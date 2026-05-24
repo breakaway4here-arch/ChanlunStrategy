@@ -278,41 +278,12 @@ body {
 
 <script>
 // ========== 数据加载 ==========
-var ADMIN_KEY_HASH = '23b3225b4f03c6cf7940f4a5f8bc1d95233a6ccf8302e15d0265b456df01c6e3';
-var DATE_POOL = ['2026-05-24'];           // 池内日期无需 key 即可访问
-var URL_DATE = new URLSearchParams(location.search).get('date');
-var URL_KEY  = new URLSearchParams(location.search).get('key');
-var IS_ADMIN = false;
-var PAGE_DATE;
+var PAGE_DATE = "2026-05-24";
 var REPORT_DATA = null;
 var CURRENT_VERSION = 'fusion';
 var HISTORY_DATA = {};
 
-async function init() {
-    // ── 校验 admin key（SHA256 比对，源码不存明文）──
-    if (URL_KEY) {
-        try {
-            var msg = new TextEncoder().encode(URL_KEY);
-            var hashBuf = await crypto.subtle.digest('SHA-256', msg);
-            var hashHex = Array.from(new Uint8Array(hashBuf))
-                .map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
-            IS_ADMIN = (hashHex === ADMIN_KEY_HASH);
-        } catch(e) {}
-    }
-
-    // ── 确定展示日期 ──
-    if (IS_ADMIN) {
-        PAGE_DATE = URL_DATE || '2026-05-24';
-    } else if (URL_DATE) {
-        PAGE_DATE = DATE_POOL.includes(URL_DATE) ? URL_DATE : null;
-    } else {
-        PAGE_DATE = DATE_POOL[DATE_POOL.length - 1];
-    }
-
-    if (!PAGE_DATE) {
-        document.body.innerHTML = '<div class="container" style="text-align:center;padding:80px 20px;"><h2 style="color:#ff4757;">该日期未开放访问</h2><p style="color:#888;margin-top:12px;">请联系分享者将日期加入访问池。</p></div>';
-        return;
-    }
+function init() {
     // 全局 resize：遍历所有已渲染图表
     window.addEventListener('resize', function() {
         var charts = window._charts || {};
@@ -322,7 +293,7 @@ async function init() {
     });
 
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'data/' + PAGE_DATE + '_v3.json', true);
+    xhr.open('GET', 'data/' + PAGE_DATE + '.json', true);
     xhr.onload = function() {
         if (xhr.status === 200) {
             try {
@@ -338,8 +309,6 @@ async function init() {
 }
 
 function renderAll() {
-    document.title = '缠论选股日报 — ' + PAGE_DATE;
-    document.querySelector('.subtitle').textContent = PAGE_DATE + ' · 基于缠中说禅108课理论';
     renderMarketCards();
     renderMarketStructure();
     renderSectorFlow();
@@ -349,7 +318,7 @@ function renderAll() {
     renderSellSignals();
     renderLimitUp();
     switchVersion('fusion');
-    if (IS_ADMIN) loadHistory();
+    loadHistory();
 }
 
 // ========== 版本切换 ==========
@@ -833,7 +802,7 @@ function renderChart(idx, ver) {
 // ========== 历史数据 ==========
 function loadHistory() {
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'data.json?v=' + Date.now(), true);
+    xhr.open('GET', 'data.json', true);
     xhr.onload = function() {
         if (xhr.status === 200) {
             try {

@@ -12,7 +12,6 @@ from config import (
     PURE_DIVERGENCE_THRESHOLD, MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
     LIMIT_UP_THRESHOLD, LIMIT_DOWN_THRESHOLD,
 )
-from .chan_engine import ema
 from .data_fetcher import is_st_stock
 
 
@@ -98,15 +97,8 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
         if not valid_buy_points:
             continue
 
-        # MA 多头检查：类二买/一买需要 MA5 > MA20，三买例外
+        # 选最优买点
         best_bp = _pick_best_buy_point(valid_buy_points)
-        if best_bp["type"] not in ("三买",):
-            closes = result.closes
-            if len(closes) >= 20:
-                ema5 = float(ema(closes, 5)[-1])
-                ema20 = float(ema(closes, 20)[-1])
-                if ema5 <= ema20:
-                    continue  # MA 不支撑，过滤
 
         # --- 构建输出 ---
         sector_name = sector_stocks.get(code, {}).get("sector", "") if sector_stocks else ""

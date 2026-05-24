@@ -326,12 +326,14 @@ def main(debug=False):
     pure_scored = apply_scores(pure_confirmed, version="pure")
     fusion_scored = apply_scores(fusion_confirmed, version="fusion", sector_rank_map=sector_rank_map)
 
-    # 自适应评分过滤：> 10 只取 TOP 10，≤ 10 只取 ≥ 50 分
-    def adaptive_filter(scored, top_n=10, floor=50):
-        if len(scored) <= top_n:
-            return [s for s in scored if s.get("score", 0) >= floor]
+    # 自适应评分过滤：>75分全保留，不足20只从剩余按分补齐
+    def adaptive_filter(scored, top_n=20, hard_threshold=75):
         scored.sort(key=lambda x: x.get("score", 0), reverse=True)
-        return scored[:top_n]
+        above = [s for s in scored if s.get("score", 0) > hard_threshold]
+        below = [s for s in scored if s.get("score", 0) <= hard_threshold]
+        if len(above) >= top_n:
+            return above
+        return above + below[:top_n - len(above)]
 
     pure_scored = adaptive_filter(pure_scored)
     fusion_scored = adaptive_filter(fusion_scored)
