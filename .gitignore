@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+output_debug/
+.env
+docs/*.md
+daily_run.log

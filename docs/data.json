@@ -1,0 +1,4787 @@
+{
+  "dates": [
+    "2026-05-23",
+    "2026-05-24"
+  ],
+  "reports": {
+    "2026-05-23": {
+      "market": {
+        "上证指数": {
+          "close": 4112.9,
+          "change_pct": 0.87
+        },
+        "深证成指": {
+          "close": 15597.3,
+          "change_pct": 2.3
+        },
+        "创业板指": {
+          "close": 3938.5,
+          "change_pct": 2.84
+        },
+        "科创50": {
+          "close": 1790.77,
+          "change_pct": 1.51
+        },
+        "沪深300": {
+          "close": 4845.1,
+          "change_pct": 1.3
+        },
+        "中证500": {
+          "close": 8576.94,
+          "change_pct": 1.87
+        }
+      },
+      "chanlun_structure": {
+        "daily_pivot": {
+          "ZD": 4061.82,
+          "ZG": 4190.87,
+          "count": 1
+        },
+        "trend_type": "盘整",
+        "key_signal": "未出现明显背驰信号",
+        "conclusion": "当前处于4190.87-4061.82区间盘整，等待方向选择。"
+      },
+      "picks_pure": [
+        {
+          "code": "002827",
+          "name": "高争民爆",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 107,
+            "price": 29.8,
+            "date": "2026-05-06",
+            "reason": "底背驰(力度比=46.20%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "一买",
+              "index": 72,
+              "price": 29.7,
+              "date": "2026-05-22 10:00:00",
+              "reason": "底背驰(力度比=47.63%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivots": {
+            "ZG": 35.2,
+            "ZD": 30.03,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 81.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "强",
+            "reason": "日线一买 + 30分钟一买共振"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 107,
+              "price": 29.8,
+              "date": "2026-05-06",
+              "reason": "底背驰(力度比=46.20%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 35.2,
+          "pivot_zd": 30.03
+        },
+        {
+          "code": "000506",
+          "name": "招金黄金",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 117,
+            "price": 13.54,
+            "date": "2026-05-20",
+            "reason": "底背驰(力度比=15.42%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 13.73,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 17.71,
+            "ZD": 16.65,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 74.0,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 117,
+              "price": 13.54,
+              "date": "2026-05-20",
+              "reason": "底背驰(力度比=15.42%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 17.71,
+          "pivot_zd": 16.65
+        },
+        {
+          "code": "603331",
+          "name": "百达精工",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 117,
+            "price": 13.47,
+            "date": "2026-05-20",
+            "reason": "底背驰(力度比=28.46%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 13.95,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 16.28,
+            "ZD": 14.13,
+            "count": 3
+          },
+          "trend_type": "上涨趋势",
+          "score": 74.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 117,
+              "price": 13.47,
+              "date": "2026-05-20",
+              "reason": "底背驰(力度比=28.46%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "二买",
+              "index": 117,
+              "price": 14.01,
+              "date": "2026-05-20",
+              "reason": "回踩不创新低(14.01 > 13.47)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 16.28,
+          "pivot_zd": 14.13
+        },
+        {
+          "code": "600262",
+          "name": "北方股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 22.71,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=28.38%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 23.66,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 28.1,
+            "ZD": 22.81,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 74.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 22.71,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=28.38%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "二买",
+              "index": 115,
+              "price": 24.24,
+              "date": "2026-05-18",
+              "reason": "回踩不创新低(24.24 > 22.71)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 28.1,
+          "pivot_zd": 22.81
+        },
+        {
+          "code": "300578",
+          "name": "会畅科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 113,
+            "price": 20.48,
+            "date": "2026-05-14",
+            "reason": "底背驰(力度比=43.22%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 21.57,
+            "ZD": 20.97,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 65.0,
+          "sector": "通信",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 113,
+              "price": 20.48,
+              "date": "2026-05-14",
+              "reason": "底背驰(力度比=43.22%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 21.57,
+          "pivot_zd": 20.97
+        },
+        {
+          "code": "300120",
+          "name": "经纬辉开",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 7.03,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=61.60%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 6.87,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 9.02,
+            "ZD": 8.11,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 62.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 7.03,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=61.60%)，下跌力度衰竭",
+              "strength": "中"
+            },
+            {
+              "type": "二买",
+              "index": 115,
+              "price": 7.15,
+              "date": "2026-05-18",
+              "reason": "回踩不创新低(7.15 > 7.03)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 9.02,
+          "pivot_zd": 8.11
+        },
+        {
+          "code": "300470",
+          "name": "中密控股",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 32.58,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=54.74%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 32.98,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 39.49,
+            "ZD": 36.72,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 62.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 32.58,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=54.74%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 39.49,
+          "pivot_zd": 36.72
+        },
+        {
+          "code": "300218",
+          "name": "安利股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 14.07,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=60.36%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 14.14,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 16.07,
+            "ZD": 14.14,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 62.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 14.07,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=60.36%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 16.07,
+          "pivot_zd": 14.14
+        },
+        {
+          "code": "603090",
+          "name": "宏盛股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 107,
+            "price": 57.65,
+            "date": "2026-05-06",
+            "reason": "底背驰(力度比=43.12%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 76.0,
+            "ZD": 66.93,
+            "count": 2
+          },
+          "trend_type": "上涨趋势",
+          "score": 60.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 107,
+              "price": 57.65,
+              "date": "2026-05-06",
+              "reason": "底背驰(力度比=43.12%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "二买",
+              "index": 107,
+              "price": 63.1,
+              "date": "2026-05-06",
+              "reason": "回踩不创新低(63.1 > 57.65)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 76.0,
+          "pivot_zd": 66.93
+        },
+        {
+          "code": "000525",
+          "name": "红太阳",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 103,
+            "price": 5.51,
+            "date": "2026-04-27",
+            "reason": "底背驰(力度比=48.99%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.39,
+            "ZD": 5.72,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 60.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 103,
+              "price": 5.51,
+              "date": "2026-04-27",
+              "reason": "底背驰(力度比=48.99%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 6.39,
+          "pivot_zd": 5.72
+        },
+        {
+          "code": "300370",
+          "name": "安控科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 2.45,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=63.65%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 2.41,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 2.69,
+            "ZD": 2.55,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 58.0,
+          "sector": "通用设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 2.45,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=63.65%)，下跌力度衰竭",
+              "strength": "中"
+            },
+            {
+              "type": "二买",
+              "index": 115,
+              "price": 2.5,
+              "date": "2026-05-18",
+              "reason": "回踩不创新低(2.5 > 2.45)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 2.69,
+          "pivot_zd": 2.55
+        },
+        {
+          "code": "603036",
+          "name": "如通股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 74,
+            "price": 18.41,
+            "date": "2026-03-16",
+            "reason": "底背驰(力度比=79.38%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "一买",
+              "index": 63,
+              "price": 14.8,
+              "date": "2026-05-20 15:00:00",
+              "reason": "底背驰(力度比=84.63%)，下跌力度衰竭",
+              "strength": "弱"
+            }
+          ],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "强",
+            "reason": "日线一买 + 30分钟一买共振"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 74,
+              "price": 18.41,
+              "date": "2026-03-16",
+              "reason": "底背驰(力度比=79.38%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "000925",
+          "name": "众合科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 80,
+            "price": 6.78,
+            "date": "2026-03-24",
+            "reason": "底背驰(力度比=40.07%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 8.69,
+            "ZD": 8.13,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 55.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 80,
+              "price": 6.78,
+              "date": "2026-03-24",
+              "reason": "底背驰(力度比=40.07%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "二买",
+              "index": 89,
+              "price": 6.83,
+              "date": "2026-04-07",
+              "reason": "回踩不创新低(6.83 > 6.78)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 8.69,
+          "pivot_zd": 8.13
+        },
+        {
+          "code": "603683",
+          "name": "晶华新材",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 100,
+            "price": 27.69,
+            "date": "2026-04-22",
+            "reason": "回踩不创新低(27.69 > 25.95)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 26.79,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 29.18,
+            "ZD": 25.95,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 52.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 100,
+              "price": 27.69,
+              "date": "2026-04-22",
+              "reason": "回踩不创新低(27.69 > 25.95)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 29.18,
+          "pivot_zd": 25.95
+        },
+        {
+          "code": "300411",
+          "name": "金盾股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 116,
+            "price": 9.86,
+            "date": "2026-05-19",
+            "reason": "底背驰(力度比=79.81%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 74,
+              "price": 9.88,
+              "date": "2026-05-22 11:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 11.24,
+            "ZD": 11.12,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 50.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 116,
+              "price": 9.86,
+              "date": "2026-05-19",
+              "reason": "底背驰(力度比=79.81%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 11.24,
+          "pivot_zd": 11.12
+        },
+        {
+          "code": "002955",
+          "name": "鸿合科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 114,
+            "price": 23.84,
+            "date": "2026-05-15",
+            "reason": "底背驰(力度比=75.25%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 75,
+              "price": 24.02,
+              "date": "2026-05-22 11:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 26.95,
+            "ZD": 25.16,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 49.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 114,
+              "price": 23.84,
+              "date": "2026-05-15",
+              "reason": "底背驰(力度比=75.25%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 26.95,
+          "pivot_zd": 25.16
+        },
+        {
+          "code": "002632",
+          "name": "道明光学",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 102,
+            "price": 10.79,
+            "date": "2026-04-24",
+            "reason": "底背驰(力度比=59.82%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 10.29,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 12.68,
+            "ZD": 11.74,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 48.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 102,
+              "price": 10.79,
+              "date": "2026-04-24",
+              "reason": "底背驰(力度比=59.82%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 12.68,
+          "pivot_zd": 11.74
+        },
+        {
+          "code": "300758",
+          "name": "七彩化学",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 106,
+            "price": 13.23,
+            "date": "2026-04-30",
+            "reason": "回踩不创新低(13.23 > 12.89)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 13.7,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 13.99,
+            "ZD": 13.23,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 48.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 106,
+              "price": 13.23,
+              "date": "2026-04-30",
+              "reason": "回踩不创新低(13.23 > 12.89)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 13.99,
+          "pivot_zd": 13.23
+        },
+        {
+          "code": "002296",
+          "name": "辉煌科技",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 115,
+            "price": 11.24,
+            "date": "2026-05-18",
+            "reason": "回踩不创新低(11.24 > 10.92)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 74,
+              "price": 10.72,
+              "date": "2026-05-22 11:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 12.38,
+            "ZD": 12.02,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 46.0,
+          "sector": "通信设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 115,
+              "price": 11.24,
+              "date": "2026-05-18",
+              "reason": "回踩不创新低(11.24 > 10.92)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 12.38,
+          "pivot_zd": 12.02
+        },
+        {
+          "code": "300269",
+          "name": "联建光电",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 105,
+            "price": 6.1,
+            "date": "2026-04-29",
+            "reason": "底背驰(力度比=79.50%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 9.28,
+            "ZD": 7.8,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 44.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 105,
+              "price": 6.1,
+              "date": "2026-04-29",
+              "reason": "底背驰(力度比=79.50%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 9.28,
+          "pivot_zd": 7.8
+        },
+        {
+          "code": "002786",
+          "name": "银宝山新",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 112,
+            "price": 7.84,
+            "date": "2026-05-13",
+            "reason": "回踩不创新低(7.84 > 6.83)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 8.14,
+            "ZD": 7.68,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 41.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 112,
+              "price": 7.84,
+              "date": "2026-05-13",
+              "reason": "回踩不创新低(7.84 > 6.83)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 8.14,
+          "pivot_zd": 7.68
+        },
+        {
+          "code": "300488",
+          "name": "恒锋工具",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 114,
+            "price": 36.41,
+            "date": "2026-05-15",
+            "reason": "回踩不创新低(36.41 > 28.68)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 35.28,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 40.15,
+            "ZD": 31.91,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 41.0,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 114,
+              "price": 36.41,
+              "date": "2026-05-15",
+              "reason": "回踩不创新低(36.41 > 28.68)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 40.15,
+          "pivot_zd": 31.91
+        },
+        {
+          "code": "605016",
+          "name": "百龙创园",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 105,
+            "price": 25.55,
+            "date": "2026-04-29",
+            "reason": "回踩不创新低(25.55 > 22.46)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 71,
+              "price": 26.45,
+              "date": "2026-05-21 15:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 27.32,
+            "ZD": 22.46,
+            "count": 2
+          },
+          "trend_type": "上涨趋势",
+          "score": 40.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 105,
+              "price": 25.55,
+              "date": "2026-04-29",
+              "reason": "回踩不创新低(25.55 > 22.46)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 27.32,
+          "pivot_zd": 22.46
+        },
+        {
+          "code": "002248",
+          "name": "华东数控",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 102,
+            "price": 11.75,
+            "date": "2026-04-24",
+            "reason": "回踩不创新低(11.75 > 11.58)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 12.01,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 40.0,
+          "sector": "通用设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 102,
+              "price": 11.75,
+              "date": "2026-04-24",
+              "reason": "回踩不创新低(11.75 > 11.58)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "001267",
+          "name": "汇绿生态",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 96,
+            "price": 39.81,
+            "date": "2026-04-16",
+            "reason": "回踩不创新低(39.81 > 39.44)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 49.89,
+            "ZD": 36.85,
+            "count": 2
+          },
+          "trend_type": "上涨趋势",
+          "score": 39.0,
+          "sector": "通信设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 96,
+              "price": 39.81,
+              "date": "2026-04-16",
+              "reason": "回踩不创新低(39.81 > 39.44)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 49.89,
+          "pivot_zd": 36.85
+        },
+        {
+          "code": "002983",
+          "name": "芯瑞达",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 106,
+            "price": 22.8,
+            "date": "2026-04-30",
+            "reason": "回踩不创新低(22.8 > 21.65)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 24.68,
+            "ZD": 22.86,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 36.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 106,
+              "price": 22.8,
+              "date": "2026-04-30",
+              "reason": "回踩不创新低(22.8 > 21.65)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 24.68,
+          "pivot_zd": 22.86
+        },
+        {
+          "code": "002971",
+          "name": "和远气体",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 109,
+            "price": 30.78,
+            "date": "2026-05-08",
+            "reason": "回踩不创新低(30.78 > 29.23)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 33.45,
+            "ZD": 29.7,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 36.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 109,
+              "price": 30.78,
+              "date": "2026-05-08",
+              "reason": "回踩不创新低(30.78 > 29.23)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 33.45,
+          "pivot_zd": 29.7
+        },
+        {
+          "code": "002559",
+          "name": "亚威股份",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 106,
+            "price": 10.19,
+            "date": "2026-04-30",
+            "reason": "回踩不创新低(10.19 > 9.0)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 10.67,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 10.71,
+            "ZD": 9.41,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 36.0,
+          "sector": "通用设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 106,
+              "price": 10.19,
+              "date": "2026-04-30",
+              "reason": "回踩不创新低(10.19 > 9.0)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 10.71,
+          "pivot_zd": 9.41
+        },
+        {
+          "code": "605077",
+          "name": "华康股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 67,
+            "price": 15.15,
+            "date": "2026-03-05",
+            "reason": "底背驰(力度比=82.63%)，下跌力度衰竭",
+            "strength": "弱"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 16.65,
+            "ZD": 15.68,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 35.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 67,
+              "price": 15.15,
+              "date": "2026-03-05",
+              "reason": "底背驰(力度比=82.63%)，下跌力度衰竭",
+              "strength": "弱"
+            }
+          ],
+          "pivot_zg": 16.65,
+          "pivot_zd": 15.68
+        },
+        {
+          "code": "000949",
+          "name": "新乡化纤",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 96,
+            "price": 7.17,
+            "date": "2026-04-16",
+            "reason": "回踩不创新低(7.17 > 6.4)",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 74,
+              "price": 7.1,
+              "date": "2026-05-22 11:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 7.91,
+            "ZD": 6.4,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 35.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线二买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 96,
+              "price": 7.17,
+              "date": "2026-04-16",
+              "reason": "回踩不创新低(7.17 > 6.4)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 7.91,
+          "pivot_zd": 6.4
+        }
+      ],
+      "picks_fusion": [
+        {
+          "code": "000506",
+          "name": "招金黄金",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 117,
+            "price": 13.54,
+            "date": "2026-05-20",
+            "reason": "底背驰(力度比=15.42%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 13.73,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 17.71,
+            "ZD": 16.65,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 70.5,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 12.86,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 13.95
+            },
+            {
+              "pct": 5.0,
+              "price": 14.22
+            },
+            {
+              "pct": 8.0,
+              "price": 14.62
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 117,
+              "price": 13.54,
+              "date": "2026-05-20",
+              "reason": "底背驰(力度比=15.42%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 17.71,
+          "pivot_zd": 16.65
+        },
+        {
+          "code": "002827",
+          "name": "高争民爆",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 107,
+            "price": 29.8,
+            "date": "2026-05-06",
+            "reason": "底背驰(力度比=46.20%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "一买",
+              "index": 72,
+              "price": 29.7,
+              "date": "2026-05-22 10:00:00",
+              "reason": "底背驰(力度比=47.63%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivots": {
+            "ZG": 35.2,
+            "ZD": 30.03,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 70.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "强",
+            "reason": "日线一买 + 30分钟一买共振"
+          },
+          "ma_bullish": false,
+          "stop_loss": 28.31,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 30.69
+            },
+            {
+              "pct": 5.0,
+              "price": 31.29
+            },
+            {
+              "pct": 8.0,
+              "price": 32.18
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 107,
+              "price": 29.8,
+              "date": "2026-05-06",
+              "reason": "底背驰(力度比=46.20%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 35.2,
+          "pivot_zd": 30.03
+        },
+        {
+          "code": "603331",
+          "name": "百达精工",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 117,
+            "price": 13.47,
+            "date": "2026-05-20",
+            "reason": "底背驰(力度比=28.46%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 13.95,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 16.28,
+            "ZD": 14.13,
+            "count": 3
+          },
+          "trend_type": "上涨趋势",
+          "score": 68.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 12.8,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 13.87
+            },
+            {
+              "pct": 5.0,
+              "price": 14.14
+            },
+            {
+              "pct": 8.0,
+              "price": 14.55
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 117,
+              "price": 13.47,
+              "date": "2026-05-20",
+              "reason": "底背驰(力度比=28.46%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 16.28,
+          "pivot_zd": 14.13
+        },
+        {
+          "code": "300120",
+          "name": "经纬辉开",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 7.03,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=61.60%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 6.87,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 9.02,
+            "ZD": 8.11,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 68.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 6.68,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 7.24
+            },
+            {
+              "pct": 5.0,
+              "price": 7.38
+            },
+            {
+              "pct": 8.0,
+              "price": 7.59
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 7.03,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=61.60%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 9.02,
+          "pivot_zd": 8.11
+        },
+        {
+          "code": "600262",
+          "name": "北方股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 22.71,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=28.38%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 23.66,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 28.1,
+            "ZD": 22.81,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 66.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 21.57,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 23.39
+            },
+            {
+              "pct": 5.0,
+              "price": 23.85
+            },
+            {
+              "pct": 8.0,
+              "price": 24.53
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 22.71,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=28.38%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 28.1,
+          "pivot_zd": 22.81
+        },
+        {
+          "code": "603090",
+          "name": "宏盛股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 107,
+            "price": 57.65,
+            "date": "2026-05-06",
+            "reason": "底背驰(力度比=43.12%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 76.0,
+            "ZD": 66.93,
+            "count": 2
+          },
+          "trend_type": "上涨趋势",
+          "score": 61.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": true,
+          "stop_loss": 54.77,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 59.38
+            },
+            {
+              "pct": 5.0,
+              "price": 60.53
+            },
+            {
+              "pct": 8.0,
+              "price": 62.26
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 107,
+              "price": 57.65,
+              "date": "2026-05-06",
+              "reason": "底背驰(力度比=43.12%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "二买",
+              "index": 107,
+              "price": 63.1,
+              "date": "2026-05-06",
+              "reason": "回踩不创新低(63.1 > 57.65)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 76.0,
+          "pivot_zd": 66.93
+        },
+        {
+          "code": "300578",
+          "name": "会畅科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 113,
+            "price": 20.48,
+            "date": "2026-05-14",
+            "reason": "底背驰(力度比=43.22%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 21.57,
+            "ZD": 20.97,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 61.2,
+          "sector": "通信",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 19.46,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 21.09
+            },
+            {
+              "pct": 5.0,
+              "price": 21.5
+            },
+            {
+              "pct": 8.0,
+              "price": 22.12
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 113,
+              "price": 20.48,
+              "date": "2026-05-14",
+              "reason": "底背驰(力度比=43.22%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 21.57,
+          "pivot_zd": 20.97
+        },
+        {
+          "code": "300470",
+          "name": "中密控股",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 32.58,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=54.74%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 32.98,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 39.49,
+            "ZD": 36.72,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 59.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 30.95,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 33.56
+            },
+            {
+              "pct": 5.0,
+              "price": 34.21
+            },
+            {
+              "pct": 8.0,
+              "price": 35.19
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 32.58,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=54.74%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 39.49,
+          "pivot_zd": 36.72
+        },
+        {
+          "code": "300218",
+          "name": "安利股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 14.07,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=60.36%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 14.14,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 16.07,
+            "ZD": 14.14,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 59.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 13.37,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 14.49
+            },
+            {
+              "pct": 5.0,
+              "price": 14.77
+            },
+            {
+              "pct": 8.0,
+              "price": 15.2
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 14.07,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=60.36%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 16.07,
+          "pivot_zd": 14.14
+        },
+        {
+          "code": "002955",
+          "name": "鸿合科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 114,
+            "price": 23.84,
+            "date": "2026-05-15",
+            "reason": "底背驰(力度比=75.25%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 75,
+              "price": 24.02,
+              "date": "2026-05-22 11:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 26.95,
+            "ZD": 25.16,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 58.0,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 22.65,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 24.56
+            },
+            {
+              "pct": 5.0,
+              "price": 25.03
+            },
+            {
+              "pct": 8.0,
+              "price": 25.75
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 114,
+              "price": 23.84,
+              "date": "2026-05-15",
+              "reason": "底背驰(力度比=75.25%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 26.95,
+          "pivot_zd": 25.16
+        },
+        {
+          "code": "300269",
+          "name": "联建光电",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 105,
+            "price": 6.1,
+            "date": "2026-04-29",
+            "reason": "底背驰(力度比=79.50%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 9.28,
+            "ZD": 7.8,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 57.5,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 5.79,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 6.28
+            },
+            {
+              "pct": 5.0,
+              "price": 6.4
+            },
+            {
+              "pct": 8.0,
+              "price": 6.59
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 105,
+              "price": 6.1,
+              "date": "2026-04-29",
+              "reason": "底背驰(力度比=79.50%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 9.28,
+          "pivot_zd": 7.8
+        },
+        {
+          "code": "603036",
+          "name": "如通股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 74,
+            "price": 18.41,
+            "date": "2026-03-16",
+            "reason": "底背驰(力度比=79.38%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "一买",
+              "index": 63,
+              "price": 14.8,
+              "date": "2026-05-20 15:00:00",
+              "reason": "底背驰(力度比=84.63%)，下跌力度衰竭",
+              "strength": "弱"
+            }
+          ],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 57.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "强",
+            "reason": "日线一买 + 30分钟一买共振"
+          },
+          "ma_bullish": false,
+          "stop_loss": 17.49,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 18.96
+            },
+            {
+              "pct": 5.0,
+              "price": 19.33
+            },
+            {
+              "pct": 8.0,
+              "price": 19.88
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 74,
+              "price": 18.41,
+              "date": "2026-03-16",
+              "reason": "底背驰(力度比=79.38%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "000525",
+          "name": "红太阳",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 103,
+            "price": 5.51,
+            "date": "2026-04-27",
+            "reason": "底背驰(力度比=48.99%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.39,
+            "ZD": 5.72,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 55.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 5.23,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 5.68
+            },
+            {
+              "pct": 5.0,
+              "price": 5.79
+            },
+            {
+              "pct": 8.0,
+              "price": 5.95
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 103,
+              "price": 5.51,
+              "date": "2026-04-27",
+              "reason": "底背驰(力度比=48.99%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 6.39,
+          "pivot_zd": 5.72
+        },
+        {
+          "code": "300370",
+          "name": "安控科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 115,
+            "price": 2.45,
+            "date": "2026-05-18",
+            "reason": "底背驰(力度比=63.65%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 73,
+              "price": 2.41,
+              "date": "2026-05-22 10:30:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 2.69,
+            "ZD": 2.55,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 54.0,
+          "sector": "通用设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 2.33,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 2.52
+            },
+            {
+              "pct": 5.0,
+              "price": 2.57
+            },
+            {
+              "pct": 8.0,
+              "price": 2.65
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 115,
+              "price": 2.45,
+              "date": "2026-05-18",
+              "reason": "底背驰(力度比=63.65%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 2.69,
+          "pivot_zd": 2.55
+        },
+        {
+          "code": "002983",
+          "name": "芯瑞达",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 106,
+            "price": 22.8,
+            "date": "2026-04-30",
+            "reason": "回踩不创新低(22.8 > 21.65)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 24.68,
+            "ZD": 22.86,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 51.5,
+          "sector": "电子",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": true,
+          "stop_loss": 21.66,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 23.48
+            },
+            {
+              "pct": 5.0,
+              "price": 23.94
+            },
+            {
+              "pct": 8.0,
+              "price": 24.62
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 106,
+              "price": 22.8,
+              "date": "2026-04-30",
+              "reason": "回踩不创新低(22.8 > 21.65)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 24.68,
+          "pivot_zd": 22.86
+        },
+        {
+          "code": "000925",
+          "name": "众合科技",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 80,
+            "price": 6.78,
+            "date": "2026-03-24",
+            "reason": "底背驰(力度比=40.07%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 8.69,
+            "ZD": 8.13,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 51.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 6.44,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 6.98
+            },
+            {
+              "pct": 5.0,
+              "price": 7.12
+            },
+            {
+              "pct": 8.0,
+              "price": 7.32
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 80,
+              "price": 6.78,
+              "date": "2026-03-24",
+              "reason": "底背驰(力度比=40.07%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 8.69,
+          "pivot_zd": 8.13
+        },
+        {
+          "code": "300411",
+          "name": "金盾股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 116,
+            "price": 9.86,
+            "date": "2026-05-19",
+            "reason": "底背驰(力度比=79.81%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 74,
+              "price": 9.88,
+              "date": "2026-05-22 11:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 11.24,
+            "ZD": 11.12,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 50.2,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 9.37,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 10.16
+            },
+            {
+              "pct": 5.0,
+              "price": 10.35
+            },
+            {
+              "pct": 8.0,
+              "price": 10.65
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 116,
+              "price": 9.86,
+              "date": "2026-05-19",
+              "reason": "底背驰(力度比=79.81%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 11.24,
+          "pivot_zd": 11.12
+        },
+        {
+          "code": "002786",
+          "name": "银宝山新",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 112,
+            "price": 7.84,
+            "date": "2026-05-13",
+            "reason": "回踩不创新低(7.84 > 6.83)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 8.14,
+            "ZD": 7.68,
+            "count": 2
+          },
+          "trend_type": "下跌趋势",
+          "score": 48.8,
+          "sector": "机械设备",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": true,
+          "stop_loss": 7.45,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 8.08
+            },
+            {
+              "pct": 5.0,
+              "price": 8.23
+            },
+            {
+              "pct": 8.0,
+              "price": 8.47
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 112,
+              "price": 7.84,
+              "date": "2026-05-13",
+              "reason": "回踩不创新低(7.84 > 6.83)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 8.14,
+          "pivot_zd": 7.68
+        },
+        {
+          "code": "002632",
+          "name": "道明光学",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 102,
+            "price": 10.79,
+            "date": "2026-04-24",
+            "reason": "底背驰(力度比=59.82%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [
+            {
+              "type": "底分型确认",
+              "index": 72,
+              "price": 10.29,
+              "date": "2026-05-22 10:00:00",
+              "reason": "30分钟形成底分型",
+              "strength": "中"
+            }
+          ],
+          "pivots": {
+            "ZG": 12.68,
+            "ZD": 11.74,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 46.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "日线一买 + 30分钟底分型确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 10.25,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 11.11
+            },
+            {
+              "pct": 5.0,
+              "price": 11.33
+            },
+            {
+              "pct": 8.0,
+              "price": 11.65
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 102,
+              "price": 10.79,
+              "date": "2026-04-24",
+              "reason": "底背驰(力度比=59.82%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 12.68,
+          "pivot_zd": 11.74
+        },
+        {
+          "code": "002971",
+          "name": "和远气体",
+          "best_buy_point": {
+            "type": "二买",
+            "index": 109,
+            "price": 30.78,
+            "date": "2026-05-08",
+            "reason": "回踩不创新低(30.78 > 29.23)",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 33.45,
+            "ZD": 29.7,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 41.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": true,
+          "stop_loss": 29.24,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 31.7
+            },
+            {
+              "pct": 5.0,
+              "price": 32.32
+            },
+            {
+              "pct": 8.0,
+              "price": 33.24
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "二买",
+              "index": 109,
+              "price": 30.78,
+              "date": "2026-05-08",
+              "reason": "回踩不创新低(30.78 > 29.23)",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 33.45,
+          "pivot_zd": 29.7
+        },
+        {
+          "code": "605077",
+          "name": "华康股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 67,
+            "price": 15.15,
+            "date": "2026-03-05",
+            "reason": "底背驰(力度比=82.63%)，下跌力度衰竭",
+            "strength": "弱"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 16.65,
+            "ZD": 15.68,
+            "count": 1
+          },
+          "trend_type": "盘整",
+          "score": 36.0,
+          "sector": "基础化工",
+          "resonance": {
+            "level": "弱",
+            "reason": "30分钟无明确买点确认"
+          },
+          "ma_bullish": false,
+          "stop_loss": 14.39,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 15.6
+            },
+            {
+              "pct": 5.0,
+              "price": 15.91
+            },
+            {
+              "pct": 8.0,
+              "price": 16.36
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 67,
+              "price": 15.15,
+              "date": "2026-03-05",
+              "reason": "底背驰(力度比=82.63%)，下跌力度衰竭",
+              "strength": "弱"
+            }
+          ],
+          "pivot_zg": 16.65,
+          "pivot_zd": 15.68
+        }
+      ],
+      "sector_flow": [
+        {
+          "code": "BK1201",
+          "name": "电子",
+          "change_pct": 3.75,
+          "flow": 25490657280.0,
+          "flow_str": "254.91亿"
+        },
+        {
+          "code": "BK0459",
+          "name": "元件",
+          "change_pct": 8.04,
+          "flow": 13569596672.0,
+          "flow_str": "135.70亿"
+        },
+        {
+          "code": "BK1340",
+          "name": "印制电路板",
+          "change_pct": 8.21,
+          "flow": 12105575680.0,
+          "flow_str": "121.06亿"
+        },
+        {
+          "code": "BK0448",
+          "name": "通信设备",
+          "change_pct": 2.85,
+          "flow": 7706466816.0,
+          "flow_str": "77.06亿"
+        },
+        {
+          "code": "BK0478",
+          "name": "有色金属",
+          "change_pct": 4.0,
+          "flow": 6864029952.0,
+          "flow_str": "68.64亿"
+        },
+        {
+          "code": "BK1215",
+          "name": "通信",
+          "change_pct": 2.42,
+          "flow": 6786162176.0,
+          "flow_str": "67.86亿"
+        },
+        {
+          "code": "BK1591",
+          "name": "通信网络设备及器件",
+          "change_pct": 3.52,
+          "flow": 5805035264.0,
+          "flow_str": "58.05亿"
+        },
+        {
+          "code": "BK1338",
+          "name": "消费电子零部件及组装",
+          "change_pct": 3.54,
+          "flow": 5320504064.0,
+          "flow_str": "53.21亿"
+        },
+        {
+          "code": "BK1037",
+          "name": "消费电子",
+          "change_pct": 3.09,
+          "flow": 5180514816.0,
+          "flow_str": "51.81亿"
+        },
+        {
+          "code": "BK1205",
+          "name": "机械设备",
+          "change_pct": 2.3,
+          "flow": 4308761088.0,
+          "flow_str": "43.09亿"
+        },
+        {
+          "code": "BK1287",
+          "name": "工业金属",
+          "change_pct": 4.34,
+          "flow": 4122548736.0,
+          "flow_str": "41.23亿"
+        },
+        {
+          "code": "BK1036",
+          "name": "半导体",
+          "change_pct": 2.99,
+          "flow": 4122038272.0,
+          "flow_str": "41.22亿"
+        },
+        {
+          "code": "BK1206",
+          "name": "基础化工",
+          "change_pct": 2.63,
+          "flow": 3387659264.0,
+          "flow_str": "33.88亿"
+        },
+        {
+          "code": "BK0545",
+          "name": "通用设备",
+          "change_pct": 2.57,
+          "flow": 2854915328.0,
+          "flow_str": "28.55亿"
+        },
+        {
+          "code": "BK0546",
+          "name": "玻璃玻纤",
+          "change_pct": 5.47,
+          "flow": 2665182400.0,
+          "flow_str": "26.65亿"
+        },
+        {
+          "code": "BK1208",
+          "name": "建筑材料",
+          "change_pct": 2.37,
+          "flow": 2629916416.0,
+          "flow_str": "26.30亿"
+        },
+        {
+          "code": "BK1462",
+          "name": "玻纤制造",
+          "change_pct": 8.41,
+          "flow": 2613055584.0,
+          "flow_str": "26.13亿"
+        },
+        {
+          "code": "BK1328",
+          "name": "集成电路封测",
+          "change_pct": 3.64,
+          "flow": 2375823616.0,
+          "flow_str": "23.76亿"
+        },
+        {
+          "code": "BK1615",
+          "name": "铜",
+          "change_pct": 5.66,
+          "flow": 2310003664.0,
+          "flow_str": "23.10亿"
+        },
+        {
+          "code": "BK1329",
+          "name": "集成电路制造",
+          "change_pct": 3.44,
+          "flow": 2259360256.0,
+          "flow_str": "22.59亿"
+        }
+      ],
+      "sector_outflow": [
+        {
+          "code": "BK1203",
+          "name": "非银金融",
+          "change_pct": -0.96,
+          "flow": -3136514560.0,
+          "flow_str": "-31.37亿"
+        },
+        {
+          "code": "BK0473",
+          "name": "证券Ⅱ",
+          "change_pct": -1.41,
+          "flow": -2663295744.0,
+          "flow_str": "-26.63亿"
+        },
+        {
+          "code": "BK1366",
+          "name": "证券Ⅲ",
+          "change_pct": -1.41,
+          "flow": -2663295744.0,
+          "flow_str": "-26.63亿"
+        },
+        {
+          "code": "BK0486",
+          "name": "传媒",
+          "change_pct": 0.41,
+          "flow": -2130301376.0,
+          "flow_str": "-21.30亿"
+        },
+        {
+          "code": "BK1277",
+          "name": "白酒Ⅱ",
+          "change_pct": -3.09,
+          "flow": -1815872544.0,
+          "flow_str": "-18.16亿"
+        }
+      ],
+      "limit_up_pool": [],
+      "events": [],
+      "forecast": {
+        "core_judgment": "温和反弹，中枢区间整理",
+        "volume_note": "量能平稳",
+        "short_term": [
+          "指数+0.87%，温和反弹",
+          "走势类型：盘整，关注方向选择",
+          "主线板块：电子/元件/印制电路板持续活跃",
+          "板块普涨，风格偏进攻"
+        ],
+        "mid_term": "市场经过近期调整后反弹修复，若能持续放量，中期有望走出二波行情。重点关注硬科技主线的持续力度以及量能能否重新放大。",
+        "risks": [
+          "量能若持续萎缩，反弹高度有限",
+          "北向资金若持续流出，蓝筹权重承压",
+          "外部扰动：海外通胀、地缘政治等不确定性",
+          "缠论选股仅为技术筛选，不构成投资建议，务必结合基本面分析"
+        ]
+      }
+    },
+    "2026-05-24": {
+      "market": {
+        "上证指数": {
+          "close": 4112.9,
+          "change_pct": 0.87
+        },
+        "深证成指": {
+          "close": 15597.3,
+          "change_pct": 2.3
+        },
+        "创业板指": {
+          "close": 3938.5,
+          "change_pct": 2.84
+        },
+        "科创50": {
+          "close": 1790.77,
+          "change_pct": 1.51
+        },
+        "沪深300": {
+          "close": 4845.1,
+          "change_pct": 1.3
+        },
+        "中证500": {
+          "close": 8576.94,
+          "change_pct": 1.87
+        }
+      },
+      "chanlun_structure": {
+        "daily_pivot": null,
+        "trend_type": "无中枢",
+        "key_signal": "未出现明显背驰信号",
+        "conclusion": "无中枢"
+      },
+      "picks_pure": [
+        {
+          "code": "002833",
+          "name": "弘亚数控",
+          "best_buy_point": {
+            "type": "三买",
+            "index": 99,
+            "price": 20.12,
+            "date": "2026-05-22",
+            "reason": "突破ZG=18.88后回抽, 近5日最低=19.95, 高出ZG 5.67%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 18.88,
+            "ZD": 17.67,
+            "count": 1
+          },
+          "trend_type": "无中枢",
+          "score": 67.2,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 20.12,
+              "date": "2026-05-22",
+              "reason": "突破ZG=18.88后回抽, 近5日最低=19.95, 高出ZG 5.67%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 18.88,
+          "pivot_zd": 17.67
+        },
+        {
+          "code": "000925",
+          "name": "众合科技",
+          "best_buy_point": {
+            "type": "三买",
+            "index": 99,
+            "price": 8.34,
+            "date": "2026-05-22",
+            "reason": "突破ZG=7.51后回抽, 近5日最低=8.1, 高出ZG 7.86%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 10.74,
+            "ZD": 9.11,
+            "count": 4
+          },
+          "trend_type": "无中枢",
+          "score": 59.2,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 51,
+              "price": 6.78,
+              "date": "2026-03-11",
+              "reason": "底背驰(力度比=33.63%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 8.34,
+              "date": "2026-05-22",
+              "reason": "突破ZG=7.51后回抽, 近5日最低=8.1, 高出ZG 7.86%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 10.74,
+          "pivot_zd": 9.11
+        },
+        {
+          "code": "300241",
+          "name": "瑞丰光电",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 91,
+            "price": 6.76,
+            "date": "2026-05-12",
+            "reason": "底背驰(力度比=20.03%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.79,
+            "ZD": 6.76,
+            "count": 3
+          },
+          "trend_type": "盘整",
+          "score": 58.5,
+          "sector": "电子",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 91,
+              "price": 6.76,
+              "date": "2026-05-12",
+              "reason": "底背驰(力度比=20.03%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 6.79,
+          "pivot_zd": 6.76
+        },
+        {
+          "code": "300565",
+          "name": "科信技术",
+          "best_buy_point": {
+            "type": "三买",
+            "index": 99,
+            "price": 14.75,
+            "date": "2026-05-22",
+            "reason": "突破ZG=13.53后回抽, 近5日最低=14.06, 高出ZG 3.92%",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 14.72,
+            "ZD": 14.06,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 55.2,
+          "sector": "通信设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 63,
+              "price": 12.91,
+              "date": "2026-03-27",
+              "reason": "笔底背驰(力度比=67.96%)，下跌力度衰竭",
+              "strength": "中"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 14.75,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=14.72, ZD=14.06), 现价=14.75, 距ZD=+4.9%",
+              "strength": "中"
+            },
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 14.75,
+              "date": "2026-05-22",
+              "reason": "突破ZG=13.53后回抽, 近5日最低=14.06, 高出ZG 3.92%",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 14.72,
+          "pivot_zd": 14.06
+        },
+        {
+          "code": "300669",
+          "name": "沪宁股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 90,
+            "price": 30.7,
+            "date": "2026-05-11",
+            "reason": "底背驰(力度比=45.97%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 32.66,
+            "ZD": 30.86,
+            "count": 3
+          },
+          "trend_type": "盘整",
+          "score": 54.5,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 90,
+              "price": 30.7,
+              "date": "2026-05-11",
+              "reason": "底背驰(力度比=45.97%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 32.66,
+          "pivot_zd": 30.86
+        },
+        {
+          "code": "605288",
+          "name": "凯迪股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 89,
+            "price": 78.03,
+            "date": "2026-05-08",
+            "reason": "底背驰(力度比=12.19%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 89.89,
+            "ZD": 85.73,
+            "count": 4
+          },
+          "trend_type": "无中枢",
+          "score": 53.5,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 89,
+              "price": 78.03,
+              "date": "2026-05-08",
+              "reason": "底背驰(力度比=12.19%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 89.89,
+          "pivot_zd": 85.73
+        },
+        {
+          "code": "300647",
+          "name": "超频三",
+          "best_buy_point": {
+            "type": "三买",
+            "index": 99,
+            "price": 6.9,
+            "date": "2026-05-22",
+            "reason": "突破ZG=6.26后回抽, 近5日最低=6.63, 高出ZG 5.91%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.26,
+            "ZD": 5.85,
+            "count": 3
+          },
+          "trend_type": "盘整",
+          "score": 51.2,
+          "sector": "电子",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 46,
+              "price": 6.37,
+              "date": "2026-03-04",
+              "reason": "笔底背驰(力度比=62.52%)，下跌力度衰竭",
+              "strength": "中"
+            },
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 6.9,
+              "date": "2026-05-22",
+              "reason": "突破ZG=6.26后回抽, 近5日最低=6.63, 高出ZG 5.91%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 6.26,
+          "pivot_zd": 5.85
+        },
+        {
+          "code": "600768",
+          "name": "宁波富邦",
+          "best_buy_point": {
+            "type": "三买",
+            "index": 99,
+            "price": 18.08,
+            "date": "2026-05-22",
+            "reason": "突破ZG=17.5后回抽, 近5日最低=17.62, 高出ZG 0.69%",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 19.5,
+            "ZD": 17.87,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 51.2,
+          "sector": "有色金属",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 99,
+              "price": 17.62,
+              "date": "2026-05-22",
+              "reason": "笔底背驰(力度比=20.28%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 18.08,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=19.5, ZD=17.87), 现价=18.08, 距ZD=+1.2%",
+              "strength": "强"
+            },
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 18.08,
+              "date": "2026-05-22",
+              "reason": "突破ZG=17.5后回抽, 近5日最低=17.62, 高出ZG 0.69%",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 19.5,
+          "pivot_zd": 17.87
+        },
+        {
+          "code": "300720",
+          "name": "海川智能",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 69.86,
+            "date": "2026-05-22",
+            "reason": "中枢下沿附近(ZG=68.94, ZD=66.72), 现价=69.86, 距ZD=+4.7%",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 68.94,
+            "ZD": 66.72,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 51.2,
+          "sector": "通用设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 73,
+              "price": 48.0,
+              "date": "2026-04-13",
+              "reason": "笔底背驰(力度比=49.59%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 69.86,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=68.94, ZD=66.72), 现价=69.86, 距ZD=+4.7%",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 68.94,
+          "pivot_zd": 66.72
+        },
+        {
+          "code": "300809",
+          "name": "华辰装备",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 66,
+            "price": 30.3,
+            "date": "2026-04-01",
+            "reason": "底背驰(力度比=40.00%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 33.75,
+            "ZD": 33.35,
+            "count": 3
+          },
+          "trend_type": "无中枢",
+          "score": 40.5,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 66,
+              "price": 30.3,
+              "date": "2026-04-01",
+              "reason": "底背驰(力度比=40.00%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 33.75,
+          "pivot_zd": 33.35
+        }
+      ],
+      "picks_fusion": [
+        {
+          "code": "300241",
+          "name": "瑞丰光电",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 91,
+            "price": 6.76,
+            "date": "2026-05-12",
+            "reason": "底背驰(力度比=20.03%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.79,
+            "ZD": 6.76,
+            "count": 3
+          },
+          "trend_type": "盘整",
+          "score": 65.5,
+          "sector": "电子",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 6.42,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 6.96
+            },
+            {
+              "pct": 5.0,
+              "price": 7.1
+            },
+            {
+              "pct": 8.0,
+              "price": 7.3
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 91,
+              "price": 6.76,
+              "date": "2026-05-12",
+              "reason": "底背驰(力度比=20.03%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 6.79,
+          "pivot_zd": 6.76
+        },
+        {
+          "code": "002170",
+          "name": "芭田股份",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 11.99,
+            "date": "2026-05-22",
+            "reason": "中枢下沿附近(ZG=12.83, ZD=11.88), 现价=11.99, 距ZD=+0.9%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 12.83,
+            "ZD": 11.88,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 61.5,
+          "sector": "基础化工",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 11.39,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 12.35
+            },
+            {
+              "pct": 5.0,
+              "price": 12.59
+            },
+            {
+              "pct": 8.0,
+              "price": 12.95
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 86,
+              "price": 12.57,
+              "date": "2026-04-30",
+              "reason": "底背驰(力度比=24.42%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 11.99,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=12.83, ZD=11.88), 现价=11.99, 距ZD=+0.9%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 12.83,
+          "pivot_zd": 11.88
+        },
+        {
+          "code": "300269",
+          "name": "联建光电",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 5.81,
+            "date": "2026-05-22",
+            "reason": "略低于中枢下沿(ZG=6.65, ZD=6.1), 现价=5.81, 距ZD=-4.8%",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.65,
+            "ZD": 6.1,
+            "count": 4
+          },
+          "trend_type": "盘整",
+          "score": 61.0,
+          "sector": "电子",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 5.52,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 5.98
+            },
+            {
+              "pct": 5.0,
+              "price": 6.1
+            },
+            {
+              "pct": 8.0,
+              "price": 6.27
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 94,
+              "price": 5.82,
+              "date": "2026-05-15",
+              "reason": "笔底背驰(力度比=52.12%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 5.81,
+              "date": "2026-05-22",
+              "reason": "略低于中枢下沿(ZG=6.65, ZD=6.1), 现价=5.81, 距ZD=-4.8%",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 6.65,
+          "pivot_zd": 6.1
+        },
+        {
+          "code": "300578",
+          "name": "会畅科技",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 20.41,
+            "date": "2026-05-22",
+            "reason": "略低于中枢下沿(ZG=20.68, ZD=20.61), 现价=20.41, 距ZD=-1.0%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 20.68,
+            "ZD": 20.61,
+            "count": 4
+          },
+          "trend_type": "盘整",
+          "score": 60.8,
+          "sector": "通信",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 19.39,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 21.02
+            },
+            {
+              "pct": 5.0,
+              "price": 21.43
+            },
+            {
+              "pct": 8.0,
+              "price": 22.04
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 89,
+              "price": 20.48,
+              "date": "2026-05-08",
+              "reason": "底背驰(力度比=43.28%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 20.41,
+              "date": "2026-05-22",
+              "reason": "略低于中枢下沿(ZG=20.68, ZD=20.61), 现价=20.41, 距ZD=-1.0%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 20.68,
+          "pivot_zd": 20.61
+        },
+        {
+          "code": "603331",
+          "name": "百达精工",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 14.36,
+            "date": "2026-05-22",
+            "reason": "中枢下沿附近(ZG=15.31, ZD=14.3), 现价=14.36, 距ZD=+0.4%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 15.31,
+            "ZD": 14.3,
+            "count": 4
+          },
+          "trend_type": "盘整",
+          "score": 60.8,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 13.64,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 14.79
+            },
+            {
+              "pct": 5.0,
+              "price": 15.08
+            },
+            {
+              "pct": 8.0,
+              "price": 15.51
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 92,
+              "price": 14.01,
+              "date": "2026-05-13",
+              "reason": "底背驰(力度比=36.40%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 14.36,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=15.31, ZD=14.3), 现价=14.36, 距ZD=+0.4%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 15.31,
+          "pivot_zd": 14.3
+        },
+        {
+          "code": "300669",
+          "name": "沪宁股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 90,
+            "price": 30.7,
+            "date": "2026-05-11",
+            "reason": "底背驰(力度比=45.97%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 32.66,
+            "ZD": 30.86,
+            "count": 3
+          },
+          "trend_type": "盘整",
+          "score": 59.2,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": true,
+          "stop_loss": 29.16,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 31.62
+            },
+            {
+              "pct": 5.0,
+              "price": 32.24
+            },
+            {
+              "pct": 8.0,
+              "price": 33.16
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 90,
+              "price": 30.7,
+              "date": "2026-05-11",
+              "reason": "底背驰(力度比=45.97%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 32.66,
+          "pivot_zd": 30.86
+        },
+        {
+          "code": "002827",
+          "name": "高争民爆",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 30.5,
+            "date": "2026-05-22",
+            "reason": "中枢下沿附近(ZG=33.9, ZD=30.03), 现价=30.5, 距ZD=+1.6%",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 33.9,
+            "ZD": 30.03,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 58.5,
+          "sector": "基础化工",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 28.97,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 31.41
+            },
+            {
+              "pct": 5.0,
+              "price": 32.02
+            },
+            {
+              "pct": 8.0,
+              "price": 32.94
+            }
+          ],
+          "is_active": false,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 78,
+              "price": 29.8,
+              "date": "2026-04-20",
+              "reason": "底背驰(力度比=44.59%)，下跌力度衰竭",
+              "strength": "强"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 30.5,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=33.9, ZD=30.03), 现价=30.5, 距ZD=+1.6%",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 33.9,
+          "pivot_zd": 30.03
+        },
+        {
+          "code": "605288",
+          "name": "凯迪股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 89,
+            "price": 78.03,
+            "date": "2026-05-08",
+            "reason": "底背驰(力度比=12.19%)，下跌力度衰竭",
+            "strength": "强"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 89.89,
+            "ZD": 85.73,
+            "count": 4
+          },
+          "trend_type": "无中枢",
+          "score": 58.2,
+          "sector": "机械设备",
+          "resonance": {},
+          "ma_bullish": true,
+          "stop_loss": 74.13,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 80.37
+            },
+            {
+              "pct": 5.0,
+              "price": 81.93
+            },
+            {
+              "pct": 8.0,
+              "price": 84.27
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 89,
+              "price": 78.03,
+              "date": "2026-05-08",
+              "reason": "底背驰(力度比=12.19%)，下跌力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "pivot_zg": 89.89,
+          "pivot_zd": 85.73
+        },
+        {
+          "code": "000751",
+          "name": "锌业股份",
+          "best_buy_point": {
+            "type": "一买",
+            "index": 98,
+            "price": 5.23,
+            "date": "2026-05-21",
+            "reason": "笔底背驰(力度比=68.03%)，下跌力度衰竭",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 6.65,
+            "ZD": 5.78,
+            "count": 4
+          },
+          "trend_type": "无中枢",
+          "score": 58.0,
+          "sector": "有色金属",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": 4.97,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 5.39
+            },
+            {
+              "pct": 5.0,
+              "price": 5.49
+            },
+            {
+              "pct": 8.0,
+              "price": 5.65
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 98,
+              "price": 5.23,
+              "date": "2026-05-21",
+              "reason": "笔底背驰(力度比=68.03%)，下跌力度衰竭",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 6.65,
+          "pivot_zd": 5.78
+        },
+        {
+          "code": "300565",
+          "name": "科信技术",
+          "best_buy_point": {
+            "type": "类二买",
+            "index": 99,
+            "price": 14.75,
+            "date": "2026-05-22",
+            "reason": "中枢下沿附近(ZG=14.72, ZD=14.06), 现价=14.75, 距ZD=+4.9%",
+            "strength": "中"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": 14.72,
+            "ZD": 14.06,
+            "count": 2
+          },
+          "trend_type": "盘整",
+          "score": 57.0,
+          "sector": "通信设备",
+          "resonance": {},
+          "ma_bullish": true,
+          "stop_loss": 14.01,
+          "stop_loss_pct": -5.0,
+          "trailing_targets": [
+            {
+              "pct": 3.0,
+              "price": 15.19
+            },
+            {
+              "pct": 5.0,
+              "price": 15.49
+            },
+            {
+              "pct": 8.0,
+              "price": 15.93
+            }
+          ],
+          "is_active": true,
+          "market_trend": "强趋势",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "一买",
+              "index": 63,
+              "price": 12.91,
+              "date": "2026-03-27",
+              "reason": "笔底背驰(力度比=67.96%)，下跌力度衰竭",
+              "strength": "中"
+            },
+            {
+              "type": "类二买",
+              "index": 99,
+              "price": 14.75,
+              "date": "2026-05-22",
+              "reason": "中枢下沿附近(ZG=14.72, ZD=14.06), 现价=14.75, 距ZD=+4.9%",
+              "strength": "中"
+            },
+            {
+              "type": "三买",
+              "index": 99,
+              "price": 14.75,
+              "date": "2026-05-22",
+              "reason": "突破ZG=13.53后回抽, 近5日最低=14.06, 高出ZG 3.92%",
+              "strength": "中"
+            }
+          ],
+          "pivot_zg": 14.72,
+          "pivot_zd": 14.06
+        }
+      ],
+      "sector_flow": [
+        {
+          "code": "BK1201",
+          "name": "电子",
+          "change_pct": 3.75,
+          "flow": 25490657280.0,
+          "flow_str": "254.91亿"
+        },
+        {
+          "code": "BK0459",
+          "name": "元件",
+          "change_pct": 8.04,
+          "flow": 13569596672.0,
+          "flow_str": "135.70亿"
+        },
+        {
+          "code": "BK1340",
+          "name": "印制电路板",
+          "change_pct": 8.21,
+          "flow": 12105575680.0,
+          "flow_str": "121.06亿"
+        },
+        {
+          "code": "BK0448",
+          "name": "通信设备",
+          "change_pct": 2.85,
+          "flow": 7706466816.0,
+          "flow_str": "77.06亿"
+        },
+        {
+          "code": "BK0478",
+          "name": "有色金属",
+          "change_pct": 4.0,
+          "flow": 6864029952.0,
+          "flow_str": "68.64亿"
+        },
+        {
+          "code": "BK1215",
+          "name": "通信",
+          "change_pct": 2.42,
+          "flow": 6786162176.0,
+          "flow_str": "67.86亿"
+        },
+        {
+          "code": "BK1591",
+          "name": "通信网络设备及器件",
+          "change_pct": 3.52,
+          "flow": 5805035264.0,
+          "flow_str": "58.05亿"
+        },
+        {
+          "code": "BK1338",
+          "name": "消费电子零部件及组装",
+          "change_pct": 3.54,
+          "flow": 5320504064.0,
+          "flow_str": "53.21亿"
+        },
+        {
+          "code": "BK1037",
+          "name": "消费电子",
+          "change_pct": 3.09,
+          "flow": 5180514816.0,
+          "flow_str": "51.81亿"
+        },
+        {
+          "code": "BK1205",
+          "name": "机械设备",
+          "change_pct": 2.3,
+          "flow": 4308761088.0,
+          "flow_str": "43.09亿"
+        },
+        {
+          "code": "BK1287",
+          "name": "工业金属",
+          "change_pct": 4.34,
+          "flow": 4122548736.0,
+          "flow_str": "41.23亿"
+        },
+        {
+          "code": "BK1036",
+          "name": "半导体",
+          "change_pct": 2.99,
+          "flow": 4122038272.0,
+          "flow_str": "41.22亿"
+        },
+        {
+          "code": "BK1206",
+          "name": "基础化工",
+          "change_pct": 2.63,
+          "flow": 3387659264.0,
+          "flow_str": "33.88亿"
+        },
+        {
+          "code": "BK0545",
+          "name": "通用设备",
+          "change_pct": 2.57,
+          "flow": 2854915328.0,
+          "flow_str": "28.55亿"
+        },
+        {
+          "code": "BK0546",
+          "name": "玻璃玻纤",
+          "change_pct": 5.47,
+          "flow": 2665182400.0,
+          "flow_str": "26.65亿"
+        },
+        {
+          "code": "BK1208",
+          "name": "建筑材料",
+          "change_pct": 2.37,
+          "flow": 2629916416.0,
+          "flow_str": "26.30亿"
+        },
+        {
+          "code": "BK1462",
+          "name": "玻纤制造",
+          "change_pct": 8.41,
+          "flow": 2613055584.0,
+          "flow_str": "26.13亿"
+        },
+        {
+          "code": "BK1328",
+          "name": "集成电路封测",
+          "change_pct": 3.64,
+          "flow": 2375823616.0,
+          "flow_str": "23.76亿"
+        },
+        {
+          "code": "BK1615",
+          "name": "铜",
+          "change_pct": 5.66,
+          "flow": 2310003664.0,
+          "flow_str": "23.10亿"
+        },
+        {
+          "code": "BK1329",
+          "name": "集成电路制造",
+          "change_pct": 3.44,
+          "flow": 2259360256.0,
+          "flow_str": "22.59亿"
+        }
+      ],
+      "sector_outflow": [
+        {
+          "code": "BK1203",
+          "name": "非银金融",
+          "change_pct": -0.96,
+          "flow": -3136514560.0,
+          "flow_str": "-31.37亿"
+        },
+        {
+          "code": "BK0473",
+          "name": "证券Ⅱ",
+          "change_pct": -1.41,
+          "flow": -2663295744.0,
+          "flow_str": "-26.63亿"
+        },
+        {
+          "code": "BK1366",
+          "name": "证券Ⅲ",
+          "change_pct": -1.41,
+          "flow": -2663295744.0,
+          "flow_str": "-26.63亿"
+        },
+        {
+          "code": "BK0486",
+          "name": "传媒",
+          "change_pct": 0.41,
+          "flow": -2130301376.0,
+          "flow_str": "-21.30亿"
+        },
+        {
+          "code": "BK1277",
+          "name": "白酒Ⅱ",
+          "change_pct": -3.09,
+          "flow": -1815872544.0,
+          "flow_str": "-18.16亿"
+        }
+      ],
+      "limit_up_pool": [],
+      "events": [
+        {
+          "title": "连涨数月无水氢氟酸价格趋稳 存储热潮或进一步拉动G5级电子氢氟酸需求",
+          "content": "【连涨数月无水氢氟酸价格趋稳 存储热潮或进一步拉动G5级电子氢氟酸需求】财联社5月24日电，近期，存储热潮带动电子级氢氟酸及上游无水氢氟酸 （AHF） 涨价预期升温。财联社记者多方采访获悉，无水氢氟酸价格自3月起稳步上行，5月已趋于平稳，核心驱动为原料硫酸涨价以及行业开工率低，但由于行业长期亏损，目前盈利仍处修复阶段。目前，用于半导体的电子级氢氟酸一般分为G4、G5两个级别，后者纯度更高，适14nm及以下先进制程芯片先进制程，有上市公司人士表示，由于存储需求较旺，对电子级氢氟酸预计有拉动，G5级相对更紧张。（财联社记者 罗祎辰）",
+          "brief": "【连涨数月无水氢氟酸价格趋稳 存储热潮或进一步拉动G5级电子氢氟酸需求】近期，存储热潮带动电子级氢氟酸及上游无水氢氟酸 （AHF） 涨价预期升温。财联社记者多方采访获悉，无水氢氟酸价格自3月起稳步上行，5月已趋于平稳，核心驱动为原料硫酸涨价以及行业开工率低，但由于行业长期亏损，目前盈利仍处修复阶段。目前，用于半导体的电子级氢氟酸一般分为G4、G5两个级别，后者纯度更高，适14nm及以下先进制程芯片先进制程，有上市公司人士表示，由于存储需求较旺，对电子级氢氟酸预计有拉动，G5级相对更紧张。（财联社记者 罗祎辰）",
+          "ctime": 1779623764,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": false,
+            "summary": "存储热潮或拉动G5级电子氢氟酸需求，利好氟化工及半导体材料板块",
+            "positive_sectors": [
+              "氟化工",
+              "半导体"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "多氟多",
+                "code": "002407",
+                "reason": "电子级氢氟酸龙头，产品可用于半导体"
+              },
+              {
+                "name": "巨化股份",
+                "code": "600160",
+                "reason": "国内氟化工龙头，拥有电子级氢氟酸产能"
+              },
+              {
+                "name": "永太科技",
+                "code": "002326",
+                "reason": "氟精细化学品供应商，布局电子级氢氟酸"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "【风口研报·公司】聚焦AI“运力”芯片构建护城河，这家公司覆盖三星电子、SK海力士、美光等全球头部DRAM厂商，受益于内存互连芯片需求上升；周策略：核心科技主线宽幅震荡后重回趋势",
+          "content": "①聚焦AI“运力”芯片构建护城河，这家公司覆盖三星电子、SK海力士、美光等全球头部DRAM厂商，受益于内存互连芯片需求上升；②周策略：核心科技主线宽幅震荡后重回趋势。",
+          "brief": "①聚焦AI“运力”芯片构建护城河，这家公司覆盖三星电子、SK海力士、美光等全球头部DRAM厂商，受益于内存互连芯片需求上升；②周策略：核心科技主线宽幅震荡后重回趋势。",
+          "ctime": 1779626088,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "AI运力芯片受关注，利好半导体及AI芯片板块",
+            "positive_sectors": [
+              "半导体",
+              "AI芯片"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "澜起科技",
+                "code": "688008",
+                "reason": "内存接口芯片龙头，深度覆盖全球DRAM巨头"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "中信建投：迎接MLCC超级周期  重视产业链投资机遇",
+          "content": "【中信建投：迎接MLCC超级周期  重视产业链投资机遇】财联社5月24日电，中信建投认为，MLCC作为电子电路的核心被动元件，其需求、价格、库存波动与半导体、电子行业周期深度绑定，始终围绕“需求驱动、库存传导、供需放大”的逻辑展开，二者相互绑定、同步波动。伴随电子、半导体超级周期启动，MLCC行业迎来“爆发时刻”。自动驾驶及AI发展对被动元件数量及性能要求大幅提升，尤其是高功率、高频率、高可靠性、小型化的电感、电容和电阻需求激增，正推动行业迈向新景气周期。虽然高端MLCC主要集中在三星电机、村田、太阳诱电等公司，但材料决定器件性能，我国材料领域的优秀企业正具备全球竞争力，缩小与日韩企业差距。",
+          "brief": "【中信建投：迎接MLCC超级周期  重视产业链投资机遇】财联社5月24日电，中信建投认为，MLCC作为电子电路的核心被动元件，其需求、价格、库存波动与半导体、电子行业周期深度绑定，始终围绕“需求驱动、库存传导、供需放大”的逻辑展开，二者相互绑定、同步波动。伴随电子、半导体超级周期启动，MLCC行业迎来“爆发时刻”。自动驾驶及AI发展对被动元件数量及性能要求大幅提升，尤其是高功率、高频率、高可靠性、小型化的电感、电容和电阻需求激增，正推动行业迈向新景气周期。虽然高端MLCC主要集中在三星电机、村田、太阳诱电等公司，但材料决定器件性能，我国材料领域的优秀企业正具备全球竞争力，缩小与日韩企业差距。",
+          "ctime": 1779621698,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "中信建投看好MLCC超级周期，利好电子元件及材料板块",
+            "positive_sectors": [
+              "电子元件",
+              "半导体材料"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "三环集团",
+                "code": "300408",
+                "reason": "国内MLCC材料龙头，受益周期上行"
+              },
+              {
+                "name": "风华高科",
+                "code": "000636",
+                "reason": "国内MLCC制造领军企业"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "5月24日周日《新闻联播》要闻16条",
+          "content": "【5月24日周日《新闻联播》要闻16条】财联社5月24日电，今天《新闻联播》主要内容有：\n1、【新思想引领新征程】努力建设社会主义现代化新西藏；\n2、【树立和践行正确政绩观】暖民心 惠民生 推动学习教育走深走实；\n3、神舟二十三号飞船发射准备就绪；\n4、强降雨来袭 各地各部门积极应对；\n5、全球超九成超大型油轮订单涌向中国；\n6、最高检发布“十四五”时期服务保障长江经济带发展白皮书； \n7、我国加快研究制定全国一体化算力网技术标准；\n8、国产F406涡扇发动机完成首飞试验； \n9、首届中学生人形机器人足球赛决出首站冠军；\n10、四川卧龙野生白色大熊猫野外活动影像公布；\n11、美称美伊协议基本谈成 伊称双方正努力敲定谅解备忘录 以媒称美伊协议或对以非常不利 以总理紧急开会；\n12、俄称使用“榛树”导弹等对乌发动大规模打击 乌称打击俄黑海沿岸石油码头；\n13、以轰炸加沙北部 法制裁以官员；\n14、刚果（金）埃博拉疫情持续恶化；\n15、伊朗队将世界杯驻地从美国改至墨西哥；\n16、印度多地热浪持续 用水用电紧张。",
+          "brief": "【5月24日周日《新闻联播》要闻16条】财联社5月24日电，今天《新闻联播》主要内容有：\n1、【新思想引领新征程】努力建设社会主义现代化新西藏；\n2、【树立和践行正确政绩观】暖民心 惠民生 推动学习教育走深走实；\n3、神舟二十三号飞船发射准备就绪；\n4、强降雨来袭 各地各部门积极应对；\n5、全球超九成超大型油轮订单涌向中国；\n6、最高检发布“十四五”时期服务保障长江经济带发展白皮书； \n7、我国加快研究制定全国一体化算力网技术标准；\n8、国产F406涡扇发动机完成首飞试验； \n9、首届中学生人形机器人足球赛决出首站冠军；\n10、四川卧龙野生白色大熊猫野外活动影像公布；\n11、美称美伊协议基本谈",
+          "ctime": 1779624591,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": false,
+            "summary": "油轮订单利好船舶制造，算力网标准利好数据中心，发动机首飞利好航空军工",
+            "positive_sectors": [
+              "船舶制造",
+              "数据中心",
+              "航空发动机"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "中国船舶",
+                "code": "600150",
+                "reason": "全球超九成超大型油轮订单涌向中国，龙头受益"
+              },
+              {
+                "name": "中船防务",
+                "code": "600685",
+                "reason": "油轮订单大增，公司为重要船舶制造商"
+              },
+              {
+                "name": "数据港",
+                "code": "603881",
+                "reason": "一体化算力网标准制定加速，数据中心需求提升"
+              },
+              {
+                "name": "光环新网",
+                "code": "300383",
+                "reason": "算力网标准推动，公司为一线城市IDC龙头"
+              },
+              {
+                "name": "航发动力",
+                "code": "600893",
+                "reason": "国产F406涡扇发动机首飞成功，航空发动机龙头受益"
+              },
+              {
+                "name": "航发科技",
+                "code": "600391",
+                "reason": "航空发动机研发试验成功，公司从事相关零部件制造"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "今年首个红色预警！水利部和中国气象局联合发布红色山洪灾害气象预警",
+          "content": "【今年首个红色预警！水利部和中国气象局联合发布红色山洪灾害气象预警】财联社5月24日电，水利部和中国气象局5月24日18时联合发布红色山洪灾害气象预警：预计，5月24日20时至5月25日20时，浙江西部、安徽西部和南部、江西东北部、湖北东部等地部分地区发生山洪灾害可能性大（橙色预警），其中，安徽西部、湖北东部局地发生山洪灾害可能性很大（红色预警）。其他地区也可能因局地短历时强降水引发山洪灾害，请各地注意做好实时监测、防汛预警和转移避险等防范工作。",
+          "brief": "【今年首个红色预警！水利部和中国气象局联合发布红色山洪灾害气象预警】财联社5月24日电，水利部和中国气象局5月24日18时联合发布红色山洪灾害气象预警：预计，5月24日20时至5月25日20时，浙江西部、安徽西部和南部、江西东北部、湖北东部等地部分地区发生山洪灾害可能性大（橙色预警），其中，安徽西部、湖北东部局地发生山洪灾害可能性很大（红色预警）。其他地区也可能因局地短历时强降水引发山洪灾害，请各地注意做好实时监测、防汛预警和转移避险等防范工作。",
+          "ctime": 1779619450,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": false,
+            "summary": "红色山洪预警发布，刺激防汛抗洪板块",
+            "positive_sectors": [
+              "水利建设",
+              "地下管网"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "钱江水利",
+                "code": "600283",
+                "reason": "浙江防汛概念龙头"
+              },
+              {
+                "name": "安徽建工",
+                "code": "600502",
+                "reason": "安徽本地水利建设企业"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "",
+          "content": "财联社5月24日电，伊朗伊斯兰革命卫队海军表示，过去24小时内，共有33艘船舶在获得伊朗许可后通过霍尔木兹海峡。",
+          "brief": "财联社5月24日电，伊朗伊斯兰革命卫队海军表示，过去24小时内，共有33艘船舶在获得伊朗许可后通过霍尔木兹海峡。",
+          "ctime": 1779626043,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": true,
+            "summary": "对A股无明显影响",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "以媒：特朗普向以方保证与伊朗协议将解除其核计划",
+          "content": "【以媒：特朗普向以方保证与伊朗协议将解除其核计划】《以色列时报》网站24日援引一名以色列高级官员的话报道说，美国总统特朗普前一晚在与以总理内塔尼亚胡的通话中表示，将坚持解除伊朗核计划的目标。\n\n报道称，特朗普向内塔尼亚胡“保证”，与伊朗达成的“最终协议”将彻底解除伊朗核计划。这名未具名的以方官员说：“特朗普明确表示，他将在谈判中坚持其长期以来的要求，即解除伊朗核计划，并将所有浓缩铀从伊朗领土移除，如果这些条件得不到满足，他不会签署最终协议。”\n\n报道还说，美方正随时向以方通报有关“重新开放霍尔木兹海峡的谅解备忘录以及就仍然存在争议的问题达成最终协议”的谈判进展。内塔尼亚胡感谢特朗普“对以色列安全的非凡承诺”。\n\n这名未具名的以方官员还称，内塔尼亚胡告诉特朗普，以色列将在“所有领域”保留应对威胁的行动自由，特朗普则表达了他对这一原则的支持。 (新华社)",
+          "brief": "【以媒：特朗普向以方保证与伊朗协议将解除其核计划】《以色列时报》网站24日援引一名以色列高级官员的话报道说，美国总统特朗普前一晚在与以总理内塔尼亚胡的通话中表示，将坚持解除伊朗核计划的目标。\n\n报道称，特朗普向内塔尼亚胡“保证”，与伊朗达成的“最终协议”将彻底解除伊朗核计划。这名未具名的以方官员说：“特朗普明确表示，他将在谈判中坚持其长期以来的要求，即解除伊朗核计划，并将所有浓缩铀从伊朗领土移除，如果这些条件得不到满足，他不会签署最终协议。”\n\n报道还说，美方正随时向以方通报有关“重新开放霍尔木兹海峡的谅解备忘录以及就仍然存在争议的问题达成最终协议”的谈判进展。内塔尼亚胡感谢特朗普“对以色列安",
+          "ctime": 1779624461,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "美伊协议预期缓和中东局势，油价下行压力利好航空，利空石油军工",
+            "positive_sectors": [
+              "航空运输"
+            ],
+            "negative_sectors": [
+              "石油开采",
+              "军工"
+            ],
+            "positive_stocks": [
+              {
+                "name": "中国国航",
+                "code": "601111",
+                "reason": "油价下跌降低运营成本"
+              },
+              {
+                "name": "南方航空",
+                "code": "600029",
+                "reason": "燃油成本下降提升盈利"
+              }
+            ],
+            "negative_stocks": [
+              {
+                "name": "中国石油",
+                "code": "601857",
+                "reason": "油价预期下跌压制业绩"
+              },
+              {
+                "name": "航发动力",
+                "code": "600893",
+                "reason": "地缘冲突缓和削弱军工需求"
+              }
+            ]
+          }
+        },
+        {
+          "title": "中信证券：下游需求筑底改善 继续看好肉牛原奶周期共振",
+          "content": "【中信证券：下游需求筑底改善 继续看好肉牛原奶周期共振】财联社5月24日电，中信证券研报指出，2026年原奶供给小幅增加，液奶需求筑底改善，固体乳需求高景气。4月以来散奶价格维持高位，原奶供需矛盾持续缓解，龙头乳企深加工布局持续推进。5月以来淘汰母牛价格涨至22元/kg以上，龙头牧业公司增加肉牛业务布局，2024年以来肉牛存栏去化较多，国内去化及进口配额背景下，2026年肉牛供给端存在下降压力，参考上轮肉牛周期去化及价格回升节奏，研报判断本轮周期活牛价格仍有上行空间。继续看好肉牛原奶周期共振，推荐牧业养殖龙头及全产业链布局、原奶自给率较高的企业，以及乳制品深加工受益乳企。",
+          "brief": "【中信证券：下游需求筑底改善 继续看好肉牛原奶周期共振】财联社5月24日电，中信证券研报指出，2026年原奶供给小幅增加，液奶需求筑底改善，固体乳需求高景气。4月以来散奶价格维持高位，原奶供需矛盾持续缓解，龙头乳企深加工布局持续推进。5月以来淘汰母牛价格涨至22元/kg以上，龙头牧业公司增加肉牛业务布局，2024年以来肉牛存栏去化较多，国内去化及进口配额背景下，2026年肉牛供给端存在下降压力，参考上轮肉牛周期去化及价格回升节奏，研报判断本轮周期活牛价格仍有上行空间。继续看好肉牛原奶周期共振，推荐牧业养殖龙头及全产业链布局、原奶自给率较高的企业，以及乳制品深加工受益乳企。",
+          "ctime": 1779623721,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "中信证券看好肉牛原奶周期共振，利好养殖和乳业板块",
+            "positive_sectors": [
+              "养殖业",
+              "乳业"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "福成股份",
+                "code": "600965",
+                "reason": "肉牛养殖龙头，受益肉牛周期上行"
+              },
+              {
+                "name": "伊利股份",
+                "code": "600887",
+                "reason": "原奶自给率较高，受益原奶供需改善"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "【电报解读】神舟二十三号已具备执行发射任务条件，机构称中国商业航天产业已正式迈入“技术—资本—市场”相互促进、正向循环的爆发期，这家公司已为神舟十二号至二十一号载人航天任务提供舱内工作服支持",
+          "content": "神舟二十三号已具备执行发射任务条件，机构称中国商业航天产业已正式迈入“技术—资本—市场”相互促进、正向循环的爆发期，这家公司已为神舟十二号至二十一号载人航天任务提供舱内工作服支持，另一家已与国际知名航天公司开展商业合作，长期供应系列产品。",
+          "brief": "神舟二十三号已具备执行发射任务条件，机构称中国商业航天产业已正式迈入“技术—资本—市场”相互促进、正向循环的爆发期，这家公司已为神舟十二号至二十一号载人航天任务提供舱内工作服支持，另一家已与国际知名航天公司开展商业合作，长期供应系列产品。",
+          "ctime": 1779622375,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "summary": "分析失败: Expecting value: line 1 column 1 (char 0)",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true
+          }
+        },
+        {
+          "title": "比特币过去24小时涨3.3%",
+          "content": "【比特币过去24小时涨3.3%】财联社5月24日电，行情显示，比特币涨至77293.4美元，过去24小时内涨3.28%；行情显示，以太坊涨至2125.7美元，过去24小时内涨4.53%。",
+          "brief": "【比特币过去24小时涨3.3%】财联社5月24日电，行情显示，比特币涨至77293.4美元，过去24小时内涨3.28%；行情显示，以太坊涨至2125.7美元，过去24小时内涨4.53%。",
+          "ctime": 1779622355,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "比特币大涨提振A股区块链及数字货币概念",
+            "positive_sectors": [
+              "区块链",
+              "数字货币"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "智度股份",
+                "code": "000676",
+                "reason": "子公司涉及区块链技术及比特币挖矿"
+              },
+              {
+                "name": "四方精创",
+                "code": "300468",
+                "reason": "布局央行数字货币及区块链支付"
+              }
+            ],
+            "negative_stocks": []
+          }
+        }
+      ],
+      "forecast": {
+        "core_judgment": "缩量上涨，缠论无日线中枢，科技板块主升浪延续，但量价背离需警惕",
+        "volume_note": "今日较5日均量缩量11.5%，无量上攻，突破有效性存疑",
+        "short_term": [
+          "若上证放量站上4150点，则上涨趋势延续，可关注三买信号",
+          "若缩量回调不破4080点，则维持强势震荡，等待中枢构建",
+          "若电子、元件板块资金大幅流出且上证跌破4050，则短期调整展开"
+        ],
+        "mid_term": "中期看4100-4300区间能否构建日线中枢，若成功则有望向上离开中枢；若中枢构建失败或出现盘整背驰，则可能形成阶段顶部。科技主线扩散程度决定行情广度。",
+        "risks": [
+          "量价背离持续，无量拉高后易引发快速回调",
+          "科技股交易热度集中，一旦分歧可能引发多杀多",
+          "热点事件利好兑现后，若无新催化，板块轮动可能熄火"
+        ]
+      },
+      "sell_signals": [
+        {
+          "code": "000751",
+          "name": "锌业股份",
+          "sell_points": [
+            {
+              "type": "一卖",
+              "index": 69,
+              "price": 6.84,
+              "date": "2026-04-07",
+              "reason": "顶背驰(力度比=33.08%)，上涨力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "trend_type": "无中枢",
+          "divergence": {
+            "is_divergence": true,
+            "type": "盘整顶背驰",
+            "area_ratio": 0.3308
+          },
+          "sector": "有色金属"
+        },
+        {
+          "code": "002833",
+          "name": "弘亚数控",
+          "sell_points": [
+            {
+              "type": "一卖",
+              "index": 75,
+              "price": 22.17,
+              "date": "2026-04-15",
+              "reason": "顶背驰(力度比=23.43%)，上涨力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "trend_type": "无中枢",
+          "divergence": {
+            "is_divergence": true,
+            "type": "盘整顶背驰",
+            "area_ratio": 0.2343
+          },
+          "sector": "机械设备"
+        },
+        {
+          "code": "605060",
+          "name": "联德股份",
+          "sell_points": [
+            {
+              "type": "一卖",
+              "index": 79,
+              "price": 65.7,
+              "date": "2026-04-21",
+              "reason": "顶背驰(力度比=33.10%)，上涨力度衰竭",
+              "strength": "强"
+            }
+          ],
+          "trend_type": "盘整",
+          "divergence": {
+            "is_divergence": true,
+            "type": "盘整顶背驰",
+            "area_ratio": 0.331
+          },
+          "sector": "机械设备"
+        }
+      ]
+    }
+  }
+}
