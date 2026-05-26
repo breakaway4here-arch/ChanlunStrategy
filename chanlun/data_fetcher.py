@@ -172,7 +172,7 @@ def fetch_sector_stocks(sector_code):
         params = {
             "pn": str(page), "pz": "200", "po": "0", "np": "1",
             "fltt": "2", "invt": "2", "fid": "f3",
-            "fs": f"b:{sector_code}+f:!200",
+            "fs": f"b:{sector_code}",
             "fields": "f12,f14,f3,f2",
         }
         try:
