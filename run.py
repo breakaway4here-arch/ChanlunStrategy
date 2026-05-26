@@ -327,10 +327,12 @@ def main(debug=False):
     startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
         chan_results, sector_stocks)
     print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
-          f"日线启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
-          f"涨停观察: {startup_diag.get('watch_due_to_limit_up', 0)}, "
-          f"高位过滤: {startup_diag.get('dropped_high_position', 0)}, "
-          f"无量过滤: {startup_diag.get('dropped_no_volume', 0)}")
+          f"启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
+          f"涨停观察: {startup_diag.get('watch_due_to_limit_up', 0)}")
+    print(f"  过滤: 基础={startup_diag.get('dropped_base_filter', 0)}, "
+          f"高位={startup_diag.get('dropped_high_position', 0)}, "
+          f"无量={startup_diag.get('dropped_no_volume', 0)}, "
+          f"无突破={startup_diag.get('dropped_no_breakout', 0)}")
 
     # ================================================================
     # Phase 5: 30min fetch + analysis + candidate upgrade
@@ -430,9 +432,54 @@ def main(debug=False):
                       f"watch_no_confirm={startup_upgrade_diag['watch_due_to_no_30min_confirm']}, "
                       f"dropped_no_30min_data={startup_upgrade_diag.get('dropped_no_30min_confirm', 0)}")
                 startup_watchlist = startup_watchlist + startup_additional_watchlist
-                # Merge startup candidates into pure_confirmed
+                # Normalize startup candidates to match regular pick structure
                 if startup_candidates:
-                    pure_confirmed = pure_confirmed + startup_candidates
+                    normalized = []
+                    for sc in startup_candidates:
+                        pick = {
+                            "code": sc["code"],
+                            "name": sc["name"],
+                            "signal_tier": "candidate",
+                            "best_buy_point": {
+                                "type": sc.get("type", "强势启动候选"),
+                                "tier": "candidate",
+                                "index": len(sc.get("closes", [])) - 1,
+                                "price": sc.get("close", 0),
+                                "reason": sc.get("startup_reason", ""),
+                                "strength": sc.get("startup_strength", "中"),
+                                "source_type": sc.get("source_type", "日线强势启动"),
+                                "confirmed_by": "30min确认",
+                                "confirmations": sc.get("confirmations", []),
+                                "startup_reason": sc.get("startup_reason", ""),
+                                "startup_signals": sc.get("startup_signals", []),
+                            },
+                            "buy_points_30min": [],
+                            "pivots": sc.get("pivot_info", {}),
+                            "trend_type": "",
+                            "score": 0,
+                            "sector": "",
+                            "resonance": {},
+                            "ma_bullish": False,
+                            "fusion_admission": {},
+                            "market_regime": "",
+                            "dates": sc.get("dates", sc.get("closes", [])),
+                            "closes": sc.get("closes", []),
+                            "opens": sc.get("opens", []),
+                            "highs": sc.get("highs", []),
+                            "lows": sc.get("lows", []),
+                            "volumes": sc.get("volumes", []),
+                            "macd_hist": np.zeros(len(sc.get("closes", []))),
+                            "buy_points": sc.get("buy_points", []),
+                            "reference_buy_points": [],
+                            "blocked_buy_points": [],
+                            "result_30min": sc.get("result_30min"),
+                            "startup_reason": sc.get("startup_reason", ""),
+                            "startup_signals": sc.get("startup_signals", []),
+                            "change_pct": sc.get("change_pct", 0),
+                            "volume_ratio": sc.get("volume_ratio", 0),
+                        }
+                        normalized.append(pick)
+                    pure_confirmed = pure_confirmed + normalized
                     print(f"  合并启动候选 {len(startup_candidates)} 只到纯净版主推荐")
             else:
                 startup_upgrade_diag = {}

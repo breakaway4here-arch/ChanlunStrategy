@@ -29,6 +29,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         "daily_startup_seed": 0,
         "dropped_high_position": 0,
         "dropped_no_volume": 0,
+        "dropped_no_breakout": 0,
         "dropped_base_filter": 0,
         "watch_due_to_limit_up": 0,
     }
@@ -49,7 +50,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         if is_st_stock(name):
             diag["dropped_base_filter"] += 1
             continue
-        if closes is None or len(closes) < max(120, config.MIN_LISTED_DAYS):
+        if closes is None or len(closes) < max(60, config.MIN_LISTED_DAYS):
             diag["dropped_base_filter"] += 1
             continue
 
@@ -91,7 +92,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             closes, opens, highs, config.STRONG_STARTUP_MIN_CHANGE_PCT
         )
         if len(startup_signals) < 2:
-            diag["dropped_no_volume"] += 1  # reuse counter for "no breakout"
+            diag["dropped_no_breakout"] += 1
             continue
 
         # --- Build startup seed ---
