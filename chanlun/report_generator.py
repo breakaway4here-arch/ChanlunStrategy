@@ -1530,8 +1530,7 @@ function renderChart(idx, ver) {{
         window._charts[domId].dispose();
     }}
 
-    var has30min = pick.has_30min && (pick.dates_30min || []).length > 0;
-    var chartHeight = has30min ? 520 : 420;
+    var chartHeight = 420;
 
     var chart = echarts.init(dom);
     window._charts = window._charts || {{}};
@@ -1595,101 +1594,54 @@ function renderChart(idx, ver) {{
 
     var grids, xAxes, yAxes, series;
 
-    if (has30min) {{
-        // Dual-panel: daily (top) + 30min (bottom)
-        grids = [
-            {{ left: 60, right: 20, top: 20, height: '28%' }},
-            {{ left: 60, right: 20, top: '34%', height: '14%' }},
-            {{ left: 60, right: 20, top: '54%', height: '20%' }},
-            {{ left: 60, right: 20, top: '78%', height: '16%' }}
-        ];
-        var d30 = pick.dates_30min || [];
-        xAxes = [
-            {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
-            {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }},
-            {{ type: 'category', data: d30, gridIndex: 2, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9, rotate: 30 }} }},
-            {{ type: 'category', data: d30, gridIndex: 3, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
-        ];
-        yAxes = [
-            {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
-            {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
-            {{ type: 'value', gridIndex: 2, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
-            {{ type: 'value', gridIndex: 3, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
-        ];
-        series = [
-            // Daily K-line
-            {{
-                type: 'candlestick', name: '日线',
-                data: (pick.highs || []).map(function(h, i) {{
-                    return [pick.opens ? pick.opens[i] : closes[i], closes[i],
-                            pick.lows ? pick.lows[i] : closes[i], h];
-                }}),
-                xAxisIndex: 0, yAxisIndex: 0,
-                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
-                markPoint: {{ data: buyMarks }},
-                markArea: {{ silent: true, data: markAreas }},
-                markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
-            }},
-            // Daily MACD
-            {{
-                type: 'bar', name: '日线MACD',
-                data: macdHist.map(function(v) {{ return v || 0; }}),
-                xAxisIndex: 1, yAxisIndex: 1,
-                itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
-            }},
-            // 30min K-line
-            {{
-                type: 'candlestick', name: '30min',
-                data: (pick.highs_30min || []).map(function(h, i) {{
-                    var o = (pick.opens_30min || [])[i];
-                    var c = (pick.closes_30min || [])[i];
-                    var l = (pick.lows_30min || [])[i];
-                    return [o !== undefined ? o : c, c, l !== undefined ? l : c, h];
-                }}),
-                xAxisIndex: 2, yAxisIndex: 2,
-                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }}
-            }},
-            // 30min volume
-            {{
-                type: 'bar', name: '30min量',
-                data: (pick.volumes_30min || (pick.result_30min ? [] : [])).map(function(v) {{ return v || 0; }}),
-                xAxisIndex: 3, yAxisIndex: 3,
-                itemStyle: {{ color: 'rgba(116,185,255,0.4)' }}
-            }}
-        ];
-    }} else {{
-        grids = [
-            {{ left: 60, right: 20, top: 20, height: '55%' }},
-            {{ left: 60, right: 20, top: '68%', height: '25%' }}
-        ];
-        xAxes = [
-            {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
-            {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
-        ];
-        yAxes = [
-            {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
-            {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
-        ];
-        series = [
-            {{
-                type: 'candlestick', name: 'K线',
-                data: (pick.highs || []).map(function(h, i) {{
-                    return [pick.opens ? pick.opens[i] : closes[i], closes[i],
-                            pick.lows ? pick.lows[i] : closes[i], h];
-                }}),
-                xAxisIndex: 0, yAxisIndex: 0,
-                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
-                markPoint: {{ data: buyMarks }},
-                markArea: {{ silent: true, data: markAreas }},
-                markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
-            }},
-            {{
-                type: 'bar', name: 'MACD',
-                data: macdHist.map(function(v) {{ return v || 0; }}),
-                xAxisIndex: 1, yAxisIndex: 1,
-                itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
-            }}
-        ];
+    grids = [
+        {{ left: 60, right: 20, top: 20, height: '55%' }},
+        {{ left: 60, right: 20, top: '68%', height: '25%' }}
+    ];
+    xAxes = [
+        {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
+        {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
+    ];
+    yAxes = [
+        {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+        {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
+    ];
+    series = [
+        {{
+            type: 'candlestick', name: '日线K线',
+            data: (pick.highs || []).map(function(h, i) {{
+                return [pick.opens ? pick.opens[i] : closes[i], closes[i],
+                        pick.lows ? pick.lows[i] : closes[i], h];
+            }}),
+            xAxisIndex: 0, yAxisIndex: 0,
+            itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
+            markPoint: {{ data: buyMarks }},
+            markArea: {{ silent: true, data: markAreas }},
+            markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
+        }},
+        {{
+            type: 'bar', name: '日线MACD',
+            data: macdHist.map(function(v) {{ return v || 0; }}),
+            xAxisIndex: 1, yAxisIndex: 1,
+            itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
+        }}
+    ];
+
+    function formatTooltip(params) {{
+        var p = Array.isArray(params) ? params[0] : params;
+        if (!p) return '';
+        var name = p.name || '';
+        var series = p.seriesName || '';
+        var val = p.value;
+        if (p.seriesType === 'candlestick' && Array.isArray(val)) {{
+            return '<strong>' + series + '</strong><br>' +
+                name + '<br>' +
+                '开: ' + val[0] + '<br>' +
+                '收: ' + val[1] + '<br>' +
+                '低: ' + val[2] + '<br>' +
+                '高: ' + val[3];
+        }}
+        return '<strong>' + series + '</strong><br>' + name + '<br>' + val;
     }}
 
     var option = {{
@@ -1698,7 +1650,11 @@ function renderChart(idx, ver) {{
         xAxis: xAxes,
         yAxis: yAxes,
         series: series,
-        tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }} }}
+        tooltip: {{
+            trigger: 'item',
+            formatter: formatTooltip,
+            axisPointer: {{ type: 'cross' }}
+        }}
     }};
     chart.setOption(option);
 }}
