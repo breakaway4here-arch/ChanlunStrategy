@@ -76,12 +76,13 @@ class TestAnnotateBuyPointRecency(unittest.TestCase):
         annotated = annotate_buy_point_recency(bp, closes, max_age=10)
         self.assertIn("超过10个交易日", annotated["recency_reason"])
 
-    def test_negative_age_clamped_to_zero(self):
+    def test_future_index_treated_as_invalid(self):
         bp = {"index": 105, "type": "一买", "price": 10.0}
         closes = [1.0] * 100
         annotated = annotate_buy_point_recency(bp, closes, max_age=10)
-        self.assertEqual(annotated["signal_age_days"], 0)
-        self.assertTrue(annotated["is_recent"])
+        self.assertIsNone(annotated["signal_age_days"])
+        self.assertFalse(annotated["is_recent"])
+        self.assertIn("越界", annotated["recency_reason"])
 
 
 class TestFilterRecentPicks(unittest.TestCase):

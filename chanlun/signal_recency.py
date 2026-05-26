@@ -34,7 +34,10 @@ def annotate_buy_point_recency(bp, closes, dates=None, max_age=None):
     current_index = n_bars - 1
     age = current_index - signal_index
     if age < 0:
-        age = 0
+        bp["signal_age_days"] = None
+        bp["is_recent"] = False
+        bp["recency_reason"] = "信号index越界（超过当前K线范围），无法确定时效"
+        return bp
 
     bp["signal_age_days"] = age
     bp["is_recent"] = age <= max_age

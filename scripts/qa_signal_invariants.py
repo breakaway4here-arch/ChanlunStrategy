@@ -162,6 +162,49 @@ def main():
                 if ud.get("fetched_30min", 0) == 0:
                     errors.append(f"diagnostics: {label} candidate_upgraded>0 but fetched_30min=0")
 
+    # 8. Signal recency invariants
+    max_age = 10
+    for key in ("picks_pure", "picks_fusion"):
+        for pick in report.get(key, []):
+            best = pick.get("best_buy_point", {})
+            age = best.get("signal_age_days")
+            # 8a: age must not be None
+            if age is None:
+                errors.append(f"{pick['code']}: best_buy_point.signal_age_days is None (must be an integer)")
+            # 8b: age must be <= 10
+            elif age > max_age:
+                errors.append(f"{pick['code']}: best_buy_point.signal_age_days={age} > {max_age}")
+            # 8c: is_recent must be True
+            if best.get("is_recent") is not True:
+                errors.append(f"{pick['code']}: best_buy_point.is_recent is {best.get('is_recent')} (must be True)")
+
+    # 8d: watchlist age <= 10
+    for w in report.get("startup_watchlist", []):
+        age = w.get("startup_age_days")
+        if age is None:
+            errors.append(f"{w.get('code', '?')}: startup_watchlist item missing startup_age_days")
+        elif age > max_age:
+            errors.append(f"{w.get('code', '?')}: startup_watchlist startup_age_days={age} > {max_age}")
+
+    # 8e: signal_recency diagnostics must be present and consistent
+    sr = diag.get("signal_recency", {})
+    if sr:
+        if sr.get("max_age_trading_days") != max_age:
+            errors.append(f"diagnostics.signal_recency.max_age_trading_days={sr.get('max_age_trading_days')}")
+        for key, label in [("pure", "pure"), ("fusion", "fusion")]:
+            kept = sr.get(f"{label}_kept", 0)
+            dropped = sr.get(f"{label}_dropped_expired", 0)
+            inp = sr.get(f"{label}_input", 0)
+            if kept + dropped != inp:
+                errors.append(f"diagnostics.signal_recency: {label}_kept({kept}) + {label}_dropped_expired({dropped}) != {label}_input({inp})")
+        # check there are no expired signals with age <= max_age in details
+        for d in sr.get("dropped_details", []):
+            detail_age = d.get("signal_age_days")
+            if detail_age is not None and detail_age <= max_age:
+                errors.append(f"diagnostics.signal_recency: dropped_detail {d.get('code')} has age={detail_age} <= {max_age}")
+    else:
+        errors.append("diagnostics.signal_recency missing")
+
     if errors:
         print("FAIL:")
         for e in errors:
