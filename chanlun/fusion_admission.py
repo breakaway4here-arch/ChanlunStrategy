@@ -174,5 +174,15 @@ def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
                 return True, "底背驰候选弱市关键位不破+EMA5收复通过"
             return False, "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
 
+    if bp_type == "强势启动候选":
+        if not ma_ok:
+            return False, "强势启动候选要求MA多头(MA5>MA10>MA20)"
+        if market_strong:
+            return True, "强势启动候选强市通过"
+        else:
+            if strength not in ("强", "中"):
+                return False, "强势启动候选弱市要求30min确认强/中"
+            return True, "强势启动候选弱市通过"
+
     # Unknown type — keep in pure, let fusion be more permissive for unknowns
     return True, f"未知类型{bp_type}默认保留"

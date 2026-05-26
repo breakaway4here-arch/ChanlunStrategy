@@ -266,6 +266,29 @@ def _serialize_sell_signals(sell_list):
     return result
 
 
+def _serialize_startup_watchlist(watchlist):
+    """Serialize startup watchlist items for JSON output."""
+    result = []
+    for w in watchlist:
+        item = {
+            "code": w.get("code", ""),
+            "name": w.get("name", ""),
+            "type": w.get("type", "强势启动观察"),
+            "tier": w.get("tier", "watch"),
+            "source_type": w.get("source_type", ""),
+            "startup_reason": w.get("startup_reason", ""),
+            "startup_signals": w.get("startup_signals", []),
+            "change_pct": w.get("change_pct", 0),
+            "volume_ratio": w.get("volume_ratio", 0),
+            "close": w.get("close", 0),
+            "avoid_chase": w.get("avoid_chase", True),
+            "watch_reason": w.get("watch_reason", ""),
+            "next_day_conditions": w.get("next_day_conditions", []),
+        }
+        result.append(item)
+    return result
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -378,6 +401,7 @@ def generate_report(report_data, output_dir=None):
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
+        "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
     }
 
     html = f"""<!DOCTYPE html>
@@ -639,6 +663,12 @@ body {{
     <div id="pickTable"></div>
 </div>
 
+<!-- 启动观察 -->
+<div class="section" id="startupWatchSection">
+    <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
+    <div id="startupWatchContent"></div>
+</div>
+
 <!-- 板块资金 -->
 <div class="section">
     <div class="section-title">板块资金流向 TOP10</div>
@@ -811,6 +841,7 @@ function renderAll() {{
     renderForecast();
     renderSellSignals();
     renderLimitUp();
+    renderStartupWatchlist();
     switchVersion('fusion');
 }}
 
@@ -1103,6 +1134,34 @@ function renderLimitUp() {{
         html += '</div>';
     }});
     document.getElementById('limitUpContent').innerHTML = html;
+}}
+
+// ========== 启动观察 ==========
+function renderStartupWatchlist() {{
+    var watchlist = REPORT_DATA.startup_watchlist || [];
+    if (!watchlist.length) {{
+        document.getElementById('startupWatchSection').style.display = 'none';
+        return;
+    }}
+    document.getElementById('startupWatchSection').style.display = '';
+    document.getElementById('startupWatchCount').textContent = '(' + watchlist.length + ' 只)';
+
+    var html = '<table class="chan-table"><thead><tr>' +
+        '<th>代码</th><th>名称</th><th>信号</th><th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
+        '</tr></thead><tbody>';
+    watchlist.forEach(function(w) {{
+        var conditions = (w.next_day_conditions || []).join('<br>');
+        html += '<tr>' +
+            '<td>' + w.code + '</td>' +
+            '<td>' + w.name + '</td>' +
+            '<td><span class="sell-tag">' + w.type + '</span></td>' +
+            '<td style="color:#ffa502;font-size:13px;">' + (w.startup_reason || '') + '</td>' +
+            '<td style="color:#dfe6e9;font-size:13px;">' + (w.watch_reason || '') + '</td>' +
+            '<td style="color:#aaa;font-size:12px;">' + conditions + '</td>' +
+            '</tr>';
+    }});
+    html += '</tbody></table>';
+    document.getElementById('startupWatchContent').innerHTML = html;
 }}
 
 // ========== 选股表格 ==========

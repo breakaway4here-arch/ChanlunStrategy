@@ -2,10 +2,12 @@
 import unittest
 from chanlun.signal_policy import (
     FORMAL_TYPES, CANDIDATE_TYPES, CANDIDATE_SEED_TYPES, BLOCKED_TYPES,
-    UPGRADEABLE_REFERENCE_TYPES, REFERENCE_ONLY_TYPES,
+    UPGRADEABLE_REFERENCE_TYPES, REFERENCE_ONLY_TYPES, WATCH_TYPES,
+    STRONG_STARTUP_CANDIDATE_TYPES,
     infer_signal_tier, is_formal_buy, is_upgradeable_reference,
     is_recommendable_buy, is_blocked_buy,
     is_candidate_seed, is_reference_only,
+    is_watch_only, is_strong_startup_candidate, is_strong_startup_watch,
     UPGRADE_OUTPUT_TYPE, ALL_RECOMMENDABLE_TYPES,
 )
 
@@ -89,6 +91,41 @@ class TestSignalTiers(unittest.TestCase):
         self.assertEqual(infer_signal_tier(bp), "reference")
         self.assertTrue(is_reference_only(bp))
         self.assertFalse(is_recommendable_buy(bp))
+
+    # —— 强势启动候选 ——
+
+    def test_strong_startup_candidate_in_candidate_types(self):
+        self.assertIn("强势启动候选", CANDIDATE_TYPES)
+        self.assertIn("强势启动候选", STRONG_STARTUP_CANDIDATE_TYPES)
+
+    def test_strong_startup_candidate_tier(self):
+        bp = {"type": "强势启动候选"}
+        self.assertEqual(infer_signal_tier(bp), "candidate")
+
+    def test_strong_startup_candidate_is_recommendable(self):
+        bp = {"type": "强势启动候选", "tier": "candidate"}
+        self.assertTrue(is_recommendable_buy(bp))
+        self.assertTrue(is_strong_startup_candidate(bp))
+        self.assertFalse(is_strong_startup_watch(bp))
+
+    # —— 强势启动观察 ——
+
+    def test_strong_startup_watch_in_watch_types(self):
+        self.assertIn("强势启动观察", WATCH_TYPES)
+
+    def test_strong_startup_watch_tier(self):
+        bp = {"type": "强势启动观察"}
+        self.assertEqual(infer_signal_tier(bp), "watch")
+
+    def test_strong_startup_watch_is_not_recommendable(self):
+        bp = {"type": "强势启动观察", "tier": "watch"}
+        self.assertFalse(is_recommendable_buy(bp))
+        self.assertTrue(is_watch_only(bp))
+        self.assertTrue(is_strong_startup_watch(bp))
+        self.assertFalse(is_strong_startup_candidate(bp))
+
+    def test_strong_startup_watch_not_in_recommendable(self):
+        self.assertNotIn("强势启动观察", ALL_RECOMMENDABLE_TYPES)
 
 
 if __name__ == "__main__":

@@ -51,6 +51,7 @@ from chanlun.report_generator import generate_report, update_data_json
 from chanlun.market_news import fetch_cls_news, rank_events, enrich_events, generate_forecast
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
+from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min
 
 
 # ============================================================
@@ -317,30 +318,71 @@ def main(debug=False):
         fusion_diag = {}
 
     # ================================================================
+    # Phase 4.5: Strong startup scan (independent of structure pool)
+    # ================================================================
+    print("=" * 60)
+    print("Phase 4.5: Strong startup scan")
+    print("=" * 60)
+
+    startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
+        chan_results, sector_stocks)
+    print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
+          f"日线启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
+          f"涨停观察: {startup_diag.get('watch_due_to_limit_up', 0)}, "
+          f"高位过滤: {startup_diag.get('dropped_high_position', 0)}, "
+          f"无量过滤: {startup_diag.get('dropped_no_volume', 0)}")
+
+    # ================================================================
     # Phase 5: 30min fetch + analysis + candidate upgrade
     # ================================================================
     print("=" * 60)
     print("Phase 5: 30min fetch + candidate upgrade")
     print("=" * 60)
 
+    startup_candidates = []
+    startup_upgrade_diag = {}
+    startup_additional_watchlist = []
+
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
-        # Collect codes from structure pool(s)
+        # Collect codes from structure pool(s) + non-limit-up startup seeds
         if ENABLE_FUSION_ADMISSION_POLICY:
-            # Only pure pool needed; fusion derives from it
             all_target_codes = {s["code"] for s in pure_pool}
         else:
             pure_codes = {s["code"] for s in pure_pool}
             fusion_codes = {s["code"] for s in fusion_pool}
             all_target_codes = pure_codes | fusion_codes
+
+        # Add startup seed codes (only non-limit-up, which need 30min confirmation)
+        startup_seed_codes = {s["code"] for s in startup_seeds}
+        all_target_codes |= startup_seed_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
 
-        print(f"  结构池并集: {len(all_target_codes)} 只, 拉取30分钟数据 ...")
+        print(f"  结构池并集: {len(all_target_codes)} 只 "
+              f"(含启动种子: {len(startup_seed_codes)}), 拉取30分钟数据 ...")
         min30_data_list = collect_30min_data(all_targets)
 
         if not min30_data_list:
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结构池结果")
             # Without 30min, keep formal buys only, drop upgradeable-only stocks
             pure_confirmed = _downgrade_to_formal_only(pure_pool)
+            # All startup seeds → watch (no 30min data to confirm)
+            if startup_seeds:
+                for s in startup_seeds:
+                    startup_watchlist.append({
+                        "code": s["code"], "name": s["name"],
+                        "type": "强势启动观察", "tier": "watch",
+                        "source_type": "日线强势启动",
+                        "startup_reason": s.get("startup_reason", ""),
+                        "startup_signals": s.get("startup_signals", []),
+                        "change_pct": s.get("change_pct", 0),
+                        "volume_ratio": s.get("volume_ratio", 0),
+                        "close": s.get("close", 0),
+                        "avoid_chase": True,
+                        "watch_reason": "缺少30分钟数据，等待次日确认",
+                        "next_day_conditions": ["回踩不破突破位", "30min出现二买/三买确认"],
+                    })
+            startup_upgrade_diag = {"startup_candidate": 0,
+                                     "watch_due_to_no_30min_confirm": len(startup_seeds)}
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
             if ENABLE_FUSION_ADMISSION_POLICY:
@@ -378,6 +420,22 @@ def main(debug=False):
                   f"dropped_no_confirm={upgrade_diag_pure['dropped_no_confirm']}, "
                   f"dropped_no_30min={upgrade_diag_pure['dropped_no_30min']}, "
                   f"dropped_risk_guard={upgrade_diag_pure.get('dropped_risk_guard', 0)}")
+
+            # —— 强势启动 30min 升级 ——
+            if startup_seeds:
+                print("[强势启动30min升级]")
+                startup_candidates, startup_additional_watchlist, startup_upgrade_diag = \
+                    upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min)
+                print(f"  candidate={startup_upgrade_diag['startup_candidate']}, "
+                      f"watch_no_confirm={startup_upgrade_diag['watch_due_to_no_30min_confirm']}, "
+                      f"dropped_no_30min_data={startup_upgrade_diag.get('dropped_no_30min_confirm', 0)}")
+                startup_watchlist = startup_watchlist + startup_additional_watchlist
+                # Merge startup candidates into pure_confirmed
+                if startup_candidates:
+                    pure_confirmed = pure_confirmed + startup_candidates
+                    print(f"  合并启动候选 {len(startup_candidates)} 只到纯净版主推荐")
+            else:
+                startup_upgrade_diag = {}
 
             if ENABLE_FUSION_ADMISSION_POLICY:
                 # Fusion: apply admission policy on top of pure confirmed picks
@@ -531,6 +589,12 @@ def main(debug=False):
             "total_picks": len(pure_scored),
             "with_annotations": picks_with_annotations,
         },
+        "strong_startup": {
+            "daily_scan": startup_diag,
+            "upgrade": startup_upgrade_diag,
+            "startup_candidates": len(startup_candidates),
+            "startup_watchlist": len(startup_watchlist),
+        },
     }
     report_data = {
         "date": today,
@@ -546,6 +610,7 @@ def main(debug=False):
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
         "diagnostics": diagnostics,
+        "startup_watchlist": startup_watchlist,
     }
 
     # 生成 HTML（debug 模式输出到独立目录，隔离上线数据）

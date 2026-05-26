@@ -4,8 +4,10 @@ Signal tier policy — constants and helpers for classifying buy point signals.
 Tiers:
   formal     Fully confirmed daily Chanlun buy point. Recommendable directly.
   candidate  Daily reference upgraded by 30min sub-level confirmation. Recommendable.
+  watch      Startup detected but needs next-day confirmation. Not recommendable today.
   reference  Informational only; never recommended by itself.
   blocked    Explicitly not recommendable.
+  seed       Raw candidate seed before 30min upgrade.
 """
 
 # —— Tier constants ——
@@ -36,6 +38,13 @@ CANDIDATE_TYPES = {
     "中枢低吸候选",
     "三买候选",
     "底背驰候选",
+    "强势启动候选",
+}
+
+STRONG_STARTUP_CANDIDATE_TYPES = {"强势启动候选"}
+
+WATCH_TYPES = {
+    "强势启动观察",
 }
 
 ALL_RECOMMENDABLE_TYPES = FORMAL_TYPES | CANDIDATE_TYPES
@@ -61,6 +70,8 @@ def infer_signal_tier(bp):
         return "candidate"
     if t in CANDIDATE_SEED_TYPES:
         return "seed"
+    if t in WATCH_TYPES:
+        return "watch"
     if t in UPGRADEABLE_REFERENCE_TYPES or t in REFERENCE_ONLY_TYPES:
         return "reference"
     if t in BLOCKED_TYPES:
@@ -92,3 +103,18 @@ def is_recommendable_buy(bp):
 
 def is_blocked_buy(bp):
     return infer_signal_tier(bp) == "blocked"
+
+
+def is_watch_only(bp):
+    """Startup watch signals — not recommendable today."""
+    return infer_signal_tier(bp) == "watch"
+
+
+def is_strong_startup_candidate(bp):
+    t = bp.get("type", "")
+    return t in STRONG_STARTUP_CANDIDATE_TYPES
+
+
+def is_strong_startup_watch(bp):
+    t = bp.get("type", "")
+    return t in WATCH_TYPES

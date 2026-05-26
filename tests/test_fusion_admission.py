@@ -189,6 +189,31 @@ class TestFusionAdmission(unittest.TestCase):
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
         self.assertEqual(len(picks), 1)
 
+    # —— 强势启动候选 fusion admission ——
+
+    def test_strong_startup_candidate_strong_market_ma_ok(self):
+        stock = self._make_stock("强势启动候选", strength="强")
+        picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["fusion_admission"]["reason"], "强势启动候选强市通过")
+
+    def test_strong_startup_candidate_no_ma_filtered(self):
+        stock = self._make_stock("强势启动候选", strength="强")
+        stock["closes"] = self._make_non_bullish_closes()
+        picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
+        self.assertEqual(len(picks), 0)
+        self.assertEqual(diag["drop_details"][0]["reason"], "强势启动候选要求MA多头(MA5>MA10>MA20)")
+
+    def test_strong_startup_candidate_weak_market_medium_confirm_ok(self):
+        stock = self._make_stock("强势启动候选", strength="中")
+        picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
+        self.assertEqual(len(picks), 1)
+
+    def test_strong_startup_candidate_weak_market_weak_confirm_filtered(self):
+        stock = self._make_stock("强势启动候选", strength="弱")
+        picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
+        self.assertEqual(len(picks), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

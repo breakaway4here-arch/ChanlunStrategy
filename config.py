@@ -82,6 +82,19 @@ ENABLE_FUSION_ADMISSION_POLICY = True         # 融合版独立admission策略�
 # ============================================================
 # 弱保护访问控制（前端 hash 校验，非安全鉴权）
 # ============================================================
+# ============================================================
+# 强势启动候选（独立于底背驰通道的右侧启动检测）
+# ============================================================
+ENABLE_STRONG_STARTUP_CANDIDATES = True
+STRONG_STARTUP_MIN_CHANGE_PCT = 4.0
+STRONG_STARTUP_MIN_VOLUME_RATIO = 1.5
+STRONG_STARTUP_LOW_POSITION_60D_RATIO = 0.88
+STRONG_STARTUP_LOW_POSITION_120D_RATIO = 0.82
+STRONG_STARTUP_PRE_START_LOW_RATIO = 1.12
+
+# ============================================================
+# 弱保护访问控制（前端 hash 校验，非安全鉴权）
+# ============================================================
 ENABLE_WEAK_ACCESS_CONTROL = True
 PUBLIC_DATES = ["2026-05-26"]
 FULL_ACCESS_KEY = "02951e20-6de2-418c-8bab-463647220883"
