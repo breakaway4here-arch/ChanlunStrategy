@@ -77,6 +77,7 @@ ENABLE_30MIN_CANDIDATE_UPGRADE = True    # 30分钟候选升级
 ENABLE_SWING_POSITION_SEEDS = True           # swing底背驰参考 → 候选种子（日线位置保护）
 ENABLE_RELAXED_30MIN_CONFIRM = True          # 30min中确认放宽（EMA5收复 + 止跌结构）
 ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS = True  # 详细信号分布诊断
+ENABLE_FUSION_ADMISSION_POLICY = True         # 融合版独立admission策略（MA多头+大盘强弱门槛矩阵）
 
 # ============================================================
 # K线本地缓存

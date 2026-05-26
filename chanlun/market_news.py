@@ -129,7 +129,8 @@ _SYSTEM_PROMPT = """你是A股市场分析师。分析新闻事件对A股的影�
 你必须输出一个JSON对象，字段名必须严格使用以下英文key：
 {
   "no_impact": true或false,
-  "summary": "一句话总结影响（30字以内）",
+  "headline": "一句话结论，20-30字",
+  "analysis": ["分析句1", "分析句2", "分析句3"],
   "positive_sectors": ["利好板块1", "利好板块2"],
   "negative_sectors": ["利空板块1"],
   "positive_stocks": [{"name": "个股名称", "code": "6位代码", "reason": "利好原因"}],
@@ -137,16 +138,75 @@ _SYSTEM_PROMPT = """你是A股市场分析师。分析新闻事件对A股的影�
 }
 
 规则：
-1. 板块用A股标准行业名（半导体、白酒、光伏、银行、军工等），不超过3个
-2. 个股代码6位数字（上海60xxxx、深圳00xxxx/001xxx、创业30xxxx），至少给1-2个最相关的
-3. reason 一句话说清逻辑（15字以内），字段名用英文 reason
-4. 无明显影响时 no_impact=true，其余数组留空，summary写"对A股无明显影响"
-5. 事件提到具体个股或代码时，必须放入对应数组
-6. 只输出JSON，不要markdown包裹，不要其他文字"""
+1. headline 一句话总结事件对A股的影响，20-30字
+2. analysis 给出2-4句具体分析，每句15-30字，包含逻辑推理
+3. 板块用A股标准行业名（半导体、白酒、光伏、银行、军工等），不超过3个
+4. 个股代码6位数字（上海60xxxx、深圳00xxxx/001xxx、创业30xxxx），至少给1-2个最相关的
+5. reason 一句话说清逻辑（15字以内），字段名用英文 reason
+6. 无明显影响时 no_impact=true，其余数组留空，headline写"对A股无明显影响"
+7. 事件提到具体个股或代码时，必须放入对应数组
+8. 只输出JSON，不要markdown包裹，不要其他文字"""
+
+
+def _extract_first_json_object(text):
+    """Extract the first complete JSON object from text using bracket-depth scan.
+
+    Handles nested objects (e.g. positive_stocks with reason fields) and
+    text with surrounding noise / markdown fences.
+    Returns the substring if found, otherwise None.
+    """
+    # Strip markdown fences first
+    t = text.strip()
+    if t.startswith("```"):
+        t = re.sub(r"^```\w*\n?", "", t)
+        t = re.sub(r"\n?```$", "", t)
+        t = t.strip()
+
+    start = t.find("{")
+    if start == -1:
+        return None
+
+    depth = 0
+    in_string = False
+    escape = False
+    for i in range(start, len(t)):
+        ch = t[i]
+        if escape:
+            escape = False
+            continue
+        if ch == "\\":
+            escape = True
+            continue
+        if ch == '"':
+            in_string = not in_string
+            continue
+        if in_string:
+            continue
+        if ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return t[start:i + 1]
+    return None
+
+
+def _parse_llm_json(raw):
+    """Clean and parse LLM JSON output. Returns dict or raises."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        pass
+
+    extracted = _extract_first_json_object(raw)
+    if extracted:
+        return json.loads(extracted)
+
+    raise ValueError(f"无法从LLM输出中提取有效JSON: {raw[:200]}")
 
 
 def _analyze_event_llm(event):
-    """调用 DeepSeek 分析单条事件"""
+    """调用 DeepSeek 分析单条事件（带重试）"""
     if not _DS_API_KEY:
         raise RuntimeError("ANTHROPIC_AUTH_TOKEN 未设置")
 
@@ -155,55 +215,35 @@ def _analyze_event_llm(event):
     if not text:
         raise ValueError("事件文本为空")
 
-    resp = requests.post(
-        _DS_BASE_URL,
-        headers={
-            "Authorization": f"Bearer {_DS_API_KEY}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": _DS_MODEL,
-            "messages": [
-                {"role": "system", "content": _SYSTEM_PROMPT},
-                {"role": "user", "content": f"分析事件：{text}"},
-            ],
-            "temperature": 0.3,
-            "max_tokens": 800,
-            "response_format": {"type": "json_object"},
-        },
-        timeout=45,
-    )
-    resp.raise_for_status()
-    body = resp.json()
-    raw = body["choices"][0]["message"]["content"]
-
-    # 清理可能的 markdown 代码块包裹
-    raw = raw.strip()
-    if raw.startswith("```"):
-        raw = re.sub(r"^```\w*\n?", "", raw)
-        raw = re.sub(r"\n?```$", "", raw)
+    messages = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
+        {"role": "user", "content": f"分析事件：{text}"},
+    ]
 
     try:
-        impact = json.loads(raw)
-    except json.JSONDecodeError:
-        # 非标准 JSON，尝试从文本中提取 JSON 对象
-        m = re.search(r'\{[^{}]*\}', raw, re.DOTALL)
-        if m:
-            impact = json.loads(m.group(0))
-        else:
-            raise
+        raw = _call_llm_with_retry(messages, max_retries=2, temperature=0.3, max_tokens=800, raw_response=True)
+    except Exception:
+        raise
 
-    # 补全字段
-    impact.setdefault("summary", "")
+    impact = _parse_llm_json(raw)
+
+    # Normalize fields
+    impact.setdefault("headline", "")
+    impact.setdefault("analysis", [])
     impact.setdefault("positive_sectors", [])
     impact.setdefault("negative_sectors", [])
     impact.setdefault("positive_stocks", [])
     impact.setdefault("negative_stocks", [])
     impact.setdefault("no_impact", False)
 
-    # 兼容模型返回 reason 而非 summary
-    if not impact["summary"] and impact.get("reason"):
-        impact["summary"] = impact.pop("reason")
+    # Backward-compat: fill summary from headline for old consumers
+    if not impact.get("summary"):
+        impact["summary"] = impact.get("headline", "")
+    # If model returned old format with only summary, promote to headline
+    if not impact["headline"] and impact.get("summary"):
+        impact["headline"] = impact["summary"]
+    if not impact["analysis"] and impact.get("summary"):
+        impact["analysis"] = [impact["summary"]]
 
     return impact
 
@@ -215,23 +255,37 @@ def _analyze_event_llm(event):
 def enrich_events(events):
     """
     对每条事件调 LLM 做影响分析。
-    返回: events 列表，每条增加 impact 字段
+    返回: events 列表，每条增加 impact 字段（含 status/error 内部字段）
     """
     if not _DS_API_KEY:
         print("  [WARN] ANTHROPIC_AUTH_TOKEN 未设置，事件分析跳过")
         for e in events:
-            e["impact"] = {"summary": "分析服务未配置", "positive_sectors": [], "negative_sectors": [],
-                           "positive_stocks": [], "negative_stocks": [], "no_impact": True}
+            e["impact"] = {
+                "headline": "分析服务未配置", "analysis": [],
+                "summary": "分析服务未配置",
+                "positive_sectors": [], "negative_sectors": [],
+                "positive_stocks": [], "negative_stocks": [],
+                "no_impact": True, "status": "skipped",
+            }
         return events
 
     for i, e in enumerate(events):
         try:
             e["impact"] = _analyze_event_llm(e)
-            print(f"  [LLM] 事件{i+1}/10 完成: {e['impact'].get('summary', '')[:60]}")
+            e["impact"]["status"] = "ok"
+            print(f"  [LLM] 事件{i+1}/10 完成: {e['impact'].get('headline', '')[:60]}")
         except Exception as err:
             print(f"  [LLM] 事件{i+1}/10 失败 ({err})")
-            e["impact"] = {"summary": f"分析失败: {err}", "positive_sectors": [], "negative_sectors": [],
-                           "positive_stocks": [], "negative_stocks": [], "no_impact": True}
+            e["impact"] = {
+                "headline": "AI分析暂不可用",
+                "analysis": [],
+                "summary": "AI分析暂不可用",
+                "positive_sectors": [], "negative_sectors": [],
+                "positive_stocks": [], "negative_stocks": [],
+                "no_impact": True,
+                "status": "failed",
+                "error": str(err)[:200],
+            }
 
     return events
 
@@ -273,8 +327,11 @@ _FORECAST_SYSTEM_PROMPT = """你是一位资深A股市场分析师，精通缠�
 只输出JSON，不要markdown包裹，不要其他文字。"""
 
 
-def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=1200):
-    """调用 DeepSeek，带指数退避重试"""
+def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=1200, raw_response=False):
+    """调用 DeepSeek，带指数退避重试。
+
+    If raw_response=True, returns the raw text content instead of parsed JSON.
+    """
     last_error = None
     for attempt in range(max_retries):
         try:
@@ -296,6 +353,8 @@ def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=12
             resp.raise_for_status()
             body = resp.json()
             raw = body["choices"][0]["message"]["content"]
+            if raw_response:
+                return raw.strip()
             raw = raw.strip()
             if raw.startswith("```"):
                 raw = re.sub(r"^```\w*\n?", "", raw)
@@ -305,7 +364,7 @@ def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=12
             last_error = e
             if attempt < max_retries - 1:
                 wait = 2 ** attempt
-                print(f"  [LLM] forecast 第{attempt+1}次失败，{wait}s后重试: {e}")
+                print(f"  [LLM] 第{attempt+1}次失败，{wait}s后重试: {e}")
                 time.sleep(wait)
     raise last_error
 

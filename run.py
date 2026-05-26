@@ -33,6 +33,7 @@ from config import (
     SECTOR_OUTFLOW_COUNT, EVENT_TOP_N,
     ENABLE_DAILY_STRUCTURE_POOL, ENABLE_30MIN_CANDIDATE_UPGRADE,
     ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS,
+    ENABLE_FUSION_ADMISSION_POLICY,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data,
@@ -48,6 +49,8 @@ from chanlun.candidate_upgrade import upgrade_daily_candidates_with_30min
 from chanlun.scorer import apply_scores
 from chanlun.report_generator import generate_report, update_data_json
 from chanlun.market_news import fetch_cls_news, rank_events, enrich_events, generate_forecast
+from chanlun.fusion_admission import apply_fusion_admission
+from chanlun.event_normalizer import normalize_events
 
 
 # ============================================================
@@ -289,12 +292,17 @@ def main(debug=False):
               f"seeds={pure_diag.get('swing_seed_count', 0)}, "
               f"reference_only={pure_diag['reference_only_count']}, pool={len(pure_pool)}")
 
-        print("[融合版结构池]")
-        fusion_pool, fusion_diag = build_daily_structure_pool(chan_results, sector_stocks, mode="fusion")
-        print(f"  base_pass={fusion_diag['base_pass']}, with_signal={fusion_diag['with_buy_points']}, "
-              f"formal={fusion_diag['formal_count']}, upgradeable={fusion_diag['upgradeable_count']}, "
-              f"seeds={fusion_diag.get('swing_seed_count', 0)}, "
-              f"reference_only={fusion_diag['reference_only_count']}, pool={len(fusion_pool)}")
+        if ENABLE_FUSION_ADMISSION_POLICY:
+            # Fusion derives from the pure structure pool; admission runs after 30min upgrade
+            print("[融合版] 共用纯净版结构池，将在30min升级后应用独立admission策略")
+            fusion_diag = pure_diag.copy()
+        else:
+            print("[融合版结构池]")
+            fusion_pool, fusion_diag = build_daily_structure_pool(chan_results, sector_stocks, mode="fusion")
+            print(f"  base_pass={fusion_diag['base_pass']}, with_signal={fusion_diag['with_buy_points']}, "
+                  f"formal={fusion_diag['formal_count']}, upgradeable={fusion_diag['upgradeable_count']}, "
+                  f"seeds={fusion_diag.get('swing_seed_count', 0)}, "
+                  f"reference_only={fusion_diag['reference_only_count']}, pool={len(fusion_pool)}")
     else:
         # Rollback: old behavior
         print("[纯净版]")
@@ -316,10 +324,14 @@ def main(debug=False):
     print("=" * 60)
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
-        # Collect codes from both structure pools (union)
-        pure_codes = {s["code"] for s in pure_pool}
-        fusion_codes = {s["code"] for s in fusion_pool}
-        all_target_codes = pure_codes | fusion_codes
+        # Collect codes from structure pool(s)
+        if ENABLE_FUSION_ADMISSION_POLICY:
+            # Only pure pool needed; fusion derives from it
+            all_target_codes = {s["code"] for s in pure_pool}
+        else:
+            pure_codes = {s["code"] for s in pure_pool}
+            fusion_codes = {s["code"] for s in fusion_pool}
+            all_target_codes = pure_codes | fusion_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
 
         print(f"  结构池并集: {len(all_target_codes)} 只, 拉取30分钟数据 ...")
@@ -329,11 +341,20 @@ def main(debug=False):
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结构池结果")
             # Without 30min, keep formal buys only, drop upgradeable-only stocks
             pure_confirmed = _downgrade_to_formal_only(pure_pool)
-            fusion_confirmed = _downgrade_to_formal_only(fusion_pool)
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
-            upgrade_diag_fusion = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(fusion_confirmed),
-                                   "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(fusion_pool) - len(fusion_confirmed)}
+            if ENABLE_FUSION_ADMISSION_POLICY:
+                fusion_confirmed, fusion_admission_diag = apply_fusion_admission(
+                    pure_confirmed, sh_closes, sector_stocks)
+                upgrade_diag_fusion = {"requested_30min": 0, "fetched_30min": 0,
+                                       "formal_kept": len(pure_confirmed),
+                                       "candidate_upgraded": 0, "dropped_no_confirm": 0,
+                                       "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
+            else:
+                fusion_confirmed = _downgrade_to_formal_only(fusion_pool if not ENABLE_FUSION_ADMISSION_POLICY else pure_pool)
+                upgrade_diag_fusion = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(fusion_confirmed),
+                                       "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(fusion_confirmed)}
+                fusion_admission_diag = {}
         else:
             print(f"  30分钟数据获取: {len(min30_data_list)} 只, 缠论分析 ...")
             chan_results_30min = []
@@ -358,14 +379,40 @@ def main(debug=False):
                   f"dropped_no_30min={upgrade_diag_pure['dropped_no_30min']}, "
                   f"dropped_risk_guard={upgrade_diag_pure.get('dropped_risk_guard', 0)}")
 
-            print("[融合版候选升级]")
-            fusion_confirmed, upgrade_diag_fusion = upgrade_daily_candidates_with_30min(
-                fusion_pool, chan_results_30min, mode="fusion")
-            print(f"  formal_kept={upgrade_diag_fusion['formal_kept']}, "
-                  f"candidate_upgraded={upgrade_diag_fusion['candidate_upgraded']}, "
-                  f"dropped_no_confirm={upgrade_diag_fusion['dropped_no_confirm']}, "
-                  f"dropped_no_30min={upgrade_diag_fusion['dropped_no_30min']}, "
-                  f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}")
+            if ENABLE_FUSION_ADMISSION_POLICY:
+                # Fusion: apply admission policy on top of pure confirmed picks
+                print("[融合版admission]")
+                import copy
+                fusion_ready = copy.deepcopy(pure_confirmed)
+                fusion_confirmed, fusion_admission_diag = apply_fusion_admission(
+                    fusion_ready, sh_closes, sector_stocks)
+                print(f"  input={fusion_admission_diag['input_count']}, "
+                      f"regime={fusion_admission_diag['market_regime']}, "
+                      f"kept_formal={fusion_admission_diag['kept_formal']}, "
+                      f"kept_candidate={fusion_admission_diag['kept_candidate']}, "
+                      f"dropped_ma={fusion_admission_diag['dropped_by_ma']}, "
+                      f"dropped_regime={fusion_admission_diag['dropped_by_market_regime']}, "
+                      f"dropped_gate={fusion_admission_diag['dropped_by_signal_gate']}, "
+                      f"output={fusion_admission_diag['output_count']}")
+                upgrade_diag_fusion = {
+                    "requested_30min": upgrade_diag_pure.get("requested_30min", 0),
+                    "fetched_30min": upgrade_diag_pure.get("fetched_30min", 0),
+                    "formal_kept": fusion_admission_diag.get("kept_formal", 0),
+                    "candidate_upgraded": fusion_admission_diag.get("kept_candidate", 0),
+                    "dropped_no_confirm": upgrade_diag_pure.get("dropped_no_confirm", 0),
+                    "dropped_no_30min": upgrade_diag_pure.get("dropped_no_30min", 0),
+                    "dropped_risk_guard": upgrade_diag_pure.get("dropped_risk_guard", 0),
+                }
+            else:
+                print("[融合版候选升级]")
+                fusion_confirmed, upgrade_diag_fusion = upgrade_daily_candidates_with_30min(
+                    fusion_pool, chan_results_30min, mode="fusion")
+                print(f"  formal_kept={upgrade_diag_fusion['formal_kept']}, "
+                      f"candidate_upgraded={upgrade_diag_fusion['candidate_upgraded']}, "
+                      f"dropped_no_confirm={upgrade_diag_fusion['dropped_no_confirm']}, "
+                      f"dropped_no_30min={upgrade_diag_fusion['dropped_no_30min']}, "
+                      f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}")
+                fusion_admission_diag = {}
     else:
         # Rollback: old 30min confirmation flow
         pure_codes = {s["code"] for s in pure_pool}
@@ -399,6 +446,7 @@ def main(debug=False):
             print(f"  区间套确认: {len(fusion_confirmed)} 只")
             upgrade_diag_pure = {}
             upgrade_diag_fusion = {}
+            fusion_admission_diag = {}
 
     # ================================================================
     # Phase 6: Score + generate report
@@ -432,7 +480,7 @@ def main(debug=False):
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
 
     # 热点事件（LLM 分析在前，供时局推演引用）
-    events = enrich_events(rank_events(fetch_cls_news(), sectors))
+    events = normalize_events(enrich_events(rank_events(fetch_cls_news(), sectors)))
 
     # 构建报告数据
     daily_scan_diag = {
@@ -450,12 +498,39 @@ def main(debug=False):
         daily_scan_diag["structure_pool_reasons"] = pure_diag.get("structure_pool_reasons", {})
         daily_scan_diag["excluded_reference_type_counts"] = pure_diag.get("excluded_reference_type_counts", {})
 
+    # Signal distribution
+    signal_distribution = {}
+    for p in pure_scored:
+        bp = p.get("best_buy_point", {})
+        t = bp.get("type", "其他")
+        signal_distribution[t] = signal_distribution.get(t, 0) + 1
+
+    # Event analysis status counts
+    event_status_counts = {"ok": 0, "failed": 0, "skipped": 0}
+    for ev in events:
+        imp = ev.get("impact", {})
+        status = imp.get("status", "skipped")
+        event_status_counts[status] = event_status_counts.get(status, 0) + 1
+
+    # Chart annotation coverage
+    picks_with_annotations = sum(
+        1 for p in pure_scored
+        if p.get("best_buy_point", {}).get("index") is not None
+    )
+
     from chanlun.kline_cache import get_cache_stats
     diagnostics = {
         "daily_scan": daily_scan_diag,
         "sublevel_upgrade_pure": upgrade_diag_pure if ENABLE_30MIN_CANDIDATE_UPGRADE else {},
         "sublevel_upgrade_fusion": upgrade_diag_fusion if ENABLE_30MIN_CANDIDATE_UPGRADE else {},
         "kline_cache": get_cache_stats(),
+        "fusion_admission": fusion_admission_diag if ENABLE_FUSION_ADMISSION_POLICY else {},
+        "signal_distribution": signal_distribution,
+        "event_analysis_status_counts": event_status_counts,
+        "chart_annotation_coverage": {
+            "total_picks": len(pure_scored),
+            "with_annotations": picks_with_annotations,
+        },
     }
     report_data = {
         "date": today,

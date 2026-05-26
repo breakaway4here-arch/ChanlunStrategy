@@ -6703,6 +6703,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "中枢低吸候选",
@@ -6799,6 +6801,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -6814,71 +6818,6 @@
                 "关键位不破",
                 "EMA5收复",
                 "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "003038",
-          "name": "鑫铂股份",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 12.9,
-            "date": "2026-05-26",
-            "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 12.9,
-              "date": "2026-05-26",
-              "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
@@ -6930,6 +6869,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -6944,6 +6885,73 @@
               "confirmations": [
                 "30min底分型",
                 "关键位不破"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "003038",
+          "name": "鑫铂股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 12.9,
+            "date": "2026-05-26",
+            "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 12.9,
+              "date": "2026-05-26",
+              "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
@@ -6995,6 +7003,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7060,6 +7070,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7126,6 +7138,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7193,6 +7207,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7259,6 +7275,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7324,6 +7342,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7406,6 +7426,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7473,6 +7495,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7538,6 +7562,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7604,6 +7630,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7671,6 +7699,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7737,6 +7767,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7803,6 +7835,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7869,6 +7903,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -7877,71 +7913,6 @@
               "price": 5.72,
               "date": "2026-05-25",
               "reason": "swing笔底背驰(力度比=42.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "601628",
-          "name": "中国人寿",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 33.48,
-            "date": "2026-05-26",
-            "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "非银金融",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 33.48,
-              "date": "2026-05-26",
-              "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -7999,6 +7970,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8016,6 +7989,73 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "601628",
+          "name": "中国人寿",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 33.48,
+            "date": "2026-05-26",
+            "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "非银金融",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 33.48,
+              "date": "2026-05-26",
+              "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -8064,6 +8104,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8129,6 +8171,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8194,6 +8238,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8259,6 +8305,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8276,71 +8324,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "600906",
-          "name": "财达证券",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 98,
-            "price": 6.23,
-            "date": "2026-05-25",
-            "reason": "swing笔底背驰(力度比=9.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "非银金融",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 98,
-              "price": 6.23,
-              "date": "2026-05-25",
-              "reason": "swing笔底背驰(力度比=9.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -8389,6 +8372,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8397,6 +8382,73 @@
               "price": 7.85,
               "date": "2026-05-25",
               "reason": "swing笔底背驰(力度比=32.00%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "600906",
+          "name": "财达证券",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 98,
+            "price": 6.23,
+            "date": "2026-05-25",
+            "reason": "swing笔底背驰(力度比=9.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "非银金融",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 98,
+              "price": 6.23,
+              "date": "2026-05-25",
+              "reason": "swing笔底背驰(力度比=9.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -8454,6 +8506,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8519,6 +8573,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8585,6 +8641,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8651,6 +8709,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8716,6 +8776,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8781,6 +8843,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8848,6 +8912,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8916,6 +8982,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -8934,73 +9002,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "000878",
-          "name": "云南铜业",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 17.01,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 52.5,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 17.01,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分"
             }
           ],
           "reference_buy_points": [],
@@ -9050,6 +9051,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9131,6 +9134,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9197,6 +9202,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9215,6 +9222,75 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "000878",
+          "name": "云南铜业",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 97,
+            "price": 17.01,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 97,
+              "price": 17.01,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分"
             }
           ],
           "reference_buy_points": [],
@@ -9264,6 +9340,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9330,6 +9408,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9395,6 +9475,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9461,6 +9543,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9527,6 +9611,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9535,6 +9621,73 @@
               "price": 33.51,
               "date": "2026-05-21",
               "reason": "swing笔底背驰(力度比=37.31%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "300120",
+          "name": "经纬辉开",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 97,
+            "price": 6.87,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=19.85%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "面板",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 97,
+              "price": 6.87,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=19.85%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -9593,6 +9746,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9608,71 +9763,6 @@
                 "关键位不破",
                 "EMA5收复",
                 "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "300120",
-          "name": "经纬辉开",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 6.87,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=19.85%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 52.5,
-          "sector": "面板",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 6.87,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=19.85%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；接近swing参考价"
@@ -9725,6 +9815,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9743,6 +9835,75 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "相对20日高点回撤充分"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "600547",
+          "name": "山东黄金",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 97,
+            "price": 29.5,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "贵金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 97,
+              "price": 29.5,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -9806,6 +9967,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -9823,73 +9986,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "600547",
-          "name": "山东黄金",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 29.5,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 52.5,
-          "sector": "贵金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 29.5,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -9939,6 +10035,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10006,6 +10104,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10073,6 +10173,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10140,6 +10242,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10206,6 +10310,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10271,6 +10377,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10336,6 +10444,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10401,6 +10511,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10409,71 +10521,6 @@
               "price": 19.36,
               "date": "2026-05-22",
               "reason": "swing笔底背驰(力度比=35.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "601688",
-          "name": "华泰证券",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 18.1,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=40.55%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 52.5,
-          "sector": "非银金融",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 18.1,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=40.55%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -10531,6 +10578,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10556,16 +10605,16 @@
           "pivot_zd": null
         },
         {
-          "code": "002988",
-          "name": "豪美新材",
+          "code": "601688",
+          "name": "华泰证券",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "底背驰候选",
             "tier": "candidate",
-            "index": 93,
-            "price": 30.3,
-            "date": "2026-05-18",
-            "reason": "swing笔底背驰(力度比=26.41%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "index": 97,
+            "price": 18.1,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=40.55%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -10583,8 +10632,8 @@
             "count": 0
           },
           "trend_type": "无中枢",
-          "score": 47.5,
-          "sector": "工业金属",
+          "score": 52.5,
+          "sector": "非银金融",
           "resonance": {
             "level": "中",
             "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
@@ -10596,14 +10645,16 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
               "tier": "candidate",
-              "index": 93,
-              "price": 30.3,
-              "date": "2026-05-18",
-              "reason": "swing笔底背驰(力度比=26.41%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "index": 97,
+              "price": 18.1,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=40.55%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -10662,6 +10713,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10680,6 +10733,73 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "002988",
+          "name": "豪美新材",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 93,
+            "price": 30.3,
+            "date": "2026-05-18",
+            "reason": "swing笔底背驰(力度比=26.41%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 47.5,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 93,
+              "price": 30.3,
+              "date": "2026-05-18",
+              "reason": "swing笔底背驰(力度比=26.41%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -10729,6 +10849,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10795,6 +10917,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10860,6 +10984,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10925,6 +11051,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -10991,6 +11119,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11058,6 +11188,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11124,6 +11256,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11189,6 +11323,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11256,6 +11392,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11324,6 +11462,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11391,6 +11531,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11458,6 +11600,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11524,6 +11668,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11589,6 +11735,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11655,6 +11803,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11737,6 +11887,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11803,6 +11955,8 @@
           "is_active": false,
           "market_trend": "",
           "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11829,101 +11983,6 @@
         }
       ],
       "picks_fusion": [
-        {
-          "code": "688102",
-          "name": "斯瑞新材",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "中枢低吸候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 38.59,
-            "date": "2026-05-26",
-            "reason": "中枢下沿附近(ZG=43.14, ZD=37.33), 现价=38.59, 距ZD=+3.4%；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "中枢震荡低吸参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "",
-            "seed_reason": ""
-          },
-          "buy_points_30min": [
-            {
-              "type": "swing底背驰参考",
-              "tier": "reference",
-              "index": 73,
-              "price": 37.56,
-              "date": "2026-05-26 10:30:00",
-              "reason": "swing笔底背驰(力度比=49.25%)，仅供参考",
-              "strength": "弱",
-              "source_type": "",
-              "confirmed_by": "",
-              "confirmations": [],
-              "seed_type": "",
-              "seed_reason": ""
-            }
-          ],
-          "pivots": {
-            "ZG": 43.14,
-            "ZD": 37.33,
-            "count": 1
-          },
-          "trend_type": "盘整",
-          "score": 59.2,
-          "sector": "有色金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "fusion",
-          "buy_points": [
-            {
-              "type": "中枢低吸候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 38.59,
-              "date": "2026-05-26",
-              "reason": "中枢下沿附近(ZG=43.14, ZD=37.33), 现价=38.59, 距ZD=+3.4%；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "中枢震荡低吸参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "",
-              "seed_reason": ""
-            }
-          ],
-          "reference_buy_points": [
-            {
-              "type": "swing底背驰参考",
-              "tier": "reference",
-              "index": 67,
-              "price": 32.9,
-              "date": "2026-04-07",
-              "reason": "swing笔底背驰(力度比=26.74%)，仅供参考",
-              "strength": "弱",
-              "source_type": "",
-              "confirmed_by": "",
-              "confirmations": [],
-              "seed_type": "",
-              "seed_reason": ""
-            }
-          ],
-          "blocked_buy_points": [],
-          "pivot_zg": 43.14,
-          "pivot_zd": 37.33
-        },
         {
           "code": "600768",
           "name": "宁波富邦",
@@ -11980,7 +12039,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -11996,71 +12060,6 @@
                 "关键位不破",
                 "EMA5收复",
                 "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "003038",
-          "name": "鑫铂股份",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 12.9,
-            "date": "2026-05-26",
-            "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 61.5,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "fusion",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 12.9,
-              "date": "2026-05-26",
-              "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
@@ -12111,7 +12110,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12126,6 +12130,76 @@
               "confirmations": [
                 "30min底分型",
                 "关键位不破"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "003038",
+          "name": "鑫铂股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 12.9,
+            "date": "2026-05-26",
+            "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 61.5,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 12.9,
+              "date": "2026-05-26",
+              "reason": "swing笔底背驰(力度比=75.05%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
@@ -12177,7 +12251,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12245,7 +12324,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12312,7 +12396,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12377,7 +12466,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12443,7 +12537,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12509,7 +12608,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12575,7 +12679,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12594,73 +12703,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "000878",
-          "name": "云南铜业",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 17.01,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 58.5,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "fusion",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 17.01,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分"
             }
           ],
           "reference_buy_points": [],
@@ -12723,7 +12765,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12789,7 +12836,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12808,6 +12860,78 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "000878",
+          "name": "云南铜业",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 97,
+            "price": 17.01,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 58.5,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 97,
+              "price": 17.01,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=42.87%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分"
             }
           ],
           "reference_buy_points": [],
@@ -12856,7 +12980,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12922,7 +13051,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -12987,7 +13121,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13052,7 +13191,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13118,7 +13262,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13184,7 +13333,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13249,7 +13403,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13314,7 +13473,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13379,7 +13543,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13444,7 +13613,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13510,7 +13684,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13577,7 +13756,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13644,7 +13828,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13711,7 +13900,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13777,7 +13971,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13842,7 +14041,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13908,7 +14112,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -13975,7 +14184,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14042,7 +14256,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14108,7 +14327,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14117,71 +14341,6 @@
               "price": 5.72,
               "date": "2026-05-25",
               "reason": "swing笔底背驰(力度比=42.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "601628",
-          "name": "中国人寿",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 33.48,
-            "date": "2026-05-26",
-            "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 54.5,
-          "sector": "非银金融",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "fusion",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 33.48,
-              "date": "2026-05-26",
-              "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -14238,7 +14397,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14256,6 +14420,76 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "601628",
+          "name": "中国人寿",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 33.48,
+            "date": "2026-05-26",
+            "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 54.5,
+          "sector": "非银金融",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 33.48,
+              "date": "2026-05-26",
+              "reason": "swing笔底背驰(力度比=29.52%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -14303,7 +14537,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14368,7 +14607,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14427,13 +14671,18 @@
             "level": "中",
             "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
           },
-          "ma_bullish": false,
+          "ma_bullish": true,
           "stop_loss": null,
           "stop_loss_pct": null,
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14498,7 +14747,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14564,7 +14818,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14583,6 +14842,78 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "相对20日高点回撤充分"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "600547",
+          "name": "山东黄金",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 97,
+            "price": 29.5,
+            "date": "2026-05-22",
+            "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 53.8,
+          "sector": "贵金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 97,
+              "price": 29.5,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -14645,7 +14976,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14663,73 +14999,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "相对20日高点回撤充分；接近swing参考价"
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "600547",
-          "name": "山东黄金",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 97,
-            "price": 29.5,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 53.8,
-          "sector": "贵金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "fusion",
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 97,
-              "price": 29.5,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=67.62%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
             }
           ],
           "reference_buy_points": [],
@@ -14777,7 +15046,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14842,7 +15116,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14924,7 +15203,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -14991,7 +15275,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15056,7 +15345,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15121,7 +15415,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15187,7 +15486,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15253,7 +15557,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15318,7 +15627,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15383,7 +15697,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15443,13 +15762,18 @@
             "level": "中",
             "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
           },
-          "ma_bullish": false,
+          "ma_bullish": true,
           "stop_loss": null,
           "stop_loss_pct": null,
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15516,7 +15840,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15583,7 +15912,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15649,7 +15983,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15714,7 +16053,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15780,7 +16124,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15846,7 +16195,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15905,13 +16259,18 @@
             "level": "中",
             "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
           },
-          "ma_bullish": false,
+          "ma_bullish": true,
           "stop_loss": null,
           "stop_loss_pct": null,
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -15977,7 +16336,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16043,7 +16407,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16102,13 +16471,18 @@
             "level": "中",
             "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
           },
-          "ma_bullish": false,
+          "ma_bullish": true,
           "stop_loss": null,
           "stop_loss_pct": null,
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16173,7 +16547,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16238,7 +16617,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16303,7 +16687,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16369,7 +16758,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16437,7 +16831,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16505,7 +16904,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16572,7 +16976,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16639,7 +17048,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16705,7 +17119,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16771,7 +17190,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16837,7 +17261,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16902,7 +17331,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -16983,7 +17417,12 @@
           "trailing_targets": [],
           "is_active": false,
           "market_trend": "",
-          "version": "fusion",
+          "version": "pure",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "底背驰候选强市通过"
+          },
           "buy_points": [
             {
               "type": "底背驰候选",
@@ -17152,424 +17591,415 @@
           "flow_str": "3.78亿"
         }
       ],
-      "sector_outflow": [
-        {
-          "code": "BK1201",
-          "name": "电子",
-          "change_pct": -1.31,
-          "flow": -39180095488.0,
-          "flow_str": "-391.80亿"
-        },
-        {
-          "code": "BK1036",
-          "name": "半导体",
-          "change_pct": -2.64,
-          "flow": -25303035904.0,
-          "flow_str": "-253.03亿"
-        },
-        {
-          "code": "BK1207",
-          "name": "计算机",
-          "change_pct": -2.2,
-          "flow": -13961591808.0,
-          "flow_str": "-139.62亿"
-        },
-        {
-          "code": "BK1215",
-          "name": "通信",
-          "change_pct": -2.67,
-          "flow": -13731759872.0,
-          "flow_str": "-137.32亿"
-        },
-        {
-          "code": "BK0448",
-          "name": "通信设备",
-          "change_pct": -2.84,
-          "flow": -11324305152.0,
-          "flow_str": "-113.24亿"
-        }
-      ],
+      "sector_outflow": [],
       "limit_up_pool": [],
       "events": [
         {
-          "title": "收评：创业板指探底回升涨0.54% 全市场超4000只个股下跌",
-          "content": "【收评：创业板指探底回升涨0.54% 全市场超4000只个股下跌】财联社5月26日电，市场探底回升，创业板指、深成指先后翻红。沪深两市成交额3.24万亿，较上一个交易日放量380亿。盘面上，市场热点较为杂乱，全市场超4000只个股下跌。从板块来看，PCB概念反复走强，生益电子涨停，沪电股份触及涨停，股价均创历史新高，华塑控股2连板。电力板块表现活跃，华电能源2连板，上海电力涨停。有色金属板块震荡拉升，中国铝业、招金黄金涨停。机器人概念盘中活跃，中大力德、沃特股份涨停，大业股份触及涨停。先进封装概念震荡回升，长电科技2连板，通富微电触及涨停，续创历史新高。下跌方面，算力租赁概念集体调整，行云科技跌超10%，大位科技跌停。存储芯片概念震荡走弱，大普微、同有科技、朗科科技、江波龙、德明利纷纷下挫。截至收盘，沪指跌0.17%，深成指涨0.12%，创业板指涨0.54%。",
-          "brief": "【收评：创业板指探底回升涨0.54% 全市场超4000只个股下跌】财联社5月26日电，市场探底回升，创业板指、深成指先后翻红。沪深两市成交额3.24万亿，较上一个交易日放量380亿。盘面上，市场热点较为杂乱，全市场超4000只个股下跌。从板块来看，PCB概念反复走强，生益电子涨停，沪电股份触及涨停，股价均创历史新高，华塑控股2连板。电力板块表现活跃，华电能源2连板，上海电力涨停。有色金属板块震荡拉升，中国铝业、招金黄金涨停。机器人概念盘中活跃，中大力德、沃特股份涨停，大业股份触及涨停。先进封装概念震荡回升，长电科技2连板，通富微电触及涨停，续创历史新高。下跌方面，算力租赁概念集体调整，行云科技",
-          "ctime": 1779778896,
+          "title": "杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份",
+          "content": "【杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份】财联社5月26日电，杰瑞股份(002353.SZ)公告称，公司董事长李志勇、副总裁李慧涛、副总裁路伟计划自2026年5月27日起6个月内，使用自筹资金通过集中竞价方式增持公司股票，增持金额合计不低于800万元且不超过1000万元。本次增持计划不设价格区间，增持主体将根据股票价格情况择机实施。",
+          "brief": "【杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份】财联社5月26日电，杰瑞股份(002353.SZ)公告称，公司董事长李志勇、副总裁李慧涛、副总裁路伟计划自2026年5月27日起6个月内，使用自筹资金通过集中竞价方式增持公司股票，增持金额合计不低于800万元且不超过1000万元。本次增持计划不设价格区间，增持主体将根据股票价格情况择机实施。",
+          "ctime": 1779783318,
           "stock_list": [
             {
-              "rise_range_has_null": 0.0054,
-              "RiseRange": 0.54,
-              "name": "创业板指",
-              "StockID": "sz399006",
-              "schema": "cailianshe://stock_detail?stock_id=sz399006",
+              "rise_range_has_null": -0.024,
+              "RiseRange": -2.4,
+              "name": "杰瑞股份",
+              "StockID": "sz002353",
+              "schema": "cailianshe://stock_detail?stock_id=sz002353",
               "status": "L",
-              "last": 4043.065,
+              "last": 134.05,
               "is_stib": false
             }
           ],
           "plate_list": [],
-          "level": 2,
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "headline": "杰瑞股份高管增持计划彰显信心，有望提振股价并带动油服板块情绪",
+            "analysis": [
+              "高管真金白银增持表明对公司价值认可，短期内能增强市场信心并吸引跟风资金。",
+              "增持规模虽不大，但象征意义强，可能引发市场对油气设备板块的重新关注。",
+              "当前A股市场对股东增持行为反应积极，该公告有望推动个股走强。"
+            ],
+            "positive_sectors": [
+              "油服工程"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "杰瑞股份",
+                "code": "002353",
+                "reason": "董事长及副总裁计划增持800-1000万元，直接利好股价"
+              },
+              {
+                "name": "石化机械",
+                "code": "000852",
+                "reason": "同为油服设备龙头，或受板块情绪带动"
+              }
+            ],
+            "negative_stocks": [],
+            "summary": "杰瑞股份高管增持计划彰显信心，有望提振股价并带动油服板块情绪",
+            "status": "ok"
+          },
+          "display_title": "杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份",
+          "display_body": "【杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份】财联社5月26日电，杰瑞股份(002353.SZ)公告称，公司董事长李志勇、副总裁李慧涛、副总裁路伟计划自2026年5月27日起6个月内，使用自筹资金通过集中竞价方式增持公司股票，增持金额合计不低于800万元且不超过1000万元。本次增持计划不设价格区间，增持主体将根据股票价格情况择机实施。",
+          "raw_content": "【杰瑞股份：董事长及副总裁计划增持800万元-1000万元公司股份】财联社5月26日电，杰瑞股份(002353.SZ)公告称，公司董事长李志勇、副总裁李慧涛、副总裁路伟计划自2026年5月27日起6个月内，使用自筹资金通过集中竞价方式增持公司股票，增持金额合计不低于800万元且不超过1000万元。本次增持计划不设价格区间，增持主体将根据股票价格情况择机实施。",
+          "has_redundant_content": true
+        },
+        {
+          "title": "香港恒生科技指数收涨1.59% 半导体板块大涨",
+          "content": "【香港恒生科技指数收涨1.59% 半导体板块大涨】财联社5月26日电，香港恒生指数收跌0.03%，恒生科技指数涨1.59%。半导体板块大涨，华虹半导体涨超10%，中芯国际涨超5%。有色金属板块涨幅居前，中国铝业涨超9%，洛阳钼业涨超7%，招金矿业涨超6%。联想集团涨超15%，创历史新高。",
+          "brief": "【香港恒生科技指数收涨1.59% 半导体板块大涨】财联社5月26日电，香港恒生指数收跌0.03%，恒生科技指数涨1.59%。半导体板块大涨，华虹半导体涨超10%，中芯国际涨超5%。有色金属板块涨幅居前，中国铝业涨超9%，洛阳钼业涨超7%，招金矿业涨超6%。联想集团涨超15%，创历史新高。",
+          "ctime": 1779782991,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "headline": "港股半导体及有色大涨，A股相关板块有望联动走强",
+            "analysis": [
+              "港股半导体板块爆发，反映市场对芯片景气度回升预期，A股半导体或跟随。",
+              "有色金属板块强势，中国铝业等大涨，对A股有色板块形成正面刺激。",
+              "恒生科技指数上扬，科技股情绪回暖，A股科创板及科技股可能受益。"
+            ],
+            "positive_sectors": [
+              "半导体",
+              "有色金属",
+              "消费电子"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "中芯国际",
+                "code": "688981",
+                "reason": "港股中芯国际涨超5%带动A股"
+              },
+              {
+                "name": "华虹半导体",
+                "code": "688347",
+                "reason": "港股大涨，直接利好A股"
+              },
+              {
+                "name": "中国铝业",
+                "code": "601600",
+                "reason": "港股大涨，有色板块情绪提振"
+              },
+              {
+                "name": "洛阳钼业",
+                "code": "603993",
+                "reason": "港股涨超7%，A股联动效应"
+              }
+            ],
+            "negative_stocks": [],
+            "summary": "港股半导体及有色大涨，A股相关板块有望联动走强",
+            "status": "ok"
+          },
+          "display_title": "香港恒生科技指数收涨1.59% 半导体板块大涨",
+          "display_body": "【香港恒生科技指数收涨1.59% 半导体板块大涨】财联社5月26日电，香港恒生指数收跌0.03%，恒生科技指数涨1.59%。半导体板块大涨，华虹半导体涨超10%，中芯国际涨超5%。有色金属板块涨幅居前，中国铝业涨超9%，洛阳钼业涨超7%，招金矿业涨超6%。联想集团涨超15%，创历史新高。",
+          "raw_content": "【香港恒生科技指数收涨1.59% 半导体板块大涨】财联社5月26日电，香港恒生指数收跌0.03%，恒生科技指数涨1.59%。半导体板块大涨，华虹半导体涨超10%，中芯国际涨超5%。有色金属板块涨幅居前，中国铝业涨超9%，洛阳钼业涨超7%，招金矿业涨超6%。联想集团涨超15%，创历史新高。",
+          "has_redundant_content": true
+        },
+        {
+          "title": "算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧",
+          "content": "【算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧】财联社5月26日电，AI算力硬件需求的爆发，令聚苯醚(PPO)及其改性材料变得供不应求。财联社记者从多家企业获悉，当前PPO树脂供应确为紧俏，处于满产满销状态。银禧科技PPO产品全部供应给覆铜板客户，公司证券部人士坦言，“公司产能跟不上，能产多少，客户就可以拿多少”。 价格方面，有电子级树脂上市公司相关负责人表示，相较现有的普通产品，适配AI算力领域的PPO树脂产品价格能提高20%-30%，有些规格甚至增一倍。多位业内人士看好高频高速PPO的远期需求增量，目前圣泉集团、银禧科技、同宇新材等主要厂商均在高频高速树脂方面布局发力，且已规划相关产能。（财联社记者 陆婷婷）",
+          "brief": "【算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧】AI算力硬件需求的爆发，令聚苯醚(PPO)及其改性材料变得供不应求。财联社记者从多家企业获悉，当前PPO树脂供应确为紧俏，处于满产满销状态。银禧科技PPO产品全部供应给覆铜板客户，公司证券部人士坦言，“公司产能跟不上，能产多少，客户就可以拿多少”。 价格方面，有电子级树脂上市公司相关负责人表示，相较现有的普通产品，适配AI算力领域的PPO树脂产品价格能提高20%-30%，有些规格甚至增一倍。多位业内人士看好高频高速PPO的远期需求增量，目前圣泉集团、银禧科技、同宇新材等主要厂商均在高频高速树脂方面布局发力，且已规划相关产能。（财联社",
+          "ctime": 1779782538,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "headline": "AI算力需求引爆PPO树脂紧缺，化工新材料企业迎量价齐升机遇",
+            "analysis": [
+              "AI算力基建带动高频高速覆铜板需求激增，关键原料PPO树脂供不应求，价格或将上涨20%-100%。",
+              "银禧科技、圣泉集团等国内主要PPO厂商满产满销，产能扩张下远期业绩弹性显著。",
+              "PPO树脂紧俏有望向覆铜板、PCB及算力服务器环节传导，强化半导体上游材料景气预期。"
+            ],
+            "positive_sectors": [
+              "化工新材料",
+              "电子元件",
+              "算力基建"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "银禧科技",
+                "code": "300221",
+                "reason": "PPO产品全部供应覆铜板客户，产能供不应求"
+              },
+              {
+                "name": "圣泉集团",
+                "code": "605589",
+                "reason": "布局高频高速树脂，受益PPO需求增长"
+              }
+            ],
+            "negative_stocks": [],
+            "summary": "AI算力需求引爆PPO树脂紧缺，化工新材料企业迎量价齐升机遇",
+            "status": "ok"
+          },
+          "display_title": "算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧",
+          "display_body": "【算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧】财联社5月26日电，AI算力硬件需求的爆发，令聚苯醚(PPO)及其改性材料变得供不应求。财联社记者从多家企业获悉，当前PPO树脂供应确为紧俏，处于满产满销状态。银禧科技PPO产品全部供应给覆铜板客户，公司证券部人士坦言，“公司产能跟不上，能产多少，客户就可以拿多少”。 价格方面，有电子级树脂上市公司相关负责人表示，相较现有的普通产品，适",
+          "raw_content": "【算力基建带旺需求 高端覆铜板关键原料“PPO树脂”供需趋紧】财联社5月26日电，AI算力硬件需求的爆发，令聚苯醚(PPO)及其改性材料变得供不应求。财联社记者从多家企业获悉，当前PPO树脂供应确为紧俏，处于满产满销状态。银禧科技PPO产品全部供应给覆铜板客户，公司证券部人士坦言，“公司产能跟不上，能产多少，客户就可以拿多少”。 价格方面，有电子级树脂上市公司相关负责人表示，相较现有的普通产品，适配AI算力领域的PPO树脂产品价格能提高20%-30%，有些规格甚至增一倍。多位业内人士看好高频高速PPO的远期需求增量，目前圣泉集团、银禧科技、同宇新材等主要厂商均在高频高速树脂方面布局发力，且已规划相关产能。（财联社记者 陆婷婷）",
+          "has_redundant_content": true
+        },
+        {
+          "title": "5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势",
+          "content": "【5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势】今日共46股涨停，连板股总数12只，其中三连板及以上个股4只，上一交易日共23只连板股，连板股晋级率17.39%（不含ST股、退市股）。个股方面，全市场超4000只个股下跌，四环生物尾盘跌停，恒林股份午后炸板，市场连板高度进一步降至3板。大盘科技股主导市场行情，兆易创新、新易盛、长电科技、胜宏科技日内成交额均超270亿，并创出历史新高。板块方面，PCB板块延续强势，宝鼎科技14天9板，华塑控股2连板，山东玻纤、生益科技均3天2板，沪电股份、铜冠铜箔、宏和科技等大涨创历史新高；华为“韬（τ）定律”消息持续发酵，先进封测概念继续走强，新亚制程、三佳科技、华天科技、长电科技均晋级2连板，和顺石油涨停，甬矽电子、联瑞新材等涨超10%。",
+          "brief": "【5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势】今日共46股涨停，连板股总数12只，其中三连板及以上个股4只，上一交易日共23只连板股，连板股晋级率17.39%（不含ST股、退市股）。个股方面，全市场超4000只个股下跌，四环生物尾盘跌停，恒林股份午后炸板，市场连板高度进一步降至3板。大盘科技股主导市场行情，兆易创新、新易盛、长电科技、胜宏科技日内成交额均超270亿，并创出历史新高。板块方面，PCB板块延续强势，宝鼎科技14天9板，华塑控股2连板，山东玻纤、生益科技均3天2板，沪电股份、铜冠铜箔、宏和科技等大涨创历史新高；华为“韬（τ）定律”消息持续发酵，先进封测概",
+          "ctime": 1779781681,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "headline": "AI分析暂不可用",
+            "analysis": [],
+            "summary": "AI分析暂不可用",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true,
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: {\n  \"no_impact\": false,\n  \"headline\": \"短线情绪退潮但PCB与先进封测持续走强，科技股结构性行情延续\",\n  \"analysis\": [\n    \"连板股晋级率仅17%，高度降至3板，显示短线接力情绪低迷，纯题材炒作降温。\",\n    \"PCB"
+          },
+          "display_title": "5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势",
+          "display_body": "【5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势】今日共46股涨停，连板股总数12只，其中三连板及以上个股4只，上一交易日共23只连板股，连板股晋级率17.39%（不含ST股、退市股）。个股方面，全市场超4000只个股下跌，四环生物尾盘跌停，恒林股份午后炸板，市场连板高度进一步降至3板。大盘科技股主导市场行情，兆易创新、新易盛、长电科技、胜宏科技日内成交额均超270亿，并",
+          "raw_content": "【5月26日连板股分析：连板股晋级率不足二成 PCB、先进封测概念延续强势】今日共46股涨停，连板股总数12只，其中三连板及以上个股4只，上一交易日共23只连板股，连板股晋级率17.39%（不含ST股、退市股）。个股方面，全市场超4000只个股下跌，四环生物尾盘跌停，恒林股份午后炸板，市场连板高度进一步降至3板。大盘科技股主导市场行情，兆易创新、新易盛、长电科技、胜宏科技日内成交额均超270亿，并创出历史新高。板块方面，PCB板块延续强势，宝鼎科技14天9板，华塑控股2连板，山东玻纤、生益科技均3天2板，沪电股份、铜冠铜箔、宏和科技等大涨创历史新高；华为“韬（τ）定律”消息持续发酵，先进封测概念继续走强，新亚制程、三佳科技、华天科技、长电科技均晋级2连板，和顺石油涨停，甬矽电子、联瑞新材等涨超10%。",
+          "has_redundant_content": true
+        },
+        {
+          "title": "今日投资舆情热点",
+          "content": "【今日投资舆情热点】\n1）芯片：华为发表“韬（τ）定律” 半导体技术实现新突破，预计到2031年，基于该定律的高端芯片晶体管密度将达到1.4纳米制程的同等水平。\n2）有色金属：全球最大铝土矿生产国几内亚计划于下月宣布改革措施，对这种矿石实施出口管控，以提振价格。\n3）机器人：宇树科技科创板IPO将于6月1日上会，拟募资42.02亿元，预计上半年扣非净利润2.36亿-2.83亿元。\n4）PCB：Rubin物料清单拆解显示，PCB成为价值增幅最显著的下游零部件，较上一代GB300机架大涨233%。",
+          "brief": "【今日投资舆情热点】\n1）芯片：华为发表“韬（τ）定律” 半导体技术实现新突破，预计到2031年，基于该定律的高端芯片晶体管密度将达到1.4纳米制程的同等水平。\n2）有色金属：全球最大铝土矿生产国几内亚计划于下月宣布改革措施，对这种矿石实施出口管控，以提振价格。\n3）机器人：宇树科技科创板IPO将于6月1日上会，拟募资42.02亿元，预计上半年扣非净利润2.36亿-2.83亿元。\n4）PCB：Rubin物料清单拆解显示，PCB成为价值增幅最显著的下游零部件，较上一代GB300机架大涨233%。",
+          "ctime": 1779781212,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "headline": "AI分析暂不可用",
+            "analysis": [],
+            "summary": "AI分析暂不可用",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true,
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: "
+          },
+          "display_title": "今日投资舆情热点",
+          "display_body": "【今日投资舆情热点】\n1）芯片：华为发表“韬（τ）定律” 半导体技术实现新突破，预计到2031年，基于该定律的高端芯片晶体管密度将达到1.4纳米制程的同等水平。\n2）有色金属：全球最大铝土矿生产国几内亚计划于下月宣布改革措施，对这种矿石实施出口管控，以提振价格。\n3）机器人：宇树科技科创板IPO将于6月1日上会，拟募资42.02亿元，预计上半年扣非净利润2.36亿-2.83亿元。\n4）PCB：Ru",
+          "raw_content": "【今日投资舆情热点】\n1）芯片：华为发表“韬（τ）定律” 半导体技术实现新突破，预计到2031年，基于该定律的高端芯片晶体管密度将达到1.4纳米制程的同等水平。\n2）有色金属：全球最大铝土矿生产国几内亚计划于下月宣布改革措施，对这种矿石实施出口管控，以提振价格。\n3）机器人：宇树科技科创板IPO将于6月1日上会，拟募资42.02亿元，预计上半年扣非净利润2.36亿-2.83亿元。\n4）PCB：Rubin物料清单拆解显示，PCB成为价值增幅最显著的下游零部件，较上一代GB300机架大涨233%。",
+          "has_redundant_content": true
+        },
+        {
+          "title": "马来西亚对金条加征10%进口税",
+          "content": "【马来西亚对金条加征10%进口税】财联社5月26日电，多位不愿具名的交易商与经销商表示，至少自5月初起，部分入境金条货物便开始被征收10%进口税。由于当地金价并未同步上涨，额外税负导致进口业务陷入亏损，部分货物遭海关暂扣，也有货主将货品转运至其他地区。马来西亚皇家海关署发言人表示，财政部将就铸制黄金制品进口事宜与行业展开沟通。马来西亚黄金协会及世界黄金协会当地代表均拒绝置评。",
+          "brief": "【马来西亚对金条加征10%进口税】财联社5月26日电，多位不愿具名的交易商与经销商表示，至少自5月初起，部分入境金条货物便开始被征收10%进口税。由于当地金价并未同步上涨，额外税负导致进口业务陷入亏损，部分货物遭海关暂扣，也有货主将货品转运至其他地区。马来西亚皇家海关署发言人表示，财政部将就铸制黄金制品进口事宜与行业展开沟通。马来西亚黄金协会及世界黄金协会当地代表均拒绝置评。",
+          "ctime": 1779781193,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
           "impact": {
             "no_impact": true,
+            "headline": "对A股无明显影响",
+            "analysis": [
+              "对A股无明显影响"
+            ],
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
             "summary": "对A股无明显影响",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": []
-          }
+            "status": "ok"
+          },
+          "display_title": "马来西亚对金条加征10%进口税",
+          "display_body": "【马来西亚对金条加征10%进口税】财联社5月26日电，多位不愿具名的交易商与经销商表示，至少自5月初起，部分入境金条货物便开始被征收10%进口税。由于当地金价并未同步上涨，额外税负导致进口业务陷入亏损，部分货物遭海关暂扣，也有货主将货品转运至其他地区。马来西亚皇家海关署发言人表示，财政部将就铸制黄金制品进口事宜与行业展开沟通。马来西亚黄金协会及世界黄金协会当地代表均拒绝置评。",
+          "raw_content": "【马来西亚对金条加征10%进口税】财联社5月26日电，多位不愿具名的交易商与经销商表示，至少自5月初起，部分入境金条货物便开始被征收10%进口税。由于当地金价并未同步上涨，额外税负导致进口业务陷入亏损，部分货物遭海关暂扣，也有货主将货品转运至其他地区。马来西亚皇家海关署发言人表示，财政部将就铸制黄金制品进口事宜与行业展开沟通。马来西亚黄金协会及世界黄金协会当地代表均拒绝置评。",
+          "has_redundant_content": true
         },
         {
-          "title": "先进封装概念震荡回升 长电科技2连板续创历史新高",
-          "content": "【先进封装概念震荡回升 长电科技2连板续创历史新高】财联社5月26日电，尾盘先进封装概念震荡回升，长电科技2连板，通富微电触及涨停，续创历史新高，此前华天科技、三佳科技2连板，胜科纳米、甬矽电子、联瑞新材、颀中科技均涨超10%。",
-          "brief": "【先进封装概念震荡回升 长电科技2连板续创历史新高】财联社5月26日电，尾盘先进封装概念震荡回升，长电科技2连板，通富微电触及涨停，续创历史新高，此前华天科技、三佳科技2连板，胜科纳米、甬矽电子、联瑞新材、颀中科技均涨超10%。\n",
-          "ctime": 1779778136,
-          "stock_list": [
-            {
-              "rise_range_has_null": 0.1187,
-              "RiseRange": 11.87,
-              "name": "甬矽电子",
-              "StockID": "sh688362",
-              "schema": "cailianshe://stock_detail?stock_id=sh688362",
-              "status": "L",
-              "last": 75.58,
-              "is_stib": true
-            },
-            {
-              "rise_range_has_null": 0.1001,
-              "RiseRange": 10.01,
-              "name": "三佳科技",
-              "StockID": "sh600520",
-              "schema": "cailianshe://stock_detail?stock_id=sh600520",
-              "status": "L",
-              "last": 36.82,
-              "is_stib": false
-            },
-            {
-              "rise_range_has_null": 0.0945,
-              "RiseRange": 9.45,
-              "name": "颀中科技",
-              "StockID": "sh688352",
-              "schema": "cailianshe://stock_detail?stock_id=sh688352",
-              "status": "L",
-              "last": 18.99,
-              "is_stib": true
-            },
-            {
-              "rise_range_has_null": 0.1251,
-              "RiseRange": 12.51,
-              "name": "联瑞新材",
-              "StockID": "sh688300",
-              "schema": "cailianshe://stock_detail?stock_id=sh688300",
-              "status": "L",
-              "last": 157.5,
-              "is_stib": true
-            },
-            {
-              "rise_range_has_null": 0.1002,
-              "RiseRange": 10.0199995,
-              "name": "华天科技",
-              "StockID": "sz002185",
-              "schema": "cailianshe://stock_detail?stock_id=sz002185",
-              "status": "L",
-              "last": 18.67,
-              "is_stib": false
-            },
-            {
-              "rise_range_has_null": 0.1,
-              "RiseRange": 10,
-              "name": "长电科技",
-              "StockID": "sh600584",
-              "schema": "cailianshe://stock_detail?stock_id=sh600584",
-              "status": "L",
-              "last": 88.19,
-              "is_stib": false
-            },
-            {
-              "rise_range_has_null": 0.0804,
-              "RiseRange": 8.04,
-              "name": "通富微电",
-              "StockID": "sz002156",
-              "schema": "cailianshe://stock_detail?stock_id=sz002156",
-              "status": "L",
-              "last": 75.39,
-              "is_stib": false
-            }
-          ],
-          "plate_list": [],
-          "level": 2,
-          "impact": {
-            "summary": "分析失败: ('Connection aborted.', OSError(0, 'Error'))",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": true
-          }
-        },
-        {
-          "title": "新易盛涨超6%续创历史新高 总市值突破7000亿",
-          "content": "【新易盛涨超6%续创历史新高 总市值突破7000亿】财联社5月26日电，光模块龙头新易盛扩大涨幅至6%，股价突破700元，续创历史新高，总市值突破7000亿。",
-          "brief": "【新易盛涨超6%续创历史新高 总市值突破7000亿】财联社5月26日电，光模块龙头新易盛扩大涨幅至6%，股价突破700元，续创历史新高，总市值突破7000亿。",
-          "ctime": 1779777793,
-          "stock_list": [
-            {
-              "rise_range_has_null": 0.0622,
-              "RiseRange": 6.22,
-              "name": "新易盛",
-              "StockID": "sz300502",
-              "schema": "cailianshe://stock_detail?stock_id=sz300502",
-              "status": "L",
-              "last": 700,
-              "is_stib": false
-            }
-          ],
-          "plate_list": [],
-          "level": 2,
-          "impact": {
-            "no_impact": false,
-            "summary": "光模块龙头新易盛创新高，提振光通信及AI算力板块情绪",
-            "positive_sectors": [
-              "通信设备",
-              "半导体"
-            ],
-            "negative_sectors": [],
-            "positive_stocks": [
-              {
-                "name": "新易盛",
-                "code": "300502",
-                "reason": "股价续创新高，总市值突破7000亿"
-              },
-              {
-                "name": "中际旭创",
-                "code": "300308",
-                "reason": "光模块龙头带动板块关注度提升"
-              }
-            ],
-            "negative_stocks": []
-          }
-        },
-        {
-          "title": "盛新锂能旗下盛屯锂业公司增资至29.5亿 增幅约64%",
-          "content": "【盛新锂能旗下盛屯锂业公司增资至29.5亿 增幅约64%】财联社5月26日电， 天眼查显示，近日，四川盛屯锂业有限公司发生工商变更，注册资本由18亿人民币增至29.5亿人民币，增幅约64%。 该公司成立于2007年11月，法定代表人为刘伟新，经营范围包括金属矿石销售、货物进出口、化工产品销售等，由盛新锂能全资持股。",
-          "brief": "【盛新锂能旗下盛屯锂业公司增资至29.5亿 增幅约64%】财联社5月26日电， 天眼查显示，近日，四川盛屯锂业有限公司发生工商变更，注册资本由18亿人民币增至29.5亿人民币，增幅约64%。 该公司成立于2007年11月，法定代表人为刘伟新，经营范围包括金属矿石销售、货物进出口、化工产品销售等，由盛新锂能全资持股。 ",
-          "ctime": 1779778744,
-          "stock_list": [
-            {
-              "rise_range_has_null": 0.0148,
-              "RiseRange": 1.48,
-              "name": "盛新锂能",
-              "StockID": "sz002240",
-              "schema": "cailianshe://stock_detail?stock_id=sz002240",
-              "status": "L",
-              "last": 49.23,
-              "is_stib": false
-            }
-          ],
+          "title": "几内亚将限制铝土矿出口 外交部回应",
+          "content": "【几内亚将限制铝土矿出口 外交部回应】财联社5月26日电，外交部发言人毛宁主持例行记者会。彭博社记者提问，几内亚表示，正敲定铝土矿出口的限制方案，相关措施将于下月起实施。几内亚的铝土矿绝大部分销往中国，而中国进口的铝土矿中，约四分之三都来自几内亚。请问中方对该国即将实施的出口管控有何评论？对此，毛宁表示：“我还不了解你提到的情况，你也可以向中方的主管部门了解。我想说的是，作为原则，所有的国家都有责任维护产供链的稳定。” (北京日报)",
+          "brief": "【几内亚将限制铝土矿出口 外交部回应】财联社5月26日电，外交部发言人毛宁主持例行记者会。彭博社记者提问，几内亚表示，正敲定铝土矿出口的限制方案，相关措施将于下月起实施。几内亚的铝土矿绝大部分销往中国，而中国进口的铝土矿中，约四分之三都来自几内亚。请问中方对该国即将实施的出口管控有何评论？对此，毛宁表示：“我还不了解你提到的情况，你也可以向中方的主管部门了解。我想说的是，作为原则，所有的国家都有责任维护产供链的稳定。”",
+          "ctime": 1779781131,
+          "stock_list": [],
           "plate_list": [],
           "level": 1,
           "impact": {
             "no_impact": false,
-            "summary": "盛新锂能子公司增资，体现对锂业前景信心，利好锂电板块",
+            "headline": "几内亚限制铝土矿出口或致供应紧张，铝业板块受益",
+            "analysis": [
+              "中国进口铝土矿约75%来自几内亚，出口限制将直接导致国内铝土矿供应缺口",
+              "铝土矿短缺推高氧化铝成本，铝价上涨利好铝矿及冶炼企业",
+              "外交部回应未明确反对，短期限制预期强化，铝板块获事件催化"
+            ],
             "positive_sectors": [
-              "锂电池",
+              "铝",
               "有色金属"
-            ],
-            "negative_sectors": [],
-            "positive_stocks": [
-              {
-                "name": "盛新锂能",
-                "code": "002240",
-                "reason": "子公司增资彰显发展信心"
-              },
-              {
-                "name": "天齐锂业",
-                "code": "002466",
-                "reason": "锂资源板块情绪提振"
-              }
-            ],
-            "negative_stocks": []
-          }
-        },
-        {
-          "title": "国内商品期货多数收跌 碳酸锂跌4%",
-          "content": "【国内商品期货多数收跌 碳酸锂跌4%】财联社5月26日电，国内商品期货多数收跌，碳酸锂跌4%，苯乙烯、原油跌超3%，纯苯、硅铁、生猪、螺纹钢跌超2%。涨幅方面，焦煤、氧化铝涨超5%，红枣涨近3%，焦炭涨超2%，鸡蛋、沪锌涨超1%。",
-          "brief": "【国内商品期货多数收跌 碳酸锂跌4%】财联社5月26日电，国内商品期货多数收跌，碳酸锂跌4%，苯乙烯、原油跌超3%，纯苯、硅铁、生猪、螺纹钢跌超2%。涨幅方面，焦煤、氧化铝涨超5%，红枣涨近3%，焦炭涨超2%，鸡蛋、沪锌涨超1%。",
-          "ctime": 1779778895,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 1,
-          "impact": {
-            "name": "山西焦煤",
-            "code": "000983",
-            "summary": "焦煤期货涨超5%利好焦煤龙头",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": false
-          }
-        },
-        {
-          "title": "几内亚“两月三提”出口控量 对铝土矿价的实质拉动有限",
-          "content": "【几内亚“两月三提”出口控量 对铝土矿价的实质拉动有限】财联社5月26日电，几内亚矿业与地质部长西拉明确表示，政府预计将于6月正式敲定铝土矿出口管制新政，核心诉求为“控制出口量、让价格回升至合理水平”，政策落地的直接导因在于当地铝土矿出口高增以及FOB矿价大幅下行。综合来看，当前全球铝土矿和氧化铝过剩格局仍明确，几内亚矿价FOB 38美金/干吨已逼近当地矿企平均成本线，此次控量更多起到封杀矿价进一步下行空间的作用，对矿价的实质拉动有限。短期氧化铝情绪盘面或有脉冲式拉涨，建议规避单边情绪风险，策略上可考虑情绪释放完毕后的右侧布局近月空单。 (广发期货)",
-          "brief": "【几内亚“两月三提”出口控量 对矿价的实质拉动有限】财联社5月26日电，几内亚矿业与地质部长西拉明确表示，政府预计将于6月正式敲定铝土矿出口管制新政，核心诉求为“控制出口量、让价格回升至合理水平”，政策落地的直接导因在于当地铝土矿出口高增以及FOB矿价大幅下行。综合来看，当前全球铝土矿和氧化铝过剩格局仍明确，几内亚矿价FOB 38美金/干吨已逼近当地矿企平均成本线，此次控量更多起到封杀矿价进一步下行空间的作用，对矿价的实质拉动有限。短期氧化铝情绪盘面或有脉冲式拉涨，建议规避单边情绪风险，策略上可考虑情绪释放完毕后的右侧布局近月空单。",
-          "ctime": 1779778577,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 1,
-          "impact": {
-            "no_impact": false,
-            "summary": "几内亚铝土矿出口控量短期提振氧化铝情绪，实质影响有限",
-            "positive_sectors": [
-              "有色金属",
-              "铝"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
                 "name": "中国铝业",
                 "code": "601600",
-                "reason": "铝土矿资源自给率高，矿价企稳有利"
+                "reason": "铝土矿资源自给率较高"
               },
               {
                 "name": "云铝股份",
                 "code": "000807",
-                "reason": "氧化铝生产企业，受益情绪脉冲"
+                "reason": "电解铝龙头，受益铝价上涨"
+              },
+              {
+                "name": "南山铝业",
+                "code": "600219",
+                "reason": "完整铝产业链，氧化铝受益"
               }
             ],
-            "negative_stocks": []
-          }
-        },
-        {
-          "title": "【盘中宝·记者一线】算力基建带旺需求！这类高端覆铜板关键原料供需趋紧，多家公司处于满产满销状态",
-          "content": "财联社记者采访获悉，算力基建带旺需求，这类高端覆铜板关键原料供需趋紧，多家公司处于满产满销状态。",
-          "brief": "财联社记者采访获悉，算力基建带旺需求，这类高端覆铜板关键原料供需趋紧，多家公司处于满产满销状态。",
-          "ctime": 1779778267,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 1,
-          "impact": {
-            "summary": "分析失败: Expecting value: line 1 column 1 (char 0)",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
             "negative_stocks": [],
-            "no_impact": true
-          }
+            "summary": "几内亚限制铝土矿出口或致供应紧张，铝业板块受益",
+            "status": "ok"
+          },
+          "display_title": "几内亚将限制铝土矿出口 外交部回应",
+          "display_body": "【几内亚将限制铝土矿出口 外交部回应】财联社5月26日电，外交部发言人毛宁主持例行记者会。彭博社记者提问，几内亚表示，正敲定铝土矿出口的限制方案，相关措施将于下月起实施。几内亚的铝土矿绝大部分销往中国，而中国进口的铝土矿中，约四分之三都来自几内亚。请问中方对该国即将实施的出口管控有何评论？对此，毛宁表示：“我还不了解你提到的情况，你也可以向中方的主管部门了解。我想说的是，作为原则，所有的国家都有责",
+          "raw_content": "【几内亚将限制铝土矿出口 外交部回应】财联社5月26日电，外交部发言人毛宁主持例行记者会。彭博社记者提问，几内亚表示，正敲定铝土矿出口的限制方案，相关措施将于下月起实施。几内亚的铝土矿绝大部分销往中国，而中国进口的铝土矿中，约四分之三都来自几内亚。请问中方对该国即将实施的出口管控有何评论？对此，毛宁表示：“我还不了解你提到的情况，你也可以向中方的主管部门了解。我想说的是，作为原则，所有的国家都有责任维护产供链的稳定。” (北京日报)",
+          "has_redundant_content": true
         },
         {
-          "title": "沪深两市成交额超3万亿 较上一日此时放量超300亿",
-          "content": "【沪深两市成交额超3万亿 较上一日此时放量超300亿】财联社5月26日电，据财联社盯盘数据显示，沪深两市成交额突破3万亿，较上一日此时放量超300亿，预计全天成交金额超3.2万亿。",
-          "brief": "【沪深两市成交额超3万亿 较上一日此时放量超300亿】财联社5月26日电，据财联社盯盘数据显示，沪深两市成交额突破3万亿，较上一日此时放量超300亿，预计全天成交金额超3.2万亿。",
-          "ctime": 1779777703,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 2,
-          "impact": {
-            "no_impact": false,
-            "summary": "成交额放量超3万亿，市场活跃度提升，利好券商及金融科技板块。",
-            "positive_sectors": [
-              "券商",
-              "金融科技"
-            ],
-            "negative_sectors": [],
-            "positive_stocks": [
-              {
-                "name": "中信证券",
-                "code": "600030",
-                "reason": "成交额放大直接增厚经纪业务收入"
-              },
-              {
-                "name": "东方财富",
-                "code": "300059",
-                "reason": "互联网券商龙头，受益于交易活跃"
-              }
-            ],
-            "negative_stocks": []
-          }
-        },
-        {
-          "title": "伊朗称若战争重启将猛烈回击 并将阻止地区石油出口",
-          "content": "【伊朗称若战争重启将猛烈回击 并将阻止地区石油出口】财联社5月26日电，伊朗武装部队总参谋部发言人谢卡尔希当地时间26日表示，伊朗已为战争做好准备，若美国和以色列发动新的攻击，伊方的回应将更加猛烈，且将动用新战术。他表示，若战争重启且伊朗出口遭禁，伊方将阻止地区石油外运。 (央视新闻)",
-          "brief": "【伊朗称若战争重启将猛烈回击 并将阻止地区石油出口】财联社5月26日电，伊朗武装部队总参谋部发言人谢卡尔希当地时间26日表示，伊朗已为战争做好准备，若美国和以色列发动新的攻击，伊方的回应将更加猛烈，且将动用新战术。他表示，若战争重启且伊朗出口遭禁，伊方将阻止地区石油外运。",
-          "ctime": 1779779065,
+          "title": "两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”",
+          "content": "【两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”】财联社5月26日电，国家市场监督管理总局、国家标准化管理委员会批准发布强制性国家标准《光伏组件安全要求》、《光伏组件铭牌标识要求》，实施日期为2027年6月1日。据了解，这两项标准是由工业和信息化部提出并归口。其中，《光伏组件安全要求》规定了光伏组件的电气安全、机械安全、防火安全、有害物质限制等要求，并描述了相应的试验方法。在防火方面，标准不仅明确了光伏组件的防火等级和燃烧性能，还对部件材料阻燃性提出了硬性指标，旨在全方位降低光伏组件火灾风险。《光伏组件铭牌标识要求》中，通过规定组件铭牌中电性能参数值的最大允许公差和验证判定值，明确测量方法、规定量值溯源要求、测量结果可追溯，以杜绝功率“虚标”现象。",
+          "brief": "【两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”】财联社5月26日电，国家市场监督管理总局、国家标准化管理委员会批准发布强制性国家标准《光伏组件安全要求》、《光伏组件铭牌标识要求》，实施日期为2027年6月1日。据了解，这两项标准是由工业和信息化部提出并归口。其中，《光伏组件安全要求》规定了光伏组件的电气安全、机械安全、防火安全、有害物质限制等要求，并描述了相应的试验方法。在防火方面，标准不仅明确了光伏组件的防火等级和燃烧性能，还对部件材料阻燃性提出了硬性指标，旨在全方位降低光伏组件火灾风险。《光伏组件铭牌标识要求》中，通过规定组件铭牌中电性能参数值的最大允许公差和验证判定值，明确测",
+          "ctime": 1779782742,
           "stock_list": [],
           "plate_list": [],
           "level": 1,
           "impact": {
             "no_impact": false,
-            "summary": "伊朗威胁阻止石油出口推高油价预期，利好石油板块，利空航空等用油行业",
+            "headline": "光伏强制性国标发布提升行业门槛，利好头部企业加速劣质产能出清",
+            "analysis": [
+              "新国标强制规范组件安全与铭牌标识，提高行业门槛，将加速中小厂商淘汰。",
+              "杜绝功率虚标有助于恢复市场信任，提升投资回报确定性，刺激终端需求。",
+              "头部组件企业技术成熟、质量体系完善，更易达标，有望获取更大市场份额。"
+            ],
             "positive_sectors": [
-              "石油",
-              "黄金",
-              "军工"
+              "光伏"
             ],
-            "negative_sectors": [
-              "航空"
-            ],
+            "negative_sectors": [],
             "positive_stocks": [
               {
-                "name": "中国石油",
-                "code": "601857",
-                "reason": "国际油价上涨直接受益"
+                "name": "隆基绿能",
+                "code": "601012",
+                "reason": "全球光伏组件龙头，技术及规模优势突出，受益于行业规范化"
               },
               {
-                "name": "山东黄金",
-                "code": "600547",
-                "reason": "地缘风险刺激避险买金"
+                "name": "晶澳科技",
+                "code": "002459",
+                "reason": "一体化组件龙头，产品质量控制严格，市场份额有望提升"
               },
               {
-                "name": "中航沈飞",
-                "code": "600760",
-                "reason": "地区冲突加剧利好军工"
+                "name": "天合光能",
+                "code": "688599",
+                "reason": "组件出货量领先，品牌认知度高，标准升级巩固龙头地位"
               }
             ],
-            "negative_stocks": [
-              {
-                "name": "中国国航",
-                "code": "601111",
-                "reason": "油价上涨增加运营成本"
-              },
-              {
-                "name": "南方航空",
-                "code": "600029",
-                "reason": "航油成本占比高，利润承压"
-              }
-            ]
-          }
+            "negative_stocks": [],
+            "summary": "光伏强制性国标发布提升行业门槛，利好头部企业加速劣质产能出清",
+            "status": "ok"
+          },
+          "display_title": "两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”",
+          "display_body": "【两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”】财联社5月26日电，国家市场监督管理总局、国家标准化管理委员会批准发布强制性国家标准《光伏组件安全要求》、《光伏组件铭牌标识要求》，实施日期为2027年6月1日。据了解，这两项标准是由工业和信息化部提出并归口。其中，《光伏组件安全要求》规定了光伏组件的电气安全、机械安全、防火安全、有害物质限制等要求，并描述了相应的试验方法。在防火方面，标",
+          "raw_content": "【两项光伏组件强制性国标发布 规范安全要求杜绝功率“虚标”】财联社5月26日电，国家市场监督管理总局、国家标准化管理委员会批准发布强制性国家标准《光伏组件安全要求》、《光伏组件铭牌标识要求》，实施日期为2027年6月1日。据了解，这两项标准是由工业和信息化部提出并归口。其中，《光伏组件安全要求》规定了光伏组件的电气安全、机械安全、防火安全、有害物质限制等要求，并描述了相应的试验方法。在防火方面，标准不仅明确了光伏组件的防火等级和燃烧性能，还对部件材料阻燃性提出了硬性指标，旨在全方位降低光伏组件火灾风险。《光伏组件铭牌标识要求》中，通过规定组件铭牌中电性能参数值的最大允许公差和验证判定值，明确测量方法、规定量值溯源要求、测量结果可追溯，以杜绝功率“虚标”现象。",
+          "has_redundant_content": true
         },
         {
-          "title": "",
-          "content": "财联社5月26日电，欧洲斯托克50指数开盘下跌0.25%，英国富时100指数涨0.53%，法国CAC40指数跌0.27%，德国DAX30指数跌0.18%。",
-          "brief": "财联社5月26日电，欧洲斯托克(Eurostoxx)50指数开盘下跌0.25%，英国富时100指数涨0.53%，法国CAC40指数跌0.27%，德国DAX30指数跌0.18%。",
-          "ctime": 1779778954,
+          "title": "韩国首尔高架桥坍塌事故造成3死3伤",
+          "content": "【韩国首尔高架桥坍塌事故造成3死3伤】财联社5月26日电，韩国首尔西大门区一高架桥当地时间26日下午在拆除过程中发生部分桥体垮塌事故。目前现场搜救工作已结束，事故造成3人死亡，另有3人受伤。 (央视新闻)",
+          "brief": "【韩国首尔高架桥坍塌事故造成3死3伤】财联社5月26日电，韩国首尔西大门区一高架桥当地时间26日下午在拆除过程中发生部分桥体垮塌事故。目前现场搜救工作已结束，事故造成3人死亡，另有3人受伤。",
+          "ctime": 1779782665,
           "stock_list": [],
           "plate_list": [],
           "level": 1,
           "impact": {
             "no_impact": true,
-            "summary": "欧洲股市开盘小幅波动，对A股无明显影响",
+            "headline": "对A股无明显影响",
+            "analysis": [
+              "对A股无明显影响"
+            ],
             "positive_sectors": [],
             "negative_sectors": [],
             "positive_stocks": [],
-            "negative_stocks": []
-          }
+            "negative_stocks": [],
+            "summary": "对A股无明显影响",
+            "status": "ok"
+          },
+          "display_title": "韩国首尔高架桥坍塌事故造成3死3伤",
+          "display_body": "【韩国首尔高架桥坍塌事故造成3死3伤】财联社5月26日电，韩国首尔西大门区一高架桥当地时间26日下午在拆除过程中发生部分桥体垮塌事故。目前现场搜救工作已结束，事故造成3人死亡，另有3人受伤。 (央视新闻)",
+          "raw_content": "【韩国首尔高架桥坍塌事故造成3死3伤】财联社5月26日电，韩国首尔西大门区一高架桥当地时间26日下午在拆除过程中发生部分桥体垮塌事故。目前现场搜救工作已结束，事故造成3人死亡，另有3人受伤。 (央视新闻)",
+          "has_redundant_content": true
+        },
+        {
+          "title": "伊朗对美违反停火保留报复权",
+          "content": "【伊朗对美违反停火保留报复权】财联社5月26日电，据伊朗官方媒体报道，伊朗伊斯兰革命卫队今天（5月26日）表示，保留对美国任何违反停火行为采取“合法且必然”报复的权利。革命卫队还称，其防空部队再次击落一架侵入伊朗领空的美国MQ-9“死神”无人机，并向一架闯入伊朗领空的战斗机开火。 (央视新闻)",
+          "brief": "【伊朗对美违反停火保留报复权】财联社5月26日电，据伊朗官方媒体报道，伊朗伊斯兰革命卫队今天（5月26日）表示，保留对美国任何违反停火行为采取“合法且必然”报复的权利。革命卫队还称，其防空部队再次击落一架侵入伊朗领空的美国MQ-9“死神”无人机，并向一架闯入伊朗领空的战斗机开火。",
+          "ctime": 1779782568,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "headline": "中东紧张局势升级，石油、军工、黄金板块或迎短期催化",
+            "analysis": [
+              "伊朗与美国军事摩擦加剧，可能推高国际油价，利好国内石油石化板块",
+              "地缘冲突刺激军工情绪，无人机及防空系统相关企业或受关注",
+              "市场避险情绪升温，黄金板块作为传统避险资产有望获得资金流入"
+            ],
+            "positive_sectors": [
+              "石油石化",
+              "军工",
+              "黄金"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "中曼石油",
+                "code": "603619",
+                "reason": "油价上涨利好石油开采企业"
+              },
+              {
+                "name": "航天彩虹",
+                "code": "002389",
+                "reason": "无人机龙头，地缘冲突提振需求预期"
+              },
+              {
+                "name": "中金黄金",
+                "code": "600489",
+                "reason": "避险情绪推升金价，黄金资源股受益"
+              }
+            ],
+            "negative_stocks": [],
+            "summary": "中东紧张局势升级，石油、军工、黄金板块或迎短期催化",
+            "status": "ok"
+          },
+          "display_title": "伊朗对美违反停火保留报复权",
+          "display_body": "【伊朗对美违反停火保留报复权】财联社5月26日电，据伊朗官方媒体报道，伊朗伊斯兰革命卫队今天（5月26日）表示，保留对美国任何违反停火行为采取“合法且必然”报复的权利。革命卫队还称，其防空部队再次击落一架侵入伊朗领空的美国MQ-9“死神”无人机，并向一架闯入伊朗领空的战斗机开火。 (央视新闻)",
+          "raw_content": "【伊朗对美违反停火保留报复权】财联社5月26日电，据伊朗官方媒体报道，伊朗伊斯兰革命卫队今天（5月26日）表示，保留对美国任何违反停火行为采取“合法且必然”报复的权利。革命卫队还称，其防空部队再次击落一架侵入伊朗领空的美国MQ-9“死神”无人机，并向一架闯入伊朗领空的战斗机开火。 (央视新闻)",
+          "has_redundant_content": true
         }
       ],
       "forecast": {
-        "core_judgment": "上证日线无中枢，处于趋势延伸，量能平稳，大盘股强小盘弱，结构性行情主导，关注资源与科技轮动。",
-        "volume_note": "量能较5日均量仅增3.1%，未有效放大，突破需补量。",
+        "core_judgment": "大盘震荡分化，资源股强势上行，科技股承压调整，日线无中枢结构，方向待定。",
+        "volume_note": "量能较5日均量略增3.1%，但未有效放大，资金集中涌入有色、黄金等少数板块。",
         "short_term": [
-          "若上证放量站上4200点且金融权重配合，则有望向上离开当前小级别中枢，可视为三买机会。",
-          "若回调不破4100点且15分钟出现底背驰，则构成二买区域，可低吸资源或光模块等主线。",
-          "若跌破4050点且反弹无力回到上方，则短期趋势转弱，需防范一卖风险，减仓应对。"
+          "若上证放量站上4150且量能持续>5日均量20%，则有望冲击4180-4200区域，否则谨防假突破。",
+          "若上证跌破4130且30分钟出现顶分型确认，则可能回踩4100点附近寻求支撑。",
+          "资源板块（铝、铜、黄金）短期情绪高涨，若明日板块内龙头股放量滞涨，注意短线回调风险。",
+          "创业板指强于上证，若科技股（半导体、PCB）能止跌企稳，可能带动小盘股情绪修复，否则分化加剧。"
         ],
-        "mid_term": "上证日线级别无标准中枢，当前处于上涨趋势延伸，中期关键观察位4000点。若后续回调能在4000附近构建日线中枢且不破，则形成三买继续上行；若失守4000且反抽无力，则可能转为下跌趋势。板块分化下，资源、科技主线若持续获资金流入，将支撑指数中枢上移。",
+        "mid_term": "日线目前无清晰中枢，未来1-2周大概率在4100-4200区间构建30分钟级别中枢，若构建成功且三买确认，则向上延伸；若中枢后出现三卖，则可能下探4050。关键观察点：资源股动能衰减时是否有新主线承接（如光伏、化工），以及量能能否重回万亿以上。",
         "risks": [
-          "板块轮动过快，追高资源股易被套，若贵金属板块集体回调，将拖累市场情绪。",
-          "创业板探底回升但个股涨少跌多，赚钱效应不足，若权重股补跌，将引发指数快速回落。",
-          "成交额虽超3万亿但为存量博弈，若后续缩量至2.5万亿以下，热点持续性堪忧。"
+          "资源股短期交易过热，若期货价格波动或获利盘涌出，可能引发指数快速回调。",
+          "科技股（科创50、半导体）持续弱势，若未能跟随港股反弹，将拖累市场人气。",
+          "量能不足导致上证无法有效突破4150-4180压力区，形成多周期顶背离后开启下跌。"
         ]
       },
       "sell_signals": [
@@ -17637,7 +18067,7 @@
           "requested_30min": 117,
           "fetched_30min": 117,
           "formal_kept": 0,
-          "candidate_upgraded": 77,
+          "candidate_upgraded": 76,
           "dropped_no_confirm": 40,
           "dropped_no_30min": 0,
           "dropped_risk_guard": 30
@@ -17645,11 +18075,43 @@
         "kline_cache": {
           "day_hit": 419,
           "day_miss": 27,
-          "day_write": 424,
+          "day_write": 425,
           "30min_hit": 117,
           "30min_miss": 0,
           "30min_write": 117,
-          "pruned_records": 21
+          "pruned_records": 412
+        },
+        "fusion_admission": {
+          "market_regime": "strong",
+          "input_count": 77,
+          "dropped_by_ma": 1,
+          "dropped_by_market_regime": 0,
+          "dropped_by_signal_gate": 0,
+          "kept_formal": 0,
+          "kept_candidate": 76,
+          "drop_details": [
+            {
+              "code": "688102",
+              "name": "斯瑞新材",
+              "type": "中枢低吸候选",
+              "reason": "中枢低吸候选强市要求MA多头或确认强度强"
+            }
+          ],
+          "output_count": 76,
+          "pure_fusion_identical": false
+        },
+        "signal_distribution": {
+          "中枢低吸候选": 1,
+          "底背驰候选": 76
+        },
+        "event_analysis_status_counts": {
+          "ok": 8,
+          "failed": 2,
+          "skipped": 0
+        },
+        "chart_annotation_coverage": {
+          "total_picks": 77,
+          "with_annotations": 77
         }
       }
     },

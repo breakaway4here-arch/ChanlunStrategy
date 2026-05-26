@@ -36,45 +36,161 @@ class NpEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
-CHART_MAX_BARS = 50  # 图表展示最多K线根数
+CHART_MAX_BARS = 50  # 图表展示默认K线根数（动态窗口会扩展）
+CHART_MIN_BARS = 50
+CHART_MAX_EXTENDED = 120
+
+
+def build_chart_window(pick):
+    """Calculate the slice window so key points (reference/seed/confirm/best_buy) are visible.
+
+    Returns (slice_start, slice_end) indices into the original arrays.
+    """
+    dates = _safe_list(pick.get("dates", []))
+    n = len(dates)
+    if n == 0:
+        return 0, 0
+
+    # Collect key indices that must be visible
+    key_indices = set()
+
+    bp = pick.get("best_buy_point", {})
+    bp_idx = bp.get("index")
+    if bp_idx is not None and isinstance(bp_idx, int) and 0 <= bp_idx < n:
+        key_indices.add(bp_idx)
+
+    # reference buy points
+    for ref in pick.get("reference_buy_points", []) or []:
+        ri = ref.get("index")
+        if ri is not None and isinstance(ri, int) and 0 <= ri < n:
+            key_indices.add(ri)
+
+    # Always include latest bar
+    key_indices.add(n - 1)
+
+    if not key_indices:
+        return max(0, n - CHART_MAX_BARS), n
+
+    min_key = min(key_indices)
+    max_key = max(key_indices)
+
+    # Window must cover min_key to max_key, plus padding
+    padding = 5
+    win_start = max(0, min_key - padding)
+    win_end = min(n, max_key + padding + 1)
+
+    # Ensure minimum window size
+    if win_end - win_start < CHART_MIN_BARS:
+        extra = CHART_MIN_BARS - (win_end - win_start)
+        win_start = max(0, win_start - extra // 2)
+        win_end = min(n, win_end + extra - extra // 2)
+
+    # Cap at max extended
+    if win_end - win_start > CHART_MAX_EXTENDED:
+        win_start = win_end - CHART_MAX_EXTENDED
+
+    return win_start, win_end
+
+
+def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
+    """Build annotation data for chart JS rendering.
+
+    Returns a dict with markLines and markPoints for ECharts.
+    """
+    annotations = {"markLines": [], "markPoints": [], "labels": []}
+
+    bp = pick.get("best_buy_point", {})
+    bp_idx_orig = bp.get("index")
+    bp_price = bp.get("price")
+
+    # Pivot ZD/ZG
+    pivots = pick.get("pivots", {})
+    zg = pivots.get("ZG")
+    zd = pivots.get("ZD")
+    if zg is not None and zd is not None and dates_sliced:
+        annotations["markLines"].append({
+            "name": "ZG",
+            "yAxis": float(zg),
+            "lineStyle": {"color": "rgba(255,165,0,0.4)", "type": "dashed"},
+            "label": {"formatter": f"ZG {zg}", "color": "#ffa502", "fontSize": 10},
+        })
+        annotations["markLines"].append({
+            "name": "ZD",
+            "yAxis": float(zd),
+            "lineStyle": {"color": "rgba(255,165,0,0.4)", "type": "dashed"},
+            "label": {"formatter": f"ZD {zd}", "color": "#ffa502", "fontSize": 10},
+        })
+
+    # Source price
+    source_price = bp.get("source_price") or bp_price
+    if source_price and dates_sliced:
+        annotations["markLines"].append({
+            "name": "source",
+            "yAxis": float(source_price),
+            "lineStyle": {"color": "rgba(116,185,255,0.5)", "type": "dotted"},
+            "label": {"formatter": f"参考 {source_price}", "color": "#74b9ff", "fontSize": 10},
+        })
+
+    # Best buy point marker
+    if bp_idx_orig is not None and isinstance(bp_idx_orig, int):
+        adj_idx = bp_idx_orig - slice_start
+        if 0 <= adj_idx < len(dates_sliced) and bp_price:
+            annotations["markPoints"].append({
+                "name": bp.get("type", "BP"),
+                "coord": [dates_sliced[adj_idx], float(bp_price)],
+                "symbol": "pin",
+                "symbolSize": 30,
+                "itemStyle": {"color": "#ff4757"},
+                "label": {"formatter": bp.get("type", ""), "color": "#ff4757", "fontSize": 10},
+            })
+
+    # Seed reason label
+    seed_reason = bp.get("seed_reason", "")
+    if seed_reason and dates_sliced:
+        annotations["labels"].append(seed_reason)
+
+    return annotations
+
 
 
 def _serialize_picks(picks):
-    """将 picks 列表转为 JSON-safe 格式，图表数据截取最近50根K线"""
+    """将 picks 列表转为 JSON-safe 格式，使用动态图表窗口"""
     result = []
     for p in picks:
-        # 图表数组截取最近50根，计算偏移量用于调整买卖点索引
         raw_dates = _safe_list(p.get("dates", []))
         n_orig = len(raw_dates)
-        slice_start = max(0, n_orig - CHART_MAX_BARS)
-        index_offset = slice_start  # 原索引 → 截取后索引的偏移
+        slice_start, slice_end = build_chart_window(p)
+        index_offset = slice_start
 
         def _slice(arr):
             lst = _safe_list(arr)
-            return lst[slice_start:] if len(lst) > CHART_MAX_BARS else lst
+            if slice_start >= len(lst):
+                return []
+            return lst[slice_start:slice_end]
 
         def _adjust_bp(bp):
-            """调整买点索引到截取后坐标系；超出图表范围返回 None（前端不显示标记）"""
             if not bp or not bp.get("type"):
                 return None
             d = dict(bp)
             orig_idx = d.get("index", 0)
-            if orig_idx >= slice_start:
+            if slice_start <= orig_idx < slice_end:
                 d["index"] = orig_idx - index_offset
                 return d
-            return None  # 买点在截取范围外，前端不显示
+            return None
 
         def _adjust_bp_keep(bp):
-            """调整买点索引，但即使超出范围也保留（用于 best_buy_point 表格展示）"""
             if not bp or not bp.get("type"):
                 return {}
             d = dict(bp)
             orig_idx = d.get("index", 0)
-            if orig_idx >= slice_start:
+            if slice_start <= orig_idx < slice_end:
                 d["index"] = orig_idx - index_offset
             else:
-                d["index"] = None  # 表格仍可用 price/type，图表不标记
+                d["index"] = None
             return d
+
+        dates_sliced = _slice(raw_dates)
+        closes_sliced = _slice(p.get("closes", []))
 
         item = {
             "code": p.get("code", ""),
@@ -94,14 +210,18 @@ def _serialize_picks(picks):
             "is_active": p.get("is_active", False),
             "market_trend": p.get("market_trend", ""),
             "version": p.get("version", ""),
-            # 图表数据（截取最近50根）
-            "dates": _slice(raw_dates),
-            "closes": _slice(p.get("closes", [])),
+            "market_regime": p.get("market_regime", ""),
+            "fusion_admission": p.get("fusion_admission", {}),
+            # 图表数据（动态窗口）
+            "dates": dates_sliced,
+            "closes": closes_sliced,
             "opens": _slice(p.get("opens", [])),
             "highs": _slice(p.get("highs", [])),
             "lows": _slice(p.get("lows", [])),
             "volumes": _slice(p.get("volumes", [])),
             "macd_hist": _slice(p.get("macd_hist", [])),
+            # 图表标注
+            "chart_annotations": build_chart_annotations(p, slice_start, dates_sliced, closes_sliced),
             # 买卖点标注（超出图表范围的已过滤）
             "buy_points": [b for b in (_adjust_bp(b) for b in p.get("buy_points", [])) if b is not None],
             "reference_buy_points": [_serialize_bp(b) for b in p.get("reference_buy_points", [])],
@@ -109,6 +229,14 @@ def _serialize_picks(picks):
             # 中枢
             "pivot_zg": p["pivots"].get("ZG") if p.get("pivots") else None,
             "pivot_zd": p["pivots"].get("ZD") if p.get("pivots") else None,
+            # 30min data for dual chart
+            "has_30min": bool(p.get("result_30min")),
+            "dates_30min": _safe_list(p.get("result_30min", {}).dates) if p.get("result_30min") else [],
+            "closes_30min": _safe_list(p.get("result_30min", {}).closes) if p.get("result_30min") else [],
+            "opens_30min": _safe_list(p.get("result_30min", {}).opens) if p.get("result_30min") else [],
+            "highs_30min": _safe_list(p.get("result_30min", {}).highs) if p.get("result_30min") else [],
+            "lows_30min": _safe_list(p.get("result_30min", {}).lows) if p.get("result_30min") else [],
+            "volumes_30min": _safe_list(p.get("result_30min", {}).volumes) if p.get("result_30min") else [],
         }
         result.append(item)
     return result
@@ -155,6 +283,8 @@ def _serialize_picks_light(picks):
             "is_active": p.get("is_active", False),
             "market_trend": p.get("market_trend", ""),
             "version": p.get("version", ""),
+            "market_regime": p.get("market_regime", ""),
+            "fusion_admission": p.get("fusion_admission", {}),
             "buy_points": [_serialize_bp(b) for b in p.get("buy_points", [])],
             "reference_buy_points": [_serialize_bp(b) for b in p.get("reference_buy_points", [])],
             "blocked_buy_points": [_serialize_bp(b) for b in p.get("blocked_buy_points", [])],
@@ -432,6 +562,35 @@ body {{
 .risk-list {{ list-style: none; color: #e0e0e0; font-size: 13px; }}
 .risk-list li {{ padding: 4px 0; padding-left: 20px; position: relative; line-height: 1.6; }}
 .risk-list li::before {{ content: "!"; position: absolute; left: 0; color: #ff4757; font-weight: bold; }}
+
+/* 信号摘要 */
+.signal-summary {{
+    display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 16px;
+    padding: 14px 18px; background: rgba(255,255,255,0.03); border-radius: 10px;
+}}
+.signal-summary-item {{
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 14px; border-right: 1px solid rgba(255,255,255,0.08);
+}}
+.signal-summary-item:last-child {{ border-right: none; }}
+.signal-summary-item .ss-count {{ font-size: 22px; font-weight: bold; color: #fff; }}
+.signal-summary-item .ss-label {{ font-size: 11px; color: #888; margin-top: 2px; }}
+
+.version-diff {{
+    padding: 12px 18px; margin-bottom: 16px; border-radius: 8px;
+    font-size: 13px; line-height: 1.6;
+}}
+.version-diff.identical {{ background: rgba(46,213,115,0.08); border: 1px solid rgba(46,213,115,0.2); color: #5effa0; }}
+.version-diff.different {{ background: rgba(255,165,0,0.08); border: 1px solid rgba(255,165,0,0.2); color: #ffb347; }}
+
+.detail-group {{
+    margin-bottom: 10px; padding: 10px 14px;
+    background: rgba(255,255,255,0.02); border-radius: 8px;
+}}
+.detail-group-title {{
+    font-size: 12px; color: #74b9ff; font-weight: bold; margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 1px;
+}}
 </style>
 </head>
 <body>
@@ -463,6 +622,8 @@ body {{
 <!-- 选股结果 -->
 <div class="section">
     <div class="section-title">缠论选股结果 <span style="font-size:13px;color:#888;" id="pickCount"></span></div>
+    <div id="signalSummary"></div>
+    <div id="versionDiff"></div>
     <div id="pickTable"></div>
 </div>
 
@@ -668,17 +829,32 @@ function renderEvents() {{
         stocks.forEach(function(s) {{ tags.push(s.name || s); }});
         plates.forEach(function(p) {{ tags.push(p.name || p); }});
         var levelColor = ev.level >= 3 ? '#ff4757' : (ev.level >= 2 ? '#ffa502' : '#888');
+        var imp = ev.impact || {{}};
+        var isFailed = imp.status === 'failed';
+        var eventId = 'ev_' + i;
+
         html += '<div class="event-item">' +
             '<span class="event-rank">' + (i + 1) + '</span>' +
-            '<span style="color:' + levelColor + ';font-weight:bold;">' + (ev.title || '') + '</span>' +
-            (ev.brief ? '<div class="event-title">' + ev.brief + '</div>' : '') +
-            (ev.content ? '<div class="event-desc">' + ev.content + '</div>' : '') +
-            (tags.length ? '<div class="event-stocks">📌 ' + tags.join(' / ') + '</div>' : '');
-        // 影响分析
-        var imp = ev.impact || {{}};
-        if (imp.summary) {{
-            html += '<div class="impact-summary">📊 ' + imp.summary + '</div>';
+            '<span style="color:' + levelColor + ';font-weight:bold;">' + (ev.display_title || ev.title || '') + '</span>';
+
+        // AI headline
+        if (imp.headline && !isFailed) {{
+            html += '<div style="color:#dfe6e9;font-size:14px;margin:6px 0;">' +
+                '📊 ' + imp.headline + '</div>';
+        }} else if (isFailed) {{
+            html += '<div style="color:#888;font-size:13px;margin:6px 0;">AI分析暂不可用</div>';
         }}
+
+        // AI analysis points
+        if (imp.analysis && imp.analysis.length && !isFailed) {{
+            html += '<div style="color:#aaa;font-size:13px;line-height:1.6;margin:6px 0;">';
+            imp.analysis.forEach(function(a) {{
+                html += '<div style="margin-left:8px;">• ' + a + '</div>';
+            }});
+            html += '</div>';
+        }}
+
+        // Sector tags
         if (imp.positive_sectors && imp.positive_sectors.length || imp.negative_sectors && imp.negative_sectors.length) {{
             html += '<div class="impact-tags">';
             if (imp.positive_sectors && imp.positive_sectors.length) {{
@@ -695,6 +871,8 @@ function renderEvents() {{
             }}
             html += '</div>';
         }}
+
+        // Stock recommendations
         if (imp.positive_stocks && imp.positive_stocks.length || imp.negative_stocks && imp.negative_stocks.length) {{
             html += '<div class="impact-stocks">';
             var renderStock = function(st, cls) {{
@@ -714,6 +892,25 @@ function renderEvents() {{
             }}
             html += '</div>';
         }}
+
+        // Related tags
+        if (tags.length) {{
+            html += '<div class="event-stocks">📌 ' + tags.join(' / ') + '</div>';
+        }}
+
+        // Collapsed raw content
+        var rawContent = ev.raw_content || ev.content || ev.brief || '';
+        if (rawContent && !ev.has_redundant_content) {{
+            html += '<div style="margin-top:8px;">' +
+                '<a href="javascript:void(0)" onclick="var d=document.getElementById(\\'' + eventId + '\\');' +
+                'd.style.display=d.style.display===\\'none\\'?\\'block\\':\\'none\\';' +
+                'this.textContent=d.style.display===\\'none\\'?\\'查看原文 ▼\\':\\'收起 ▲\\'"' +
+                'style="color:#74b9ff;font-size:12px;cursor:pointer;">查看原文 ▼</a>' +
+                '<div id="' + eventId + '" style="display:none;color:#888;font-size:12px;line-height:1.6;margin-top:6px;' +
+                'padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;">' +
+                rawContent + '</div></div>';
+        }}
+
         html += '</div>';
     }});
     document.getElementById('eventsList').innerHTML = html;
@@ -822,14 +1019,18 @@ function renderPickTable(ver) {{
     var picks = REPORT_DATA['picks_' + ver] || [];
     var isFusion = ver === 'fusion';
 
+    renderSignalSummary(picks);
+    renderVersionDiffSummary();
+
     var html = '<table class="chan-table"><thead><tr>';
     if (isFusion) {{
-        html += '<th>代码</th><th>名称</th><th>买点</th><th>日线中枢</th>' +
-                '<th>30min信号</th><th>评分</th><th>止损</th><th>止盈目标</th>' +
+        html += '<th>代码</th><th>名称</th><th>信号类型</th>' +
+                '<th>30min确认</th><th>融合版门槛</th>' +
+                '<th>评分</th><th>止损</th><th>止盈目标</th>' +
                 '<th>板块</th><th>活跃</th>';
     }} else {{
-        html += '<th>代码</th><th>名称</th><th>买点</th><th>日线中枢</th>' +
-                '<th>30min信号</th><th>背驰清晰度</th><th>级别共振</th><th>评分</th>';
+        html += '<th>代码</th><th>名称</th><th>信号类型</th><th>信号层级</th>' +
+                '<th>来源/种子</th><th>30min确认</th><th>日线位置</th><th>评分</th>';
     }}
     html += '</tr></thead><tbody>';
 
@@ -838,11 +1039,18 @@ function renderPickTable(ver) {{
         var diag = REPORT_DATA.diagnostics || {{}};
         var ds = diag.daily_scan || {{}};
         var up = diag['sublevel_upgrade_' + ver] || {{}};
+        var fa = diag.fusion_admission || {{}};
         var summary = '日线信号 ' + (ds.with_buy_points || 0) + ' 个' +
             '，其中可进入30min确认 ' + (ds.upgradeable_count || 0) + ' 个' +
             '，swing位置种子 ' + (ds.swing_seed_count || 0) + ' 个；' +
             '30min确认通过 ' + (up.candidate_upgraded || 0) + ' 个' +
             '，风险保护剔除 ' + (up.dropped_risk_guard || 0) + ' 个。';
+        if (isFusion && fa.market_regime) {{
+            summary += ' 融合版大盘' + (fa.market_regime === 'strong' ? '强市' : '弱市') +
+                '，MA过滤 ' + (fa.dropped_by_ma || 0) + ' 只' +
+                '，弱市门槛过滤 ' + (fa.dropped_by_market_regime || 0) + ' 只' +
+                '，信号门槛过滤 ' + (fa.dropped_by_signal_gate || 0) + ' 只。';
+        }}
         html += '<tr><td colspan="' + colspan + '" style="text-align:center;color:#888;padding:20px;">' +
                 '今日暂无符合条件的选股结果</td></tr>' +
                 '<tr><td colspan="' + colspan + '" style="text-align:center;color:#666;font-size:12px;padding:8px 20px 20px;">' +
@@ -862,19 +1070,18 @@ function renderPickTable(ver) {{
         html += '<td>' + p.name + '</td>';
         html += '<td><span class="buy-tag ' + tagClass + '">' + (bp.type || '-') + '</span></td>';
 
-        // 中枢
-        var pivotStr = '-';
-        if (p.pivot_zg && p.pivot_zd) {{
-            pivotStr = '[' + p.pivot_zd + ' — ' + p.pivot_zg + ']';
-        }}
-        html += '<td class="pivot-cell">' + pivotStr + '</td>';
-
-        // 30min信号
-        var bp30 = (p.buy_points_30min || [])[0];
-        var sig30 = bp30 ? bp30.type : '-';
-        html += '<td>' + sig30 + '</td>';
-
         if (isFusion) {{
+            // 30min确认
+            html += '<td style="font-size:12px;">' +
+                (bp.confirmed_by || (resonance.reason || '-')) +
+                (bp.strength ? ' <span style="color:#ffa502;">[' + bp.strength + ']</span>' : '') +
+                '</td>';
+            // 融合版门槛
+            var fa = p.fusion_admission || {{}};
+            html += '<td style="font-size:12px;">' +
+                (fa.passed ? '<span style="color:#5effa0;">通过</span>' : '<span style="color:#ff4757;">过滤</span>') +
+                (fa.reason ? '<br><span style="color:#888;font-size:10px;">' + fa.reason + '</span>' : '') +
+                '</td>';
             // 评分
             html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
             // 止损
@@ -888,14 +1095,31 @@ function renderPickTable(ver) {{
             // 活跃
             html += '<td>' + (p.is_active ? '<span class="active-dot"></span>活跃' : '-') + '</td>';
         }} else {{
-            html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
-            // 背驰清晰度
-            var div = p.divergence || {{}};
-            html += '<td>' + (div.is_divergence ? (div.type || '有') : '-') + '</td>';
-            // 级别共振
-            html += '<td>' + (resonance.level || '-') + '</td>';
+            // 信号层级
+            html += '<td>' + (bp.tier === 'formal' ? '<span style="color:#5effa0;">正式</span>' :
+                              bp.tier === 'candidate' ? '<span style="color:#ffb347;">候选</span>' :
+                              (bp.tier || '-')) + '</td>';
+            // 来源/种子
+            var srcLabel = bp.source_type || '-';
+            if (bp.seed_type) srcLabel += '<br><span style="font-size:10px;color:#888;">种子:' + bp.seed_type + '</span>';
+            if (bp.seed_reason) srcLabel += '<br><span style="font-size:10px;color:#888;">' + bp.seed_reason.substring(0, 20) + '</span>';
+            html += '<td style="font-size:12px;">' + srcLabel + '</td>';
+            // 30min确认
+            html += '<td style="font-size:12px;">' +
+                (bp.confirmed_by || (resonance.reason || '-')) +
+                (bp.strength ? ' <span style="color:#ffa502;">[' + bp.strength + ']</span>' : '') +
+                '</td>';
+            // 日线位置
+            var closes = p.closes || [];
+            var bpIdx = bp.index;
+            var posLabel = '-';
+            if (closes.length && bpIdx !== undefined && bpIdx !== null) {{
+                var dist = closes.length - bpIdx;
+                posLabel = dist <= 2 ? '刚形成' : (dist <= 5 ? '近期(' + dist + 'K)' : (dist <= 10 ? '较早(' + dist + 'K)' : '久远(' + dist + 'K)'));
+            }}
+            html += '<td style="font-size:12px;">' + posLabel + '</td>';
             // 评分
-            html += '<td>' + score.toFixed(1) + '</td>';
+            html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
         }}
         html += '</tr>';
 
@@ -904,18 +1128,35 @@ function renderPickTable(ver) {{
                 '<td colspan="' + (isFusion ? 10 : 8) + '">' +
                 '<div class="chart-container" id="chart_' + ver + '_' + idx + '"></div>' +
                 '<div class="detail-section">' +
-                (bp.type === '底背驰候选' ? '<strong>来源：</strong>' + (bp.source_type || '-') +
-                 ' ｜ <strong>日线种子原因：</strong>' + (bp.seed_reason || '-') + '<br>' +
-                 '<strong>30min确认：</strong>' + (bp.confirmed_by || '-') +
-                 ' ｜ <strong>强度：</strong>' + (bp.strength || '-') + '<br>' : '') +
-                (bp.tier === 'candidate' && bp.type !== '底背驰候选' ? '<strong>来源信号：</strong>' + (bp.source_type || '-') +
-                 ' ｜ <strong>30min确认：</strong>' + (bp.confirmed_by || '-') + '<br>' : '') +
-                '<strong>买点理由：</strong>' + (bp.reason || '-') + '<br>' +
-                '<strong>走势类型：</strong>' + (p.trend_type || '-') + ' ｜ ' +
-                '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) +
-                (isFusion ? ('<br><strong>大盘趋势：</strong>' + (p.market_trend || '-') +
-                 ' ｜ <strong>MA多头：</strong>' + (p.ma_bullish ? '是' : '否') +
-                 ' ｜ <strong>止损：</strong>' + (p.stop_loss_pct || '') + '%') : '') +
+                // 信号路径
+                '<div class="detail-group">' +
+                '<div class="detail-group-title">信号路径</div>' +
+                (bp.source_type ? '<strong>来源信号：</strong>' + bp.source_type + '<br>' : '') +
+                (bp.seed_type ? '<strong>种子类型：</strong>' + bp.seed_type + '<br>' : '') +
+                (bp.seed_reason ? '<strong>种子原因：</strong>' + bp.seed_reason + '<br>' : '') +
+                (bp.confirmed_by ? '<strong>30min确认：</strong>' + bp.confirmed_by +
+                 (bp.strength ? ' [' + bp.strength + ']' : '') + '<br>' : '') +
+                '<strong>当前买点：</strong>' + (bp.type || '-') + ' — ' + (bp.reason || '-') + '<br>' +
+                '</div>' +
+                // 结构状态
+                '<div class="detail-group">' +
+                '<div class="detail-group-title">结构状态</div>' +
+                '<strong>走势类型：</strong>' + (p.trend_type || '-') + '<br>' +
+                '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) + '<br>' +
+                (p.pivot_zg && p.pivot_zd ? '<strong>中枢区间：</strong>[' + p.pivot_zd + ' — ' + p.pivot_zg + ']<br>' : '') +
+                '<strong>共振等级：</strong>' + (resonance.level || '-') +
+                (resonance.reason ? ' (' + resonance.reason + ')' : '') + '<br>' +
+                '</div>' +
+                // 融合版约束
+                (isFusion ? '<div class="detail-group">' +
+                '<div class="detail-group-title">融合版约束</div>' +
+                '<strong>大盘状态：</strong>' + (p.market_regime === 'strong' ? '强市' : (p.market_regime === 'weak' ? '弱市' : (p.market_trend || '-'))) + '<br>' +
+                '<strong>MA多头：</strong>' + (p.ma_bullish ? '是 (MA5>MA10>MA20)' : '否') + '<br>' +
+                (p.fusion_admission ? '<strong>融合版结果：</strong>' +
+                 (p.fusion_admission.passed ? '<span style="color:#5effa0;">保留</span>' : '<span style="color:#ff4757;">过滤</span>') +
+                 ' — ' + (p.fusion_admission.reason || '') + '<br>' : '') +
+                (p.stop_loss_pct ? '<strong>止损：</strong>' + p.stop_loss_pct + '%<br>' : '') +
+                '</div>' : '') +
                 '</div></td></tr>';
     }});
     html += '</tbody></table>';
@@ -923,6 +1164,62 @@ function renderPickTable(ver) {{
 
     // 清空已渲染的图表引用
     window._charts = window._charts || {{}};
+}}
+
+// ========== 信号摘要条 ==========
+function renderSignalSummary(picks) {{
+    var counts = {{}};
+    picks.forEach(function(p) {{
+        var bp = p.best_buy_point || {{}};
+        var t = bp.type || '其他';
+        counts[t] = (counts[t] || 0) + 1;
+    }});
+    var total = picks.length;
+    var html = '<div class="signal-summary">';
+    html += '<div class="signal-summary-item"><span class="ss-count">' + total + '</span><span class="ss-label">总数</span></div>';
+    var order = ['一买','二买','三买','底背驰候选','二买候选','三买候选','中枢低吸候选','盘整低吸候选'];
+    order.forEach(function(t) {{
+        if (counts[t]) {{
+            html += '<div class="signal-summary-item"><span class="ss-count">' + counts[t] + '</span><span class="ss-label">' + t + '</span></div>';
+        }}
+    }});
+    // Any types not in order
+    Object.keys(counts).forEach(function(t) {{
+        if (order.indexOf(t) === -1) {{
+            html += '<div class="signal-summary-item"><span class="ss-count">' + counts[t] + '</span><span class="ss-label">' + t + '</span></div>';
+        }}
+    }});
+    html += '</div>';
+    document.getElementById('signalSummary').innerHTML = html;
+}}
+
+// ========== 版本差异说明 ==========
+function renderVersionDiffSummary() {{
+    var diag = REPORT_DATA.diagnostics || {{}};
+    var fa = diag.fusion_admission || {{}};
+    var pureCount = (REPORT_DATA.picks_pure || []).length;
+    var fusionCount = (REPORT_DATA.picks_fusion || []).length;
+    var html = '';
+    if (fa.pure_fusion_identical) {{
+        html = '<div class="version-diff identical">' +
+            '本次 pure / fusion 选股集合相同（' + pureCount + ' 只），差异主要体现在融合版 admission 通过情况与排序。' +
+            (fa.identical_reason ? ' (' + fa.identical_reason + ')' : '') +
+            '</div>';
+    }} else if (fa.input_count !== undefined && fa.output_count !== undefined && fa.input_count !== fa.output_count) {{
+        var diff = fa.input_count - fa.output_count;
+        html = '<div class="version-diff different">' +
+            'fusion 相比 pure 额外过滤 ' + diff + ' 只（' + fa.input_count + ' → ' + fa.output_count + '），' +
+            '主要原因：MA不多头 ' + (fa.dropped_by_ma || 0) + ' 只 / ' +
+            '弱市门槛 ' + (fa.dropped_by_market_regime || 0) + ' 只 / ' +
+            '信号门槛 ' + (fa.dropped_by_signal_gate || 0) + ' 只。' +
+            ' 大盘状态：' + (fa.market_regime === 'strong' ? '强市' : '弱市') + '。' +
+            '</div>';
+    }} else if (pureCount !== fusionCount) {{
+        html = '<div class="version-diff different">' +
+            'pure 推荐 ' + pureCount + ' 只，fusion 推荐 ' + fusionCount + ' 只。' +
+            '</div>';
+    }}
+    document.getElementById('versionDiff').innerHTML = html;
 }}
 
 // ========== 图表展开/收起 ==========
@@ -951,6 +1248,9 @@ function renderChart(idx, ver) {{
         window._charts[domId].dispose();
     }}
 
+    var has30min = pick.has_30min && (pick.dates_30min || []).length > 0;
+    var chartHeight = has30min ? 520 : 420;
+
     var chart = echarts.init(dom);
     window._charts = window._charts || {{}};
     window._charts[domId] = chart;
@@ -958,6 +1258,7 @@ function renderChart(idx, ver) {{
     var dates = pick.dates || [];
     var closes = pick.closes || [];
     var macdHist = pick.macd_hist || [];
+    var ann = pick.chart_annotations || {{}};
 
     // 准备买卖点标注
     var buyMarks = [];
@@ -974,6 +1275,19 @@ function renderChart(idx, ver) {{
         }}
     }});
 
+    // Add annotation markPoints
+    if (ann.markPoints && ann.markPoints.length) {{
+        ann.markPoints.forEach(function(mp) {{
+            buyMarks.push({{
+                coord: mp.coord,
+                symbol: mp.symbol || 'pin',
+                symbolSize: mp.symbolSize || 30,
+                itemStyle: mp.itemStyle || {{ color: '#ff4757' }},
+                label: mp.label || {{ show: true }}
+            }});
+        }});
+    }}
+
     // 中枢区间
     var markAreas = [];
     if (pick.pivot_zg && pick.pivot_zd) {{
@@ -989,39 +1303,92 @@ function renderChart(idx, ver) {{
         }}]);
     }}
 
-    var option = {{
-        backgroundColor: '#252545',
-        grid: [
+    // Annotation markLines
+    var markLines = [];
+    if (ann.markLines && ann.markLines.length) {{
+        markLines = ann.markLines;
+    }}
+
+    var hasMarkLines = markLines.length > 0;
+
+    var grids, xAxes, yAxes, series;
+
+    if (has30min) {{
+        // Dual-panel: daily (top) + 30min (bottom)
+        grids = [
+            {{ left: 60, right: 20, top: 20, height: '28%' }},
+            {{ left: 60, right: 20, top: '34%', height: '14%' }},
+            {{ left: 60, right: 20, top: '54%', height: '20%' }},
+            {{ left: 60, right: 20, top: '78%', height: '16%' }}
+        ];
+        var d30 = pick.dates_30min || [];
+        xAxes = [
+            {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
+            {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }},
+            {{ type: 'category', data: d30, gridIndex: 2, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9, rotate: 30 }} }},
+            {{ type: 'category', data: d30, gridIndex: 3, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
+        ];
+        yAxes = [
+            {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+            {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+            {{ type: 'value', gridIndex: 2, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+            {{ type: 'value', gridIndex: 3, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 9 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
+        ];
+        series = [
+            // Daily K-line
+            {{
+                type: 'candlestick', name: '日线',
+                data: (pick.highs || []).map(function(h, i) {{
+                    return [pick.opens ? pick.opens[i] : closes[i], closes[i],
+                            pick.lows ? pick.lows[i] : closes[i], h];
+                }}),
+                xAxisIndex: 0, yAxisIndex: 0,
+                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
+                markPoint: {{ data: buyMarks }},
+                markArea: {{ silent: true, data: markAreas }},
+                markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
+            }},
+            // Daily MACD
+            {{
+                type: 'bar', name: '日线MACD',
+                data: macdHist.map(function(v) {{ return v || 0; }}),
+                xAxisIndex: 1, yAxisIndex: 1,
+                itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
+            }},
+            // 30min K-line
+            {{
+                type: 'candlestick', name: '30min',
+                data: (pick.highs_30min || []).map(function(h, i) {{
+                    var o = (pick.opens_30min || [])[i];
+                    var c = (pick.closes_30min || [])[i];
+                    var l = (pick.lows_30min || [])[i];
+                    return [o !== undefined ? o : c, c, l !== undefined ? l : c, h];
+                }}),
+                xAxisIndex: 2, yAxisIndex: 2,
+                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }}
+            }},
+            // 30min volume
+            {{
+                type: 'bar', name: '30min量',
+                data: (pick.volumes_30min || (pick.result_30min ? [] : [])).map(function(v) {{ return v || 0; }}),
+                xAxisIndex: 3, yAxisIndex: 3,
+                itemStyle: {{ color: 'rgba(116,185,255,0.4)' }}
+            }}
+        ];
+    }} else {{
+        grids = [
             {{ left: 60, right: 20, top: 20, height: '55%' }},
             {{ left: 60, right: 20, top: '68%', height: '25%' }}
-        ],
-        xAxis: [
-            {{
-                type: 'category', data: dates, gridIndex: 0,
-                axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }},
-            }},
-            {{
-                type: 'category', data: dates, gridIndex: 1,
-                axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                axisLabel: {{ show: false }},
-            }}
-        ],
-        yAxis: [
-            {{
-                type: 'value', gridIndex: 0,
-                axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                axisLabel: {{ color: '#888', fontSize: 10 }},
-                splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }}
-            }},
-            {{
-                type: 'value', gridIndex: 1,
-                axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                axisLabel: {{ color: '#888', fontSize: 10 }},
-                splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }}
-            }}
-        ],
-        series: [
+        ];
+        xAxes = [
+            {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
+            {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
+        ];
+        yAxes = [
+            {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+            {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
+        ];
+        series = [
             {{
                 type: 'candlestick', name: 'K线',
                 data: (pick.highs || []).map(function(h, i) {{
@@ -1029,30 +1396,27 @@ function renderChart(idx, ver) {{
                             pick.lows ? pick.lows[i] : closes[i], h];
                 }}),
                 xAxisIndex: 0, yAxisIndex: 0,
-                itemStyle: {{
-                    color: '#ff4757', color0: '#2ed573',
-                    borderColor: '#ff4757', borderColor0: '#2ed573'
-                }},
+                itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
                 markPoint: {{ data: buyMarks }},
-                markArea: {{ silent: true, data: markAreas }}
+                markArea: {{ silent: true, data: markAreas }},
+                markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
             }},
             {{
                 type: 'bar', name: 'MACD',
-                data: macdHist.map(function(v) {{
-                    return v || 0;
-                }}),
+                data: macdHist.map(function(v) {{ return v || 0; }}),
                 xAxisIndex: 1, yAxisIndex: 1,
-                itemStyle: {{
-                    color: function(params) {{
-                        return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)';
-                    }}
-                }}
+                itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
             }}
-        ],
-        tooltip: {{
-            trigger: 'axis',
-            axisPointer: {{ type: 'cross' }}
-        }}
+        ];
+    }}
+
+    var option = {{
+        backgroundColor: '#252545',
+        grid: grids,
+        xAxis: xAxes,
+        yAxis: yAxes,
+        series: series,
+        tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }} }}
     }};
     chart.setOption(option);
 }}
