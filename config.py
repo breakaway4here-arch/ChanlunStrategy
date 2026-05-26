@@ -80,6 +80,14 @@ ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS = True  # 详细信号分布诊断
 ENABLE_FUSION_ADMISSION_POLICY = True         # 融合版独立admission策略（MA多头+大盘强弱门槛矩阵）
 
 # ============================================================
+# 弱保护访问控制（前端 hash 校验，非安全鉴权）
+# ============================================================
+ENABLE_WEAK_ACCESS_CONTROL = True
+PUBLIC_DATES = ["2026-05-26"]
+FULL_ACCESS_KEY = "02951e20-6de2-418c-8bab-463647220883"
+FULL_ACCESS_KEY_SALT = "chanlun-report-salt-v1"
+
+# ============================================================
 # K线本地缓存
 # ============================================================
 KLINE_CACHE_ENABLED = True

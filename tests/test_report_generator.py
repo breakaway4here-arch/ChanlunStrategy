@@ -1,11 +1,18 @@
-"""Tests for report_generator — table columns, 30min确认, volumes_30min serialization."""
+"""Tests for report_generator — table columns, 30min确认, volumes_30min serialization, access control."""
+import hashlib
 import json
+import os
+import tempfile
 import unittest
 import numpy as np
 
 from chanlun.report_generator import (
     _serialize_picks, _serialize_bp, build_chart_window, build_chart_annotations,
-    _safe_list, NpEncoder,
+    _safe_list, NpEncoder, generate_report,
+)
+from config import (
+    ENABLE_WEAK_ACCESS_CONTROL, FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
+    PUBLIC_DATES,
 )
 
 
@@ -139,6 +146,99 @@ class TestReportGenerator(unittest.TestCase):
         decoded = json.loads(encoded)
         self.assertEqual(decoded[0]["code"], "600519")
         self.assertEqual(decoded[0]["volumes_30min"], [1000.0, 2000.0])
+
+
+def _make_minimal_report_data():
+    return {
+        "date": "2026-05-26",
+        "market": {},
+        "chanlun_structure": {},
+        "picks_pure": [],
+        "picks_fusion": [],
+        "sector_flow": [],
+        "sector_outflow": [],
+        "limit_up_pool": [],
+        "events": [],
+        "forecast": {},
+        "sell_signals": [],
+        "diagnostics": {},
+    }
+
+
+class TestAccessControl(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_ac_")
+        report_data = _make_minimal_report_data()
+        generate_report(report_data, output_dir=cls.tmpdir)
+        html_path = os.path.join(cls.tmpdir, "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def test_no_plaintext_access_key_in_html(self):
+        """HTML must NOT contain the plaintext ACCESS_KEY."""
+        self.assertNotIn(FULL_ACCESS_KEY, self.html)
+
+    def test_access_key_hash_in_html(self):
+        """HTML contains ACCESS_KEY_HASH (sha256 hex of key+salt)."""
+        expected_hash = hashlib.sha256(
+            (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
+        ).hexdigest()
+        self.assertIn(expected_hash, self.html)
+
+    def test_access_key_salt_in_html(self):
+        """HTML contains ACCESS_KEY_SALT."""
+        self.assertIn(FULL_ACCESS_KEY_SALT, self.html)
+
+    def test_access_control_enabled_in_html(self):
+        """HTML contains ACCESS_CONTROL_ENABLED = true."""
+        self.assertIn("ACCESS_CONTROL_ENABLED = true", self.html)
+
+    def test_public_dates_in_html(self):
+        """HTML contains ACCESS_PUBLIC_DATES with configured dates."""
+        self.assertIn(json.dumps(PUBLIC_DATES), self.html)
+
+    def test_sha256_helper_in_html(self):
+        """HTML contains sha256Hex function for crypto.subtle hashing."""
+        self.assertIn("crypto.subtle.digest('SHA-256'", self.html)
+        self.assertIn("function sha256Hex", self.html)
+
+    def test_resolve_granted_in_html(self):
+        """HTML contains async resolveGranted function."""
+        self.assertIn("function resolveGranted", self.html)
+
+    def test_get_allowed_dates_in_html(self):
+        """HTML contains getAllowedDates filter function."""
+        self.assertIn("function getAllowedDates", self.html)
+
+    def test_resolve_initial_date_in_html(self):
+        """HTML contains resolveInitialDate fallback function."""
+        self.assertIn("function resolveInitialDate", self.html)
+
+    def test_filter_history_data_in_html(self):
+        """HTML contains filterHistoryData function."""
+        self.assertIn("function filterHistoryData", self.html)
+
+    def test_no_old_access_key_var(self):
+        """HTML does not contain the old var ACCESS_KEY = 'plaintext' pattern."""
+        self.assertNotIn('var ACCESS_KEY = "', self.html)
+
+    def test_no_old_render_limited_view_blocking(self):
+        """renderLimitedView is no longer called to block all rendering."""
+        self.assertNotIn("renderLimitedView();", self.html)
+
+    def test_public_notice_function_in_html(self):
+        """HTML contains renderPublicNotice for unauthorized users."""
+        self.assertIn("function renderPublicNotice", self.html)
+
+    def test_no_public_data_function_in_html(self):
+        """HTML contains renderNoPublicData for empty allowlist."""
+        self.assertIn("function renderNoPublicData", self.html)
+
+    def test_show_history_guards_disallowed_dates(self):
+        """showHistory checks GRANTED and PUBLIC_DATES before switching dates."""
+        self.assertIn("ACCESS_PUBLIC_DATES.indexOf(dateStr)", self.html)
 
 
 if __name__ == "__main__":

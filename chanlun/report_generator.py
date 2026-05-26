@@ -7,6 +7,7 @@ HTML 日报生成器 — 深色主题，双版本切换，ECharts 走势图
 - docs/data.json (历史5天聚合数据)
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -14,7 +15,11 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
-from config import OUTPUT_DIR, HISTORY_DAYS
+from config import (
+    OUTPUT_DIR, HISTORY_DAYS,
+    ENABLE_WEAK_ACCESS_CONTROL, PUBLIC_DATES,
+    FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
+)
 
 # ------------------------------------------------------------
 # JSON 序列化辅助
@@ -352,6 +357,13 @@ def generate_report(report_data, output_dir=None):
     """
     date_str = report_data.get("date", datetime.now().strftime("%Y-%m-%d"))
 
+    # 计算访问控制 hash（前端不直接暴露明文 key）
+    access_key_hash = ""
+    if ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY:
+        access_key_hash = hashlib.sha256(
+            (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
+        ).hexdigest()
+
     # 全量数据（序列化后写入 per-day JSON，HTML 通过 fetch 加载）
     daily_data = {
         "date": date_str,
@@ -679,13 +691,65 @@ body {{
 </div>
 
 <script>
+// ========== 弱保护访问控制（hash 校验，非安全鉴权） ==========
+var ACCESS_CONTROL_ENABLED = {str(ENABLE_WEAK_ACCESS_CONTROL).lower()};
+var ACCESS_PUBLIC_DATES = {json.dumps(PUBLIC_DATES)};
+var ACCESS_KEY_SALT = "{FULL_ACCESS_KEY_SALT}";
+var ACCESS_KEY_HASH = "{access_key_hash}";
+var GRANTED = false;
+
+async function sha256Hex(text) {{
+    var encoder = new TextEncoder();
+    var data = encoder.encode(text);
+    var hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    var hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(function(b) {{ return b.toString(16).padStart(2, '0'); }}).join('');
+}}
+
+async function resolveGranted() {{
+    if (!ACCESS_CONTROL_ENABLED) return true;
+    var params = new URLSearchParams(window.location.search);
+    var key = params.get('key') || '';
+    if (!key) return false;
+    try {{
+        var hash = await sha256Hex(key + ACCESS_KEY_SALT);
+        return hash === ACCESS_KEY_HASH;
+    }} catch(e) {{
+        return false;
+    }}
+}}
+
+function getAllowedDates(allDates, granted, publicDates) {{
+    if (granted) return allDates.slice();
+    return allDates.filter(function(d) {{ return publicDates.indexOf(d) !== -1; }});
+}}
+
+function resolveInitialDate(pageDate, allowedDates) {{
+    if (allowedDates.indexOf(pageDate) !== -1) return pageDate;
+    if (allowedDates.length > 0) return allowedDates[0];
+    return null;
+}}
+
+function filterHistoryData(historyData, allowedDates) {{
+    var filtered = {{ dates: [], reports: {{}} }};
+    (historyData.dates || []).forEach(function(d) {{
+        if (allowedDates.indexOf(d) !== -1) {{
+            filtered.dates.push(d);
+            if (historyData.reports && historyData.reports[d]) {{
+                filtered.reports[d] = historyData.reports[d];
+            }}
+        }}
+    }});
+    return filtered;
+}}
+
 // ========== 数据加载 ==========
 var PAGE_DATE = "{date_str}";
 var REPORT_DATA = null;
 var CURRENT_VERSION = 'fusion';
 var HISTORY_DATA = {{}};
 
-function init() {{
+async function init() {{
     // 全局 resize：遍历所有已渲染图表
     window.addEventListener('resize', function() {{
         var charts = window._charts || {{}};
@@ -694,20 +758,56 @@ function init() {{
         }});
     }});
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'data/' + PAGE_DATE + '.json', true);
-    xhr.onload = function() {{
-        if (xhr.status === 200) {{
-            try {{
-                REPORT_DATA = JSON.parse(xhr.responseText);
-                renderAll();
-            }} catch(e) {{ console.error('JSON parse error:', e); }}
+    GRANTED = await resolveGranted();
+
+    try {{
+        // 加载 data.json 获取所有可用日期
+        var manifestResp = await fetch('data.json');
+        if (!manifestResp.ok) throw new Error('Failed to load data.json');
+        var manifest = await manifestResp.json();
+        var allDates = manifest.dates || [];
+        var allowedDates = getAllowedDates(allDates, GRANTED, ACCESS_PUBLIC_DATES);
+        var resolvedDate = resolveInitialDate(PAGE_DATE, allowedDates);
+
+        if (!resolvedDate) {{
+            renderNoPublicData();
+            return;
         }}
-    }};
-    xhr.onerror = function() {{
-        console.error('Failed to load data/' + PAGE_DATE + '.json');
-    }};
-    xhr.send();
+
+        // 加载实际日期的数据
+        var dataResp = await fetch('data/' + resolvedDate + '.json');
+        if (!dataResp.ok) throw new Error('Failed to load data for ' + resolvedDate);
+        REPORT_DATA = await dataResp.json();
+        REPORT_DATA.date = resolvedDate;
+
+        // 过滤历史数据
+        HISTORY_DATA = filterHistoryData(manifest, allowedDates);
+
+        renderAll();
+        renderHistoryTabs();
+
+        // 未授权提示
+        if (!GRANTED) {{
+            renderPublicNotice();
+        }}
+
+        // 日期回退提示
+        if (resolvedDate !== PAGE_DATE) {{
+            renderDateFallbackNotice(resolvedDate);
+        }}
+    }} catch(e) {{
+        console.error(e);
+        // 最终 fallback：尝试直接加载 PAGE_DATE
+        try {{
+            var dataResp = await fetch('data/' + PAGE_DATE + '.json');
+            if (dataResp.ok) {{
+                REPORT_DATA = await dataResp.json();
+                renderAll();
+            }}
+        }} catch(e2) {{
+            console.error(e2);
+        }}
+    }}
 }}
 
 function renderAll() {{
@@ -720,7 +820,6 @@ function renderAll() {{
     renderSellSignals();
     renderLimitUp();
     switchVersion('fusion');
-    loadHistory();
 }}
 
 // ========== 版本切换 ==========
@@ -1422,20 +1521,6 @@ function renderChart(idx, ver) {{
 }}
 
 // ========== 历史数据 ==========
-function loadHistory() {{
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'data.json', true);
-    xhr.onload = function() {{
-        if (xhr.status === 200) {{
-            try {{
-                HISTORY_DATA = JSON.parse(xhr.responseText);
-                renderHistoryTabs();
-            }} catch(e) {{}}
-        }}
-    }};
-    xhr.send();
-}}
-
 function renderHistoryTabs() {{
     var dates = HISTORY_DATA.dates || [];
     if (dates.length <= 1) return;
@@ -1450,6 +1535,9 @@ function renderHistoryTabs() {{
 }}
 
 function showHistory(dateStr) {{
+    // 未授权时只允许访问 PUBLIC_DATES 中的日期
+    if (!GRANTED && ACCESS_PUBLIC_DATES.indexOf(dateStr) === -1) return;
+
     var reports = HISTORY_DATA.reports || {{}};
     var report = reports[dateStr];
     if (!report) return;
@@ -1479,6 +1567,39 @@ function showHistory(dateStr) {{
     tabs.forEach(function(t) {{
         t.classList.toggle('active', t.textContent.trim() === dateStr);
     }});
+}}
+
+// ========== 未授权/受限提示 ==========
+function renderPublicNotice() {{
+    var banner = document.createElement('div');
+    banner.id = 'publicNotice';
+    banner.style.cssText = 'background:#2d3436;color:#dfe6e9;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;text-align:center;';
+    banner.textContent = '\\uD83D\\uDD12 当前仅开放部分日期，输入完整 key 可查看全部历史';
+    var container = document.querySelector('.container');
+    if (container) container.insertBefore(banner, container.firstChild);
+}}
+
+function renderDateFallbackNotice(resolvedDate) {{
+    var banner = document.createElement('div');
+    banner.id = 'dateFallbackNotice';
+    banner.style.cssText = 'background:#2d3436;color:#ffa502;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;text-align:center;';
+    banner.textContent = '\\u26A0\\uFE0F 当前日期未公开，已切换到最近开放日期: ' + resolvedDate;
+    var container = document.querySelector('.container');
+    var existing = document.getElementById('publicNotice');
+    if (existing) {{
+        existing.insertAdjacentElement('afterend', banner);
+    }} else if (container) {{
+        container.insertBefore(banner, container.firstChild);
+    }}
+}}
+
+function renderNoPublicData() {{
+    document.getElementById('historySection').style.display = 'none';
+    document.getElementById('historyContent').innerHTML =
+        '<div style="text-align:center;padding:60px 20px;color:#888;">' +
+        '<p style="font-size:18px;margin-bottom:12px;">\\uD83D\\uDD12 当前无公开可访问日报</p>' +
+        '<p style="font-size:13px;">请使用完整 key 访问</p>' +
+        '</div>';
 }}
 
 // ========== 启动 ==========
