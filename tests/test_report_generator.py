@@ -228,13 +228,18 @@ class TestAccessControl(unittest.TestCase):
         """renderLimitedView is no longer called to block all rendering."""
         self.assertNotIn("renderLimitedView();", self.html)
 
-    def test_public_notice_function_in_html(self):
-        """HTML contains renderPublicNotice for unauthorized users."""
-        self.assertIn("function renderPublicNotice", self.html)
+    def test_no_public_notice_banner(self):
+        """renderPublicNotice is removed — unauthorized users are silently restricted."""
+        self.assertNotIn("function renderPublicNotice", self.html)
+
+    def test_no_date_fallback_notice(self):
+        """renderDateFallbackNotice is removed — date fallback is silent."""
+        self.assertNotIn("function renderDateFallbackNotice", self.html)
 
     def test_no_public_data_function_in_html(self):
         """HTML contains renderNoPublicData for empty allowlist."""
         self.assertIn("function renderNoPublicData", self.html)
+        self.assertIn("暂无日报数据", self.html)
 
     def test_show_history_guards_disallowed_dates(self):
         """showHistory checks GRANTED and PUBLIC_DATES before switching dates."""

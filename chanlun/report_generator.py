@@ -786,15 +786,7 @@ async function init() {{
         renderAll();
         renderHistoryTabs();
 
-        // 未授权提示
-        if (!GRANTED) {{
-            renderPublicNotice();
-        }}
-
-        // 日期回退提示
-        if (resolvedDate !== PAGE_DATE) {{
-            renderDateFallbackNotice(resolvedDate);
-        }}
+        // 静默限制：未授权用户仅看到 PUBLIC_DATES 中的日期，无提示
     }} catch(e) {{
         console.error(e);
         // 最终 fallback：尝试直接加载 PAGE_DATE
@@ -1569,36 +1561,12 @@ function showHistory(dateStr) {{
     }});
 }}
 
-// ========== 未授权/受限提示 ==========
-function renderPublicNotice() {{
-    var banner = document.createElement('div');
-    banner.id = 'publicNotice';
-    banner.style.cssText = 'background:#2d3436;color:#dfe6e9;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;text-align:center;';
-    banner.textContent = '\\uD83D\\uDD12 当前仅开放部分日期，输入完整 key 可查看全部历史';
-    var container = document.querySelector('.container');
-    if (container) container.insertBefore(banner, container.firstChild);
-}}
-
-function renderDateFallbackNotice(resolvedDate) {{
-    var banner = document.createElement('div');
-    banner.id = 'dateFallbackNotice';
-    banner.style.cssText = 'background:#2d3436;color:#ffa502;padding:8px 16px;border-radius:6px;margin-bottom:16px;font-size:13px;text-align:center;';
-    banner.textContent = '\\u26A0\\uFE0F 当前日期未公开，已切换到最近开放日期: ' + resolvedDate;
-    var container = document.querySelector('.container');
-    var existing = document.getElementById('publicNotice');
-    if (existing) {{
-        existing.insertAdjacentElement('afterend', banner);
-    }} else if (container) {{
-        container.insertBefore(banner, container.firstChild);
-    }}
-}}
-
+// ========== 受限提示（仅 PUBLIC_DATES=[] 时显示） ==========
 function renderNoPublicData() {{
     document.getElementById('historySection').style.display = 'none';
     document.getElementById('historyContent').innerHTML =
         '<div style="text-align:center;padding:60px 20px;color:#888;">' +
-        '<p style="font-size:18px;margin-bottom:12px;">\\uD83D\\uDD12 当前无公开可访问日报</p>' +
-        '<p style="font-size:13px;">请使用完整 key 访问</p>' +
+        '<p style="font-size:18px;margin-bottom:12px;">暂无日报数据</p>' +
         '</div>';
 }}
 
