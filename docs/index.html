@@ -257,6 +257,12 @@ body {
     <div id="pickTable"></div>
 </div>
 
+<!-- 启动观察 -->
+<div class="section" id="startupWatchSection">
+    <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
+    <div id="startupWatchContent"></div>
+</div>
+
 <!-- 板块资金 -->
 <div class="section">
     <div class="section-title">板块资金流向 TOP10</div>
@@ -429,6 +435,7 @@ function renderAll() {
     renderForecast();
     renderSellSignals();
     renderLimitUp();
+    renderStartupWatchlist();
     switchVersion('fusion');
 }
 
@@ -721,6 +728,34 @@ function renderLimitUp() {
         html += '</div>';
     });
     document.getElementById('limitUpContent').innerHTML = html;
+}
+
+// ========== 启动观察 ==========
+function renderStartupWatchlist() {
+    var watchlist = REPORT_DATA.startup_watchlist || [];
+    if (!watchlist.length) {
+        document.getElementById('startupWatchSection').style.display = 'none';
+        return;
+    }
+    document.getElementById('startupWatchSection').style.display = '';
+    document.getElementById('startupWatchCount').textContent = '(' + watchlist.length + ' 只)';
+
+    var html = '<table class="chan-table"><thead><tr>' +
+        '<th>代码</th><th>名称</th><th>信号</th><th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
+        '</tr></thead><tbody>';
+    watchlist.forEach(function(w) {
+        var conditions = (w.next_day_conditions || []).join('<br>');
+        html += '<tr>' +
+            '<td>' + w.code + '</td>' +
+            '<td>' + w.name + '</td>' +
+            '<td><span class="sell-tag">' + w.type + '</span></td>' +
+            '<td style="color:#ffa502;font-size:13px;">' + (w.startup_reason || '') + '</td>' +
+            '<td style="color:#dfe6e9;font-size:13px;">' + (w.watch_reason || '') + '</td>' +
+            '<td style="color:#aaa;font-size:12px;">' + conditions + '</td>' +
+            '</tr>';
+    });
+    html += '</tbody></table>';
+    document.getElementById('startupWatchContent').innerHTML = html;
 }
 
 // ========== 选股表格 ==========
