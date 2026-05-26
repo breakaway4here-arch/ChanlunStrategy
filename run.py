@@ -34,6 +34,7 @@ from config import (
     ENABLE_DAILY_STRUCTURE_POOL, ENABLE_30MIN_CANDIDATE_UPGRADE,
     ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS,
     ENABLE_FUSION_ADMISSION_POLICY,
+    SIGNAL_MAX_AGE_TRADING_DAYS,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data,
@@ -52,6 +53,7 @@ from chanlun.market_news import fetch_cls_news, rank_events, enrich_events, gene
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min
+from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 
 
 # ============================================================
@@ -452,6 +454,14 @@ def main(debug=False):
                                 "confirmations": sc.get("confirmations", []),
                                 "startup_reason": sc.get("startup_reason", ""),
                                 "startup_signals": sc.get("startup_signals", []),
+                                "startup_index": sc.get("startup_index"),
+                                "startup_date": sc.get("startup_date", ""),
+                                "startup_age_days": sc.get("startup_age_days", 0),
+                                "confirm_index": sc.get("confirm_index"),
+                                "confirm_date": sc.get("confirm_date", ""),
+                                "confirm_age_days": sc.get("confirm_age_days"),
+                                "change_pct": sc.get("change_pct", 0),
+                                "volume_ratio": sc.get("volume_ratio", 0),
                             },
                             "buy_points_30min": [],
                             "pivots": sc.get("pivot_info", {}),
@@ -469,8 +479,18 @@ def main(debug=False):
                             "lows": sc.get("lows", []),
                             "volumes": sc.get("volumes", []),
                             "macd_hist": np.zeros(len(sc.get("closes", []))),
-                            "buy_points": sc.get("buy_points", []),
-                            "reference_buy_points": [],
+                            "buy_points": [{
+                                "type": sc.get("type", "强势启动候选"),
+                                "tier": "candidate",
+                                "index": len(sc.get("closes", [])) - 1,
+                                "price": sc.get("close", 0),
+                                "reason": sc.get("startup_reason", ""),
+                                "strength": sc.get("startup_strength", "中"),
+                                "source_type": sc.get("source_type", "日线强势启动"),
+                                "confirmed_by": "30min确认",
+                                "confirmations": sc.get("confirmations", []),
+                            }],
+                            "reference_buy_points": sc.get("buy_points", []),
                             "blocked_buy_points": [],
                             "result_30min": sc.get("result_30min"),
                             "startup_reason": sc.get("startup_reason", ""),
@@ -557,8 +577,19 @@ def main(debug=False):
     # Phase 6: Score + generate report
     # ================================================================
     print("=" * 60)
-    print("Phase 6: Score + generate report")
+    print("Phase 6: Signal recency filter + Score + generate report")
     print("=" * 60)
+
+    # Signal recency filter (before scoring, per spec)
+    pure_confirmed, recency_pure_diag = filter_recent_picks(pure_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
+    fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
+    startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
+    print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
+          f"(过期{recency_pure_diag['dropped_expired']}), "
+          f"fusion {recency_fusion_diag['input']}→{recency_fusion_diag['kept']} "
+          f"(过期{recency_fusion_diag['dropped_expired']}), "
+          f"watch {recency_watch_diag['input']}→{recency_watch_diag['kept']} "
+          f"(过期{recency_watch_diag['dropped_expired']})")
 
     # Score
     pure_scored = apply_scores(pure_confirmed, version="pure")
@@ -641,6 +672,23 @@ def main(debug=False):
             "upgrade": startup_upgrade_diag,
             "startup_candidates": len(startup_candidates),
             "startup_watchlist": len(startup_watchlist),
+        },
+        "signal_recency": {
+            "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
+            "pure_input": recency_pure_diag["input"],
+            "pure_kept": recency_pure_diag["kept"],
+            "pure_dropped_expired": recency_pure_diag["dropped_expired"],
+            "fusion_input": recency_fusion_diag["input"],
+            "fusion_kept": recency_fusion_diag["kept"],
+            "fusion_dropped_expired": recency_fusion_diag["dropped_expired"],
+            "watch_input": recency_watch_diag["input"],
+            "watch_kept": recency_watch_diag["kept"],
+            "watch_dropped_expired": recency_watch_diag["dropped_expired"],
+            "dropped_details": (
+                recency_pure_diag.get("dropped_details", []) +
+                recency_fusion_diag.get("dropped_details", []) +
+                recency_watch_diag.get("dropped_details", [])
+            ),
         },
     }
     report_data = {

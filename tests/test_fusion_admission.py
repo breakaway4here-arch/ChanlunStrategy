@@ -214,6 +214,13 @@ class TestFusionAdmission(unittest.TestCase):
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
         self.assertEqual(len(picks), 0)
 
+    def test_unknown_type_not_admitted(self):
+        stock = self._make_stock("未知买点类型", strength="强")
+        picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
+        self.assertEqual(len(picks), 0)
+        self.assertEqual(diag["dropped_by_signal_gate"], 1)
+        self.assertIn("不默认放行", diag["drop_details"][0]["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

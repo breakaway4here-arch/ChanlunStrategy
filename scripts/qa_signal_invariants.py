@@ -19,6 +19,7 @@ ALLOWED_BEST_TYPES = {
     "中枢低吸候选",
     "三买候选",
     "底背驰候选",
+    "强势启动候选",
 }
 
 FORBIDDEN_BEST_TYPES = {

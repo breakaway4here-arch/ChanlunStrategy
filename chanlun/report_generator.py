@@ -107,6 +107,7 @@ def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
     bp = pick.get("best_buy_point", {})
     bp_idx_orig = bp.get("index")
     bp_price = bp.get("price")
+    bp_type = bp.get("type", "")
 
     # Pivot ZD/ZG
     pivots = pick.get("pivots", {})
@@ -126,7 +127,7 @@ def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
             "label": {"formatter": f"ZD {zd}", "color": "#ffa502", "fontSize": 10},
         })
 
-    # Source price
+    # Reference price (signal price)
     source_price = bp.get("source_price") or bp_price
     if source_price and dates_sliced:
         annotations["markLines"].append({
@@ -136,23 +137,63 @@ def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
             "label": {"formatter": f"参考 {source_price}", "color": "#74b9ff", "fontSize": 10},
         })
 
+    # Current price line
+    if closes_sliced and dates_sliced:
+        curr_price = float(closes_sliced[-1])
+        annotations["markLines"].append({
+            "name": "current",
+            "yAxis": curr_price,
+            "lineStyle": {"color": "rgba(0,255,136,0.5)", "type": "dotted"},
+            "label": {"formatter": f"现价 {curr_price}", "color": "#00ff88", "fontSize": 10},
+        })
+
     # Best buy point marker
     if bp_idx_orig is not None and isinstance(bp_idx_orig, int):
         adj_idx = bp_idx_orig - slice_start
         if 0 <= adj_idx < len(dates_sliced) and bp_price:
+            is_near_expiry = bp.get("signal_age_days") is not None and bp.get("signal_age_days", 0) >= 8
+            marker_label = bp_type + (" ⚠接近过期" if is_near_expiry else "")
+            marker_color = "#ffa502" if is_near_expiry else "#ff4757"
             annotations["markPoints"].append({
-                "name": bp.get("type", "BP"),
+                "name": bp_type,
                 "coord": [dates_sliced[adj_idx], float(bp_price)],
                 "symbol": "pin",
-                "symbolSize": 30,
-                "itemStyle": {"color": "#ff4757"},
-                "label": {"formatter": bp.get("type", ""), "color": "#ff4757", "fontSize": 10},
+                "symbolSize": 36 if is_near_expiry else 30,
+                "itemStyle": {"color": marker_color},
+                "label": {"formatter": marker_label, "color": marker_color, "fontSize": 10},
             })
+
+    # Strong startup: start day and confirm day markers
+    startup_idx = bp.get("startup_index")
+    startup_date = bp.get("startup_date", "")
+    if startup_idx is not None and isinstance(startup_idx, int) and dates_sliced:
+        adj_startup = startup_idx - slice_start
+        if 0 <= adj_startup < len(dates_sliced):
+            annotations["markPoints"].append({
+                "name": "startup",
+                "coord": [dates_sliced[adj_startup], float(closes_sliced[adj_startup]) if closes_sliced else 0],
+                "symbol": "triangle",
+                "symbolSize": 20,
+                "itemStyle": {"color": "#00ff88"},
+                "label": {"formatter": "启动日", "color": "#00ff88", "fontSize": 10},
+            })
+
+    confirm_idx = bp.get("confirm_index")
+    confirm_date = bp.get("confirm_date", "")
+    if confirm_idx is not None and isinstance(confirm_idx, int):
+        # confirm index is on 30min chart, show as label on daily chart when available
+        if confirm_date:
+            annotations["labels"].append(f"确认日: {confirm_date}")
 
     # Seed reason label
     seed_reason = bp.get("seed_reason", "")
     if seed_reason and dates_sliced:
         annotations["labels"].append(seed_reason)
+
+    # Near expiry warning label
+    signal_age = bp.get("signal_age_days")
+    if signal_age is not None and signal_age >= 8 and dates_sliced:
+        annotations["labels"].append(f"信号接近过期（{signal_age}天）")
 
     return annotations
 
@@ -197,11 +238,27 @@ def _serialize_picks(picks):
         dates_sliced = _slice(raw_dates)
         closes_sliced = _slice(p.get("closes", []))
 
+        # Compute reference / current price
+        bp = p.get("best_buy_point", {})
+        ref_price = bp.get("price", 0) if bp else 0
+        closes_arr = p.get("closes")
+        if closes_arr is not None and len(closes_arr) > 0:
+            curr_price = float(closes_arr[-1])
+        else:
+            curr_price = 0
+        dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
+
+        # Attach computed fields to bp for serialization
+        bp_enhanced = dict(bp) if bp else {}
+        bp_enhanced.setdefault("reference_price", ref_price)
+        bp_enhanced.setdefault("current_price", curr_price)
+        bp_enhanced.setdefault("distance_from_reference_pct", dist_pct)
+
         item = {
             "code": p.get("code", ""),
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
-            "best_buy_point": _adjust_bp_keep(p.get("best_buy_point", {})),
+            "best_buy_point": _adjust_bp_keep(bp_enhanced),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
             "pivots": p.get("pivots", {}),
             "trend_type": p.get("trend_type", ""),
@@ -270,6 +327,13 @@ def _serialize_startup_watchlist(watchlist):
     """Serialize startup watchlist items for JSON output."""
     result = []
     for w in watchlist:
+        closes = w.get("closes")
+        if closes is not None and len(closes) > 0:
+            curr_price = float(closes[-1])
+        else:
+            curr_price = 0
+        ref_price = w.get("close", 0)
+        dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
         item = {
             "code": w.get("code", ""),
             "name": w.get("name", ""),
@@ -278,12 +342,19 @@ def _serialize_startup_watchlist(watchlist):
             "source_type": w.get("source_type", ""),
             "startup_reason": w.get("startup_reason", ""),
             "startup_signals": w.get("startup_signals", []),
+            "startup_index": w.get("startup_index"),
+            "startup_date": w.get("startup_date", ""),
+            "startup_age_days": w.get("startup_age_days"),
             "change_pct": w.get("change_pct", 0),
             "volume_ratio": w.get("volume_ratio", 0),
-            "close": w.get("close", 0),
+            "close": ref_price,
+            "current_price": curr_price,
+            "distance_from_reference_pct": dist_pct,
             "avoid_chase": w.get("avoid_chase", True),
             "watch_reason": w.get("watch_reason", ""),
             "next_day_conditions": w.get("next_day_conditions", []),
+            "is_recent": w.get("is_recent", True),
+            "recency_reason": w.get("recency_reason", ""),
         }
         result.append(item)
     return result
@@ -339,6 +410,23 @@ def _serialize_bp(bp):
         "confirmations": bp.get("confirmations", []),
         "seed_type": bp.get("seed_type", ""),
         "seed_reason": bp.get("seed_reason", ""),
+        "signal_age_days": bp.get("signal_age_days"),
+        "is_recent": bp.get("is_recent", True),
+        "recency_reason": bp.get("recency_reason", ""),
+        "signal_date": bp.get("signal_date", ""),
+        "startup_index": bp.get("startup_index"),
+        "startup_date": bp.get("startup_date", ""),
+        "startup_age_days": bp.get("startup_age_days"),
+        "confirm_index": bp.get("confirm_index"),
+        "confirm_date": bp.get("confirm_date", ""),
+        "confirm_age_days": bp.get("confirm_age_days"),
+        "reference_price": bp.get("reference_price"),
+        "current_price": bp.get("current_price"),
+        "distance_from_reference_pct": bp.get("distance_from_reference_pct"),
+        "startup_reason": bp.get("startup_reason", ""),
+        "startup_signals": bp.get("startup_signals", []),
+        "change_pct": bp.get("change_pct"),
+        "volume_ratio": bp.get("volume_ratio"),
     }
 
 
@@ -1147,14 +1235,26 @@ function renderStartupWatchlist() {{
     document.getElementById('startupWatchCount').textContent = '(' + watchlist.length + ' 只)';
 
     var html = '<table class="chan-table"><thead><tr>' +
-        '<th>代码</th><th>名称</th><th>信号</th><th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
+        '<th>代码</th><th>名称</th><th>信号</th><th>信号年龄</th>' +
+        '<th>参考价</th><th>现价</th><th>距参考价</th>' +
+        '<th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
         '</tr></thead><tbody>';
     watchlist.forEach(function(w) {{
         var conditions = (w.next_day_conditions || []).join('<br>');
+        var ageLabel = w.startup_age_days !== undefined ? w.startup_age_days + '天' : '-';
+        var refPrice = w.close || 0;
+        var curPrice = w.current_price || 0;
+        var distPct = w.distance_from_reference_pct;
+        var distStr = distPct !== null && distPct !== undefined ? (distPct >= 0 ? '+' : '') + distPct.toFixed(2) + '%' : '-';
+        var distColor = distPct !== null ? (distPct > 0 ? '#ff4757' : '#5effa0') : '#aaa';
         html += '<tr>' +
             '<td>' + w.code + '</td>' +
             '<td>' + w.name + '</td>' +
             '<td><span class="sell-tag">' + w.type + '</span></td>' +
+            '<td style="font-size:12px;">' + ageLabel + '</td>' +
+            '<td>' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>' +
+            '<td>' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>' +
+            '<td style="color:' + distColor + ';">' + distStr + '</td>' +
             '<td style="color:#ffa502;font-size:13px;">' + (w.startup_reason || '') + '</td>' +
             '<td style="color:#dfe6e9;font-size:13px;">' + (w.watch_reason || '') + '</td>' +
             '<td style="color:#aaa;font-size:12px;">' + conditions + '</td>' +
@@ -1172,34 +1272,31 @@ function renderPickTable(ver) {{
     renderSignalSummary(picks);
     renderVersionDiffSummary();
 
-    var html = '<table class="chan-table"><thead><tr>';
+    var html = '<table class="chan-table"><thead><tr>' +
+        '<th>代码</th><th>名称</th><th>信号类型</th>' +
+        '<th>信号年龄</th><th>参考价</th><th>现价</th><th>距参考价</th>' +
+        '<th>评分</th><th>一句话原因</th>';
     if (isFusion) {{
-        html += '<th>代码</th><th>名称</th><th>信号类型</th>' +
-                '<th>30min确认</th><th>融合版门槛</th>' +
-                '<th>评分</th><th>止损</th><th>止盈目标</th>' +
-                '<th>板块</th><th>活跃</th>';
-    }} else {{
-        html += '<th>代码</th><th>名称</th><th>信号类型</th><th>信号层级</th>' +
-                '<th>来源/种子</th><th>30min确认</th><th>日线位置</th><th>评分</th>';
+        html += '<th>融合版</th><th>止损</th>';
     }}
     html += '</tr></thead><tbody>';
 
+    var colspan = isFusion ? 11 : 9;
+
     if (picks.length === 0) {{
-        var colspan = isFusion ? 10 : 8;
         var diag = REPORT_DATA.diagnostics || {{}};
         var ds = diag.daily_scan || {{}};
         var up = diag['sublevel_upgrade_' + ver] || {{}};
         var fa = diag.fusion_admission || {{}};
+        var sr = diag.signal_recency || {{}};
         var summary = '日线信号 ' + (ds.with_buy_points || 0) + ' 个' +
-            '，其中可进入30min确认 ' + (ds.upgradeable_count || 0) + ' 个' +
-            '，swing位置种子 ' + (ds.swing_seed_count || 0) + ' 个；' +
-            '30min确认通过 ' + (up.candidate_upgraded || 0) + ' 个' +
-            '，风险保护剔除 ' + (up.dropped_risk_guard || 0) + ' 个。';
+            '，30min确认通过 ' + (up.candidate_upgraded || 0) + ' 个' +
+            '，风险保护剔除 ' + (up.dropped_risk_guard || 0) + ' 个。' +
+            '时效过滤: ' + (sr.pure_kept || 0) + '只保留，' + (sr.pure_dropped_expired || 0) + '只过期丢弃。';
         if (isFusion && fa.market_regime) {{
             summary += ' 融合版大盘' + (fa.market_regime === 'strong' ? '强市' : '弱市') +
                 '，MA过滤 ' + (fa.dropped_by_ma || 0) + ' 只' +
-                '，弱市门槛过滤 ' + (fa.dropped_by_market_regime || 0) + ' 只' +
-                '，信号门槛过滤 ' + (fa.dropped_by_signal_gate || 0) + ' 只。';
+                '，弱市门槛过滤 ' + (fa.dropped_by_market_regime || 0) + ' 只。';
         }}
         html += '<tr><td colspan="' + colspan + '" style="text-align:center;color:#888;padding:20px;">' +
                 '今日暂无符合条件的选股结果</td></tr>' +
@@ -1209,110 +1306,145 @@ function renderPickTable(ver) {{
 
     picks.forEach(function(p, idx) {{
         var bp = p.best_buy_point || {{}};
-        var tagClass = {{'一买':'b1','二买':'b2','三买':'b3','类二买':'b2l'}}[bp.type] || '';
+        var tagClass = {{'一买':'b1','二买':'b2','三买':'b3','类二买':'b2l','强势启动候选':'b3'}}[bp.type] || '';
         if (!tagClass && bp.tier === 'candidate') {{ tagClass = 'candidate'; }}
+        if (!tagClass) {{ tagClass = 'candidate'; }}
         var resonance = p.resonance || {{}};
         var score = p.score || 0;
         var barW = Math.max(4, score * 0.6);
+
+        // Signal age
+        var ageDays = bp.signal_age_days;
+        var ageLabel = ageDays !== null && ageDays !== undefined ? ageDays + '天' : '-';
+        var ageColor = ageDays !== null && ageDays >= 8 ? '#ffa502' : (ageDays !== null && ageDays >= 5 ? '#ffb347' : '#aaa');
+
+        // Reference / current price
+        var refPrice = bp.reference_price || bp.price || 0;
+        var curPrice = bp.current_price;
+        if (curPrice === undefined || curPrice === null) {{
+            var closes = p.closes || [];
+            curPrice = closes.length ? closes[closes.length - 1] : 0;
+        }}
+        var distPct = bp.distance_from_reference_pct;
+        if (distPct === undefined || distPct === null) {{
+            distPct = refPrice && curPrice ? ((curPrice - refPrice) / refPrice * 100) : null;
+            if (distPct !== null) distPct = Math.round(distPct * 100) / 100;
+        }}
+        var distStr = distPct !== null && distPct !== undefined ? (distPct >= 0 ? '+' : '') + distPct.toFixed(2) + '%' : '-';
+        var distColor = distPct !== null ? (distPct > 0 ? '#ff4757' : (distPct < 0 ? '#5effa0' : '#aaa')) : '#aaa';
+
+        // One-line reason
+        var shortReason = bp.startup_reason || bp.reason || '-';
+        if (shortReason.length > 40) shortReason = shortReason.substring(0, 40) + '...';
 
         html += '<tr class="expandable" onclick="toggleChart(' + idx + ', \\'' + ver + '\\')">';
         html += '<td>' + p.code + '</td>';
         html += '<td>' + p.name + '</td>';
         html += '<td><span class="buy-tag ' + tagClass + '">' + (bp.type || '-') + '</span></td>';
-
+        html += '<td style="color:' + ageColor + ';font-size:12px;">' + ageLabel + '</td>';
+        html += '<td style="font-size:13px;">' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>';
+        html += '<td style="font-size:13px;">' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>';
+        html += '<td style="color:' + distColor + ';font-size:13px;">' + distStr + '</td>';
+        html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
+        html += '<td style="font-size:12px;white-space:normal;line-height:1.6;max-width:200px;">' + shortReason + '</td>';
         if (isFusion) {{
-            // 30min确认
-            html += '<td style="font-size:12px;">' +
-                (bp.confirmed_by || (resonance.reason || '-')) +
-                (bp.strength ? ' <span style="color:#ffa502;">[' + bp.strength + ']</span>' : '') +
-                '</td>';
-            // 融合版门槛
             var fa = p.fusion_admission || {{}};
             html += '<td style="font-size:12px;">' +
                 (fa.passed ? '<span style="color:#5effa0;">通过</span>' : '<span style="color:#ff4757;">过滤</span>') +
-                (fa.reason ? '<br><span style="color:#888;font-size:10px;">' + fa.reason + '</span>' : '') +
                 '</td>';
-            // 评分
-            html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
-            // 止损
             html += '<td>' + (p.stop_loss ? p.stop_loss.toFixed(2) : '-') + '</td>';
-            // 止盈
-            var targets = p.trailing_targets || [];
-            var tStr = targets.map(function(t) {{ return t.price; }}).join(' / ');
-            html += '<td>' + (tStr || '-') + '</td>';
-            // 板块
-            html += '<td>' + (p.sector || '-') + '</td>';
-            // 活跃
-            html += '<td>' + (p.is_active ? '<span class="active-dot"></span>活跃' : '-') + '</td>';
-        }} else {{
-            // 信号层级
-            html += '<td>' + (bp.tier === 'formal' ? '<span style="color:#5effa0;">正式</span>' :
-                              bp.tier === 'candidate' ? '<span style="color:#ffb347;">候选</span>' :
-                              (bp.tier || '-')) + '</td>';
-            // 来源/种子
-            var srcLabel = bp.source_type || '-';
-            if (bp.seed_type) srcLabel += '<br><span style="font-size:10px;color:#888;">种子:' + bp.seed_type + '</span>';
-            if (bp.seed_reason) srcLabel += '<br><span style="font-size:10px;color:#888;">' + bp.seed_reason.substring(0, 20) + '</span>';
-            html += '<td style="font-size:12px;">' + srcLabel + '</td>';
-            // 30min确认
-            html += '<td style="font-size:12px;">' +
-                (bp.confirmed_by || (resonance.reason || '-')) +
-                (bp.strength ? ' <span style="color:#ffa502;">[' + bp.strength + ']</span>' : '') +
-                '</td>';
-            // 日线位置
-            var closes = p.closes || [];
-            var bpIdx = bp.index;
-            var posLabel = '-';
-            if (closes.length && bpIdx !== undefined && bpIdx !== null) {{
-                var dist = closes.length - bpIdx;
-                posLabel = dist <= 2 ? '刚形成' : (dist <= 5 ? '近期(' + dist + 'K)' : (dist <= 10 ? '较早(' + dist + 'K)' : '久远(' + dist + 'K)'));
-            }}
-            html += '<td style="font-size:12px;">' + posLabel + '</td>';
-            // 评分
-            html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
         }}
         html += '</tr>';
 
-        // 图表行
-        html += '<tr class="chart-row" id="chartRow_' + ver + '_' + idx + '">' +
-                '<td colspan="' + (isFusion ? 10 : 8) + '">' +
-                '<div class="chart-container" id="chart_' + ver + '_' + idx + '"></div>' +
-                '<div class="detail-section">' +
-                // 信号路径
-                '<div class="detail-group">' +
-                '<div class="detail-group-title">信号路径</div>' +
-                (bp.source_type ? '<strong>来源信号：</strong>' + bp.source_type + '<br>' : '') +
-                (bp.seed_type ? '<strong>种子类型：</strong>' + bp.seed_type + '<br>' : '') +
-                (bp.seed_reason ? '<strong>种子原因：</strong>' + bp.seed_reason + '<br>' : '') +
-                (bp.confirmed_by ? '<strong>30min确认：</strong>' + bp.confirmed_by +
-                 (bp.strength ? ' [' + bp.strength + ']' : '') + '<br>' : '') +
-                '<strong>当前买点：</strong>' + (bp.type || '-') + ' — ' + (bp.reason || '-') + '<br>' +
-                '</div>' +
-                // 结构状态
-                '<div class="detail-group">' +
-                '<div class="detail-group-title">结构状态</div>' +
-                '<strong>走势类型：</strong>' + (p.trend_type || '-') + '<br>' +
-                '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) + '<br>' +
-                (p.pivot_zg && p.pivot_zd ? '<strong>中枢区间：</strong>[' + p.pivot_zd + ' — ' + p.pivot_zg + ']<br>' : '') +
-                '<strong>共振等级：</strong>' + (resonance.level || '-') +
-                (resonance.reason ? ' (' + resonance.reason + ')' : '') + '<br>' +
-                '</div>' +
-                // 融合版约束
-                (isFusion ? '<div class="detail-group">' +
+        // —— Expand row: full detail ——
+        var detail = '';
+        detail += '<div class="detail-section">';
+
+        // Basic info
+        detail += '<div class="detail-group">' +
+            '<div class="detail-group-title">信号详情</div>';
+        if (bp.signal_date) detail += '<strong>信号发生日：</strong>' + bp.signal_date + '<br>';
+        detail += '<strong>距今天数：</strong>' + ageLabel + '<br>';
+        detail += '<strong>参考价：</strong>' + (refPrice ? refPrice.toFixed(2) : '-') +
+            ' &nbsp; <strong>现价：</strong>' + (curPrice ? curPrice.toFixed(2) : '-') +
+            ' &nbsp; <strong>距参考价：</strong><span style="color:' + distColor + ';">' + distStr + '</span><br>';
+        detail += '<strong>完整原因：</strong>' + (bp.reason || bp.startup_reason || '-') + '<br>';
+        if (bp.confirmed_by) detail += '<strong>30min确认：</strong>' + bp.confirmed_by +
+            (bp.strength ? ' [' + bp.strength + ']' : '') + '<br>';
+        if (bp.confirmations && bp.confirmations.length) detail += '<strong>确认细节：</strong>' + bp.confirmations.join('，') + '<br>';
+        detail += '</div>';
+
+        // Strong startup specifics
+        if (bp.type === '强势启动候选') {{
+            detail += '<div class="detail-group">' +
+                '<div class="detail-group-title">强势启动详情</div>';
+            if (bp.startup_date) detail += '<strong>启动日：</strong>' + bp.startup_date +
+                (bp.startup_age_days !== undefined ? ' (' + bp.startup_age_days + '天前)' : '') + '<br>';
+            if (bp.confirm_date) detail += '<strong>确认日：</strong>' + bp.confirm_date +
+                (bp.confirm_age_days !== undefined ? ' (' + bp.confirm_age_days + '天前)' : '') + '<br>';
+            if (bp.volume_ratio) detail += '<strong>放量倍数：</strong>' + bp.volume_ratio.toFixed(1) + '倍<br>';
+            if (bp.change_pct) detail += '<strong>涨幅：</strong>' + bp.change_pct.toFixed(1) + '%<br>';
+            if (bp.startup_signals && bp.startup_signals.length) detail += '<strong>突破类型：</strong>' + bp.startup_signals.join('，') + '<br>';
+            if (bp.source_type) detail += '<strong>来源：</strong>' + bp.source_type + '<br>';
+            detail += '</div>';
+        }}
+
+        // 底背驰/低吸 specifics
+        if (bp.seed_type || bp.seed_reason) {{
+            detail += '<div class="detail-group">' +
+                '<div class="detail-group-title">原始参考信号</div>';
+            if (bp.seed_type) detail += '<strong>种子类型：</strong>' + bp.seed_type + '<br>';
+            if (bp.seed_reason) detail += '<strong>种子原因：</strong>' + bp.seed_reason + '<br>';
+            if (bp.source_type) detail += '<strong>参考信号：</strong>' + bp.source_type + '<br>';
+            detail += '</div>';
+        }}
+
+        // Risk / structure
+        detail += '<div class="detail-group">' +
+            '<div class="detail-group-title">结构状态</div>' +
+            '<strong>走势类型：</strong>' + (p.trend_type || '-') + '<br>' +
+            '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) + '<br>' +
+            (p.pivot_zg && p.pivot_zd ? '<strong>中枢区间：</strong>[' + p.pivot_zd + ' — ' + p.pivot_zg + ']<br>' : '') +
+            '<strong>共振等级：</strong>' + (resonance.level || '-') +
+            (resonance.reason ? ' (' + resonance.reason + ')' : '') + '<br>' +
+            '</div>';
+
+        // Fusion admission detail
+        if (isFusion || p.fusion_admission) {{
+            var fa = p.fusion_admission || {{}};
+            detail += '<div class="detail-group">' +
                 '<div class="detail-group-title">融合版约束</div>' +
                 '<strong>大盘状态：</strong>' + (p.market_regime === 'strong' ? '强市' : (p.market_regime === 'weak' ? '弱市' : (p.market_trend || '-'))) + '<br>' +
                 '<strong>MA多头：</strong>' + (p.ma_bullish ? '是 (MA5>MA10>MA20)' : '否') + '<br>' +
-                (p.fusion_admission ? '<strong>融合版结果：</strong>' +
-                 (p.fusion_admission.passed ? '<span style="color:#5effa0;">保留</span>' : '<span style="color:#ff4757;">过滤</span>') +
-                 ' — ' + (p.fusion_admission.reason || '') + '<br>' : '') +
+                (fa.reason ? '<strong>融合版结果：</strong>' +
+                 (fa.passed ? '<span style="color:#5effa0;">保留</span>' : '<span style="color:#ff4757;">过滤</span>') +
+                 ' — ' + fa.reason + '<br>' : '') +
                 (p.stop_loss_pct ? '<strong>止损：</strong>' + p.stop_loss_pct + '%<br>' : '') +
-                '</div>' : '') +
-                '</div></td></tr>';
+                '</div>';
+        }}
+
+        // Risk tips
+        if (bp.recency_reason) {{
+            var rColor = bp.is_recent ? (bp.signal_age_days >= 8 ? '#ffa502' : '#5effa0') : '#ff4757';
+            detail += '<div class="detail-group">' +
+                '<div class="detail-group-title">风险提示</div>' +
+                '<span style="color:' + rColor + ';">' + bp.recency_reason + '</span><br>';
+            if (bp.signal_age_days >= 8 && bp.is_recent) {{
+                detail += '<span style="color:#ffa502;">⚠ 信号接近过期，建议优先关注更新鲜的信号</span><br>';
+            }}
+            detail += '</div>';
+        }}
+
+        detail += '</div>';
+
+        html += '<tr class="chart-row" id="chartRow_' + ver + '_' + idx + '">' +
+                '<td colspan="' + colspan + '" style="white-space:normal;line-height:1.6;">' +
+                '<div class="chart-container" id="chart_' + ver + '_' + idx + '"></div>' +
+                detail + '</td></tr>';
     }});
     html += '</tbody></table>';
     document.getElementById('pickTable').innerHTML = html;
 
-    // 清空已渲染的图表引用
     window._charts = window._charts || {{}};
 }}
 
@@ -1327,7 +1459,7 @@ function renderSignalSummary(picks) {{
     var total = picks.length;
     var html = '<div class="signal-summary">';
     html += '<div class="signal-summary-item"><span class="ss-count">' + total + '</span><span class="ss-label">总数</span></div>';
-    var order = ['一买','二买','三买','底背驰候选','二买候选','三买候选','中枢低吸候选','盘整低吸候选'];
+    var order = ['一买','二买','三买','强势启动候选','底背驰候选','二买候选','三买候选','中枢低吸候选','盘整低吸候选'];
     order.forEach(function(t) {{
         if (counts[t]) {{
             html += '<div class="signal-summary-item"><span class="ss-count">' + counts[t] + '</span><span class="ss-label">' + t + '</span></div>';

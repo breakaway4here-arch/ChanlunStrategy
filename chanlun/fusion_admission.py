@@ -184,5 +184,5 @@ def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
                 return False, "强势启动候选弱市要求30min确认强/中"
             return True, "强势启动候选弱市通过"
 
-    # Unknown type — keep in pure, let fusion be more permissive for unknowns
-    return True, f"未知类型{bp_type}默认保留"
+    # Unknown type — do not admit
+    return False, f"未知类型{bp_type}不默认放行"

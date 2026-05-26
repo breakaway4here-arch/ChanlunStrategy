@@ -12,7 +12,7 @@ from chanlun.strong_startup import (
 
 
 def _make_chan_result(code, name, closes, opens=None, highs=None, lows=None,
-                       volumes=None, buy_points=None):
+                       volumes=None, buy_points=None, dates=None):
     """Build a mock chan result object."""
     class MockResult:
         pass
@@ -25,6 +25,7 @@ def _make_chan_result(code, name, closes, opens=None, highs=None, lows=None,
     r.lows = np.array(lows, dtype=float) if lows is not None else r.closes * 0.98
     r.volumes = np.array(volumes, dtype=float) if volumes is not None else np.ones(len(closes)) * 10000000
     r.buy_points = buy_points or []
+    r.dates = dates if dates is not None else [f"2026-05-{i:02d}" for i in range(1, len(closes) + 1)]
     return r
 
 
@@ -195,51 +196,58 @@ class TestBuildStrongStartupPool(unittest.TestCase):
             config.ENABLE_STRONG_STARTUP_CANDIDATES = old_val
 
 
+def _make_30min_result(code, closes_30, buy_points=None):
+    """Build a mock 30min chan result."""
+    class Mock30Result:
+        pass
+    r = Mock30Result()
+    r.code = code
+    r.closes = np.array(closes_30, dtype=float)
+    r.opens = np.array(closes_30, dtype=float) * 0.99
+    r.highs = np.array(closes_30, dtype=float) * 1.01
+    r.lows = np.array(closes_30, dtype=float) * 0.99
+    r.volumes = np.ones(len(closes_30)) * 100000
+    r.buy_points = buy_points or []
+    r.dates = [f"2026-05-26 {i:02d}:00:00" for i in range(len(closes_30))]
+    return r
+
+
+def _make_seed(code="000001", name="测试"):
+    closes = _make_low_position_closes(120)
+    closes[-1] = 55.0
+    closes[-2] = 52.0
+    return {
+        "code": code,
+        "name": name,
+        "type": "强势启动候选",
+        "tier": "candidate",
+        "source_type": "日线强势启动",
+        "startup_reason": "低位放量突破",
+        "startup_signals": ["涨幅≥4%", "close_above_ma5"],
+        "startup_index": len(closes) - 1,
+        "startup_date": "2026-05-26",
+        "startup_age_days": 0,
+        "change_pct": 5.7,
+        "volume_ratio": 1.8,
+        "close": 55.0,
+        "pivot_info": {},
+        "closes": closes,
+        "opens": closes * 0.98,
+        "highs": closes * 1.02,
+        "lows": closes * 0.97,
+        "volumes": np.ones(120) * 10000000,
+        "dates": [f"2026-05-{i:02d}" for i in range(1, 121)],
+        "buy_points": [],
+        "result_30min": None,
+    }
+
+
 class TestUpgrade30min(unittest.TestCase):
-
-    def _make_30min_result(self, code, closes_30, buy_points=None):
-        """Build a mock 30min chan result."""
-        class Mock30Result:
-            pass
-        r = Mock30Result()
-        r.code = code
-        r.closes = np.array(closes_30, dtype=float)
-        r.opens = np.array(closes_30, dtype=float) * 0.99
-        r.highs = np.array(closes_30, dtype=float) * 1.01
-        r.lows = np.array(closes_30, dtype=float) * 0.99
-        r.volumes = np.ones(len(closes_30)) * 100000
-        r.buy_points = buy_points or []
-        return r
-
-    def _make_seed(self, code="000001", name="测试"):
-        closes = _make_low_position_closes(120)
-        closes[-1] = 55.0
-        closes[-2] = 52.0
-        return {
-            "code": code,
-            "name": name,
-            "type": "强势启动候选",
-            "tier": "candidate",
-            "source_type": "日线强势启动",
-            "startup_reason": "低位放量突破",
-            "startup_signals": ["涨幅≥4%", "close_above_ma5"],
-            "change_pct": 5.7,
-            "volume_ratio": 1.8,
-            "close": 55.0,
-            "pivot_info": {},
-            "closes": closes,
-            "opens": closes * 0.98,
-            "highs": closes * 1.02,
-            "lows": closes * 0.97,
-            "volumes": np.ones(120) * 10000000,
-            "buy_points": [],
-            "result_30min": None,
-        }
 
     def test_30min_confirm_upgrades_to_candidate(self):
         """Seed with 30min EMA5 > EMA10 → candidate."""
-        seed = self._make_seed()
-        min30 = self._make_30min_result("000001", np.linspace(50, 55, 50))
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
         candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertEqual(diag["startup_candidate"], 1)
         self.assertEqual(len(candidates), 1)
@@ -248,8 +256,8 @@ class TestUpgrade30min(unittest.TestCase):
     def test_no_30min_confirm_goes_to_watch(self):
         """Seed with 30min data but no confirmation signals → watch."""
         import chanlun.strong_startup as ss
-        seed = self._make_seed()
-        min30 = self._make_30min_result("000001", np.linspace(55, 50, 50))
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(55, 50, 50))
         orig = ss._check_30min_confirmations
         try:
             ss._check_30min_confirmations = lambda r, s: []
@@ -262,17 +270,79 @@ class TestUpgrade30min(unittest.TestCase):
 
     def test_no_30min_data_goes_to_watch(self):
         """Seed without 30min data → watch."""
-        seed = self._make_seed()
+        seed = _make_seed()
         candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [])
         self.assertEqual(diag["watch_due_to_no_30min_confirm"], 1)
         self.assertEqual(len(watchlist), 1)
 
     def test_candidate_has_confirmations_field(self):
         """Upgraded candidate has confirmations list."""
-        seed = self._make_seed()
-        min30 = self._make_30min_result("000001", np.linspace(50, 55, 50))
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
         candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertIn("confirmations", candidates[0])
+
+
+class TestStartupAgeFields(unittest.TestCase):
+
+    def test_seed_has_startup_age_fields(self):
+        """Seed from build_strong_startup_pool has startup_index/date/age."""
+        closes = _make_low_position_closes(120)
+        closes[-1] = 55.0
+        closes[-2] = 52.0
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        vols = _make_volume_spike(120)
+        r = _make_chan_result("000001", "测试", closes, opens, highs, lows, vols)
+        seeds, _, _ = build_strong_startup_pool([r])
+        self.assertEqual(len(seeds), 1)
+        s = seeds[0]
+        self.assertEqual(s["startup_index"], len(closes) - 1)
+        self.assertIn("startup_date", s)
+        self.assertEqual(s["startup_age_days"], 0)
+        self.assertIn("dates", s)
+
+    def test_watchlist_has_startup_age_fields(self):
+        """Watchlist item inherits startup_index/date/age from seed."""
+        closes = _make_low_position_closes(120)
+        closes[-1] = 55.0
+        closes[-2] = 50.0  # +10% → limit up
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        vols = _make_volume_spike(120)
+        r = _make_chan_result("000506", "招金黄金", closes, opens, highs, lows, vols)
+        _, watchlist, _ = build_strong_startup_pool([r])
+        self.assertEqual(len(watchlist), 1)
+        w = watchlist[0]
+        self.assertEqual(w["startup_index"], len(closes) - 1)
+        self.assertEqual(w["startup_age_days"], 0)
+
+    def test_candidate_has_confirm_age_fields(self):
+        """Upgraded candidate has confirm_index/date/age."""
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+        candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
+        self.assertEqual(len(candidates), 1)
+        c = candidates[0]
+        self.assertIn("confirm_index", c)
+        self.assertEqual(c["confirm_index"], 49)
+        self.assertIn("confirm_date", c)
+        self.assertEqual(c["confirm_age_days"], 0)
+
+    def test_seed_startup_age_is_zero(self):
+        """First version only detects today's bar as startup, so age is 0."""
+        closes = _make_low_position_closes(120)
+        closes[-1] = 55.0
+        closes[-2] = 52.0
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        vols = _make_volume_spike(120)
+        r = _make_chan_result("000001", "测试", closes, opens, highs, lows, vols)
+        seeds, _, _ = build_strong_startup_pool([r])
+        self.assertEqual(seeds[0]["startup_age_days"], 0)
 
 
 if __name__ == "__main__":

@@ -45,6 +45,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         highs = result.highs
         lows = result.lows
         volumes = result.volumes
+        dates = result.dates if hasattr(result, 'dates') else []
 
         # --- Base filters ---
         if is_st_stock(name):
@@ -141,6 +142,10 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
 
         startup_reason = "；".join(reason_parts)
 
+        startup_index = len(closes) - 1
+        startup_date = str(dates[-1]) if dates else ""
+        startup_age_days = 0  # 第一版只识别今天这根日K是否启动
+
         seed = {
             "code": code,
             "name": name,
@@ -149,6 +154,9 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "source_type": "日线强势启动",
             "startup_reason": startup_reason,
             "startup_signals": startup_signals,
+            "startup_index": startup_index,
+            "startup_date": startup_date,
+            "startup_age_days": startup_age_days,
             "change_pct": round(change_pct, 2),
             "volume_ratio": round(volume_ratio, 2),
             "close": curr_close,
@@ -158,6 +166,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "highs": highs,
             "lows": lows,
             "volumes": volumes,
+            "dates": dates,
             "buy_points": list(result.buy_points) if hasattr(result, 'buy_points') and result.buy_points else [],
             "result_30min": None,
         }
@@ -229,6 +238,18 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
             seed["type"] = "强势启动候选"
             seed["tier"] = "candidate"
             seed["avoid_chase"] = False
+
+            closes_30 = min30_result.closes
+            dates_30 = min30_result.dates if hasattr(min30_result, 'dates') else []
+            if closes_30 is not None and len(closes_30) > 0:
+                seed["confirm_index"] = len(closes_30) - 1
+                seed["confirm_date"] = str(dates_30[-1]) if dates_30 else ""
+                seed["confirm_age_days"] = 0
+            else:
+                seed["confirm_index"] = seed.get("startup_index")
+                seed["confirm_date"] = seed.get("startup_date", "")
+                seed["confirm_age_days"] = seed.get("startup_age_days", 0)
+
             candidates.append(seed)
         else:
             # No 30min confirmation → watch
@@ -389,6 +410,9 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "source_type": "日线强势启动",
         "startup_reason": startup_reason,
         "startup_signals": seed.get("startup_signals", []),
+        "startup_index": seed.get("startup_index"),
+        "startup_date": seed.get("startup_date", ""),
+        "startup_age_days": seed.get("startup_age_days", 0),
         "change_pct": seed.get("change_pct", 0),
         "volume_ratio": seed.get("volume_ratio", 0),
         "close": seed.get("close", 0),
@@ -402,5 +426,6 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "highs": seed.get("highs", []),
         "lows": seed.get("lows", []),
         "volumes": seed.get("volumes", []),
+        "dates": seed.get("dates", []),
         "result_30min": None,
     }
