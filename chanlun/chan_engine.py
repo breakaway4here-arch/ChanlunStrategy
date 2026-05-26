@@ -13,6 +13,8 @@ from config import (
     DIVERGENCE_PLATEAU,
 )
 
+THIRD_BUY_MAX_CHASE_PCT = 0.08
+
 
 @dataclass
 class Fractal:
@@ -44,6 +46,8 @@ class Segment:
     direction: str  # "up" | "down"
     high: float
     low: float
+    destroyed_by_idx: Optional[int] = None
+    confirmed: bool = True
 
 
 @dataclass
@@ -72,8 +76,8 @@ class ChanResult:
     strokes: list = field(default_factory=list)
     segments: list = field(default_factory=list)
     pivots: list = field(default_factory=list)
-    stroke_pivots: list = field(default_factory=list)  # 笔中枢（swing tracking）
-    strokes_swing: list = field(default_factory=list)  # swing tracking 笔
+    swing_waves: list = field(default_factory=list)  # swing tracking 笔
+    swing_zones: list = field(default_factory=list)  # 笔中枢（swing tracking）
     divergence: Optional[dict] = None
     buy_points: list = field(default_factory=list)
     sell_points: list = field(default_factory=list)
@@ -528,13 +532,121 @@ def build_stroke_pivots(strokes, min_strokes=3):
 # ============================================================
 # 4. 线段划分
 # ============================================================
-def build_segments(strokes):
+
+def stroke_high(stroke):
+    return max(stroke.start_price, stroke.end_price)
+
+
+def stroke_low(stroke):
+    return min(stroke.start_price, stroke.end_price)
+
+
+def _is_alternating(strokes):
+    return all(strokes[i].direction != strokes[i + 1].direction for i in range(len(strokes) - 1))
+
+
+def _make_segment(strokes, confirmed=True, destroyed_by_idx=None):
+    return Segment(
+        strokes=strokes[:],
+        start_idx=strokes[0].start_idx,
+        end_idx=strokes[-1].end_idx,
+        direction=strokes[0].direction,
+        high=max(stroke_high(s) for s in strokes),
+        low=min(stroke_low(s) for s in strokes),
+        confirmed=confirmed,
+        destroyed_by_idx=destroyed_by_idx,
+    )
+
+
+def _segment_destroyed(candidate, direction):
+    if len(candidate) < 4:
+        return False
+
+    last = candidate[-1]
+
+    if direction == "up" and last.direction == "down":
+        prior_down_lows = [stroke_low(s) for s in candidate[:-1] if s.direction == "down"]
+        return bool(prior_down_lows) and stroke_low(last) < min(prior_down_lows)
+
+    if direction == "down" and last.direction == "up":
+        prior_up_highs = [stroke_high(s) for s in candidate[:-1] if s.direction == "up"]
+        return bool(prior_up_highs) and stroke_high(last) > max(prior_up_highs)
+
+    return False
+
+
+def _segment_extreme_index(seg, extreme="low"):
+    """找到线段极值所在的原始K线索引。low 找最低点，high 找最高点。"""
+    if not seg.strokes:
+        return seg.end_idx
+
+    if extreme == "low":
+        best_val = float('inf')
+        best_idx = seg.end_idx
+        for s in seg.strokes:
+            val = stroke_low(s)
+            if val < best_val:
+                best_val = val
+                best_idx = s.end_idx if s.direction == "down" else s.start_idx
+        return best_idx
+    else:
+        best_val = float('-inf')
+        best_idx = seg.end_idx
+        for s in seg.strokes:
+            val = stroke_high(s)
+            if val > best_val:
+                best_val = val
+                best_idx = s.end_idx if s.direction == "up" else s.start_idx
+        return best_idx
+
+
+def build_segments_by_break(strokes):
+    if len(strokes) < 3:
+        return []
+
+    segments = []
+    i = 0
+    n = len(strokes)
+
+    while i <= n - 3:
+        while i <= n - 3 and not _is_alternating(strokes[i:i + 3]):
+            i += 1
+        if i > n - 3:
+            break
+
+        current = strokes[i:i + 3]
+        j = i + 3
+        closed = False
+
+        while j < n:
+            current.append(strokes[j])
+            if not _is_alternating(current[-3:]):
+                j += 1
+                continue
+
+            if _segment_destroyed(current, current[0].direction):
+                old = current[:-1]
+                segments.append(_make_segment(old, confirmed=True, destroyed_by_idx=strokes[j].end_idx))
+                i = max(j - 2, i + 1)
+                closed = True
+                break
+
+            j += 1
+
+        if not closed:
+            segments.append(_make_segment(current, confirmed=False))
+            break
+
+    return segments
+
+
+def build_segments_fixed_window(strokes):
     """
     由笔划分线段。线段首尾相连（前一段终点=后一段起点）。
     每 SEGMENT_MIN_STROKES 笔构成一段，以步长 (SEGMENT_MIN_STROKES-1) 滑动，
     确保段间首尾相连无重叠。
 
-    后续可按缠论第67/71/78课升级为特征序列+线段破坏逻辑。
+    保留作为回退方案。
     """
     if len(strokes) < SEGMENT_MIN_STROKES:
         return []
@@ -749,61 +861,75 @@ def check_divergence(closes, segments, dif, dea, hist, pivots=None):
 def locate_buy_sell_points(result, divergence_threshold=0.85):
     """
     定位三类买卖点。
-    优先使用笔中枢（stroke_pivots），回退到段中枢（pivots）。
+    仅使用标准段中枢（result.pivots），不使用 swing 中枢。
     """
     buy_points = []
     sell_points = []
     div = result.divergence
 
-    # ── 一买/一卖：背驰驱动（沿用现有逻辑）──
+    # ── 一买/一卖：背驰驱动（仅使用已确认线段）──
     if div and div.get("is_divergence"):
         area_ratio = div.get("area_ratio", 1.0)
         is_plateau = "盘整" in div.get("type", "")
         threshold = DIVERGENCE_PLATEAU if is_plateau else divergence_threshold
 
-        if "底背驰" in div["type"] and area_ratio < threshold:
-            last_seg = result.segments[-1]
-            if last_seg.direction == "down":
-                buy_idx = last_seg.end_idx
-                buy_price = last_seg.strokes[-1].end_price
-                buy_points.append({
-                    "type": "一买",
-                    "index": buy_idx,
-                    "price": round(buy_price, 2),
-                    "date": str(result.dates[buy_idx]) if buy_idx < len(result.dates) else "",
-                    "reason": f"底背驰(力度比={area_ratio:.2%})，下跌力度衰竭",
-                    "strength": "强" if area_ratio < 0.6 else "中" if area_ratio < 0.8 else "弱",
-                })
+        # 通过 divergence 的 last_segment 索引定位背驰发生的实际线段
+        div_last = div.get("last_segment")
+        div_seg = None
+        if div_last and len(div_last) == 2:
+            for s in result.segments:
+                if s.confirmed and s.start_idx == div_last[0] and s.end_idx == div_last[1]:
+                    div_seg = s
+                    break
 
-        if "顶背驰" in div["type"] and area_ratio < threshold:
-            last_seg = result.segments[-1]
-            if last_seg.direction == "up":
-                sell_idx = last_seg.end_idx
-                sell_price = last_seg.strokes[-1].end_price
-                sell_points.append({
-                    "type": "一卖",
-                    "index": sell_idx,
-                    "price": round(sell_price, 2),
-                    "date": str(result.dates[sell_idx]) if sell_idx < len(result.dates) else "",
-                    "reason": f"顶背驰(力度比={area_ratio:.2%})，上涨力度衰竭",
-                    "strength": "强" if area_ratio < 0.6 else "中" if area_ratio < 0.8 else "弱",
-                })
+        if "底背驰" in div["type"] and area_ratio < threshold and div_seg and div_seg.direction == "down":
+            buy_idx = _segment_extreme_index(div_seg, "low")
+            buy_price = div_seg.low
+            div_label = "一买" if "趋势" in div["type"] else "盘整背驰参考"
+            div_tier = "formal" if div_label == "一买" else "reference"
+            buy_points.append({
+                "type": div_label,
+                "tier": div_tier,
+                "index": buy_idx,
+                "price": round(buy_price, 2),
+                "date": str(result.dates[buy_idx]) if buy_idx < len(result.dates) else "",
+                "reason": f"底背驰(力度比={area_ratio:.2%})，下跌力度衰竭",
+                "strength": "强" if area_ratio < 0.6 else "中" if area_ratio < 0.8 else "弱",
+            })
 
-    # ── 中枢结构买点（优先笔中枢）──
-    sp = result.stroke_pivots if result.stroke_pivots else result.pivots
-    if sp:
-        _find_pivot_buy_points(result, sp, buy_points)
+        if "顶背驰" in div["type"] and area_ratio < threshold and div_seg and div_seg.direction == "up":
+            sell_idx = _segment_extreme_index(div_seg, "high")
+            sell_price = div_seg.high
+            sell_points.append({
+                "type": "一卖",
+                "index": sell_idx,
+                "price": round(sell_price, 2),
+                "date": str(result.dates[sell_idx]) if sell_idx < len(result.dates) else "",
+                "reason": f"顶背驰(力度比={area_ratio:.2%})，上涨力度衰竭",
+                "strength": "强" if area_ratio < 0.6 else "中" if area_ratio < 0.8 else "弱",
+            })
+
+    # ── Swing 底背驰参考（非正式买点）──
+    _detect_swing_divergence_ref(result, buy_points)
+
+    # ── 二买：需在一买之后 ──
+    _find_second_buy_point(result, buy_points)
+
+    # ── 中枢结构买点（仅标准中枢）──
+    if result.pivots:
+        _find_pivot_buy_points(result, result.pivots, buy_points)
+
+    # ── 三买（标准中枢破坏确认）──
+    _find_third_buy_point(result, buy_points)
 
     return buy_points, sell_points
 
 
-def _detect_first_buy_from_swing(result, buy_points):
+def _detect_swing_divergence_ref(result, buy_points):
     """
-    基于 swing strokes 检测一买（笔底背驰）。
-    遍历相邻向下笔对：较新的笔价格新低 + MACD 力度减弱 → 一买。
-    若已有段背驰一买则跳过。
+    基于 swing waves 检测底背驰，仅作为参考标注，不作为正式买点。
     """
-    strokes = result.strokes_swing
+    strokes = result.swing_waves
     if not strokes or len(strokes) < 3:
         return
 
@@ -811,11 +937,6 @@ def _detect_first_buy_from_swing(result, buy_points):
     if hist is None:
         return
 
-    # 已有段背驰一买则跳过（避免重复）
-    if any(bp["type"] == "一买" for bp in buy_points):
-        return
-
-    # 找最后一笔有底背驰的向下笔对（从新到旧遍历）
     down_strokes = [s for s in strokes if s["direction"] == "down"]
     if len(down_strokes) < 2:
         return
@@ -828,12 +949,10 @@ def _detect_first_buy_from_swing(result, buy_points):
         h = h[~np.isnan(h)]
         return float(np.sum(np.abs(h))) if len(h) > 0 else 0.0
 
-    # 从新到旧遍历相邻对，找到价格新低 + 力度减弱的组合
     for i in range(len(down_strokes) - 1, 0, -1):
-        curr = down_strokes[i]    # 较新（时间靠后）的向下笔
-        prev = down_strokes[i - 1]  # 较旧的向下笔
+        curr = down_strokes[i]
+        prev = down_strokes[i - 1]
 
-        # 需要价格创新低
         if curr["end_price"] >= prev["end_price"]:
             continue
 
@@ -848,28 +967,136 @@ def _detect_first_buy_from_swing(result, buy_points):
 
         idx = curr["end_idx"]
         price = curr["end_price"]
-        strength = "强" if ratio < 0.6 else "中" if ratio < 0.8 else "弱"
 
         buy_points.append({
-            "type": "一买",
+            "type": "swing底背驰参考",
+            "tier": "reference",
             "index": idx,
             "price": round(price, 2),
             "date": str(result.dates[idx]) if idx < len(result.dates) else "",
-            "reason": f"笔底背驰(力度比={ratio:.2%})，下跌力度衰竭",
-            "strength": strength,
+            "reason": f"swing笔底背驰(力度比={ratio:.2%})，仅供参考",
+            "strength": "弱",
         })
-        return  # 找到最近的一个底背驰即停止
+        return
+
+
+def _find_second_buy_point(result, buy_points):
+    """二买：需在一买之后，首次回拉不破一买低点。
+
+    正式 二买：上离开 + 回拉必须都是已确认线段。
+    二买待确认：使用未确认线段检测，仅用于展示，不进选股。
+    """
+    first_buys = [bp for bp in buy_points if bp["type"] == "一买"]
+    if not first_buys:
+        return
+
+    first = max(first_buys, key=lambda x: x["index"])
+    first_idx = first["index"]
+    first_price = first["price"]
+
+    confirmed = [s for s in result.segments if s.confirmed]
+
+    def _try_find(post_segments, label, strength_suffix):
+        """在给定段列表中搜索 二买 形态，返回找到的买点 dict 或 None。"""
+        if len(post_segments) < 2:
+            return None
+        saw_up = False
+        for seg in post_segments:
+            if not saw_up:
+                if seg.direction == "up":
+                    saw_up = True
+                continue
+            if seg.direction == "down":
+                if seg.low > first_price:
+                    buy_idx = _segment_extreme_index(seg, "low")
+                    base_strength = "强" if seg.low > first_price * 1.02 else "中"
+                    bp_tier = "formal" if label == "二买" else "reference"
+                    return {
+                        "type": label,
+                        "tier": bp_tier,
+                        "index": buy_idx,
+                        "price": round(seg.low, 2),
+                        "date": str(result.dates[buy_idx]) if buy_idx < len(result.dates) else "",
+                        "reason": f"一买后首次回拉, 低点={seg.low:.2f}>{first_price:.2f}(一买低点)",
+                        "strength": base_strength if label == "二买" else "弱",
+                    }
+                return None  # 首次回拉跌破一买低点，不再继续
+        return None
+
+    # 1) 正式二买：只用已确认线段
+    formal_post = [s for s in confirmed if s.start_idx >= first_idx]
+    formal = _try_find(formal_post, "二买", "")
+    if formal:
+        buy_points.append(formal)
+        return
+
+    # 2) 待确认二买：含未确认线段，仅供展示
+    all_post = [s for s in result.segments if s.start_idx >= first_idx]
+    pending = _try_find(all_post, "二买待确认", "_pending")
+    if pending:
+        buy_points.append(pending)
+
+
+def _find_third_buy_point(result, buy_points):
+    """三买：标准中枢 + 首次向上离开 + 首次回拉不破 ZG。"""
+    if not result.pivots:
+        return
+
+    pivot = result.pivots[-1]
+    confirmed = [s for s in result.segments if s.confirmed]
+    post = [s for s in confirmed if s.start_idx >= pivot.end_idx]
+    if len(post) < 2:
+        return
+
+    # 找到中枢后第一段向上的离开
+    leave_idx = None
+    for k, seg in enumerate(post):
+        if seg.direction == "up":
+            leave_idx = k
+            break
+    if leave_idx is None:
+        return
+
+    # 找到离开后的第一段向下回拉
+    pullback = None
+    for seg in post[leave_idx + 1:]:
+        if seg.direction == "down":
+            pullback = seg
+            break
+    if pullback is None:
+        return
+
+    leave = post[leave_idx]
+    if pullback.low <= pivot.ZG:
+        return
+
+    current_price = float(result.closes[-1])
+    if (current_price - pullback.low) / pullback.low > THIRD_BUY_MAX_CHASE_PCT:
+        buy_type = "三买已错过"
+        strength = "弱"
+    else:
+        buy_type = "三买"
+        dist_pct = round((pullback.low - pivot.ZG) / pivot.ZG * 100, 2)
+        strength = "强" if dist_pct > 1 else "中"
+
+    buy_idx = _segment_extreme_index(pullback, "low")
+    buy_points.append({
+        "type": buy_type,
+        "tier": "formal" if buy_type == "三买" else "blocked",
+        "index": buy_idx,
+        "price": round(pullback.low, 2),
+        "date": str(result.dates[buy_idx]) if buy_idx < len(result.dates) else "",
+        "reason": f"突破ZG={pivot.ZG}后首次回拉, 回拉低点={pullback.low:.2f}>ZG={pivot.ZG}",
+        "strength": strength,
+    })
 
 
 def _find_pivot_buy_points(result, pivots, buy_points):
     """
-    基于中枢结构找 类二买 / 三买。
-    类二买：现价距最近中枢 ZD 在 -5%~+8% 内
-    三买：价格突破某中枢 ZG 后回抽，回抽低点不破 ZG
+    基于标准中枢的辅助买点参考。
+    类二买在 phase 1 禁用，仅输出 中枢震荡低吸参考（不参与选股）。
     """
     closes = result.closes
-    highs = result.highs
-    lows = result.lows
     now_price = float(closes[-1])
     n = len(closes)
 
@@ -879,100 +1106,36 @@ def _find_pivot_buy_points(result, pivots, buy_points):
     # ── 找 ZD 最接近当前价格的中枢 ──
     best_p = None
     best_dist = float('inf')
-    above_pivots = []
 
     for p in pivots:
         zd = _get(p, 'ZD')
-        zg = _get(p, 'ZG')
         dist = abs(now_price - zd) / zd if zd > 0 else float('inf')
         if dist < best_dist:
             best_dist = dist
             best_p = p
-        if now_price > zg:
-            above_pivots.append(p)
 
     if best_p is None:
         return
-
-    # ── Swing Stroke 一买检测（笔底背驰）──
-    _detect_first_buy_from_swing(result, buy_points)
 
     zg = _get(best_p, 'ZG')
     zd = _get(best_p, 'ZD')
     end_idx = _get(best_p, 'end_idx')
     rel = (now_price - zd) / zd if zd > 0 else float('inf')
 
-    # 类二买需要中枢有时效性：中枢结束在近 20 根K线内
+    # 中枢时效性
     pivot_recent = (n - 1 - end_idx) <= 20
 
-    # ── 买点依赖链：一买 → 类二买 → 三买 ──
-    has_first_buy = any(bp["type"] == "一买" for bp in buy_points)
-
-    # ── 类二买 ──
-    if pivot_recent and has_first_buy:
-        if -0.05 <= rel <= 0.08:
-            if -0.02 <= rel <= 0.04:
-                strength = "强"
-            else:
-                strength = "中"
-
-            if rel >= 0:
-                reason = f"中枢下沿附近(ZG={zg}, ZD={zd}), 现价={now_price}, 距ZD=+{rel*100:.1f}%"
-            else:
-                reason = f"略低于中枢下沿(ZG={zg}, ZD={zd}), 现价={now_price}, 距ZD={rel*100:.1f}%"
-
-            buy_points.append({
-                "type": "类二买",
-                "index": n - 1,
-                "price": now_price,
-                "date": str(result.dates[-1]) if n > 0 else "",
-                "reason": reason,
-                "strength": strength,
-            })
-        elif -0.08 <= rel <= 0.12:
-            buy_points.append({
-                "type": "类二买待确认",
-                "index": n - 1,
-                "price": now_price,
-                "date": str(result.dates[-1]) if n > 0 else "",
-                "reason": f"距中枢下沿稍远(ZG={zg}, ZD={zd}), 现价={now_price}, 距ZD={rel*100:+.1f}%",
-                "strength": "弱",
-            })
-
-    # ── 三买（无依赖限制，需中枢时效性）──
-    has_class2 = any(bp["type"] in ("类二买", "类二买待确认") for bp in buy_points)
-
-    for p in above_pivots:
-        p_zg = _get(p, 'ZG')
-        p_zd = _get(p, 'ZD')
-        p_end = _get(p, 'end_idx')
-        # 中枢时效性：结束在近 40 根K线内
-        if (n - 1 - p_end) > 40:
-            continue
-        if p_end >= n - 5:
-            continue
-        post_highs = highs[p_end:]
-        if len(post_highs) <= 5:
-            continue
-        max_h = float(np.max(post_highs))
-        if max_h <= p_zg * 1.02:
-            continue
-
-        recent_low = float(np.min(lows[-5:]))
-        if recent_low > p_zg:
-            dist_pct = round((recent_low - p_zg) / p_zg * 100, 2)
-            if not any(bp["type"] == "三买" and abs(bp.get("price", 0) - now_price) < 0.01 for bp in buy_points):
-                strength = "中" if has_class2 else ("强" if dist_pct > 1 else "中")
-                surge_pct = round((now_price - p_zg) / p_zg * 100, 1)
-                surge_warn = f" ⚠已涨{surge_pct}%" if surge_pct > 15 else ""
-                buy_points.append({
-                    "type": "三买",
-                    "index": n - 1,
-                    "price": now_price,
-                    "date": str(result.dates[-1]) if n > 0 else "",
-                    "reason": f"突破ZG={p_zg}后回抽, 近5日最低={recent_low}, 高出ZG {dist_pct}%{surge_warn}",
-                    "strength": strength,
-                })
+    # ── 中枢震荡低吸参考（非正式买点，不参与选股）──
+    if pivot_recent and -0.05 <= rel <= 0.08:
+        buy_points.append({
+            "type": "中枢震荡低吸参考",
+            "tier": "reference",
+            "index": n - 1,
+            "price": now_price,
+            "date": str(result.dates[-1]) if n > 0 else "",
+            "reason": f"中枢下沿附近(ZG={zg}, ZD={zd}), 现价={now_price}, 距ZD={rel*100:+.1f}%",
+            "strength": "弱",
+        })
 
 
 # ============================================================
@@ -1000,21 +1163,23 @@ def analyze(code, name, dates, opens, highs, lows, closes, volumes):
     strokes = build_strokes(fractals, merged_high, merged_low)
 
     # 线段
-    segments = build_segments(strokes)
+    from config import USE_SEGMENT_BREAK_BUILDER
+    segments = build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
 
-    # 中枢（段中枢）
-    pivots = find_pivots(segments)
+    # 中枢（段中枢）—— 仅使用已确认线段
+    confirmed_segments = [s for s in segments if s.confirmed]
+    pivots = find_pivots(confirmed_segments)
 
     # 走势类型
-    trend_type = classify_trend(pivots, segments)
+    trend_type = classify_trend(pivots, confirmed_segments)
 
     # 背驰
-    divergence = check_divergence(closes, segments, dif, dea, hist, pivots=pivots)
+    divergence = check_divergence(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
 
-    # ── Swing Tracking 笔中枢（替代方案，更可靠）──
-    sw_strokes_raw = build_strokes_swing(highs, lows, closes, min_bars=2, min_swing_pct=0.06)
-    sw_strokes = prune_strokes(sw_strokes_raw, min_pct=0.06)
-    stroke_pivots = build_stroke_pivots(sw_strokes)
+    # ── Swing Tracking 笔中枢（辅助展示/评分，不参与正式买卖点）──
+    swing_waves_raw = build_strokes_swing(highs, lows, closes, min_bars=2, min_swing_pct=0.06)
+    swing_waves = prune_strokes(swing_waves_raw, min_pct=0.06)
+    swing_zones = build_stroke_pivots(swing_waves)
 
     result = ChanResult(
         code=code,
@@ -1029,8 +1194,8 @@ def analyze(code, name, dates, opens, highs, lows, closes, volumes):
         strokes=strokes,
         segments=segments,
         pivots=pivots,
-        stroke_pivots=stroke_pivots,
-        strokes_swing=sw_strokes,
+        swing_waves=swing_waves,
+        swing_zones=swing_zones,
         divergence=divergence,
         trend_type=trend_type,
         macd_dif=dif,

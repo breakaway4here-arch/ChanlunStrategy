@@ -120,12 +120,20 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
         if not result.buy_points:
             continue
 
+        # 过滤不可选类型
+        selectable_bp = [bp for bp in result.buy_points
+                         if bp["type"] not in ("三买已错过", "中枢震荡低吸参考",
+                                                "swing底背驰参考", "盘整背驰参考",
+                                                "二买待确认")]
+        if not selectable_bp:
+            continue
+
         # MA 多头检查（一买除外）
         ma_bullish = is_ma_bullish(closes)
 
         # 背驰质量检查（使用双参数阈值）
         valid_buy_points = []
-        for bp in result.buy_points:
+        for bp in selectable_bp:
             if bp["type"] == "一买":
                 # 一买不需要MA多头
                 if result.divergence:
@@ -133,7 +141,7 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
                     if area_ratio >= div_threshold:
                         continue
                 valid_buy_points.append(bp)
-            elif bp["type"] in ("二买", "三买", "类二买"):
+            elif bp["type"] in ("二买", "三买"):
                 # 需要一个条件：MA多头 或 是优先买卖点
                 if ma_bullish or bp["type"] in preferred_bp:
                     valid_buy_points.append(bp)
@@ -192,7 +200,7 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
         })
 
     # 排序：优先买卖点 > MA多头 > 买点优先级
-    bp_order = {"三买": 0, "二买": 1, "类二买": 2, "类二买待确认": 3, "一买": 4}
+    bp_order = {"三买": 0, "二买": 1, "一买": 2}
 
     def sort_key(x):
         bp = x["best_buy_point"]
@@ -317,8 +325,8 @@ def _pick_best_fusion(buy_points, preferred_types):
                     best = b2
             return best
 
-    # 按优先级选（三买 > 二买 > 类二买 > 一买）
-    priority = {"三买": 0, "二买": 1, "类二买": 2, "类二买待确认": 3, "一买": 4}
+    # 按优先级选（三买 > 二买 > 一买）
+    priority = {"三买": 0, "二买": 1, "一买": 2}
     best = buy_points[0]
     for bp in buy_points[1:]:
         if priority.get(bp["type"], 9) < priority.get(best["type"], 9):

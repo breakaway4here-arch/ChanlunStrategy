@@ -84,9 +84,17 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
         if not result.buy_points:
             continue
 
+        # 过滤不可选类型
+        selectable_bp = [bp for bp in result.buy_points
+                         if bp["type"] not in ("三买已错过", "中枢震荡低吸参考",
+                                                "swing底背驰参考", "盘整背驰参考",
+                                                "二买待确认")]
+        if not selectable_bp:
+            continue
+
         # 背驰质量检查
         valid_buy_points = []
-        for bp in result.buy_points:
+        for bp in selectable_bp:
             # 如果是背驰类买点（一买），检查力度比
             if bp["type"] == "一买" and result.divergence:
                 area_ratio = result.divergence.get("area_ratio", 1.0)
@@ -128,8 +136,8 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
             "version": "pure",
         })
 
-    # 按买点类型优先级排序（三买 > 二买 > 类二买 > 一买）
-    bp_order = {"三买": 0, "二买": 1, "类二买": 2, "类二买待确认": 3, "一买": 4}
+    # 按买点类型优先级排序（三买 > 二买 > 一买）
+    bp_order = {"三买": 0, "二买": 1, "一买": 2}
     target_pool.sort(key=lambda x: bp_order.get(x["best_buy_point"]["type"], 9))
 
     return target_pool
@@ -191,8 +199,8 @@ def screen_30min_pure(daily_pool, chan_results_30min):
 
 
 def _pick_best_buy_point(buy_points):
-    """从多个买点中选最优的（三买 > 二买 > 类二买 > 一买）"""
-    priority = {"三买": 0, "二买": 1, "类二买": 2, "类二买待确认": 3, "一买": 4}
+    """从多个买点中选最优的（三买 > 二买 > 一买）"""
+    priority = {"三买": 0, "二买": 1, "一买": 2}
     best = buy_points[0]
     for bp in buy_points[1:]:
         if priority.get(bp["type"], 9) < priority.get(best["type"], 9):
@@ -201,8 +209,8 @@ def _pick_best_buy_point(buy_points):
 
 
 def _get_pivot_info(result):
-    """提取中枢信息，优先使用笔中枢"""
-    sp = result.stroke_pivots if result.stroke_pivots else result.pivots
+    """提取中枢信息，仅使用标准段中枢"""
+    sp = result.pivots
     if not sp:
         return {"ZG": None, "ZD": None, "count": 0}
     last = sp[-1]

@@ -14,6 +14,7 @@ RUN_MINUTE = 35
 BI_MIN_KLINE_COUNT = 5       # 笔的最小包含K线数（含两端）
 SEGMENT_MIN_STROKES = 3      # 线段的最小笔数
 PIVOT_MIN_SEGMENTS = 3       # 中枢的最小次级别段数
+USE_SEGMENT_BREAK_BUILDER = True  # 线段破坏确认版（False 回退到固定窗口）
 MACD_FAST = 12
 MACD_SLOW = 26
 MACD_SIGNAL = 9
@@ -37,7 +38,7 @@ PURE_WEIGHT_POSITION = 0.25
 
 # 大盘趋势 — 强趋势
 FUSION_DIVERGENCE_TREND = 0.85       # 强趋势背驰阈值（宽松）
-FUSION_BUY_POINTS_TREND = ["三买", "类二买"]  # 强趋势优先
+FUSION_BUY_POINTS_TREND = ["三买"]  # 强趋势优先（类二买 phase1 禁用）
 
 # 大盘趋势 — 弱市
 FUSION_DIVERGENCE_WEAK = 0.75        # 弱市背驰阈值（严格）
@@ -65,6 +66,30 @@ FUSION_HARD_STOP = -5.0
 # 活跃标记
 FUSION_ACTIVE_DAYS = 7       # 近N日内
 FUSION_ACTIVE_THRESHOLD = 5.0  # 单日涨幅超过此值标记为活跃
+
+# ============================================================
+# 多级候选升级特性开关
+# ============================================================
+ENABLE_DAILY_STRUCTURE_POOL = True       # 日线结构池（含可升级参考信号）
+ENABLE_30MIN_CANDIDATE_UPGRADE = True    # 30分钟候选升级
+
+# 候选覆盖率优化开关（默认全开，仅线上紧急隔离时关闭）
+ENABLE_SWING_POSITION_SEEDS = True           # swing底背驰参考 → 候选种子（日线位置保护）
+ENABLE_RELAXED_30MIN_CONFIRM = True          # 30min中确认放宽（EMA5收复 + 止跌结构）
+ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS = True  # 详细信号分布诊断
+
+# ============================================================
+# K线本地缓存
+# ============================================================
+KLINE_CACHE_ENABLED = True
+KLINE_CACHE_DIR = ".cache/chanlun"
+KLINE_CACHE_VERBOSE = False
+KLINE_CACHE_FORCE_REFRESH = False
+KLINE_CACHE_TRADING_DAYS = 10
+DAY_KLINE_CACHE_RETENTION_TRADING_DAYS = max(DAY_LOOKBACK, KLINE_CACHE_TRADING_DAYS)
+MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS = KLINE_CACHE_TRADING_DAYS
+DAY_KLINE_INCREMENTAL_FETCH_COUNT = 5
+MIN30_KLINE_INCREMENTAL_FETCH_COUNT = 16
 
 # ============================================================
 # 通用过滤参数（两版本共用）

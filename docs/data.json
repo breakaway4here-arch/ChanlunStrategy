@@ -1,7 +1,9 @@
 {
   "dates": [
     "2026-05-23",
-    "2026-05-24"
+    "2026-05-24",
+    "2026-05-25",
+    "2026-05-26"
   ],
   "reports": {
     "2026-05-23": {
@@ -6610,6 +6612,1538 @@
           "sector": "机械设备"
         }
       ]
+    },
+    "2026-05-26": {
+      "market": {
+        "上证指数": {
+          "close": 4117.85,
+          "change_pct": -0.84
+        },
+        "深证成指": {
+          "close": 15718.98,
+          "change_pct": -0.87
+        },
+        "创业板指": {
+          "close": 4000.5,
+          "change_pct": -0.51
+        },
+        "科创50": {
+          "close": 1841.35,
+          "change_pct": -2.88
+        },
+        "沪深300": {
+          "close": 4907.69,
+          "change_pct": -0.28
+        },
+        "中证500": {
+          "close": 8566.73,
+          "change_pct": -1.58
+        }
+      },
+      "chanlun_structure": {
+        "daily_pivot": null,
+        "trend_type": "无中枢",
+        "key_signal": "未出现明显背驰信号",
+        "conclusion": "无中枢"
+      },
+      "picks_pure": [
+        {
+          "code": "000751",
+          "name": "锌业股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 96,
+            "price": 5.23,
+            "date": "2026-05-21",
+            "reason": "swing笔底背驰(力度比=68.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 96,
+              "price": 5.23,
+              "date": "2026-05-21",
+              "reason": "swing笔底背驰(力度比=68.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "002842",
+          "name": "翔鹭钨业",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 95,
+            "price": 31.63,
+            "date": "2026-05-20",
+            "reason": "swing笔底背驰(力度比=56.45%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 76,
+              "price": 31.41,
+              "date": "2026-05-26 10:00:00",
+              "reason": "swing笔底背驰(力度比=33.92%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": ""
+            }
+          ],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "钨",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 95,
+              "price": 31.63,
+              "date": "2026-05-20",
+              "reason": "swing笔底背驰(力度比=56.45%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "300644",
+          "name": "南京聚隆",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 82,
+            "price": 26.75,
+            "date": "2026-04-28",
+            "reason": "swing笔底背驰(力度比=84.25%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 42.5,
+          "sector": "改性塑料",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 82,
+              "price": 26.75,
+              "date": "2026-04-28",
+              "reason": "swing笔底背驰(力度比=84.25%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        }
+      ],
+      "picks_fusion": [
+        {
+          "code": "000751",
+          "name": "锌业股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 96,
+            "price": 5.23,
+            "date": "2026-05-21",
+            "reason": "swing笔底背驰(力度比=68.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 54.0,
+          "sector": "工业金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 96,
+              "price": 5.23,
+              "date": "2026-05-21",
+              "reason": "swing笔底背驰(力度比=68.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "002842",
+          "name": "翔鹭钨业",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 95,
+            "price": 31.63,
+            "date": "2026-05-20",
+            "reason": "swing笔底背驰(力度比=56.45%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分；接近swing参考价"
+          },
+          "buy_points_30min": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 76,
+              "price": 31.41,
+              "date": "2026-05-26 10:00:00",
+              "reason": "swing笔底背驰(力度比=33.92%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": ""
+            }
+          ],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 49.5,
+          "sector": "钨",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 95,
+              "price": 31.63,
+              "date": "2026-05-20",
+              "reason": "swing笔底背驰(力度比=56.45%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "300644",
+          "name": "南京聚隆",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 82,
+            "price": 26.75,
+            "date": "2026-04-28",
+            "reason": "swing笔底背驰(力度比=84.25%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 43.5,
+          "sector": "改性塑料",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "fusion",
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 82,
+              "price": 26.75,
+              "date": "2026-04-28",
+              "reason": "swing笔底背驰(力度比=84.25%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价"
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        }
+      ],
+      "sector_flow": [
+        {
+          "code": "BK1320",
+          "name": "逆变器",
+          "change_pct": -0.61,
+          "flow": 1816925952.0,
+          "flow_str": "18.17亿"
+        },
+        {
+          "code": "BK1203",
+          "name": "非银金融",
+          "change_pct": -0.07,
+          "flow": 1249623552.0,
+          "flow_str": "12.50亿"
+        },
+        {
+          "code": "BK1366",
+          "name": "证券Ⅲ",
+          "change_pct": 0.54,
+          "flow": 1091267072.0,
+          "flow_str": "10.91亿"
+        },
+        {
+          "code": "BK0473",
+          "name": "证券Ⅱ",
+          "change_pct": 0.54,
+          "flow": 1091267072.0,
+          "flow_str": "10.91亿"
+        },
+        {
+          "code": "BK1287",
+          "name": "工业金属",
+          "change_pct": -0.16,
+          "flow": 1040753664.0,
+          "flow_str": "10.41亿"
+        },
+        {
+          "code": "BK1613",
+          "name": "铝",
+          "change_pct": -0.45,
+          "flow": 678486896.0,
+          "flow_str": "6.78亿"
+        },
+        {
+          "code": "BK1303",
+          "name": "锂电池",
+          "change_pct": -0.35,
+          "flow": 631987712.0,
+          "flow_str": "6.32亿"
+        },
+        {
+          "code": "BK1615",
+          "name": "铜",
+          "change_pct": 0.28,
+          "flow": 570521648.0,
+          "flow_str": "5.71亿"
+        },
+        {
+          "code": "BK1283",
+          "name": "银行",
+          "change_pct": 0.06,
+          "flow": 495118096.0,
+          "flow_str": "4.95亿"
+        },
+        {
+          "code": "BK0475",
+          "name": "银行Ⅱ",
+          "change_pct": 0.06,
+          "flow": 495118096.0,
+          "flow_str": "4.95亿"
+        },
+        {
+          "code": "BK1525",
+          "name": "车身附件及饰件",
+          "change_pct": -1.15,
+          "flow": 438178320.0,
+          "flow_str": "4.38亿"
+        },
+        {
+          "code": "BK1519",
+          "name": "电动乘用车",
+          "change_pct": 1.32,
+          "flow": 414496096.0,
+          "flow_str": "4.14亿"
+        },
+        {
+          "code": "BK1552",
+          "name": "超市",
+          "change_pct": 3.24,
+          "flow": 373333055.0,
+          "flow_str": "3.73亿"
+        },
+        {
+          "code": "BK1532",
+          "name": "金属包装",
+          "change_pct": 0.31,
+          "flow": 330026432.0,
+          "flow_str": "3.30亿"
+        },
+        {
+          "code": "BK1611",
+          "name": "国有大型银行Ⅲ",
+          "change_pct": 0.81,
+          "flow": 313423584.0,
+          "flow_str": "3.13亿"
+        },
+        {
+          "code": "BK1437",
+          "name": "改性塑料",
+          "change_pct": 0.52,
+          "flow": 309518912.0,
+          "flow_str": "3.10亿"
+        },
+        {
+          "code": "BK1380",
+          "name": "水力发电",
+          "change_pct": -0.01,
+          "flow": 302929232.0,
+          "flow_str": "3.03亿"
+        },
+        {
+          "code": "BK1617",
+          "name": "黄金",
+          "change_pct": 2.81,
+          "flow": 286913888.0,
+          "flow_str": "2.87亿"
+        },
+        {
+          "code": "BK1623",
+          "name": "钼",
+          "change_pct": 9.13,
+          "flow": 283305760.0,
+          "flow_str": "2.83亿"
+        },
+        {
+          "code": "BK1625",
+          "name": "钨",
+          "change_pct": 1.94,
+          "flow": 248190432.0,
+          "flow_str": "2.48亿"
+        }
+      ],
+      "sector_outflow": [
+        {
+          "code": "BK1201",
+          "name": "电子",
+          "change_pct": -2.57,
+          "flow": -40668917760.0,
+          "flow_str": "-406.69亿"
+        },
+        {
+          "code": "BK1036",
+          "name": "半导体",
+          "change_pct": -4.2,
+          "flow": -24011395072.0,
+          "flow_str": "-240.11亿"
+        },
+        {
+          "code": "BK1215",
+          "name": "通信",
+          "change_pct": -3.42,
+          "flow": -11605007872.0,
+          "flow_str": "-116.05亿"
+        },
+        {
+          "code": "BK1207",
+          "name": "计算机",
+          "change_pct": -3.01,
+          "flow": -10744527104.0,
+          "flow_str": "-107.45亿"
+        },
+        {
+          "code": "BK0448",
+          "name": "通信设备",
+          "change_pct": -3.68,
+          "flow": -9613292800.0,
+          "flow_str": "-96.13亿"
+        }
+      ],
+      "limit_up_pool": [],
+      "events": [
+        {
+          "title": "5月26日午间涨停分析",
+          "content": "【5月26日午间涨停分析】财联社5月26日电，今日午盘全市场共33股涨停，连板股总数10只，15股封板未遂，封板率为69%（不含ST股、退市股）。焦点股方面，芯片产业链的恒林股份4连板，钽金属概念股新金路3连板，MLCC概念股双星新材3连板，金刚石散热概念股黄河旋风3连板。",
+          "brief": "【5月26日午间涨停分析】财联社5月26日电，今日午盘全市场共33股涨停，连板股总数10只，15股封板未遂，封板率为69%（不含ST股、退市股）。焦点股方面，芯片产业链的恒林股份4连板，钽金属概念股新金路3连板，MLCC概念股双星新材3连板，金刚石散热概念股黄河旋风3连板。",
+          "ctime": 1779767425,
+          "stock_list": [
+            {
+              "rise_range_has_null": 0.0998,
+              "RiseRange": 9.98,
+              "name": "新金路",
+              "StockID": "sz000510",
+              "schema": "cailianshe://stock_detail?stock_id=sz000510",
+              "status": "L",
+              "last": 18.07,
+              "is_stib": false
+            },
+            {
+              "rise_range_has_null": 0.1002,
+              "RiseRange": 10.0199995,
+              "name": "双星新材",
+              "StockID": "sz002585",
+              "schema": "cailianshe://stock_detail?stock_id=sz002585",
+              "status": "L",
+              "last": 10.87,
+              "is_stib": false
+            },
+            {
+              "rise_range_has_null": 0.1001,
+              "RiseRange": 10.01,
+              "name": "恒林股份",
+              "StockID": "sh603661",
+              "schema": "cailianshe://stock_detail?stock_id=sh603661",
+              "status": "L",
+              "last": 39.36,
+              "is_stib": false
+            },
+            {
+              "rise_range_has_null": 0.1001,
+              "RiseRange": 10.01,
+              "name": "黄河旋风",
+              "StockID": "sh600172",
+              "schema": "cailianshe://stock_detail?stock_id=sh600172",
+              "status": "L",
+              "last": 13.3,
+              "is_stib": false
+            }
+          ],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "summary": "分析失败: HTTPSConnectionPool(host='api.deepseek.com', port=443): Read timed out. (read timeout=45)",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true
+          }
+        },
+        {
+          "title": "深圳“十五五”规划纲要：推动国资大型证券公司提升资本实力 打造国际一流投资银行和投资机构",
+          "content": "【深圳“十五五”规划纲要：推动国资大型证券公司提升资本实力 打造国际一流投资银行和投资机构】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，推动法人总部银行增加资本规模，持续优化公司治理，提升综合竞争优势；支持民营银行打造数字化普惠金融服务样板。推动证券、基金、期货机构提升创新能力；支持头部证券公司成为综合型全能型投资银行，推动国资大型证券公司提升资本实力，打造国际一流投资银行和投资机构；推动基金公司做优做强，提升市场份额。支持保险法人机构设立资产管理、产业投资、医疗、健康、养老等专业子公司。支持银行理财公司、财务公司、消费金融公司、信托公司、金融租赁公司高质量发展。鼓励符合条件的制造业企业设立融资租赁公司，围绕飞机、船舶、海洋工程机械等大型设备租赁打造特色融资租赁集群。到2030年，金融业增加值突破7000亿元。",
+          "brief": "【深圳“十五五”规划纲要：推动国资大型证券公司提升资本实力 打造国际一流投资银行和投资机构】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，推动法人总部银行增加资本规模，持续优化公司治理，提升综合竞争优势；支持民营银行打造数字化普惠金融服务样板。推动证券、基金、期货机构提升创新能力；支持头部证券公司成为综合型全能型投资银行，推动国资大型证券公司提升资本实力，打造国际一流投资银行和投资机构；推动基金公司做优做强，提升市场份额。支持保险法人机构设立资产管理、产业投资、医疗、健康、养老等专业子公司。支持银行理财公司、财务公司、消费金融公司、信托公司、金融租赁公司高",
+          "ctime": 1779768962,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "深圳规划推动国资券商做大做强，利好本地券商及金融股",
+            "positive_sectors": [
+              "券商",
+              "银行",
+              "保险"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "国信证券",
+                "code": "002736",
+                "reason": "深圳国资龙头券商，直接受益于资本实力提升政策"
+              },
+              {
+                "name": "招商证券",
+                "code": "600999",
+                "reason": "央企券商总部位于深圳，有望获得资源倾斜"
+              },
+              {
+                "name": "中信证券",
+                "code": "600030",
+                "reason": "行业龙头总部在深圳，受益于打造一流投资银行战略"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "深圳“十五五”规划纲要：到2030年金融业增加值突破7000亿元",
+          "content": "【深圳“十五五”规划纲要：到2030年金融业增加值突破7000亿元】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，推动法人总部银行增加资本规模，持续优化公司治理，提升综合竞争优势；支持民营银行打造数字化普惠金融服务样板。推动证券、基金、期货机构提升创新能力；支持头部证券公司成为综合型全能型投资银行，推动国资大型证券公司提升资本实力，打造国际一流投资银行和投资机构；推动基金公司做优做强，提升市场份额。支持保险法人机构设立资产管理、产业投资、医疗、健康、养老等专业子公司。支持银行理财公司、财务公司、消费金融公司、信托公司、金融租赁公司高质量发展。鼓励符合条件的制造业企业设立融资租赁公司，围绕飞机、船舶、海洋工程机械等大型设备租赁打造特色融资租赁集群。到2030年，金融业增加值突破7000亿元。",
+          "brief": "【深圳“十五五”规划纲要：到2030年金融业增加值突破7000亿元】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，推动法人总部银行增加资本规模，持续优化公司治理，提升综合竞争优势；支持民营银行打造数字化普惠金融服务样板。推动证券、基金、期货机构提升创新能力；支持头部证券公司成为综合型全能型投资银行，推动国资大型证券公司提升资本实力，打造国际一流投资银行和投资机构；推动基金公司做优做强，提升市场份额。支持保险法人机构设立资产管理、产业投资、医疗、健康、养老等专业子公司。",
+          "ctime": 1779768896,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "深圳金融业规划利好本地券商、银行及保险股，提振金融板块预期",
+            "positive_sectors": [
+              "银行",
+              "证券",
+              "保险"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "中信证券",
+                "code": "600030",
+                "reason": "头部券商受益于打造国际一流投行"
+              },
+              {
+                "name": "招商银行",
+                "code": "600036",
+                "reason": "深圳本地龙头银行受政策支持"
+              },
+              {
+                "name": "中国平安",
+                "code": "601318",
+                "reason": "保险龙头将拓展医疗养老专业子公司"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "港股午评：恒生指数涨0.54% 恒生科技指数涨2.29%",
+          "content": "【港股午评：恒生指数涨0.54% 恒生科技指数涨2.29%】财联社5月26日电，港股午间收盘，香港恒生指数涨0.54%，恒生科技指数涨2.29%。芯片股大涨，华虹半导体涨11%，中芯国际涨逾8%。有色金属板块涨幅居前，中国铝业涨逾7%，洛阳钼业、招金矿业涨超5%。",
+          "brief": "【港股午评：恒生指数涨0.54% 恒生科技指数涨2.29%】财联社5月26日电，港股午间收盘，香港恒生指数涨0.54%，恒生科技指数涨2.29%。芯片股大涨，华虹半导体涨11%，中芯国际涨逾8%。有色金属板块涨幅居前，中国铝业涨逾7%，洛阳钼业、招金矿业涨超5%。",
+          "ctime": 1779768075,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "港股芯片及有色大涨，或提振A股半导体与有色板块。",
+            "positive_sectors": [
+              "半导体",
+              "有色金属"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "华虹公司",
+                "code": "688347",
+                "reason": "港股华虹半导体大涨"
+              },
+              {
+                "name": "中芯国际",
+                "code": "688981",
+                "reason": "港股中芯国际大涨"
+              },
+              {
+                "name": "中国铝业",
+                "code": "601600",
+                "reason": "港股中国铝业大涨"
+              },
+              {
+                "name": "洛阳钼业",
+                "code": "603993",
+                "reason": "港股洛阳钼业大涨"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "鲁比奥称美伊协议有望数日内达成",
+          "content": "【鲁比奥称美伊协议有望数日内达成】财联社5月26日电，据法新社最新报道，美国国务卿鲁比奥表示，尽管美军的新一轮空袭为本就脆弱的停火协议蒙上阴影，但美方与伊朗仍有机会达成相关协议。鲁比奥称，“今天各方已在卡塔尔展开磋商，我们将看看能否取得进展。目前各方主要围绕初始协议文本的具体措辞反复商议，整个过程还需要几天时间。”报道称，美军发动空袭之际，伊朗首席谈判代表抵达多哈开启新一轮谈判，试图结束这场持续数月的冲突。 (中国新闻网)",
+          "brief": "【鲁比奥称美伊协议有望数日内达成】财联社5月26日电，据法新社最新报道，美国国务卿鲁比奥表示，尽管美军的新一轮空袭为本就脆弱的停火协议蒙上阴影，但美方与伊朗仍有机会达成相关协议。鲁比奥称，“今天各方已在卡塔尔展开磋商，我们将看看能否取得进展。目前各方主要围绕初始协议文本的具体措辞反复商议，整个过程还需要几天时间。”报道称，美军发动空袭之际，伊朗首席谈判代表抵达多哈开启新一轮谈判，试图结束这场持续数月的冲突。",
+          "ctime": 1779767472,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": false,
+            "summary": "美伊协议进展或致油价回落，利好航空化工，利空石油军工",
+            "positive_sectors": [
+              "航空运输",
+              "化工"
+            ],
+            "negative_sectors": [
+              "石油开采",
+              "军工"
+            ],
+            "positive_stocks": [
+              {
+                "name": "中国国航",
+                "code": "601111",
+                "reason": "油价下降降低航空燃油成本"
+              },
+              {
+                "name": "南方航空",
+                "code": "600029",
+                "reason": "油价下降降低航空燃油成本"
+              },
+              {
+                "name": "恒力石化",
+                "code": "600346",
+                "reason": "原油成本下降利好炼化利润"
+              }
+            ],
+            "negative_stocks": [
+              {
+                "name": "中国石油",
+                "code": "601857",
+                "reason": "油价下跌直接影响开采利润"
+              },
+              {
+                "name": "中航沈飞",
+                "code": "600760",
+                "reason": "地缘风险缓和削弱军工需求预期"
+              }
+            ]
+          }
+        },
+        {
+          "title": "深圳“十五五”规划纲要：实施企业并购重组行动 加大对企业上市融资、并购重组、债券发行等支持",
+          "content": "【深圳“十五五”规划纲要：实施企业并购重组行动 加大对企业上市融资、并购重组、债券发行等支持】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，积极发展“大胆资本”“耐心资本”，集聚国际资本，壮大产业资本，投向产业发展和科技创新重点领域。加大力度引进国家级母基金、发展市场化母基金，推动金融资产管理公司、保险公司、产业资本等在深设立创投基金。高水平推进知识产权金融生态综合试点，支持深交所科技成果与知识产权交易中心打造连接技术市场与资本市场的全国性综合服务平台。综合运用信贷、租赁、保险等多元金融工具，加强对新技术新业态新产品金融支持。实施企业并购重组行动，加大对企业上市融资、并购重组、债券发行等支持。“十五五”时期，科技贷款、制造业中长期贷款增速高于全口径贷款增速。",
+          "brief": "【深圳“十五五”规划纲要：实施企业并购重组行动 加大对企业上市融资、并购重组、债券发行等支持】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，积极发展“大胆资本”“耐心资本”，集聚国际资本，壮大产业资本，投向产业发展和科技创新重点领域。加大力度引进国家级母基金、发展市场化母基金，推动金融资产管理公司、保险公司、产业资本等在深设立创投基金。高水平推进知识产权金融生态综合试点，支持深交所科技成果与知识产权交易中心打造连接技术市场与资本市场的全国性综合服务平台。综合运用信贷、租赁、保险等多元金融工具，加强对新技术新业态新产品金融支持。",
+          "ctime": 1779768978,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "深圳规划大力支持并购重组与上市融资，利好深圳本地创投、券商及创投概念股。",
+            "positive_sectors": [
+              "创投",
+              "券商",
+              "深圳本地股"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "力合科创",
+                "code": "002243",
+                "reason": "深圳本地创投孵化龙头，直接受益于并购重组和创投支持政策"
+              },
+              {
+                "name": "深赛格",
+                "code": "000058",
+                "reason": "深圳本地园区及创投业务，受益企业发展和资本运作"
+              },
+              {
+                "name": "招商证券",
+                "code": "600999",
+                "reason": "深圳本地头部券商，并购重组和上市融资支持将增加投行业务"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "深圳“十五五”规划纲要：前瞻布局6G、量子科技、脑机接口等未来产业",
+          "content": "【深圳“十五五”规划纲要：前瞻布局6G、量子科技、脑机接口等未来产业】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，前瞻布局第六代移动通信（6G）、生物制造、未来能源、量子科技、脑机接口、细胞与基因等未来产业，建立健全投入增长和风险分担机制，构建创新策源、转化孵化、应用牵引、生态营造的未来产业培育全链条。引育一批战略科学家，加强未来产业识别和动态调整。创新未来产业管理服务模式，建立未来产业知识产权审查绿色通道，对符合产业发展导向的新技术、新产品、新模式，分类制定准入、监管规则和标准。",
+          "brief": "【深圳“十五五”规划纲要：前瞻布局6G、量子科技、脑机接口等未来产业】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，前瞻布局第六代移动通信（6G）、生物制造、未来能源、量子科技、脑机接口、细胞与基因等未来产业，建立健全投入增长和风险分担机制，构建创新策源、转化孵化、应用牵引、生态营造的未来产业培育全链条。引育一批战略科学家，加强未来产业识别和动态调整。创新未来产业管理服务模式，建立未来产业知识产权审查绿色通道，对符合产业发展导向的新技术、新产品、新模式，分类制定准入、监管规则和标准。",
+          "ctime": 1779768923,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "深圳十五五布局未来产业，利好6G、量子科技、脑机接口等概念",
+            "positive_sectors": [
+              "通信设备",
+              "计算机应用",
+              "生物医药"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "中兴通讯",
+                "code": "000063",
+                "reason": "6G技术研发领先，深圳本地通信龙头"
+              },
+              {
+                "name": "国盾量子",
+                "code": "688027",
+                "reason": "量子通信核心设备商，直接受益政策推动"
+              },
+              {
+                "name": "创新医疗",
+                "code": "002173",
+                "reason": "布局脑机接口医疗应用，概念纯正"
+              },
+              {
+                "name": "华大基因",
+                "code": "300676",
+                "reason": "基因测序龙头，符合细胞与基因产业方向"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "韩称朝鲜向半岛西部海域发射不明飞行物 朝方暂无回应",
+          "content": "【韩称朝鲜向半岛西部海域发射不明飞行物 朝方暂无回应】财联社5月26日电，据韩国联合参谋本部当地时间5月26日消息，朝鲜向半岛西部海域发射不明飞行物。目前，朝鲜官方暂未就此发布消息。 (央视新闻)",
+          "brief": "【韩称朝鲜向半岛西部海域发射不明飞行物 朝方暂无回应】财联社5月26日电，据韩国联合参谋本部当地时间5月26日消息，朝鲜向半岛西部海域发射不明飞行物。目前，朝鲜官方暂未就此发布消息。",
+          "ctime": 1779768849,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "朝鲜发射不明飞行物加剧地缘紧张，避险情绪利好军工黄金，利空航空旅游",
+            "positive_sectors": [
+              "军工",
+              "贵金属"
+            ],
+            "negative_sectors": [
+              "民航机场"
+            ],
+            "positive_stocks": [
+              {
+                "name": "中航沈飞",
+                "code": "600760",
+                "reason": "地缘紧张刺激军工需求"
+              },
+              {
+                "name": "山东黄金",
+                "code": "600547",
+                "reason": "避险情绪推升金价"
+              }
+            ],
+            "negative_stocks": [
+              {
+                "name": "中国国航",
+                "code": "601111",
+                "reason": "地缘风险影响航线安全与成本"
+              },
+              {
+                "name": "南方航空",
+                "code": "600029",
+                "reason": "区域紧张可能干扰航空运营"
+              }
+            ]
+          }
+        },
+        {
+          "title": "深圳“十五五”规划纲要：支持深圳证券交易所建设世界一流交易所 深化创业板改革",
+          "content": "【深圳“十五五”规划纲要：支持深圳证券交易所建设世界一流交易所 深化创业板改革】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，支持深圳证券交易所建设世界一流交易所，深化创业板改革。健全科技创新债券融资审核“绿色通道”机制，优化科技创新债券做市交易制度，推动科技创新债券、民营公司债券存续规模快速增长。支持前海股权交易中心打造高水平上市培育基地，推动创新型和“专精特新”中小企业纳入专板培育，畅通前海股权交易中心转新三板挂牌“绿色通道”机制。支持前海联合交易中心完善期现货联动业务。到2030年，前海股权交易中心“专精特新”专板入板企业数量达5000家。",
+          "brief": "【深圳“十五五”规划纲要：支持深圳证券交易所建设世界一流交易所 深化创业板改革】财联社5月26日电，《深圳市国民经济和社会发展第十五个五年规划纲要》发布，其中提出，支持深圳证券交易所建设世界一流交易所，深化创业板改革。健全科技创新债券融资审核“绿色通道”机制，优化科技创新债券做市交易制度，推动科技创新债券、民营公司债券存续规模快速增长。支持前海股权交易中心打造高水平上市培育基地，推动创新型和“专精特新”中小企业纳入专板培育，畅通前海股权交易中心转新三板挂牌“绿色通道”机制。支持前海联合交易中心完善期现货联动业务。到2030年，前海股权交易中心“专精特新”专板入板企业数量达5000家。",
+          "ctime": 1779768840,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "summary": "分析失败: Expecting value: line 1 column 1 (char 0)",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true
+          }
+        },
+        {
+          "title": "中广核云南保山隆阳区540兆瓦光伏项目群全面开工建设 总投资超18.7亿元",
+          "content": "【中广核云南保山隆阳区540兆瓦光伏项目群全面开工建设 总投资超18.7亿元】财联社5月26日电，据云南省能源局官微消息，近日，中广核云南保山隆阳区540兆瓦光伏项目群全面开工建设，总投资超18.7亿元。据测算，项目建成投运后，预计年平均上网电量超过7.2亿千瓦时。",
+          "brief": "【中广核云南保山隆阳区540兆瓦光伏项目群全面开工建设 总投资超18.7亿元】财联社5月26日电，据云南省能源局官微消息，近日，中广核云南保山隆阳区540兆瓦光伏项目群全面开工建设，总投资超18.7亿元。据测算，项目建成投运后，预计年平均上网电量超过7.2亿千瓦时。",
+          "ctime": 1779768614,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "大型光伏项目开工利好光伏产业链及设备商",
+            "positive_sectors": [
+              "光伏",
+              "电力设备"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "阳光电源",
+                "code": "300274",
+                "reason": "逆变器龙头受益光伏电站建设"
+              },
+              {
+                "name": "隆基绿能",
+                "code": "601012",
+                "reason": "组件龙头有望获得订单"
+              }
+            ],
+            "negative_stocks": []
+          }
+        }
+      ],
+      "forecast": {
+        "core_judgment": "大盘缩量调整，金融护盘但个股普跌，缠论无中枢需警惕下跌中继风险。",
+        "volume_note": "今日量能较近5日均量萎缩32.9%，上涨需补量，否则易冲高回落。",
+        "short_term": [
+          "若明日上证放量站上4130点，则有望形成日线底分型，短期企稳；否则将下探4080点支撑。",
+          "证券板块若持续放量并带动非银金融，可视为指数风向标，关注证券指数能否站稳1600点。",
+          "深圳国资券商及本地股受规划利好或反复活跃，但大盘缩量下板块轮动快，追高需谨慎。"
+        ],
+        "mid_term": "上证大概率在4000-4200点区间构建日线中枢，深圳‘十五五’规划对金融、科技构成中期利好，若后续量能回升至均量以上，有望向上突破中枢；否则将延长震荡时间。",
+        "risks": [
+          "缩量环境下热点持续性差，板块一日游风险高。",
+          "朝鲜半岛局势升级可能引发避险情绪，冲击科技成长板块。",
+          "美伊协议若达成将压制能源板块，导致指数进一步承压。"
+        ]
+      },
+      "sell_signals": [],
+      "diagnostics": {
+        "daily_scan": {
+          "total": 55,
+          "base_pass": 42,
+          "with_buy_points": 22,
+          "formal_count": 0,
+          "upgradeable_count": 0,
+          "swing_seed_count": 15,
+          "reference_only_count": 7,
+          "blocked_only_count": 0,
+          "buy_point_type_counts": {
+            "swing底背驰参考": 22
+          },
+          "structure_pool_reasons": {
+            "formal": 0,
+            "upgradeable_reference": 0,
+            "swing_position_seed": 15
+          },
+          "excluded_reference_type_counts": {
+            "swing底背驰参考": 7
+          }
+        },
+        "sublevel_upgrade_pure": {
+          "requested_30min": 15,
+          "fetched_30min": 15,
+          "formal_kept": 0,
+          "candidate_upgraded": 3,
+          "dropped_no_confirm": 12,
+          "dropped_no_30min": 0,
+          "dropped_risk_guard": 3
+        },
+        "sublevel_upgrade_fusion": {
+          "requested_30min": 15,
+          "fetched_30min": 15,
+          "formal_kept": 0,
+          "candidate_upgraded": 3,
+          "dropped_no_confirm": 12,
+          "dropped_no_30min": 0,
+          "dropped_risk_guard": 3
+        },
+        "kline_cache": {
+          "day_hit": 62,
+          "day_miss": 0,
+          "day_write": 62,
+          "30min_hit": 0,
+          "30min_miss": 15,
+          "30min_write": 15,
+          "pruned_records": 114
+        }
+      }
+    },
+    "2026-05-25": {
+      "market": {
+        "上证指数": {
+          "close": 4152.57,
+          "change_pct": 0.96
+        },
+        "深证成指": {
+          "close": 15856.61,
+          "change_pct": 1.66
+        },
+        "创业板指": {
+          "close": 4021.16,
+          "change_pct": 2.1
+        },
+        "科创50": {
+          "close": 1896.04,
+          "change_pct": 5.88
+        },
+        "沪深300": {
+          "close": 4921.6,
+          "change_pct": 1.58
+        },
+        "中证500": {
+          "close": 8703.89,
+          "change_pct": 1.48
+        }
+      },
+      "chanlun_structure": {
+        "daily_pivot": null,
+        "trend_type": "无中枢",
+        "key_signal": "未出现明显背驰信号",
+        "conclusion": "无中枢"
+      },
+      "picks_pure": [],
+      "picks_fusion": [],
+      "sector_flow": [
+        {
+          "code": "BK1201",
+          "name": "电子",
+          "change_pct": 2.99,
+          "flow": 25458184192.0,
+          "flow_str": "254.58亿"
+        },
+        {
+          "code": "BK1036",
+          "name": "半导体",
+          "change_pct": 4.69,
+          "flow": 19725406208.0,
+          "flow_str": "197.25亿"
+        },
+        {
+          "code": "BK1331",
+          "name": "数字芯片设计",
+          "change_pct": 3.39,
+          "flow": 6341264384.0,
+          "flow_str": "63.41亿"
+        }
+      ],
+      "sector_outflow": [
+        {
+          "code": "BK1200",
+          "name": "电力设备",
+          "change_pct": -0.81,
+          "flow": -14991958784.0,
+          "flow_str": "-149.92亿"
+        },
+        {
+          "code": "BK1033",
+          "name": "电池",
+          "change_pct": -2.54,
+          "flow": -11476644864.0,
+          "flow_str": "-114.77亿"
+        },
+        {
+          "code": "BK1302",
+          "name": "电池化学品",
+          "change_pct": -3.16,
+          "flow": -6423828480.0,
+          "flow_str": "-64.24亿"
+        },
+        {
+          "code": "BK0478",
+          "name": "有色金属",
+          "change_pct": 0.5,
+          "flow": -5634422528.0,
+          "flow_str": "-56.34亿"
+        },
+        {
+          "code": "BK1206",
+          "name": "基础化工",
+          "change_pct": -0.78,
+          "flow": -5262761728.0,
+          "flow_str": "-52.63亿"
+        }
+      ],
+      "limit_up_pool": [],
+      "events": [
+        {
+          "title": "龙磁科技：研发的芯片电感产品产能正在建设 处于客户端验证及小批量出货阶段",
+          "content": "【龙磁科技：研发的芯片电感产品产能正在建设 处于客户端验证及小批量出货阶段】财联社5月25日电，龙磁科技(300835)发布股票交易异常波动公告，目前公司研发的芯片电感产品产能正在建设，处于客户端验证及小批量出货阶段，当前该产品尚未形成稳定营收贡献，业务合作及订单交付进度存在不确定性，存在未来业务推进不及预期的风险。",
+          "brief": "【龙磁科技：研发的芯片电感产品产能正在建设 处于客户端验证及小批量出货阶段】财联社5月25日电，龙磁科技(300835)发布股票交易异常波动公告，目前公司研发的芯片电感产品产能正在建设，处于客户端验证及小批量出货阶段，当前该产品尚未形成稳定营收贡献，业务合作及订单交付进度存在不确定性，存在未来业务推进不及预期的风险。",
+          "ctime": 1779700839,
+          "stock_list": [
+            {
+              "rise_range_has_null": 0.2,
+              "RiseRange": 20,
+              "name": "龙磁科技",
+              "StockID": "sz300835",
+              "schema": "cailianshe://stock_detail?stock_id=sz300835",
+              "status": "L",
+              "last": 170.2,
+              "is_stib": false
+            }
+          ],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": true,
+            "summary": "对A股无明显影响",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "热景生物：子公司创新药SGC001注射液新增适应症临床试验申请获受理",
+          "content": "【热景生物：子公司创新药SGC001注射液新增适应症临床试验申请获受理】《科创板日报》25日讯，热景生物(688068.SH)公告称，公司控股子公司舜景医药自主研发的创新药SGC001注射液新增预期重症急性胰腺炎适应症临床试验申请，已获国家药监局《受理通知书》。该药此前已获FDA和CDE临床批准，用于急性心肌梗死急救治疗，并已启动Ⅱ期临床试验。本次新增适应症申请受理，标志着该候选药物进入多适应症临床开发新阶段。",
+          "brief": "【热景生物：子公司创新药SGC001注射液新增适应症临床试验申请获受理】财联社5月25日电，热景生物(688068.SH)公告称，公司控股子公司舜景医药自主研发的创新药SGC001注射液新增预期重症急性胰腺炎适应症临床试验申请，已获国家药监局《受理通知书》。该药此前已获FDA和CDE临床批准，用于急性心肌梗死急救治疗，并已启动Ⅱ期临床试验。本次新增适应症申请受理，标志着该候选药物进入多适应症临床开发新阶段。",
+          "ctime": 1779702329,
+          "stock_list": [
+            {
+              "rise_range_has_null": 0.0272,
+              "RiseRange": 2.72,
+              "name": "热景生物",
+              "StockID": "sh688068",
+              "schema": "cailianshe://stock_detail?stock_id=sh688068",
+              "status": "L",
+              "last": 86.8,
+              "is_stib": true
+            }
+          ],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "热景生物创新药新增适应症获受理，利好公司及创新药板块",
+            "positive_sectors": [
+              "医药生物",
+              "创新药"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "热景生物",
+                "code": "688068",
+                "reason": "子公司创新药新增适应症获受理，管线价值提升"
+              },
+              {
+                "name": "恒瑞医药",
+                "code": "600276",
+                "reason": "创新药龙头，板块情绪提振"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "湖南黄金：新龙矿业本部恢复生产",
+          "content": "【湖南黄金：新龙矿业本部恢复生产】财联社5月25日电，湖南黄金(002155.SZ)公告称，公司子公司新龙矿业本部于2026年5月26日起恢复生产。此前因4月25日发生顶板冒落事故导致一名员工死亡，新龙矿业本部主动停产整顿。经初步测算，本次停产预计减少公司当期净利润约4000万元。新龙矿业已通过安全培训、隐患排查等措施降低影响。",
+          "brief": "【湖南黄金：新龙矿业本部恢复生产】财联社5月25日电，湖南黄金(002155.SZ)公告称，公司子公司新龙矿业本部于2026年5月26日起恢复生产。此前因4月25日发生顶板冒落事故导致一名员工死亡，新龙矿业本部主动停产整顿。经初步测算，本次停产预计减少公司当期净利润约4000万元。新龙矿业已通过安全培训、隐患排查等措施降低影响。",
+          "ctime": 1779701450,
+          "stock_list": [
+            {
+              "rise_range_has_null": 0.0111,
+              "RiseRange": 1.11,
+              "name": "湖南黄金",
+              "StockID": "sz002155",
+              "schema": "cailianshe://stock_detail?stock_id=sz002155",
+              "status": "L",
+              "last": 25.47,
+              "is_stib": false
+            }
+          ],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "湖南黄金子公司复产，停产影响消除",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "湖南黄金",
+                "code": "002155",
+                "reason": "子公司复产，利空出尽"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "*ST万方：股票终止上市并将于15个交易日内摘牌",
+          "content": "【*ST万方：股票终止上市并将于15个交易日内摘牌】财联社5月25日电，*ST万方(000638.SZ)公告称，公司收到深交所《关于万方城镇投资发展股份有限公司股票终止上市的决定》，因连续二十个交易日股票收盘总市值均低于5亿元，触及终止上市情形。公司股票不进入退市整理期，将在十五个交易日内摘牌，并转入全国中小企业股份转让系统挂牌转让。",
+          "brief": "【*ST万方：股票终止上市并将于15个交易日内摘牌】财联社5月25日电，*ST万方(000638.SZ)公告称，公司收到深交所《关于万方城镇投资发展股份有限公司股票终止上市的决定》，因连续二十个交易日股票收盘总市值均低于5亿元，触及终止上市情形。公司股票不进入退市整理期，将在十五个交易日内摘牌，并转入全国中小企业股份转让系统挂牌转让。",
+          "ctime": 1779701175,
+          "stock_list": [
+            {
+              "rise_range_has_null": 0,
+              "RiseRange": 0,
+              "name": "*ST万方",
+              "StockID": "sz000638",
+              "schema": "cailianshe://stock_detail?stock_id=sz000638",
+              "status": "S",
+              "last": 0.89,
+              "is_stib": false
+            }
+          ],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "*ST万方退市摘牌，加剧ST板块和微盘股恐慌情绪",
+            "positive_sectors": [],
+            "negative_sectors": [
+              "ST板块",
+              "微盘股"
+            ],
+            "positive_stocks": [],
+            "negative_stocks": [
+              {
+                "name": "*ST万方",
+                "code": "000638",
+                "reason": "股票终止上市，投资者面临损失"
+              },
+              {
+                "name": "*ST美尚",
+                "code": "300495",
+                "reason": "同为深市退市风险股，可能引发连锁担忧"
+              }
+            ]
+          }
+        },
+        {
+          "title": "消息称三星电子完成900层超高堆叠3D NAND闪存原型开发",
+          "content": "【消息称三星电子完成900层超高堆叠3D NAND闪存原型开发】《科创板日报》25日讯，三星电子近期利用单元多层键合 (CMB) 技术连接两片450层3D NAND，构建了全球首个900层超高堆叠3D NAND闪存原型，这一样品的存储单元工作特性已得到验证。 (ETNews)",
+          "brief": "【消息称三星电子完成900层超高堆叠3D NAND闪存原型开发】《科创板日报》25日讯，三星电子近期利用单元多层键合 (CMB) 技术连接两片450层3D NAND，构建了全球首个900层超高堆叠3D NAND闪存原型，这一样品的存储单元工作特性已得到验证。",
+          "ctime": 1779701305,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "三星NAND技术突破或扰动存储竞争格局，设备材料环节受益",
+            "positive_sectors": [
+              "半导体设备",
+              "先进封装"
+            ],
+            "negative_sectors": [
+              "存储芯片"
+            ],
+            "positive_stocks": [
+              {
+                "name": "中微公司",
+                "code": "688012",
+                "reason": "超高堆叠NAND增加刻蚀设备需求"
+              },
+              {
+                "name": "北方华创",
+                "code": "002371",
+                "reason": "超高堆叠NAND增加薄膜沉积设备需求"
+              }
+            ],
+            "negative_stocks": [
+              {
+                "name": "兆易创新",
+                "code": "603986",
+                "reason": "NAND市场竞争加剧，技术领先优势受挑战"
+              }
+            ]
+          }
+        },
+        {
+          "title": "安徽：支持科技创新 着力投早、投小、投长期、投硬科技 不断提升安徽创新效能",
+          "content": "【安徽：支持科技创新 着力投早、投小、投长期、投硬科技 不断提升安徽创新效能】财联社5月25日电，安徽印发《安徽省政府投资基金管理办法》。政府投资基金突出政府引导和政策性定位，遵循市场化、法治化、专业化原则规范运作；按投资方向，主要分为产业投资类基金和创业投资类基金。（一）产业投资类基金。主要围绕构建具有安徽特色的现代化产业体系，支持传统产业优化提升、新兴产业发展壮大、未来产业前瞻布局，加快建设具有国际竞争力的先进制造业集群。（二）创业投资类基金。主要围绕催生新质生产力，支持科技创新，着力投早、投小、投长期、投硬科技，不断提升安徽创新效能。",
+          "brief": "【安徽：支持科技创新 着力投早、投小、投长期、投硬科技 不断提升安徽创新效能】财联社5月25日电，安徽印发《安徽省政府投资基金管理办法》。政府投资基金突出政府引导和政策性定位，遵循市场化、法治化、专业化原则规范运作；按投资方向，主要分为产业投资类基金和创业投资类基金。（一）产业投资类基金。主要围绕构建具有安徽特色的现代化产业体系，支持传统产业优化提升、新兴产业发展壮大、未来产业前瞻布局，加快建设具有国际竞争力的先进制造业集群。（二）创业投资类基金。主要围绕催生新质生产力，支持科技创新，着力投早、投小、投长期、投硬科技，不断提升安徽创新效能。",
+          "ctime": 1779701897,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact": {
+            "no_impact": false,
+            "summary": "安徽加强创投引导支持硬科技，利好本地科创企业及创投概念",
+            "positive_sectors": [
+              "半导体",
+              "人工智能",
+              "创业投资"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "国盾量子",
+                "code": "688027",
+                "reason": "安徽量子科技龙头，政策支持硬科技早期投资"
+              },
+              {
+                "name": "科大讯飞",
+                "code": "002230",
+                "reason": "安徽AI领军，受益于创投基金对科技企业扶持"
+              },
+              {
+                "name": "芯碁微装",
+                "code": "688630",
+                "reason": "安徽半导体设备企业，符合投硬科技导向"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "Epic首次曝光虚幻6引擎 首款游戏正式确定",
+          "content": "【Epic首次曝光虚幻6引擎 首款游戏正式确定】财联社5月25日电，游戏开发商Psyonix与其母公司Epic Games共同宣布了一项震撼业界的重磅消息：旗下风靡全球的免费载具足球竞技游戏《火箭联盟》将成为全球首款确认使用全新“虚幻6”（Unreal Engine 6，简称UE6）打造的游戏。不过，两家公司在现场并未透露关于这次游戏更新或新引擎技术细节的更多情报。",
+          "brief": "【Epic首次曝光虚幻6引擎 首款游戏正式确定】财联社5月25日电，游戏开发商Psyonix与其母公司Epic Games共同宣布了一项震撼业界的重磅消息：旗下风靡全球的免费载具足球竞技游戏《火箭联盟》将成为全球首款确认使用全新“虚幻6”（Unreal Engine 6，简称UE6）打造的游戏。不过，两家公司在现场并未透露关于这次游戏更新或新引擎技术细节的更多情报。",
+          "ctime": 1779702911,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": false,
+            "summary": "虚幻6引擎曝光利好游戏开发，游戏与VR板块或受关注",
+            "positive_sectors": [
+              "游戏",
+              "虚拟现实"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "完美世界",
+                "code": "002624",
+                "reason": "与Epic合作紧密，多款游戏采用虚幻引擎"
+              },
+              {
+                "name": "三七互娱",
+                "code": "002555",
+                "reason": "头部游戏厂商，引擎升级提升产品竞争力"
+              }
+            ],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "",
+          "content": "财联社5月25日电，现货钯金上涨近3%至每盎司1,388.58美元。",
+          "brief": "财联社5月25日电，现货钯金上涨近3%至每盎司1,388.58美元。",
+          "ctime": 1779702871,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": true,
+            "summary": "对A股无明显影响",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "",
+          "content": "财联社5月25日电，标普维持以色列电气公司的评级为‘BBB+’；展望为稳定。",
+          "brief": "财联社5月25日电，标普维持以色列电气公司的评级为‘BBB+’；展望为稳定。",
+          "ctime": 1779702854,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": true,
+            "summary": "对A股无明显影响",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": []
+          }
+        },
+        {
+          "title": "伊朗总统说不会屈服于外部压力和“过分要求”",
+          "content": "【伊朗总统说不会屈服于外部压力和“过分要求”】财联社5月25日电，伊朗总统佩泽希齐扬25日表示，伊朗不会屈服于外部压力和“过分要求”，伊朗人民的权利必须得到“完全维护”。佩泽希齐扬当天与伊朗工商、矿业和农业商会成员举行的专题会议上表示，当“敌方”未能在军事领域实现目标后，其重点已转向对伊朗发动经济战。伊朗当前正在推进对外谈判和外交互动，旨在确保伊朗人民的合法权益得到充分保障。 (新华社)",
+          "brief": "【伊朗总统说不会屈服于外部压力和“过分要求”】财联社5月25日电，伊朗总统佩泽希齐扬25日表示，伊朗不会屈服于外部压力和“过分要求”，伊朗人民的权利必须得到“完全维护”。佩泽希齐扬当天与伊朗工商、矿业和农业商会成员举行的专题会议上表示，当“敌方”未能在军事领域实现目标后，其重点已转向对伊朗发动经济战。伊朗当前正在推进对外谈判和外交互动，旨在确保伊朗人民的合法权益得到充分保障。",
+          "ctime": 1779702162,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 1,
+          "impact": {
+            "no_impact": true,
+            "summary": "对A股无明显影响",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": []
+          }
+        }
+      ],
+      "forecast": {
+        "core_judgment": "大盘呈无中枢上涨，量能平稳但不足，资金聚焦科技，结构性行情延续，关注4200阻力。",
+        "volume_note": "量能较5日均量缩减3.3%，上涨缺乏有效放量配合，存在量价背离隐忧。",
+        "short_term": [
+          "若上证指数放量站上4200点，则上涨趋势加速，可视为三买信号，追涨需谨慎。",
+          "若缩量回踩4100点附近企稳，可能进入中枢构建，形成二买机会，可逢低布局。",
+          "科创50领涨且资金持续流入半导体，若其继续强于主板，则科技结构性行情延续，否则提防冲高回落。",
+          "当板块资金集中度下降或半导体资金流出时，短期调整风险加大，宜减仓应对。"
+        ],
+        "mid_term": "当前无中枢，大概率在4050-4200区间震荡构建日线中枢，关键支撑观察4000点。若中枢完成后能向上离开，中期目标看4300以上；若失守4000点，则可能转为下跌趋势。",
+        "risks": [
+          "量价背离下若无法补量，突破可能为假突破，诱发急跌。",
+          "半导体、电子等热点板块短期涨幅大，获利盘涌出可能引发强势股回调。",
+          "*ST万方退市冲击ST板块及微盘股，情绪传导可能拖累小盘股整体表现。"
+        ]
+      },
+      "sell_signals": []
     }
   }
 }

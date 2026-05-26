@@ -19,6 +19,19 @@ import requests
 
 from config import (
     DAY_LOOKBACK, MIN30_LOOKBACK_DAYS, TOP_SECTOR_COUNT,
+    KLINE_CACHE_FORCE_REFRESH,
+    DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
+    MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
+    DAY_KLINE_INCREMENTAL_FETCH_COUNT,
+    MIN30_KLINE_INCREMENTAL_FETCH_COUNT,
+)
+from .kline_cache import (
+    cached_kline_if_sufficient,
+    read_cached_records,
+    write_cached_records,
+    merge_kline_records,
+    kline_dict_to_records,
+    CACHE_STATS,
 )
 
 # ------------------------------------------------------------
@@ -165,7 +178,10 @@ def fetch_sector_stocks(sector_code):
         try:
             resp = SESSION.get(url, params=params, timeout=15)
             data = resp.json()
-            items = data.get("data", {}).get("diff", [])
+            stock_data = data.get("data")
+            if not stock_data:
+                break
+            items = stock_data.get("diff", [])
             if not items:
                 break
             for it in items:
@@ -182,6 +198,17 @@ def fetch_sector_stocks(sector_code):
             print(f"[ERROR] 获取板块 {sector_code} 成分股失败: {e}")
             break
     return all_stocks
+
+
+# ============================================================
+# K线缓存强制刷新开关
+# ============================================================
+_FORCE_REFRESH_CACHE = False
+
+
+def set_force_refresh_cache(value):
+    global _FORCE_REFRESH_CACHE
+    _FORCE_REFRESH_CACHE = bool(value)
 
 
 # ============================================================
@@ -212,7 +239,7 @@ def _parse_tencent_kline(raw_lines):
     }
 
 
-def fetch_daily_kline(code, count=DAY_LOOKBACK):
+def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
     """
     获取日线K线（前复权）。腾讯 API。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
@@ -233,6 +260,46 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK):
         return None
 
 
+def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
+    """Fetch daily kline with incremental cache support."""
+    force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    cached_records = read_cached_records("day", code)
+    cached_enough = len(cached_records) >= count
+
+    if force:
+        remote_count = count
+    elif cached_enough:
+        remote_count = DAY_KLINE_INCREMENTAL_FETCH_COUNT
+    else:
+        remote_count = count
+
+    remote = _fetch_daily_kline_remote(code, count=remote_count)
+    CACHE_STATS["day_miss" if remote is None else "day_hit"] += 0  # placeholder
+
+    if remote:
+        merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
+        write_cached_records(
+            "day", code, merged,
+            source="tencent",
+            keep_trading_days=DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
+        )
+        CACHE_STATS["day_write"] += 1
+        cached = cached_kline_if_sufficient("day", code, count)
+        if cached is not None:
+            CACHE_STATS["day_hit"] += 1
+            return cached
+        CACHE_STATS["day_miss"] += 1
+        return remote
+
+    cached = cached_kline_if_sufficient("day", code, count)
+    if cached is not None:
+        CACHE_STATS["day_hit"] += 1
+        print(f"  [CACHE FALLBACK] day {code} remote failed, using cache")
+        return cached
+    CACHE_STATS["day_miss"] += 1
+    return None
+
+
 def fetch_shanghai_index():
     """获取上证指数日线"""
     return fetch_daily_kline("000001", count=DAY_LOOKBACK)
@@ -241,7 +308,7 @@ def fetch_shanghai_index():
 # ============================================================
 # 30分钟 K 线 — 新浪
 # ============================================================
-def fetch_30min_kline(code, count=80):
+def _fetch_30min_kline_remote(code, count=80):
     """
     获取30分钟K线。新浪 API（最大约100根）。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
@@ -276,6 +343,45 @@ def fetch_30min_kline(code, count=80):
     except Exception as e:
         print(f"[ERROR] 获取30分钟K线失败 {code}: {e}")
         return None
+
+
+def fetch_30min_kline(code, count=80, force_refresh=False):
+    """Fetch 30min kline with incremental cache support."""
+    force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    cached_records = read_cached_records("30min", code)
+    cached_enough = len(cached_records) >= count
+
+    if force:
+        remote_count = count
+    elif cached_enough:
+        remote_count = min(MIN30_KLINE_INCREMENTAL_FETCH_COUNT, count)
+    else:
+        remote_count = count
+
+    remote = _fetch_30min_kline_remote(code, count=remote_count)
+
+    if remote:
+        merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
+        write_cached_records(
+            "30min", code, merged,
+            source="sina",
+            keep_trading_days=MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
+        )
+        CACHE_STATS["30min_write"] += 1
+        cached = cached_kline_if_sufficient("30min", code, count)
+        if cached is not None:
+            CACHE_STATS["30min_hit"] += 1
+            return cached
+        CACHE_STATS["30min_miss"] += 1
+        return remote
+
+    cached = cached_kline_if_sufficient("30min", code, count)
+    if cached is not None:
+        CACHE_STATS["30min_hit"] += 1
+        print(f"  [CACHE FALLBACK] 30min {code} remote failed, using cache")
+        return cached
+    CACHE_STATS["30min_miss"] += 1
+    return None
 
 
 # ============================================================
@@ -542,4 +648,12 @@ def _format_amount(amount):
 
 
 def is_st_stock(name):
-    return "ST" in name.upper() if name else False
+    """Check if stock name indicates ST or delisting risk."""
+    if not name:
+        return False
+    upper = name.upper()
+    if "ST" in upper:
+        return True
+    if "退市" in name or "退" in name:
+        return True
+    return False

@@ -10,6 +10,23 @@ from config import (
     TOP_SECTOR_COUNT,
 )
 
+SIGNAL_TIER_BASE = {
+    "formal": 100,
+    "candidate": 75,
+    "reference": 30,
+    "blocked": 0,
+}
+
+BUY_TYPE_PRIORITY = {
+    "三买": 0,
+    "二买": 1,
+    "一买": 2,
+    "三买候选": 3,
+    "二买候选": 4,
+    "盘整低吸候选": 5,
+    "中枢低吸候选": 6,
+}
+
 
 def score_pure(stock):
     """
@@ -222,7 +239,7 @@ def _score_volume_confirmation(stock):
 def apply_scores(picks, version="pure", sector_rank_map=None):
     """
     为一组 picks 评分并附加 score 字段。
-    返回按评分降序排列的列表。
+    排序: formal > candidate, then type priority, then score.
     """
     score_func = score_pure if version == "pure" else score_fusion
     for pick in picks:
@@ -231,5 +248,13 @@ def apply_scores(picks, version="pure", sector_rank_map=None):
         else:
             pick["score"] = score_func(pick)
 
-    picks.sort(key=lambda x: x.get("score", 0), reverse=True)
+    def _sort_key(p):
+        bp = p.get("best_buy_point", {})
+        tier = bp.get("tier", "reference")
+        tier_order = 0 if tier == "formal" else 1 if tier == "candidate" else 2
+        type_order = BUY_TYPE_PRIORITY.get(bp.get("type", ""), 9)
+        score = p.get("score", 0)
+        return (tier_order, type_order, -score)
+
+    picks.sort(key=_sort_key)
     return picks

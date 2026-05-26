@@ -79,6 +79,7 @@ def _serialize_picks(picks):
         item = {
             "code": p.get("code", ""),
             "name": p.get("name", ""),
+            "signal_tier": p.get("signal_tier", ""),
             "best_buy_point": _adjust_bp_keep(p.get("best_buy_point", {})),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
             "pivots": p.get("pivots", {}),
@@ -103,6 +104,8 @@ def _serialize_picks(picks):
             "macd_hist": _slice(p.get("macd_hist", [])),
             # 买卖点标注（超出图表范围的已过滤）
             "buy_points": [b for b in (_adjust_bp(b) for b in p.get("buy_points", [])) if b is not None],
+            "reference_buy_points": [_serialize_bp(b) for b in p.get("reference_buy_points", [])],
+            "blocked_buy_points": [_serialize_bp(b) for b in p.get("blocked_buy_points", [])],
             # 中枢
             "pivot_zg": p["pivots"].get("ZG") if p.get("pivots") else None,
             "pivot_zd": p["pivots"].get("ZD") if p.get("pivots") else None,
@@ -137,6 +140,7 @@ def _serialize_picks_light(picks):
         item = {
             "code": p.get("code", ""),
             "name": p.get("name", ""),
+            "signal_tier": p.get("signal_tier", ""),
             "best_buy_point": _serialize_bp(p.get("best_buy_point", {})),
             "buy_points_30min": [_serialize_bp(b) for b in p.get("buy_points_30min", [])],
             "pivots": p.get("pivots", {}),
@@ -152,6 +156,8 @@ def _serialize_picks_light(picks):
             "market_trend": p.get("market_trend", ""),
             "version": p.get("version", ""),
             "buy_points": [_serialize_bp(b) for b in p.get("buy_points", [])],
+            "reference_buy_points": [_serialize_bp(b) for b in p.get("reference_buy_points", [])],
+            "blocked_buy_points": [_serialize_bp(b) for b in p.get("blocked_buy_points", [])],
             "pivot_zg": p["pivots"].get("ZG") if p.get("pivots") else None,
             "pivot_zd": p["pivots"].get("ZD") if p.get("pivots") else None,
         }
@@ -164,11 +170,17 @@ def _serialize_bp(bp):
         return {}
     return {
         "type": bp.get("type", ""),
+        "tier": bp.get("tier", ""),
         "index": bp.get("index", 0),
         "price": bp.get("price", 0),
         "date": str(bp.get("date", "")),
         "reason": bp.get("reason", ""),
         "strength": bp.get("strength", ""),
+        "source_type": bp.get("source_type", ""),
+        "confirmed_by": bp.get("confirmed_by", ""),
+        "confirmations": bp.get("confirmations", []),
+        "seed_type": bp.get("seed_type", ""),
+        "seed_reason": bp.get("seed_reason", ""),
     }
 
 
@@ -223,6 +235,7 @@ def generate_report(report_data, output_dir=None):
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
+        "diagnostics": report_data.get("diagnostics", {}),
     }
 
     html = f"""<!DOCTYPE html>
@@ -306,6 +319,7 @@ body {{
 .buy-tag.b2 {{ background: rgba(255,165,0,0.2); color: #ffb347; }}
 .buy-tag.b3 {{ background: rgba(46,213,115,0.2); color: #5effa0; }}
 .buy-tag.b2l {{ background: rgba(0,191,255,0.2); color: #5ebdff; }}
+.buy-tag.candidate {{ background: rgba(255,165,0,0.15); color: #ffb347; border: 1px dashed rgba(255,165,0,0.4); }}
 .sell-tag {{
     display: inline-block; padding: 2px 8px; border-radius: 4px;
     font-size: 12px; font-weight: bold;
@@ -821,13 +835,24 @@ function renderPickTable(ver) {{
 
     if (picks.length === 0) {{
         var colspan = isFusion ? 10 : 8;
-        html += '<tr><td colspan="' + colspan + '" style="text-align:center;color:#888;padding:30px;">' +
-                '今日暂无符合条件的选股结果</td></tr>';
+        var diag = REPORT_DATA.diagnostics || {{}};
+        var ds = diag.daily_scan || {{}};
+        var up = diag['sublevel_upgrade_' + ver] || {{}};
+        var summary = '日线信号 ' + (ds.with_buy_points || 0) + ' 个' +
+            '，其中可进入30min确认 ' + (ds.upgradeable_count || 0) + ' 个' +
+            '，swing位置种子 ' + (ds.swing_seed_count || 0) + ' 个；' +
+            '30min确认通过 ' + (up.candidate_upgraded || 0) + ' 个' +
+            '，风险保护剔除 ' + (up.dropped_risk_guard || 0) + ' 个。';
+        html += '<tr><td colspan="' + colspan + '" style="text-align:center;color:#888;padding:20px;">' +
+                '今日暂无符合条件的选股结果</td></tr>' +
+                '<tr><td colspan="' + colspan + '" style="text-align:center;color:#666;font-size:12px;padding:8px 20px 20px;">' +
+                summary + '</td></tr>';
     }}
 
     picks.forEach(function(p, idx) {{
         var bp = p.best_buy_point || {{}};
         var tagClass = {{'一买':'b1','二买':'b2','三买':'b3','类二买':'b2l'}}[bp.type] || '';
+        if (!tagClass && bp.tier === 'candidate') {{ tagClass = 'candidate'; }}
         var resonance = p.resonance || {{}};
         var score = p.score || 0;
         var barW = Math.max(4, score * 0.6);
@@ -879,6 +904,12 @@ function renderPickTable(ver) {{
                 '<td colspan="' + (isFusion ? 10 : 8) + '">' +
                 '<div class="chart-container" id="chart_' + ver + '_' + idx + '"></div>' +
                 '<div class="detail-section">' +
+                (bp.type === '底背驰候选' ? '<strong>来源：</strong>' + (bp.source_type || '-') +
+                 ' ｜ <strong>日线种子原因：</strong>' + (bp.seed_reason || '-') + '<br>' +
+                 '<strong>30min确认：</strong>' + (bp.confirmed_by || '-') +
+                 ' ｜ <strong>强度：</strong>' + (bp.strength || '-') + '<br>' : '') +
+                (bp.tier === 'candidate' && bp.type !== '底背驰候选' ? '<strong>来源信号：</strong>' + (bp.source_type || '-') +
+                 ' ｜ <strong>30min确认：</strong>' + (bp.confirmed_by || '-') + '<br>' : '') +
                 '<strong>买点理由：</strong>' + (bp.reason || '-') + '<br>' +
                 '<strong>走势类型：</strong>' + (p.trend_type || '-') + ' ｜ ' +
                 '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) +
@@ -1195,6 +1226,7 @@ def update_data_json(report_data, output_dir=None):
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
+        "diagnostics": report_data.get("diagnostics", {}),
     }
     existing["reports"][date_str] = day_entry
 
