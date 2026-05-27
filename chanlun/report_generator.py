@@ -1627,34 +1627,13 @@ function renderChart(idx, ver) {{
         }}
     ];
 
-    function formatTooltip(params) {{
-        var p = Array.isArray(params) ? params[0] : params;
-        if (!p) return '';
-        var name = p.name || '';
-        var series = p.seriesName || '';
-        var val = p.value;
-        if (p.seriesType === 'candlestick' && Array.isArray(val)) {{
-            return '<strong>' + series + '</strong><br>' +
-                name + '<br>' +
-                '开: ' + val[0] + '<br>' +
-                '收: ' + val[1] + '<br>' +
-                '低: ' + val[2] + '<br>' +
-                '高: ' + val[3];
-        }}
-        return '<strong>' + series + '</strong><br>' + name + '<br>' + val;
-    }}
-
     var option = {{
         backgroundColor: '#252545',
         grid: grids,
         xAxis: xAxes,
         yAxis: yAxes,
         series: series,
-        tooltip: {{
-            trigger: 'item',
-            formatter: formatTooltip,
-            axisPointer: {{ type: 'cross' }}
-        }}
+        tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }} }}
     }};
     chart.setOption(option);
 }}
