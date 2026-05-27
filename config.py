@@ -140,5 +140,5 @@ HISTORY_DAYS = 5  # 保留最近N个交易日
 # ============================================================
 SECTOR_OUTFLOW_COUNT = 5       # 资金流出 TOP N
 LIMIT_UP_PAGE_SIZE = 200       # 涨停板池每页数量
-CLS_NEWS_COUNT = 30            # 财联社抓取快讯数量
+CLS_NEWS_COUNT = 100           # 财联社抓取快讯数量
 EVENT_TOP_N = 10               # 事件驱动展示 Top N

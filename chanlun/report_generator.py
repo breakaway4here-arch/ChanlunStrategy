@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 
 import numpy as np
 
+from chanlun.chan_engine import calc_macd
+
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
     ENABLE_WEAK_ACCESS_CONTROL, PUBLIC_DATES,
@@ -198,6 +200,59 @@ def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
     return annotations
 
 
+def build_startup_watch_chart_annotations(watch_item, slice_start, dates_sliced, closes_sliced):
+    """Build chart annotations for a startup watchlist item.
+
+    Only daily K-line (no 30min). Annotations:
+    - 启动日 markPoint (triangle, orange)
+    - 参考价 markLine (blue dotted)
+    - 现价 markLine (green dotted)
+    - 接近过期 label (startup_age_days >= 8)
+    """
+    annotations = {"markLines": [], "markPoints": [], "labels": []}
+
+    # 启动日 markPoint
+    startup_idx = watch_item.get("startup_index")
+    if startup_idx is not None and isinstance(startup_idx, int) and dates_sliced:
+        adj_startup = startup_idx - slice_start
+        if 0 <= adj_startup < len(dates_sliced):
+            startup_price = float(closes_sliced[adj_startup]) if closes_sliced else 0
+            annotations["markPoints"].append({
+                "name": "startup",
+                "coord": [dates_sliced[adj_startup], startup_price],
+                "symbol": "triangle",
+                "symbolSize": 20,
+                "itemStyle": {"color": "#ffa502"},
+                "label": {"formatter": "启动日", "color": "#ffa502", "fontSize": 10},
+            })
+
+    # 参考价 markLine
+    ref_price = watch_item.get("close")
+    if ref_price and dates_sliced:
+        annotations["markLines"].append({
+            "name": "source",
+            "yAxis": float(ref_price),
+            "lineStyle": {"color": "rgba(116,185,255,0.5)", "type": "dotted"},
+            "label": {"formatter": f"参考 {float(ref_price):.2f}", "color": "#74b9ff", "fontSize": 10},
+        })
+
+    # 现价 markLine
+    if closes_sliced and dates_sliced and len(closes_sliced) > 0:
+        curr_price = float(closes_sliced[-1])
+        annotations["markLines"].append({
+            "name": "current",
+            "yAxis": curr_price,
+            "lineStyle": {"color": "rgba(0,255,136,0.5)", "type": "dotted"},
+            "label": {"formatter": f"现价 {curr_price:.2f}", "color": "#00ff88", "fontSize": 10},
+        })
+
+    # 接近过期 label
+    age_days = watch_item.get("startup_age_days")
+    if age_days is not None and age_days >= 8:
+        annotations["labels"].append(f"信号接近过期（{age_days}天）")
+
+    return annotations
+
 
 def _serialize_picks(picks):
     """将 picks 列表转为 JSON-safe 格式，使用动态图表窗口"""
@@ -324,16 +379,52 @@ def _serialize_sell_signals(sell_list):
 
 
 def _serialize_startup_watchlist(watchlist):
-    """Serialize startup watchlist items for JSON output."""
+    """Serialize startup watchlist items for JSON output, including chart data."""
     result = []
     for w in watchlist:
-        closes = w.get("closes")
-        if closes is not None and len(closes) > 0:
-            curr_price = float(closes[-1])
+        closes_arr = _safe_list(w.get("closes", []))
+        raw_dates = _safe_list(w.get("dates", []))
+
+        # 计算现价
+        if closes_arr and len(closes_arr) > 0:
+            curr_price = float(closes_arr[-1])
         else:
             curr_price = 0
         ref_price = w.get("close", 0)
         dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
+
+        # 图表窗口切片（最近50根K线）
+        n_orig = len(raw_dates)
+        slice_start = max(0, n_orig - CHART_MAX_BARS)
+        slice_end = n_orig
+
+        def _slice(arr):
+            lst = _safe_list(arr)
+            if slice_start >= len(lst):
+                return []
+            return lst[slice_start:slice_end]
+
+        dates_sliced = _slice(raw_dates)
+        closes_sliced = _slice(closes_arr)
+        opens_sliced = _slice(w.get("opens", []))
+        highs_sliced = _slice(w.get("highs", []))
+        lows_sliced = _slice(w.get("lows", []))
+        volumes_sliced = _slice(w.get("volumes", []))
+
+        # MACD histogram
+        macd_hist_sliced = _slice(w.get("macd_hist", []))
+        if not macd_hist_sliced and len(closes_sliced) > 10:
+            try:
+                _, _, hist = calc_macd(closes_sliced)
+                macd_hist_sliced = _safe_list(hist)
+            except Exception:
+                macd_hist_sliced = [0.0] * len(closes_sliced)
+
+        # Build annotations
+        chart_annotations = build_startup_watch_chart_annotations(
+            w, slice_start, dates_sliced, closes_sliced
+        )
+
         item = {
             "code": w.get("code", ""),
             "name": w.get("name", ""),
@@ -355,6 +446,15 @@ def _serialize_startup_watchlist(watchlist):
             "next_day_conditions": w.get("next_day_conditions", []),
             "is_recent": w.get("is_recent", True),
             "recency_reason": w.get("recency_reason", ""),
+            # 图表数据
+            "dates": dates_sliced,
+            "closes": closes_sliced,
+            "opens": opens_sliced,
+            "highs": highs_sliced,
+            "lows": lows_sliced,
+            "volumes": volumes_sliced,
+            "macd_hist": macd_hist_sliced,
+            "chart_annotations": chart_annotations,
         }
         result.append(item)
     return result
@@ -771,7 +871,7 @@ body {{
 
 <!-- 事件驱动 -->
 <div class="section" id="eventsSection">
-    <div class="section-title">事件驱动 Top10</div>
+    <div class="section-title">A股影响力事件 Top10</div>
     <div id="eventsList"></div>
 </div>
 
@@ -1023,7 +1123,7 @@ function renderSectorOutflow() {{
     document.getElementById('sectorOutflow').innerHTML = html;
 }}
 
-// ========== 事件驱动 ==========
+// ========== A股影响力事件 ==========
 function renderEvents() {{
     var events = REPORT_DATA.events || [];
     if (!events.length) {{
@@ -1043,14 +1143,67 @@ function renderEvents() {{
         var isFailed = imp.status === 'failed';
         var eventId = 'ev_' + i;
 
-        html += '<div class="event-item">' +
-            '<span class="event-rank">' + (i + 1) + '</span>' +
-            '<span style="color:' + levelColor + ';font-weight:bold;">' + (ev.display_title || ev.title || '') + '</span>';
+        // 影响力评分
+        var impactScore = ev.impact_score;
+        var impactLevel = ev.impact_level || '';
+        var impactReason = ev.impact_reason || '';
+        var matchedSectors = ev.matched_hot_sectors || [];
+        var marketValidation = ev.market_validation || '';
+        var affectedThemes = ev.affected_themes || [];
+        var tradability = ev.tradability || '';
+
+        var levelColorMap = {{'重大': '#ff4757', '较强': '#ffa502', '一般': '#ffd43b', '微弱': '#888'}};
+        var levelBgMap = {{'重大': 'rgba(255,71,87,0.2)', '较强': 'rgba(255,165,2,0.2)',
+                          '一般': 'rgba(255,212,59,0.15)', '微弱': 'rgba(136,136,136,0.1)'}};
+        var lc = levelColorMap[impactLevel] || '#888';
+        var lbg = levelBgMap[impactLevel] || 'rgba(136,136,136,0.1)';
+
+        var tradabilityColor = tradability === '强' ? '#ff4757' : (tradability === '中' ? '#ffa502' : '#888');
+
+        var borderColor = lc;
+
+        html += '<div class="event-item" style="border-left-color:' + borderColor + ';">' +
+            '<span class="event-rank">' + (i + 1) + '</span>';
+
+        // 影响力分数+等级 badge
+        if (impactScore !== undefined) {{
+            html += '<span style="display:inline-block;background:' + lbg + ';color:' + lc + ';' +
+                'padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;margin-right:6px;">' +
+                impactScore + '分·' + impactLevel + '</span>';
+        }}
+
+        // 可交易性
+        if (tradability) {{
+            html += '<span style="display:inline-block;color:' + tradabilityColor + ';font-size:11px;margin-right:6px;">可交易性:' + tradability + '</span>';
+        }}
+
+        html += '<span style="color:' + levelColor + ';font-weight:bold;">' + (ev.display_title || ev.title || '') + '</span>';
+
+        // 规则影响理由（LLM 失败时也展示）
+        if (impactReason) {{
+            html += '<div style="color:#888;font-size:12px;margin:4px 0 2px;">📋 评分: ' + impactReason + '</div>';
+        }}
+
+        // 匹配热门板块
+        if (matchedSectors && matchedSectors.length) {{
+            html += '<div style="margin:2px 0;">' +
+                matchedSectors.map(function(s) {{
+                    return '<span style="display:inline-block;background:rgba(255,165,2,0.12);' +
+                        'color:#ffa502;padding:1px 6px;border-radius:4px;font-size:11px;margin-right:4px;">🔥 ' + s + '</span>';
+                }}).join('') +
+                '</div>';
+        }}
+
+        // 盘面验证
+        if (marketValidation) {{
+            var valColor = marketValidation.includes('涨停') ? '#ff4757' : '#888';
+            html += '<div style="color:' + valColor + ';font-size:12px;margin:2px 0;">📊 ' + marketValidation + '</div>';
+        }}
 
         // AI headline
         if (imp.headline && !isFailed) {{
             html += '<div style="color:#dfe6e9;font-size:14px;margin:6px 0;">' +
-                '📊 ' + imp.headline + '</div>';
+                '🤖 ' + imp.headline + '</div>';
         }} else if (isFailed) {{
             html += '<div style="color:#888;font-size:13px;margin:6px 0;">AI分析暂不可用</div>';
         }}
@@ -1064,7 +1217,19 @@ function renderEvents() {{
             html += '</div>';
         }}
 
-        // Sector tags
+        // 规则分类主题（LLM sector 为空时展示）
+        if (affectedThemes && affectedThemes.length &&
+            (!imp.positive_sectors || !imp.positive_sectors.length) &&
+            (!imp.negative_sectors || !imp.negative_sectors.length)) {{
+            html += '<div class="impact-tags">';
+            html += '<span class="impact-label">主题：</span>';
+            affectedThemes.forEach(function(t) {{
+                html += '<span class="impact-tag positive">' + t + '</span>';
+            }});
+            html += '</div>';
+        }}
+
+        // Sector tags (from LLM analysis)
         if (imp.positive_sectors && imp.positive_sectors.length || imp.negative_sectors && imp.negative_sectors.length) {{
             html += '<div class="impact-tags">';
             if (imp.positive_sectors && imp.positive_sectors.length) {{
@@ -1239,7 +1404,7 @@ function renderStartupWatchlist() {{
         '<th>参考价</th><th>现价</th><th>距参考价</th>' +
         '<th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
         '</tr></thead><tbody>';
-    watchlist.forEach(function(w) {{
+    watchlist.forEach(function(w, idx) {{
         var conditions = (w.next_day_conditions || []).join('<br>');
         var ageLabel = w.startup_age_days !== undefined ? w.startup_age_days + '天' : '-';
         var refPrice = w.close || 0;
@@ -1247,7 +1412,7 @@ function renderStartupWatchlist() {{
         var distPct = w.distance_from_reference_pct;
         var distStr = distPct !== null && distPct !== undefined ? (distPct >= 0 ? '+' : '') + distPct.toFixed(2) + '%' : '-';
         var distColor = distPct !== null ? (distPct > 0 ? '#ff4757' : '#5effa0') : '#aaa';
-        html += '<tr>' +
+        html += '<tr class="expandable" onclick="toggleStartupWatchChart(' + idx + ')">' +
             '<td>' + w.code + '</td>' +
             '<td>' + w.name + '</td>' +
             '<td><span class="sell-tag">' + w.type + '</span></td>' +
@@ -1259,6 +1424,29 @@ function renderStartupWatchlist() {{
             '<td style="color:#dfe6e9;font-size:13px;">' + (w.watch_reason || '') + '</td>' +
             '<td style="color:#aaa;font-size:12px;">' + conditions + '</td>' +
             '</tr>';
+
+        // 展开行：图表 + 详情
+        var detail = '';
+        detail += '<div class="detail-section"><div class="detail-group"><div class="detail-group-title">启动观察详情</div>';
+        if (w.startup_date) detail += '<strong>启动日：</strong>' + w.startup_date +
+            (w.startup_age_days !== undefined ? ' (' + w.startup_age_days + '天前)' : '') + '<br>';
+        if (w.source_type) detail += '<strong>来源：</strong>' + w.source_type + '<br>';
+        if (w.change_pct) detail += '<strong>涨幅：</strong>' + w.change_pct + '%<br>';
+        if (w.volume_ratio) detail += '<strong>放量倍数：</strong>' + w.volume_ratio.toFixed(2) + '倍<br>';
+        if (w.startup_signals && w.startup_signals.length) detail += '<strong>突破类型：</strong>' + w.startup_signals.join('，') + '<br>';
+        detail += '<strong>完整启动原因：</strong>' + (w.startup_reason || '-') + '<br>';
+        detail += '<strong>完整观察理由：</strong>' + (w.watch_reason || '-') + '<br>';
+        detail += '<strong>次日确认条件：</strong>' + ((w.next_day_conditions || []).join('；') || '-') + '<br>';
+        detail += '<strong>参考价：</strong>' + (refPrice ? refPrice.toFixed(2) : '-') +
+            ' &nbsp; <strong>现价：</strong>' + (curPrice ? curPrice.toFixed(2) : '-') +
+            ' &nbsp; <strong>距参考价：</strong><span style="color:' + distColor + ';">' + distStr + '</span><br>';
+        detail += '<strong>信号年龄：</strong>' + ageLabel + ' &nbsp; <strong>时效：</strong>' + (w.recency_reason || '-') + '<br>';
+        detail += '</div></div>';
+
+        html += '<tr class="chart-row" id="chartRow_sw_' + idx + '">' +
+            '<td colspan="10" style="white-space:normal;line-height:1.6;">' +
+            '<div class="chart-container" id="chart_sw_' + idx + '"></div>' +
+            detail + '</td></tr>';
     }});
     html += '</tbody></table>';
     document.getElementById('startupWatchContent').innerHTML = html;
@@ -1513,6 +1701,106 @@ function toggleChart(idx, ver) {{
     if (!isOpen) {{
         setTimeout(function() {{ renderChart(idx, ver); }}, 100);
     }}
+}}
+
+// ========== 启动观察图表展开/收起 ==========
+function toggleStartupWatchChart(idx) {{
+    var row = document.getElementById('chartRow_sw_' + idx);
+    if (!row) return;
+    var isOpen = row.classList.contains('open');
+    row.classList.toggle('open');
+    if (!isOpen) {{
+        setTimeout(function() {{ renderStartupWatchChart(idx); }}, 100);
+    }}
+}}
+
+function renderStartupWatchChart(idx) {{
+    var domId = 'chart_sw_' + idx;
+    var dom = document.getElementById(domId);
+    if (!dom || dom.clientWidth === 0) return;
+
+    var watchlist = REPORT_DATA.startup_watchlist || [];
+    var item = watchlist[idx];
+    if (!item) return;
+
+    // 销毁旧图表
+    if (window._charts && window._charts[domId]) {{
+        window._charts[domId].dispose();
+    }}
+
+    var chart = echarts.init(dom);
+    window._charts = window._charts || {{}};
+    window._charts[domId] = chart;
+
+    var dates = item.dates || [];
+    var closes = item.closes || [];
+    var macdHist = item.macd_hist || [];
+    var ann = item.chart_annotations || {{}};
+
+    // 启动日标注
+    var buyMarks = [];
+    if (ann.markPoints && ann.markPoints.length) {{
+        ann.markPoints.forEach(function(mp) {{
+            buyMarks.push({{
+                coord: mp.coord,
+                symbol: mp.symbol || 'triangle',
+                symbolSize: mp.symbolSize || 20,
+                itemStyle: mp.itemStyle || {{ color: '#ffa502' }},
+                label: mp.label || {{ show: true }}
+            }});
+        }});
+    }}
+
+    // markLines
+    var markLines = [];
+    if (ann.markLines && ann.markLines.length) {{
+        markLines = ann.markLines;
+    }}
+
+    var hasMarkLines = markLines.length > 0;
+
+    // 2-grid: 日线K线 + MACD（无30min子图）
+    var grids = [
+        {{ left: 60, right: 20, top: 20, height: '55%' }},
+        {{ left: 60, right: 20, top: '68%', height: '25%' }}
+    ];
+    var xAxes = [
+        {{ type: 'category', data: dates, gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10, rotate: 30 }} }},
+        {{ type: 'category', data: dates, gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ show: false }} }}
+    ];
+    var yAxes = [
+        {{ type: 'value', gridIndex: 0, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }},
+        {{ type: 'value', gridIndex: 1, axisLine: {{ lineStyle: {{ color: '#444' }} }}, axisLabel: {{ color: '#888', fontSize: 10 }}, splitLine: {{ lineStyle: {{ color: 'rgba(255,255,255,0.06)' }} }} }}
+    ];
+    var series = [
+        {{
+            type: 'candlestick', name: '日线K线',
+            data: (item.highs || []).map(function(h, i) {{
+                return [item.opens ? item.opens[i] : closes[i], closes[i],
+                        item.lows ? item.lows[i] : closes[i], h];
+            }}),
+            xAxisIndex: 0, yAxisIndex: 0,
+            itemStyle: {{ color: '#ff4757', color0: '#2ed573', borderColor: '#ff4757', borderColor0: '#2ed573' }},
+            markPoint: {{ data: buyMarks }},
+            markLine: hasMarkLines ? {{ silent: true, symbol: 'none', data: markLines }} : undefined
+        }},
+        {{
+            type: 'bar', name: '日线MACD',
+            data: macdHist.map(function(v) {{ return v || 0; }}),
+            xAxisIndex: 1, yAxisIndex: 1,
+            itemStyle: {{ color: function(params) {{ return (params.value || 0) >= 0 ? 'rgba(255,71,87,0.7)' : 'rgba(46,213,115,0.7)'; }} }}
+        }}
+    ];
+
+    var option = {{
+        backgroundColor: '#252545',
+        grid: grids,
+        xAxis: xAxes,
+        yAxis: yAxes,
+        series: series,
+        tooltip: {{ trigger: 'axis', axisPointer: {{ type: 'cross' }} }}
+    }};
+    chart.setOption(option);
 }}
 
 // ========== ECharts 走势图 ==========

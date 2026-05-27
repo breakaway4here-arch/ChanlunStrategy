@@ -80,39 +80,162 @@ def fetch_cls_news(count=30):
 
 
 def rank_events(events, hot_sectors=None):
-    """
-    对事件按相关性排序，取 Top10。
-    排序规则：
-    1. 有关联股票或板块的事件优先
-    2. 与当前热门板块（sector_flow）匹配的事件加权
-    3. level 字段（重要性）高的优先
-    """
-    if not events:
-        return _template_events()
+    """兼容包装：委托给 rank_market_impact_events。"""
+    sector_flow = []
+    if hot_sectors:
+        sector_flow = [{"name": s.get("name", ""), "flow": s.get("flow", 0)} for s in hot_sectors[:10]]
+    return rank_market_impact_events(events, sector_flow=sector_flow, limit_up_pool=None, top_n=10)
+
+
+# ============================================================
+# 主题/板块同义词映射
+# ============================================================
+
+THEME_SYNONYMS = {
+    "半导体": ["半导体", "芯片", "集成电路", "光刻机", "晶圆", "封测", "IC设计", "存储芯片", "先进封装"],
+    "人工智能": ["AI", "人工智能", "大模型", "算力", "ChatGPT", "AI应用", "智能体", "AI Agent"],
+    "新能源车": ["新能源车", "电动汽车", "电动车", "锂电池", "充电桩", "锂电", "动力电池", "新能源汽车"],
+    "光伏": ["光伏", "太阳能", "光伏组件", "逆变器", "硅片", "光伏电站", "BIPV"],
+    "机器人": ["机器人", "人形机器人", "工业机器人", "减速器", "伺服电机"],
+    "低空经济": ["低空经济", "eVTOL", "无人机", "飞行汽车", "低空飞行"],
+    "军工": ["军工", "国防", "航空航天", "卫星", "导弹", "军机"],
+    "创新药": ["创新药", "生物医药", "CXO", "CAR-T", "生物科技", "医药研发"],
+    "数据要素": ["数据要素", "数据资产", "数据确权", "数据交易", "数据安全"],
+    "大消费": ["消费", "消费品", "消费复苏", "社零", "内需", "促消费"],
+    "房地产": ["房地产", "地产", "楼市", "住房", "保障房", "城中村"],
+    "大金融": ["金融", "银行", "券商", "保险", "资本市场"],
+    "储能": ["储能", "逆变器", "电池储能", "抽水蓄能", "储能系统"],
+    "消费电子": ["消费电子", "手机", "智能终端", "可穿戴", "MR", "VR", "AR", "折叠屏"],
+    "数字经济": ["数字经济", "数字化转型", "数字产业化", "产业数字化"],
+}
+
+
+def classify_event_category(event):
+    """对事件标题/摘要/正文做主题分类，返回匹配的主题列表。"""
+    text = ((event.get("title", "") or "") + " "
+            + (event.get("brief", "") or "") + " "
+            + (event.get("content", "") or "")).lower()
+    matched = []
+    for theme, keywords in THEME_SYNONYMS.items():
+        for kw in keywords:
+            if kw.lower() in text:
+                matched.append(theme)
+                break
+    return matched
+
+
+def score_market_impact(event, sector_flow, limit_up_pool=None):
+    """对单条事件做 A 股影响力综合评分，将评分字段写入 event 并返回。"""
+    score = 0.0
+    reasons = []
 
     hot_names = set()
-    if hot_sectors:
-        hot_names = set(s["name"] for s in hot_sectors[:10])
+    if sector_flow:
+        hot_names = set(s.get("name", "") for s in sector_flow[:10] if s.get("flow", 0) > 0)
 
-    def score(e):
-        s = 0
-        # 有关联股票 +5，有关联板块 +3
-        if e.get("stock_list"):
-            s += 5
-        if e.get("plate_list"):
-            s += 3
-        # level 权重
-        s += (e.get("level", 0) or 0) * 2 if e.get("level") else 1
-        # 与热门板块匹配
-        title = e.get("title", "") + e.get("content", "")
-        for hn in hot_names:
-            if hn in title:
-                s += 4
-                break
-        return s
+    # 1. 关联股票
+    stock_count = len(event.get("stock_list", []) or [])
+    if stock_count >= 5:
+        score += 15
+        reasons.append(f"关联{stock_count}只个股+15")
+    elif stock_count >= 2:
+        score += 10
+        reasons.append(f"关联{stock_count}只个股+10")
+    elif stock_count >= 1:
+        score += 5
+        reasons.append(f"关联个股+5")
 
-    ranked = sorted(events, key=score, reverse=True)
-    return ranked[:10]
+    # 2. 关联板块
+    plate_count = len(event.get("plate_list", []) or [])
+    if plate_count >= 3:
+        score += 10
+        reasons.append(f"关联{plate_count}个板块+10")
+    elif plate_count >= 1:
+        score += 6
+        reasons.append(f"关联{plate_count}个板块+6")
+
+    # 3. level 权重
+    level = event.get("level", 1) or 1
+    score += level * 8
+    level_label = {3: "A级", 2: "B级", 1: "C级"}.get(level, f"L{level}")
+    reasons.append(f"{level_label}+{level * 8}")
+
+    # 4. 主题分类
+    categories = classify_event_category(event)
+    if categories:
+        score += 5
+        reasons.append(f"主题: {','.join(categories[:2])}+5")
+
+    # 5. 热门板块匹配
+    title_content = (event.get("title", "") or "") + " " + (event.get("content", "") or "")
+    matched_hot = []
+    for hn in hot_names:
+        if hn in title_content:
+            matched_hot.append(hn)
+            score += 6
+    if matched_hot:
+        reasons.append(f"热门板块 {','.join(matched_hot[:3])}+{len(matched_hot) * 6}")
+
+    # 6. 涨停池验证
+    market_val = ""
+    if limit_up_pool and categories:
+        limit_up_names = set(s.get("name", "") for s in limit_up_pool)
+        limit_up_codes = set(s.get("code", "") for s in limit_up_pool)
+        event_stocks = event.get("stock_list", []) or []
+        limit_match = 0
+        for s in event_stocks:
+            s_name = s.get("name", "") if isinstance(s, dict) else str(s)
+            s_code = s.get("code", "") if isinstance(s, dict) else ""
+            if s_name in limit_up_names or s_code in limit_up_codes:
+                limit_match += 1
+        if limit_match >= 2:
+            score += 12
+            market_val = f"{limit_match}只关联个股涨停"
+            reasons.append(f"涨停验证+12")
+        elif limit_match >= 1:
+            score += 6
+            market_val = f"{limit_match}只关联个股涨停"
+            reasons.append(f"涨停验证+6")
+        else:
+            market_val = "未在涨停池发现关联个股"
+
+    # 影响力等级
+    if score >= 35:
+        impact_level = "重大"
+    elif score >= 22:
+        impact_level = "较强"
+    elif score >= 12:
+        impact_level = "一般"
+    else:
+        impact_level = "微弱"
+
+    # 可交易性
+    if score >= 30 and matched_hot:
+        tradability = "强"
+    elif score >= 18:
+        tradability = "中"
+    else:
+        tradability = "弱"
+
+    event["impact_score"] = round(score, 1)
+    event["impact_level"] = impact_level
+    event["impact_reason"] = "；".join(reasons)
+    event["matched_hot_sectors"] = matched_hot
+    event["affected_themes"] = categories
+    event["event_category"] = categories
+    event["market_validation"] = market_val
+    event["tradability"] = tradability
+    return event
+
+
+def rank_market_impact_events(events, sector_flow, limit_up_pool=None, top_n=10):
+    """对事件按 A 股影响力评分排序，返回 Top N。"""
+    if not events:
+        return []
+
+    scored = [score_market_impact(e, sector_flow, limit_up_pool) for e in events]
+    scored.sort(key=lambda e: e.get("impact_score", 0), reverse=True)
+    return scored[:top_n]
 
 
 def _template_events():

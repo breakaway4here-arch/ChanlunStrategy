@@ -30,7 +30,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from config import (
     DAY_LOOKBACK, HISTORY_DAYS, OUTPUT_DIR, DEBUG_OUTPUT_DIR,
-    SECTOR_OUTFLOW_COUNT, EVENT_TOP_N,
+    SECTOR_OUTFLOW_COUNT, EVENT_TOP_N, CLS_NEWS_COUNT,
     ENABLE_DAILY_STRUCTURE_POOL, ENABLE_30MIN_CANDIDATE_UPGRADE,
     ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS,
     ENABLE_FUSION_ADMISSION_POLICY,
@@ -49,7 +49,7 @@ from chanlun.daily_structure_pool import build_daily_structure_pool
 from chanlun.candidate_upgrade import upgrade_daily_candidates_with_30min
 from chanlun.scorer import apply_scores
 from chanlun.report_generator import generate_report, update_data_json
-from chanlun.market_news import fetch_cls_news, rank_events, enrich_events, generate_forecast
+from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_events, enrich_events, generate_forecast
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min
@@ -615,8 +615,13 @@ def main(debug=False):
     print("  分析上证缠论结构 ...")
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
 
-    # 热点事件（LLM 分析在前，供时局推演引用）
-    events = normalize_events(enrich_events(rank_events(fetch_cls_news(), sectors)))
+    # 涨停池提前获取，供事件影响力评分复用
+    limit_up_pool_data = fetch_limit_up_pool(today.replace("-", ""))
+
+    # 热点事件 — 影响力评分排序后再 LLM 增强
+    raw_events = fetch_cls_news(CLS_NEWS_COUNT)
+    ranked_events = rank_market_impact_events(raw_events, sector_flow=sectors, limit_up_pool=limit_up_pool_data, top_n=EVENT_TOP_N)
+    events = normalize_events(enrich_events(ranked_events))
 
     # 构建报告数据
     daily_scan_diag = {
@@ -700,7 +705,7 @@ def main(debug=False):
         "sector_flow": sectors,
         # 新增模块
         "sector_outflow": fetch_sector_outflow(SECTOR_OUTFLOW_COUNT),
-        "limit_up_pool": fetch_limit_up_pool(today.replace("-", "")),
+        "limit_up_pool": limit_up_pool_data,
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
