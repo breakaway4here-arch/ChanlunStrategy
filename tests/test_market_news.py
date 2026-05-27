@@ -2,7 +2,8 @@
 import unittest
 from chanlun.market_news import (
     _extract_first_json_object, _parse_llm_json,
-    THEME_SYNONYMS, classify_event_category, score_market_impact,
+    THEME_SYNONYMS, classify_event_category, classify_event_type,
+    score_market_impact, dedupe_or_downgrade_events,
     rank_market_impact_events, rank_events,
 )
 
@@ -126,7 +127,7 @@ class TestClassifyEventCategory(unittest.TestCase):
     def test_ai_match(self):
         events = [{"title": "大模型算力需求爆发"}]
         result = classify_event_category(events[0])
-        self.assertIn("人工智能", result)
+        self.assertIn("AI算力", result)
 
     def test_robot_match(self):
         events = [{"title": "人形机器人量产加速", "content": "减速器需求大增"}]
@@ -212,6 +213,195 @@ class TestRankEventsBackwardCompat(unittest.TestCase):
         self.assertIsInstance(result, list)
         if result:
             self.assertIn("impact_score", result[0])
+
+
+class TestScoreMarketImpactDowngrades(unittest.TestCase):
+
+    def test_company_reply_with_no_major_impact_is_downgraded(self):
+        event = {
+            "title": "某公司称不构成重大影响",
+            "content": "公司在互动平台表示，本次投资规模较小，不构成重大影响",
+            "stock_list": [{"name": "测试股", "code": "000001"}],
+            "plate_list": [],
+            "level": 1,
+        }
+        event = score_market_impact(event, sector_flow=None, limit_up_pool=None)
+        self.assertIn("降权", event["impact_reason"])
+        self.assertTrue(len(event.get("downgrade_reasons", [])) > 0)
+
+    def test_pure_overseas_without_a_share_mapping_is_downgraded(self):
+        event = {
+            "title": "伊朗说尚未就霍尔木兹海峡问题与美国达成一致",
+            "content": "中东地缘局势持续紧张",
+            "stock_list": [],
+            "plate_list": [],
+            "level": 2,
+        }
+        event = score_market_impact(event, sector_flow=None, limit_up_pool=None)
+        self.assertEqual(event["event_category"], "overseas")
+        self.assertIn("降权", event["impact_reason"])
+        # With overseas type(+2) + level 2(+16) = 18 + downgrade -12 -8 = -2 → "微弱"
+        self.assertLess(event["impact_score"], 18)
+
+    def test_no_a_share_clue_event_is_downgraded(self):
+        event = {
+            "title": "某国军事采购联盟变化",
+            "content": "英媒说9国退出供乌弹药采购联盟",
+            "stock_list": [],
+            "plate_list": [],
+            "level": 2,
+        }
+        event = score_market_impact(event, sector_flow=None, limit_up_pool=None)
+        self.assertIn("降权", event["impact_reason"])
+        self.assertLess(event["impact_score"], 22)
+
+
+class TestScoreMarketImpactThemeLimitUp(unittest.TestCase):
+
+    def test_theme_limit_up_validation_scores_even_without_stock_list(self):
+        event = {
+            "title": "半导体产业政策扶持",
+            "content": "国务院发布半导体产业规划",
+            "stock_list": [],  # No direct stock mapping
+            "plate_list": [{"name": "半导体"}],
+            "level": 3,
+        }
+        limit_up_pool = [
+            {"name": "中芯国际", "code": "688981", "sector": "半导体"},
+            {"name": "北方华创", "code": "002371", "sector": "半导体"},
+            {"name": "韦尔股份", "code": "603501", "sector": "半导体"},
+        ]
+        event = score_market_impact(event, sector_flow=None, limit_up_pool=limit_up_pool)
+        # Should get theme-limit-up validation bonus
+        self.assertIn("涨停主题验证", event["impact_reason"])
+        self.assertGreater(event["impact_score"], 30)
+
+
+class TestRankMarketImpactSortOrder(unittest.TestCase):
+
+    def test_rank_uses_score_then_tradability_then_level(self):
+        events = [
+            # Higher score should win
+            {"title": "半导体政策扶持", "stock_list": [{"name": "芯", "code": "001"}],
+             "plate_list": [{"name": "半导体"}], "level": 3, "ctime": 1000},
+            # Lower score, higher level doesn't matter
+            {"title": "普通公告", "stock_list": [], "plate_list": [],
+             "level": 1, "ctime": 2000},
+        ]
+        ranked = rank_market_impact_events(events, sector_flow=[], top_n=10)
+        self.assertEqual(len(ranked), 2)
+        self.assertGreater(ranked[0]["impact_score"], ranked[1]["impact_score"])
+
+    def test_same_score_higher_tradability_wins(self):
+        """When scores are equal, 强 tradability ranks above 弱."""
+        # Two events that should score similarly but differ in tradability
+        e1 = {
+            "title": "白酒板块资金流入", "content": "白酒",
+            "stock_list": [], "plate_list": [{"name": "白酒"}], "level": 2, "ctime": 1000,
+        }
+        e2 = {
+            "title": "海外地缘冲突", "content": "伊朗 霍尔木兹",
+            "stock_list": [], "plate_list": [], "level": 3, "ctime": 2000,
+        }
+        sector_flow = [{"name": "白酒", "flow": 50}]
+        ranked = rank_market_impact_events([e1, e2], sector_flow=sector_flow, top_n=10)
+        # e1 should rank higher because it has hot sector + theme, while e2 is overseas downgraded
+        self.assertGreater(ranked[0]["impact_score"], ranked[1]["impact_score"])
+
+
+class TestClassifyEventType(unittest.TestCase):
+
+    def test_company_reply_via_回应(self):
+        e = {"title": "公司回应股价波动", "content": "公司回应近期股价波动"}
+        self.assertEqual(classify_event_type(e), "company_reply")
+
+    def test_lawsuit_is_risk_not_tech(self):
+        e = {"title": "专利诉讼撤回", "content": "双方就专利诉讼达成和解并撤诉"}
+        self.assertEqual(classify_event_type(e), "risk")
+
+    def test_和解_is_mna(self):
+        e = {"title": "某公司和解公告", "content": "与原告达成和解"}
+        self.assertEqual(classify_event_type(e), "mna")
+
+    def test_order_matches_before_company_reply(self):
+        e = {"title": "某公司回应订单传闻", "content": "回应称订单情况正常"}
+        # "订单" (order) appears before "回应" (company_reply) in rules — order wins
+        self.assertEqual(classify_event_type(e), "order")
+
+    def test_tech_breakthrough_still_works(self):
+        e = {"title": "国产芯片技术突破", "content": "实现先进制程量产"}
+        self.assertEqual(classify_event_type(e), "tech")
+
+
+class TestScoreMarketImpactNoValidationPenalty(unittest.TestCase):
+
+    def test_no_market_validation_gets_penalty(self):
+        """Events with zero market validation get -10 penalty."""
+        event = {
+            "title": "某公司发布公告",
+            "content": "公司发布日常经营公告",
+            "stock_list": [{"name": "测试股", "code": "000001"}],
+            "plate_list": [],
+            "level": 1,
+        }
+        event = score_market_impact(event, sector_flow=[], limit_up_pool=None)
+        self.assertIn("降权", event["impact_reason"])
+        self.assertIn("无盘面验证", event["impact_reason"])
+
+    def test_validated_event_ranks_above_unvalidated(self):
+        """An event with market validation should rank above one without."""
+        e_validated = {
+            "title": "半导体政策利好", "content": "半导体 芯片",
+            "stock_list": [], "plate_list": [{"name": "半导体"}], "level": 1,
+        }
+        e_unvalidated = {
+            "title": "某公司日常公告", "content": "经营情况正常",
+            "stock_list": [{"name": "测试", "code": "000001"}], "plate_list": [], "level": 3,
+        }
+        sector_flow = [{"name": "半导体", "flow": 100}]
+        ranked = rank_market_impact_events([e_validated, e_unvalidated], sector_flow=sector_flow, top_n=10)
+        self.assertEqual(ranked[0]["title"], "半导体政策利好")
+
+
+class TestDedupeOrDowngrade(unittest.TestCase):
+
+    def test_empty_title_dropped(self):
+        events = [
+            {"title": "", "content": "empty title event"},
+            {"title": "正常事件", "content": "normal"},
+        ]
+        result = dedupe_or_downgrade_events(events)
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["title"], "正常事件")
+
+    def test_whitespace_title_dropped(self):
+        events = [
+            {"title": "   ", "content": "whitespace title"},
+            {"title": "正常", "content": "normal"},
+        ]
+        result = dedupe_or_downgrade_events(events)
+        self.assertEqual(len(result), 1)
+
+    def test_identical_title_dedupe(self):
+        events = [
+            {"title": "重复事件", "content": "a"},
+            {"title": "重复事件", "content": "b"},
+        ]
+        result = dedupe_or_downgrade_events(events)
+        self.assertEqual(len(result), 1)
+
+    def test_same_theme_4th_downgraded(self):
+        events = [
+            {"title": f"半导体新闻{i}", "content": "芯片",
+             "affected_themes": ["半导体"], "event_category": "policy",
+             "impact_score": 30}
+            for i in range(5)
+        ]
+        result = dedupe_or_downgrade_events(events)
+        self.assertEqual(len(result), 5)
+        # 4th and 5th should be downgraded
+        self.assertLess(result[3]["impact_score"], 30)
+        self.assertLess(result[4]["impact_score"], 30)
 
 
 if __name__ == "__main__":

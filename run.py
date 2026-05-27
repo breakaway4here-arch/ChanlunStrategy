@@ -42,7 +42,7 @@ from chanlun.data_fetcher import (
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool,
 )
-from chanlun.chan_engine import analyze
+from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
 from chanlun.screener_fusion import screen_daily_fusion, screen_30min_fusion
 from chanlun.daily_structure_pool import build_daily_structure_pool
@@ -52,7 +52,7 @@ from chanlun.report_generator import generate_report, update_data_json
 from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_events, enrich_events, generate_forecast
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
-from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min
+from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 
 
@@ -478,7 +478,7 @@ def main(debug=False):
                             "highs": sc.get("highs", []),
                             "lows": sc.get("lows", []),
                             "volumes": sc.get("volumes", []),
-                            "macd_hist": np.zeros(len(sc.get("closes", []))),
+                            "macd_hist": calc_macd(sc.get("closes", []))[2],
                             "buy_points": [{
                                 "type": sc.get("type", "强势启动候选"),
                                 "tier": "candidate",
@@ -498,6 +498,8 @@ def main(debug=False):
                             "change_pct": sc.get("change_pct", 0),
                             "volume_ratio": sc.get("volume_ratio", 0),
                         }
+                        # Annotate startup quality labels on best_buy_point
+                        pick["best_buy_point"] = annotate_startup_quality(pick["best_buy_point"])
                         normalized.append(pick)
                     pure_confirmed = pure_confirmed + normalized
                     print(f"  合并启动候选 {len(startup_candidates)} 只到纯净版主推荐")

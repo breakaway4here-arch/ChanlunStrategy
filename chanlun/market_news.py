@@ -92,22 +92,53 @@ def rank_events(events, hot_sectors=None):
 # ============================================================
 
 THEME_SYNONYMS = {
-    "半导体": ["半导体", "芯片", "集成电路", "光刻机", "晶圆", "封测", "IC设计", "存储芯片", "先进封装"],
-    "人工智能": ["AI", "人工智能", "大模型", "算力", "ChatGPT", "AI应用", "智能体", "AI Agent"],
+    "半导体": ["半导体", "芯片", "集成电路", "光刻机", "晶圆", "封测", "IC设计", "存储芯片", "先进封装",
+               "存储", "长江存储", "长鑫存储", "靶材", "EMC", "HBM"],
+    "AI算力": ["AI", "人工智能", "大模型", "算力", "ChatGPT", "AI应用", "智能体", "AI Agent",
+               "服务器", "数据中心", "GPU", "液冷", "NLP"],
+    "光模块": ["光模块", "CPO", "800G", "1.6T", "光通信", "光芯片", "硅光"],
     "新能源车": ["新能源车", "电动汽车", "电动车", "锂电池", "充电桩", "锂电", "动力电池", "新能源汽车"],
     "光伏": ["光伏", "太阳能", "光伏组件", "逆变器", "硅片", "光伏电站", "BIPV"],
-    "机器人": ["机器人", "人形机器人", "工业机器人", "减速器", "伺服电机"],
-    "低空经济": ["低空经济", "eVTOL", "无人机", "飞行汽车", "低空飞行"],
+    "机器人": ["机器人", "人形机器人", "工业机器人", "减速器", "伺服电机", "执行器"],
+    "低空经济": ["低空经济", "eVTOL", "无人机", "飞行汽车", "低空飞行", "通航"],
+    "固态电池": ["固态电池", "电解质", "锂电", "动力电池"],
     "军工": ["军工", "国防", "航空航天", "卫星", "导弹", "军机"],
     "创新药": ["创新药", "生物医药", "CXO", "CAR-T", "生物科技", "医药研发"],
     "数据要素": ["数据要素", "数据资产", "数据确权", "数据交易", "数据安全"],
-    "大消费": ["消费", "消费品", "消费复苏", "社零", "内需", "促消费"],
+    "白酒": ["白酒", "酒企", "高端酒", "酱酒"],
+    "电力": ["电力", "火电", "水电", "绿电", "电网", "虚拟电厂"],
+    "煤炭": ["煤炭", "焦煤", "动力煤", "煤价"],
+    "大消费": ["消费", "消费品", "消费复苏", "社零", "内需", "促消费", "食品饮料", "零售"],
     "房地产": ["房地产", "地产", "楼市", "住房", "保障房", "城中村"],
     "大金融": ["金融", "银行", "券商", "保险", "资本市场"],
-    "储能": ["储能", "逆变器", "电池储能", "抽水蓄能", "储能系统"],
+    "储能": ["储能", "电池储能", "抽水蓄能", "储能系统"],
     "消费电子": ["消费电子", "手机", "智能终端", "可穿戴", "MR", "VR", "AR", "折叠屏"],
     "数字经济": ["数字经济", "数字化转型", "数字产业化", "产业数字化"],
 }
+
+
+# --- Event category keywords ---
+# Order matters: first match wins. risk/mna before tech so "诉讼" matches before "专利".
+_EVENT_TYPE_RULES = [
+    ("policy", ["国务院", "发改委", "工信部", "财政部", "证监会", "央行", "政策", "规划",
+                "指导意见", "国常会", "中央经济", "政治局", "部委", "监管层"]),
+    ("industry", ["涨价", "供需", "订单潮", "产能", "景气度", "库存", "价格上行", "供不应求",
+                  "需求旺盛", "出货量", "排产", "满产"]),
+    ("risk", ["减持", "解禁", "监管处罚", "立案", "业绩下滑", "亏损", "退市", "警示函",
+              "问询函", "调查", "诉讼", "大跌", "暴跌", "跌停"]),
+    ("mna", ["并购", "重组", "收购", "增资", "股权转让", "借壳", "和解", "撤诉"]),
+    ("tech", ["技术突破", "量产", "首发", "国产替代", "先进制程", "新产品", "研发成功",
+              "专利", "自研", "打破垄断"]),
+    ("earnings", ["业绩预增", "利润增长", "收入增长", "财报", "净利润", "营收", "扭亏",
+                  "业绩快报", "业绩预告"]),
+    ("order", ["中标", "订单", "合同", "供货", "供应商", "定点", "配套"]),
+    ("commodity", ["期货", "现货", "商品价格", "大宗", "铜价", "铝价", "金价", "油价"]),
+    ("overseas", ["美股", "美联储", "关税", "制裁", "海外", "特朗普", "拜登", "白宫",
+                  "欧洲", "日本", "韩国", "伊朗", "霍尔木兹", "英媒", "供乌", "弹药",
+                  "中东", "俄罗斯", "乌克兰", "北约", "以色列", "巴以", "胡塞",
+                  "红海", "海峡", "OPEC", "地缘", "军事冲突", "谈判未果"]),
+    ("company_reply", ["互动平台", "投资者关系", "公司回复", "公司称", "公司表示", "回应"]),
+]
 
 
 def classify_event_category(event):
@@ -124,60 +155,139 @@ def classify_event_category(event):
     return matched
 
 
+def classify_event_type(event):
+    """Classify event into a single primary category. Returns category string."""
+    text = ((event.get("title", "") or "") + " "
+            + (event.get("brief", "") or "") + " "
+            + (event.get("content", "") or ""))
+    for cat, keywords in _EVENT_TYPE_RULES:
+        for kw in keywords:
+            if kw in text:
+                return cat
+    return "other"
+
+
+# Category name mapping
+_EVENT_CATEGORY_NAMES = {
+    "policy": "政策催化",
+    "industry": "产业趋势",
+    "tech": "技术突破",
+    "earnings": "业绩驱动",
+    "order": "订单/合同",
+    "mna": "并购重组",
+    "risk": "风险事件",
+    "commodity": "商品期货",
+    "overseas": "海外事件",
+    "company_reply": "公司互动",
+    "other": "其他",
+}
+
+# Category base scores
+_EVENT_TYPE_SCORES = {
+    "policy": 18, "industry": 15, "tech": 15, "earnings": 12,
+    "order": 12, "mna": 10, "company_reply": 3, "commodity": 5,
+    "overseas": 2, "risk": 8, "other": 5,
+}
+
+# Downgrade patterns
+_DOWNGRADE_PATTERNS = [
+    ("不构成重大影响", -15),
+    ("不会对业绩产生重大影响", -15),
+    ("投资规模较小", -12),
+    ("对经营业绩影响有限", -12),
+    ("暂不涉及", -8),
+]
+
+
 def score_market_impact(event, sector_flow, limit_up_pool=None):
     """对单条事件做 A 股影响力综合评分，将评分字段写入 event 并返回。"""
     score = 0.0
     reasons = []
+    downgrade_reasons = []
 
-    hot_names = set()
+    # --- Build lookup sets ---
+    hot_sectors = []
     if sector_flow:
-        hot_names = set(s.get("name", "") for s in sector_flow[:10] if s.get("flow", 0) > 0)
+        for s in sector_flow[:10]:
+            hot_sectors.append({
+                "name": s.get("name", ""),
+                "flow": s.get("flow", 0),
+                "rank": sector_flow.index(s) + 1 if s in sector_flow else 99,
+            })
 
-    # 1. 关联股票
-    stock_count = len(event.get("stock_list", []) or [])
-    if stock_count >= 5:
-        score += 15
-        reasons.append(f"关联{stock_count}只个股+15")
-    elif stock_count >= 2:
-        score += 10
-        reasons.append(f"关联{stock_count}只个股+10")
-    elif stock_count >= 1:
-        score += 5
-        reasons.append(f"关联个股+5")
-
-    # 2. 关联板块
-    plate_count = len(event.get("plate_list", []) or [])
-    if plate_count >= 3:
-        score += 10
-        reasons.append(f"关联{plate_count}个板块+10")
-    elif plate_count >= 1:
-        score += 6
-        reasons.append(f"关联{plate_count}个板块+6")
-
-    # 3. level 权重
+    # --- 1. 财联社 level ---
     level = event.get("level", 1) or 1
-    score += level * 8
+    level_scores = {3: 24, 2: 16, 1: 8}
+    level_score = level_scores.get(level, 8)
+    score += level_score
     level_label = {3: "A级", 2: "B级", 1: "C级"}.get(level, f"L{level}")
-    reasons.append(f"{level_label}+{level * 8}")
+    reasons.append(f"{level_label}+{level_score}")
 
-    # 4. 主题分类
+    # --- 2. A股映射强度 ---
     categories = classify_event_category(event)
+    stock_count = len(event.get("stock_list", []) or [])
+    plate_count = len(event.get("plate_list", []) or [])
+
     if categories:
+        score += 8
+        reasons.append(f"主题映射+8")
+    if stock_count >= 1:
         score += 5
-        reasons.append(f"主题: {','.join(categories[:2])}+5")
+        reasons.append(f"个股映射+5")
+    if plate_count >= 1:
+        score += 6
+        reasons.append(f"板块映射+6")
 
-    # 5. 热门板块匹配
-    title_content = (event.get("title", "") or "") + " " + (event.get("content", "") or "")
+    # --- 3. 事件类型 ---
+    etype = classify_event_type(event)
+    type_score = _EVENT_TYPE_SCORES.get(etype, 5)
+    score += type_score
+    reasons.append(f"{_EVENT_CATEGORY_NAMES.get(etype, etype)}+{type_score}")
+
+    # --- 4. 热门板块验证 ---
+    sector_validation_parts = []
     matched_hot = []
-    for hn in hot_names:
-        if hn in title_content:
-            matched_hot.append(hn)
-            score += 6
-    if matched_hot:
-        reasons.append(f"热门板块 {','.join(matched_hot[:3])}+{len(matched_hot) * 6}")
+    title_content = (event.get("title", "") or "") + " " + (event.get("content", "") or "")
 
-    # 6. 涨停池验证
-    market_val = ""
+    for hs in hot_sectors:
+        hn = hs["name"]
+        if hn and hn in title_content:
+            matched_hot.append(hn)
+            if hs["flow"] > 0:
+                if hs["rank"] <= 3:
+                    score += 22
+                    sector_validation_parts.append(f"命中资金流Top3 {hn}+22")
+                elif hs["rank"] <= 10:
+                    score += 12
+                    sector_validation_parts.append(f"命中资金流Top10 {hn}+12")
+                else:
+                    score += 3
+                    sector_validation_parts.append(f"命中板块{hn}+3")
+            else:
+                score += 3
+                sector_validation_parts.append(f"板块{hn}资金流非正+3")
+
+    # Also check if any theme keyword matches a hot sector name
+    if not matched_hot and categories:
+        for cat in categories:
+            for hs in hot_sectors:
+                if hs["name"] and (cat in hs["name"] or hs["name"] in cat):
+                    matched_hot.append(hs["name"])
+                    if hs["flow"] > 0 and hs["rank"] <= 3:
+                        score += 22
+                        sector_validation_parts.append(f"主题{cat}命中Top3 {hs['name']}+22")
+                    elif hs["flow"] > 0:
+                        score += 12
+                        sector_validation_parts.append(f"主题{cat}命中 {hs['name']}+12")
+                    else:
+                        score += 3
+                        sector_validation_parts.append(f"主题{cat}板块非正+3")
+                    break
+
+    reasons.extend(sector_validation_parts)
+
+    # --- 5. 涨停验证 ---
+    limit_validation_parts = []
     if limit_up_pool and categories:
         limit_up_names = set(s.get("name", "") for s in limit_up_pool)
         limit_up_codes = set(s.get("code", "") for s in limit_up_pool)
@@ -188,53 +298,184 @@ def score_market_impact(event, sector_flow, limit_up_pool=None):
             s_code = s.get("code", "") if isinstance(s, dict) else ""
             if s_name in limit_up_names or s_code in limit_up_codes:
                 limit_match += 1
-        if limit_match >= 2:
-            score += 12
-            market_val = f"{limit_match}只关联个股涨停"
-            reasons.append(f"涨停验证+12")
-        elif limit_match >= 1:
-            score += 6
-            market_val = f"{limit_match}只关联个股涨停"
-            reasons.append(f"涨停验证+6")
-        else:
-            market_val = "未在涨停池发现关联个股"
+        stock_bonus = min(limit_match * 10, 20)
+        if stock_bonus > 0:
+            score += stock_bonus
+            limit_validation_parts.append(f"涨停个股验证+{stock_bonus}")
 
-    # 影响力等级
-    if score >= 35:
+        # Theme→limit-up name matching
+        theme_limit_match = 0
+        for lu in limit_up_pool:
+            lu_name = lu.get("name", "")
+            lu_sector = lu.get("sector", "") or ""
+            lu_text = lu_name + lu_sector
+            for cat in categories:
+                if cat in lu_text:
+                    theme_limit_match += 1
+                    break
+        theme_bonus = min(theme_limit_match * 6, 18)
+        if theme_bonus > 0:
+            score += theme_bonus
+            limit_validation_parts.append(f"涨停主题验证+{theme_bonus}")
+
+        reasons.extend(limit_validation_parts)
+
+    # --- 6. 可交易性 ---
+    has_sector_valid = len(sector_validation_parts) > 0
+    has_limit_valid = len(limit_validation_parts) > 0
+    if categories and (has_sector_valid or has_limit_valid):
+        score += 8
+        reasons.append("可交易性+8")
+    elif categories and stock_count >= 1:
+        pass  # 只有单个公司公告 +0
+    elif categories and not has_sector_valid and not has_limit_valid:
+        pass  # +0
+
+    # --- 7. 降权 ---
+    full_text = ((event.get("title", "") or "") + " "
+                 + (event.get("brief", "") or "") + " "
+                 + (event.get("content", "") or ""))
+
+    for pattern, penalty in _DOWNGRADE_PATTERNS:
+        if pattern in full_text:
+            score += penalty
+            downgrade_reasons.append(f"'{pattern}' {penalty}")
+            reasons.append(f"降权: {pattern} {penalty}")
+            break  # Only apply strongest downgrade
+
+    # 纯海外且无A股主题
+    if etype == "overseas" and not categories:
+        score -= 12
+        downgrade_reasons.append("纯海外无A股映射-12")
+        reasons.append("降权: 纯海外无A股映射-12")
+
+    # 纯商品期货且无A股主题
+    if etype == "commodity" and not categories:
+        score -= 8
+        downgrade_reasons.append("纯商品无A股映射-8")
+        reasons.append("降权: 纯商品无A股映射-8")
+
+    # 无任何A股映射线索（无主题/无个股/无板块）→ 降权
+    if not categories and not stock_count and not plate_count:
+        score -= 8
+        downgrade_reasons.append("无A股映射线索-8")
+        reasons.append("降权: 无A股映射线索-8")
+
+    # 纯单股公告、无任何盘面验证 → 降权，不能排在已验证事件前面
+    if not has_sector_valid and not has_limit_valid:
+        score -= 10
+        downgrade_reasons.append("无盘面验证-10")
+        reasons.append("降权: 无盘面验证-10")
+
+    # --- 影响力等级 ---
+    if score >= 55:
         impact_level = "重大"
-    elif score >= 22:
+    elif score >= 35:
         impact_level = "较强"
-    elif score >= 12:
+    elif score >= 18:
         impact_level = "一般"
     else:
         impact_level = "微弱"
 
-    # 可交易性
-    if score >= 30 and matched_hot:
+    # --- 可交易性 ---
+    if score >= 45 and (has_sector_valid or has_limit_valid):
         tradability = "强"
-    elif score >= 18:
+    elif score >= 25 and categories:
         tradability = "中"
     else:
         tradability = "弱"
+
+    # --- 盘面验证文本 ---
+    validation_parts = []
+    if sector_validation_parts:
+        # Extract top sector rank info
+        for hs in hot_sectors:
+            if hs["name"] in matched_hot:
+                validation_parts.append(f"板块资金流排名{hs['rank']}")
+                break
+    if limit_validation_parts:
+        validation_parts.append("；".join(limit_validation_parts))
+    market_val = "；".join(validation_parts) if validation_parts else ""
+
+    # --- Build validation_details ---
+    validation_details = {}
+    if matched_hot:
+        for hs in hot_sectors:
+            if hs["name"] == matched_hot[0]:
+                validation_details["sector_rank"] = hs["rank"]
+                validation_details["sector_flow"] = hs["flow"]
+                break
 
     event["impact_score"] = round(score, 1)
     event["impact_level"] = impact_level
     event["impact_reason"] = "；".join(reasons)
     event["matched_hot_sectors"] = matched_hot
     event["affected_themes"] = categories
-    event["event_category"] = categories
+    event["event_category"] = etype
+    event["event_category_name"] = _EVENT_CATEGORY_NAMES.get(etype, etype)
     event["market_validation"] = market_val
+    event["validation_details"] = validation_details
     event["tradability"] = tradability
+    event["downgrade_reasons"] = downgrade_reasons
     return event
 
 
+def dedupe_or_downgrade_events(events):
+    """Deduplicate identical titles and downgrade repetitive same-theme events.
+
+    - Titles exactly identical → keep only the first
+    - Same (affected_themes[0] + event_category) > 3 occurrences → downgrade later ones
+    """
+    if not events:
+        return events
+
+    seen_titles = set()
+    theme_cat_counts = {}
+    result = []
+
+    for e in events:
+        title = (e.get("title", "") or "").strip()
+        # Drop events with empty titles (e.g. ETF trading-halt boilerplate)
+        if not title:
+            continue
+        if title in seen_titles:
+            e["downgrade_reasons"] = (e.get("downgrade_reasons") or []) + ["重复标题已去重"]
+            continue
+        seen_titles.add(title)
+
+        themes = e.get("affected_themes", []) or []
+        etype = e.get("event_category", "other")
+        key = (themes[0] if themes else "none") + "|" + etype
+        theme_cat_counts[key] = theme_cat_counts.get(key, 0) + 1
+
+        if theme_cat_counts[key] > 3:
+            e["impact_score"] = round(e.get("impact_score", 0) - 5, 1)
+            e["downgrade_reasons"] = (e.get("downgrade_reasons") or []) + [f"同主题第{theme_cat_counts[key]}条，重复降权-5"]
+
+        result.append(e)
+
+    return result
+
+
 def rank_market_impact_events(events, sector_flow, limit_up_pool=None, top_n=10):
-    """对事件按 A 股影响力评分排序，返回 Top N。"""
+    """对事件按 A 股影响力评分排序，返回 Top N。
+
+    Sort: impact_score desc → tradability 强>中>弱 → level desc → ctime desc
+    """
     if not events:
         return []
 
     scored = [score_market_impact(e, sector_flow, limit_up_pool) for e in events]
-    scored.sort(key=lambda e: e.get("impact_score", 0), reverse=True)
+    scored = dedupe_or_downgrade_events(scored)
+
+    tradability_order = {"强": 3, "中": 2, "弱": 1}
+    scored.sort(key=lambda e: (
+        -e.get("impact_score", 0),
+        -tradability_order.get(e.get("tradability", "弱"), 0),
+        -(e.get("level", 1) or 1),
+        -(e.get("ctime", 0) or 0),
+    ))
+
     return scored[:top_n]
 
 

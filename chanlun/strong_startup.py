@@ -429,3 +429,60 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "dates": seed.get("dates", []),
         "result_30min": None,
     }
+
+
+def annotate_startup_quality(bp):
+    """Annotate a startup buy_point with daily startup grade and sublevel confirm grade.
+
+    Does NOT filter — only adds labels for display and sorting.
+    """
+    bp = dict(bp)
+
+    change_pct = bp.get("change_pct", 0) or 0
+    startup_signals = bp.get("startup_signals", []) or []
+    startup_reason = bp.get("startup_reason", "") or ""
+    confirmations = bp.get("confirmations", []) or []
+
+    # --- daily_startup_grade ---
+    is_strong = (
+        change_pct >= 4
+        or "break_20d_high" in startup_signals
+        or "突破20日平台" in startup_reason
+        or "突破中枢" in startup_reason
+    )
+    if is_strong:
+        bp["daily_startup_grade"] = "strong"
+        bp["daily_startup_label"] = "强启动"
+    elif change_pct >= 0:
+        bp["daily_startup_grade"] = "weak"
+        bp["daily_startup_label"] = "弱启动确认"
+        bp["daily_startup_warning"] = "涨幅较小，属于观察型启动，不是追涨启动"
+    else:
+        bp["daily_startup_grade"] = "pullback"
+        bp["daily_startup_label"] = "回踩型启动观察"
+        bp["daily_startup_warning"] = f"当日收跌{abs(change_pct):.1f}%，属于观察型启动，不是追涨启动"
+
+    # --- sublevel_confirm_grade ---
+    conf_text = " ".join(confirmations) if confirmations else ""
+    has_buy23 = any("二买" in c or "三买" in c for c in confirmations)
+    has_ema5 = "EMA5" in conf_text
+    has_any_confirm = len(confirmations) > 0
+
+    if has_buy23:
+        bp["sublevel_confirm_grade"] = "S"
+        bp["sublevel_confirm_label"] = "S级确认"
+        bp["sublevel_confirm_reason"] = "30min出现二买/三买确认"
+    elif bp["daily_startup_grade"] == "strong" and has_ema5:
+        bp["sublevel_confirm_grade"] = "A"
+        bp["sublevel_confirm_label"] = "A级确认"
+        bp["sublevel_confirm_reason"] = "日线强启动+30min EMA5维持"
+    elif has_any_confirm:
+        bp["sublevel_confirm_grade"] = "B"
+        bp["sublevel_confirm_label"] = "B级确认"
+        bp["sublevel_confirm_reason"] = f"30min确认: {', '.join(confirmations[:2])}"
+    else:
+        bp["sublevel_confirm_grade"] = "C"
+        bp["sublevel_confirm_label"] = "C级确认"
+        bp["sublevel_confirm_reason"] = "暂无30min确认信号"
+
+    return bp

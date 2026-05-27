@@ -64,36 +64,19 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 class TestReportGenerator(unittest.TestCase):
 
-    def test_serialize_picks_volumes_30min(self):
-        """volumes_30min is serialized when result_30min is present."""
-        pick = make_pick(with_30min=True)
-        serialized = _serialize_picks([pick])
-        self.assertEqual(len(serialized), 1)
-        s = serialized[0]
-        self.assertTrue(s["has_30min"])
-        self.assertEqual(len(s["volumes_30min"]), 2)
-        self.assertEqual(s["volumes_30min"], [1000.0, 2000.0])
-
-    def test_serialize_picks_no_30min_empty_arrays(self):
-        """When no result_30min, volumes_30min is empty list."""
-        pick = make_pick(with_30min=False)
-        serialized = _serialize_picks([pick])
-        s = serialized[0]
-        self.assertFalse(s["has_30min"])
-        self.assertEqual(s["volumes_30min"], [])
-        self.assertEqual(s["dates_30min"], [])
-
-    def test_serialize_picks_includes_30min_ohlc(self):
-        """30min OHLC data is serialized for dual chart."""
+    def test_serialize_picks_omits_30min_chart_arrays(self):
+        """30min K线数组已从报告JSON删除，只保留确认摘要字段。"""
         pick = make_pick(with_30min=True)
         serialized = _serialize_picks([pick])
         s = serialized[0]
-        self.assertEqual(len(s["dates_30min"]), 2)
-        self.assertEqual(len(s["opens_30min"]), 2)
-        self.assertEqual(len(s["highs_30min"]), 2)
-        self.assertEqual(len(s["lows_30min"]), 2)
-        self.assertEqual(len(s["closes_30min"]), 2)
-        self.assertEqual(s["opens_30min"][0], 50.0)
+        for f in ("has_30min", "dates_30min", "opens_30min", "highs_30min",
+                  "lows_30min", "closes_30min", "volumes_30min"):
+            self.assertNotIn(f, s)
+        # These fields are kept
+        self.assertIn("buy_points_30min", s)
+
+    def test_serialize_picks_json_encodable(self):
+        """Serialized picks can be JSON-encoded (no numpy types leak)."""
 
     def test_serialize_bp_includes_30min_confirm_fields(self):
         """best_buy_point serialization preserves confirmed_by and strength."""
@@ -146,7 +129,8 @@ class TestReportGenerator(unittest.TestCase):
         encoded = json.dumps(serialized, cls=NpEncoder)
         decoded = json.loads(encoded)
         self.assertEqual(decoded[0]["code"], "600519")
-        self.assertEqual(decoded[0]["volumes_30min"], [1000.0, 2000.0])
+        self.assertIn("buy_points_30min", decoded[0])
+        self.assertEqual(decoded[0]["buy_points_30min"], [])
 
 
 def _make_minimal_report_data():
@@ -415,6 +399,141 @@ class TestBuildStartupWatchChartAnnotations(unittest.TestCase):
         # Should not crash, just no ref markLine
         ref_lines = [ml for ml in result["markLines"] if ml.get("name") == "source"]
         self.assertEqual(len(ref_lines), 0)
+
+
+class TestHTMLEscape(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_esc_")
+        report_data = _make_minimal_report_data()
+        report_data["events"] = [{
+            "title": "<img src=x onerror=alert(1)>",
+            "display_title": "<script>alert('xss')</script>",
+            "content": "<b>bold</b>",
+            "brief": "brief & more",
+            "level": 1,
+            "event_category": "policy",
+            "event_category_name": "政策催化",
+            "impact_score": 20,
+            "impact_level": "一般",
+            "impact_reason": "<script>bad</script>",
+            "affected_themes": ["<img onerror=alert(1)>"],
+            "matched_hot_sectors": ["<b>x</b>"],
+            "downgrade_reasons": ["<script>alert(2)</script>"],
+            "market_validation": "<img src=x>",
+            "impact": {
+                "headline": "<script>alert(3)</script>",
+                "analysis": ["<img onerror=alert(4)>", "normal text"],
+                "positive_sectors": ["<b>sector</b>"],
+                "negative_sectors": [],
+                "positive_stocks": [{"name": "<script>x</script>", "code": "000001", "reason": "<img>"}],
+                "negative_stocks": [],
+            },
+        }]
+        report_data["picks_fusion"] = [{
+            "code": "<script>x</script>",
+            "name": "<img src=x>",
+            "best_buy_point": {
+                "type": "强势启动候选",
+                "reason": "<b>reason</b>",
+                "startup_reason": "<script>alert(5)</script>",
+                "confirmed_by": "<img src=x>",
+                "confirmations": ["<b>conf</b>"],
+                "daily_startup_grade": "strong",
+                "daily_startup_label": "<x>",
+                "daily_startup_warning": "<script>warn</script>",
+                "sublevel_confirm_grade": "A",
+                "sublevel_confirm_label": "A级确认",
+                "sublevel_confirm_reason": "<b>reason</b>",
+                "signal_date": "2026-05-26",
+                "reference_price": 10,
+                "current_price": 12,
+            },
+            "closes": [10.0] * 60,
+            "opens": [10.0] * 60,
+            "highs": [10.0] * 60,
+            "lows": [10.0] * 60,
+            "volumes": [1000.0] * 60,
+            "dates": ["2026-05-{:02d}".format(d) for d in range(1, 61)],
+            "macd_hist": [0.1] * 60,
+            "buy_points": [],
+            "buy_points_30min": [],
+            "reference_buy_points": [],
+            "blocked_buy_points": [],
+            "pivots": {},
+            "score": 10,
+        }]
+        report_data["startup_watchlist"] = [{
+            "code": "<img src=x>",
+            "name": "<script>alert(6)</script>",
+            "type": "强势启动观察",
+            "startup_reason": "<b>reason</b>",
+            "watch_reason": "<script>bad</script>",
+            "next_day_conditions": ["<img onerror=alert(7)>"],
+            "startup_age_days": 0,
+            "close": 10,
+            "current_price": 12,
+            "distance_from_reference_pct": 20,
+            "startup_date": "2026-05-26",
+            "source_type": "<b>source</b>",
+            "startup_signals": ["<script>x</script>"],
+            "recency_reason": "<img src=x>",
+            "closes": [10.0] * 60,
+            "opens": [10.0] * 60,
+            "highs": [10.0] * 60,
+            "lows": [10.0] * 60,
+            "volumes": [1000.0] * 60,
+            "dates": ["2026-05-{:02d}".format(d) for d in range(1, 61)],
+        }]
+        report_data["sell_signals"] = [{
+            "code": "<script>x</script>",
+            "name": "<img src=x>",
+            "sell_points": [{"type": "<b>sell</b>", "reason": "<script>bad</script>"}],
+            "sector": "<img src=x>",
+            "trend_type": "<b>trend</b>",
+        }]
+        report_data["limit_up_pool"] = [{
+            "name": "<script>alert(8)</script>",
+            "code": "000001",
+            "sector": "<img src=x>",
+        }]
+        report_data["sector_outflow"] = [{
+            "name": "<b>outflow</b>",
+            "change_pct": -1.5,
+            "flow_str": "-1.23亿",
+        }]
+        generate_report(report_data, output_dir=cls.tmpdir)
+        html_path = os.path.join(cls.tmpdir, "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def test_no_unescaped_script_tags(self):
+        self.assertNotIn("<script>alert('xss')</script>", self.html)
+        self.assertNotIn("<script>alert(1)</script>", self.html)
+        self.assertNotIn("<script>alert(2)</script>", self.html)
+        self.assertNotIn("<script>alert(3)</script>", self.html)
+        self.assertNotIn("<script>alert(5)</script>", self.html)
+        self.assertNotIn("<script>alert(6)</script>", self.html)
+        self.assertNotIn("<script>alert(8)</script>", self.html)
+        self.assertNotIn("<script>x</script>", self.html)
+        self.assertNotIn("<script>bad</script>", self.html)
+        self.assertNotIn("<script>warn</script>", self.html)
+
+    def test_no_img_onerror(self):
+        self.assertNotIn("onerror=alert(1)", self.html)
+        self.assertNotIn("onerror=alert(4)", self.html)
+        self.assertNotIn("onerror=alert(7)", self.html)
+
+    def test_escapeHtml_function_defined(self):
+        self.assertIn("function escapeHtml(value)", self.html)
+        self.assertIn(".replace(/&/g, '&amp;')", self.html)
+
+    def test_no_raw_html_in_js_innerHTML(self):
+        """Verify all dynamic text in JS is wrapped with escapeHtml()."""
+        # Count all escapeHtml calls — should be substantial
+        esc_count = self.html.count("escapeHtml(")
+        self.assertGreater(esc_count, 30, f"Only {esc_count} escapeHtml calls found")
 
 
 if __name__ == "__main__":

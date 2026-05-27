@@ -252,6 +252,7 @@ body {
 <!-- 选股结果 -->
 <div class="section">
     <div class="section-title">缠论选股结果 <span style="font-size:13px;color:#888;" id="pickCount"></span></div>
+    <div id="selectionSummaryCards"></div>
     <div id="signalSummary"></div>
     <div id="versionDiff"></div>
     <div id="pickTable"></div>
@@ -278,6 +279,7 @@ body {
 <!-- 事件驱动 -->
 <div class="section" id="eventsSection">
     <div class="section-title">A股影响力事件 Top10</div>
+    <div style="color:#888;font-size:12px;margin:-4px 0 12px 0;">按事件重要性、主题映射、资金流、涨停验证综合排序；不是最新新闻列表。</div>
     <div id="eventsList"></div>
 </div>
 
@@ -426,9 +428,20 @@ async function init() {
     }
 }
 
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function renderAll() {
     renderMarketCards();
     renderMarketStructure();
+    renderSelectionSummaryCards();
     renderSectorFlow();
     renderSectorOutflow();
     renderEvents();
@@ -479,15 +492,82 @@ function renderMarketStructure() {
             '</div>';
     }
     if (cs.key_signal) {
-        html += '<div class="detail-section"><strong>关键信号：</strong>' + cs.key_signal + '</div>';
+        html += '<div class="detail-section"><strong>关键信号：</strong>' + escapeHtml(cs.key_signal) + '</div>';
     }
     if (cs.conclusion) {
-        html += '<div class="detail-section"><strong>结论：</strong>' + cs.conclusion + '</div>';
+        html += '<div class="detail-section"><strong>结论：</strong>' + escapeHtml(cs.conclusion) + '</div>';
     }
     if (!html) {
         html = '<div class="detail-section">未能计算上证缠论结构</div>';
     }
     document.getElementById('marketStructure').innerHTML = html;
+}
+
+// ========== 选股摘要卡片 ==========
+function renderSelectionSummaryCards() {
+    var fusionPicks = REPORT_DATA.picks_fusion || [];
+    var purePicks = REPORT_DATA.picks_pure || [];
+    var diag = REPORT_DATA.diagnostics || {};
+    var fa = diag.fusion_admission || {};
+
+    // Count strong startup candidates
+    var startupCount = 0;
+    var gradeB = 0, gradeC = 0, pullbackCount = 0;
+    fusionPicks.forEach(function(p) {
+        var bp = p.best_buy_point || {};
+        if (bp.type === '强势启动候选') {
+            startupCount++;
+            var dg = bp.daily_startup_grade || '';
+            var sg = bp.sublevel_confirm_grade || '';
+            if (dg === 'pullback') pullbackCount++;
+            if (sg === 'B') gradeB++;
+            if (sg === 'C') gradeC++;
+        }
+    });
+
+    var regime = fa.market_regime || 'unknown';
+    var regimeText = regime === 'strong' ? '强市' : (regime === 'weak' ? '弱市' : '-');
+    var regimeColor = regime === 'strong' ? '#ff4757' : (regime === 'weak' ? '#74b9ff' : '#888');
+
+    var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+
+    // Card 1: picks count
+    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
+    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📋 今日推荐</div>';
+    html += '<div style="font-size:20px;font-weight:bold;">' +
+        '<span style="color:#ffa502;">fusion ' + fusionPicks.length + '</span>' +
+        ' <span style="color:#888;font-size:14px;">/</span> ' +
+        '<span style="color:#74b9ff;">pure ' + purePicks.length + '</span>' +
+        '</div>';
+    html += '</div>';
+
+    // Card 2: main signal
+    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
+    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📡 主信号</div>';
+    html += '<div style="font-size:14px;color:#dfe6e9;">强势启动 <span style="color:#ffa502;font-weight:bold;">' + startupCount + '</span> 只</div>';
+    html += '</div>';
+
+    // Card 3: market state
+    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
+    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📊 市场状态</div>';
+    html += '<div style="font-size:14px;">' +
+        '大盘<span style="color:' + regimeColor + ';font-weight:bold;">' + regimeText + '</span>' +
+        (fa.dropped_by_ma !== undefined ? '，MA过滤 <span style="color:#ffa502;">' + fa.dropped_by_ma + '</span> 只' : '') +
+        '</div>';
+    html += '</div>';
+
+    // Card 4: risk hints
+    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
+    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">⚠️ 风险提示</div>';
+    var riskParts = [];
+    if (gradeB > 0) riskParts.push('B级确认 <span style="color:#ffd43b;">' + gradeB + '</span> 只');
+    if (gradeC > 0) riskParts.push('C级确认 <span style="color:#888;">' + gradeC + '</span> 只');
+    if (pullbackCount > 0) riskParts.push('回踩型 <span style="color:#74b9ff;">' + pullbackCount + '</span> 只');
+    html += '<div style="font-size:12px;color:#aaa;">' + (riskParts.length ? riskParts.join('，') : '暂无') + '</div>';
+    html += '</div>';
+
+    html += '</div>';
+    document.getElementById('selectionSummaryCards').innerHTML = html;
 }
 
 // ========== 板块资金 ==========
@@ -498,7 +578,7 @@ function renderSectorFlow() {
         var cls = (s.flow || 0) >= 0 ? 'in' : 'out';
         html += '<div class="sector-tag">' +
             '<span class="rank">#' + (i + 1) + '</span>' +
-            '<span class="sname">' + s.name + '</span>' +
+            '<span class="sname">' + escapeHtml(s.name) + '</span>' +
             '<span class="sflow ' + cls + '">' + (s.flow_str || '') + '</span>' +
             '</div>';
     });
@@ -520,7 +600,7 @@ function renderSectorOutflow() {
         var sign = (it.change_pct || 0) >= 0 ? '+' : '';
         html += '<tr>' +
             '<td>' + (i + 1) + '</td>' +
-            '<td>' + it.name + '</td>' +
+            '<td>' + escapeHtml(it.name) + '</td>' +
             '<td class="' + chgCls + '">' + sign + (it.change_pct || 0).toFixed(2) + '%</td>' +
             '<td style="color:#2ed573">' + (it.flow_str || '') + '</td>' +
             '</tr>';
@@ -583,11 +663,24 @@ function renderEvents() {
             html += '<span style="display:inline-block;color:' + tradabilityColor + ';font-size:11px;margin-right:6px;">可交易性:' + tradability + '</span>';
         }
 
-        html += '<span style="color:' + levelColor + ';font-weight:bold;">' + (ev.display_title || ev.title || '') + '</span>';
+        html += '<span style="color:' + levelColor + ';font-weight:bold;">' + escapeHtml(ev.display_title || ev.title || '') + '</span>';
+
+        // Event category badge
+        var catName = ev.event_category_name || '';
+        if (catName) {
+            html += ' <span style="display:inline-block;background:rgba(116,185,255,0.15);' +
+                'color:#74b9ff;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:4px;">' + catName + '</span>';
+        }
 
         // 规则影响理由（LLM 失败时也展示）
         if (impactReason) {
-            html += '<div style="color:#888;font-size:12px;margin:4px 0 2px;">📋 评分: ' + impactReason + '</div>';
+            html += '<div style="color:#888;font-size:12px;margin:4px 0 2px;">📋 评分: ' + escapeHtml(impactReason) + '</div>';
+        }
+
+        // 降权原因
+        var downgradeReasons = ev.downgrade_reasons || [];
+        if (downgradeReasons.length) {
+            html += '<div style="color:#ffa502;font-size:11px;margin:2px 0;">⚠ ' + downgradeReasons.map(function(r) { return escapeHtml(r); }).join('；') + '</div>';
         }
 
         // 匹配热门板块
@@ -603,13 +696,13 @@ function renderEvents() {
         // 盘面验证
         if (marketValidation) {
             var valColor = marketValidation.includes('涨停') ? '#ff4757' : '#888';
-            html += '<div style="color:' + valColor + ';font-size:12px;margin:2px 0;">📊 ' + marketValidation + '</div>';
+            html += '<div style="color:' + valColor + ';font-size:12px;margin:2px 0;">📊 ' + escapeHtml(marketValidation) + '</div>';
         }
 
         // AI headline
         if (imp.headline && !isFailed) {
             html += '<div style="color:#dfe6e9;font-size:14px;margin:6px 0;">' +
-                '🤖 ' + imp.headline + '</div>';
+                '🤖 ' + escapeHtml(imp.headline) + '</div>';
         } else if (isFailed) {
             html += '<div style="color:#888;font-size:13px;margin:6px 0;">AI分析暂不可用</div>';
         }
@@ -618,7 +711,7 @@ function renderEvents() {
         if (imp.analysis && imp.analysis.length && !isFailed) {
             html += '<div style="color:#aaa;font-size:13px;line-height:1.6;margin:6px 0;">';
             imp.analysis.forEach(function(a) {
-                html += '<div style="margin-left:8px;">• ' + a + '</div>';
+                html += '<div style="margin-left:8px;">• ' + escapeHtml(a) + '</div>';
             });
             html += '</div>';
         }
@@ -630,7 +723,7 @@ function renderEvents() {
             html += '<div class="impact-tags">';
             html += '<span class="impact-label">主题：</span>';
             affectedThemes.forEach(function(t) {
-                html += '<span class="impact-tag positive">' + t + '</span>';
+                html += '<span class="impact-tag positive">' + escapeHtml(t) + '</span>';
             });
             html += '</div>';
         }
@@ -641,13 +734,13 @@ function renderEvents() {
             if (imp.positive_sectors && imp.positive_sectors.length) {
                 html += '<span class="impact-label">利好：</span>';
                 imp.positive_sectors.forEach(function(s) {
-                    html += '<span class="impact-tag positive">' + s + '</span>';
+                    html += '<span class="impact-tag positive">' + escapeHtml(s) + '</span>';
                 });
             }
             if (imp.negative_sectors && imp.negative_sectors.length) {
                 html += '<span class="impact-label">利空：</span>';
                 imp.negative_sectors.forEach(function(s) {
-                    html += '<span class="impact-tag negative">' + s + '</span>';
+                    html += '<span class="impact-tag negative">' + escapeHtml(s) + '</span>';
                 });
             }
             html += '</div>';
@@ -658,9 +751,9 @@ function renderEvents() {
             html += '<div class="impact-stocks">';
             var renderStock = function(st, cls) {
                 return '<span class="impact-stock-item ' + cls + '">' +
-                    '<span class="s-name">' + st.name + '</span>' +
-                    '<span class="s-code">' + st.code + '</span>' +
-                    (st.reason ? '<span class="s-reason">' + st.reason + '</span>' : '') +
+                    '<span class="s-name">' + escapeHtml(st.name) + '</span>' +
+                    '<span class="s-code">' + escapeHtml(st.code) + '</span>' +
+                    (st.reason ? '<span class="s-reason">' + escapeHtml(st.reason) + '</span>' : '') +
                     '</span>';
             };
             if (imp.positive_stocks && imp.positive_stocks.length) {
@@ -676,7 +769,7 @@ function renderEvents() {
 
         // Related tags
         if (tags.length) {
-            html += '<div class="event-stocks">📌 ' + tags.join(' / ') + '</div>';
+            html += '<div class="event-stocks">📌 ' + escapeHtml(tags.join(' / ')) + '</div>';
         }
 
         // Collapsed raw content
@@ -689,7 +782,7 @@ function renderEvents() {
                 'style="color:#74b9ff;font-size:12px;cursor:pointer;">查看原文 ▼</a>' +
                 '<div id="' + eventId + '" style="display:none;color:#888;font-size:12px;line-height:1.6;margin-top:6px;' +
                 'padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;">' +
-                rawContent + '</div></div>';
+                escapeHtml(rawContent) + '</div></div>';
         }
 
         html += '</div>';
@@ -706,25 +799,25 @@ function renderForecast() {
     }
     document.getElementById('forecastSection').style.display = '';
     var html = '<div class="forecast-box"><div class="forecast-text">';
-    html += '<p><strong>📌 核心判断：' + fc.core_judgment + '</strong></p>';
+    html += '<p><strong>📌 核心判断：' + escapeHtml(fc.core_judgment) + '</strong></p>';
     if (fc.volume_note) {
-        html += '<p style="color:#888;font-size:13px;">' + fc.volume_note + '</p>';
+        html += '<p style="color:#888;font-size:13px;">' + escapeHtml(fc.volume_note) + '</p>';
     }
     if (fc.short_term && fc.short_term.length) {
         html += '<span class="forecast-label">🔍 短期预判（1周内）：</span>';
         fc.short_term.forEach(function(s) {
-            html += '<p style="margin-left:12px;">' + s + '</p>';
+            html += '<p style="margin-left:12px;">' + escapeHtml(s) + '</p>';
         });
     }
     if (fc.mid_term) {
         html += '<span class="forecast-label">🔍 中期预判（2-4周）：</span>';
-        html += '<p style="margin-left:12px;">' + fc.mid_term + '</p>';
+        html += '<p style="margin-left:12px;">' + escapeHtml(fc.mid_term) + '</p>';
     }
     if (fc.risks && fc.risks.length) {
         html += '<div class="risk-box"><strong style="color:#ff4757;">⚠️ 风险提示</strong>';
         html += '<ul class="risk-list">';
         fc.risks.forEach(function(r) {
-            html += '<li>' + r + '</li>';
+            html += '<li>' + escapeHtml(r) + '</li>';
         });
         html += '</ul></div>';
     }
@@ -747,13 +840,13 @@ function renderSellSignals() {
     signals.forEach(function(s) {
         var sp = (s.sell_points || [])[0] || {};
         html += '<tr>' +
-            '<td>' + s.code + '</td>' +
-            '<td>' + s.name + '</td>' +
-            '<td><span class="sell-tag">' + (sp.type || '-') + '</span></td>' +
+            '<td>' + escapeHtml(s.code) + '</td>' +
+            '<td>' + escapeHtml(s.name) + '</td>' +
+            '<td><span class="sell-tag">' + escapeHtml(sp.type || '-') + '</span></td>' +
             '<td>' + (sp.price || '-') + '</td>' +
-            '<td>' + (s.sector || '-') + '</td>' +
-            '<td>' + (s.trend_type || '-') + '</td>' +
-            '<td style="font-size:12px;color:#aaa;">' + (sp.reason || '-') + '</td>' +
+            '<td>' + escapeHtml(s.sector || '-') + '</td>' +
+            '<td>' + escapeHtml(s.trend_type || '-') + '</td>' +
+            '<td style="font-size:12px;color:#aaa;">' + escapeHtml(sp.reason || '-') + '</td>' +
             '</tr>';
     });
     html += '</tbody></table>';
@@ -782,12 +875,12 @@ function renderLimitUp() {
     var html = '';
     keys.forEach(function(sec) {
         var list = groups[sec];
-        html += '<h3 style="color:#fff;margin:18px 0 12px;font-size:15px;">📊 ' + sec + ' (' + list.length + '只)</h3>';
+        html += '<h3 style="color:#fff;margin:18px 0 12px;font-size:15px;">📊 ' + escapeHtml(sec) + ' (' + list.length + '只)</h3>';
         html += '<div class="limit-up-list">';
         list.forEach(function(it) {
             html += '<div class="limit-up-item">' +
-                '<div class="stock-name">' + it.name + '</div>' +
-                '<div class="stock-code">' + it.code + '</div>' +
+                '<div class="stock-name">' + escapeHtml(it.name) + '</div>' +
+                '<div class="stock-code">' + escapeHtml(it.code) + '</div>' +
                 '</div>';
         });
         html += '</div>';
@@ -819,34 +912,34 @@ function renderStartupWatchlist() {
         var distStr = distPct !== null && distPct !== undefined ? (distPct >= 0 ? '+' : '') + distPct.toFixed(2) + '%' : '-';
         var distColor = distPct !== null ? (distPct > 0 ? '#ff4757' : '#5effa0') : '#aaa';
         html += '<tr class="expandable" onclick="toggleStartupWatchChart(' + idx + ')">' +
-            '<td>' + w.code + '</td>' +
-            '<td>' + w.name + '</td>' +
-            '<td><span class="sell-tag">' + w.type + '</span></td>' +
+            '<td>' + escapeHtml(w.code) + '</td>' +
+            '<td>' + escapeHtml(w.name) + '</td>' +
+            '<td><span class="sell-tag">' + escapeHtml(w.type) + '</span></td>' +
             '<td style="font-size:12px;">' + ageLabel + '</td>' +
             '<td>' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>' +
             '<td>' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>' +
             '<td style="color:' + distColor + ';">' + distStr + '</td>' +
-            '<td style="color:#ffa502;font-size:13px;">' + (w.startup_reason || '') + '</td>' +
-            '<td style="color:#dfe6e9;font-size:13px;">' + (w.watch_reason || '') + '</td>' +
-            '<td style="color:#aaa;font-size:12px;">' + conditions + '</td>' +
+            '<td style="color:#ffa502;font-size:13px;">' + escapeHtml(w.startup_reason || '') + '</td>' +
+            '<td style="color:#dfe6e9;font-size:13px;">' + escapeHtml(w.watch_reason || '') + '</td>' +
+            '<td style="color:#aaa;font-size:12px;">' + escapeHtml(conditions) + '</td>' +
             '</tr>';
 
         // 展开行：图表 + 详情
         var detail = '';
         detail += '<div class="detail-section"><div class="detail-group"><div class="detail-group-title">启动观察详情</div>';
-        if (w.startup_date) detail += '<strong>启动日：</strong>' + w.startup_date +
+        if (w.startup_date) detail += '<strong>启动日：</strong>' + escapeHtml(w.startup_date) +
             (w.startup_age_days !== undefined ? ' (' + w.startup_age_days + '天前)' : '') + '<br>';
-        if (w.source_type) detail += '<strong>来源：</strong>' + w.source_type + '<br>';
+        if (w.source_type) detail += '<strong>来源：</strong>' + escapeHtml(w.source_type) + '<br>';
         if (w.change_pct) detail += '<strong>涨幅：</strong>' + w.change_pct + '%<br>';
         if (w.volume_ratio) detail += '<strong>放量倍数：</strong>' + w.volume_ratio.toFixed(2) + '倍<br>';
-        if (w.startup_signals && w.startup_signals.length) detail += '<strong>突破类型：</strong>' + w.startup_signals.join('，') + '<br>';
-        detail += '<strong>完整启动原因：</strong>' + (w.startup_reason || '-') + '<br>';
-        detail += '<strong>完整观察理由：</strong>' + (w.watch_reason || '-') + '<br>';
-        detail += '<strong>次日确认条件：</strong>' + ((w.next_day_conditions || []).join('；') || '-') + '<br>';
+        if (w.startup_signals && w.startup_signals.length) detail += '<strong>突破类型：</strong>' + escapeHtml(w.startup_signals.join('，')) + '<br>';
+        detail += '<strong>完整启动原因：</strong>' + escapeHtml(w.startup_reason || '-') + '<br>';
+        detail += '<strong>完整观察理由：</strong>' + escapeHtml(w.watch_reason || '-') + '<br>';
+        detail += '<strong>次日确认条件：</strong>' + escapeHtml((w.next_day_conditions || []).join('；') || '-') + '<br>';
         detail += '<strong>参考价：</strong>' + (refPrice ? refPrice.toFixed(2) : '-') +
             ' &nbsp; <strong>现价：</strong>' + (curPrice ? curPrice.toFixed(2) : '-') +
             ' &nbsp; <strong>距参考价：</strong><span style="color:' + distColor + ';">' + distStr + '</span><br>';
-        detail += '<strong>信号年龄：</strong>' + ageLabel + ' &nbsp; <strong>时效：</strong>' + (w.recency_reason || '-') + '<br>';
+        detail += '<strong>信号年龄：</strong>' + ageLabel + ' &nbsp; <strong>时效：</strong>' + escapeHtml(w.recency_reason || '-') + '<br>';
         detail += '</div></div>';
 
         html += '<tr class="chart-row" id="chartRow_sw_' + idx + '">' +
@@ -868,6 +961,7 @@ function renderPickTable(ver) {
 
     var html = '<table class="chan-table"><thead><tr>' +
         '<th>代码</th><th>名称</th><th>信号类型</th>' +
+        '<th>启动形态</th><th>30min确认</th>' +
         '<th>信号年龄</th><th>参考价</th><th>现价</th><th>距参考价</th>' +
         '<th>评分</th><th>一句话原因</th>';
     if (isFusion) {
@@ -875,7 +969,7 @@ function renderPickTable(ver) {
     }
     html += '</tr></thead><tbody>';
 
-    var colspan = isFusion ? 11 : 9;
+    var colspan = isFusion ? 13 : 11;
 
     if (picks.length === 0) {
         var diag = REPORT_DATA.diagnostics || {};
@@ -931,16 +1025,33 @@ function renderPickTable(ver) {
         var shortReason = bp.startup_reason || bp.reason || '-';
         if (shortReason.length > 40) shortReason = shortReason.substring(0, 40) + '...';
 
+        // Startup form label
+        var isStartup = bp.type === '强势启动候选';
+        var startupGrade = bp.daily_startup_grade || '';
+        var startupLabel = bp.daily_startup_label || (startupGrade === 'strong' ? '强启动' : (startupGrade === 'weak' ? '弱启动确认' : (startupGrade === 'pullback' ? '回踩型启动观察' : '-')));
+        var startupColor = startupGrade === 'strong' ? '#ff4757' : (startupGrade === 'weak' ? '#ffa502' : (startupGrade === 'pullback' ? '#74b9ff' : '#888'));
+        var startupDisplay = isStartup ? startupLabel : '-';
+        var startupStyle = isStartup ? ' style="color:' + startupColor + ';font-weight:bold;font-size:12px;"' : ' style="color:#666;font-size:12px;"';
+
+        // 30min confirm grade
+        var confirmGrade = bp.sublevel_confirm_grade || '';
+        var confirmLabel = bp.sublevel_confirm_label || '';
+        var confirmColor = confirmGrade === 'S' ? '#ff4757' : (confirmGrade === 'A' ? '#ffa502' : (confirmGrade === 'B' ? '#ffd43b' : '#888'));
+        var confirmDisplay = isStartup ? (confirmLabel || '-') : '-';
+        var confirmStyle = isStartup ? ' style="color:' + confirmColor + ';font-weight:bold;font-size:12px;"' : ' style="color:#666;font-size:12px;"';
+
         html += '<tr class="expandable" onclick="toggleChart(' + idx + ', \'' + ver + '\')">';
-        html += '<td>' + p.code + '</td>';
-        html += '<td>' + p.name + '</td>';
-        html += '<td><span class="buy-tag ' + tagClass + '">' + (bp.type || '-') + '</span></td>';
+        html += '<td>' + escapeHtml(p.code) + '</td>';
+        html += '<td>' + escapeHtml(p.name) + '</td>';
+        html += '<td><span class="buy-tag ' + tagClass + '">' + escapeHtml(bp.type || '-') + '</span></td>';
+        html += '<td' + startupStyle + '>' + escapeHtml(startupDisplay) + '</td>';
+        html += '<td' + confirmStyle + '>' + escapeHtml(confirmDisplay) + '</td>';
         html += '<td style="color:' + ageColor + ';font-size:12px;">' + ageLabel + '</td>';
         html += '<td style="font-size:13px;">' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>';
         html += '<td style="font-size:13px;">' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>';
         html += '<td style="color:' + distColor + ';font-size:13px;">' + distStr + '</td>';
         html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
-        html += '<td style="font-size:12px;white-space:normal;line-height:1.6;max-width:200px;">' + shortReason + '</td>';
+        html += '<td style="font-size:12px;white-space:normal;line-height:1.6;max-width:200px;">' + escapeHtml(shortReason) + '</td>';
         if (isFusion) {
             var fa = p.fusion_admission || {};
             html += '<td style="font-size:12px;">' +
@@ -957,29 +1068,42 @@ function renderPickTable(ver) {
         // Basic info
         detail += '<div class="detail-group">' +
             '<div class="detail-group-title">信号详情</div>';
-        if (bp.signal_date) detail += '<strong>信号发生日：</strong>' + bp.signal_date + '<br>';
+        if (bp.signal_date) detail += '<strong>信号发生日：</strong>' + escapeHtml(bp.signal_date) + '<br>';
         detail += '<strong>距今天数：</strong>' + ageLabel + '<br>';
         detail += '<strong>参考价：</strong>' + (refPrice ? refPrice.toFixed(2) : '-') +
             ' &nbsp; <strong>现价：</strong>' + (curPrice ? curPrice.toFixed(2) : '-') +
             ' &nbsp; <strong>距参考价：</strong><span style="color:' + distColor + ';">' + distStr + '</span><br>';
-        detail += '<strong>完整原因：</strong>' + (bp.reason || bp.startup_reason || '-') + '<br>';
-        if (bp.confirmed_by) detail += '<strong>30min确认：</strong>' + bp.confirmed_by +
+        detail += '<strong>完整原因：</strong>' + escapeHtml(bp.reason || bp.startup_reason || '-') + '<br>';
+        if (bp.confirmed_by) detail += '<strong>30min确认：</strong>' + escapeHtml(bp.confirmed_by) +
             (bp.strength ? ' [' + bp.strength + ']' : '') + '<br>';
-        if (bp.confirmations && bp.confirmations.length) detail += '<strong>确认细节：</strong>' + bp.confirmations.join('，') + '<br>';
+        if (bp.confirmations && bp.confirmations.length) detail += '<strong>确认细节：</strong>' + escapeHtml(bp.confirmations.join('，')) + '<br>';
         detail += '</div>';
 
         // Strong startup specifics
         if (bp.type === '强势启动候选') {
             detail += '<div class="detail-group">' +
                 '<div class="detail-group-title">强势启动详情</div>';
-            if (bp.startup_date) detail += '<strong>启动日：</strong>' + bp.startup_date +
+            if (bp.startup_date) detail += '<strong>启动日：</strong>' + escapeHtml(bp.startup_date) +
                 (bp.startup_age_days !== undefined ? ' (' + bp.startup_age_days + '天前)' : '') + '<br>';
-            if (bp.confirm_date) detail += '<strong>确认日：</strong>' + bp.confirm_date +
+            if (bp.confirm_date) detail += '<strong>确认日：</strong>' + escapeHtml(bp.confirm_date) +
                 (bp.confirm_age_days !== undefined ? ' (' + bp.confirm_age_days + '天前)' : '') + '<br>';
             if (bp.volume_ratio) detail += '<strong>放量倍数：</strong>' + bp.volume_ratio.toFixed(1) + '倍<br>';
             if (bp.change_pct) detail += '<strong>涨幅：</strong>' + bp.change_pct.toFixed(1) + '%<br>';
-            if (bp.startup_signals && bp.startup_signals.length) detail += '<strong>突破类型：</strong>' + bp.startup_signals.join('，') + '<br>';
-            if (bp.source_type) detail += '<strong>来源：</strong>' + bp.source_type + '<br>';
+            if (bp.startup_signals && bp.startup_signals.length) detail += '<strong>突破类型：</strong>' + escapeHtml(bp.startup_signals.join('，')) + '<br>';
+
+            // Startup form grade
+            detail += '<div style="margin-top:6px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:4px;">';
+            detail += '<strong>日线启动形态：</strong><span style="color:' + startupColor + ';font-weight:bold;">' + escapeHtml(startupLabel) + '</span>';
+            if (bp.daily_startup_warning) detail += '<br><span style="color:#ffa502;font-size:12px;">⚠ ' + escapeHtml(bp.daily_startup_warning) + '</span>';
+            detail += '</div>';
+
+            // 30min confirm grade
+            detail += '<div style="margin-top:4px;padding:6px 10px;background:rgba(255,255,255,0.03);border-radius:4px;">';
+            detail += '<strong>30min确认等级：</strong><span style="color:' + confirmColor + ';font-weight:bold;">' + escapeHtml(confirmLabel) + '</span>';
+            if (bp.sublevel_confirm_reason) detail += '<br><span style="color:#aaa;font-size:12px;">' + escapeHtml(bp.sublevel_confirm_reason) + '</span>';
+            detail += '</div>';
+
+            if (bp.source_type) detail += '<strong>来源：</strong>' + escapeHtml(bp.source_type) + '<br>';
             detail += '</div>';
         }
 
@@ -987,20 +1111,20 @@ function renderPickTable(ver) {
         if (bp.seed_type || bp.seed_reason) {
             detail += '<div class="detail-group">' +
                 '<div class="detail-group-title">原始参考信号</div>';
-            if (bp.seed_type) detail += '<strong>种子类型：</strong>' + bp.seed_type + '<br>';
-            if (bp.seed_reason) detail += '<strong>种子原因：</strong>' + bp.seed_reason + '<br>';
-            if (bp.source_type) detail += '<strong>参考信号：</strong>' + bp.source_type + '<br>';
+            if (bp.seed_type) detail += '<strong>种子类型：</strong>' + escapeHtml(bp.seed_type) + '<br>';
+            if (bp.seed_reason) detail += '<strong>种子原因：</strong>' + escapeHtml(bp.seed_reason) + '<br>';
+            if (bp.source_type) detail += '<strong>参考信号：</strong>' + escapeHtml(bp.source_type) + '<br>';
             detail += '</div>';
         }
 
         // Risk / structure
         detail += '<div class="detail-group">' +
             '<div class="detail-group-title">结构状态</div>' +
-            '<strong>走势类型：</strong>' + (p.trend_type || '-') + '<br>' +
+            '<strong>走势类型：</strong>' + escapeHtml(p.trend_type || '-') + '<br>' +
             '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) + '<br>' +
             (p.pivot_zg && p.pivot_zd ? '<strong>中枢区间：</strong>[' + p.pivot_zd + ' — ' + p.pivot_zg + ']<br>' : '') +
             '<strong>共振等级：</strong>' + (resonance.level || '-') +
-            (resonance.reason ? ' (' + resonance.reason + ')' : '') + '<br>' +
+            (resonance.reason ? ' (' + escapeHtml(resonance.reason) + ')' : '') + '<br>' +
             '</div>';
 
         // Fusion admission detail
@@ -1012,7 +1136,7 @@ function renderPickTable(ver) {
                 '<strong>MA多头：</strong>' + (p.ma_bullish ? '是 (MA5>MA10>MA20)' : '否') + '<br>' +
                 (fa.reason ? '<strong>融合版结果：</strong>' +
                  (fa.passed ? '<span style="color:#5effa0;">保留</span>' : '<span style="color:#ff4757;">过滤</span>') +
-                 ' — ' + fa.reason + '<br>' : '') +
+                 ' — ' + escapeHtml(fa.reason) + '<br>' : '') +
                 (p.stop_loss_pct ? '<strong>止损：</strong>' + p.stop_loss_pct + '%<br>' : '') +
                 '</div>';
         }
@@ -1022,7 +1146,7 @@ function renderPickTable(ver) {
             var rColor = bp.is_recent ? (bp.signal_age_days >= 8 ? '#ffa502' : '#5effa0') : '#ff4757';
             detail += '<div class="detail-group">' +
                 '<div class="detail-group-title">风险提示</div>' +
-                '<span style="color:' + rColor + ';">' + bp.recency_reason + '</span><br>';
+                '<span style="color:' + rColor + ';">' + escapeHtml(bp.recency_reason) + '</span><br>';
             if (bp.signal_age_days >= 8 && bp.is_recent) {
                 detail += '<span style="color:#ffa502;">⚠ 信号接近过期，建议优先关注更新鲜的信号</span><br>';
             }
