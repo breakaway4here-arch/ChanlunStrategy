@@ -98,7 +98,7 @@ SIGNAL_MAX_AGE_TRADING_DAYS = 10
 # 弱保护访问控制（前端 hash 校验，非安全鉴权）
 # ============================================================
 ENABLE_WEAK_ACCESS_CONTROL = True
-PUBLIC_DATES = ["2026-05-26"]
+PUBLIC_DATES = ["2026-05-26", "2026-05-27"]
 FULL_ACCESS_KEY = "02951e20-6de2-418c-8bab-463647220883"
 FULL_ACCESS_KEY_SALT = "chanlun-report-salt-v1"
 
