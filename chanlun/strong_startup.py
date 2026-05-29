@@ -40,6 +40,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
 
         code = result.code
         name = result.name
+        sector_name = sector_stocks.get(code, {}).get("sector", "") if sector_stocks else ""
         closes = result.closes
         opens = result.opens
         highs = result.highs
@@ -149,6 +150,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         seed = {
             "code": code,
             "name": name,
+            "sector": sector_name,
             "type": "强势启动候选",
             "tier": "candidate",
             "source_type": "日线强势启动",
@@ -405,6 +407,7 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
     return {
         "code": seed["code"],
         "name": seed["name"],
+        "sector": seed.get("sector", ""),
         "type": "强势启动观察",
         "tier": "watch",
         "source_type": "日线强势启动",

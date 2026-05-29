@@ -238,6 +238,7 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         item = {
             "code": "000001",
             "name": "测试股",
+            "sector": "测试板块",
             "type": "强势启动观察",
             "tier": "watch",
             "source_type": "日线强势启动",
@@ -276,6 +277,9 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         self.assertIn("volumes", sw)
         self.assertIn("macd_hist", sw)
         self.assertIn("chart_annotations", sw)
+        self.assertIn("sector", sw)
+        self.assertIn("daily_startup_label", sw)
+        self.assertIn("sublevel_confirm_label", sw)
         self.assertIsInstance(sw["dates"], list)
         self.assertIsInstance(sw["closes"], list)
 
@@ -434,6 +438,7 @@ class TestHTMLEscape(unittest.TestCase):
         report_data["picks_fusion"] = [{
             "code": "<script>x</script>",
             "name": "<img src=x>",
+            "sector": "<svg onload=alert(9)>",
             "best_buy_point": {
                 "type": "强势启动候选",
                 "reason": "<b>reason</b>",
@@ -467,6 +472,7 @@ class TestHTMLEscape(unittest.TestCase):
         report_data["startup_watchlist"] = [{
             "code": "<img src=x>",
             "name": "<script>alert(6)</script>",
+            "sector": "<svg onload=alert(10)>",
             "type": "强势启动观察",
             "startup_reason": "<b>reason</b>",
             "watch_reason": "<script>bad</script>",
@@ -518,6 +524,13 @@ class TestHTMLEscape(unittest.TestCase):
         self.assertNotIn("<script>alert(8)</script>", self.html)
         self.assertNotIn("<script>x</script>", self.html)
         self.assertNotIn("<script>bad</script>", self.html)
+        self.assertNotIn("<svg onload=alert(9)>", self.html)
+        self.assertNotIn("<svg onload=alert(10)>", self.html)
+
+    def test_startup_and_pick_headers_rendered(self):
+        self.assertIn("<th>板块</th>", self.html)
+        self.assertIn("<th>启动形态</th>", self.html)
+        self.assertIn("<th>30min确认</th>", self.html)
 
 
 class TestMarketCardRendering(unittest.TestCase):

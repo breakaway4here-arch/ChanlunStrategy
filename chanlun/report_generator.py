@@ -439,11 +439,20 @@ def _serialize_startup_watchlist(watchlist):
         item = {
             "code": w.get("code", ""),
             "name": w.get("name", ""),
+            "sector": w.get("sector", ""),
             "type": w.get("type", "强势启动观察"),
             "tier": w.get("tier", "watch"),
             "source_type": w.get("source_type", ""),
             "startup_reason": w.get("startup_reason", ""),
             "startup_signals": w.get("startup_signals", []),
+            "daily_startup_grade": w.get("daily_startup_grade", ""),
+            "daily_startup_label": w.get("daily_startup_label", ""),
+            "daily_startup_warning": w.get("daily_startup_warning", ""),
+            "sublevel_confirm_grade": w.get("sublevel_confirm_grade", ""),
+            "sublevel_confirm_label": w.get("sublevel_confirm_label", ""),
+            "sublevel_confirm_reason": w.get("sublevel_confirm_reason", ""),
+            "confirmed_by": w.get("confirmed_by", ""),
+            "confirmations": w.get("confirmations", []),
             "startup_index": w.get("startup_index"),
             "startup_date": w.get("startup_date", ""),
             "startup_age_days": w.get("startup_age_days"),
@@ -2534,7 +2543,7 @@ function renderStartupWatchlist() {{
     document.getElementById('startupWatchCount').textContent = '(' + watchlist.length + ' 只)';
 
     var html = '<table class="chan-table"><thead><tr>' +
-        '<th>代码</th><th>名称</th><th>信号</th><th>信号年龄</th>' +
+        '<th>代码</th><th>名称</th><th>板块</th><th>信号</th><th>启动形态</th><th>30min确认</th><th>信号年龄</th>' +
         '<th>参考价</th><th>现价</th><th>距参考价</th>' +
         '<th>启动原因</th><th>观察理由</th><th>次日条件</th>' +
         '</tr></thead><tbody>';
@@ -2546,10 +2555,16 @@ function renderStartupWatchlist() {{
         var distPct = w.distance_from_reference_pct;
         var distStr = distPct !== null && distPct !== undefined ? (distPct >= 0 ? '+' : '') + distPct.toFixed(2) + '%' : '-';
         var distColor = distPct !== null ? (distPct > 0 ? '#ff4757' : '#5effa0') : '#aaa';
+        var startupGrade = w.daily_startup_grade || '';
+        var startupLabel = w.daily_startup_label || (startupGrade === 'strong' ? '强启动' : (startupGrade === 'weak' ? '弱启动确认' : (startupGrade === 'pullback' ? '回踩型启动观察' : (w.startup_signals && w.startup_signals.length ? '启动观察' : '-'))));
+        var confirmLabel = w.sublevel_confirm_label || (w.confirmed_by ? w.confirmed_by : '等待确认');
         html += '<tr class="expandable" onclick="toggleStartupWatchChart(' + idx + ')">' +
             '<td>' + escapeHtml(w.code) + '</td>' +
             '<td>' + escapeHtml(w.name) + '</td>' +
+            '<td><div class="secondary-cell" style="margin-top:0;">' + escapeHtml(w.sector || '-') + '</div></td>' +
             '<td><span class="sell-tag">' + escapeHtml(w.type) + '</span></td>' +
+            '<td><span class="buy-tag candidate">' + escapeHtml(startupLabel) + '</span></td>' +
+            '<td><span class="decision-chip pass">' + escapeHtml(confirmLabel) + '</span></td>' +
             '<td class="num-condensed" style="font-size:12px;">' + ageLabel + '</td>' +
             '<td class="num-condensed">' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>' +
             '<td class="num-condensed">' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>' +
@@ -2564,6 +2579,9 @@ function renderStartupWatchlist() {{
         detail += '<div class="detail-section"><div class="detail-group"><div class="detail-group-title">启动观察详情</div>';
         if (w.startup_date) detail += '<strong>启动日：</strong>' + escapeHtml(w.startup_date) +
             (w.startup_age_days !== undefined ? ' (' + w.startup_age_days + '天前)' : '') + '<br>';
+        detail += '<strong>板块：</strong>' + escapeHtml(w.sector || '-') + '<br>';
+        detail += '<strong>启动形态：</strong>' + escapeHtml(startupLabel) + '<br>';
+        detail += '<strong>30min确认：</strong>' + escapeHtml(confirmLabel) + '<br>';
         if (w.source_type) detail += '<strong>来源：</strong>' + escapeHtml(w.source_type) + '<br>';
         if (w.change_pct) detail += '<strong>涨幅：</strong>' + w.change_pct + '%<br>';
         if (w.volume_ratio) detail += '<strong>放量倍数：</strong>' + w.volume_ratio.toFixed(2) + '倍<br>';
@@ -2578,7 +2596,7 @@ function renderStartupWatchlist() {{
         detail += '</div></div>';
 
         html += '<tr class="chart-row" id="chartRow_sw_' + idx + '">' +
-            '<td colspan="10" style="white-space:normal;line-height:1.6;">' +
+            '<td colspan="13" style="white-space:normal;line-height:1.6;">' +
             '<div class="chart-container" id="chart_sw_' + idx + '"></div>' +
             detail + '</td></tr>';
     }});
@@ -2601,7 +2619,7 @@ function renderPickTable(ver) {{
     var html = '<div class="table-shell"><div class="table-meta"><span>选股主表</span>' +
         '<span class="table-note">主表只保留筛选决策字段，完整原因与结构状态请展开查看</span></div>' +
         '<table class="chan-table"><thead><tr>' +
-        '<th>代码</th><th>名称</th><th>信号类型</th>' +
+        '<th>代码</th><th>名称</th><th>板块</th><th>信号类型</th>' +
         '<th>启动形态</th><th>30min确认</th>' +
         '<th>信号年龄</th><th>距参考价</th>' +
         '<th>评分</th>';
@@ -2610,7 +2628,7 @@ function renderPickTable(ver) {{
     }}
     html += '</tr></thead><tbody>';
 
-    var colspan = isFusion ? 10 : 8;
+    var colspan = isFusion ? 11 : 9;
 
     if (picks.length === 0) {{
         var diag = REPORT_DATA.diagnostics || {{}};
@@ -2688,6 +2706,7 @@ function renderPickTable(ver) {{
         html += '<td><div class="primary-cell">' + escapeHtml(p.name) + '</div>' +
             '<div class="secondary-cell">参考 ' + (refPrice ? refPrice.toFixed(2) : '-') +
             ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></td>';
+        html += '<td><div class="secondary-cell" style="margin-top:0;">' + escapeHtml(p.sector || '-') + '</div></td>';
         html += '<td><span class="buy-tag ' + tagClass + '">' + escapeHtml(bp.type || '-') + '</span></td>';
         html += '<td' + startupStyle + '>' + escapeHtml(startupDisplay) + '</td>';
         html += '<td' + confirmStyle + '>' + escapeHtml(confirmDisplay) + '</td>';
@@ -2808,7 +2827,7 @@ function renderPickTable(ver) {{
             cardHtml += '<div class="pick-card" onclick="toggleChart(' + idx + ', \\'' + ver + '\\')">' +
                 '<div class="pick-card-head">' +
                 '<div><div class="pick-card-title">' + escapeHtml(p.name) + '</div>' +
-                '<div class="secondary-cell">' + escapeHtml(p.code) + ' · 参考 ' + (refPrice ? refPrice.toFixed(2) : '-') + ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></div>' +
+                '<div class="secondary-cell">' + escapeHtml(p.code) + ' · ' + escapeHtml(p.sector || '-') + ' · 参考 ' + (refPrice ? refPrice.toFixed(2) : '-') + ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></div>' +
                 '<span class="buy-tag ' + tagClass + '">' + escapeHtml(bp.type || '-') + '</span>' +
                 '</div>' +
                 '<div class="pick-card-grid">' +
