@@ -518,6 +518,29 @@ class TestHTMLEscape(unittest.TestCase):
         self.assertNotIn("<script>alert(8)</script>", self.html)
         self.assertNotIn("<script>x</script>", self.html)
         self.assertNotIn("<script>bad</script>", self.html)
+
+
+class TestMarketCardRendering(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_market_cards_")
+        report_data = _make_minimal_report_data()
+        report_data["market"] = {
+            "上证指数": {"close": "", "change_pct": 0.0},
+            "深证成指": {"close": "bad-data", "change_pct": 1.23},
+        }
+        generate_report(report_data, output_dir=cls.tmpdir)
+        html_path = os.path.join(cls.tmpdir, "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def test_market_card_uses_finite_number_guard(self):
+        self.assertIn("var closeNum = Number(idx.close);", self.html)
+        self.assertIn("var closeText = Number.isFinite(closeNum) ? closeNum.toLocaleString() : '-';", self.html)
+
+    def test_market_card_does_not_embed_nan_fallback(self):
+        self.assertNotIn("Number(idx.close).toLocaleString()", self.html)
         self.assertNotIn("<script>warn</script>", self.html)
 
     def test_no_img_onerror(self):
@@ -534,6 +557,48 @@ class TestHTMLEscape(unittest.TestCase):
         # Count all escapeHtml calls — should be substantial
         esc_count = self.html.count("escapeHtml(")
         self.assertGreater(esc_count, 30, f"Only {esc_count} escapeHtml calls found")
+
+
+class TestLayoutRefresh(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_layout_refresh_")
+        report_data = _make_minimal_report_data()
+        report_data["picks_fusion"] = [make_pick()]
+        generate_report(report_data, output_dir=cls.tmpdir)
+        html_path = os.path.join(cls.tmpdir, "index.html")
+        with open(html_path, "r", encoding="utf-8") as f:
+            cls.html = f.read()
+
+    def test_has_first_screen_summary_strip(self):
+        self.assertIn("summary-strip", self.html)
+        self.assertIn("summary-meter", self.html)
+
+    def test_has_main_table_controls(self):
+        self.assertIn("table-control", self.html)
+        self.assertIn("filter-chip", self.html)
+        self.assertIn("signal-summary", self.html)
+
+    def test_has_inline_favicon(self):
+        self.assertIn('rel="icon"', self.html)
+        self.assertIn('data:image/svg+xml', self.html)
+
+    def test_startup_watch_precedes_pick_table(self):
+        self.assertLess(
+            self.html.index('id="startupWatchSection"'),
+            self.html.index('id="pickTable"'),
+        )
+
+    def test_pick_table_has_collapse_controls(self):
+        self.assertIn("pickTableToggle", self.html)
+        self.assertIn("pickTableMore", self.html)
+        self.assertIn("pickTableCollapsed", self.html)
+
+    def test_mobile_card_mode_markers_exist(self):
+        self.assertIn("pick-card", self.html)
+        self.assertIn("pick-row-label", self.html)
+        self.assertIn("pick-row-value", self.html)
 
 
 if __name__ == "__main__":

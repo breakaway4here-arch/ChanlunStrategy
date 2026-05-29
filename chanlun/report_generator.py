@@ -602,6 +602,12 @@ def generate_report(report_data, output_dir=None):
         "diagnostics": report_data.get("diagnostics", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
     }
+    bootstrap_data_json = (
+        json.dumps(daily_data, ensure_ascii=False, cls=NpEncoder, indent=2)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -609,6 +615,7 @@ def generate_report(report_data, output_dir=None):
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>缠论选股日报 — {date_str}</title>
+<link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -826,6 +833,956 @@ body {{
     font-size: 12px; color: #74b9ff; font-weight: bold; margin-bottom: 6px;
     text-transform: uppercase; letter-spacing: 1px;
 }}
+
+/* ── Industrial refresh ── */
+body {{
+    font-family: "SFMono-Regular", "SF Mono", "Menlo", "Monaco", Consolas, "Liberation Mono", monospace;
+    background:
+        radial-gradient(circle at top left, rgba(0, 230, 118, 0.08), transparent 26%),
+        radial-gradient(circle at top right, rgba(255, 183, 3, 0.08), transparent 22%),
+        linear-gradient(180deg, #080b10 0%, #0b0f14 100%);
+    color: #e5edf5;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+}}
+
+.container {{
+    max-width: 1360px;
+}}
+
+.header,
+.section,
+.version-toggle,
+.summary-card,
+.index-card,
+.event-item,
+.forecast-box,
+.risk-box,
+.limit-up-item,
+.detail-group,
+.version-diff,
+.signal-summary {{
+    border: 1px solid #202833;
+    background: #0f141b;
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+}}
+
+.header {{
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+    padding: 24px 24px 22px;
+    margin-bottom: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 42%),
+        #0f141b;
+}}
+
+.header h1 {{
+    color: #f8fbff;
+    font-size: 30px;
+    letter-spacing: 0.02em;
+    margin-bottom: 6px;
+}}
+
+.header .subtitle {{
+    color: #90a0b5;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}}
+
+.market-summary {{
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}}
+
+.summary-grid {{
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 16px;
+}}
+
+.summary-card {{
+    position: relative;
+    overflow: hidden;
+    min-height: 118px;
+    padding: 16px 18px 18px;
+    border-radius: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 68%),
+        #11161d;
+    border: 1px solid #202833;
+}}
+
+.summary-card::after {{
+    content: "";
+    position: absolute;
+    inset: auto 16px 0 16px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);
+}}
+
+.summary-card.primary {{
+    background:
+        linear-gradient(135deg, rgba(116, 185, 255, 0.12), rgba(255, 255, 255, 0.03) 65%),
+        #11161d;
+}}
+
+.summary-card.accent {{
+    background:
+        linear-gradient(135deg, rgba(0, 230, 118, 0.12), rgba(255, 255, 255, 0.03) 65%),
+        #11161d;
+}}
+
+.summary-card.warn {{
+    background:
+        linear-gradient(135deg, rgba(255, 183, 3, 0.12), rgba(255, 255, 255, 0.03) 65%),
+        #11161d;
+}}
+
+.summary-card.risk {{
+    background:
+        linear-gradient(135deg, rgba(255, 71, 87, 0.14), rgba(255, 255, 255, 0.03) 65%),
+        #11161d;
+}}
+
+.summary-kicker {{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #9cabbd;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+}}
+
+.summary-value {{
+    color: #f8fbff;
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.1;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.summary-note {{
+    margin-top: 10px;
+    color: #90a0b5;
+    font-size: 12px;
+    line-height: 1.6;
+}}
+
+.summary-note strong {{
+    color: #f8fbff;
+}}
+
+.num-condensed {{
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.table-shell {{
+    border: 1px solid #202833;
+    border-radius: 18px;
+    overflow: hidden;
+    background: #0d1218;
+}}
+
+.table-meta {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #202833;
+    background: #11161d;
+    color: #90a0b5;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}}
+
+.table-note {{
+    color: #6f8095;
+    font-size: 11px;
+    letter-spacing: normal;
+    text-transform: none;
+}}
+
+.primary-cell {{
+    color: #f8fbff;
+    font-weight: 700;
+}}
+
+.secondary-cell {{
+    margin-top: 3px;
+    color: #90a0b5;
+    font-size: 11px;
+    line-height: 1.4;
+}}
+
+.metric-stack {{
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}}
+
+.metric-main {{
+    color: #f8fbff;
+    font-weight: 700;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.metric-sub {{
+    color: #90a0b5;
+    font-size: 11px;
+}}
+
+.decision-chip {{
+    display: inline-flex;
+    align-items: center;
+    min-width: 52px;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    border: 1px solid #202833;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}}
+
+.decision-chip.pass {{
+    color: #6cf0a9;
+    border-color: rgba(0, 230, 118, 0.28);
+    background: rgba(0, 230, 118, 0.08);
+}}
+
+.decision-chip.block {{
+    color: #ff7b8a;
+    border-color: rgba(255, 71, 87, 0.28);
+    background: rgba(255, 71, 87, 0.08);
+}}
+
+.stop-loss-value {{
+    color: #f8fbff;
+    font-weight: 700;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.outflow-flow {{
+    color: #6cf0a9;
+    font-weight: 700;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.event-stack {{
+    display: grid;
+    gap: 12px;
+}}
+
+.event-item {{
+    display: grid;
+    gap: 10px;
+}}
+
+.event-head {{
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}}
+
+.event-titleline {{
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}}
+
+.event-meta {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+}}
+
+.event-pill {{
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 8px;
+    border-radius: 999px;
+    border: 1px solid #202833;
+    background: rgba(255, 255, 255, 0.03);
+    color: #b7c4d4;
+    font-size: 11px;
+    font-weight: 700;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.03em;
+}}
+
+.event-pill.score {{
+    border-color: rgba(255, 183, 3, 0.25);
+}}
+
+.event-pill.trade-strong {{
+    border-color: rgba(255, 71, 87, 0.28);
+    color: #ff9aa5;
+}}
+
+.event-pill.trade-mid {{
+    border-color: rgba(255, 183, 3, 0.28);
+    color: #ffcb66;
+}}
+
+.event-pill.trade-weak {{
+    color: #9cabbd;
+}}
+
+.event-headline {{
+    color: #dde6ef;
+    font-size: 14px;
+    line-height: 1.6;
+}}
+
+.event-analysis {{
+    display: grid;
+    gap: 4px;
+    color: #a9b6c6;
+    font-size: 13px;
+    line-height: 1.6;
+    padding-left: 10px;
+}}
+
+.event-analysis-row {{
+    position: relative;
+    padding-left: 10px;
+}}
+
+.event-analysis-row::before {{
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 10px;
+    width: 4px;
+    height: 4px;
+    border-radius: 999px;
+    background: #00e676;
+}}
+
+.event-body {{
+    display: grid;
+    gap: 8px;
+}}
+
+.event-tags-row {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}}
+
+.raw-toggle {{
+    display: inline-flex;
+    align-items: center;
+    color: #74b9ff;
+    font-size: 12px;
+    cursor: pointer;
+}}
+
+.raw-panel {{
+    display: none;
+    color: #90a0b5;
+    font-size: 12px;
+    line-height: 1.6;
+    margin-top: 6px;
+    padding: 10px 12px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 8px;
+    border: 1px solid #202833;
+}}
+
+.module-list {{
+    display: grid;
+    gap: 14px;
+}}
+
+.limit-sector {{
+    border: 1px solid #202833;
+    border-radius: 16px;
+    padding: 14px;
+    background: #11161d;
+}}
+
+.limit-sector-header {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}}
+
+.limit-sector-title {{
+    color: #f8fbff;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+}}
+
+.limit-sector-count {{
+    color: #ffcb66;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}}
+
+.index-card {{
+    position: relative;
+    min-height: 98px;
+    padding: 14px 16px 16px;
+    border-radius: 16px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 58%),
+        #11161d;
+}}
+
+.index-card::before {{
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    border-radius: 16px 0 0 16px;
+    background: linear-gradient(180deg, #00e676, #74b9ff);
+}}
+
+.index-card .name {{
+    color: #9cabbd;
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}}
+
+.index-card .value {{
+    color: #f8fbff;
+    font-size: 24px;
+    font-weight: 700;
+    font-family: "DIN Condensed", "Helvetica Neue Condensed", "Arial Narrow", "Roboto Condensed", "Liberation Sans Narrow", "Nimbus Sans Narrow", sans-serif;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.01em;
+}}
+
+.index-card .change {{
+    margin-top: 6px;
+    font-size: 13px;
+    font-weight: 600;
+}}
+
+.section {{
+    border-radius: 20px;
+    padding: 22px;
+    margin-bottom: 18px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 38%),
+        #0f141b;
+}}
+
+.section-title {{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #f8fbff;
+    font-size: 14px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding-left: 12px;
+    border-left: 3px solid #00e676;
+}}
+
+.version-toggle {{
+    padding: 6px;
+    border-radius: 16px;
+    background: #0f141b;
+    border-color: #202833;
+}}
+
+.version-btn {{
+    border-radius: 12px;
+    border-color: transparent;
+    color: #8ea0b5;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    background: transparent;
+}}
+
+.version-btn.active {{
+    background: linear-gradient(135deg, rgba(0, 230, 118, 0.18), rgba(116, 185, 255, 0.08));
+    border-color: rgba(0, 230, 118, 0.45);
+    color: #f8fbff;
+}}
+
+.version-btn .badge {{
+    background: rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+}}
+
+.chan-table th,
+.data-table th {{
+    background: #11161d;
+    color: #94a3b8;
+    border-bottom: 1px solid #202833;
+}}
+
+.chan-table td,
+.data-table td {{
+    border-bottom: 1px solid #1d2430;
+}}
+
+.chan-table tr:hover,
+.data-table tr:hover {{
+    background: rgba(255, 255, 255, 0.03);
+}}
+
+.buy-tag.b1 {{
+    background: rgba(255, 71, 87, 0.18);
+    color: #ff7b8a;
+}}
+
+.buy-tag.b2 {{
+    background: rgba(255, 183, 3, 0.18);
+    color: #ffcb66;
+}}
+
+.buy-tag.b3 {{
+    background: rgba(0, 230, 118, 0.18);
+    color: #6cf0a9;
+}}
+
+.buy-tag.b2l {{
+    background: rgba(116, 185, 255, 0.18);
+    color: #9fd0ff;
+}}
+
+.buy-tag.candidate {{
+    border: 1px dashed rgba(255, 183, 3, 0.45);
+    background: rgba(255, 183, 3, 0.08);
+    color: #ffcb66;
+}}
+
+.sell-tag {{
+    background: rgba(0, 230, 118, 0.16);
+    color: #6cf0a9;
+}}
+
+.score-bar {{
+    background: linear-gradient(90deg, #ff4757 0%, #ffb703 52%, #00e676 100%);
+}}
+
+.pivot-cell,
+.detail-section,
+.impact-label,
+.event-desc,
+.forecast-text,
+.risk-list,
+.signal-summary-item .ss-label,
+.impact-stock-item .s-reason,
+.impact-stock-item .s-code,
+.limit-up-item .stock-code {{
+    color: #94a3b8;
+}}
+
+.sector-tag {{
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid #202833;
+}}
+
+.sector-tag .sname,
+.event-title,
+.signal-summary-item .ss-count,
+.limit-up-item .stock-name {{
+    color: #f8fbff;
+}}
+
+.history-tab {{
+    border-color: #202833;
+    color: #90a0b5;
+    background: #11161d;
+}}
+
+.history-tab.active {{
+    border-color: rgba(0, 230, 118, 0.45);
+    background: rgba(0, 230, 118, 0.12);
+    color: #f8fbff;
+}}
+
+.event-item {{
+    border-left: 3px solid #00e676;
+    border-radius: 16px;
+    padding: 16px 16px 14px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 48%),
+        #11161d;
+}}
+
+.event-rank {{
+    background: #00e676;
+    color: #081018;
+}}
+
+.impact-summary {{
+    color: #dde6ef;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid #202833;
+}}
+
+.impact-tag.positive {{
+    background: rgba(0, 230, 118, 0.14);
+    color: #6cf0a9;
+    border-color: rgba(0, 230, 118, 0.3);
+}}
+
+.impact-tag.negative {{
+    background: rgba(255, 71, 87, 0.14);
+    color: #ff7b8a;
+    border-color: rgba(255, 71, 87, 0.3);
+}}
+
+.forecast-box {{
+    border-radius: 18px;
+    padding: 20px;
+    border-left: 3px solid #74b9ff;
+}}
+
+.risk-box {{
+    border-radius: 18px;
+    padding: 20px;
+    border-color: rgba(255, 71, 87, 0.22);
+    background:
+        linear-gradient(180deg, rgba(255, 71, 87, 0.08), transparent 52%),
+        #11161d;
+}}
+
+.signal-summary {{
+    border-radius: 18px;
+    padding: 16px 18px;
+    background: #11161d;
+    gap: 10px;
+}}
+
+.signal-summary-item {{
+    min-width: 120px;
+    padding: 4px 12px 4px 0;
+    border-right: 1px solid #202833;
+}}
+
+.signal-summary-item:last-child {{
+    border-right: none;
+}}
+
+.version-diff.identical {{
+    background: rgba(0, 230, 118, 0.08);
+    border-color: rgba(0, 230, 118, 0.24);
+    color: #78f0ad;
+}}
+
+.version-diff.different {{
+    background: rgba(255, 183, 3, 0.08);
+    border-color: rgba(255, 183, 3, 0.24);
+    color: #ffcb66;
+}}
+
+.detail-group {{
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: #11161d;
+}}
+
+.detail-group-title {{
+    color: #74b9ff;
+    letter-spacing: 0.14em;
+}}
+
+.footer {{
+    color: #718096;
+    font-size: 12px;
+}}
+
+.summary-strip {{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
+    margin-bottom: 16px;
+}}
+
+.summary-meter {{
+    border: 1px solid #202833;
+    border-radius: 18px;
+    padding: 14px 16px;
+    background: #11161d;
+    min-height: 108px;
+}}
+
+.summary-meter .summary-kicker {{
+    margin-bottom: 8px;
+}}
+
+.summary-meter .summary-value {{
+    font-size: 28px;
+}}
+
+.summary-meter .summary-note {{
+    margin-top: 8px;
+}}
+
+.table-control {{
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 4px 0 12px;
+    padding: 12px 14px;
+    border: 1px solid #202833;
+    border-radius: 16px;
+    background: #11161d;
+}}
+
+.table-control-left {{
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}}
+
+.table-control-title {{
+    color: #f8fbff;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 700;
+}}
+
+.table-control-sub {{
+    color: #90a0b5;
+    font-size: 12px;
+    line-height: 1.5;
+}}
+
+.table-control-right {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+}}
+
+.filter-chip {{
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid #202833;
+    border-radius: 999px;
+    background: #0f141b;
+    color: #9cabbd;
+    font-size: 12px;
+    white-space: nowrap;
+}}
+
+.filter-chip strong {{
+    color: #f8fbff;
+    font-variant-numeric: tabular-nums;
+}}
+
+.table-shell {{
+    overflow-x: auto;
+}}
+
+.chan-table {{
+    min-width: 1120px;
+}}
+
+.pick-collapse {{
+    margin-top: 12px;
+    display: flex;
+    justify-content: center;
+}}
+
+.pick-collapse-btn {{
+    border: 1px solid #202833;
+    background: #11161d;
+    color: #f8fbff;
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 12px;
+    cursor: pointer;
+}}
+
+.pick-collapse-btn:hover {{
+    border-color: #00e676;
+}}
+
+.pick-row-hidden {{
+    display: none;
+}}
+
+.pick-cards {{
+    display: none;
+    gap: 10px;
+}}
+
+.pick-card {{
+    border: 1px solid #202833;
+    border-radius: 14px;
+    background: #11161d;
+    padding: 12px 12px 10px;
+}}
+
+.pick-card-head {{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}}
+
+.pick-card-title {{
+    color: #f8fbff;
+    font-weight: 700;
+    font-size: 14px;
+}}
+
+.pick-card-grid {{
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+}}
+
+.pick-row-label {{
+    color: #90a0b5;
+    font-size: 11px;
+}}
+
+.pick-row-value {{
+    color: #f8fbff;
+    font-size: 12px;
+    line-height: 1.45;
+    word-break: break-word;
+}}
+
+@media (max-width: 980px) {{
+    .summary-strip {{
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }}
+    .table-control {{
+        flex-direction: column;
+        align-items: stretch;
+    }}
+    .table-control-right {{
+        justify-content: flex-start;
+    }}
+}}
+
+@media (max-width: 720px) {{
+    body {{
+        padding: 12px;
+    }}
+    .container {{
+        max-width: 100%;
+    }}
+    .summary-strip {{
+        grid-template-columns: 1fr;
+    }}
+    .market-summary {{
+        grid-template-columns: 1fr 1fr;
+    }}
+    .version-toggle {{
+        flex-direction: column;
+    }}
+    .version-btn:first-child,
+    .version-btn:last-child {{
+        border-radius: 12px;
+    }}
+    .table-control-right {{
+        gap: 6px;
+    }}
+    .filter-chip {{
+        padding: 6px 10px;
+    }}
+    #pickTable {{
+        display: none;
+    }}
+    .pick-cards {{
+        display: grid;
+    }}
+    .chan-table {{
+        min-width: 0;
+        width: 100%;
+    }}
+    .chan-table thead {{
+        display: none;
+    }}
+    .chan-table tbody,
+    .chan-table tr,
+    .chan-table td {{
+        display: block;
+        width: 100%;
+    }}
+    .chan-table tr.expandable {{
+        margin-bottom: 10px;
+        border: 1px solid #202833;
+        border-radius: 14px;
+        overflow: hidden;
+        background: #11161d;
+    }}
+    .chan-table td {{
+        border-bottom: 1px solid #1d2430;
+        padding: 8px 10px;
+    }}
+    .chan-table td:last-child {{
+        border-bottom: 0;
+    }}
+    .chart-row.open {{
+        display: block;
+    }}
+    .chart-row.open td {{
+        display: block;
+        width: 100%;
+    }}
+    .chart-container {{
+        height: 300px;
+    }}
+}}
+
+::-webkit-scrollbar {{
+    width: 10px;
+    height: 10px;
+}}
+
+::-webkit-scrollbar-track {{
+    background: #090b0f;
+}}
+
+::-webkit-scrollbar-thumb {{
+    background: #202833;
+    border-radius: 999px;
+}}
+
+::-webkit-scrollbar-thumb:hover {{
+    background: #2b3542;
+}}
 </style>
 </head>
 <body>
@@ -860,13 +1817,19 @@ body {{
     <div id="selectionSummaryCards"></div>
     <div id="signalSummary"></div>
     <div id="versionDiff"></div>
+    <div id="startupWatchSection">
+        <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
+        <div id="startupWatchContent"></div>
+    </div>
+    <div class="table-control">
+        <div class="table-control-left">
+            <div class="table-control-title">选股主表</div>
+            <div class="table-control-sub">默认保留可执行字段，展开后再看完整原因、结构和图表。</div>
+        </div>
+        <div class="table-control-right" id="tableControls"></div>
+    </div>
     <div id="pickTable"></div>
-</div>
-
-<!-- 启动观察 -->
-<div class="section" id="startupWatchSection">
-    <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
-    <div id="startupWatchContent"></div>
+    <div id="pickCards"></div>
 </div>
 
 <!-- 板块资金 -->
@@ -979,6 +1942,9 @@ var PAGE_DATE = "{date_str}";
 var REPORT_DATA = null;
 var CURRENT_VERSION = 'fusion';
 var HISTORY_DATA = {{}};
+var PICK_TABLE_COLLAPSED = true;
+var PICK_TABLE_LIMIT = 20;
+var INLINE_REPORT_DATA = {bootstrap_data_json};
 
 async function init() {{
     // 全局 resize：遍历所有已渲染图表
@@ -990,6 +1956,35 @@ async function init() {{
     }});
 
     GRANTED = await resolveGranted();
+
+    if (window.location.protocol === 'file:') {{
+        REPORT_DATA = INLINE_REPORT_DATA;
+        HISTORY_DATA = {{
+            dates: [PAGE_DATE],
+            reports: (function() {{
+                var day = INLINE_REPORT_DATA;
+                var reports = {{}};
+                reports[PAGE_DATE] = {{
+                    market: day.market || {{}},
+                    chanlun_structure: day.chanlun_structure || {{}},
+                    picks_pure: day.picks_pure || [],
+                    picks_fusion: day.picks_fusion || [],
+                    sector_flow: day.sector_flow || [],
+                    sector_outflow: day.sector_outflow || [],
+                    limit_up_pool: day.limit_up_pool || [],
+                    events: day.events || [],
+                    forecast: day.forecast || {{}},
+                    sell_signals: day.sell_signals || [],
+                    diagnostics: day.diagnostics || {{}},
+                    startup_watchlist: day.startup_watchlist || [],
+                }};
+                return reports;
+            }})()
+        }};
+        renderAll();
+        renderHistoryTabs();
+        return;
+    }}
 
     try {{
         // 加载 data.json 获取所有可用日期
@@ -1073,13 +2068,16 @@ function renderMarketCards() {{
     var m = REPORT_DATA.market || {{}};
     var html = '';
     for (var key in m) {{
-        var idx = m[key];
-        var cls = (idx.change_pct || 0) >= 0 ? 'up' : 'down';
-        var sign = (idx.change_pct || 0) >= 0 ? '+' : '';
+        var idx = m[key] || {{}};
+        var pct = idx.change_pct || 0;
+        var cls = pct >= 0 ? 'up' : 'down';
+        var sign = pct >= 0 ? '+' : '';
+        var closeNum = Number(idx.close);
+        var closeText = Number.isFinite(closeNum) ? closeNum.toLocaleString() : '-';
         html += '<div class="index-card">' +
-            '<div class="name">' + key + '</div>' +
-            '<div class="value">' + (idx.close || '-').toLocaleString() + '</div>' +
-            '<div class="change ' + cls + '">' + sign + (idx.change_pct || 0).toFixed(2) + '%</div>' +
+            '<div class="name">' + escapeHtml(key) + '</div>' +
+            '<div class="value">' + closeText + '</div>' +
+            '<div class="change ' + cls + '">' + sign + pct.toFixed(2) + '%</div>' +
             '</div>';
     }}
     document.getElementById('marketCards').innerHTML = html;
@@ -1132,47 +2130,79 @@ function renderSelectionSummaryCards() {{
 
     var regime = fa.market_regime || 'unknown';
     var regimeText = regime === 'strong' ? '强市' : (regime === 'weak' ? '弱市' : '-');
-    var regimeColor = regime === 'strong' ? '#ff4757' : (regime === 'weak' ? '#74b9ff' : '#888');
+    var regimeClass = regime === 'strong' ? 'risk' : (regime === 'weak' ? 'accent' : '');
+    var regimeTone = regime === 'strong' ? '#ff7b8a' : (regime === 'weak' ? '#74b9ff' : '#9cabbd');
 
-    var html = '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;">';
+    var html = '<div class="summary-strip">';
 
-    // Card 1: picks count
-    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
-    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📋 今日推荐</div>';
-    html += '<div style="font-size:20px;font-weight:bold;">' +
-        '<span style="color:#ffa502;">fusion ' + fusionPicks.length + '</span>' +
-        ' <span style="color:#888;font-size:14px;">/</span> ' +
-        '<span style="color:#74b9ff;">pure ' + purePicks.length + '</span>' +
+    html += '<div class="summary-card summary-meter primary">' +
+        '<div class="summary-kicker">今日推荐</div>' +
+        '<div class="summary-value"><span style="color:#ffcb66">fusion ' + fusionPicks.length + '</span>' +
+        ' <span style="color:#6f8095;font-size:16px;">/</span> ' +
+        '<span style="color:#74b9ff">pure ' + purePicks.length + '</span></div>' +
+        '<div class="summary-note">当前版本输出的候选总数，反映日内可观察的选股密度。</div>' +
         '</div>';
-    html += '</div>';
 
-    // Card 2: main signal
-    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
-    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📡 主信号</div>';
-    html += '<div style="font-size:14px;color:#dfe6e9;">强势启动 <span style="color:#ffa502;font-weight:bold;">' + startupCount + '</span> 只</div>';
-    html += '</div>';
-
-    // Card 3: market state
-    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
-    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">📊 市场状态</div>';
-    html += '<div style="font-size:14px;">' +
-        '大盘<span style="color:' + regimeColor + ';font-weight:bold;">' + regimeText + '</span>' +
-        (fa.dropped_by_ma !== undefined ? '，MA过滤 <span style="color:#ffa502;">' + fa.dropped_by_ma + '</span> 只' : '') +
+    html += '<div class="summary-card summary-meter accent">' +
+        '<div class="summary-kicker">主信号</div>' +
+        '<div class="summary-value">强势启动 <span style="color:#00e676">' + startupCount + '</span> 只</div>' +
+        '<div class="summary-note">优先关注具备日线与分时共振的启动型候选。</div>' +
         '</div>';
-    html += '</div>';
 
-    // Card 4: risk hints
-    html += '<div style="flex:1;min-width:140px;background:rgba(255,255,255,0.04);border-radius:8px;padding:12px 16px;">';
-    html += '<div style="color:#888;font-size:12px;margin-bottom:4px;">⚠️ 风险提示</div>';
+    html += '<div class="summary-card summary-meter ' + regimeClass + '">' +
+        '<div class="summary-kicker">市场状态</div>' +
+        '<div class="summary-value">大盘<span style="color:' + regimeTone + '"> ' + escapeHtml(regimeText) + '</span></div>' +
+        '<div class="summary-note">' +
+            (fa.dropped_by_ma !== undefined ? 'MA过滤 <strong>' + fa.dropped_by_ma + '</strong> 只。' : '暂未识别到明显 MA 过滤压力。') +
+        '</div>' +
+        '</div>';
+
+    html += '<div class="summary-card summary-meter warn">' +
+        '<div class="summary-kicker">风险提示</div>';
     var riskParts = [];
-    if (gradeB > 0) riskParts.push('B级确认 <span style="color:#ffd43b;">' + gradeB + '</span> 只');
-    if (gradeC > 0) riskParts.push('C级确认 <span style="color:#888;">' + gradeC + '</span> 只');
-    if (pullbackCount > 0) riskParts.push('回踩型 <span style="color:#74b9ff;">' + pullbackCount + '</span> 只');
-    html += '<div style="font-size:12px;color:#aaa;">' + (riskParts.length ? riskParts.join('，') : '暂无') + '</div>';
-    html += '</div>';
+    if (gradeB > 0) riskParts.push('B级确认 <strong style="color:#ffcb66">' + gradeB + '</strong> 只');
+    if (gradeC > 0) riskParts.push('C级确认 <strong style="color:#9cabbd">' + gradeC + '</strong> 只');
+    if (pullbackCount > 0) riskParts.push('回踩型 <strong style="color:#74b9ff">' + pullbackCount + '</strong> 只');
+    html += '<div class="summary-value" style="font-size:18px;">' +
+        (riskParts.length ? riskParts.join('，') : '暂无显著风险项') +
+        '</div>' +
+        '<div class="summary-note">这里不是“坏消息提醒”，而是告诉你哪些候选更容易在盘中失真。</div>' +
+        '</div>';
 
     html += '</div>';
     document.getElementById('selectionSummaryCards').innerHTML = html;
+}}
+
+function renderTableControls(picks, ver) {{
+    var total = picks.length;
+    var startup = 0;
+    var divergence = 0;
+    var confirmed = 0;
+    var passed = 0;
+    picks.forEach(function(p) {{
+        var bp = p.best_buy_point || {{}};
+        var type = bp.type || '';
+        if (type === '强势启动候选') startup++;
+        if (type.indexOf('背驰') !== -1) divergence++;
+        if (bp.confirmed_by) confirmed++;
+        if (ver === 'fusion' && p.fusion_admission && p.fusion_admission.passed) passed++;
+    }});
+    var chips = [
+        '<span class="filter-chip">总数 <strong>' + total + '</strong></span>',
+        '<span class="filter-chip">强势启动 <strong>' + startup + '</strong></span>',
+        '<span class="filter-chip">底背驰 <strong>' + divergence + '</strong></span>',
+        '<span class="filter-chip">30min确认 <strong>' + confirmed + '</strong></span>'
+    ];
+    if (ver === 'fusion') {{
+        chips.push('<span class="filter-chip">通过 <strong>' + passed + '</strong></span>');
+    }}
+    chips.push('<span class="filter-chip">手机 <strong>卡片</strong></span>');
+    document.getElementById('tableControls').innerHTML = chips.join('');
+}}
+
+function togglePickTable() {{
+    PICK_TABLE_COLLAPSED = !PICK_TABLE_COLLAPSED;
+    renderPickTable(CURRENT_VERSION);
 }}
 
 // ========== 板块资金 ==========
@@ -1198,19 +2228,21 @@ function renderSectorOutflow() {{
         return;
     }}
     document.getElementById('outflowSection').style.display = '';
-    var html = '<table class="data-table"><thead><tr>' +
+    var html = '<div class="table-shell">' +
+        '<div class="table-meta"><span>净流出靠前板块</span><span class="table-note">按资金外流强度排序，优先看承压行业</span></div>' +
+        '<table class="data-table"><thead><tr>' +
         '<th>排名</th><th>行业板块</th><th>涨跌幅</th><th>资金流向</th></tr></thead><tbody>';
     items.forEach(function(it, i) {{
         var chgCls = (it.change_pct || 0) >= 0 ? 'up' : 'down';
         var sign = (it.change_pct || 0) >= 0 ? '+' : '';
         html += '<tr>' +
-            '<td>' + (i + 1) + '</td>' +
-            '<td>' + escapeHtml(it.name) + '</td>' +
-            '<td class="' + chgCls + '">' + sign + (it.change_pct || 0).toFixed(2) + '%</td>' +
-            '<td style="color:#2ed573">' + (it.flow_str || '') + '</td>' +
+            '<td><span class="event-rank">' + (i + 1) + '</span></td>' +
+            '<td><div class="primary-cell">' + escapeHtml(it.name) + '</div></td>' +
+            '<td class="num-condensed ' + chgCls + '">' + sign + (it.change_pct || 0).toFixed(2) + '%</td>' +
+            '<td class="outflow-flow num-condensed">' + escapeHtml(it.flow_str || '-') + '</td>' +
             '</tr>';
     }});
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
     document.getElementById('sectorOutflow').innerHTML = html;
 }}
 
@@ -1218,11 +2250,13 @@ function renderSectorOutflow() {{
 function renderEvents() {{
     var events = REPORT_DATA.events || [];
     if (!events.length) {{
-        document.getElementById('eventsSection').style.display = 'none';
+        document.getElementById('eventsSection').style.display = '';
+        document.getElementById('eventsList').innerHTML =
+            '<div style="padding:14px 16px;border:1px solid #202833;border-radius:14px;background:#11161d;color:#90a0b5;font-size:13px;">暂无事件数据</div>';
         return;
     }}
     document.getElementById('eventsSection').style.display = '';
-    var html = '';
+    var html = '<div class="event-stack">';
     events.forEach(function(ev, i) {{
         var stocks = ev.stock_list || [];
         var plates = ev.plate_list || [];
@@ -1254,78 +2288,75 @@ function renderEvents() {{
         var borderColor = lc;
 
         html += '<div class="event-item" style="border-left-color:' + borderColor + ';">' +
+            '<div class="event-head">' +
+            '<div class="event-titleline">' +
             '<span class="event-rank">' + (i + 1) + '</span>';
 
-        // 影响力分数+等级 badge
         if (impactScore !== undefined) {{
-            html += '<span style="display:inline-block;background:' + lbg + ';color:' + lc + ';' +
-                'padding:2px 8px;border-radius:10px;font-size:11px;font-weight:bold;margin-right:6px;">' +
-                impactScore + '分·' + impactLevel + '</span>';
+            html += '<span class="event-pill score" style="background:' + lbg + ';color:' + lc + ';border-color:' + lc + '33;">' +
+                impactScore + '分·' + escapeHtml(impactLevel) + '</span>';
         }}
 
-        // 可交易性
         if (tradability) {{
-            html += '<span style="display:inline-block;color:' + tradabilityColor + ';font-size:11px;margin-right:6px;">可交易性:' + tradability + '</span>';
+            var tradeCls = tradability === '强' ? 'trade-strong' : (tradability === '中' ? 'trade-mid' : 'trade-weak');
+            html += '<span class="event-pill ' + tradeCls + '" style="color:' + tradabilityColor + ';">可交易性 ' + escapeHtml(tradability) + '</span>';
         }}
 
-        html += '<span style="color:' + levelColor + ';font-weight:bold;">' + escapeHtml(ev.display_title || ev.title || '') + '</span>';
+        html += '<span class="primary-cell" style="color:' + levelColor + ';">' + escapeHtml(ev.display_title || ev.title || '') + '</span>';
 
-        // Event category badge
         var catName = ev.event_category_name || '';
         if (catName) {{
-            html += ' <span style="display:inline-block;background:rgba(116,185,255,0.15);' +
-                'color:#74b9ff;padding:1px 6px;border-radius:4px;font-size:11px;margin-left:4px;">' + catName + '</span>';
+            html += '<span class="event-pill">' + escapeHtml(catName) + '</span>';
         }}
-
-        // 规则影响理由（LLM 失败时也展示）
+        html += '</div><div class="event-meta">';
         if (impactReason) {{
-            html += '<div style="color:#888;font-size:12px;margin:4px 0 2px;">📋 评分: ' + escapeHtml(impactReason) + '</div>';
+            html += '<span class="table-note">评分逻辑已生成</span>';
+        }}
+        if (marketValidation) {{
+            html += '<span class="table-note">盘面已验证</span>';
+        }}
+        html += '</div></div><div class="event-body">';
+
+        if (impactReason) {{
+            html += '<div class="secondary-cell">评分依据：' + escapeHtml(impactReason) + '</div>';
         }}
 
-        // 降权原因
         var downgradeReasons = ev.downgrade_reasons || [];
         if (downgradeReasons.length) {{
-            html += '<div style="color:#ffa502;font-size:11px;margin:2px 0;">⚠ ' + downgradeReasons.map(function(r) {{ return escapeHtml(r); }}).join('；') + '</div>';
+            html += '<div class="secondary-cell" style="color:#ffcb66;">降权原因：' + downgradeReasons.map(function(r) {{ return escapeHtml(r); }}).join('；') + '</div>';
         }}
 
-        // 匹配热门板块
         if (matchedSectors && matchedSectors.length) {{
-            html += '<div style="margin:2px 0;">' +
+            html += '<div class="event-tags-row">' +
                 matchedSectors.map(function(s) {{
-                    return '<span style="display:inline-block;background:rgba(255,165,2,0.12);' +
-                        'color:#ffa502;padding:1px 6px;border-radius:4px;font-size:11px;margin-right:4px;">🔥 ' + s + '</span>';
+                    return '<span class="event-pill score">热点 ' + escapeHtml(s) + '</span>';
                 }}).join('') +
                 '</div>';
         }}
 
-        // 盘面验证
         if (marketValidation) {{
             var valColor = marketValidation.includes('涨停') ? '#ff4757' : '#888';
-            html += '<div style="color:' + valColor + ';font-size:12px;margin:2px 0;">📊 ' + escapeHtml(marketValidation) + '</div>';
+            html += '<div class="secondary-cell" style="color:' + valColor + ';">盘面验证：' + escapeHtml(marketValidation) + '</div>';
         }}
 
-        // AI headline
         if (imp.headline && !isFailed) {{
-            html += '<div style="color:#dfe6e9;font-size:14px;margin:6px 0;">' +
-                '🤖 ' + escapeHtml(imp.headline) + '</div>';
+            html += '<div class="event-headline">' + escapeHtml(imp.headline) + '</div>';
         }} else if (isFailed) {{
-            html += '<div style="color:#888;font-size:13px;margin:6px 0;">AI分析暂不可用</div>';
+            html += '<div class="secondary-cell">AI分析暂不可用</div>';
         }}
 
-        // AI analysis points
         if (imp.analysis && imp.analysis.length && !isFailed) {{
-            html += '<div style="color:#aaa;font-size:13px;line-height:1.6;margin:6px 0;">';
+            html += '<div class="event-analysis">';
             imp.analysis.forEach(function(a) {{
-                html += '<div style="margin-left:8px;">• ' + escapeHtml(a) + '</div>';
+                html += '<div class="event-analysis-row">' + escapeHtml(a) + '</div>';
             }});
             html += '</div>';
         }}
 
-        // 规则分类主题（LLM sector 为空时展示）
         if (affectedThemes && affectedThemes.length &&
             (!imp.positive_sectors || !imp.positive_sectors.length) &&
             (!imp.negative_sectors || !imp.negative_sectors.length)) {{
-            html += '<div class="impact-tags">';
+            html += '<div class="event-tags-row">';
             html += '<span class="impact-label">主题：</span>';
             affectedThemes.forEach(function(t) {{
                 html += '<span class="impact-tag positive">' + escapeHtml(t) + '</span>';
@@ -1333,9 +2364,8 @@ function renderEvents() {{
             html += '</div>';
         }}
 
-        // Sector tags (from LLM analysis)
         if (imp.positive_sectors && imp.positive_sectors.length || imp.negative_sectors && imp.negative_sectors.length) {{
-            html += '<div class="impact-tags">';
+            html += '<div class="event-tags-row">';
             if (imp.positive_sectors && imp.positive_sectors.length) {{
                 html += '<span class="impact-label">利好：</span>';
                 imp.positive_sectors.forEach(function(s) {{
@@ -1351,7 +2381,6 @@ function renderEvents() {{
             html += '</div>';
         }}
 
-        // Stock recommendations
         if (imp.positive_stocks && imp.positive_stocks.length || imp.negative_stocks && imp.negative_stocks.length) {{
             html += '<div class="impact-stocks">';
             var renderStock = function(st, cls) {{
@@ -1372,26 +2401,24 @@ function renderEvents() {{
             html += '</div>';
         }}
 
-        // Related tags
         if (tags.length) {{
-            html += '<div class="event-stocks">📌 ' + escapeHtml(tags.join(' / ')) + '</div>';
+            html += '<div class="event-stocks">关联标的 / 板块：' + escapeHtml(tags.join(' / ')) + '</div>';
         }}
 
-        // Collapsed raw content
         var rawContent = ev.raw_content || ev.content || ev.brief || '';
         if (rawContent && !ev.has_redundant_content) {{
             html += '<div style="margin-top:8px;">' +
                 '<a href="javascript:void(0)" onclick="var d=document.getElementById(\\'' + eventId + '\\');' +
                 'd.style.display=d.style.display===\\'none\\'?\\'block\\':\\'none\\';' +
                 'this.textContent=d.style.display===\\'none\\'?\\'查看原文 ▼\\':\\'收起 ▲\\'"' +
-                'style="color:#74b9ff;font-size:12px;cursor:pointer;">查看原文 ▼</a>' +
-                '<div id="' + eventId + '" style="display:none;color:#888;font-size:12px;line-height:1.6;margin-top:6px;' +
-                'padding:8px 12px;background:rgba(255,255,255,0.03);border-radius:6px;">' +
+                'class="raw-toggle">查看原文 ▼</a>' +
+                '<div id="' + eventId + '" class="raw-panel">' +
                 escapeHtml(rawContent) + '</div></div>';
         }}
 
-        html += '</div>';
+        html += '</div></div>';
     }});
+    html += '</div>';
     document.getElementById('eventsList').innerHTML = html;
 }}
 
@@ -1477,19 +2504,22 @@ function renderLimitUp() {{
     var keys = Object.keys(groups).sort(function(a, b) {{
         return groups[b].length - groups[a].length;
     }});
-    var html = '';
+    var html = '<div class="module-list">';
     keys.forEach(function(sec) {{
         var list = groups[sec];
-        html += '<h3 style="color:#fff;margin:18px 0 12px;font-size:15px;">📊 ' + escapeHtml(sec) + ' (' + list.length + '只)</h3>';
-        html += '<div class="limit-up-list">';
+        html += '<div class="limit-sector"><div class="limit-sector-header">' +
+            '<div class="limit-sector-title">' + escapeHtml(sec) + '</div>' +
+            '<div class="limit-sector-count">' + list.length + ' 只涨停</div>' +
+            '</div><div class="limit-up-list">';
         list.forEach(function(it) {{
             html += '<div class="limit-up-item">' +
                 '<div class="stock-name">' + escapeHtml(it.name) + '</div>' +
                 '<div class="stock-code">' + escapeHtml(it.code) + '</div>' +
                 '</div>';
         }});
-        html += '</div>';
+        html += '</div></div>';
     }});
+    html += '</div>';
     document.getElementById('limitUpContent').innerHTML = html;
 }}
 
@@ -1520,10 +2550,10 @@ function renderStartupWatchlist() {{
             '<td>' + escapeHtml(w.code) + '</td>' +
             '<td>' + escapeHtml(w.name) + '</td>' +
             '<td><span class="sell-tag">' + escapeHtml(w.type) + '</span></td>' +
-            '<td style="font-size:12px;">' + ageLabel + '</td>' +
-            '<td>' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>' +
-            '<td>' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>' +
-            '<td style="color:' + distColor + ';">' + distStr + '</td>' +
+            '<td class="num-condensed" style="font-size:12px;">' + ageLabel + '</td>' +
+            '<td class="num-condensed">' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>' +
+            '<td class="num-condensed">' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>' +
+            '<td class="num-condensed" style="color:' + distColor + ';">' + distStr + '</td>' +
             '<td style="color:#ffa502;font-size:13px;">' + escapeHtml(w.startup_reason || '') + '</td>' +
             '<td style="color:#dfe6e9;font-size:13px;">' + escapeHtml(w.watch_reason || '') + '</td>' +
             '<td style="color:#aaa;font-size:12px;">' + escapeHtml(conditions) + '</td>' +
@@ -1560,21 +2590,27 @@ function renderStartupWatchlist() {{
 function renderPickTable(ver) {{
     var picks = REPORT_DATA['picks_' + ver] || [];
     var isFusion = ver === 'fusion';
+    var visibleLimit = PICK_TABLE_COLLAPSED ? PICK_TABLE_LIMIT : picks.length;
 
     renderSignalSummary(picks);
     renderVersionDiffSummary();
+    renderTableControls(picks, ver);
 
-    var html = '<table class="chan-table"><thead><tr>' +
+    var cardHtml = '<div class="pick-cards">';
+
+    var html = '<div class="table-shell"><div class="table-meta"><span>选股主表</span>' +
+        '<span class="table-note">主表只保留筛选决策字段，完整原因与结构状态请展开查看</span></div>' +
+        '<table class="chan-table"><thead><tr>' +
         '<th>代码</th><th>名称</th><th>信号类型</th>' +
         '<th>启动形态</th><th>30min确认</th>' +
-        '<th>信号年龄</th><th>参考价</th><th>现价</th><th>距参考价</th>' +
-        '<th>评分</th><th>一句话原因</th>';
+        '<th>信号年龄</th><th>距参考价</th>' +
+        '<th>评分</th>';
     if (isFusion) {{
         html += '<th>融合版</th><th>止损</th>';
     }}
     html += '</tr></thead><tbody>';
 
-    var colspan = isFusion ? 13 : 11;
+    var colspan = isFusion ? 10 : 8;
 
     if (picks.length === 0) {{
         var diag = REPORT_DATA.diagnostics || {{}};
@@ -1598,6 +2634,7 @@ function renderPickTable(ver) {{
     }}
 
     picks.forEach(function(p, idx) {{
+        var isHidden = idx >= visibleLimit;
         var bp = p.best_buy_point || {{}};
         var tagClass = {{'一买':'b1','二买':'b2','三买':'b3','类二买':'b2l','强势启动候选':'b3'}}[bp.type] || '';
         if (!tagClass && bp.tier === 'candidate') {{ tagClass = 'candidate'; }}
@@ -1645,24 +2682,26 @@ function renderPickTable(ver) {{
         var confirmDisplay = isStartup ? (confirmLabel || '-') : '-';
         var confirmStyle = isStartup ? ' style="color:' + confirmColor + ';font-weight:bold;font-size:12px;"' : ' style="color:#666;font-size:12px;"';
 
-        html += '<tr class="expandable" onclick="toggleChart(' + idx + ', \\'' + ver + '\\')">';
-        html += '<td>' + escapeHtml(p.code) + '</td>';
-        html += '<td>' + escapeHtml(p.name) + '</td>';
+        var hiddenClass = isHidden ? ' pick-row-hidden pickTableMore' : '';
+        html += '<tr class="expandable pickTableCollapsed' + hiddenClass + '" onclick="toggleChart(' + idx + ', \\'' + ver + '\\')">';
+        html += '<td><div class="primary-cell">' + escapeHtml(p.code) + '</div></td>';
+        html += '<td><div class="primary-cell">' + escapeHtml(p.name) + '</div>' +
+            '<div class="secondary-cell">参考 ' + (refPrice ? refPrice.toFixed(2) : '-') +
+            ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></td>';
         html += '<td><span class="buy-tag ' + tagClass + '">' + escapeHtml(bp.type || '-') + '</span></td>';
         html += '<td' + startupStyle + '>' + escapeHtml(startupDisplay) + '</td>';
         html += '<td' + confirmStyle + '>' + escapeHtml(confirmDisplay) + '</td>';
-        html += '<td style="color:' + ageColor + ';font-size:12px;">' + ageLabel + '</td>';
-        html += '<td style="font-size:13px;">' + (refPrice ? refPrice.toFixed(2) : '-') + '</td>';
-        html += '<td style="font-size:13px;">' + (curPrice ? curPrice.toFixed(2) : '-') + '</td>';
-        html += '<td style="color:' + distColor + ';font-size:13px;">' + distStr + '</td>';
-        html += '<td><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</td>';
-        html += '<td style="font-size:12px;white-space:normal;line-height:1.6;max-width:200px;">' + escapeHtml(shortReason) + '</td>';
+        html += '<td class="num-condensed" style="color:' + ageColor + ';font-size:12px;">' + ageLabel + '</td>';
+        html += '<td><div class="metric-stack"><span class="metric-main" style="color:' + distColor + ';">' + distStr + '</span>' +
+            '<span class="metric-sub">' + escapeHtml(shortReason) + '</span></div></td>';
+        html += '<td><div class="metric-stack"><span class="num-condensed"><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</span>' +
+            '<span class="metric-sub">' + escapeHtml(resonance.level || '未标注共振') + '</span></div></td>';
         if (isFusion) {{
             var fa = p.fusion_admission || {{}};
-            html += '<td style="font-size:12px;">' +
-                (fa.passed ? '<span style="color:#5effa0;">通过</span>' : '<span style="color:#ff4757;">过滤</span>') +
+            html += '<td>' +
+                (fa.passed ? '<span class="decision-chip pass">通过</span>' : '<span class="decision-chip block">过滤</span>') +
                 '</td>';
-            html += '<td>' + (p.stop_loss ? p.stop_loss.toFixed(2) : '-') + '</td>';
+            html += '<td><span class="stop-loss-value num-condensed">' + (p.stop_loss ? p.stop_loss.toFixed(2) : '-') + '</span></td>';
         }}
         html += '</tr>';
 
@@ -1760,13 +2799,37 @@ function renderPickTable(ver) {{
 
         detail += '</div>';
 
-        html += '<tr class="chart-row" id="chartRow_' + ver + '_' + idx + '">' +
+        html += '<tr class="chart-row' + hiddenClass + '" id="chartRow_' + ver + '_' + idx + '">' +
                 '<td colspan="' + colspan + '" style="white-space:normal;line-height:1.6;">' +
                 '<div class="chart-container" id="chart_' + ver + '_' + idx + '"></div>' +
                 detail + '</td></tr>';
+
+        if (!isHidden) {{
+            cardHtml += '<div class="pick-card" onclick="toggleChart(' + idx + ', \\'' + ver + '\\')">' +
+                '<div class="pick-card-head">' +
+                '<div><div class="pick-card-title">' + escapeHtml(p.name) + '</div>' +
+                '<div class="secondary-cell">' + escapeHtml(p.code) + ' · 参考 ' + (refPrice ? refPrice.toFixed(2) : '-') + ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></div>' +
+                '<span class="buy-tag ' + tagClass + '">' + escapeHtml(bp.type || '-') + '</span>' +
+                '</div>' +
+                '<div class="pick-card-grid">' +
+                '<div><div class="pick-row-label">距参考价</div><div class="pick-row-value" style="color:' + distColor + ';">' + distStr + '</div></div>' +
+                '<div><div class="pick-row-label">评分</div><div class="pick-row-value">' + score.toFixed(1) + ' · ' + escapeHtml(resonance.level || '未标注') + '</div></div>' +
+                '<div><div class="pick-row-label">信号年龄</div><div class="pick-row-value" style="color:' + ageColor + ';">' + ageLabel + '</div></div>' +
+                '<div><div class="pick-row-label">30min确认</div><div class="pick-row-value" style="color:' + confirmColor + ';">' + escapeHtml(confirmDisplay) + '</div></div>' +
+                '<div style="grid-column:1/-1;"><div class="pick-row-label">原因</div><div class="pick-row-value">' + escapeHtml(shortReason) + '</div></div>' +
+                '</div></div>';
+        }}
     }});
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
+    if (picks.length > PICK_TABLE_LIMIT) {{
+        var remaining = picks.length - PICK_TABLE_LIMIT;
+        var label = PICK_TABLE_COLLAPSED ? ('展开其余 ' + remaining + ' 只') : '收起到前 20 只';
+        html += '<div class="pick-collapse"><button id="pickTableToggle" class="pick-collapse-btn" type="button" onclick="togglePickTable()">' + label + '</button></div>';
+        cardHtml += '<div class="pick-collapse"><button class="pick-collapse-btn" type="button" onclick="togglePickTable()">' + label + '</button></div>';
+    }}
+    cardHtml += '</div>';
     document.getElementById('pickTable').innerHTML = html;
+    document.getElementById('pickCards').innerHTML = cardHtml;
 
     window._charts = window._charts || {{}};
 }}
@@ -2117,6 +3180,21 @@ function renderNoPublicData() {{
         '<div style="text-align:center;padding:60px 20px;color:#888;">' +
         '<p style="font-size:18px;margin-bottom:12px;">暂无日报数据</p>' +
         '</div>';
+}}
+
+function loadHistory() {{
+    if (window.location.protocol === 'file:') return;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', 'data.json', true);
+    xhr.onload = function() {{
+        if (xhr.status === 200) {{
+            try {{
+                HISTORY_DATA = JSON.parse(xhr.responseText);
+                renderHistoryTabs();
+            }} catch(e) {{}}
+        }}
+    }};
+    xhr.send();
 }}
 
 // ========== 启动 ==========
