@@ -1,9 +1,10 @@
 """Tests for market_news — JSON parsing + impact scoring."""
 import unittest
+from unittest.mock import Mock, patch
 from chanlun.market_news import (
     _extract_first_json_object, _parse_llm_json,
     THEME_SYNONYMS, classify_event_category, classify_event_type,
-    score_market_impact, dedupe_or_downgrade_events,
+    score_market_impact, dedupe_or_downgrade_events, fetch_cls_news,
     rank_market_impact_events, rank_events,
 )
 
@@ -99,6 +100,109 @@ class TestMarketNewsJsonParsing(unittest.TestCase):
     def test_empty_string_raises(self):
         with self.assertRaises(ValueError):
             _parse_llm_json("")
+
+
+class TestFetchClsNews(unittest.TestCase):
+
+    @patch("chanlun.market_news.SESSION.get")
+    def test_prefers_next_data_when_available(self, mock_get):
+        page_resp = Mock()
+        page_resp.text = (
+            '<script id="__NEXT_DATA__" type="application/json">'
+            '{"props":{"initialState":{"telegraph":{"telegraphList":['
+            '{"title":"旧站快讯","content":"正文","brief":"摘要","ctime":123,"level":"A"}'
+            ']}}}}</script>'
+        )
+        page_resp.encoding = "utf-8"
+        mock_get.return_value = page_resp
+
+        result = fetch_cls_news(count=5)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["title"], "旧站快讯")
+        self.assertEqual(result[0]["level"], 3)
+        self.assertEqual(mock_get.call_count, 1)
+
+    @patch("chanlun.market_news.SESSION.get")
+    def test_falls_back_to_roll_api_when_next_data_missing(self, mock_get):
+        page_resp = Mock()
+        page_resp.text = "<html><body>no next data</body></html>"
+        page_resp.encoding = "utf-8"
+
+        api_resp = Mock()
+        api_resp.json.return_value = {
+            "data": {
+                "roll_data": [
+                    {
+                        "title": "新站快讯",
+                        "content": "新正文",
+                        "brief": "新摘要",
+                        "ctime": 456,
+                        "importance": "B",
+                        "stockList": [{"name": "测试股", "code": "000001"}],
+                        "plateList": [{"name": "半导体"}],
+                    }
+                ]
+            }
+        }
+        mock_get.side_effect = [page_resp, api_resp]
+
+        result = fetch_cls_news(count=5)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["title"], "新站快讯")
+        self.assertEqual(result[0]["level"], 2)
+        self.assertEqual(result[0]["stock_list"][0]["code"], "000001")
+        self.assertEqual(result[0]["plate_list"][0]["name"], "半导体")
+        self.assertEqual(mock_get.call_count, 2)
+        self.assertIn("/v1/roll/get_roll_list", mock_get.call_args_list[1][0][0])
+
+    @patch("chanlun.market_news.SESSION.get")
+    def test_uses_template_when_both_sources_empty(self, mock_get):
+        page_resp = Mock()
+        page_resp.text = "<html><body>no next data</body></html>"
+        page_resp.encoding = "utf-8"
+
+        api_resp = Mock()
+        api_resp.json.return_value = {"data": {"roll_data": []}}
+        ws_resp = Mock()
+        ws_resp.json.return_value = {"data": {"items": []}}
+        mock_get.side_effect = [page_resp, api_resp, ws_resp]
+
+        result = fetch_cls_news(count=5)
+
+        self.assertEqual(result, [])
+
+    @patch("chanlun.market_news.SESSION.get")
+    def test_falls_back_to_wallstreetcn_when_cls_empty(self, mock_get):
+        page_resp = Mock()
+        page_resp.text = "<html><body>no next data</body></html>"
+        page_resp.encoding = "utf-8"
+
+        api_resp = Mock()
+        api_resp.json.return_value = {"data": {"roll_data": []}}
+
+        ws_resp = Mock()
+        ws_resp.json.return_value = {
+            "data": {
+                "items": [
+                    {
+                        "title": "见闻A股快讯",
+                        "content_text": "算力链盘中走强",
+                        "display_time": 789,
+                    }
+                ]
+            }
+        }
+        mock_get.side_effect = [page_resp, api_resp, ws_resp]
+
+        result = fetch_cls_news(count=5)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["title"], "见闻A股快讯")
+        self.assertEqual(result[0]["content"], "算力链盘中走强")
+        self.assertEqual(result[0]["level"], 2)
+        self.assertIn("api-one.wallstcn.com", mock_get.call_args_list[2][0][0])
 
 
 class TestThemeSynonyms(unittest.TestCase):

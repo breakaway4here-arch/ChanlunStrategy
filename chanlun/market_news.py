@@ -30,53 +30,136 @@ _DS_MODEL = "deepseek-v4-pro"
 # ============================================================
 def fetch_cls_news(count=30):
     """
-    从财联社电报页抓取最新快讯。
-    页面内嵌 __NEXT_DATA__ JSON，含 telegraphList。
+    抓取市场快讯，优先财联社，其次华尔街见闻。
+    顺序：
+    1. 财联社页面 __NEXT_DATA__
+    2. 财联社 /v1/roll/get_roll_list API
+    3. 华尔街见闻 live API
     返回: [{"title": ..., "content": ..., "brief": ..., "ctime": ...,
              "stock_list": [...], "plate_list": [...]}, ...]
     """
-    url = "https://www.cls.cn/telegraph"
+    page_url = "https://www.cls.cn/telegraph"
+    api_url = "https://www.cls.cn/v1/roll/get_roll_list"
+    wallstreetcn_url = "https://api-one.wallstcn.com/apiv1/content/lives?channel=a-stock-channel&limit=200"
     try:
-        resp = SESSION.get(url, timeout=15)
+        resp = SESSION.get(page_url, timeout=15)
         resp.encoding = "utf-8"
         html = resp.text
 
-        # 提取 __NEXT_DATA__ JSON
-        match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
-        if not match:
-            print("[WARN] 未找到 __NEXT_DATA__，使用模板化事件")
-            return _template_events()
-
-        raw_json = match.group(1)
-        data = json.loads(raw_json)
-
-        # 路径: props → initialState → telegraph → telegraphList（直接数组）
-        telegraph_data = data.get("props", {}).get("initialState", {}).get("telegraph", {})
-        records = telegraph_data.get("telegraphList", [])
+        records = _extract_cls_records_from_next_data(html)
         if not records:
-            print("[WARN] telegraphList 为空，使用模板化事件")
-            return _template_events()
+            records = _fetch_cls_records_from_api(api_url, count=count)
+        if records:
+            return _normalize_cls_records(records, count=count)
 
-        # level 字符串 → 数值映射
-        level_map = {"A": 3, "B": 2, "C": 1}
+        records = _fetch_wallstreetcn_records(wallstreetcn_url)
+        if records:
+            return _normalize_wallstreetcn_records(records, count=count)
 
-        events = []
-        for r in records[:count]:
-            raw_level = r.get("level", "C")
-            events.append({
-                "title": r.get("title", ""),
-                "content": r.get("content", "") or r.get("brief", ""),
-                "brief": r.get("brief", ""),
-                "ctime": r.get("ctime", 0),
-                "stock_list": r.get("stock_list", []) or [],
-                "plate_list": r.get("plate_list", []) or [],
-                "level": level_map.get(raw_level, 1),
-            })
-
-        return events
+        print("[WARN] 所有快讯源均为空")
+        return []
     except Exception as e:
-        print(f"[WARN] 抓取财联社失败 ({e})，使用模板化事件")
-        return _template_events()
+        print(f"[WARN] 主快讯源抓取失败 ({e})，尝试华尔街见闻")
+        try:
+            records = _fetch_wallstreetcn_records(wallstreetcn_url)
+            if records:
+                return _normalize_wallstreetcn_records(records, count=count)
+        except Exception as sub_e:
+            print(f"[WARN] 华尔街见闻抓取失败 ({sub_e})")
+        return []
+
+
+def _extract_cls_records_from_next_data(html):
+    """Parse telegraph records from the legacy server-rendered __NEXT_DATA__ blob."""
+    match = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', html)
+    if not match:
+        return []
+
+    raw_json = match.group(1)
+    data = json.loads(raw_json)
+    telegraph_data = data.get("props", {}).get("initialState", {}).get("telegraph", {})
+    return telegraph_data.get("telegraphList", []) or []
+
+
+def _fetch_cls_records_from_api(api_url, count=30):
+    """Fallback for the new CLS telegraph site, which loads data client-side."""
+    params = {
+        "app": "CailianpressWeb",
+        "category": "",
+        "keyword": "",
+        "last_time": "",
+        "os": "web",
+        "refresh_type": 1,
+        "rn": max(int(count), 30),
+        "sv": "8.4.6",
+    }
+    resp = SESSION.get(api_url, params=params, timeout=15)
+    data = resp.json()
+    payload = data.get("data", {}) if isinstance(data, dict) else {}
+
+    candidate_lists = [
+        payload.get("roll_data"),
+        payload.get("data"),
+        payload.get("items"),
+        data.get("roll_data") if isinstance(data, dict) else None,
+        data.get("items") if isinstance(data, dict) else None,
+    ]
+    for records in candidate_lists:
+        if isinstance(records, list) and records:
+            return records
+    return []
+
+
+def _normalize_cls_records(records, count=30):
+    """Normalize legacy and API telegraph payloads to the project event schema."""
+    level_map = {"A": 3, "B": 2, "C": 1, 3: 3, 2: 2, 1: 1}
+    normalized = []
+
+    for r in records[:count]:
+        title = r.get("title", "") or r.get("brief", "") or r.get("content", "")
+        brief = r.get("brief", "") or r.get("title", "") or r.get("content", "")
+        content = r.get("content", "") or brief
+        raw_level = r.get("level", r.get("importance", "C"))
+
+        normalized.append({
+            "title": title,
+            "content": content,
+            "brief": brief,
+            "ctime": r.get("ctime", r.get("time", 0)),
+            "stock_list": r.get("stock_list", []) or r.get("stockList", []) or [],
+            "plate_list": r.get("plate_list", []) or r.get("plateList", []) or [],
+            "level": level_map.get(raw_level, 1),
+        })
+
+    return normalized
+
+
+def _fetch_wallstreetcn_records(api_url):
+    """Fetch A-share live headlines from WallstreetCN."""
+    resp = SESSION.get(api_url, timeout=15)
+    data = resp.json()
+    payload = data.get("data", {}) if isinstance(data, dict) else {}
+    items = payload.get("items", [])
+    return items if isinstance(items, list) else []
+
+
+def _normalize_wallstreetcn_records(records, count=30):
+    """Normalize WallstreetCN live payloads to the shared event schema."""
+    normalized = []
+    for r in records[:count]:
+        title = r.get("title", "") or r.get("content_text", "")
+        content = r.get("content_text", "") or title
+        ctime = r.get("display_time") or r.get("time") or 0
+        normalized.append({
+            "title": title,
+            "content": content,
+            "brief": content,
+            "ctime": ctime,
+            "stock_list": [],
+            "plate_list": [],
+            "level": 2,
+        })
+    return normalized
 
 
 def rank_events(events, hot_sectors=None):
