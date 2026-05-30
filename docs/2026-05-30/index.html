@@ -1037,6 +1037,7 @@ body {
     border-radius: 14px;
     background: #11161d;
     padding: 12px 12px 10px;
+    cursor: pointer;
 }
 
 .pick-card-head {
@@ -1069,6 +1070,21 @@ body {
     font-size: 12px;
     line-height: 1.45;
     word-break: break-word;
+}
+
+.pick-card-detail {
+    display: none;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #202833;
+}
+
+.pick-card.open .pick-card-detail {
+    display: block;
+}
+
+.pick-card-detail .detail-section {
+    margin-top: 0;
 }
 
 @media (max-width: 980px) {
@@ -21966,7 +21982,7 @@ function renderPickTable(ver) {
                 detail + '</td></tr>';
 
         if (!isHidden) {
-            cardHtml += '<div class="pick-card" onclick="toggleChart(' + idx + ', \'' + ver + '\')">' +
+            cardHtml += '<div class="pick-card" id="pickCard_' + ver + '_' + idx + '" onclick="toggleChart(' + idx + ', \'' + ver + '\')">' +
                 '<div class="pick-card-head">' +
                 '<div><div class="pick-card-title">' + escapeHtml(p.name) + '</div>' +
                 '<div class="secondary-cell">' + escapeHtml(p.code) + ' · ' + escapeHtml(p.sector || '-') + ' · 参考 ' + (refPrice ? refPrice.toFixed(2) : '-') + ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></div>' +
@@ -21978,6 +21994,10 @@ function renderPickTable(ver) {
                 '<div><div class="pick-row-label">信号年龄</div><div class="pick-row-value" style="color:' + ageColor + ';">' + ageLabel + '</div></div>' +
                 '<div><div class="pick-row-label">30min确认</div><div class="pick-row-value" style="color:' + confirmColor + ';">' + escapeHtml(confirmDisplay) + '</div></div>' +
                 '<div style="grid-column:1/-1;"><div class="pick-row-label">原因</div><div class="pick-row-value">' + escapeHtml(shortReason) + '</div></div>' +
+                '</div>' +
+                '<div class="pick-card-detail" id="pickCardDetail_' + ver + '_' + idx + '" onclick="event.stopPropagation()">' +
+                '<div class="chart-container" id="chart_card_' + ver + '_' + idx + '"></div>' +
+                detail +
                 '</div></div>';
         }
     });
@@ -22053,6 +22073,24 @@ function renderVersionDiffSummary() {
 
 // ========== 图表展开/收起 ==========
 function toggleChart(idx, ver) {
+    var card = document.getElementById('pickCard_' + ver + '_' + idx);
+    var cardDetail = document.getElementById('pickCardDetail_' + ver + '_' + idx);
+    var table = document.getElementById('pickTable');
+    var tableVisible = !!table && window.getComputedStyle(table).display !== 'none';
+    if (!tableVisible && card && cardDetail) {
+        var isCardOpen = card.classList.contains('open');
+        if (isCardOpen) {
+            card.classList.remove('open');
+            return;
+        }
+        document.querySelectorAll('.pick-card.open').forEach(function(openCard) {
+            if (openCard !== card) openCard.classList.remove('open');
+        });
+        card.classList.add('open');
+        setTimeout(function() { renderChart(idx, ver, 'chart_card_' + ver + '_' + idx); }, 100);
+        return;
+    }
+
     var row = document.getElementById('chartRow_' + ver + '_' + idx);
     if (!row) return;
     var isOpen = row.classList.contains('open');
@@ -22163,8 +22201,8 @@ function renderStartupWatchChart(idx) {
 }
 
 // ========== ECharts 走势图 ==========
-function renderChart(idx, ver) {
-    var domId = 'chart_' + ver + '_' + idx;
+function renderChart(idx, ver, domId) {
+    domId = domId || ('chart_' + ver + '_' + idx);
     var dom = document.getElementById(domId);
     if (!dom || dom.clientWidth === 0) return;
 

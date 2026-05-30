@@ -613,6 +613,13 @@ class TestLayoutRefresh(unittest.TestCase):
         self.assertIn("pick-row-label", self.html)
         self.assertIn("pick-row-value", self.html)
 
+    def test_mobile_card_has_expandable_chart_detail(self):
+        self.assertIn("pick-card-detail", self.html)
+        self.assertIn("chart_card_", self.html)
+        self.assertIn("pickCard_", self.html)
+        self.assertIn("document.querySelectorAll('.pick-card.open')", self.html)
+        self.assertIn("classList.remove('open')", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
