@@ -1749,6 +1749,9 @@ body {{
     #pickTable {{
         display: none;
     }}
+    #startupWatchContent {{
+        display: none;
+    }}
     .pick-cards {{
         display: grid;
     }}
@@ -1845,6 +1848,7 @@ body {{
     <div id="startupWatchSection">
         <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
         <div id="startupWatchContent"></div>
+        <div id="startupWatchCards"></div>
     </div>
     <div class="table-control">
         <div class="table-control-left">
@@ -1969,7 +1973,13 @@ var CURRENT_VERSION = 'fusion';
 var HISTORY_DATA = {{}};
 var PICK_TABLE_COLLAPSED = true;
 var PICK_TABLE_LIMIT = 20;
+var DATA_BASE_PREFIX = getDataBasePrefix();
 var INLINE_REPORT_DATA = {bootstrap_data_json};
+
+function getDataBasePrefix() {{
+    var path = (window.location.pathname || '').replace(/\/+$/, '');
+    return /\/\d{{4}}-\d{{2}}-\d{{2}}$/.test(path) ? '../' : '';
+}}
 
 async function init() {{
     // 全局 resize：遍历所有已渲染图表
@@ -2013,7 +2023,7 @@ async function init() {{
 
     try {{
         // 加载 data.json 获取所有可用日期
-        var manifestResp = await fetch('data.json');
+        var manifestResp = await fetch(DATA_BASE_PREFIX + 'data.json');
         if (!manifestResp.ok) throw new Error('Failed to load data.json');
         var manifest = await manifestResp.json();
         var allDates = manifest.dates || [];
@@ -2026,7 +2036,7 @@ async function init() {{
         }}
 
         // 加载实际日期的数据
-        var dataResp = await fetch('data/' + resolvedDate + '.json');
+        var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json');
         if (!dataResp.ok) throw new Error('Failed to load data for ' + resolvedDate);
         REPORT_DATA = await dataResp.json();
         REPORT_DATA.date = resolvedDate;
@@ -2042,7 +2052,7 @@ async function init() {{
         console.error(e);
         // 最终 fallback：尝试直接加载 PAGE_DATE
         try {{
-            var dataResp = await fetch('data/' + PAGE_DATE + '.json');
+            var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
             if (dataResp.ok) {{
                 REPORT_DATA = await dataResp.json();
                 renderAll();
@@ -2553,11 +2563,14 @@ function renderStartupWatchlist() {{
     var watchlist = REPORT_DATA.startup_watchlist || [];
     if (!watchlist.length) {{
         document.getElementById('startupWatchSection').style.display = 'none';
+        document.getElementById('startupWatchContent').innerHTML = '';
+        document.getElementById('startupWatchCards').innerHTML = '';
         return;
     }}
     document.getElementById('startupWatchSection').style.display = '';
     document.getElementById('startupWatchCount').textContent = '(' + watchlist.length + ' 只)';
 
+    var cardHtml = '<div class="pick-cards startup-watch-cards">';
     var html = '<table class="chan-table"><thead><tr>' +
         '<th>代码</th><th>名称</th><th>板块</th><th>信号</th><th>启动形态</th><th>30min确认</th><th>信号年龄</th>' +
         '<th>参考价</th><th>现价</th><th>距参考价</th>' +
@@ -2574,6 +2587,8 @@ function renderStartupWatchlist() {{
         var startupGrade = w.daily_startup_grade || '';
         var startupLabel = w.daily_startup_label || (startupGrade === 'strong' ? '强启动' : (startupGrade === 'weak' ? '弱启动确认' : (startupGrade === 'pullback' ? '回踩型启动观察' : (w.startup_signals && w.startup_signals.length ? '启动观察' : '-'))));
         var confirmLabel = w.sublevel_confirm_label || (w.confirmed_by ? w.confirmed_by : '等待确认');
+        var reasonSummary = w.startup_reason || w.watch_reason || '-';
+        if (reasonSummary.length > 48) reasonSummary = reasonSummary.substring(0, 48) + '...';
         html += '<tr class="expandable" onclick="toggleStartupWatchChart(' + idx + ')">' +
             '<td>' + escapeHtml(w.code) + '</td>' +
             '<td>' + escapeHtml(w.name) + '</td>' +
@@ -2615,9 +2630,29 @@ function renderStartupWatchlist() {{
             '<td colspan="13" style="white-space:normal;line-height:1.6;">' +
             '<div class="chart-container" id="chart_sw_' + idx + '"></div>' +
             detail + '</td></tr>';
+
+        cardHtml += '<div class="pick-card startup-watch-card" id="startupWatchCard_' + idx + '" onclick="toggleStartupWatchChart(' + idx + ')">' +
+            '<div class="pick-card-head">' +
+            '<div><div class="pick-card-title">' + escapeHtml(w.name) + '</div>' +
+            '<div class="secondary-cell">' + escapeHtml(w.code) + ' · ' + escapeHtml(w.sector || '-') + ' · 参考 ' + (refPrice ? refPrice.toFixed(2) : '-') + ' · 现价 ' + (curPrice ? curPrice.toFixed(2) : '-') + '</div></div>' +
+            '<span class="sell-tag">' + escapeHtml(w.type || '-') + '</span>' +
+            '</div>' +
+            '<div class="pick-card-grid">' +
+            '<div><div class="pick-row-label">启动形态</div><div class="pick-row-value">' + escapeHtml(startupLabel) + '</div></div>' +
+            '<div><div class="pick-row-label">30min确认</div><div class="pick-row-value">' + escapeHtml(confirmLabel) + '</div></div>' +
+            '<div><div class="pick-row-label">信号年龄</div><div class="pick-row-value">' + ageLabel + '</div></div>' +
+            '<div><div class="pick-row-label">距参考价</div><div class="pick-row-value" style="color:' + distColor + ';">' + distStr + '</div></div>' +
+            '<div style="grid-column:1/-1;"><div class="pick-row-label">观察摘要</div><div class="pick-row-value">' + escapeHtml(reasonSummary) + '</div></div>' +
+            '</div>' +
+            '<div class="pick-card-detail" id="startupWatchCardDetail_' + idx + '" onclick="event.stopPropagation()">' +
+            '<div class="chart-container" id="startupWatchCardDetailChart_' + idx + '"></div>' +
+            detail +
+            '</div></div>';
     }});
     html += '</tbody></table>';
+    cardHtml += '</div>';
     document.getElementById('startupWatchContent').innerHTML = html;
+    document.getElementById('startupWatchCards').innerHTML = cardHtml;
 }}
 
 // ========== 选股表格 ==========
@@ -2960,6 +2995,24 @@ function toggleChart(idx, ver) {{
 
 // ========== 启动观察图表展开/收起 ==========
 function toggleStartupWatchChart(idx) {{
+    var card = document.getElementById('startupWatchCard_' + idx);
+    var cardDetail = document.getElementById('startupWatchCardDetail_' + idx);
+    var table = document.getElementById('startupWatchContent');
+    var tableVisible = !!table && window.getComputedStyle(table).display !== 'none';
+    if (!tableVisible && card && cardDetail) {{
+        var isCardOpen = card.classList.contains('open');
+        if (isCardOpen) {{
+            card.classList.remove('open');
+            return;
+        }}
+        document.querySelectorAll('.startup-watch-card.open').forEach(function(openCard) {{
+            if (openCard !== card) openCard.classList.remove('open');
+        }});
+        card.classList.add('open');
+        setTimeout(function() {{ renderStartupWatchChart(idx, 'startupWatchCardDetailChart_' + idx); }}, 100);
+        return;
+    }}
+
     var row = document.getElementById('chartRow_sw_' + idx);
     if (!row) return;
     var isOpen = row.classList.contains('open');
@@ -2969,8 +3022,8 @@ function toggleStartupWatchChart(idx) {{
     }}
 }}
 
-function renderStartupWatchChart(idx) {{
-    var domId = 'chart_sw_' + idx;
+function renderStartupWatchChart(idx, domId) {{
+    domId = domId || ('chart_sw_' + idx);
     var dom = document.getElementById(domId);
     if (!dom || dom.clientWidth === 0) return;
 
@@ -3214,15 +3267,18 @@ function showHistory(dateStr) {{
         events: report.events || [],
         forecast: report.forecast || {{}},
         sell_signals: report.sell_signals || [],
+        startup_watchlist: report.startup_watchlist || [],
     }};
     renderMarketCards();
     renderMarketStructure();
+    renderSelectionSummaryCards();
     renderSectorFlow();
     renderSectorOutflow();
     renderEvents();
     renderForecast();
     renderSellSignals();
     renderLimitUp();
+    renderStartupWatchlist();
     switchVersion(CURRENT_VERSION);
     var tabs = document.querySelectorAll('.history-tab');
     tabs.forEach(function(t) {{
@@ -3242,7 +3298,7 @@ function renderNoPublicData() {{
 function loadHistory() {{
     if (window.location.protocol === 'file:') return;
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', 'data.json', true);
+    xhr.open('GET', DATA_BASE_PREFIX + 'data.json', true);
     xhr.onload = function() {{
         if (xhr.status === 200) {{
             try {{

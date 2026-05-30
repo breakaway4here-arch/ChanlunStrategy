@@ -620,6 +620,27 @@ class TestLayoutRefresh(unittest.TestCase):
         self.assertIn("document.querySelectorAll('.pick-card.open')", self.html)
         self.assertIn("classList.remove('open')", self.html)
 
+    def test_startup_watch_has_mobile_card_mode_markers(self):
+        self.assertIn("startup-watch-cards", self.html)
+        self.assertIn("startup-watch-card", self.html)
+        self.assertIn("startupWatchCard_", self.html)
+        self.assertIn("startupWatchCardDetail_", self.html)
+
+    def test_startup_watch_mobile_cards_use_single_open_logic(self):
+        self.assertIn("document.querySelectorAll('.startup-watch-card.open')", self.html)
+        self.assertIn("startupWatchCardDetailChart_", self.html)
+        self.assertIn("classList.remove('open')", self.html)
+
+    def test_history_switch_refreshes_startup_watch_data(self):
+        self.assertIn("startup_watchlist: report.startup_watchlist || []", self.html)
+        self.assertIn("renderStartupWatchlist();", self.html)
+
+    def test_archive_pages_use_resolved_data_base_prefix(self):
+        self.assertIn("function getDataBasePrefix()", self.html)
+        self.assertIn("var DATA_BASE_PREFIX = getDataBasePrefix();", self.html)
+        self.assertIn("fetch(DATA_BASE_PREFIX + 'data.json')", self.html)
+        self.assertIn("fetch(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json')", self.html)
+
 
 if __name__ == "__main__":
     unittest.main()
