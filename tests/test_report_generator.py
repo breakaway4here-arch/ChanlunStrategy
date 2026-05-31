@@ -180,9 +180,10 @@ class TestAccessControl(unittest.TestCase):
         """HTML contains ACCESS_CONTROL_ENABLED = true."""
         self.assertIn("ACCESS_CONTROL_ENABLED = true", self.html)
 
-    def test_public_dates_in_html(self):
-        """HTML contains ACCESS_PUBLIC_DATES with configured dates."""
-        self.assertIn(json.dumps(PUBLIC_DATES), self.html)
+    def test_no_public_dates_in_html(self):
+        """HTML no longer embeds the public-date allowlist."""
+        self.assertNotIn("ACCESS_PUBLIC_DATES", self.html)
+        self.assertNotIn(json.dumps(PUBLIC_DATES), self.html)
 
     def test_sha256_helper_in_html(self):
         """HTML contains sha256Hex function for crypto.subtle hashing."""
@@ -193,17 +194,27 @@ class TestAccessControl(unittest.TestCase):
         """HTML contains async resolveGranted function."""
         self.assertIn("function resolveGranted", self.html)
 
-    def test_get_allowed_dates_in_html(self):
-        """HTML contains getAllowedDates filter function."""
-        self.assertIn("function getAllowedDates", self.html)
+    def test_get_visible_dates_in_html(self):
+        """HTML contains the latest-date visibility helper instead of allowlists."""
+        self.assertIn("function getVisibleDates", self.html)
+        self.assertNotIn("function getAllowedDates", self.html)
+        self.assertIn("function isTradingDay", self.html)
+        self.assertIn("function getLatestTradingDate", self.html)
 
     def test_resolve_initial_date_in_html(self):
         """HTML contains resolveInitialDate fallback function."""
         self.assertIn("function resolveInitialDate", self.html)
+        self.assertIn("return latestTradingDate;", self.html)
+        self.assertIn("if (!granted) return latestTradingDate;", self.html)
 
     def test_filter_history_data_in_html(self):
         """HTML contains filterHistoryData function."""
         self.assertIn("function filterHistoryData", self.html)
+
+    def test_header_date_sync_in_html(self):
+        """HTML syncs the visible header date to the resolved report date."""
+        self.assertIn("function updateHeaderDate", self.html)
+        self.assertIn("document.title = '缠论选股日报 — ' + dateStr;", self.html)
 
     def test_no_old_access_key_var(self):
         """HTML does not contain the old var ACCESS_KEY = 'plaintext' pattern."""
@@ -226,9 +237,14 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("function renderNoPublicData", self.html)
         self.assertIn("暂无日报数据", self.html)
 
-    def test_show_history_guards_disallowed_dates(self):
-        """showHistory checks GRANTED and PUBLIC_DATES before switching dates."""
-        self.assertIn("ACCESS_PUBLIC_DATES.indexOf(dateStr)", self.html)
+    def test_show_history_requires_key(self):
+        """showHistory returns immediately unless the key is granted."""
+        self.assertIn("if (!GRANTED) return;", self.html)
+
+    def test_unauthorized_history_tabs_hidden(self):
+        """Unauthenticated sessions should not render history tabs."""
+        self.assertIn("if (!GRANTED || dates.length <= 1)", self.html)
+        self.assertIn("document.getElementById('historySection').style.display = 'none';", self.html)
 
 
 class TestStartupWatchlistSerialization(unittest.TestCase):

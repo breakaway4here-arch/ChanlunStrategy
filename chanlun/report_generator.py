@@ -19,7 +19,7 @@ from chanlun.chan_engine import calc_macd
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
-    ENABLE_WEAK_ACCESS_CONTROL, PUBLIC_DATES,
+    ENABLE_WEAK_ACCESS_CONTROL,
     FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
 )
 
@@ -1916,7 +1916,6 @@ body {{
 <script>
 // ========== 弱保护访问控制（hash 校验，非安全鉴权） ==========
 var ACCESS_CONTROL_ENABLED = {str(ENABLE_WEAK_ACCESS_CONTROL).lower()};
-var ACCESS_PUBLIC_DATES = {json.dumps(PUBLIC_DATES)};
 var ACCESS_KEY_SALT = "{FULL_ACCESS_KEY_SALT}";
 var ACCESS_KEY_HASH = "{access_key_hash}";
 var GRANTED = false;
@@ -1942,21 +1941,47 @@ async function resolveGranted() {{
     }}
 }}
 
-function getAllowedDates(allDates, granted, publicDates) {{
+function isTradingDay(dateStr) {{
+    if (!dateStr) return false;
+    var d = new Date(dateStr + 'T00:00:00Z');
+    var day = d.getUTCDay();
+    return day >= 1 && day <= 5;
+}}
+
+function getLatestTradingDate(allDates) {{
+    if (!allDates || allDates.length === 0) return null;
+    for (var i = allDates.length - 1; i >= 0; i--) {{
+        if (isTradingDay(allDates[i])) return allDates[i];
+    }}
+    return allDates[allDates.length - 1];
+}}
+
+function getVisibleDates(allDates, granted) {{
     if (granted) return allDates.slice();
-    return allDates.filter(function(d) {{ return publicDates.indexOf(d) !== -1; }});
+    var latestTradingDate = getLatestTradingDate(allDates);
+    return latestTradingDate ? [latestTradingDate] : [];
 }}
 
-function resolveInitialDate(pageDate, allowedDates) {{
-    if (allowedDates.indexOf(pageDate) !== -1) return pageDate;
-    if (allowedDates.length > 0) return allowedDates[0];
-    return null;
+function resolveInitialDate(pageDate, allDates, granted) {{
+    var latestTradingDate = getLatestTradingDate(allDates);
+    if (!latestTradingDate) return null;
+    if (!granted) return latestTradingDate;
+    if (allDates.indexOf(pageDate) !== -1) return pageDate;
+    return latestTradingDate;
 }}
 
-function filterHistoryData(historyData, allowedDates) {{
+function updateHeaderDate(dateStr) {{
+    var subtitle = document.querySelector('.subtitle');
+    if (subtitle) {{
+        subtitle.textContent = dateStr + ' · 盘中 14:35 运行 · 基于缠中说禅108课理论';
+    }}
+    document.title = '缠论选股日报 — ' + dateStr;
+}}
+
+function filterHistoryData(historyData, visibleDates) {{
     var filtered = {{ dates: [], reports: {{}} }};
     (historyData.dates || []).forEach(function(d) {{
-        if (allowedDates.indexOf(d) !== -1) {{
+        if (visibleDates.indexOf(d) !== -1) {{
             filtered.dates.push(d);
             if (historyData.reports && historyData.reports[d]) {{
                 filtered.reports[d] = historyData.reports[d];
@@ -2016,6 +2041,7 @@ async function init() {{
                 return reports;
             }})()
         }};
+        updateHeaderDate(PAGE_DATE);
         renderAll();
         renderHistoryTabs();
         return;
@@ -2027,8 +2053,8 @@ async function init() {{
         if (!manifestResp.ok) throw new Error('Failed to load data.json');
         var manifest = await manifestResp.json();
         var allDates = manifest.dates || [];
-        var allowedDates = getAllowedDates(allDates, GRANTED, ACCESS_PUBLIC_DATES);
-        var resolvedDate = resolveInitialDate(PAGE_DATE, allowedDates);
+        var visibleDates = getVisibleDates(allDates, GRANTED);
+        var resolvedDate = resolveInitialDate(PAGE_DATE, allDates, GRANTED);
 
         if (!resolvedDate) {{
             renderNoPublicData();
@@ -2040,26 +2066,33 @@ async function init() {{
         if (!dataResp.ok) throw new Error('Failed to load data for ' + resolvedDate);
         REPORT_DATA = await dataResp.json();
         REPORT_DATA.date = resolvedDate;
+        updateHeaderDate(resolvedDate);
 
         // 过滤历史数据
-        HISTORY_DATA = filterHistoryData(manifest, allowedDates);
+        HISTORY_DATA = filterHistoryData(manifest, visibleDates);
 
         renderAll();
         renderHistoryTabs();
-
-        // 静默限制：未授权用户仅看到 PUBLIC_DATES 中的日期，无提示
     }} catch(e) {{
         console.error(e);
-        // 最终 fallback：尝试直接加载 PAGE_DATE
-        try {{
-            var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
-            if (dataResp.ok) {{
-                REPORT_DATA = await dataResp.json();
-                renderAll();
+        if (GRANTED) {{
+            // 最终 fallback：仅授权访问时允许回退到归档页自身数据
+            try {{
+                var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
+                if (dataResp.ok) {{
+                    REPORT_DATA = await dataResp.json();
+                    REPORT_DATA.date = PAGE_DATE;
+                    updateHeaderDate(PAGE_DATE);
+                    HISTORY_DATA = filterHistoryData({{ dates: [PAGE_DATE], reports: {{}} }}, [PAGE_DATE]);
+                    renderAll();
+                    renderHistoryTabs();
+                    return;
+                }}
+            }} catch(e2) {{
+                console.error(e2);
             }}
-        }} catch(e2) {{
-            console.error(e2);
         }}
+        renderNoPublicData();
     }}
 }}
 
@@ -3237,7 +3270,11 @@ function renderChart(idx, ver, domId) {{
 // ========== 历史数据 ==========
 function renderHistoryTabs() {{
     var dates = HISTORY_DATA.dates || [];
-    if (dates.length <= 1) return;
+    if (!GRANTED || dates.length <= 1) {{
+        document.getElementById('historySection').style.display = 'none';
+        document.getElementById('historyTabs').innerHTML = '';
+        return;
+    }}
     document.getElementById('historySection').style.display = 'block';
 
     var html = '';
@@ -3249,8 +3286,7 @@ function renderHistoryTabs() {{
 }}
 
 function showHistory(dateStr) {{
-    // 未授权时只允许访问 PUBLIC_DATES 中的日期
-    if (!GRANTED && ACCESS_PUBLIC_DATES.indexOf(dateStr) === -1) return;
+    if (!GRANTED) return;
 
     var reports = HISTORY_DATA.reports || {{}};
     var report = reports[dateStr];
@@ -3269,6 +3305,7 @@ function showHistory(dateStr) {{
         sell_signals: report.sell_signals || [],
         startup_watchlist: report.startup_watchlist || [],
     }};
+    updateHeaderDate(dateStr);
     renderMarketCards();
     renderMarketStructure();
     renderSelectionSummaryCards();
@@ -3286,7 +3323,7 @@ function showHistory(dateStr) {{
     }});
 }}
 
-// ========== 受限提示（仅 PUBLIC_DATES=[] 时显示） ==========
+// ========== 无可见日报时的占位 ==========
 function renderNoPublicData() {{
     document.getElementById('historySection').style.display = 'none';
     document.getElementById('historyContent').innerHTML =

@@ -1296,7 +1296,6 @@ body {
 <script>
 // ========== 弱保护访问控制（hash 校验，非安全鉴权） ==========
 var ACCESS_CONTROL_ENABLED = true;
-var ACCESS_PUBLIC_DATES = ["2026-05-26", "2026-05-27"];
 var ACCESS_KEY_SALT = "chanlun-report-salt-v1";
 var ACCESS_KEY_HASH = "0bc3dd055ac1d648ee44c70ab32c6e1104fb45d84e5b3b0ca3a5eea59f1ca59d";
 var GRANTED = false;
@@ -1322,21 +1321,47 @@ async function resolveGranted() {
     }
 }
 
-function getAllowedDates(allDates, granted, publicDates) {
+function isTradingDay(dateStr) {
+    if (!dateStr) return false;
+    var d = new Date(dateStr + 'T00:00:00Z');
+    var day = d.getUTCDay();
+    return day >= 1 && day <= 5;
+}
+
+function getLatestTradingDate(allDates) {
+    if (!allDates || allDates.length === 0) return null;
+    for (var i = allDates.length - 1; i >= 0; i--) {
+        if (isTradingDay(allDates[i])) return allDates[i];
+    }
+    return allDates[allDates.length - 1];
+}
+
+function getVisibleDates(allDates, granted) {
     if (granted) return allDates.slice();
-    return allDates.filter(function(d) { return publicDates.indexOf(d) !== -1; });
+    var latestTradingDate = getLatestTradingDate(allDates);
+    return latestTradingDate ? [latestTradingDate] : [];
 }
 
-function resolveInitialDate(pageDate, allowedDates) {
-    if (allowedDates.indexOf(pageDate) !== -1) return pageDate;
-    if (allowedDates.length > 0) return allowedDates[0];
-    return null;
+function resolveInitialDate(pageDate, allDates, granted) {
+    var latestTradingDate = getLatestTradingDate(allDates);
+    if (!latestTradingDate) return null;
+    if (!granted) return latestTradingDate;
+    if (allDates.indexOf(pageDate) !== -1) return pageDate;
+    return latestTradingDate;
 }
 
-function filterHistoryData(historyData, allowedDates) {
+function updateHeaderDate(dateStr) {
+    var subtitle = document.querySelector('.subtitle');
+    if (subtitle) {
+        subtitle.textContent = dateStr + ' · 盘中 14:35 运行 · 基于缠中说禅108课理论';
+    }
+    document.title = '缠论选股日报 — ' + dateStr;
+}
+
+function filterHistoryData(historyData, visibleDates) {
     var filtered = { dates: [], reports: {} };
     (historyData.dates || []).forEach(function(d) {
-        if (allowedDates.indexOf(d) !== -1) {
+        if (visibleDates.indexOf(d) !== -1) {
             filtered.dates.push(d);
             if (historyData.reports && historyData.reports[d]) {
                 filtered.reports[d] = historyData.reports[d];
@@ -7108,7 +7133,7 @@ var INLINE_REPORT_DATA = {
       "best_buy_point": {
         "type": "强势启动候选",
         "tier": "candidate",
-        "index": 27,
+        "index": 33,
         "price": 48.5,
         "reason": "处于60日低位区间；放量1.6倍；涨幅4.8%",
         "strength": "中",
@@ -7160,6 +7185,12 @@ var INLINE_REPORT_DATA = {
       "market_regime": "",
       "fusion_admission": {},
       "dates": [
+        "2026-04-07",
+        "2026-04-08",
+        "2026-04-09",
+        "2026-04-10",
+        "2026-04-13",
+        "2026-04-14",
         "2026-04-15",
         "2026-04-16",
         "2026-04-17",
@@ -7190,6 +7221,12 @@ var INLINE_REPORT_DATA = {
         "2026-05-27"
       ],
       "closes": [
+        30.21,
+        33.23,
+        34.64,
+        38.1,
+        38.7,
+        37.18,
         37.54,
         39.47,
         41.3,
@@ -7220,6 +7257,12 @@ var INLINE_REPORT_DATA = {
         48.5
       ],
       "opens": [
+        30.98,
+        31.59,
+        33.95,
+        34.65,
+        37.87,
+        38.1,
         37.26,
         37.5,
         39.47,
@@ -7250,6 +7293,12 @@ var INLINE_REPORT_DATA = {
         45.36
       ],
       "highs": [
+        31.81,
+        33.23,
+        34.92,
+        38.1,
+        39.61,
+        38.62,
         40.27,
         40.5,
         42.5,
@@ -7280,6 +7329,12 @@ var INLINE_REPORT_DATA = {
         49.88
       ],
       "lows": [
+        30.01,
+        31.3,
+        33.2,
+        33.98,
+        36.7,
+        36.8,
         36.98,
         36.41,
         39.47,
@@ -7310,6 +7365,12 @@ var INLINE_REPORT_DATA = {
         45.28
       ],
       "volumes": [
+        1241374.0,
+        1535919.0,
+        1864375.0,
+        2331300.0,
+        2175915.0,
+        1840653.0,
         2323465.0,
         2004663.0,
         1673910.0,
@@ -7340,6 +7401,12 @@ var INLINE_REPORT_DATA = {
         1960929.0
       ],
       "macd_hist": [
+        0.9626166635536626,
+        1.2842106528979302,
+        1.592512429927465,
+        2.134343980887108,
+        2.424242125984243,
+        2.264924120482146,
         2.0671900433932278,
         2.051418984066756,
         2.133086432467035,
@@ -7425,7 +7492,7 @@ var INLINE_REPORT_DATA = {
         {
           "type": "强势启动候选",
           "tier": "candidate",
-          "index": 27,
+          "index": 33,
           "price": 48.5,
           "reason": "处于60日低位区间；放量1.6倍；涨幅4.8%",
           "strength": "中",
@@ -8565,7 +8632,7 @@ var INLINE_REPORT_DATA = {
       "best_buy_point": {
         "type": "强势启动候选",
         "tier": "candidate",
-        "index": 27,
+        "index": 33,
         "price": 26.41,
         "reason": "处于60日低位区间；放量2.7倍",
         "strength": "中",
@@ -8617,6 +8684,12 @@ var INLINE_REPORT_DATA = {
       "market_regime": "",
       "fusion_admission": {},
       "dates": [
+        "2026-04-07",
+        "2026-04-08",
+        "2026-04-09",
+        "2026-04-10",
+        "2026-04-13",
+        "2026-04-14",
         "2026-04-15",
         "2026-04-16",
         "2026-04-17",
@@ -8647,6 +8720,12 @@ var INLINE_REPORT_DATA = {
         "2026-05-27"
       ],
       "closes": [
+        26.61,
+        29.83,
+        28.1,
+        27.78,
+        27.36,
+        28.1,
         27.45,
         28.41,
         28.58,
@@ -8677,6 +8756,12 @@ var INLINE_REPORT_DATA = {
         26.41
       ],
       "opens": [
+        25.41,
+        27.45,
+        28.46,
+        28.35,
+        27.21,
+        27.98,
         28.11,
         27.6,
         28.02,
@@ -8707,6 +8792,12 @@ var INLINE_REPORT_DATA = {
         27.52
       ],
       "highs": [
+        27.09,
+        30.24,
+        28.88,
+        28.49,
+        27.83,
+        28.66,
         28.5,
         28.76,
         28.8,
@@ -8737,6 +8828,12 @@ var INLINE_REPORT_DATA = {
         28.66
       ],
       "lows": [
+        25.02,
+        27.2,
+        27.9,
+        27.72,
+        26.89,
+        27.71,
         27.27,
         27.6,
         28.02,
@@ -8767,6 +8864,12 @@ var INLINE_REPORT_DATA = {
         26.21
       ],
       "volumes": [
+        557176.0,
+        1359370.0,
+        864932.0,
+        559945.0,
+        358518.0,
+        626989.0,
         409028.0,
         660065.0,
         458627.0,
@@ -8797,6 +8900,12 @@ var INLINE_REPORT_DATA = {
         1052178.0
       ],
       "macd_hist": [
+        0.3409678518389594,
+        0.8169703391103029,
+        0.8708248520394515,
+        0.8352430764363676,
+        0.730802402636298,
+        0.7350685917207824,
         0.6281580203553232,
         0.6612296165051031,
         0.6779666707488842,
@@ -8882,7 +8991,7 @@ var INLINE_REPORT_DATA = {
         {
           "type": "强势启动候选",
           "tier": "candidate",
-          "index": 27,
+          "index": 33,
           "price": 26.41,
           "reason": "处于60日低位区间；放量2.7倍",
           "strength": "中",
@@ -38700,6 +38809,7 @@ async function init() {
                 return reports;
             })()
         };
+        updateHeaderDate(PAGE_DATE);
         renderAll();
         renderHistoryTabs();
         return;
@@ -38711,8 +38821,8 @@ async function init() {
         if (!manifestResp.ok) throw new Error('Failed to load data.json');
         var manifest = await manifestResp.json();
         var allDates = manifest.dates || [];
-        var allowedDates = getAllowedDates(allDates, GRANTED, ACCESS_PUBLIC_DATES);
-        var resolvedDate = resolveInitialDate(PAGE_DATE, allowedDates);
+        var visibleDates = getVisibleDates(allDates, GRANTED);
+        var resolvedDate = resolveInitialDate(PAGE_DATE, allDates, GRANTED);
 
         if (!resolvedDate) {
             renderNoPublicData();
@@ -38724,26 +38834,33 @@ async function init() {
         if (!dataResp.ok) throw new Error('Failed to load data for ' + resolvedDate);
         REPORT_DATA = await dataResp.json();
         REPORT_DATA.date = resolvedDate;
+        updateHeaderDate(resolvedDate);
 
         // 过滤历史数据
-        HISTORY_DATA = filterHistoryData(manifest, allowedDates);
+        HISTORY_DATA = filterHistoryData(manifest, visibleDates);
 
         renderAll();
         renderHistoryTabs();
-
-        // 静默限制：未授权用户仅看到 PUBLIC_DATES 中的日期，无提示
     } catch(e) {
         console.error(e);
-        // 最终 fallback：尝试直接加载 PAGE_DATE
-        try {
-            var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
-            if (dataResp.ok) {
-                REPORT_DATA = await dataResp.json();
-                renderAll();
+        if (GRANTED) {
+            // 最终 fallback：仅授权访问时允许回退到归档页自身数据
+            try {
+                var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
+                if (dataResp.ok) {
+                    REPORT_DATA = await dataResp.json();
+                    REPORT_DATA.date = PAGE_DATE;
+                    updateHeaderDate(PAGE_DATE);
+                    HISTORY_DATA = filterHistoryData({ dates: [PAGE_DATE], reports: {} }, [PAGE_DATE]);
+                    renderAll();
+                    renderHistoryTabs();
+                    return;
+                }
+            } catch(e2) {
+                console.error(e2);
             }
-        } catch(e2) {
-            console.error(e2);
         }
+        renderNoPublicData();
     }
 }
 
@@ -39921,7 +40038,11 @@ function renderChart(idx, ver, domId) {
 // ========== 历史数据 ==========
 function renderHistoryTabs() {
     var dates = HISTORY_DATA.dates || [];
-    if (dates.length <= 1) return;
+    if (!GRANTED || dates.length <= 1) {
+        document.getElementById('historySection').style.display = 'none';
+        document.getElementById('historyTabs').innerHTML = '';
+        return;
+    }
     document.getElementById('historySection').style.display = 'block';
 
     var html = '';
@@ -39933,8 +40054,7 @@ function renderHistoryTabs() {
 }
 
 function showHistory(dateStr) {
-    // 未授权时只允许访问 PUBLIC_DATES 中的日期
-    if (!GRANTED && ACCESS_PUBLIC_DATES.indexOf(dateStr) === -1) return;
+    if (!GRANTED) return;
 
     var reports = HISTORY_DATA.reports || {};
     var report = reports[dateStr];
@@ -39953,6 +40073,7 @@ function showHistory(dateStr) {
         sell_signals: report.sell_signals || [],
         startup_watchlist: report.startup_watchlist || [],
     };
+    updateHeaderDate(dateStr);
     renderMarketCards();
     renderMarketStructure();
     renderSelectionSummaryCards();
@@ -39970,7 +40091,7 @@ function showHistory(dateStr) {
     });
 }
 
-// ========== 受限提示（仅 PUBLIC_DATES=[] 时显示） ==========
+// ========== 无可见日报时的占位 ==========
 function renderNoPublicData() {
     document.getElementById('historySection').style.display = 'none';
     document.getElementById('historyContent').innerHTML =
