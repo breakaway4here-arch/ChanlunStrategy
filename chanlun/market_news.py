@@ -19,10 +19,33 @@ SESSION.headers.update({
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 })
 
-# DeepSeek API 配置（Token 从 ANTHROPIC_AUTH_TOKEN 读取）
-_DS_API_KEY = os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
-_DS_BASE_URL = "https://api.deepseek.com/v1/chat/completions"
-_DS_MODEL = "deepseek-v4-pro"
+# DeepSeek API 配置（优先 config.json，其次环境变量 ANTHROPIC_AUTH_TOKEN）
+def _load_config():
+    """从 config.json 加载 DeepSeek 配置，不存在则回退到环境变量"""
+    import json as _json
+    _cfg_paths = [
+        os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config.json"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json"),
+    ]
+    for _p in _cfg_paths:
+        try:
+            with open(_p, "r", encoding="utf-8") as _f:
+                _cfg = _json.load(_f)
+            _ds = _cfg.get("deepseek", {})
+            _key = _ds.get("api_key", "") or os.environ.get("ANTHROPIC_AUTH_TOKEN", "")
+            _url = _ds.get("base_url", "https://api.deepseek.com/v1/chat/completions")
+            _model = _ds.get("model", "deepseek-v4-pro")
+            return _key, _url, _model
+        except (FileNotFoundError, json.JSONDecodeError, KeyError):
+            continue
+    # 兜底：纯环境变量
+    return (
+        os.environ.get("ANTHROPIC_AUTH_TOKEN", ""),
+        "https://api.deepseek.com/v1/chat/completions",
+        "deepseek-v4-pro",
+    )
+
+_DS_API_KEY, _DS_BASE_URL, _DS_MODEL = _load_config()
 
 
 # ============================================================

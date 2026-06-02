@@ -52353,28 +52353,28 @@
     "2026-06-02": {
       "market": {
         "上证指数": {
-          "close": 4075.83,
-          "change_pct": 0.45
+          "close": 4075.1,
+          "change_pct": 0.43
         },
         "深证成指": {
-          "close": 15595.8,
-          "change_pct": 1.67
+          "close": 15591.13,
+          "change_pct": 1.63
         },
         "创业板指": {
-          "close": 4057.7,
-          "change_pct": 2.7
+          "close": 4055.87,
+          "change_pct": 2.66
         },
         "科创50": {
-          "close": 1691.2,
-          "change_pct": 1.65
+          "close": 1690.56,
+          "change_pct": 1.62
         },
         "沪深300": {
-          "close": 4915.33,
-          "change_pct": 1.47
+          "close": 4914.56,
+          "change_pct": 1.45
         },
         "中证500": {
-          "close": 8324.94,
-          "change_pct": 0.61
+          "close": 8321.43,
+          "change_pct": 0.57
         }
       },
       "chanlun_structure": {
@@ -52392,9 +52392,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 39.56,
+            "price": 39.5,
             "date": "",
-            "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52416,14 +52416,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "startup_reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "startup_signals": [
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 3.7,
-            "volume_ratio": 1.83
+            "change_pct": 3.54,
+            "volume_ratio": 2.02
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52445,9 +52445,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 39.56,
+              "price": 39.5,
               "date": "",
-              "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+              "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -52488,9 +52488,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 11.49,
+            "price": 11.51,
             "date": "",
-            "reason": "处于60日低位区间；放量1.9倍；涨幅4.5%",
+            "reason": "处于60日低位区间；放量2.0倍；涨幅4.7%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52512,14 +52512,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量1.9倍；涨幅4.5%",
+            "startup_reason": "处于60日低位区间；放量2.0倍；涨幅4.7%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "实体阳线≥3%"
             ],
-            "change_pct": 4.55,
-            "volume_ratio": 1.88
+            "change_pct": 4.73,
+            "volume_ratio": 2.02
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52541,9 +52541,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 11.49,
+              "price": 11.51,
               "date": "",
-              "reason": "处于60日低位区间；放量1.9倍；涨幅4.5%",
+              "reason": "处于60日低位区间；放量2.0倍；涨幅4.7%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -52577,16 +52577,16 @@
           "pivot_zd": null
         },
         {
-          "code": "000737",
-          "name": "北方铜业",
+          "code": "300627",
+          "name": "华测导航",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 15.12,
+            "price": 29.23,
             "date": "",
-            "reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅8.2%",
+            "reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅4.8%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52608,15 +52608,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅8.2%",
+            "startup_reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅4.8%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
-              "close_above_ma10",
-              "实体阳线≥3%"
+              "close_above_ma10"
             ],
-            "change_pct": 8.23,
-            "volume_ratio": 2.35
+            "change_pct": 4.77,
+            "volume_ratio": 1.58
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52638,9 +52637,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 15.12,
+              "price": 29.23,
               "date": "",
-              "reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅8.2%",
+              "reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅4.8%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -52681,9 +52680,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 19.07,
+            "price": 19.0,
             "date": "",
-            "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅6.5%",
+            "reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅6.1%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52705,15 +52704,15 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅6.5%",
+            "startup_reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅6.1%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 6.54,
-            "volume_ratio": 1.83
+            "change_pct": 6.15,
+            "volume_ratio": 2.0
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52735,9 +52734,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 19.07,
+              "price": 19.0,
               "date": "",
-              "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅6.5%",
+              "reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅6.1%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -52803,16 +52802,16 @@
           "pivot_zd": null
         },
         {
-          "code": "301282",
-          "name": "金禄电子",
+          "code": "000737",
+          "name": "北方铜业",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 29.77,
+            "price": 15.1,
             "date": "",
-            "reason": "处于60日低位区间；放量1.4倍；站上MA5/MA10；涨幅7.0%",
+            "reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅8.1%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52834,15 +52833,15 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量1.4倍；站上MA5/MA10；涨幅7.0%",
+            "startup_reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅8.1%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 7.01,
-            "volume_ratio": 1.45
+            "change_pct": 8.09,
+            "volume_ratio": 2.54
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52864,9 +52863,106 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 29.77,
+              "price": 15.1,
               "date": "",
-              "reason": "处于60日低位区间；放量1.4倍；站上MA5/MA10；涨幅7.0%",
+              "reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅8.1%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min EMA5维持"
+              ],
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "301282",
+          "name": "金禄电子",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 29.8,
+            "date": "",
+            "reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅7.1%",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min EMA5维持"
+            ],
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": 99,
+            "startup_date": "2026-06-02",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-06-02 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅7.1%",
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "实体阳线≥3%"
+            ],
+            "change_pct": 7.12,
+            "volume_ratio": 1.6
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "",
+          "score": 35.2,
+          "sector": "",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 29.8,
+              "date": "",
+              "reason": "处于60日低位区间；放量1.6倍；站上MA5/MA10；涨幅7.1%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -52939,9 +53035,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 3.72,
+            "price": 3.71,
             "date": "",
-            "reason": "处于60日低位区间；放量3.3倍；站上MA5/MA10",
+            "reason": "处于60日低位区间；放量3.5倍；站上MA5/MA10",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -52964,14 +53060,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量3.3倍；站上MA5/MA10",
+            "startup_reason": "处于60日低位区间；放量3.5倍；站上MA5/MA10",
             "startup_signals": [
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 1.64,
-            "volume_ratio": 3.29
+            "change_pct": 1.37,
+            "volume_ratio": 3.48
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -52993,9 +53089,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 3.72,
+              "price": 3.71,
               "date": "",
-              "reason": "处于60日低位区间；放量3.3倍；站上MA5/MA10",
+              "reason": "处于60日低位区间；放量3.5倍；站上MA5/MA10",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53069,9 +53165,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 12.03,
+            "price": 12.0,
             "date": "",
-            "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53093,13 +53189,13 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "startup_reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "startup_signals": [
               "close_above_ma5",
               "close_above_ma10"
             ],
-            "change_pct": 2.3,
-            "volume_ratio": 1.82
+            "change_pct": 2.04,
+            "volume_ratio": 1.99
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53121,9 +53217,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 12.03,
+              "price": 12.0,
               "date": "",
-              "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+              "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53157,16 +53253,16 @@
           "pivot_zd": null
         },
         {
-          "code": "002925",
-          "name": "盈趣科技",
+          "code": "300647",
+          "name": "超频三",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 21.85,
+            "price": 6.75,
             "date": "",
-            "reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+            "reason": "启动前接近20日低点；放量1.6倍；站上MA5/MA10",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53188,15 +53284,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+            "startup_reason": "启动前接近20日低点；放量1.6倍；站上MA5/MA10",
             "startup_signals": [
-              "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
-              "break_20d_high"
+              "实体阳线≥3%"
             ],
-            "change_pct": 4.2,
-            "volume_ratio": 2.34
+            "change_pct": 2.74,
+            "volume_ratio": 1.62
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53218,9 +53313,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 21.85,
+              "price": 6.75,
               "date": "",
-              "reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+              "reason": "启动前接近20日低点；放量1.6倍；站上MA5/MA10",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53248,39 +53343,7 @@
               "volume_ratio": null
             }
           ],
-          "reference_buy_points": [
-            {
-              "type": "swing底背驰参考",
-              "tier": "reference",
-              "index": 92,
-              "price": 19.7,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=8.50%)，仅供参考",
-              "strength": "弱",
-              "source_type": "",
-              "confirmed_by": "",
-              "confirmations": [],
-              "seed_type": "",
-              "seed_reason": "",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
+          "reference_buy_points": [],
           "blocked_buy_points": [],
           "pivot_zg": null,
           "pivot_zd": null
@@ -53293,9 +53356,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 39.68,
+            "price": 39.67,
             "date": "",
-            "reason": "启动前接近20日低点；放量2.8倍；站上MA5/MA10；涨幅4.7%",
+            "reason": "启动前接近20日低点；放量3.0倍；站上MA5/MA10；涨幅4.6%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53317,14 +53380,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量2.8倍；站上MA5/MA10；涨幅4.7%",
+            "startup_reason": "启动前接近20日低点；放量3.0倍；站上MA5/MA10；涨幅4.6%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10"
             ],
-            "change_pct": 4.67,
-            "volume_ratio": 2.76
+            "change_pct": 4.64,
+            "volume_ratio": 2.97
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53346,9 +53409,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 39.68,
+              "price": 39.67,
               "date": "",
-              "reason": "启动前接近20日低点；放量2.8倍；站上MA5/MA10；涨幅4.7%",
+              "reason": "启动前接近20日低点；放量3.0倍；站上MA5/MA10；涨幅4.6%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53414,16 +53477,16 @@
           "pivot_zd": null
         },
         {
-          "code": "002866",
-          "name": "传艺科技",
+          "code": "002925",
+          "name": "盈趣科技",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 21.57,
+            "price": 22.06,
             "date": "",
-            "reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；涨幅4.8%",
+            "reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53445,15 +53508,16 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；涨幅4.8%",
+            "startup_reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
+              "break_20d_high",
               "实体阳线≥3%"
             ],
-            "change_pct": 4.81,
-            "volume_ratio": 2.12
+            "change_pct": 5.2,
+            "volume_ratio": 2.72
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53475,9 +53539,138 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 21.57,
+              "price": 22.06,
               "date": "",
-              "reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；涨幅4.8%",
+              "reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min EMA5维持"
+              ],
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 92,
+              "price": 19.7,
+              "date": "2026-05-22",
+              "reason": "swing笔底背驰(力度比=8.50%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "002866",
+          "name": "传艺科技",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 21.9,
+            "date": "",
+            "reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅6.4%",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min EMA5维持"
+            ],
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": 99,
+            "startup_date": "2026-06-02",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-06-02 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅6.4%",
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "实体阳线≥3%"
+            ],
+            "change_pct": 6.41,
+            "volume_ratio": 2.52
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "",
+          "score": 35.2,
+          "sector": "",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 21.9,
+              "date": "",
+              "reason": "处于60日低位区间；放量2.5倍；站上MA5/MA10；涨幅6.4%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53511,16 +53704,16 @@
           "pivot_zd": null
         },
         {
-          "code": "300709",
-          "name": "精研科技",
+          "code": "300686",
+          "name": "智动力",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 48.01,
+            "price": 16.35,
             "date": "",
-            "reason": "启动前接近20日低点；放量1.7倍；站上MA5/MA10；涨幅7.5%",
+            "reason": "处于60日低位区间；放量1.7倍；涨幅5.8%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53542,15 +53735,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量1.7倍；站上MA5/MA10；涨幅7.5%",
+            "startup_reason": "处于60日低位区间；放量1.7倍；涨幅5.8%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
-              "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 7.5,
-            "volume_ratio": 1.68
+            "change_pct": 5.83,
+            "volume_ratio": 1.72
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53572,9 +53764,138 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 48.01,
+              "price": 16.35,
               "date": "",
-              "reason": "启动前接近20日低点；放量1.7倍；站上MA5/MA10；涨幅7.5%",
+              "reason": "处于60日低位区间；放量1.7倍；涨幅5.8%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min EMA5维持"
+              ],
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 79,
+              "price": 17.4,
+              "date": "2026-04-30",
+              "reason": "swing笔底背驰(力度比=45.16%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "300709",
+          "name": "精研科技",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 48.1,
+            "date": "",
+            "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10；涨幅7.7%",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min EMA5维持"
+            ],
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": 99,
+            "startup_date": "2026-06-02",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-06-02 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10；涨幅7.7%",
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "实体阳线≥3%"
+            ],
+            "change_pct": 7.7,
+            "volume_ratio": 1.8
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "",
+          "score": 35.2,
+          "sector": "",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 48.1,
+              "date": "",
+              "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10；涨幅7.7%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53615,9 +53936,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 30.09,
+            "price": 29.93,
             "date": "",
-            "reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅8.6%",
+            "reason": "处于60日低位区间；放量2.3倍；站上MA5/MA10；涨幅8.1%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53639,15 +53960,15 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅8.6%",
+            "startup_reason": "处于60日低位区间；放量2.3倍；站上MA5/MA10；涨幅8.1%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 8.63,
-            "volume_ratio": 2.05
+            "change_pct": 8.05,
+            "volume_ratio": 2.25
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53669,9 +53990,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 30.09,
+              "price": 29.93,
               "date": "",
-              "reason": "处于60日低位区间；放量2.0倍；站上MA5/MA10；涨幅8.6%",
+              "reason": "处于60日低位区间；放量2.3倍；站上MA5/MA10；涨幅8.1%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53744,9 +54065,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 26.88,
+            "price": 26.75,
             "date": "",
-            "reason": "处于60日低位区间；放量1.7倍；涨幅6.2%",
+            "reason": "处于60日低位区间；放量1.8倍；涨幅5.7%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53768,14 +54089,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量1.7倍；涨幅6.2%",
+            "startup_reason": "处于60日低位区间；放量1.8倍；涨幅5.7%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "实体阳线≥3%"
             ],
-            "change_pct": 6.25,
-            "volume_ratio": 1.68
+            "change_pct": 5.73,
+            "volume_ratio": 1.77
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53797,9 +54118,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 26.88,
+              "price": 26.75,
               "date": "",
-              "reason": "处于60日低位区间；放量1.7倍；涨幅6.2%",
+              "reason": "处于60日低位区间；放量1.8倍；涨幅5.7%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -53872,9 +54193,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 8.45,
+            "price": 8.46,
             "date": "",
-            "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅4.7%",
+            "reason": "处于60日低位区间；放量1.9倍；站上MA5/MA10；涨幅4.8%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -53896,15 +54217,15 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅4.7%",
+            "startup_reason": "处于60日低位区间；放量1.9倍；站上MA5/MA10；涨幅4.8%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 4.71,
-            "volume_ratio": 1.77
+            "change_pct": 4.83,
+            "volume_ratio": 1.89
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -53926,9 +54247,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 8.45,
+              "price": 8.46,
               "date": "",
-              "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅4.7%",
+              "reason": "处于60日低位区间；放量1.9倍；站上MA5/MA10；涨幅4.8%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -54063,16 +54384,16 @@
           "pivot_zd": null
         },
         {
-          "code": "688418",
-          "name": "震有科技",
+          "code": "688027",
+          "name": "国盾量子",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "底背驰候选",
             "tier": "candidate",
             "index": 99,
-            "price": 44.0,
+            "price": 530.37,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=50.46%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=57.57%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -54100,45 +54421,20 @@
             "change_pct": null,
             "volume_ratio": null
           },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "通信",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
+          "buy_points_30min": [
             {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 44.0,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=50.46%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 73,
+              "price": 530.37,
+              "date": "2026-06-02 10:30:00",
+              "reason": "swing笔底背驰(力度比=21.93%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": "",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -54158,50 +54454,6 @@
               "volume_ratio": null
             }
           ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "688080",
-          "name": "映翰通",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 40.8,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=56.83%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
           "pivots": {
             "ZG": null,
             "ZD": null,
@@ -54228,9 +54480,9 @@
               "type": "底背驰候选",
               "tier": "candidate",
               "index": 99,
-              "price": 40.8,
+              "price": 530.37,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=56.83%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=57.57%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -54274,7 +54526,7 @@
             "index": 99,
             "price": 77.4,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=20.42%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "reason": "swing笔底背驰(力度比=20.44%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -54331,7 +54583,7 @@
               "index": 99,
               "price": 77.4,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=20.42%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "reason": "swing笔底背驰(力度比=20.44%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -54375,7 +54627,7 @@
             "index": 99,
             "price": 34.97,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=77.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "reason": "swing笔底背驰(力度比=77.76%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -54432,217 +54684,13 @@
               "index": 99,
               "price": 34.97,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=77.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "reason": "swing笔底背驰(力度比=77.76%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "confirmations": [
                 "30min底分型",
                 "关键位不破"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "600456",
-          "name": "宝钛股份",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 31.4,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=38.22%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "30min底分型",
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "有色金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 31.4,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=38.22%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "30min底分型",
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "300337",
-          "name": "银邦股份",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 11.8,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=41.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "有色金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 11.8,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=41.50%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -54774,6 +54822,109 @@
           "pivot_zd": null
         },
         {
+          "code": "600456",
+          "name": "宝钛股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 31.4,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=38.19%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 31.4,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=38.19%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
           "code": "601388",
           "name": "怡球资源",
           "signal_tier": "candidate",
@@ -54783,15 +54934,14 @@
             "index": 98,
             "price": 3.41,
             "date": "2026-06-01",
-            "reason": "swing笔底背驰(力度比=27.96%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "reason": "swing笔底背驰(力度比=27.96%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "confirmations": [
               "30min底分型",
               "关键位不破",
-              "EMA5收复",
-              "止跌结构"
+              "EMA5收复"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -54824,7 +54974,7 @@
           "sector": "有色金属",
           "resonance": {
             "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -54842,15 +54992,115 @@
               "index": 98,
               "price": 3.41,
               "date": "2026-06-01",
-              "reason": "swing笔底背驰(力度比=27.96%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "reason": "swing笔底背驰(力度比=27.96%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "confirmations": [
                 "30min底分型",
                 "关键位不破",
-                "EMA5收复",
-                "止跌结构"
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "601069",
+          "name": "西部黄金",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 26.6,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=40.13%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 26.6,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=40.13%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -54888,7 +55138,7 @@
             "index": 99,
             "price": 21.77,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=72.86%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "reason": "swing笔底背驰(力度比=72.91%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
@@ -54947,7 +55197,7 @@
               "index": 99,
               "price": 21.77,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=72.86%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "reason": "swing笔底背驰(力度比=72.91%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
@@ -54984,16 +55234,117 @@
           "pivot_zd": null
         },
         {
-          "code": "601069",
-          "name": "西部黄金",
+          "code": "600988",
+          "name": "赤峰黄金",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "底背驰候选",
             "tier": "candidate",
             "index": 99,
-            "price": 26.6,
+            "price": 32.41,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=39.95%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "reason": "swing笔底背驰(力度比=52.88%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 32.41,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=52.88%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "601212",
+          "name": "白银有色",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 6.13,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=63.54%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
@@ -55050,9 +55401,9 @@
               "type": "底背驰候选",
               "tier": "candidate",
               "index": 99,
-              "price": 26.6,
+              "price": 6.13,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=39.95%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "reason": "swing笔底背驰(力度比=63.54%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
@@ -55089,23 +55440,22 @@
           "pivot_zd": null
         },
         {
-          "code": "601212",
-          "name": "白银有色",
+          "code": "000506",
+          "name": "招金黄金",
           "signal_tier": "candidate",
           "best_buy_point": {
             "type": "底背驰候选",
             "tier": "candidate",
             "index": 99,
-            "price": 6.13,
+            "price": 13.41,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=63.64%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=9.97%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "confirmations": [
               "30min底分型",
-              "关键位不破",
-              "EMA5收复"
+              "关键位不破"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -55127,46 +55477,20 @@
             "change_pct": null,
             "volume_ratio": null
           },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "有色金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
+          "buy_points_30min": [
             {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 6.13,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=63.64%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "30min底分型",
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 72,
+              "price": 13.41,
+              "date": "2026-06-02 10:00:00",
+              "reason": "swing笔底背驰(力度比=49.55%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "seed_type": "",
+              "seed_reason": "",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -55186,51 +55510,6 @@
               "volume_ratio": null
             }
           ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "600988",
-          "name": "赤峰黄金",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 32.41,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=52.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "30min底分型",
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
           "pivots": {
             "ZG": null,
             "ZD": null,
@@ -55241,7 +55520,7 @@
           "sector": "有色金属",
           "resonance": {
             "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -55257,119 +55536,15 @@
               "type": "底背驰候选",
               "tier": "candidate",
               "index": 99,
-              "price": 32.41,
+              "price": 13.41,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=52.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=9.97%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "confirmations": [
                 "30min底分型",
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "300139",
-          "name": "晓程科技",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 41.58,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=46.78%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "有色金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 99,
-              "price": 41.58,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=46.78%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
+                "关键位不破"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -55407,14 +55582,13 @@
             "index": 98,
             "price": 14.78,
             "date": "2026-06-01",
-            "reason": "swing笔底背驰(力度比=38.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=38.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "confirmations": [
               "30min底分型",
-              "关键位不破",
-              "EMA5收复"
+              "关键位不破"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -55476,109 +55650,7 @@
           },
           "trend_type": "无中枢",
           "score": 56.2,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 98,
-              "price": 14.78,
-              "date": "2026-06-01",
-              "reason": "swing笔底背驰(力度比=38.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "30min底分型",
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "002782",
-          "name": "可立克",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 99,
-            "price": 25.7,
-            "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=53.86%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
-            "confirmations": [
-              "30min底分型",
-              "关键位不破"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 0,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近0个交易日内",
-            "signal_date": "2026-06-02",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "电子",
+          "sector": "有色金属",
           "resonance": {
             "level": "中",
             "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
@@ -55596,10 +55668,10 @@
             {
               "type": "底背驰候选",
               "tier": "candidate",
-              "index": 99,
-              "price": 25.7,
-              "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=53.86%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "index": 98,
+              "price": 14.78,
+              "date": "2026-06-01",
+              "reason": "swing笔底背驰(力度比=38.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -55608,7 +55680,7 @@
                 "关键位不破"
               ],
               "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -55643,13 +55715,14 @@
             "index": 99,
             "price": 62.0,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=54.62%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "reason": "swing笔底背驰(力度比=54.42%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "confirmations": [
               "30min底分型",
-              "关键位不破"
+              "关键位不破",
+              "EMA5收复"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "相对20日高点回撤充分；接近swing参考价",
@@ -55714,7 +55787,7 @@
           "sector": "元件",
           "resonance": {
             "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -55732,7 +55805,412 @@
               "index": 99,
               "price": 62.0,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=54.62%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "reason": "swing笔底背驰(力度比=54.42%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "30min底分型",
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "301176",
+          "name": "逸豪新材",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 41.25,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=60.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "元件",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 41.25,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=60.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "603115",
+          "name": "海星股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 98,
+            "price": 100.0,
+            "date": "2026-06-01",
+            "reason": "swing笔底背驰(力度比=62.86%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 1,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近1个交易日内",
+            "signal_date": "2026-06-01",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "元件",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 98,
+              "price": 100.0,
+              "date": "2026-06-01",
+              "reason": "swing笔底背驰(力度比=62.86%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "603920",
+          "name": "世运电路",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 53.66,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=81.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "元件",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 53.66,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=81.08%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "002782",
+          "name": "可立克",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 25.7,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=53.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "confirmations": [
+              "30min底分型",
+              "关键位不破"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "电子",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 25.7,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=53.78%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -55776,7 +56254,7 @@
             "index": 99,
             "price": 27.45,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=80.60%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+            "reason": "swing笔底背驰(力度比=81.52%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -55833,7 +56311,7 @@
               "index": 99,
               "price": 27.45,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=80.60%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
+              "reason": "swing笔底背驰(力度比=81.52%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
@@ -55868,139 +56346,6 @@
           "pivot_zd": null
         },
         {
-          "code": "301486",
-          "name": "致尚科技",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 98,
-            "price": 225.0,
-            "date": "2026-06-01",
-            "reason": "swing笔底背驰(力度比=81.29%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分",
-            "signal_age_days": 1,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近1个交易日内",
-            "signal_date": "2026-06-01",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [
-            {
-              "type": "swing底背驰参考",
-              "tier": "reference",
-              "index": 57,
-              "price": 256.0,
-              "date": "2026-05-29 10:30:00",
-              "reason": "swing笔底背驰(力度比=31.42%)，仅供参考",
-              "strength": "弱",
-              "source_type": "",
-              "confirmed_by": "",
-              "confirmations": [],
-              "seed_type": "",
-              "seed_reason": "",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 56.2,
-          "sector": "消费电子零部件及组装",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 98,
-              "price": 225.0,
-              "date": "2026-06-01",
-              "reason": "swing笔底背驰(力度比=81.29%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
           "code": "002428",
           "name": "云南锗业",
           "signal_tier": "candidate",
@@ -56010,15 +56355,13 @@
             "index": 99,
             "price": 78.25,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=71.33%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "reason": "swing笔底背驰(力度比=71.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "confirmations": [
               "30min底分型",
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
+              "关键位不破"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "相对20日高点回撤充分",
@@ -56083,7 +56426,7 @@
           "sector": "小金属",
           "resonance": {
             "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -56101,18 +56444,119 @@
               "index": 99,
               "price": 78.25,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=71.33%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "reason": "swing笔底背驰(力度比=71.69%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "confirmations": [
                 "30min底分型",
+                "关键位不破"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "相对20日高点回撤充分",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
+          "code": "301587",
+          "name": "中瑞股份",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 99,
+            "price": 25.32,
+            "date": "2026-06-02",
+            "reason": "swing笔底背驰(力度比=67.73%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-06-02",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "sector": "锂电池",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 99,
+              "price": 25.32,
+              "date": "2026-06-02",
+              "reason": "swing笔底背驰(力度比=67.73%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
                 "关键位不破",
                 "EMA5收复",
                 "止跌结构"
               ],
               "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -56147,7 +56591,7 @@
             "index": 99,
             "price": 79.52,
             "date": "2026-06-02",
-            "reason": "swing笔底背驰(力度比=81.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=82.68%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
             "strength": "中",
             "source_type": "swing底背驰参考",
             "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -56204,7 +56648,7 @@
               "index": 99,
               "price": 79.52,
               "date": "2026-06-02",
-              "reason": "swing笔底背驰(力度比=81.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=82.68%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
@@ -56214,107 +56658,6 @@
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "300050",
-          "name": "世纪鼎利",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 95,
-            "price": 6.6,
-            "date": "2026-05-27",
-            "reason": "swing笔底背驰(力度比=84.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分",
-            "signal_age_days": 4,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近4个交易日内",
-            "signal_date": "2026-05-27",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 52.5,
-          "sector": "通信",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 95,
-              "price": 6.6,
-              "date": "2026-05-27",
-              "reason": "swing笔底背驰(力度比=84.91%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -56441,6 +56784,109 @@
           "pivot_zd": 39.99
         },
         {
+          "code": "000795",
+          "name": "英洛华",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 95,
+            "price": 8.74,
+            "date": "2026-05-27",
+            "reason": "swing笔底背驰(力度比=37.64%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复",
+              "止跌结构"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；接近swing参考价",
+            "signal_age_days": 4,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近4个交易日内",
+            "signal_date": "2026-05-27",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 52.5,
+          "sector": "有色金属",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 95,
+              "price": 8.74,
+              "date": "2026-05-27",
+              "reason": "swing笔底背驰(力度比=37.64%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复",
+                "止跌结构"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
           "code": "002978",
           "name": "安宁股份",
           "signal_tier": "candidate",
@@ -56450,13 +56896,14 @@
             "index": 96,
             "price": 27.37,
             "date": "2026-05-28",
-            "reason": "swing笔底背驰(力度比=71.53%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=71.53%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "confirmations": [
               "关键位不破",
-              "EMA5收复"
+              "EMA5收复",
+              "止跌结构"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -56489,7 +56936,7 @@
           "sector": "有色金属",
           "resonance": {
             "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -56507,13 +56954,14 @@
               "index": 96,
               "price": 27.37,
               "date": "2026-05-28",
-              "reason": "swing笔底背驰(力度比=71.53%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=71.53%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "confirmations": [
                 "关键位不破",
-                "EMA5收复"
+                "EMA5收复",
+                "止跌结构"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -56858,15 +57306,13 @@
             "index": 96,
             "price": 21.92,
             "date": "2026-05-28",
-            "reason": "swing笔底背驰(力度比=17.84%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "reason": "swing笔底背驰(力度比=17.84%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+            "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
             "confirmations": [
               "30min底分型",
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
+              "关键位不破"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -56899,7 +57345,7 @@
           "sector": "有色金属",
           "resonance": {
             "level": "中",
-            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
+            "reason": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -56917,15 +57363,13 @@
               "index": 96,
               "price": 21.92,
               "date": "2026-05-28",
-              "reason": "swing笔底背驰(力度比=17.84%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "reason": "swing笔底背驰(力度比=17.84%)，仅供参考；次级别确认：30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
+              "confirmed_by": "30分钟底分型+MACD金叉 + 30分钟回拉不破日线关键位",
               "confirmations": [
                 "30min底分型",
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
+                "关键位不破"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -57022,109 +57466,6 @@
               "price": 5.23,
               "date": "2026-05-21",
               "reason": "swing笔底背驰(力度比=69.04%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "strength": "中",
-              "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-              "confirmations": [
-                "关键位不破",
-                "EMA5收复",
-                "止跌结构"
-              ],
-              "seed_type": "swing底背驰候选种子",
-              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-              "signal_age_days": null,
-              "is_recent": true,
-              "recency_reason": "",
-              "signal_date": "",
-              "startup_index": null,
-              "startup_date": "",
-              "startup_age_days": null,
-              "confirm_index": null,
-              "confirm_date": "",
-              "confirm_age_days": null,
-              "reference_price": null,
-              "current_price": null,
-              "distance_from_reference_pct": null,
-              "startup_reason": "",
-              "startup_signals": [],
-              "change_pct": null,
-              "volume_ratio": null
-            }
-          ],
-          "reference_buy_points": [],
-          "blocked_buy_points": [],
-          "pivot_zg": null,
-          "pivot_zd": null
-        },
-        {
-          "code": "601899",
-          "name": "紫金矿业",
-          "signal_tier": "candidate",
-          "best_buy_point": {
-            "type": "底背驰候选",
-            "tier": "candidate",
-            "index": 92,
-            "price": 29.88,
-            "date": "2026-05-22",
-            "reason": "swing笔底背驰(力度比=71.88%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "strength": "中",
-            "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
-            "confirmations": [
-              "关键位不破",
-              "EMA5收复",
-              "止跌结构"
-            ],
-            "seed_type": "swing底背驰候选种子",
-            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
-            "signal_age_days": 7,
-            "is_recent": true,
-            "recency_reason": "信号发生在最近7个交易日内",
-            "signal_date": "2026-05-22",
-            "startup_index": null,
-            "startup_date": "",
-            "startup_age_days": null,
-            "confirm_index": null,
-            "confirm_date": "",
-            "confirm_age_days": null,
-            "reference_price": null,
-            "current_price": null,
-            "distance_from_reference_pct": null,
-            "startup_reason": "",
-            "startup_signals": [],
-            "change_pct": null,
-            "volume_ratio": null
-          },
-          "buy_points_30min": [],
-          "pivots": {
-            "ZG": null,
-            "ZD": null,
-            "count": 0
-          },
-          "trend_type": "无中枢",
-          "score": 47.5,
-          "sector": "工业金属",
-          "resonance": {
-            "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
-          },
-          "ma_bullish": false,
-          "stop_loss": null,
-          "stop_loss_pct": null,
-          "trailing_targets": [],
-          "is_active": false,
-          "market_trend": "",
-          "version": "pure",
-          "market_regime": "",
-          "fusion_admission": {},
-          "buy_points": [
-            {
-              "type": "底背驰候选",
-              "tier": "candidate",
-              "index": 92,
-              "price": 29.88,
-              "date": "2026-05-22",
-              "reason": "swing笔底背驰(力度比=71.88%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
               "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
@@ -57295,6 +57636,107 @@
           "pivot_zd": null
         },
         {
+          "code": "002922",
+          "name": "伊戈尔",
+          "signal_tier": "candidate",
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 93,
+            "price": 38.4,
+            "date": "2026-05-25",
+            "reason": "swing笔底背驰(力度比=61.01%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 6,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近6个交易日内",
+            "signal_date": "2026-05-25",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 47.5,
+          "sector": "电子",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 93,
+              "price": 38.4,
+              "date": "2026-05-25",
+              "reason": "swing笔底背驰(力度比=61.01%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        },
+        {
           "code": "300976",
           "name": "达瑞电子",
           "signal_tier": "candidate",
@@ -57313,7 +57755,7 @@
               "关键位不破"
             ],
             "seed_type": "swing底背驰候选种子",
-            "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
             "signal_age_days": 5,
             "is_recent": true,
             "recency_reason": "信号发生在最近5个交易日内",
@@ -57370,7 +57812,7 @@
                 "关键位不破"
               ],
               "seed_type": "swing底背驰候选种子",
-              "seed_reason": "相对20日高点回撤充分；接近swing参考价",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
               "signal_age_days": null,
               "is_recent": true,
               "recency_reason": "",
@@ -57506,9 +57948,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 39.56,
+            "price": 39.5,
             "date": "",
-            "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -57530,14 +57972,14 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+            "startup_reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
             "startup_signals": [
               "close_above_ma5",
               "close_above_ma10",
               "实体阳线≥3%"
             ],
-            "change_pct": 3.7,
-            "volume_ratio": 1.83
+            "change_pct": 3.54,
+            "volume_ratio": 2.02
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -57562,9 +58004,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 39.56,
+              "price": 39.5,
               "date": "",
-              "reason": "启动前接近20日低点；放量1.8倍；站上MA5/MA10",
+              "reason": "启动前接近20日低点；放量2.0倍；站上MA5/MA10",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -57605,9 +58047,9 @@
             "type": "强势启动候选",
             "tier": "candidate",
             "index": 99,
-            "price": 21.85,
+            "price": 22.06,
             "date": "",
-            "reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+            "reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
             "strength": "中",
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
@@ -57629,15 +58071,16 @@
             "reference_price": null,
             "current_price": null,
             "distance_from_reference_pct": null,
-            "startup_reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+            "startup_reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
             "startup_signals": [
               "涨幅≥4.0%",
               "close_above_ma5",
               "close_above_ma10",
-              "break_20d_high"
+              "break_20d_high",
+              "实体阳线≥3%"
             ],
-            "change_pct": 4.2,
-            "volume_ratio": 2.34
+            "change_pct": 5.2,
+            "volume_ratio": 2.72
           },
           "buy_points_30min": [],
           "pivots": {},
@@ -57662,9 +58105,9 @@
               "type": "强势启动候选",
               "tier": "candidate",
               "index": 99,
-              "price": 21.85,
+              "price": 22.06,
               "date": "",
-              "reason": "启动前接近20日低点；放量2.3倍；站上MA5/MA10；突破20日平台；涨幅4.2%",
+              "reason": "启动前接近20日低点；放量2.7倍；站上MA5/MA10；突破20日平台；涨幅5.2%",
               "strength": "中",
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
@@ -57734,142 +58177,142 @@
         {
           "code": "BK1215",
           "name": "通信",
-          "change_pct": 1.81,
-          "flow": 14532827136.0,
-          "flow_str": "145.33亿"
+          "change_pct": 1.91,
+          "flow": 15906316288.0,
+          "flow_str": "159.06亿"
         },
         {
           "code": "BK0448",
           "name": "通信设备",
-          "change_pct": 2.47,
-          "flow": 14273429248.0,
-          "flow_str": "142.73亿"
+          "change_pct": 2.53,
+          "flow": 15523133440.0,
+          "flow_str": "155.23亿"
         },
         {
           "code": "BK1592",
           "name": "通信线缆及配套",
-          "change_pct": 6.59,
-          "flow": 8159250688.0,
-          "flow_str": "81.59亿"
+          "change_pct": 6.81,
+          "flow": 8183965696.0,
+          "flow_str": "81.84亿"
         },
         {
           "code": "BK0478",
           "name": "有色金属",
-          "change_pct": 2.01,
-          "flow": 7032635392.0,
-          "flow_str": "70.33亿"
+          "change_pct": 1.96,
+          "flow": 8058878464.0,
+          "flow_str": "80.59亿"
         },
         {
           "code": "BK1591",
           "name": "通信网络设备及器件",
-          "change_pct": 4.04,
-          "flow": 6183209216.0,
-          "flow_str": "61.83亿"
+          "change_pct": 4.11,
+          "flow": 7338994688.0,
+          "flow_str": "73.39亿"
         },
         {
           "code": "BK1287",
           "name": "工业金属",
-          "change_pct": 2.0,
-          "flow": 5335162368.0,
-          "flow_str": "53.35亿"
-        },
-        {
-          "code": "BK1201",
-          "name": "电子",
-          "change_pct": 1.27,
-          "flow": 4493111296.0,
-          "flow_str": "44.93亿"
-        },
-        {
-          "code": "BK0459",
-          "name": "元件",
-          "change_pct": 3.89,
-          "flow": 4293805056.0,
-          "flow_str": "42.94亿"
+          "change_pct": 2.01,
+          "flow": 5832129024.0,
+          "flow_str": "58.32亿"
         },
         {
           "code": "BK1615",
           "name": "铜",
-          "change_pct": 3.52,
-          "flow": 4228044800.0,
-          "flow_str": "42.28亿"
+          "change_pct": 3.44,
+          "flow": 4588871424.0,
+          "flow_str": "45.89亿"
+        },
+        {
+          "code": "BK0459",
+          "name": "元件",
+          "change_pct": 3.98,
+          "flow": 4505943040.0,
+          "flow_str": "45.06亿"
+        },
+        {
+          "code": "BK1201",
+          "name": "电子",
+          "change_pct": 1.31,
+          "flow": 3694067712.0,
+          "flow_str": "36.94亿"
         },
         {
           "code": "BK1340",
           "name": "印制电路板",
-          "change_pct": 2.9,
-          "flow": 2845991168.0,
-          "flow_str": "28.46亿"
+          "change_pct": 2.96,
+          "flow": 3002849024.0,
+          "flow_str": "30.03亿"
         },
         {
           "code": "BK1338",
           "name": "消费电子零部件及组装",
-          "change_pct": 1.16,
-          "flow": 2829602560.0,
-          "flow_str": "28.30亿"
+          "change_pct": 1.23,
+          "flow": 2532401920.0,
+          "flow_str": "25.32亿"
         },
         {
           "code": "BK1037",
           "name": "消费电子",
-          "change_pct": 0.96,
-          "flow": 2786108416.0,
-          "flow_str": "27.86亿"
-        },
-        {
-          "code": "BK1303",
-          "name": "锂电池",
-          "change_pct": -0.43,
-          "flow": 1855865600.0,
-          "flow_str": "18.56亿"
+          "change_pct": 1.05,
+          "flow": 2503124736.0,
+          "flow_str": "25.03亿"
         },
         {
           "code": "BK1027",
           "name": "小金属",
-          "change_pct": 3.14,
-          "flow": 1693910784.0,
-          "flow_str": "16.94亿"
+          "change_pct": 2.98,
+          "flow": 1995635712.0,
+          "flow_str": "19.96亿"
+        },
+        {
+          "code": "BK1303",
+          "name": "锂电池",
+          "change_pct": -0.36,
+          "flow": 1922849536.0,
+          "flow_str": "19.23亿"
+        },
+        {
+          "code": "BK1339",
+          "name": "被动元件",
+          "change_pct": 6.45,
+          "flow": 1503094016.0,
+          "flow_str": "15.03亿"
+        },
+        {
+          "code": "BK1624",
+          "name": "其他小金属",
+          "change_pct": 3.12,
+          "flow": 1384031952.0,
+          "flow_str": "13.84亿"
+        },
+        {
+          "code": "BK1519",
+          "name": "电动乘用车",
+          "change_pct": 1.74,
+          "flow": 1370326816.0,
+          "flow_str": "13.70亿"
         },
         {
           "code": "BK1336",
           "name": "其他电子Ⅲ",
           "change_pct": 1.58,
-          "flow": 1494896384.0,
-          "flow_str": "14.95亿"
+          "flow": 1337552896.0,
+          "flow_str": "13.38亿"
         },
         {
           "code": "BK1223",
           "name": "其他电子Ⅱ",
           "change_pct": 1.58,
-          "flow": 1494896384.0,
-          "flow_str": "14.95亿"
-        },
-        {
-          "code": "BK1339",
-          "name": "被动元件",
-          "change_pct": 6.28,
-          "flow": 1447813888.0,
-          "flow_str": "14.48亿"
-        },
-        {
-          "code": "BK1519",
-          "name": "电动乘用车",
-          "change_pct": 1.63,
-          "flow": 1288619312.0,
-          "flow_str": "12.89亿"
-        },
-        {
-          "code": "BK1624",
-          "name": "其他小金属",
-          "change_pct": 3.25,
-          "flow": 1248261872.0,
-          "flow_str": "12.48亿"
+          "flow": 1337552896.0,
+          "flow_str": "13.38亿"
         },
         {
           "code": "BK1262",
           "name": "乘用车",
-          "change_pct": 1.35,
-          "flow": 1226401136.0,
-          "flow_str": "12.26亿"
+          "change_pct": 1.43,
+          "flow": 1308940896.0,
+          "flow_str": "13.09亿"
         }
       ],
       "sector_outflow": [
@@ -57877,40 +58320,86 @@
           "code": "BK1200",
           "name": "电力设备",
           "change_pct": -1.25,
-          "flow": -7169786368.0,
-          "flow_str": "-71.70亿"
+          "flow": -7477857792.0,
+          "flow_str": "-74.78亿"
         },
         {
           "code": "BK0486",
           "name": "传媒",
-          "change_pct": -3.1,
-          "flow": -4940986400.0,
-          "flow_str": "-49.41亿"
-        },
-        {
-          "code": "BK1216",
-          "name": "医药生物",
-          "change_pct": -1.67,
-          "flow": -3648267776.0,
-          "flow_str": "-36.48亿"
+          "change_pct": -2.99,
+          "flow": -4879326752.0,
+          "flow_str": "-48.79亿"
         },
         {
           "code": "BK1036",
           "name": "半导体",
-          "change_pct": 0.64,
-          "flow": -3592302592.0,
-          "flow_str": "-35.92亿"
+          "change_pct": 0.6,
+          "flow": -4190560256.0,
+          "flow_str": "-41.91亿"
         },
         {
           "code": "BK0427",
           "name": "公用事业",
-          "change_pct": -1.22,
-          "flow": -3578026240.0,
-          "flow_str": "-35.78亿"
+          "change_pct": -1.27,
+          "flow": -3923250688.0,
+          "flow_str": "-39.23亿"
+        },
+        {
+          "code": "BK0428",
+          "name": "电力",
+          "change_pct": -1.25,
+          "flow": -3825710592.0,
+          "flow_str": "-38.26亿"
         }
       ],
       "limit_up_pool": [],
       "events": [
+        {
+          "title": "6月2日收评：创业板指震荡涨2.66%，算力硬件股集体走强",
+          "content": "1、沪指全天探底回升，创业板指走势较强。MLCC概念反复走强，火炬电子、鸿远电子等多股涨停。CPO、光纤概念拉升，长飞光纤、汇源通信等涨停。PCB概念活跃，东山精密、圣泉集团等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业等跌停。指数黄白二线分化，个股跌多涨少，沪深京三市约3900股飘绿，今日成交2.81万亿。截止收盘沪指涨0.43%，深成指涨1.63%，创业板指涨2.66%。\n2、板块概念方面，MLCC、CPO、光纤、PCB等板块涨幅居前，影视、体育、游戏、养殖等板块跌幅居前。\n3、两市共1373只个股上涨，93只个股涨停，3742只个股下跌，14只个股跌停，21只股票炸板，炸板率26%。",
+          "brief": "1、沪指全天探底回升，创业板指走势较强。MLCC概念反复走强，火炬电子、鸿远电子等多股涨停。CPO、光纤概念拉升，长飞光纤、汇源通信等涨停。PCB概念活跃，东山精密、圣泉集团等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业等跌停。指数黄白二线分化，个股跌多涨少，沪深京三市约3900股飘绿，今日成交2.81万亿。截止收盘沪指涨0.43%，深成指涨1.63%，创业板指涨2.66%。\n2、板块概念方面，MLCC、CPO、光纤、PCB等板块涨幅居前，影视、体育、游戏、养殖等板块跌幅居前。\n3、两市共1373只个股上涨，93只个股涨停，3742只个股下跌，14只个股跌停，21只股票炸板，炸板率26%。",
+          "ctime": 1780383651,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact_score": 74.0,
+          "impact_level": "重大",
+          "impact_reason": "B级+16；主题映射+8；风险事件+8；命中资金流Top3 通信+22；命中资金流Top10 电子+12；可交易性+8",
+          "matched_hot_sectors": [
+            "通信",
+            "电子"
+          ],
+          "affected_themes": [
+            "AI算力",
+            "光模块"
+          ],
+          "event_category": "risk",
+          "event_category_name": "风险事件",
+          "market_validation": "板块资金流排名1",
+          "validation_details": {
+            "sector_rank": 1,
+            "sector_flow": 15906316288.0
+          },
+          "tradability": "强",
+          "downgrade_reasons": [],
+          "impact": {
+            "no_impact": true,
+            "headline": "对A股无明显影响",
+            "analysis": [
+              "对A股无明显影响"
+            ],
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "summary": "对A股无明显影响",
+            "status": "ok"
+          },
+          "display_title": "6月2日收评：创业板指震荡涨2.66%，算力硬件股集体走强",
+          "display_body": "1、沪指全天探底回升，创业板指走势较强。MLCC概念反复走强，火炬电子、鸿远电子等多股涨停。CPO、光纤概念拉升，长飞光纤、汇源通信等涨停。PCB概念活跃，东山精密、圣泉集团等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业等跌停。指数黄白二线分化，个股跌多涨少，沪深京三市约3900股飘绿，今日成交2.81万亿。截止收盘沪指涨0.43%，深成指涨1.63%，创业板指涨2.66%。\n2、板块概念方",
+          "raw_content": "1、沪指全天探底回升，创业板指走势较强。MLCC概念反复走强，火炬电子、鸿远电子等多股涨停。CPO、光纤概念拉升，长飞光纤、汇源通信等涨停。PCB概念活跃，东山精密、圣泉集团等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业等跌停。指数黄白二线分化，个股跌多涨少，沪深京三市约3900股飘绿，今日成交2.81万亿。截止收盘沪指涨0.43%，深成指涨1.63%，创业板指涨2.66%。\n2、板块概念方面，MLCC、CPO、光纤、PCB等板块涨幅居前，影视、体育、游戏、养殖等板块跌幅居前。\n3、两市共1373只个股上涨，93只个股涨停，3742只个股下跌，14只个股跌停，21只股票炸板，炸板率26%。",
+          "has_redundant_content": true
+        },
         {
           "title": "6月2日午间收评：创业板指半日涨超2%，算力硬件股集体走强",
           "content": "1、沪指早间探底回升，创业板指涨超2%。算力硬件股集体走强，其中MLCC方向，火炬电子、达利凯普涨停；光通信方向，意华股份、亨通光电等涨停。AI PC概念延续涨势，春秋电子2连板。玻璃基板封装概念拉升，红星发展、五方光电等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业跌停。指数黄白二线分化，个股跌多涨少，沪深京三市超4200股飘绿，上午半天成交1.82万亿。午间收盘沪指跌0.04%，深成指涨0.96%，创业板涨2.15%。\n2、板块概念方面，MLCC、光通信、AI PC、玻璃基板等板块领涨；影视、体育、游戏、养殖等板块领跌； \n3、两市共1112只个股上涨，67只个股涨停；4028只个股下跌，11只个股跌停；14只股票炸板，炸板率26%。",
@@ -57935,20 +58424,58 @@
           "market_validation": "板块资金流排名1",
           "validation_details": {
             "sector_rank": 1,
-            "sector_flow": 14532827136.0
+            "sector_flow": 15906316288.0
           },
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
+            "no_impact": false,
+            "headline": "创业板指大涨逾2%，算力硬件与AI PC概念走强，个股跌多涨少",
+            "analysis": [
+              "算力硬件股集体走强，反映市场对AI算力基建及国产替代的持续乐观预期。",
+              "AI PC概念延续涨势，有望带动消费电子产业链需求回升，利好相关零部件厂商。",
+              "尽管指数上扬，但超4000只个股飘绿，市场分化显著，权重股拉抬效应明显。"
+            ],
+            "positive_sectors": [
+              "半导体",
+              "通信设备",
+              "消费电子"
+            ],
+            "negative_sectors": [
+              "传媒",
+              "体育"
+            ],
+            "positive_stocks": [
+              {
+                "name": "火炬电子",
+                "code": "603678",
+                "reason": "MLCC核心供应商，受益算力硬件需求爆发"
+              },
+              {
+                "name": "意华股份",
+                "code": "002897",
+                "reason": "光通信连接器龙头，直接受益算力网络建设"
+              },
+              {
+                "name": "春秋电子",
+                "code": "603890",
+                "reason": "笔记本结构件龙头，AI PC换机潮利好"
+              }
+            ],
+            "negative_stocks": [
+              {
+                "name": "舒华体育",
+                "code": "605299",
+                "reason": "体育概念股跌停，板块情绪降温"
+              },
+              {
+                "name": "中体产业",
+                "code": "600158",
+                "reason": "体育概念股跌停，短期利空冲击"
+              }
+            ],
+            "summary": "创业板指大涨逾2%，算力硬件与AI PC概念走强，个股跌多涨少",
+            "status": "ok"
           },
           "display_title": "6月2日午间收评：创业板指半日涨超2%，算力硬件股集体走强",
           "display_body": "1、沪指早间探底回升，创业板指涨超2%。算力硬件股集体走强，其中MLCC方向，火炬电子、达利凯普涨停；光通信方向，意华股份、亨通光电等涨停。AI PC概念延续涨势，春秋电子2连板。玻璃基板封装概念拉升，红星发展、五方光电等涨停。下跌方面，体育概念股下挫，舒华体育、中体产业跌停。指数黄白二线分化，个股跌多涨少，沪深京三市超4200股飘绿，上午半天成交1.82万亿。午间收盘沪指跌0.04%，深成指涨0",
@@ -57981,20 +58508,21 @@
           "market_validation": "板块资金流排名1",
           "validation_details": {
             "sector_rank": 1,
-            "sector_flow": 14532827136.0
+            "sector_flow": 15906316288.0
           },
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "分析服务未配置",
+            "headline": "AI分析暂不可用",
             "analysis": [],
-            "summary": "分析服务未配置",
+            "summary": "AI分析暂不可用",
             "positive_sectors": [],
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
             "no_impact": true,
-            "status": "skipped"
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: "
           },
           "display_title": "华尔街见闻早餐 | 2026年6月2日",
           "display_body": "伊朗暂停沟通消息后，盘中美油涨超8%、布油涨逾7%；特朗普称快速推进谈判后，三大美股指转涨，继续齐创新高；英伟达涨超6%，PC芯片对手英特尔跌近5%，PC厂商戴尔涨超10%，绩优慧与盘后一度涨近40%。\n\n伊媒：伊朗将暂停与美国通过中间人沟通、抗议以军扩大在黎行动，计划彻底封锁霍尔木兹海峡。特朗普：以色列和黎真主党的所有交火行动将立即停止，与伊谈判正“快速推进”，尚未收到伊朗暂停谈判消息，美伊或于",
@@ -58021,23 +58549,41 @@
           ],
           "event_category": "policy",
           "event_category_name": "政策催化",
-          "market_validation": "板块资金流排名7",
+          "market_validation": "板块资金流排名9",
           "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
           },
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
+            "no_impact": false,
+            "headline": "储蓄国债纳入个人养老金，利好银行及长期资金入市",
+            "analysis": [
+              "储蓄国债纳入个人养老金产品，将吸引更多长期稳健资金间接流入资本市场。",
+              "银行作为个人养老金账户开办主体，将受益于账户活跃度提升及代销业务增长。",
+              "政策有望激活个人养老金缴存热情，为A股带来潜在增量资金。"
+            ],
+            "positive_sectors": [
+              "银行",
+              "保险"
+            ],
             "negative_sectors": [],
-            "positive_stocks": [],
+            "positive_stocks": [
+              {
+                "name": "工商银行",
+                "code": "601398",
+                "reason": "个人养老金国债业务主要开办行之一"
+              },
+              {
+                "name": "建设银行",
+                "code": "601939",
+                "reason": "个人养老金业务市场份额领先"
+              }
+            ],
             "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
+            "summary": "储蓄国债纳入个人养老金，利好银行及长期资金入市",
+            "status": "ok"
           },
           "display_title": "储蓄国债即将纳入个人养老金产品池",
           "display_body": "6月1日，记者发现工商银行等部分机构的手机端APP，已在个人养老金专区上线“国债”入口。根据财政部、中国人民银行此前联合发布的《关于储蓄国债（电子式）纳入个人养老金产品范围有关事宜的通知》，开办机构应当自2026年6月起，开办个人养老金储蓄国债（电子式）业务。专家认为，此举将为投资者提供长期稳健的投资选择，有望激活缴存热情，后续个人养老金产品体系仍有扩容空间。（中证报）",
@@ -58064,23 +58610,47 @@
           ],
           "event_category": "other",
           "event_category_name": "其他",
-          "market_validation": "板块资金流排名7",
+          "market_validation": "板块资金流排名9",
           "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
           },
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
+            "no_impact": false,
+            "headline": "三星展示HBM5，利好A股HBM产业链",
+            "analysis": [
+              "三星展示HBM5，表明高带宽内存技术迭代加速，将拉动上游材料和设备需求",
+              "国内HBM产业链企业有望获得更多订单，先进封装和存储芯片板块受关注",
+              "事件或刺激A股市场对HBM相关公司的投资情绪，带动板块活跃"
+            ],
+            "positive_sectors": [
+              "半导体",
+              "先进封装",
+              "半导体设备"
+            ],
             "negative_sectors": [],
-            "positive_stocks": [],
+            "positive_stocks": [
+              {
+                "name": "通富微电",
+                "code": "002156",
+                "reason": "HBM封装核心供应商"
+              },
+              {
+                "name": "长电科技",
+                "code": "600584",
+                "reason": "先进封装龙头，布局HBM"
+              },
+              {
+                "name": "华海诚科",
+                "code": "688535",
+                "reason": "HBM封装材料供应商"
+              }
+            ],
             "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
+            "summary": "三星展示HBM5，利好A股HBM产业链",
+            "status": "ok"
           },
           "display_title": "三星电子在台北举行的国际电脑展（Computex）上首次展示了第8代高带宽内存HBM5。（Edaily）",
           "display_body": "三星电子在台北举行的国际电脑展（Computex）上首次展示了第8代高带宽内存HBM5。（Edaily）",
@@ -58106,111 +58676,28 @@
           ],
           "event_category": "other",
           "event_category_name": "其他",
-          "market_validation": "板块资金流排名7",
+          "market_validation": "板块资金流排名9",
           "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
           },
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "分析服务未配置",
+            "headline": "AI分析暂不可用",
             "analysis": [],
-            "summary": "分析服务未配置",
+            "summary": "AI分析暂不可用",
             "positive_sectors": [],
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
             "no_impact": true,
-            "status": "skipped"
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: "
           },
           "display_title": "美国FDA代理局长将与罕见病组织举行闭门会议",
           "display_body": "据一位资深机构官员透露，美国食品药品管理局（FDA）计划本周三与美国罕见疾病组织（NORD）、EveryLife罕见病基金会、癌症研究之友（Friends of Cancer Research）以及安格曼综合症治疗基金会（Foundation for Angelman Syndrome Therapeutics）等十几个倡导罕见病治疗的团体举行闭门圆桌会议。",
           "raw_content": "据一位资深机构官员透露，美国食品药品管理局（FDA）计划本周三与美国罕见疾病组织（NORD）、EveryLife罕见病基金会、癌症研究之友（Friends of Cancer Research）以及安格曼综合症治疗基金会（Foundation for Angelman Syndrome Therapeutics）等十几个倡导罕见病治疗的团体举行闭门圆桌会议。",
-          "has_redundant_content": true
-        },
-        {
-          "title": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "content": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "brief": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "ctime": 1780344340,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 2,
-          "impact_score": 46.0,
-          "impact_level": "较强",
-          "impact_reason": "B级+16；主题映射+8；海外事件+2；主题消费电子命中 电子+12；可交易性+8",
-          "matched_hot_sectors": [
-            "电子"
-          ],
-          "affected_themes": [
-            "消费电子"
-          ],
-          "event_category": "overseas",
-          "event_category_name": "海外事件",
-          "market_validation": "板块资金流排名7",
-          "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
-          },
-          "tradability": "强",
-          "downgrade_reasons": [],
-          "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
-          },
-          "display_title": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "display_body": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "raw_content": "惠与第二财季调整后每股收益（EPS）为0.79美元，分析师预期0.54美元。\n\n将Elliott Investment Partners的Chris Hsu纳入董事会。\n\n预计全年调整后EPS为3.35-3.45美元，公司原本预计2.30-2.50美元。\n\n惠与（HPE）美股盘后涨28%。",
-          "has_redundant_content": true
-        },
-        {
-          "title": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴尔科技涨10.70%，铿腾电子涨10.46%表现第七，Credo则收跌4.2%跌幅第四大，英特尔跌4.67%，Astera Lab跌6.64%，高通跌8.78%。",
-          "content": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴尔科技涨10.70%，铿腾电子涨10.46%表现第七，Credo则收跌4.2%跌幅第四大，英特尔跌4.67%，Astera Lab跌6.64%，高通跌8.78%。",
-          "brief": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴尔科技涨10.70%，铿腾电子涨10.46%表现第七，Credo则收跌4.2%跌幅第四大，英特尔跌4.67%，Astera Lab跌6.64%，高通跌8.78%。",
-          "ctime": 1780344112,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 2,
-          "impact_score": 46.0,
-          "impact_level": "较强",
-          "impact_reason": "B级+16；主题映射+8；海外事件+2；命中资金流Top10 电子+12；可交易性+8",
-          "matched_hot_sectors": [
-            "电子"
-          ],
-          "affected_themes": [
-            "消费电子"
-          ],
-          "event_category": "overseas",
-          "event_category_name": "海外事件",
-          "market_validation": "板块资金流排名7",
-          "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
-          },
-          "tradability": "强",
-          "downgrade_reasons": [],
-          "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
-          },
-          "display_title": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴尔科技涨10.70%，铿腾电子涨10.46%表现第七，Credo则收跌4.2%跌幅第四大，英特尔跌4.67%，Astera Lab跌6.64%，高通跌8.78%。",
-          "display_body": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴",
-          "raw_content": "周一（6月1日），美股iShares软件ETF两天涨13%，创2001年以来最大涨幅。\n\n超大规模云服务商（Hyperscalers）跌0.02%，报105.79点，尾盘刷新盘中历史最高位至106.56点。\n\n成分股中，MongoDB涨20.36%，Nebius集团涨14.46%，发行垃圾债融资的CoreWeave涨13.96%，Datadog涨12.19%，Cloudflare涨11.99%，戴尔科技涨10.70%，铿腾电子涨10.46%表现第七，Credo则收跌4.2%跌幅第四大，英特尔跌4.67%，Astera Lab跌6.64%，高通跌8.78%。",
           "has_redundant_content": true
         },
         {
@@ -58232,25 +58719,26 @@
           ],
           "event_category": "other",
           "event_category_name": "其他",
-          "market_validation": "板块资金流排名7",
+          "market_validation": "板块资金流排名9",
           "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
           },
           "tradability": "强",
           "downgrade_reasons": [
             "同主题第5条，重复降权-5"
           ],
           "impact": {
-            "headline": "分析服务未配置",
+            "headline": "AI分析暂不可用",
             "analysis": [],
-            "summary": "分析服务未配置",
+            "summary": "AI分析暂不可用",
             "positive_sectors": [],
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
             "no_impact": true,
-            "status": "skipped"
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: {\n  \"no_impact\": false,\n  \"headline\": \"存储芯片板块探底回升，产业链个股集体大涨\",\n  \"analysis\": [\n    \"存储芯片板块探底回升，多只个股涨超12%，显示市场对存储芯片周期复苏的乐观预期。\",\n    \"江丰电子、江化微等材料公司大涨，反映上游材料需求有望随存储芯片扩产提升。\",\n    \"商络电子、力"
           },
           "display_title": "存储芯片板块探底回升，江丰电子、商络电子、云汉芯城涨超12%，力源信息、江化微、雅创电子、太极实业、雅克科技涨超5%。",
           "display_body": "存储芯片板块探底回升，江丰电子、商络电子、云汉芯城涨超12%，力源信息、江化微、雅创电子、太极实业、雅克科技涨超5%。",
@@ -58276,25 +58764,26 @@
           ],
           "event_category": "other",
           "event_category_name": "其他",
-          "market_validation": "板块资金流排名7",
+          "market_validation": "板块资金流排名9",
           "validation_details": {
-            "sector_rank": 7,
-            "sector_flow": 4493111296.0
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
           },
           "tradability": "强",
           "downgrade_reasons": [
             "同主题第6条，重复降权-5"
           ],
           "impact": {
-            "headline": "分析服务未配置",
+            "headline": "AI分析暂不可用",
             "analysis": [],
-            "summary": "分析服务未配置",
+            "summary": "AI分析暂不可用",
             "positive_sectors": [],
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
             "no_impact": true,
-            "status": "skipped"
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: "
           },
           "display_title": "光刻机、光刻胶概念早盘走强，美迪凯20cm涨停，江丰电子、中船特气、芯碁微装、思泰克、华辰装备跟涨。",
           "display_body": "光刻机、光刻胶概念早盘走强，美迪凯20cm涨停，江丰电子、中船特气、芯碁微装、思泰克、华辰装备跟涨。",
@@ -58323,90 +58812,202 @@
           "market_validation": "板块资金流排名4",
           "validation_details": {
             "sector_rank": 4,
-            "sector_flow": 7032635392.0
+            "sector_flow": 8058878464.0
           },
           "tradability": "强",
           "downgrade_reasons": [
-            "同主题第4条，重复降权-5"
+            "同主题第6条，重复降权-5"
           ],
           "impact": {
-            "headline": "分析服务未配置",
-            "analysis": [],
-            "summary": "分析服务未配置",
-            "positive_sectors": [],
+            "no_impact": false,
+            "headline": "市场普涨提振信心，油气、AIPC、有色金属板块领涨",
+            "analysis": [
+              "创业板指涨超1%显示科技成长股情绪回暖，带动资金流入",
+              "油气板块上涨受国际油价走强影响，利好上游开采企业",
+              "AIPC概念受AI终端新品预期刺激，产业链关注度提升",
+              "有色金属板块受益于全球经济复苏预期，工业金属需求前景向好"
+            ],
+            "positive_sectors": [
+              "油气",
+              "消费电子",
+              "有色金属"
+            ],
             "negative_sectors": [],
-            "positive_stocks": [],
+            "positive_stocks": [
+              {
+                "name": "中国石油",
+                "code": "601857",
+                "reason": "国际油价上涨直接利好公司业绩"
+              },
+              {
+                "name": "紫金矿业",
+                "code": "601899",
+                "reason": "铜金价格上行带动盈利提升"
+              },
+              {
+                "name": "春秋电子",
+                "code": "603890",
+                "reason": "AIPC新品发布提振结构件需求"
+              }
+            ],
             "negative_stocks": [],
-            "no_impact": true,
-            "status": "skipped"
+            "summary": "市场普涨提振信心，油气、AIPC、有色金属板块领涨",
+            "status": "ok"
           },
           "display_title": "创业板指涨超1%，沪指涨0.12%，深成指涨0.55%，油气、AIPC、有色金属等方向涨幅居前，沪深京三市上涨个股近2500只。",
           "display_body": "创业板指涨超1%，沪指涨0.12%，深成指涨0.55%，油气、AIPC、有色金属等方向涨幅居前，沪深京三市上涨个股近2500只。",
           "raw_content": "创业板指涨超1%，沪指涨0.12%，深成指涨0.55%，油气、AIPC、有色金属等方向涨幅居前，沪深京三市上涨个股近2500只。",
           "has_redundant_content": true
+        },
+        {
+          "title": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "content": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "brief": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "ctime": 1780363656,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact_score": 44.0,
+          "impact_level": "较强",
+          "impact_reason": "B级+16；主题映射+8；其他+5；命中资金流Top10 电子+12；可交易性+8",
+          "matched_hot_sectors": [
+            "电子"
+          ],
+          "affected_themes": [
+            "AI算力"
+          ],
+          "event_category": "other",
+          "event_category_name": "其他",
+          "market_validation": "板块资金流排名9",
+          "validation_details": {
+            "sector_rank": 9,
+            "sector_flow": 3694067712.0
+          },
+          "tradability": "强",
+          "downgrade_reasons": [
+            "同主题第7条，重复降权-5"
+          ],
+          "impact": {
+            "no_impact": false,
+            "headline": "AI PC概念持续走强，带动消费电子及半导体板块活跃",
+            "analysis": [
+              "AI PC融合人工智能与个人电脑，有望刺激新一轮换机周期，提振产业链需求。",
+              "春秋电子三连板显示资金对结构性件等PC上游环节的强烈看好。",
+              "英力股份、胜利精密等大涨反映市场对AI PC带来零部件升级的乐观预期。",
+              "概念扩散至雷神科技、龙旗科技等整机及品牌厂商，说明热度向全产业链延伸。"
+            ],
+            "positive_sectors": [
+              "消费电子",
+              "半导体",
+              "人工智能"
+            ],
+            "negative_sectors": [],
+            "positive_stocks": [
+              {
+                "name": "春秋电子",
+                "code": "603890",
+                "reason": "笔记本电脑结构件龙头，直接受益AI PC换机潮"
+              },
+              {
+                "name": "英力股份",
+                "code": "300956",
+                "reason": "PC精密结构件供应商，有望切入AI PC新品供应链"
+              },
+              {
+                "name": "胜利精密",
+                "code": "002426",
+                "reason": "精密结构件厂商，AI PC带来结构升级需求"
+              },
+              {
+                "name": "龙旗科技",
+                "code": "605001",
+                "reason": "智能硬件ODM厂商，AI PC新品量产将带来增量"
+              },
+              {
+                "name": "雷神科技",
+                "code": "872190",
+                "reason": "电竞PC品牌商，AI PC新品提升产品溢价能力"
+              }
+            ],
+            "negative_stocks": [],
+            "summary": "AI PC概念持续走强，带动消费电子及半导体板块活跃",
+            "status": "ok"
+          },
+          "display_title": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "display_body": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "raw_content": "AI PC概念延续涨势，春秋电子3连板，英力股份涨超10%，雷神科技、胜利精密、龙旗科技纷纷高开。",
+          "has_redundant_content": true
         }
       ],
       "forecast": {
-        "core_judgment": "LLM 服务未配置（缺少 ANTHROPIC_AUTH_TOKEN）",
-        "volume_note": "",
-        "short_term": [],
-        "mid_term": "",
-        "risks": []
+        "core_judgment": "日线无中枢，科技股结构性行情，量能平稳未确认突破，警惕分化与背驰",
+        "volume_note": "较5日均量缩减4%，整体量能平稳，突破需补量",
+        "short_term": [
+          "若创业板指明日放量站上4100点，则科技成长主线确认，可关注通信、半导体板块三买机会",
+          "若上证指数无法有效突破4100点且持续缩量，则可能形成30分钟顶背驰，触发短线回调",
+          "通信设备板块资金流入集中但板块广度仅50%，若龙头股滞涨或量能萎缩，警惕热门板块回调"
+        ],
+        "mid_term": "中期需等待日线中枢形成以确认多空平衡。若后续回调不破3950点（主观假设前期中枢上沿），则构成日线三买，打开向上空间；若跌破则进入大级别震荡。科技结构性行情需持续放量，否则将回归轮动。",
+        "risks": [
+          "市场整体量能不足，科技板块吸血效应明显，若资金无法跟进，热门板块可能补跌",
+          "上证权重板块疲弱，若金融消费持续下行，可能拖累指数引发系统性回调",
+          "科技主题炒作过热，基本面支撑不足，一旦情绪退潮将导致快速回落"
+        ]
       },
       "sell_signals": [],
       "diagnostics": {
         "daily_scan": {
-          "total": 526,
-          "base_pass": 476,
-          "with_buy_points": 298,
+          "total": 529,
+          "base_pass": 479,
+          "with_buy_points": 300,
           "formal_count": 0,
           "upgradeable_count": 0,
-          "swing_seed_count": 190,
-          "reference_only_count": 108,
+          "swing_seed_count": 193,
+          "reference_only_count": 107,
           "blocked_only_count": 0,
           "buy_point_type_counts": {
-            "swing底背驰参考": 298
+            "swing底背驰参考": 300
           },
           "structure_pool_reasons": {
             "formal": 0,
             "upgradeable_reference": 0,
-            "swing_position_seed": 190
+            "swing_position_seed": 193
           },
           "excluded_reference_type_counts": {
-            "swing底背驰参考": 108
+            "swing底背驰参考": 107
           }
         },
         "sublevel_upgrade_pure": {
-          "requested_30min": 190,
-          "fetched_30min": 190,
+          "requested_30min": 193,
+          "fetched_30min": 193,
           "formal_kept": 0,
           "candidate_upgraded": 45,
-          "dropped_no_confirm": 145,
+          "dropped_no_confirm": 148,
           "dropped_no_30min": 0,
           "dropped_risk_guard": 78
         },
         "sublevel_upgrade_fusion": {
-          "requested_30min": 190,
-          "fetched_30min": 190,
+          "requested_30min": 193,
+          "fetched_30min": 193,
           "formal_kept": 0,
           "candidate_upgraded": 2,
-          "dropped_no_confirm": 145,
+          "dropped_no_confirm": 148,
           "dropped_no_30min": 0,
           "dropped_risk_guard": 78
         },
         "kline_cache": {
-          "day_hit": 533,
+          "day_hit": 536,
           "day_miss": 34,
-          "day_write": 539,
-          "30min_hit": 202,
-          "30min_miss": 0,
-          "30min_write": 202,
-          "pruned_records": 3346
+          "day_write": 542,
+          "30min_hit": 207,
+          "30min_miss": 1,
+          "30min_write": 185,
+          "pruned_records": 0
         },
         "fusion_admission": {
           "market_regime": "weak",
-          "input_count": 59,
-          "dropped_by_ma": 57,
+          "input_count": 62,
+          "dropped_by_ma": 60,
           "dropped_by_market_regime": 0,
           "dropped_by_signal_gate": 0,
           "kept_formal": 0,
@@ -58425,32 +59026,14 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "688418",
-              "name": "震有科技",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "688080",
-              "name": "映翰通",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
               "code": "301202",
               "name": "朗威股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "002792",
-              "name": "通宇通讯",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "300050",
-              "name": "世纪鼎利",
+              "code": "688027",
+              "name": "国盾量子",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58473,26 +59056,8 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "603271",
-              "name": "永杰新材",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
               "code": "603072",
               "name": "天和磁材",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "600456",
-              "name": "宝钛股份",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "300337",
-              "name": "银邦股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58503,14 +59068,32 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "002978",
-              "name": "安宁股份",
+              "code": "603271",
+              "name": "永杰新材",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "600456",
+              "name": "宝钛股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
               "code": "601388",
               "name": "怡球资源",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "000795",
+              "name": "英洛华",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "002978",
+              "name": "安宁股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58527,26 +59110,14 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "000975",
-              "name": "山金国际",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
               "code": "601069",
               "name": "西部黄金",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "601212",
-              "name": "白银有色",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "600988",
-              "name": "赤峰黄金",
+              "code": "000975",
+              "name": "山金国际",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58563,20 +59134,26 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
+              "code": "600988",
+              "name": "赤峰黄金",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "601212",
+              "name": "白银有色",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "000506",
+              "name": "招金黄金",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
               "code": "600489",
               "name": "中金黄金",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "300139",
-              "name": "晓程科技",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "000751",
-              "name": "锌业股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58587,14 +59164,32 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "601899",
-              "name": "紫金矿业",
+              "code": "000751",
+              "name": "锌业股份",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "000807",
-              "name": "云铝股份",
+              "code": "300903",
+              "name": "科翔股份",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "301176",
+              "name": "逸豪新材",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "603115",
+              "name": "海星股份",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "603920",
+              "name": "世运电路",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58611,6 +59206,12 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
+              "code": "002922",
+              "name": "伊戈尔",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
               "code": "002782",
               "name": "可立克",
               "type": "底背驰候选",
@@ -58623,8 +59224,8 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
-              "code": "300903",
-              "name": "科翔股份",
+              "code": "688711",
+              "name": "宏微科技",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58635,32 +59236,14 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
+              "code": "301567",
+              "name": "贝隆精密",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
               "code": "300976",
               "name": "达瑞电子",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "301383",
-              "name": "天键股份",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "301486",
-              "name": "致尚科技",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "688567",
-              "name": "孚能科技",
-              "type": "底背驰候选",
-              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
-            },
-            {
-              "code": "300014",
-              "name": "亿纬锂能",
               "type": "底背驰候选",
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
@@ -58677,6 +59260,24 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
+              "code": "301587",
+              "name": "中瑞股份",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "688567",
+              "name": "孚能科技",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
+              "code": "300014",
+              "name": "亿纬锂能",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
               "code": "601127",
               "name": "赛力斯",
               "type": "底背驰候选",
@@ -58689,14 +59290,20 @@
               "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
             },
             {
-              "code": "000737",
-              "name": "北方铜业",
+              "code": "300627",
+              "name": "华测导航",
               "type": "强势启动候选",
               "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
             },
             {
               "code": "000878",
               "name": "云南铜业",
+              "type": "强势启动候选",
+              "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
+            },
+            {
+              "code": "000737",
+              "name": "北方铜业",
               "type": "强势启动候选",
               "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
             },
@@ -58719,6 +59326,12 @@
               "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
             },
             {
+              "code": "300647",
+              "name": "超频三",
+              "type": "强势启动候选",
+              "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
+            },
+            {
               "code": "603341",
               "name": "龙旗科技",
               "type": "强势启动候选",
@@ -58727,6 +59340,12 @@
             {
               "code": "002866",
               "name": "传艺科技",
+              "type": "强势启动候选",
+              "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
+            },
+            {
+              "code": "300686",
+              "name": "智动力",
               "type": "强势启动候选",
               "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
             },
@@ -58759,48 +59378,48 @@
           "pure_fusion_identical": false
         },
         "signal_distribution": {
-          "强势启动候选": 14,
-          "底背驰候选": 33
+          "强势启动候选": 17,
+          "底背驰候选": 34
         },
         "event_analysis_status_counts": {
-          "ok": 0,
-          "failed": 0,
-          "skipped": 10
+          "ok": 6,
+          "failed": 4,
+          "skipped": 0
         },
         "chart_annotation_coverage": {
-          "total_picks": 47,
-          "with_annotations": 47
+          "total_picks": 51,
+          "with_annotations": 51
         },
         "strong_startup": {
           "daily_scan": {
-            "scanned": 526,
+            "scanned": 529,
             "enabled": true,
-            "daily_startup_seed": 15,
-            "dropped_high_position": 82,
-            "dropped_no_volume": 402,
-            "dropped_no_breakout": 1,
-            "dropped_base_filter": 23,
+            "daily_startup_seed": 19,
+            "dropped_high_position": 83,
+            "dropped_no_volume": 400,
+            "dropped_no_breakout": 0,
+            "dropped_base_filter": 24,
             "watch_due_to_limit_up": 3
           },
           "upgrade": {
-            "startup_candidate": 14,
+            "startup_candidate": 17,
             "startup_watch": 0,
             "dropped_no_30min_confirm": 0,
-            "watch_due_to_no_30min_confirm": 1
+            "watch_due_to_no_30min_confirm": 2
           },
-          "startup_candidates": 14,
-          "startup_watchlist": 4
+          "startup_candidates": 17,
+          "startup_watchlist": 5
         },
         "signal_recency": {
           "max_age_trading_days": 10,
-          "pure_input": 59,
-          "pure_kept": 47,
-          "pure_dropped_expired": 12,
+          "pure_input": 62,
+          "pure_kept": 51,
+          "pure_dropped_expired": 11,
           "fusion_input": 2,
           "fusion_kept": 2,
           "fusion_dropped_expired": 0,
-          "watch_input": 4,
-          "watch_kept": 4,
+          "watch_input": 5,
+          "watch_kept": 5,
           "watch_dropped_expired": 0,
           "dropped_details": [
             {
@@ -58816,13 +59435,6 @@
               "type": "底背驰候选",
               "signal_age_days": 51,
               "reason": "信号超过10个交易日（51天前）"
-            },
-            {
-              "code": "002792",
-              "name": "通宇通讯",
-              "type": "底背驰候选",
-              "signal_age_days": 46,
-              "reason": "信号超过10个交易日（46天前）"
             },
             {
               "code": "688387",
@@ -58846,13 +59458,6 @@
               "reason": "信号超过10个交易日（11天前）"
             },
             {
-              "code": "000807",
-              "name": "云铝股份",
-              "type": "底背驰候选",
-              "signal_age_days": 11,
-              "reason": "信号超过10个交易日（11天前）"
-            },
-            {
               "code": "688230",
               "name": "芯导科技",
               "type": "底背驰候选",
@@ -58867,15 +59472,15 @@
               "reason": "信号超过10个交易日（47天前）"
             },
             {
-              "code": "301383",
-              "name": "天键股份",
+              "code": "688711",
+              "name": "宏微科技",
               "type": "底背驰候选",
-              "signal_age_days": 21,
-              "reason": "信号超过10个交易日（21天前）"
+              "signal_age_days": 57,
+              "reason": "信号超过10个交易日（57天前）"
             },
             {
-              "code": "688567",
-              "name": "孚能科技",
+              "code": "301567",
+              "name": "贝隆精密",
               "type": "底背驰候选",
               "signal_age_days": 38,
               "reason": "信号超过10个交易日（38天前）"
@@ -58886,6 +59491,13 @@
               "type": "底背驰候选",
               "signal_age_days": 57,
               "reason": "信号超过10个交易日（57天前）"
+            },
+            {
+              "code": "688567",
+              "name": "孚能科技",
+              "type": "底背驰候选",
+              "signal_age_days": 38,
+              "reason": "信号超过10个交易日（38天前）"
             }
           ]
         }
