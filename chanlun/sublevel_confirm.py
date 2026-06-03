@@ -75,7 +75,7 @@ def classify_30min_confirmation(daily_stock, source_bp, min30_result):
         level = "强"
         confirmed = True
     elif ENABLE_RELAXED_30MIN_CONFIRM:
-        if has_fractal_macd or (key_level_ok and ema5_reclaim) or (stop_fall_bars and ema5_reclaim):
+        if has_fractal_macd or (key_level_ok and ema5_reclaim):
             level = "中"
             confirmed = True
         elif key_level_ok or ema5_reclaim:

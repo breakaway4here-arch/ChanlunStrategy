@@ -423,7 +423,8 @@ def main(debug=False):
                   f"candidate_upgraded={upgrade_diag_pure['candidate_upgraded']}, "
                   f"dropped_no_confirm={upgrade_diag_pure['dropped_no_confirm']}, "
                   f"dropped_no_30min={upgrade_diag_pure['dropped_no_30min']}, "
-                  f"dropped_risk_guard={upgrade_diag_pure.get('dropped_risk_guard', 0)}")
+                  f"dropped_risk_guard={upgrade_diag_pure.get('dropped_risk_guard', 0)}, "
+                  f"dropped_diverge_far={upgrade_diag_pure.get('dropped_diverge_far', 0)}")
 
             # —— 强势启动 30min 升级 ——
             if startup_seeds:
@@ -538,7 +539,8 @@ def main(debug=False):
                       f"candidate_upgraded={upgrade_diag_fusion['candidate_upgraded']}, "
                       f"dropped_no_confirm={upgrade_diag_fusion['dropped_no_confirm']}, "
                       f"dropped_no_30min={upgrade_diag_fusion['dropped_no_30min']}, "
-                      f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}")
+                      f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}, "
+                      f"dropped_diverge_far={upgrade_diag_fusion.get('dropped_diverge_far', 0)}")
                 fusion_admission_diag = {}
     else:
         # Rollback: old 30min confirmation flow

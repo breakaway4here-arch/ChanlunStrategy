@@ -38,6 +38,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
         "dropped_no_confirm": 0,
         "dropped_no_30min": 0,
         "dropped_risk_guard": 0,
+        "dropped_diverge_far": 0,
     }
 
     for stock in daily_pool:
@@ -94,6 +95,18 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                 # Cannot upgrade without 30min data
                 reference_buy_points.append(bp)
                 continue
+
+            # 底背驰候选 — 距源价 >3% 不升级
+            # 回测：fusion 3-10% 区间胜率仅 8-19%；pure 3-10% 胜率 25-31%、跌≥5% 37-44%。
+            if out_type == "底背驰候选":
+                closes = stock.get("closes")
+                src_price = float(bp.get("price") or 0)
+                if closes is not None and len(closes) > 0 and src_price > 0:
+                    dist_pct = (float(closes[-1]) - src_price) / src_price * 100
+                    if dist_pct > 3:
+                        reference_buy_points.append(bp)
+                        diag["dropped_diverge_far"] += 1
+                        continue
 
             # Risk guard before confirmation
             if not _passes_upgrade_risk_guard(stock, bp, min30_result):
