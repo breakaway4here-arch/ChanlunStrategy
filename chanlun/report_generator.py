@@ -571,6 +571,128 @@ def _safe_list(arr):
 
 
 # ============================================================
+# 历史推荐回看（最近 N 个交易日，仅高质量类型）
+# ============================================================
+RECENT_REVIEW_DAYS = 5
+RECENT_REVIEW_WHITELIST_PURE = {"二买", "三买", "二买候选", "三买候选"}
+RECENT_REVIEW_WHITELIST_FUSION = {"二买", "三买", "二买候选", "三买候选", "强势启动候选"}
+
+
+def build_recent_reviews(date_str, output_dir):
+    """生成最近 N 个交易日的推荐回看数据。
+
+    口径：
+    - 5 个交易日，从 docs/data/index.json 读交易日列表（不含当天 date_str）
+    - 类型白名单：pure 二买/三买/二买候选/三买候选；fusion 多收一个强势启动候选
+    - 每个 (code) 仅保留最早一次推荐
+    - 推荐价 = best_buy_point.price；当前价 = 最新交易日收盘
+    - 是否触止损 = 推荐次日起最低价 ≤ stop_loss
+
+    Returns: list[dict]，按推荐日升序
+    """
+    data_dir = os.path.join(output_dir, "data")
+    index_path = os.path.join(data_dir, "index.json")
+    if not os.path.exists(index_path):
+        return []
+
+    try:
+        with open(index_path, "r", encoding="utf-8") as f:
+            manifest = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        return []
+
+    all_dates = sorted(manifest.get("dates", []))
+    past_dates = [d for d in all_dates if d < date_str][-RECENT_REVIEW_DAYS:]
+    if not past_dates:
+        return []
+
+    seen_codes = set()
+    rows = []
+    for d in past_dates:
+        snap_path = os.path.join(data_dir, f"{d}.json")
+        if not os.path.exists(snap_path):
+            continue
+        try:
+            with open(snap_path, "r", encoding="utf-8") as f:
+                snap = json.load(f)
+        except (json.JSONDecodeError, OSError):
+            continue
+
+        for ver_key, whitelist in (
+            ("picks_pure", RECENT_REVIEW_WHITELIST_PURE),
+            ("picks_fusion", RECENT_REVIEW_WHITELIST_FUSION),
+        ):
+            for pick in (snap.get(ver_key) or []):
+                code = pick.get("code", "")
+                if not code or code in seen_codes:
+                    continue
+                bbp = pick.get("best_buy_point") or {}
+                bp_type = bbp.get("type", "")
+                if bp_type not in whitelist:
+                    continue
+                ref_price = bbp.get("price")
+                if not ref_price:
+                    continue
+                seen_codes.add(code)
+                rows.append({
+                    "rec_date": d,
+                    "code": code,
+                    "name": pick.get("name", ""),
+                    "type": bp_type,
+                    "version": "fusion" if ver_key == "picks_fusion" else "pure",
+                    "ref_price": float(ref_price),
+                    "stop_loss": pick.get("stop_loss"),
+                })
+
+    if not rows:
+        return []
+
+    # 拉每只票从推荐日到当前的 K 线，算涨跌 / 是否触止损
+    from chanlun.data_fetcher import fetch_daily_kline
+
+    enriched = []
+    for row in rows:
+        kline = fetch_daily_kline(row["code"], count=30)
+        if not kline or not kline.get("dates"):
+            continue
+        dates = list(kline["dates"])
+        rec = row["rec_date"]
+        if rec not in dates:
+            enriched.append({**row, "current_price": None, "change_pct": None,
+                             "stop_triggered": None, "lookback_days": 0,
+                             "trigger_date": None})
+            continue
+        idx = dates.index(rec)
+        forward_lows = [float(x) for x in kline["lows"][idx + 1:]]
+        forward_dates = dates[idx + 1:]
+        closes = [float(x) for x in kline["closes"]]
+        latest_close = closes[-1]
+        change_pct = round((latest_close - row["ref_price"]) / row["ref_price"] * 100, 2)
+
+        stop = row.get("stop_loss")
+        stop_triggered = False
+        trigger_date = None
+        if stop and forward_lows:
+            for fl, fd in zip(forward_lows, forward_dates):
+                if fl <= float(stop):
+                    stop_triggered = True
+                    trigger_date = fd
+                    break
+
+        enriched.append({
+            **row,
+            "current_price": round(latest_close, 2),
+            "change_pct": change_pct,
+            "stop_triggered": stop_triggered,
+            "trigger_date": trigger_date,
+            "lookback_days": len(forward_dates),
+        })
+
+    enriched.sort(key=lambda r: (r["rec_date"], r["code"]))
+    return enriched
+
+
+# ============================================================
 # HTML 页面生成
 # ============================================================
 def generate_report(report_data, output_dir=None):
@@ -610,6 +732,11 @@ def generate_report(report_data, output_dir=None):
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
+        "recent_reviews": build_recent_reviews(
+            date_str,
+            output_dir or os.path.join(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), OUTPUT_DIR)
+        ),
     }
     bootstrap_data_json = (
         json.dumps(daily_data, ensure_ascii=False, cls=NpEncoder, indent=2)
@@ -1861,6 +1988,18 @@ body {{
     <div id="pickCards"></div>
 </div>
 
+<!-- 历史推荐回看 -->
+<div class="section" id="recentReviewsSection">
+    <div class="section-title">最近 5 个交易日推荐回看 <span style="font-size:13px;color:#888;" id="recentReviewsCount"></span></div>
+    <div class="table-control">
+        <div class="table-control-left">
+            <div class="table-control-title">高质量信号回看</div>
+            <div class="table-control-sub">仅二买/三买/二买候选/三买候选；融合版多收强势启动候选。同股仅取最早一次。</div>
+        </div>
+    </div>
+    <div id="recentReviews"></div>
+</div>
+
 <!-- 板块资金 -->
 <div class="section">
     <div class="section-title">板块资金流向 TOP10</div>
@@ -2117,6 +2256,7 @@ function renderAll() {{
     renderSellSignals();
     renderLimitUp();
     renderStartupWatchlist();
+    renderRecentReviews();
     switchVersion('fusion');
 }}
 
@@ -2551,6 +2691,58 @@ function renderSellSignals() {{
     }});
     html += '</tbody></table>';
     document.getElementById('sellTable').innerHTML = html;
+}}
+
+// ========== 历史推荐回看 ==========
+function renderRecentReviews() {{
+    var rows = REPORT_DATA.recent_reviews || [];
+    var section = document.getElementById('recentReviewsSection');
+    var countEl = document.getElementById('recentReviewsCount');
+    var box = document.getElementById('recentReviews');
+    if (!rows.length) {{
+        countEl.textContent = '(暂无)';
+        box.innerHTML = '<div style="color:#888;padding:12px;">最近 5 个交易日无符合白名单的推荐。</div>';
+        return;
+    }}
+    countEl.textContent = '(' + rows.length + ' 只)';
+    var html = '<table class="chan-table"><thead><tr>' +
+        '<th>推荐日</th><th>代码</th><th>名称</th><th>类型</th><th>来源</th>' +
+        '<th>推荐价</th><th>当前价</th><th>涨跌幅</th><th>止损</th><th>状态</th>' +
+        '</tr></thead><tbody>';
+    rows.forEach(function(r) {{
+        var pct = r.change_pct;
+        var pctTxt = (pct === null || pct === undefined) ? '--' : (pct > 0 ? '+' : '') + pct.toFixed(2) + '%';
+        var pctColor = '#aaa';
+        if (pct !== null && pct !== undefined) {{
+            pctColor = pct > 0 ? '#ff5252' : (pct < 0 ? '#26de81' : '#aaa');
+        }}
+        var stopTxt = (r.stop_loss === null || r.stop_loss === undefined) ? '--' : Number(r.stop_loss).toFixed(2);
+        var stateTxt, stateColor;
+        if (r.stop_triggered === null || r.stop_triggered === undefined) {{
+            stateTxt = '--'; stateColor = '#aaa';
+        }} else if (r.stop_triggered) {{
+            stateTxt = '已触止损 ' + (r.trigger_date || ''); stateColor = '#ff5252';
+        }} else {{
+            stateTxt = '持有中'; stateColor = '#26de81';
+        }}
+        var verBadge = r.version === 'fusion'
+            ? '<span style="color:#74b9ff;">融合</span>'
+            : '<span style="color:#ffa502;">纯净</span>';
+        html += '<tr>' +
+            '<td>' + escapeHtml(r.rec_date) + '</td>' +
+            '<td>' + escapeHtml(r.code) + '</td>' +
+            '<td>' + escapeHtml(r.name) + '</td>' +
+            '<td>' + escapeHtml(r.type || '-') + '</td>' +
+            '<td>' + verBadge + '</td>' +
+            '<td>' + Number(r.ref_price).toFixed(2) + '</td>' +
+            '<td>' + (r.current_price === null || r.current_price === undefined ? '--' : Number(r.current_price).toFixed(2)) + '</td>' +
+            '<td style="color:' + pctColor + ';font-weight:bold;">' + pctTxt + '</td>' +
+            '<td>' + stopTxt + '</td>' +
+            '<td style="color:' + stateColor + ';">' + escapeHtml(stateTxt) + '</td>' +
+            '</tr>';
+    }});
+    html += '</tbody></table>';
+    box.innerHTML = html;
 }}
 
 // ========== 涨停板 ==========
