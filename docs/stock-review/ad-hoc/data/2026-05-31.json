@@ -1,0 +1,758 @@
+{
+  "overview": {
+    "date": "2026-05-31",
+    "total": 1,
+    "with_cost": 0,
+    "structure_only": 1,
+    "high_risk": 0,
+    "watch": 0,
+    "add_confirm": 0,
+    "hold": 1
+  },
+  "highlights": [],
+  "results": [
+    {
+      "holding": {
+        "account": "临时鉴股",
+        "code": "300139",
+        "name": "晓程科技",
+        "source": "adhoc",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 44.21
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "300139",
+        "name": "晓程科技",
+        "close": 44.21,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 43.89,
+            "date": "2026-05-29",
+            "reason": "swing笔底背驰(力度比=29.37%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "300139",
+        "close": 44.21,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 44.43,
+        "above_ema5": false,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "晓程科技",
+        "industry": "贵金属",
+        "industry_csrc": "采矿业-有色金属矿采选业",
+        "business": "北京晓程科技股份有限公司是一家成立于2000年在创业板上市的高新技术企业公司简介(股票代码:300139),公司在多领域进行投资、建设和运营,包括电力电子、能源管理、电网建设与管理、发电、矿产等,业务涉及到亚洲、欧洲、非洲和北美洲。公司研发了智慧矿山管理平台、光伏管理平台和智能电网管理系统,并提供系统和平台技术支持和运维服务,销售和部署的国家包括中国、哈萨克斯坦、加纳、南非、尼日利亚、坦桑尼亚;公司开发的智能仪器仪表、通信设备、芯片等,广泛应用于电力、物联网、铁路应急通信、矿山爆破等领域。2000年北京晓程科技股份有限公司成立。2010年北京晓程科技股份有限公司在深圳证券交易所上市。2011年成立全资子公司晓程加纳电力公司,公司开始进入海外市场。2012年荣获中国半导体行业十大民族品牌称号。2015年在加纳建立第一个光伏电站,公司进入新能源领域;同年在加纳收购金矿公司,公司进入矿业领域。2018年开始布局国内新能源产业。",
+        "employees": "158",
+        "region": "北京",
+        "website": "www.xiaocheng.com",
+        "market_cap": 12113540000.0,
+        "pe": 67.44,
+        "pb": 10.17,
+        "ps": null,
+        "roe": 3.76,
+        "gross_margin": 8.1358,
+        "net_margin": 75.0,
+        "revenue_yoy": 47.09,
+        "profit_yoy": 43.89,
+        "deducted_profit_yoy": 335.198614059943,
+        "operating_cashflow": 0.243305373358,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": 54.64,
+        "interest_bearing_debt": 0.8015932453,
+        "goodwill": null,
+        "cash": null,
+        "source": "push2+f10_profile+f10",
+        "updated_at": "2026-05-31 19:37",
+        "missing_fields": [
+          "ps",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok",
+        "eps": 0.16,
+        "bps": 4.34866266854,
+        "current_ratio": 3.327623960219,
+        "quick_ratio": 3.093391324269,
+        "report_date": "2026一季报",
+        "roe_annual": 14.02,
+        "ocf_per_share": 0.243305373358
+      },
+      "news": {
+        "positive": [
+          {
+            "summary": "区域冲突与央行购金共振，现货黄金涨破5200美元，黄金股票ETF基金(159322)涨超4.0%",
+            "source_title": "区域冲突与央行购金共振，现货黄金涨破5200美元，黄金股票ETF基金(159322)涨超4.0%",
+            "time": "2026-01-28 02:25",
+            "source": "Jiemian.com",
+            "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE41Y21rVWxsdjNtT1R6NDliVVRoTlZWaXpCeGd6WkdvVXdnN0xHVDg3TzVSV2ktOWlEVUs4bGFsN2FCXzhKMVJSR3U1dHBTX0R0UFlBa1d4cG0?oc=5",
+            "category": "市场异动",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "股票行情快报：晓程科技（300139）5月18日主力资金净买入2227.85万元_主力研究",
+            "source_title": "股票行情快报：晓程科技（300139）5月18日主力资金净买入2227.85万元_主力研究",
+            "time": "2026-05-18 12:44",
+            "source": "证券之星",
+            "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE9iZEIxaml4a1o4d09XZVVQYXo3REd1cEZRbHVBZDNCQ1R6aUFJYkdjMUdpdmVuekRQVU9aM2o1dUw0eWRkcndWYXBRVTNuWTl1Tjk2ZTNfRXVoNGVtNXdrQml3?oc=5",
+            "category": "市场异动",
+            "impact_strength": "弱"
+          }
+        ],
+        "negative": [
+          {
+            "summary": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+            "source_title": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+            "time": "2026-05-29 12:48",
+            "source": "证券之星",
+            "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE41ajdfVjhTVExpV0xiVnFrdkpLajRyc2dNa0NfenAzT3JoM25zYlN3S3BCTjA0RUdSX2VySlB2YmNoM3pfbVNWUXZfc3JMbXR5cXlzSHNWUXdPUUd1TTVaOHVB?oc=5",
+            "category": "市场异动",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+            "source_title": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+            "time": "2026-05-28 01:12",
+            "source": "中金在线",
+            "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE5sWGd5Ny1QYUpBS1cxTFFqUmdkVmhxYkdmRkVRQVRZbHNxc2NvY1VlaHNCRlhOVEwxMnV4b01CS1Y3dHlzazY3b2lzbFBIQnJpYzdRUFBsdWJLMkdXOHNJaDNPTVo5R21iWFQtSDFn?oc=5",
+            "category": "市场异动",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究",
+            "source_title": "股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究",
+            "time": "2026-05-19 12:07",
+            "source": "证券之星",
+            "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE5feW5sQlRTOU55NkJ5cm9WcU8tRmpQSS15c1hETTdmajAtRmhPbUloU2JpSkYtTmg1Y3hYSVAzUTQzZ1I0S3FBYldMcUVuTllMamNLRkFGdlg5M0pwemlpc09R?oc=5",
+            "category": "市场异动",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "今日上午A股三大指数涨跌不一，CPO、农牧饲渔、旅游酒店板块大涨，资源股重挫，个股掀“跌停潮” 中国基金报",
+            "source_title": "今日上午A股三大指数涨跌不一，CPO、农牧饲渔、旅游酒店板块大涨，资源股重挫，个股掀“跌停潮” 中国基金报",
+            "time": "2026-01-30 08:00",
+            "source": "中国基金报",
+            "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5GVWxGRjlFSDhHUHp3S2x1czBBS1lkTXNCQU5ZNzhNcmJEWC1NNThfNXNyYXM0ZHJyM2pfNXNBaExzVlVSTXBPLUtIb09USEVvX1lSYWVJSUVEaHNUSUtsYm9NSVBBMVpqWXh4NHp2Q2QyaGJTUkI3ZG5n?oc=5",
+            "category": "产业类",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "晓程科技:关于董事、高级管理人员减持股份预披露公告",
+            "source_title": "晓程科技:关于董事、高级管理人员减持股份预披露公告",
+            "time": "2026-04-29",
+            "source": "东方财富公告",
+            "url": "https://data.eastmoney.com/notices/detail/300139/AN202604291821759555.html",
+            "category": "公告",
+            "impact_strength": "中"
+          }
+        ],
+        "neutral": [
+          {
+            "summary": "晓程科技5月25日获融资买入1.36亿元，融资余额8.62亿元",
+            "source_title": "晓程科技5月25日获融资买入1.36亿元，融资余额8.62亿元",
+            "time": "2026-05-26 01:17",
+            "source": "新浪财经",
+            "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE94UkttQVlzR3FENlM4a01jWDhXWHNmUEdUMWxtdnkyMEV4MVUzSGdmRXNjeHNtUVNhMVBqRmpDZTBlRDNESEhSY1hKV2JFdV9XR3JjUkZFWWo4RFhaM0lpRXVxeURuTUo1V2E4T2RDaFg2M0JxVFNJVDc3LURuUQ?oc=5",
+            "category": "资本动作",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "绩优股股息估值估值法",
+            "source_title": "绩优股股息估值估值法",
+            "time": "2026-05-07 07:00",
+            "source": "财富号",
+            "url": "https://news.google.com/rss/articles/CBMirAJBVV95cUxNZHp1QjgtemNFUmFSSU12bEo1TW05d01HT3k4RFBWY2pfSTBtNmxVaXQwMFRyaGFBOTNLTU5XOXB6c0VQLWtZc3lQTFU5OTBwb2FzVjdpVHFfeXY0NDJxU085OWJNaHBtRXFTNUZPTlpWcGRqWmVxbHdrVkRlTVdwR01UMl9RNWszSHlETFp1eXdsOTBGb0JoR1hOUU1SOEdkR3ZGQnljNEpBbk1YbjVmb3F4SjMtWVowb1pvZXRHcXZSdUxIcmNpRTlDTmFIdGlHNzFGdDh6czBadXc3UGE3Y0FyV0Q3eFJidzVxTEhKYmhrcXFYclJwTDhFS3ZqcTdFSVpRZlNib0pwRFo5OWVyNm9pa256QUY3Y2J2NmQxNWtRVzVVVEVmQllaQ0M?oc=5",
+            "category": "其他",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "爱玩股票AiWanGuPiao (@Square-Creator-2f95eaefa1eca)的见解",
+            "source_title": "爱玩股票AiWanGuPiao (@Square-Creator-2f95eaefa1eca)的见解",
+            "time": "2026-01-13 08:00",
+            "source": "Binance",
+            "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE1hOGI0R3hNdExCN1I4MWhEa0tNMkJ1LUFQUVhPaUdIbEFmSllsVng1TzdqOC04Q2FJVFBfNUt1MVFtaU9nNDFoSnV4bkNsT1dyZ3JrRUlHcGo1WXVIMDdXMUZ5b0xEa2c?oc=5",
+            "category": "其他",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "晓程科技在海南成立矿业公司",
+            "source_title": "晓程科技在海南成立矿业公司",
+            "time": "2026-02-25 08:00",
+            "source": "新浪财经",
+            "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1CNVZHdGVSdkRWdkMzOUY1eE1YRlU0YV91Q2N6bWxKTHBMTlpIcjlVYlh4NlYtaVBvUUJzUW9qR1ZtamhnY3M1QU5xdkFzdWtuTnZfV0FlZEVzM1JEb0dnZ3pMdFdEM054YlB0UGtfeFk1RWtjRl8xWWZUbDNxUW8?oc=5",
+            "category": "其他",
+            "impact_strength": "弱"
+          },
+          {
+            "summary": "晓程科技两年多暴涨16倍！HALO交易火了 机构扎堆的低估值潜力股揭秘（名单）",
+            "source_title": "晓程科技两年多暴涨16倍！HALO交易火了 机构扎堆的低估值潜力股揭秘（名单）",
+            "time": "2026-03-04 08:00",
+            "source": "新浪财经",
+            "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxNRDFDR0ladS1qYmFjVGNrT3FEZF9PbHRuRXV5eGQxRzRVbnYwNWxiZnBEZWM4cjRYdVdIMjI3Y1kyVjlpRzE3VEYyTWJXMFhkYUV3ejVlZEo4dndwMHZSZmNrSjBGR24zalRCTjhkUUpEUTBHM2owVHFQZ1o5TlFJMFdpaEVTQ2RTWjMzemVuQlcyV29J?oc=5",
+            "category": "其他",
+            "impact_strength": "弱"
+          }
+        ],
+        "already_priced_in": "uncertain",
+        "summary": "2条偏正面，5条偏负面，18条中性"
+      },
+      "news_raw": [
+        {
+          "title": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+          "time": "2026-05-29 12:48",
+          "source": "证券之星",
+          "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE41ajdfVjhTVExpV0xiVnFrdkpLajRyc2dNa0NfenAzT3JoM25zYlN3S3BCTjA0RUdSX2VySlB2YmNoM3pfbVNWUXZfc3JMbXR5cXlzSHNWUXdPUUd1TTVaOHVB?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "市场异动",
+          "sentiment": "利空",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+          "time": "2026-05-28 01:12",
+          "source": "中金在线",
+          "url": "https://news.google.com/rss/articles/CBMibkFVX3lxTE5sWGd5Ny1QYUpBS1cxTFFqUmdkVmhxYkdmRkVRQVRZbHNxc2NvY1VlaHNCRlhOVEwxMnV4b01CS1Y3dHlzazY3b2lzbFBIQnJpYzdRUFBsdWJLMkdXOHNJaDNPTVo5R21iWFQtSDFn?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "市场异动",
+          "sentiment": "利空",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "晓程科技5月25日获融资买入1.36亿元，融资余额8.62亿元",
+          "time": "2026-05-26 01:17",
+          "source": "新浪财经",
+          "url": "https://news.google.com/rss/articles/CBMifkFVX3lxTE94UkttQVlzR3FENlM4a01jWDhXWHNmUEdUMWxtdnkyMEV4MVUzSGdmRXNjeHNtUVNhMVBqRmpDZTBlRDNESEhSY1hKV2JFdV9XR3JjUkZFWWo4RFhaM0lpRXVxeURuTUo1V2E4T2RDaFg2M0JxVFNJVDc3LURuUQ?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "资本动作",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究",
+          "time": "2026-05-19 12:07",
+          "source": "证券之星",
+          "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE5feW5sQlRTOU55NkJ5cm9WcU8tRmpQSS15c1hETTdmajAtRmhPbUloU2JpSkYtTmg1Y3hYSVAzUTQzZ1I0S3FBYldMcUVuTllMamNLRkFGdlg5M0pwemlpc09R?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "市场异动",
+          "sentiment": "利空",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "绩优股股息估值估值法",
+          "time": "2026-05-07 07:00",
+          "source": "财富号",
+          "url": "https://news.google.com/rss/articles/CBMirAJBVV95cUxNZHp1QjgtemNFUmFSSU12bEo1TW05d01HT3k4RFBWY2pfSTBtNmxVaXQwMFRyaGFBOTNLTU5XOXB6c0VQLWtZc3lQTFU5OTBwb2FzVjdpVHFfeXY0NDJxU085OWJNaHBtRXFTNUZPTlpWcGRqWmVxbHdrVkRlTVdwR01UMl9RNWszSHlETFp1eXdsOTBGb0JoR1hOUU1SOEdkR3ZGQnljNEpBbk1YbjVmb3F4SjMtWVowb1pvZXRHcXZSdUxIcmNpRTlDTmFIdGlHNzFGdDh6czBadXc3UGE3Y0FyV0Q3eFJidzVxTEhKYmhrcXFYclJwTDhFS3ZqcTdFSVpRZlNib0pwRFo5OWVyNm9pa256QUY3Y2J2NmQxNWtRVzVVVEVmQllaQ0M?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "爱玩股票AiWanGuPiao (@Square-Creator-2f95eaefa1eca)的见解",
+          "time": "2026-01-13 08:00",
+          "source": "Binance",
+          "url": "https://news.google.com/rss/articles/CBMiZ0FVX3lxTE1hOGI0R3hNdExCN1I4MWhEa0tNMkJ1LUFQUVhPaUdIbEFmSllsVng1TzdqOC04Q2FJVFBfNUt1MVFtaU9nNDFoSnV4bkNsT1dyZ3JrRUlHcGo1WXVIMDdXMUZ5b0xEa2c?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "晓程科技在海南成立矿业公司",
+          "time": "2026-02-25 08:00",
+          "source": "新浪财经",
+          "url": "https://news.google.com/rss/articles/CBMif0FVX3lxTE1CNVZHdGVSdkRWdkMzOUY1eE1YRlU0YV91Q2N6bWxKTHBMTlpIcjlVYlh4NlYtaVBvUUJzUW9qR1ZtamhnY3M1QU5xdkFzdWtuTnZfV0FlZEVzM1JEb0dnZ3pMdFdEM054YlB0UGtfeFk1RWtjRl8xWWZUbDNxUW8?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "今日上午A股三大指数涨跌不一，CPO、农牧饲渔、旅游酒店板块大涨，资源股重挫，个股掀“跌停潮” 中国基金报",
+          "time": "2026-01-30 08:00",
+          "source": "中国基金报",
+          "url": "https://news.google.com/rss/articles/CBMiekFVX3lxTE5GVWxGRjlFSDhHUHp3S2x1czBBS1lkTXNCQU5ZNzhNcmJEWC1NNThfNXNyYXM0ZHJyM2pfNXNBaExzVlVSTXBPLUtIb09USEVvX1lSYWVJSUVEaHNUSUtsYm9NSVBBMVpqWXh4NHp2Q2QyaGJTUkI3ZG5n?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "产业类",
+          "sentiment": "利空",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "区域冲突与央行购金共振，现货黄金涨破5200美元，黄金股票ETF基金(159322)涨超4.0%",
+          "time": "2026-01-28 02:25",
+          "source": "Jiemian.com",
+          "url": "https://news.google.com/rss/articles/CBMiWEFVX3lxTE41Y21rVWxsdjNtT1R6NDliVVRoTlZWaXpCeGd6WkdvVXdnN0xHVDg3TzVSV2ktOWlEVUs4bGFsN2FCXzhKMVJSR3U1dHBTX0R0UFlBa1d4cG0?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "市场异动",
+          "sentiment": "利好",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "股票行情快报：晓程科技（300139）5月18日主力资金净买入2227.85万元_主力研究",
+          "time": "2026-05-18 12:44",
+          "source": "证券之星",
+          "url": "https://news.google.com/rss/articles/CBMiYkFVX3lxTE9iZEIxaml4a1o4d09XZVVQYXo3REd1cEZRbHVBZDNCQ1R6aUFJYkdjMUdpdmVuekRQVU9aM2o1dUw0eWRkcndWYXBRVTNuWTl1Tjk2ZTNfRXVoNGVtNXdrQml3?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "市场异动",
+          "sentiment": "利好",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "晓程科技两年多暴涨16倍！HALO交易火了 机构扎堆的低估值潜力股揭秘（名单）",
+          "time": "2026-03-04 08:00",
+          "source": "新浪财经",
+          "url": "https://news.google.com/rss/articles/CBMilAFBVV95cUxNRDFDR0ladS1qYmFjVGNrT3FEZF9PbHRuRXV5eGQxRzRVbnYwNWxiZnBEZWM4cjRYdVdIMjI3Y1kyVjlpRzE3VEYyTWJXMFhkYUV3ejVlZEo4dndwMHZSZmNrSjBGR24zalRCTjhkUUpEUTBHM2owVHFQZ1o5TlFJMFdpaEVTQ2RTWjMzemVuQlcyV29J?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "贵金属价格涨不停！多公司股价翻倍、年报预喜",
+          "time": "2026-01-29 08:00",
+          "source": "海报新闻",
+          "url": "https://news.google.com/rss/articles/CBMiUEFVX3lxTE5VREVOU05iTXNkdjlsT0VUdy0xSmZ4R1VEVEJWQWZPOTlGUGpNTS1rQkVnT0hsQ2hrTmlxdzAyb0lLMHBkSllhUm45U05odWl6?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "12公斤黄金被抢，警方已抓捕数人！晓程科技回应“黄金劫案”",
+          "time": "2024-08-15 07:00",
+          "source": "21财经",
+          "url": "https://news.google.com/rss/articles/CBMijwFBVV95cUxNM2pleGJ6dDBmcnduRXo0M0JSOU93Wm5BTndDeGpRWGhGSUtXQ1ozLXhTbkFaTURZNWtpLTBqVkFXYUxQNFNnZXNoSnVla2VBdXotUlNiRExBUWRYY3dGeVVwV3FULTVQTnpTVERvVFFFT1l5NTE3UjdJWF84UURHbHB1d3JNcGJULU54Z2owbw?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "黄金股，彻底崩了？",
+          "time": "2026-01-30 08:00",
+          "source": "新浪财经",
+          "url": "https://news.google.com/rss/articles/CBMidkFVX3lxTFBFZkp4WE5Ib0dURWNJWDJucm9OOG9aaGJwT1RaWXhqaUQ5Z2JidlpaeGdSc3RsLW5CUGJSOE5RWDAxRUluSjNvNGUtMU83S3dlcmlzdFkyd05Jay1EUWhGLVpjSjZWeHhXaUlFRUZrY0JYb3VBU1E?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "工头关注三支股票_新浪新闻",
+          "time": "2026-05-25 00:48",
+          "source": "新浪网",
+          "url": "https://news.google.com/rss/articles/CBMiY0FVX3lxTE1SMkF0SlBtOWRCZWs3MFZKdGgweFRvV0VUM1VBMnF1X2VsYVFXYTBvMGVFWEpGUG5SeVZnbm9ZcW5BVjdNU3FtZm55Q19DZ2ZmcXUwbDdyXzNTbzloM1J0eGVqMA?oc=5",
+          "matched_reason": "Google News搜索晓程科技",
+          "category": "其他",
+          "sentiment": "中性",
+          "impact_strength": "弱"
+        },
+        {
+          "title": "晓程科技:2025年年度股东会决议公告",
+          "time": "2026-05-15",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202605151822351274.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:北京德恒律师事务所关于北京晓程科技股份有限公司2025年年度股东会法律意见书",
+          "time": "2026-05-15",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202605151822351262.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:关于公司部分独立董事离任的公告",
+          "time": "2026-05-15",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202605151822351252.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:300139晓程科技投资者关系管理信息20260509",
+          "time": "2026-05-09",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202605091822098820.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:关于董事、高级管理人员减持股份预披露公告",
+          "time": "2026-04-29",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604291821759555.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "利空",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:2025年度财务决算报告",
+          "time": "2026-04-24",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604241821564428.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:2025年度董事会工作报告",
+          "time": "2026-04-24",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604241821562491.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:关于预计2026年度申请银行授信的公告",
+          "time": "2026-04-24",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604241821562485.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:关于计提2025年度资产减值准备的公告",
+          "time": "2026-04-24",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604241821562476.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        },
+        {
+          "title": "晓程科技:2025年度独董述职报告-赵富平",
+          "time": "2026-04-24",
+          "source": "东方财富公告",
+          "url": "https://data.eastmoney.com/notices/detail/300139/AN202604241821557534.html",
+          "matched_reason": "公告匹配300139",
+          "category": "公告",
+          "sentiment": "中性",
+          "impact_strength": "中"
+        }
+      ],
+      "rule_action": {
+        "action": "HOLD",
+        "confidence": "medium",
+        "primary_reason": "日线处于中枢内，未见明确卖点",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "继续持有；基本面中，消息面负面。日线处于中枢内，未见明确卖点",
+        "mid_term_view": "贵金属板块，营收/利润同比分别为47.1%/43.9%，PE约67.44",
+        "short_term_catalysts": [],
+        "short_term_risks": [
+          {
+            "date": "2026-05-29",
+            "type": "市场异动",
+            "title": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+            "impact": "negative",
+            "summary": "Google News搜索晓程科技",
+            "source": "证券之星"
+          },
+          {
+            "date": "2026-05-28",
+            "type": "市场异动",
+            "title": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+            "impact": "negative",
+            "summary": "Google News搜索晓程科技",
+            "source": "中金在线"
+          }
+        ],
+        "event_window_days": 5,
+        "fundamental_analysis": {
+          "rating": "中",
+          "summary": "贵金属板块，营收/利润同比分别为47.1%/43.9%，PE约67.44",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "晓程科技当前可确认属于贵金属板块。",
+            "details": [
+              "所属行业: 贵金属",
+              "总市值约 121.1亿元"
+            ],
+            "data_gaps": []
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "收入和利润增速均为正，成长性偏积极。",
+            "details": [
+              "营收同比 47.1%",
+              "净利润同比 43.9%"
+            ],
+            "data_gaps": []
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "盈利能力一般，缺少更多现金流数据佐证。",
+            "details": [
+              "毛利率 8.1%",
+              "ROE 3.8%"
+            ],
+            "data_gaps": [
+              "net_margin"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "财务安全性需要结合现金和有息负债继续确认。",
+            "details": [
+              "资产负债率 54.6%"
+            ],
+            "data_gaps": []
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "当前估值不低，需要更强增长兑现来支撑。",
+            "details": [
+              "PE 67.44",
+              "PB 10.17"
+            ],
+            "data_gaps": []
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": [
+              "收入增速保持两位数",
+              "利润增速较快"
+            ]
+          },
+          "data_gaps": [
+            "ps",
+            "cash",
+            "净利率=75.0疑似异常（合理区间-50~70）"
+          ],
+          "chanlun_relation": "基本面只作为结构判断的补充，当前动作仍以缠论规则位为主。"
+        },
+        "news_analysis": {
+          "rating": "负面",
+          "summary": "共抓到8条相关消息，首条为《股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究》。",
+          "key_news": [
+            {
+              "title": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+              "time": "2026-05-29 12:48",
+              "source": "证券之星",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+              "time": "2026-05-28 01:12",
+              "source": "中金在线",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "晓程科技5月25日获融资买入1.36亿元，融资余额8.62亿元",
+              "time": "2026-05-26 01:17",
+              "source": "新浪财经",
+              "category": "资本动作",
+              "sentiment": "中性",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究",
+              "time": "2026-05-19 12:07",
+              "source": "证券之星",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "绩优股股息估值估值法",
+              "time": "2026-05-07 07:00",
+              "source": "财富号",
+              "category": "其他",
+              "sentiment": "中性",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "爱玩股票AiWanGuPiao (@Square-Creator-2f95eaefa1eca)的见解",
+              "time": "2026-01-13 08:00",
+              "source": "Binance",
+              "category": "其他",
+              "sentiment": "中性",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "晓程科技在海南成立矿业公司",
+              "time": "2026-02-25 08:00",
+              "source": "新浪财经",
+              "category": "其他",
+              "sentiment": "中性",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "今日上午A股三大指数涨跌不一，CPO、农牧饲渔、旅游酒店板块大涨，资源股重挫，个股掀“跌停潮” 中国基金报",
+              "time": "2026-01-30 08:00",
+              "source": "中国基金报",
+              "category": "产业类",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            }
+          ],
+          "risk_news": [
+            {
+              "title": "股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究",
+              "time": "2026-05-29 12:48",
+              "source": "证券之星",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线",
+              "time": "2026-05-28 01:12",
+              "source": "中金在线",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究",
+              "time": "2026-05-19 12:07",
+              "source": "证券之星",
+              "category": "市场异动",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            },
+            {
+              "title": "今日上午A股三大指数涨跌不一，CPO、农牧饲渔、旅游酒店板块大涨，资源股重挫，个股掀“跌停潮” 中国基金报",
+              "time": "2026-01-30 08:00",
+              "source": "中国基金报",
+              "category": "产业类",
+              "sentiment": "利空",
+              "impact_strength": "弱",
+              "impact_reason": "Google News搜索晓程科技",
+              "price_in": "不确定",
+              "fundamental_impact": "待结合后续公告确认",
+              "chanlun_relation": "若消息触发放量突破/跌破，再与结构信号共振判断。"
+            }
+          ],
+          "follow_up": [
+            "跟踪后续公告兑现情况",
+            "观察消息后成交量和关键位反馈"
+          ],
+          "data_gaps": []
+        },
+        "chanlun_structure_comment": "",
+        "integrated_decision": {
+          "action": "HOLD",
+          "reason": "日线处于中枢内，未见明确卖点",
+          "add_condition": "等待30min确认信号",
+          "reduce_condition": "出现卖点或跌破关键位",
+          "stop_condition": "跌破关键支撑位",
+          "confidence": "中"
+        },
+        "data_quality": {
+          "fundamental_complete": true,
+          "news_complete": true,
+          "missing_fields": [
+            "ps",
+            "cash",
+            "净利率=75.0疑似异常（合理区间-50~70）"
+          ]
+        },
+        "llm_enabled": false
+      },
+      "risks": []
+    }
+  ],
+  "generated_at": "2026-05-31 19:37:40"
+}

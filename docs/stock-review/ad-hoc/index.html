@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缠论鉴股报告 - 2026-05-31</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #1a1a1a; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.container { max-width: 860px; margin: 0 auto; padding: 16px; }
+
+/* ── Dashboard ── */
+.dashboard { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+.dashboard h1 { font-size: 1.3rem; margin-bottom: 4px; letter-spacing: 0.5px; }
+.dashboard .date { font-size: 0.8rem; opacity: 0.7; margin-bottom: 18px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+.metric { background: rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; text-align: center; }
+.metric .value { font-size: 1.6rem; font-weight: 700; }
+.metric .label { font-size: 0.75rem; opacity: 0.8; margin-top: 2px; }
+.metric.risk .value { color: #ff6b6b; }
+.metric.watch .value { color: #ffd93d; }
+.metric.safe .value { color: #6bff6b; }
+
+/* ── Section headers ── */
+.section-title { font-size: 1rem; font-weight: 700; margin: 24px 0 10px; border-left: 4px solid #e74c3c; padding-left: 10px; }
+.section-title.ok { border-left-color: #27ae60; }
+
+/* ── Risk Queue ── */
+.risk-queue { margin-bottom: 20px; }
+.risk-item { background: #fff; border-left: 4px solid #e74c3c; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+/* ── Highlights ── */
+.highlights { margin-bottom: 20px; }
+.highlight-item { background: #fff; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.88rem; }
+
+/* ── Stock Card ── */
+.stock-card { background: #fff; border-radius: 14px; margin-bottom: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+
+.card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f0f0f0; }
+.card-header-left { display: flex; align-items: baseline; gap: 10px; }
+.card-name { font-size: 1.15rem; font-weight: 700; color: #1a1a1a; }
+.card-code { font-size: 0.78rem; color: #999; }
+.action-badge { display: inline-block; padding: 4px 14px; border-radius: 14px; font-size: 0.8rem; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+.action-STOP { background: #e74c3c; }
+.action-REDUCE { background: #e67e22; }
+.action-WATCH { background: #f39c12; }
+.action-HOLD { background: #27ae60; }
+.action-ADD_ON_CONFIRM { background: #3498db; }
+.action-AVOID_ADD { background: #95a5a6; }
+
+.position-line { padding: 6px 20px; font-size: 0.82rem; color: #666; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+.position-line .pnl-negative { color: #e74c3c; font-weight: 600; }
+.position-line .pnl-positive { color: #27ae60; font-weight: 600; }
+
+/* ── Conclusion block ── */
+.conclusion-block { padding: 14px 20px; background: #f8f9fb; border-bottom: 1px solid #f0f0f0; font-size: 0.86rem; line-height: 1.6; }
+.conclusion-block .verdict { font-weight: 600; color: #1a1a1a; }
+.meta-tags { margin-bottom: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rating-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.73rem; font-weight: 600; }
+.rating-优 { background: #d4edda; color: #155724; }
+.rating-中 { background: #fff3cd; color: #856404; }
+.rating-差 { background: #f8d7da; color: #721c24; }
+.rating-数据不足 { background: #e2e3e5; color: #383d41; }
+.rating-利好 { background: #d4edda; color: #155724; }
+.rating-中性 { background: #fff3cd; color: #856404; }
+.rating-利空 { background: #f8d7da; color: #721c24; }
+.confidence-tag { font-size: 0.73rem; color: #888; }
+.llm-notice { font-size: 0.75rem; color: #e67e22; margin-top: 4px; }
+.view-block { margin-top: 10px; padding: 10px 12px; border-radius: 8px; background: #ffffff; border: 1px solid #edf1f5; }
+.view-block-title { font-size: 0.75rem; font-weight: 700; color: #667085; margin-bottom: 4px; }
+.view-block-text { font-size: 0.8rem; color: #444; }
+.event-list { margin-top: 10px; }
+.event-item { padding: 6px 0; border-bottom: 1px solid #f4f4f5; }
+.event-item:last-child { border-bottom: none; }
+.event-item-title { font-size: 0.78rem; font-weight: 600; }
+.event-item-meta { font-size: 0.7rem; color: #999; }
+.event-item-summary { font-size: 0.75rem; color: #666; }
+.event-item-risk .event-item-title { color: #c0392b; }
+.event-item-catalyst .event-item-title { color: #1f7a45; }
+
+/* ── Three-column body ── */
+.card-body { padding: 16px 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+@media (max-width: 640px) { .three-col { grid-template-columns: 1fr; } }
+.col-header { font-size: 0.75rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #eee; }
+
+/* ── Financial metrics table ── */
+.metrics-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 8px 0; }
+.metrics-table td { padding: 3px 6px; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+.metrics-table td:first-child { color: #888; width: 38%; white-space: nowrap; }
+.metrics-table td:last-child { font-weight: 600; text-align: right; white-space: nowrap; }
+.metric-warn { color: #e67e22; }
+.metric-danger { color: #e74c3c; }
+.metric-good { color: #27ae60; }
+.fund-section-title { font-size: 0.82rem; font-weight: 700; margin: 10px 0 4px; color: #444; }
+.fund-section-conclusion { font-size: 0.78rem; color: #555; margin-bottom: 4px; line-height: 1.5; }
+
+/* ── Structure grid ── */
+.structure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.78rem; }
+.structure-item { background: #f9f9f9; border-radius: 5px; padding: 5px 8px; }
+.structure-item .label { color: #999; font-size: 0.68rem; }
+.structure-item .val { font-weight: 600; font-size: 0.8rem; }
+.key-levels { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.key-level { padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+.key-cost { background: #ffe0e0; color: #c0392b; }
+.key-zd { background: #e0e0ff; color: #2c3e50; }
+.key-zg { background: #ffe8d0; color: #c0392b; }
+
+/* ── Risk section ── */
+.risk-section { margin-top: 10px; padding: 8px 10px; border-radius: 7px; font-size: 0.78rem; }
+.risk-section.has-risks { background: #fff5f5; border-left: 3px solid #e74c3c; }
+.risk-section.no-risks { background: #f0fff0; border-left: 3px solid #27ae60; }
+.risk-item-text { padding: 1px 0; color: #c0392b; }
+.catalyst-item-text { padding: 1px 0; color: #27ae60; }
+.risk-label { font-weight: 700; font-size: 0.75rem; margin-bottom: 2px; }
+
+/* ── News ── */
+.news-item { padding: 4px 0; font-size: 0.78rem; border-bottom: 1px solid #f8f8f8; }
+.news-title { font-weight: 600; }
+.news-meta { color: #999; font-size: 0.7rem; }
+.sentiment-利好 { color: #27ae60; }
+.sentiment-利空 { color: #e74c3c; }
+.sentiment-中性 { color: #888; }
+.no-news { color: #bbb; font-size: 0.78rem; }
+
+/* ── Conditions footer ── */
+.conditions-footer { padding: 12px 20px; background: #fafafa; border-top: 1px solid #f0f0f0; font-size: 0.8rem; }
+.condition-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.condition-tag { padding: 4px 10px; border-radius: 6px; font-size: 0.76rem; }
+.cond-stop { background: #fde8e8; color: #c0392b; }
+.cond-reduce { background: #fef3e2; color: #d35400; }
+.cond-add { background: #e3f2fd; color: #1565c0; }
+.cond-hold { background: #e8f5e9; color: #2e7d32; }
+
+/* ── Data quality ── */
+.data-quality { font-size: 0.7rem; color: #bbb; padding: 4px 20px 12px; }
+
+/* ── Misc ── */
+.no-data { text-align: center; padding: 40px; color: #999; }
+.disclaimer { margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px; font-size: 0.75rem; color: #856404; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="dashboard">
+<h1>持仓驾驶舱</h1>
+<div class="date">2026-05-31</div>
+<div class="metrics">
+  <div class="metric"><div class="value">1</div><div class="label">总股票</div></div>
+  <div class="metric"><div class="value">0</div><div class="label">有成本持仓</div></div>
+  <div class="metric"><div class="value">1</div><div class="label">仅结构诊断</div></div>
+  <div class="metric risk"><div class="value">0</div><div class="label">高风险</div></div>
+  <div class="metric watch"><div class="value">0</div><div class="label">需关注</div></div>
+  <div class="metric"><div class="value">0</div><div class="label">待确认加仓</div></div>
+</div>
+</div>
+
+
+
+<div class="section-title">今日重点</div>
+<div class="highlights">
+<div class="no-data">今日无特别关注事项</div>
+</div>
+
+<div class="section-title ok">持仓诊断</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">晓程科技</span>
+  <span class="card-code">300139</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-负面">消息面：负面</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">继续持有；基本面中，消息面负面。日线处于中枢内，未见明确卖点</div>
+<div class="llm-notice">⚡ 规则诊断（未启用LLM）</div>
+<div class="view-block"><div class="view-block-title">中线逻辑</div><div class="view-block-text">贵金属板块，营收/利润同比分别为47.1%/43.9%，PE约67.44</div></div><div class="view-block"><div class="view-block-title">最近5天短线触发器</div><div class="view-block-text">最近5天暂无明显正向催化。</div></div><div class="view-block"><div class="view-block-title">最近5天短线风险</div><div class="event-list"><div class="event-item event-item-risk"><div class="event-item-title">股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究</div><div class="event-item-meta">2026-05-29 | 证券之星</div><div class="event-item-summary">Google News搜索晓程科技</div></div><div class="event-item event-item-risk"><div class="event-item-title">晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线</div><div class="event-item-meta">2026-05-28 | 中金在线</div><div class="event-item-summary">Google News搜索晓程科技</div></div></div></div>
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="">67.4</td></tr><tr><td>市净率(PB)</td><td class="">10.17</td></tr><tr><td>总市值</td><td class="">121亿</td></tr><tr><td>所属行业</td><td class="">贵金属</td></tr><tr><td>ROE(年化)</td><td class="">+14.0%</td></tr><tr><td>毛利率</td><td class="">+8.1%</td></tr><tr><td>净利率</td><td class="">+75.0%</td></tr><tr><td>每股收益</td><td class="">0.16</td></tr><tr><td>营收同比</td><td class="">+47.1%</td></tr><tr><td>利润同比</td><td class="">+43.9%</td></tr><tr><td>扣非利润同比</td><td class="">+335.2%</td></tr><tr><td>资产负债率</td><td class="">+54.6%</td></tr><tr><td>有息负债率</td><td class="">+0.8%</td></tr><tr><td>流动比率</td><td class="metric-danger">3.3</td></tr><tr><td>经营现金流/股</td><td class="">0.243</td></tr><tr><td>每股净资产</td><td class="">4.35</td></tr></table>
+
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div class="news-item">
+<div class="news-title">股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-29 12:48 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线</div>
+<div class="news-meta sentiment-利空">2026-05-28 01:12 | 中金在线 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">晓程科技5月25日获融资买入1.36亿元，融资余额8.62亿元</div>
+<div class="news-meta sentiment-中性">2026-05-26 01:17 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-19 12:07 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">绩优股股息估值估值法</div>
+<div class="news-meta sentiment-中性">2026-05-07 07:00 | 财富号 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：晓程科技（300139）5月29日主力资金净卖出4890.46万元_主力研究</div><div style="font-size:0.73rem;color:#c0392b;">• 晓程科技（300139）5月27日主力资金净卖出1.55亿元_股市要闻_市场_中金在线</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：晓程科技（300139）5月19日主力资金净卖出7193.29万元_主力研究</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪后续公告兑现情况</div><div style="font-size:0.72rem;color:#888;">• 观察消息后成交量和关键位反馈</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@43.89</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section no-risks"><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 收入增速保持两位数</div><div class="catalyst-item-text">• 利润增速较快</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash; 净利率=75.0疑似异常（合理区间-50~70）</div>
+</div>
+
+<div class="disclaimer">
+<strong>风险提示：</strong>本报告由自动化系统生成，仅供参考，不构成投资建议。
+所有操作建议均为条件推演，不保证确定性结果。投资有风险，入市需谨慎。<br>
+AI复核意见为辅助参考，不替代独立判断。报告中"数据暂缺"表示该字段当前不可用。
+</div>
+
+</div>
+</body>
+</html>

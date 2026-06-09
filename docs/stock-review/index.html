@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缠论鉴股报告 - 2026-05-27</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f2f5; color: #1a1a1a; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.container { max-width: 860px; margin: 0 auto; padding: 16px; }
+
+/* ── Dashboard ── */
+.dashboard { background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%); color: #fff; border-radius: 14px; padding: 24px; margin-bottom: 20px; }
+.dashboard h1 { font-size: 1.3rem; margin-bottom: 4px; letter-spacing: 0.5px; }
+.dashboard .date { font-size: 0.8rem; opacity: 0.7; margin-bottom: 18px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; }
+.metric { background: rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; text-align: center; }
+.metric .value { font-size: 1.6rem; font-weight: 700; }
+.metric .label { font-size: 0.75rem; opacity: 0.8; margin-top: 2px; }
+.metric.risk .value { color: #ff6b6b; }
+.metric.watch .value { color: #ffd93d; }
+.metric.safe .value { color: #6bff6b; }
+
+/* ── Section headers ── */
+.section-title { font-size: 1rem; font-weight: 700; margin: 24px 0 10px; border-left: 4px solid #e74c3c; padding-left: 10px; }
+.section-title.ok { border-left-color: #27ae60; }
+
+/* ── Risk Queue ── */
+.risk-queue { margin-bottom: 20px; }
+.risk-item { background: #fff; border-left: 4px solid #e74c3c; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; font-size: 0.85rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+
+/* ── Highlights ── */
+.highlights { margin-bottom: 20px; }
+.highlight-item { background: #fff; border-radius: 8px; padding: 12px 14px; margin-bottom: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); font-size: 0.88rem; }
+
+/* ── Stock Card ── */
+.stock-card { background: #fff; border-radius: 14px; margin-bottom: 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.05); overflow: hidden; }
+
+.card-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid #f0f0f0; }
+.card-header-left { display: flex; align-items: baseline; gap: 10px; }
+.card-name { font-size: 1.15rem; font-weight: 700; color: #1a1a1a; }
+.card-code { font-size: 0.78rem; color: #999; }
+.action-badge { display: inline-block; padding: 4px 14px; border-radius: 14px; font-size: 0.8rem; font-weight: 700; color: #fff; letter-spacing: 0.5px; }
+.action-STOP { background: #e74c3c; }
+.action-REDUCE { background: #e67e22; }
+.action-WATCH { background: #f39c12; }
+.action-HOLD { background: #27ae60; }
+.action-ADD_ON_CONFIRM { background: #3498db; }
+.action-AVOID_ADD { background: #95a5a6; }
+
+.position-line { padding: 6px 20px; font-size: 0.82rem; color: #666; background: #fafafa; border-bottom: 1px solid #f0f0f0; }
+.position-line .pnl-negative { color: #e74c3c; font-weight: 600; }
+.position-line .pnl-positive { color: #27ae60; font-weight: 600; }
+
+/* ── Conclusion block ── */
+.conclusion-block { padding: 14px 20px; background: #f8f9fb; border-bottom: 1px solid #f0f0f0; font-size: 0.86rem; line-height: 1.6; }
+.conclusion-block .verdict { font-weight: 600; color: #1a1a1a; }
+.meta-tags { margin-bottom: 6px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.rating-tag { display: inline-block; padding: 2px 10px; border-radius: 10px; font-size: 0.73rem; font-weight: 600; }
+.rating-优 { background: #d4edda; color: #155724; }
+.rating-中 { background: #fff3cd; color: #856404; }
+.rating-差 { background: #f8d7da; color: #721c24; }
+.rating-数据不足 { background: #e2e3e5; color: #383d41; }
+.rating-利好 { background: #d4edda; color: #155724; }
+.rating-中性 { background: #fff3cd; color: #856404; }
+.rating-利空 { background: #f8d7da; color: #721c24; }
+.confidence-tag { font-size: 0.73rem; color: #888; }
+.llm-notice { font-size: 0.75rem; color: #e67e22; margin-top: 4px; }
+
+/* ── Three-column body ── */
+.card-body { padding: 16px 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px; }
+@media (max-width: 640px) { .three-col { grid-template-columns: 1fr; } }
+.col-header { font-size: 0.75rem; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #eee; }
+
+/* ── Financial metrics table ── */
+.metrics-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; margin: 8px 0; }
+.metrics-table td { padding: 3px 6px; border-bottom: 1px solid #f5f5f5; vertical-align: top; }
+.metrics-table td:first-child { color: #888; width: 38%; white-space: nowrap; }
+.metrics-table td:last-child { font-weight: 600; text-align: right; white-space: nowrap; }
+.metric-warn { color: #e67e22; }
+.metric-danger { color: #e74c3c; }
+.metric-good { color: #27ae60; }
+.fund-section-title { font-size: 0.82rem; font-weight: 700; margin: 10px 0 4px; color: #444; }
+.fund-section-conclusion { font-size: 0.78rem; color: #555; margin-bottom: 4px; line-height: 1.5; }
+
+/* ── Structure grid ── */
+.structure-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; font-size: 0.78rem; }
+.structure-item { background: #f9f9f9; border-radius: 5px; padding: 5px 8px; }
+.structure-item .label { color: #999; font-size: 0.68rem; }
+.structure-item .val { font-weight: 600; font-size: 0.8rem; }
+.key-levels { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.key-level { padding: 2px 7px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+.key-cost { background: #ffe0e0; color: #c0392b; }
+.key-zd { background: #e0e0ff; color: #2c3e50; }
+.key-zg { background: #ffe8d0; color: #c0392b; }
+
+/* ── Risk section ── */
+.risk-section { margin-top: 10px; padding: 8px 10px; border-radius: 7px; font-size: 0.78rem; }
+.risk-section.has-risks { background: #fff5f5; border-left: 3px solid #e74c3c; }
+.risk-section.no-risks { background: #f0fff0; border-left: 3px solid #27ae60; }
+.risk-item-text { padding: 1px 0; color: #c0392b; }
+.catalyst-item-text { padding: 1px 0; color: #27ae60; }
+.risk-label { font-weight: 700; font-size: 0.75rem; margin-bottom: 2px; }
+
+/* ── News ── */
+.news-item { padding: 4px 0; font-size: 0.78rem; border-bottom: 1px solid #f8f8f8; }
+.news-title { font-weight: 600; }
+.news-meta { color: #999; font-size: 0.7rem; }
+.sentiment-利好 { color: #27ae60; }
+.sentiment-利空 { color: #e74c3c; }
+.sentiment-中性 { color: #888; }
+.no-news { color: #bbb; font-size: 0.78rem; }
+
+/* ── Conditions footer ── */
+.conditions-footer { padding: 12px 20px; background: #fafafa; border-top: 1px solid #f0f0f0; font-size: 0.8rem; }
+.condition-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.condition-tag { padding: 4px 10px; border-radius: 6px; font-size: 0.76rem; }
+.cond-stop { background: #fde8e8; color: #c0392b; }
+.cond-reduce { background: #fef3e2; color: #d35400; }
+.cond-add { background: #e3f2fd; color: #1565c0; }
+.cond-hold { background: #e8f5e9; color: #2e7d32; }
+
+/* ── Data quality ── */
+.data-quality { font-size: 0.7rem; color: #bbb; padding: 4px 20px 12px; }
+
+/* ── Misc ── */
+.no-data { text-align: center; padding: 40px; color: #999; }
+.disclaimer { margin-top: 30px; padding: 16px; background: #fff3cd; border-radius: 8px; font-size: 0.75rem; color: #856404; text-align: center; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<div class="dashboard">
+<h1>持仓驾驶舱</h1>
+<div class="date">2026-05-27</div>
+<div class="metrics">
+  <div class="metric"><div class="value">9</div><div class="label">总股票</div></div>
+  <div class="metric"><div class="value">4</div><div class="label">有成本持仓</div></div>
+  <div class="metric"><div class="value">5</div><div class="label">仅结构诊断</div></div>
+  <div class="metric risk"><div class="value">2</div><div class="label">高风险</div></div>
+  <div class="metric watch"><div class="value">0</div><div class="label">需关注</div></div>
+  <div class="metric"><div class="value">1</div><div class="label">待确认加仓</div></div>
+</div>
+</div>
+
+<div class="section-title">风险队列</div>
+<div class="risk-queue">
+<div class="risk-item">乾照光电: STOP - 跌破成本价超过8%，当前25.44，成本35.77</div>
+<div class="risk-item">国博电子: STOP - 跌破成本价超过8%，当前99.5，成本124.59</div>
+</div>
+
+<div class="section-title">今日重点</div>
+<div class="highlights">
+<div class="highlight-item">乾照光电: STOP - 跌破成本价超过8%，当前25.44，成本35.77</div>
+<div class="highlight-item">国博电子: STOP - 跌破成本价超过8%，当前99.5，成本124.59</div>
+</div>
+
+<div class="section-title ok">持仓诊断</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">乾照光电</span>
+  <span class="card-code">300102</span>
+</div>
+<span class="action-badge action-STOP">建议止损</span>
+</div>
+<div class="position-line">成本 35.77 → 现价 25.44 | 持仓?股 |  </div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-弱">基本面：弱</span><span class="rating-tag rating-负面">消息面：负面</span><span class="confidence-tag">置信度：高</span></div>
+<div class="verdict">基本面恶化（营收-47%、扣非-221%）、大股东拟减持，缠论日线/30min无中枢下无买点，当前价25.44远低于成本35.77，建议止损离场。</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="metric-danger">201.0</td></tr><tr><td>市净率(PB)</td><td class="">5.44</td></tr><tr><td>总市值</td><td class="">233亿</td></tr><tr><td>所属行业</td><td class="">光学光电子</td></tr><tr><td>ROE(年化)</td><td class="">+2.7%</td></tr><tr><td>毛利率</td><td class="">+18.3%</td></tr><tr><td>净利率</td><td class="">+7.2%</td></tr><tr><td>每股收益</td><td class="">0.03</td></tr><tr><td>营收同比</td><td class="">-47.3%</td></tr><tr><td>利润同比</td><td class="">+6.6%</td></tr><tr><td>扣非利润同比</td><td class="metric-good">-220.8%</td></tr><tr><td>资产负债率</td><td class="">+32.0%</td></tr><tr><td>有息负债率</td><td class="">+14.3%</td></tr><tr><td>流动比率</td><td class="">1.8</td></tr><tr><td>经营现金流/股</td><td class="">-0.067</td></tr><tr><td>每股净资产</td><td class="">4.73</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">LED外延片/芯片、Mini/Micro-LED等化合物半导体器件制造商，处于产业链中上游，行业竞争激烈，毛利率仅18.3%，非好生意。</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">成长性弱，营收同比骤降47.27%，扣非净利润同比暴降220.76%，仅靠非经常性损益勉强维持净利润微增6.59%，主营业务实际大幅萎缩。</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">盈利质量差，毛利率低、ROE极低（0.69%），经营现金流为负，利润无现金支撑。</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">安全性尚可但存在隐忧，负债率32%较低，有息负债14.3%不高，但现金数据缺失，若无法覆盖短期债务或有流动性风险。</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">估值极高且不合理，PE 201倍远高于行业通常水平，PB 5.44倍，结合营收和扣非大幅下滑，缺乏业绩支撑。</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">近期消息面偏空，主力持续流出、大股东拟减持构成实质压力，正面催化（商业航天/光通信订单）尚未兑现业绩，无法扭转空头情绪。</div><div class="news-item">
+<div class="news-title">乾照光电股东拟减持不超2717万股</div>
+<div class="news-meta sentiment-利空">2026-05-06 07:00 | 新浪财经 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：乾照光电（300102）5月26日主力资金净卖出1.11亿元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-26 12:06 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">乾照光电：商业航天太阳能电池已批量应用于G60千帆星座 光通信芯片预计2026年有新订单收入</div>
+<div class="news-meta sentiment-利好">2026-05-19 10:13 | AASTOCKS.com | 利好</div>
+</div><div class="news-item">
+<div class="news-title">乾照光电(300102.SZ)：2026年一季度归母净利润2964.06万元，同比增加6.59%</div>
+<div class="news-meta sentiment-中性">2026-04-22 07:00 | AASTOCKS.com | 中性</div>
+</div><div class="news-item">
+<div class="news-title">乾照光电(300102.SZ)：暂无光模块业务</div>
+<div class="news-meta sentiment-中性">2026-05-19 13:43 | 新浪财经 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 乾照光电持股5%以上股东减持股份预披露公告（2026-05-06）</div><div style="font-size:0.73rem;color:#c0392b;">• 5月6日增减持汇总：...乾照光电等18股拟减持（2026-05-06）</div><div style="font-size:0.73rem;color:#c0392b;">• 连续多日主力资金净卖出新闻（5月20日、22日、25日、26日）</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 股东减持实际进展：关注大宗交易或竞价减持公告，若快速减持完毕则利空出尽，若缓慢减持则持续压制。</div><div style="font-size:0.72rem;color:#888;">• 光通信芯片订单：跟踪公司公告或互动易确认是否获得新订单及金额，若不及预期可能进一步下挫。</div><div style="font-size:0.72rem;color:#888;">• 商业航天太阳能电池收入：关注中报或后续季报是否单独披露该业务收入占比及毛利率。</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@30.8</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div><div class="key-levels"><span class="key-level key-cost">成本 35.77</span></div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 营收持续大幅下滑，主业亏损（扣非同比-221%），基本面恶化。</div><div class="risk-item-text">• 持股5%以上股东和君正德拟减持不超过3%，时间2026-05-06公告。</div><div class="risk-item-text">• 近期主力资金连续多日净卖出，短期抛压明显。</div><div class="risk-item-text">• 公司宣布暂无光模块业务，削弱概念炒作预期。</div><div class="risk-item-text">• 估值严重偏高，若市场开始杀估值可能大幅下跌。</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 商业航天太阳能电池已批量应用于G60千帆星座（新闻2026-05-19），未来可能贡献增量收入。</div><div class="catalyst-item-text">• 光通信芯片预计2026年有新订单收入（新闻2026-05-19），尚未体现在报表，若落地可提估值。</div><div class="catalyst-item-text">• 公司在手订单正常（公告2026-05-19），短期生产稳定。</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破成本价35.77且跌破日线中枢下沿</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash; goodwill; 应收账款; 存货; 可比估值数据</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">国博电子</span>
+  <span class="card-code">688375</span>
+</div>
+<span class="action-badge action-STOP">建议止损</span>
+</div>
+<div class="position-line">成本 124.59 → 现价 99.5 | 持仓?股 |  </div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-负面">消息面：负面</span><span class="confidence-tag">置信度：高</span></div>
+<div class="verdict">建议止损；基本面中，消息面负面。跌破成本价超过8%，当前99.5，成本124.59</div>
+<div class="llm-notice">⚡ 规则诊断（未启用LLM）</div>
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="">131.5</td></tr><tr><td>市净率(PB)</td><td class="">9.17</td></tr><tr><td>总市值</td><td class="">593亿</td></tr><tr><td>所属行业</td><td class="">电子元件</td></tr><tr><td>ROE(年化)</td><td class="">+8.0%</td></tr><tr><td>毛利率</td><td class="">+33.6%</td></tr><tr><td>净利率</td><td class="">+0.3%</td></tr><tr><td>营收同比</td><td class="">-8.9%</td></tr><tr><td>利润同比</td><td class="">-98.5%</td></tr><tr><td>扣非利润同比</td><td class="">-102.1%</td></tr><tr><td>资产负债率</td><td class="">+23.1%</td></tr><tr><td>有息负债率</td><td class="">+0.9%</td></tr><tr><td>流动比率</td><td class="metric-danger">3.4</td></tr><tr><td>经营现金流/股</td><td class="">-0.364</td></tr><tr><td>每股净资产</td><td class="">10.85</td></tr></table>
+
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div class="news-item">
+<div class="news-title">股票行情快报：国博电子（688375）5月25日主力资金净卖出4229.32万元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-25 11:27 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：国博电子（688375）5月21日主力资金净卖出4739.10万元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-21 11:11 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：国博电子（688375）5月19日主力资金净买入1973.06万元</div>
+<div class="news-meta sentiment-利好">2026-05-19 11:27 | 搜狐网 | 利好</div>
+</div><div class="news-item">
+<div class="news-title">国博电子A股股东户数增加5291户增幅50.53%，流通A股户均持股3.78万股降幅33.57%，户均持股市值419.39万元降幅20.87%</div>
+<div class="news-meta sentiment-中性">2026-04-10 07:00 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">国博电子(688375.SH)：2026年一季报净利润为85.63万元、同比较去年同期下降98.51%</div>
+<div class="news-meta sentiment-中性">2026-04-30 01:37 | 东方财富 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：国博电子（688375）5月25日主力资金净卖出4229.32万元_主力研究</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：国博电子（688375）5月21日主力资金净卖出4739.10万元_主力研究</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪后续公告兑现情况</div><div style="font-size:0.72rem;color:#888;">• 观察消息后成交量和关键位反馈</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@108.0</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div><div class="key-levels"><span class="key-level key-cost">成本 124.59</span></div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 利润同比为负，需警惕业绩下滑</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破成本价124.59且跌破日线中枢下沿</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">华工科技</span>
+  <span class="card-code">000988</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-正面偏强">消息面：正面偏强</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">基本面成长性突出但估值极高且经营现金流为负，缠论显示日线与30分钟均无中枢，消息面近期涨停催化已部分反应，整体建议持有并等待结构明确。</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="">94.6</td></tr><tr><td>市净率(PB)</td><td class="">13.75</td></tr><tr><td>总市值</td><td class="">1607亿</td></tr><tr><td>所属行业</td><td class="">电子元件</td></tr><tr><td>ROE(年化)</td><td class="">+14.0%</td></tr><tr><td>毛利率</td><td class="">+19.8%</td></tr><tr><td>净利率</td><td class="">+15.1%</td></tr><tr><td>每股收益</td><td class="">0.64</td></tr><tr><td>营收同比</td><td class="">+27.1%</td></tr><tr><td>利润同比</td><td class="">+55.8%</td></tr><tr><td>扣非利润同比</td><td class="">+20.5%</td></tr><tr><td>资产负债率</td><td class="">+48.8%</td></tr><tr><td>有息负债率</td><td class="">+14.3%</td></tr><tr><td>流动比率</td><td class="">1.7</td></tr><tr><td>经营现金流/股</td><td class="">-1.121</td></tr><tr><td>每股净资产</td><td class="">11.62</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">华工科技主营光通信（光模块）、激光加工装备、传感器，属高新技术制造业，是激光装备龙头和光模块全球前十，产品覆盖AI算力、汽车、消费电子等领域。</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">营收和净利润均实现较快增长，扣非利润增速略低但仍有20%以上，受益于AI算力需求，行业景气度较高。</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">毛利率低，净利率尚可，ROE年化约13.97%，经营现金流为负，利润缺乏现金支撑，盈利质量一般。</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">资产负债率适中，有息负债率低，短期偿债能力良好，但现金数据缺失，无法准确评估抗风险能力。</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">当前PE 94.6倍、PB 13.75倍，估值极高；若高增长延续则有望消化，但若增速放缓将面临估值收缩风险。</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">近期受玻璃基板、国产芯片等概念刺激出现涨停，市场情绪亢奋，但公司已提示异常波动，后续需订单或业绩兑现来支撑股价。</div><div class="news-item">
+<div class="news-title">5月25日华工科技涨停：玻璃基板封装，半导体，国产芯片概念热股_个股掘金</div>
+<div class="news-meta sentiment-利好">2026-05-25 08:23 | 证券之星 | 利好</div>
+</div><div class="news-item">
+<div class="news-title">华工科技：股票交易异常波动公告</div>
+<div class="news-meta sentiment-中性">2026-05-20 09:24 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">阿莱德：与华工科技旗下子公司华工正源在光模块领域保持合作 已批量供货</div>
+<div class="news-meta sentiment-中性">2026-05-21 04:14 | 证券之星 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 华工科技：股票交易异常波动公告</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪下一财报中的光模块收入增速</div><div style="font-size:0.72rem;color:#888;">• 关注激光装备和传感器的大额订单公告</div><div style="font-size:0.72rem;color:#888;">• 观察股价在涨停后的回调是否能在关键位置获得支撑</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">无</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 估值回调风险：高PE依赖高成长预期</div><div class="risk-item-text">• 经营现金流为负，可能面临资金压力</div><div class="risk-item-text">• 光模块行业竞争加剧，毛利率可能进一步下行</div><div class="risk-item-text">• 股价异常波动后存在回调需求</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• AI算力需求爆发，光模块订单可能增长</div><div class="catalyst-item-text">• 激光装备国产替代政策支持</div><div class="catalyst-item-text">• 传感器在汽车、低空经济等领域拓展</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash; 商誉具体值; 应收账款与存货明细; 历史PE分位; 可比公司估值</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">晓程科技</span>
+  <span class="card-code">300139</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-中性">消息面：中性</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">基本面高增长但估值偏高、减持利空压制，缠论无结构方向不明，建议持有观望</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="">69.0</td></tr><tr><td>市净率(PB)</td><td class="">10.74</td></tr><tr><td>总市值</td><td class="">109亿</td></tr><tr><td>所属行业</td><td class="">贵金属</td></tr><tr><td>ROE(年化)</td><td class="">+14.0%</td></tr><tr><td>毛利率</td><td class="">+66.4%</td></tr><tr><td>净利率</td><td class="">+41.9%</td></tr><tr><td>每股收益</td><td class="">0.16</td></tr><tr><td>营收同比</td><td class="">+74.5%</td></tr><tr><td>利润同比</td><td class="">+308.0%</td></tr><tr><td>扣非利润同比</td><td class="">+335.2%</td></tr><tr><td>资产负债率</td><td class="">+20.0%</td></tr><tr><td>有息负债率</td><td class="">+0.8%</td></tr><tr><td>流动比率</td><td class="metric-danger">3.3</td></tr><tr><td>经营现金流/股</td><td class="">0.243</td></tr><tr><td>每股净资产</td><td class="">4.35</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">以贵金属矿采选为核心，兼营电力电子与能源管理，在加纳拥有金矿，产业链覆盖勘探、采选、销售，受益于金价上涨</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">一季度营收与利润均实现爆发式增长，增速远超行业均值</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">毛利率和净利率极高，但经营现金流偏低，利润现金保障度一般</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">负债水平极低，流动性充裕，财务安全性高</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">PE、PB均处于较高水平，但高成长性可部分消化估值，需关注后续增速变化</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">业绩利好已被部分消化，减持与资金流出构成短期压力，金价上涨提供底层支撑，多空消息交织</div><div class="news-item">
+<div class="news-title">晓程科技(300139.SZ)2025年净利润同比增长225.26%</div>
+<div class="news-meta sentiment-利好">2026-04-24 07:00 | AASTOCKS.com | 利好</div>
+</div><div class="news-item">
+<div class="news-title">晓程科技:关于董事、高级管理人员减持股份预披露公告</div>
+<div class="news-meta sentiment-利空">2026-04-29 | 东方财富公告 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">晓程科技股价连续5天下跌累计跌幅12.26%，前海开源基金旗下1只基金持621.71万股，浮亏损失4606.85万元</div>
+<div class="news-meta sentiment-利空">2026-05-14 07:00 | 新浪财经 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">区域冲突与央行购金共振，现货黄金涨破5200美元，黄金股票ETF基金(159322)涨超4.0%</div>
+<div class="news-meta sentiment-利好">2026-01-28 02:25 | Jiemian.com | 利好</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：晓程科技（300139）5月18日主力资金净买入2227.85万元</div>
+<div class="news-meta sentiment-利好">2026-05-18 12:44 | 证券之星 | 利好</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 董事、高管减持预披露</div><div style="font-size:0.73rem;color:#c0392b;">• 基金持仓浮亏被动止损风险</div><div style="font-size:0.73rem;color:#c0392b;">• 股价连续下跌引发技术盘抛压</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• {'item': '减持计划实际实施进度与减持价格', 'trigger': '公告后每十五天查看减持进展公告'}</div><div style="font-size:0.72rem;color:#888;">• {'item': '2026年半年报业绩预告及实际披露', 'trigger': '预计7月中旬前关注预告'}</div><div style="font-size:0.72rem;color:#888;">• {'item': '国际金价能否站稳5200美元上方', 'trigger': '关注COMEX黄金期货收盘价'}</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">无</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 董事、高管发布减持预披露，短期卖压增大</div><div class="risk-item-text">• 近期股价连续下跌，资金面偏弱</div><div class="risk-item-text">• 部分基金持仓浮亏严重，可能存在被动减持</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 现货黄金突破5200美元，金价持续强势利好矿产业务</div><div class="catalyst-item-text">• 一季度业绩大幅增长，全年预期向好</div><div class="catalyst-item-text">• 全球央行购金与区域冲突共振，黄金资产配置需求上升</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps（市销率）; 现金绝对数值; 历史估值分位; 同行业可比估值; 收入地区/产品构成</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">三环集团</span>
+  <span class="card-code">300408</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-正面偏强">消息面：正面偏强</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">三环集团基本面高增长但估值偏高且现金流较弱，近期股价涨幅巨大并创新高，消息面多属已反应；缠论日线无中枢无明确买卖点，建议继续持有但不宜追高。</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="">81.9</td></tr><tr><td>市净率(PB)</td><td class="">10.94</td></tr><tr><td>总市值</td><td class="">2300亿</td></tr><tr><td>所属行业</td><td class="">电子元件</td></tr><tr><td>ROE(年化)</td><td class="">+12.6%</td></tr><tr><td>毛利率</td><td class="">+43.5%</td></tr><tr><td>净利率</td><td class="">+29.5%</td></tr><tr><td>每股收益</td><td class="">0.41</td></tr><tr><td>营收同比</td><td class="">+46.3%</td></tr><tr><td>利润同比</td><td class="">+48.5%</td></tr><tr><td>扣非利润同比</td><td class="">+60.8%</td></tr><tr><td>资产负债率</td><td class="">+17.1%</td></tr><tr><td>有息负债率</td><td class="">+2.1%</td></tr><tr><td>流动比率</td><td class="metric-danger">4.1</td></tr><tr><td>经营现金流/股</td><td class="">0.082</td></tr><tr><td>每股净资产</td><td class="">11.69</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">公司专注于先进陶瓷材料研发、生产及销售，是电子元件行业龙头，核心产品全球领先。</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">高增长，2026一季报营收和利润同比大幅增长，行业景气度向上。</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">盈利质量存疑，经营现金流远低于净利润，利润缺乏现金支撑。</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">财务结构非常稳健，低负债、轻有息债务，但现金数据缺失，无法评估绝对抗风险能力。</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">估值偏高，PE 81.94倍，PB 10.94倍，即使考虑高增长，性价比不高。</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">近期消息面整体正面，资金关注度高，但多数利好已反映在股价上涨中，短期情绪过热。</div><div class="news-item">
+<div class="news-title">股票行情快报：三环集团（300408）5月26日主力资金净买入677.25万元_主力研究</div>
+<div class="news-meta sentiment-利好">2026-05-26 13:52 | 证券之星 | 利好</div>
+</div><div class="news-item">
+<div class="news-title">三环集团股价涨8.63%，华夏基金旗下12只基金重仓，合计持有594.32万股浮盈赚取5051.69万元</div>
+<div class="news-meta sentiment-中性">2026-05-22 01:31 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">三环集团年内累计涨幅超116%</div>
+<div class="news-meta sentiment-中性">2026-05-21 07:39 | 证券之星 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">三环集团成交额创上市以来新高</div>
+<div class="news-meta sentiment-中性">2026-05-22 03:23 | 证券之星 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">三环集团：关于股份回购完成结果暨股份变动的公告</div>
+<div class="news-meta sentiment-利好">2026-04-09 | 东方财富公告 | 利好</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：三环集团（300408）5月18日主力资金净卖出1249.79万元_主力研究</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪半年报业绩是否延续高增长，特别是经营现金流改善情况。</div><div style="font-size:0.72rem;color:#888;">• 关注行业政策及5G、新能源订单变化。</div><div style="font-size:0.72rem;color:#888;">• 观察盘面是否出现顶背驰或中枢形成后的买卖点。</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">收复EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@52.71</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 经营现金流薄弱，利润质量不佳。</div><div class="risk-item-text">• 估值偏高，股价短期涨幅巨大（年内超116%），存在获利回吐风险。</div><div class="risk-item-text">• 行业竞争加剧可能影响毛利率。</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 公司股份回购实施，显示管理层信心。</div><div class="catalyst-item-text">• 行业景气度持续，新业务拓展可能带来增长。</div><div class="catalyst-item-text">• 一季报业绩超预期增长。</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">再升科技</span>
+  <span class="card-code">603601</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-弱">基本面：弱</span><span class="rating-tag rating-负面">消息面：负面</span><span class="confidence-tag">置信度：低</span></div>
+<div class="verdict">再升科技基本面疲弱（营收利润双降，PE极高），消息面偏空（高管减持、主力流出），缠论无结构买卖点，建议持仓观察，但需警惕基本面风险，若跌破EMA5（20.82）考虑减仓。</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="metric-danger">662.8</td></tr><tr><td>市净率(PB)</td><td class="">9.03</td></tr><tr><td>总市值</td><td class="">244亿</td></tr><tr><td>所属行业</td><td class="">玻璃玻纤</td></tr><tr><td>ROE(年化)</td><td class="">+2.5%</td></tr><tr><td>毛利率</td><td class="">+18.7%</td></tr><tr><td>净利率</td><td class="">+4.9%</td></tr><tr><td>每股收益</td><td class="">0.01</td></tr><tr><td>营收同比</td><td class="">-7.3%</td></tr><tr><td>利润同比</td><td class="">-57.4%</td></tr><tr><td>扣非利润同比</td><td class="">-66.9%</td></tr><tr><td>资产负债率</td><td class="">+12.8%</td></tr><tr><td>有息负债率</td><td class="">+0.2%</td></tr><tr><td>流动比率</td><td class="metric-danger">6.2</td></tr><tr><td>经营现金流/股</td><td class="">0.030</td></tr><tr><td>每股净资产</td><td class="">2.37</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">主营洁净空气和节能领域，提供玻璃纤维过滤材料及净化设备，属于制造业-非金属矿物制品业，下游依赖工业洁净与建筑节能需求，当前生意模式成长性欠佳。</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">成长性极弱，营收和利润均同比大幅下滑，处于明显衰退阶段。</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">盈利质量差，毛利率低，净利率微薄，ROE近乎为零，经营现金流极弱。</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">财务安全性较好，低负债、高流动性，但现金储备数据缺失。</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">估值极高且缺乏基本面支撑，PE高达662.81，PB 9.03，存在明显泡沫风险。</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">近期消息面以利空为主，高管减持与主力资金净流出持续施压，缺乏利好催化，部分利空可能已部分反应但市场情绪仍偏谨慎。</div><div class="news-item">
+<div class="news-title">再升科技：5月25日至5月26日周凌娅、杨金明、易伟减持股份合计29.87万股_公司新闻</div>
+<div class="news-meta sentiment-利空">2026-05-26 10:01 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">再升科技(603601):再升科技部分董事、高级管理人员减持股份结果</div>
+<div class="news-meta sentiment-利空">2026-05-26 10:06 | 中财网 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：再升科技（603601）5月25日主力资金净卖出3.24亿元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-25 11:37 | 证券之星 | 利空</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 再升科技：5月25日至5月26日周凌娅、杨金明、易伟减持股份合计29.87万股</div><div style="font-size:0.73rem;color:#c0392b;">• 再升科技(603601):再升科技部分董事、高级管理人员减持股份结果</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：再升科技（603601）5月25日主力资金净卖出3.24亿元</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 关注后续是否有更多减持公告</div><div style="font-size:0.72rem;color:#888;">• 即将召开的2025年年度暨2026年第一季度业绩说明会可能释放经营指引</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">收复EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@13.1</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 业绩持续下滑风险：营收、利润大幅减少，未见改善迹象</div><div class="risk-item-text">• 高管减持：多位董事、高管披露减持结果，可能反映内部人负面预期</div><div class="risk-item-text">• 估值下杀风险：目前极高PE难以维持，若业绩不能改善可能戴维斯双杀</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash; 行业估值对比; 历史盈利预测</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">炬光科技</span>
+  <span class="card-code">688167</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line" style="color:#e67e22;">仅做个股结构诊断（缺少持仓成本）</div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-中性">消息面：中性</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">继续持有；基本面中，消息面中性。日线处于中枢内，未见明确卖点</div>
+<div class="llm-notice">⚡ 规则诊断（未启用LLM）</div>
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="metric-good">-20.7</td></tr><tr><td>市净率(PB)</td><td class="">18.20</td></tr><tr><td>总市值</td><td class="">407亿</td></tr><tr><td>所属行业</td><td class="">半导体</td></tr><tr><td>ROE(年化)</td><td class="">-1.8%</td></tr><tr><td>毛利率</td><td class="">+43.2%</td></tr><tr><td>净利率</td><td class="">-6.4%</td></tr><tr><td>每股收益</td><td class="">-0.15</td></tr><tr><td>营收同比</td><td class="">+21.2%</td></tr><tr><td>利润同比</td><td class="">+58.7%</td></tr><tr><td>扣非利润同比</td><td class="">+58.2%</td></tr><tr><td>资产负债率</td><td class="">+25.4%</td></tr><tr><td>有息负债率</td><td class="">+17.5%</td></tr><tr><td>流动比率</td><td class="metric-danger">4.0</td></tr><tr><td>经营现金流/股</td><td class="">0.209</td></tr><tr><td>每股净资产</td><td class="">24.89</td></tr></table>
+
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div class="news-item">
+<div class="news-title">炬光科技（688167）披露控股股东与部分一致行动人解除一致行动关系公告，5月26日股价下跌8.13%</div>
+<div class="news-meta sentiment-中性">2026-05-27 00:01 | 中金在线 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">炬光科技（688167）5月25日主力资金净买入4.70亿元_主力研究</div>
+<div class="news-meta sentiment-利好">2026-05-26 00:15 | 证券之星 | 利好</div>
+</div><div class="news-item">
+<div class="news-title">西安炬光科技股份有限公司关于控股股东、实际控制人与其部分一致行动人解除一致行动关系的提示性公告- CFi.CN 中财网</div>
+<div class="news-meta sentiment-中性">2026-05-26 09:31 | 中财网 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">炬光科技5月21日获融资买入3.81亿元，融资余额24.64亿元</div>
+<div class="news-meta sentiment-中性">2026-05-22 00:03 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">炬光科技(688167.SH)：股东王东辉减持89.86万股公司股份</div>
+<div class="news-meta sentiment-利空">2026-05-21 08:53 | AASTOCKS.com | 利空</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 炬光科技(688167.SH)：股东王东辉减持89.86万股公司股份</div><div style="font-size:0.73rem;color:#c0392b;">• 炬光科技(688167):西安炬光科技股份有限公司股东减持股份结果</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪后续公告兑现情况</div><div style="font-size:0.72rem;color:#888;">• 观察消息后成交量和关键位反馈</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@282.0</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• PE为负，公司处于亏损状态</div><div class="risk-item-text">• ROE为负(-0.6%)</div><div class="risk-item-text">• 净利率为负(-6.4%)</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 收入增速保持两位数</div><div class="catalyst-item-text">• 利润增速较快</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破关键支撑位</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">天岳先进</span>
+  <span class="card-code">688234</span>
+</div>
+<span class="action-badge action-HOLD">继续持有</span>
+</div>
+<div class="position-line">成本 170.38 → 现价 166.99 | 持仓?股 |  </div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-弱">基本面：弱</span><span class="rating-tag rating-中性">消息面：中性</span><span class="confidence-tag">置信度：中</span></div>
+<div class="verdict">公司为碳化硅衬底龙头，但一季报营收利润双降、盈利质量差；近期主力资金净流入但股价已从历史新高回调，异动公告提示风险；缠论30min盘整中枢上方运行，日线未形成中枢，缺乏明确方向，建议HOLD观察，若跌破成本或中枢下沿则止损。</div>
+
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="metric-good">-291.8</td></tr><tr><td>市净率(PB)</td><td class="">11.38</td></tr><tr><td>总市值</td><td class="">718亿</td></tr><tr><td>所属行业</td><td class="">半导体</td></tr><tr><td>ROE(年化)</td><td class="">-3.5%</td></tr><tr><td>毛利率</td><td class="">+19.1%</td></tr><tr><td>净利率</td><td class="metric-good">-16.8%</td></tr><tr><td>每股收益</td><td class="">-0.13</td></tr><tr><td>营收同比</td><td class="">-10.4%</td></tr><tr><td>利润同比</td><td class="metric-good">-810.4%</td></tr><tr><td>扣非利润同比</td><td class="metric-good">-1750.2%</td></tr><tr><td>资产负债率</td><td class="">+25.9%</td></tr><tr><td>有息负债率</td><td class="">+12.5%</td></tr><tr><td>流动比率</td><td class="metric-danger">3.3</td></tr><tr><td>经营现金流/股</td><td class="">0.021</td></tr><tr><td>每股净资产</td><td class="">14.68</td></tr></table>
+<div class="fund-section-title">公司是干什么的</div><div class="fund-section-conclusion">主营碳化硅单晶衬底材料，属于第三代半导体，赛道前景好但现阶段产品价格承压，竞争激烈。</div><div class="fund-section-title">成长性</div><div class="fund-section-conclusion">营收与利润均大幅下滑，成长性衰退。</div><div class="fund-section-title">盈利质量</div><div class="fund-section-conclusion">盈利质量极差，毛利率偏低且巨额亏损，经营现金流几乎为零。</div><div class="fund-section-title">财务安全性</div><div class="fund-section-conclusion">负债水平低，流动性充足，财务结构安全，但补税事件可能消耗资金。</div><div class="fund-section-title">估值是否合理</div><div class="fund-section-conclusion">估值极高，PB 11.38倍，亏损状态下PE无意义，市场给予的预期溢价过高。</div>
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div style="font-size:0.8rem;color:#555;margin-bottom:8px;">近期消息以主力资金净流入和异常波动公告为主，短期资金面有支撑但无基本面改善信号，市场情绪偏中性。</div><div class="news-item">
+<div class="news-title">天岳先进（688234）5月25日主力资金净买入3.27亿元_主力研究</div>
+<div class="news-meta sentiment-利好">2026-05-26 00:21 | 证券之星 | 利好</div>
+</div><div class="news-item">
+<div class="news-title">天岳先进：碳化硅半导体衬底行业近年来市场竞争日趋激烈，产品价格面临一定下行压力</div>
+<div class="news-meta sentiment-利空">2026-05-14 07:00 | 腾讯新闻 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">连续3日股价累涨30%触发异动 天岳先进提示：碳化硅半导体衬底行业存在业绩波动风险</div>
+<div class="news-meta sentiment-中性">2026-05-14 07:00 | 新浪财经 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">天岳先进涨7.61%，股价创历史新高</div>
+<div class="news-meta sentiment-中性">2026-05-13 01:54 | 证券之星 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 半导体材料行业“碳化硅第一股”天岳先进自查补税8297万元 | 大鱼财经</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪下一季报（2026中报）营收与毛利率变化。</div><div style="font-size:0.72rem;color:#888;">• 关注碳化硅衬底价格指数及行业产能出清信号。</div><div style="font-size:0.72rem;color:#888;">• 观察30min中枢（141-156）的支撑有效性。</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">盘整</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">swing底背驰参考@71.8</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div><div class="key-levels"><span class="key-level key-cost">成本 170.38</span></div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• 业绩持续下滑，盈利能力未见好转迹象。</div><div class="risk-item-text">• 行业竞争加剧、产品降价（新闻来源：新浪财经2026-05-14）。</div><div class="risk-item-text">• 股东户数增加73.8%（新闻来源：MSN 2026-05-21），筹码分散。</div><div class="risk-item-text">• 股价已创历史新高后回调，存在获利盘压力（新闻：5月13日股价创历史新高）。</div><div class="risk-item-text">• 无明确解禁/减持公告，但需警惕。</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 长期受益于第三代半导体需求增长（无具体订单）</div><div class="catalyst-item-text">• 港股IPO可能带来资金和关注度（2025年8月已启动）</div><div class="catalyst-item-text">• 台积电等下游景气可间接带动（4月新闻）</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破成本价170.38且跌破日线中枢下沿</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash; accounts_receivable; inventory; goodwill; 客户订单数据</div>
+</div>
+<div class="stock-card">
+<div class="card-header">
+<div class="card-header-left">
+  <span class="card-name">有研复材</span>
+  <span class="card-code">688811</span>
+</div>
+<span class="action-badge action-ADD_ON_CONFIRM">待确认加仓</span>
+</div>
+<div class="position-line">成本 32.65 → 现价 30.75 | 持仓?股 |  </div>
+<div class="conclusion-block">
+<div class="meta-tags"><span class="rating-tag rating-中">基本面：中</span><span class="rating-tag rating-负面">消息面：负面</span><span class="confidence-tag">置信度：高</span></div>
+<div class="verdict">等待确认后加仓；基本面中，消息面负面。30min出现买点但日线未确认，等待日线确认后再加仓</div>
+<div class="llm-notice">⚡ 规则诊断（未启用LLM）</div>
+</div>
+<div class="card-body">
+<div class="three-col">
+<div>
+<div class="col-header">📊 基本面</div>
+<div style="font-size:0.7rem;color:#bbb;margin-bottom:6px;">财务数据：2026一季报</div>
+<table class="metrics-table"><tr><td>市盈率(PE)</td><td class="metric-danger">218.6</td></tr><tr><td>市净率(PB)</td><td class="">9.81</td></tr><tr><td>总市值</td><td class="">28亿</td></tr><tr><td>所属行业</td><td class="">有色金属</td></tr><tr><td>ROE(年化)</td><td class="">+8.9%</td></tr><tr><td>毛利率</td><td class="">+23.8%</td></tr><tr><td>净利率</td><td class="">+1.2%</td></tr><tr><td>每股收益</td><td class="">0.00</td></tr><tr><td>营收同比</td><td class="">+62.2%</td></tr><tr><td>利润同比</td><td class="">+110.6%</td></tr><tr><td>扣非利润同比</td><td class="">+40.5%</td></tr><tr><td>资产负债率</td><td class="">+23.0%</td></tr><tr><td>有息负债率</td><td class="">+6.5%</td></tr><tr><td>流动比率</td><td class="metric-danger">3.0</td></tr><tr><td>经营现金流/股</td><td class="">0.059</td></tr><tr><td>每股净资产</td><td class="">2.18</td></tr></table>
+
+</div>
+<div>
+<div class="col-header">📰 消息面</div>
+<div class="news-item">
+<div class="news-title">有研复材(SH688811)股票股价_股价行情_讨论_资讯_财报_数据报告</div>
+<div class="news-meta sentiment-中性">2026-05-26 15:44 | 雪球 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：有研复材（688811）5月26日主力资金净卖出2690.78万元</div>
+<div class="news-meta sentiment-利空">2026-05-26 11:39 | 搜狐网 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">股票行情快报：有研复材（688811）5月21日主力资金净卖出9658.63万元_主力研究</div>
+<div class="news-meta sentiment-利空">2026-05-21 11:28 | 证券之星 | 利空</div>
+</div><div class="news-item">
+<div class="news-title">今日申购：有研复材、赛英电子</div>
+<div class="news-meta sentiment-中性">2026-03-30 07:00 | 中国经济网 | 中性</div>
+</div><div class="news-item">
+<div class="news-title">有研复材：以国家战略需求为导向 全力打造世界一流金属复合材料高科技企业</div>
+<div class="news-meta sentiment-中性">2026-03-30 07:00 | 上海证券报电子版 | 中性</div>
+</div><div style="margin-top:6px;font-size:0.75rem;color:#c0392b;">风险消息:</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：有研复材（688811）5月26日主力资金净卖出2690.78万元</div><div style="font-size:0.73rem;color:#c0392b;">• 股票行情快报：有研复材（688811）5月21日主力资金净卖出9658.63万元_主力研究</div><div style="margin-top:6px;font-size:0.73rem;color:#888;">后续跟踪:</div><div style="font-size:0.72rem;color:#888;">• 跟踪后续公告兑现情况</div><div style="font-size:0.72rem;color:#888;">• 观察消息后成交量和关键位反馈</div>
+</div>
+<div>
+<div class="col-header">📈 缠论结构</div>
+<div class="structure-grid">
+<div class="structure-item"><div class="label">日线走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">当前位置</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">日线中枢</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">背驰状态</div><div class="val">无背驰</div></div>
+<div class="structure-item"><div class="label">30min走势</div><div class="val">无中枢</div></div>
+<div class="structure-item"><div class="label">30min EMA5</div><div class="val">跌破EMA5</div></div>
+<div class="structure-item"><div class="label">买点</div><div class="val">无</div></div>
+<div class="structure-item"><div class="label">卖点</div><div class="val">无</div></div>
+</div><div class="key-levels"><span class="key-level key-cost">成本 32.65</span></div>
+</div>
+</div>
+<div class="risk-section has-risks"><div class="risk-label">⚠️ 风险</div><div class="risk-item-text">• PE极高(219倍)，估值可能泡沫化</div><div class="risk-label" style="margin-top:6px;">✨ 催化</div><div class="catalyst-item-text">• 收入增速保持两位数</div><div class="catalyst-item-text">• 利润增速较快</div></div>
+</div>
+<div class="conditions-footer">
+<div class="condition-row"><span class="condition-tag cond-hold">持有：维持当前仓位</span><span class="condition-tag cond-add">加仓：等待30min确认信号</span><span class="condition-tag cond-reduce">减仓：出现卖点或跌破关键位</span><span class="condition-tag cond-stop">止损：跌破成本价32.65且跌破日线中枢下沿</span></div>
+</div>
+<div class="data-quality">数据缺口：ps; cash</div>
+</div>
+
+<div class="disclaimer">
+<strong>风险提示：</strong>本报告由自动化系统生成，仅供参考，不构成投资建议。
+所有操作建议均为条件推演，不保证确定性结果。投资有风险，入市需谨慎。<br>
+AI复核意见为辅助参考，不替代独立判断。报告中"数据暂缺"表示该字段当前不可用。
+</div>
+
+</div>
+</body>
+</html>

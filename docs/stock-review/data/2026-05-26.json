@@ -1,0 +1,2107 @@
+{
+  "overview": {
+    "date": "2026-05-26",
+    "total": 9,
+    "with_cost": 4,
+    "structure_only": 5,
+    "high_risk": 3,
+    "watch": 0,
+    "add_confirm": 2,
+    "hold": 4
+  },
+  "highlights": [
+    "乾照光电: STOP - 跌破成本价超过8%，当前26.17，成本35.77",
+    "天岳先进: STOP - 跌破成本价超过8%，当前154.0，成本170.38",
+    "国博电子: STOP - 跌破成本价超过8%，当前101.91，成本124.59"
+  ],
+  "results": [
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "300102",
+        "name": "乾照光电",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": 35.77,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": "成本  35.77"
+      },
+      "price_snapshot": {
+        "close": 26.17,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "300102",
+        "name": "乾照光电",
+        "close": 26.17,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 30.8,
+            "date": "2026-05-08",
+            "reason": "swing笔底背驰(力度比=10.43%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "300102",
+        "close": 26.17,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 26.09,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "乾照光电",
+        "industry": "半导体",
+        "business": null,
+        "market_cap": 23970000000.0,
+        "pe": 206.77,
+        "pb": 5.6,
+        "ps": null,
+        "roe": 31.45,
+        "gross_margin": 16.8254,
+        "net_margin": 88.0,
+        "revenue_yoy": 26.83,
+        "profit_yoy": 25.66,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": 32.78,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "cache+eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "business",
+          "ps",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "STOP",
+        "confidence": "high",
+        "primary_reason": "跌破成本价超过8%，当前26.17，成本35.77",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破成本价35.77且跌破日线中枢下沿",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "乾照光电基本面呈现高ROE与高净利率但成长性数据有限且估值偏贵，缠论日线无中枢仅存弱买点，成本价远高于现价，整体风险较高，建议严格止损或观望，等待明确信号。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "基本面数据不全，缺少业务描述、扣非利润、经营现金流等关键指标，现有数据显示公司盈利质量较好但成长性和估值合理性无法充分判断。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足",
+            "details": [
+              "公司名称为乾照光电，所属行业为半导体。",
+              "主营业务和核心产品数据未提供，无法判断是否好生意。"
+            ],
+            "data_gaps": [
+              "business字段为空，未提供主营业务描述",
+              "未提供产业链位置信息"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "营收和净利润均同比增长，但数据不完整，无法全面判断",
+            "details": [
+              "营收同比增长率26.83%，净利润同比增长率25.66%。",
+              "扣非净利润同比未提供，无法判断主业增长质量。",
+              "行业景气度无数据，无法判断增长是否可持续。",
+              "初步显示增长状态，但可能受非经常性损益影响。"
+            ],
+            "data_gaps": [
+              "deducted_profit_yoy为空，无法判断扣非增长",
+              "行业景气度无数据",
+              "无未来增长指引（订单、预增等）"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "净利率和ROE极高，但毛利率较低且经营现金流缺失，盈利质量存疑",
+            "details": [
+              "毛利率16.83%，较低；净利率88.0%，异常偏高，可能受非经常性损益影响。",
+              "ROE 31.45%，较高，但未提供杜邦分析细节。",
+              "经营现金流数据缺失，无法判断利润是否有现金流支撑。"
+            ],
+            "data_gaps": [
+              "operating_cashflow为空，无法判断盈利现金含量",
+              "无ROE拆解（净利率/周转率/杠杆）",
+              "无净利润与现金流的对比"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "资产负债率较低，但缺少有息负债和现金数据，整体安全性不确定",
+            "details": [
+              "资产负债率32.78%，相对较低。",
+              "有息负债、商誉、现金储备数据均缺失，无法评估真实偿债能力和抗风险能力。"
+            ],
+            "data_gaps": [
+              "interest_bearing_debt为空",
+              "goodwill为空",
+              "cash为空",
+              "无短期/长期负债结构"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "PE极高（206.77），PB较高（5.6），结合成长性数据不足，估值可能偏贵",
+            "details": [
+              "市盈率PE 206.77倍，远高于常见水平。",
+              "市净率PB 5.6倍。",
+              "市销率PS缺失。",
+              "历史分位和同行对比数据未提供，无法判断相对估值。"
+            ],
+            "data_gaps": [
+              "ps为空",
+              "无历史PE/PB分位",
+              "无同行业可比公司估值"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [
+              "高PE可能隐含业绩不及预期风险",
+              "经营现金流缺失可能隐藏流动性风险",
+              "无风险标志但数据不完整"
+            ],
+            "catalysts": [
+              "营收和净利润双增长，若可持续可能提振估值"
+            ]
+          },
+          "data_gaps": [
+            "business",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "cash",
+            "ps",
+            "industry comparison"
+          ],
+          "chanlun_relation": "基本面高盈利指标与缠论日线无中枢、弱买点结构不匹配，可能反映市场对高盈利的持续性存疑或提前消化。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "未提供任何新闻数据，无法进行消息面分析。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "关注公司公告、行业政策、业绩预告等后续消息。"
+          ],
+          "data_gaps": [
+            "news_raw为空，无任何新闻标题或内容。"
+          ]
+        },
+        "chanlun_structure_comment": "日线和30分钟级别均显示为无中枢趋势，缺乏明确的走势结构；日线上有一个swing底背驰参考买点（价格30.8，2026-05-08，力度比10.43%，强度弱），但当前价格26.17已跌破该买点，且远离成本35.77；30分钟级别无买卖点，暂无反弹信号。整体技术面偏弱，需等待中枢形成或更高级别背驰。",
+        "integrated_decision": {
+          "action": "STOP",
+          "reason": "持有成本35.77，现价26.17，跌幅约26.8%，已触发规则止损条件（跌破成本且无中枢支撑）。基本面数据虽显示部分增长但估值极高且信息不全，缠论无强势反转结构，风险较大。",
+          "add_condition": "如果30分钟出现二买或日线底分型确认，可考虑轻仓试多，否则不新增仓位。",
+          "reduce_condition": "如果反弹至30.8附近遇阻或30分钟卖点出现，可减仓。",
+          "stop_condition": "如果价格继续下跌跌破25元（整数关口），或出现重大利空消息，应果断止损。",
+          "confidence": "高"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "business",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "cash",
+            "ps",
+            "interest_bearing_debt",
+            "goodwill",
+            "news_raw"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "688234",
+        "name": "天岳先进",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": 170.38,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": "成本  170.38"
+      },
+      "price_snapshot": {
+        "close": 154.0,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "688234",
+        "name": "天岳先进",
+        "close": 154.0,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 71.8,
+            "date": "2026-03-24",
+            "reason": "swing笔底背驰(力度比=36.12%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "688234",
+        "close": 154.0,
+        "trend_type": "盘整",
+        "pivots": [
+          {
+            "ZD": 141.0,
+            "ZG": 150.13,
+            "start_idx": 1,
+            "end_idx": 55
+          }
+        ],
+        "current_pivot": {
+          "ZD": 141.0,
+          "ZG": 150.13
+        },
+        "position": "中枢上方",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": {
+          "type": "",
+          "is_divergence": false
+        },
+        "ema5": 153.43,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "天岳先进",
+        "industry": null,
+        "business": null,
+        "market_cap": 66176000000.0,
+        "pe": -269.09,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "STOP",
+        "confidence": "high",
+        "primary_reason": "跌破成本价超过8%，当前154.0，成本170.38",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破成本价170.38且跌破日线中枢下沿",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "基本面数据严重缺失，消息面空白，缠论30分钟中枢上方但日线无结构，当前价154.0已跌破成本170.38触发止损规则，建议立即止损。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "基本面关键数据严重缺失，仅知市盈率为负，无法评估公司质地与估值。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "business"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "数据不足",
+            "details": [
+              "市盈率为-269.09，表明公司亏损，但由于缺少营收及利润增长数据，无法判断成长性。"
+            ],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy",
+              "deducted_profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "数据不足",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe",
+              "operating_cashflow"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "数据不足",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio",
+              "interest_bearing_debt",
+              "goodwill",
+              "cash"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "数据不足，市盈率为负，缺乏可比估值指标。",
+            "details": [
+              "总市值661.76亿元，但净利润为负，市盈率-269.09，无法简单判断估值合理性。"
+            ],
+            "data_gaps": [
+              "pb",
+              "ps",
+              "industry"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "interest_bearing_debt",
+            "goodwill"
+          ],
+          "chanlun_relation": "基本面严重缺失，无法与缠论结构形成共振。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "无公司相关新闻，消息面空白。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "待补充消息面数据"
+          ],
+          "data_gaps": [
+            "无新闻数据"
+          ]
+        },
+        "chanlun_structure_comment": "日线级别无中枢，仅有一个71.8元的swing底背驰参考买点，当前价格154.0远离该区域；30分钟级别为盘整，中枢区间141.0-150.13元，当前价格154.0元位于中枢上方，站上EMA5(153.43)，但无买卖点信号。整体结构面临前高中枢压力，且与成本价170.38形成较大乖离。",
+        "integrated_decision": {
+          "action": "STOP",
+          "reason": "基本面数据缺失，消息面空白，技术面日线无结构，且当前价154.0已跌破成本价170.38超过8%，符合预设止损条件。",
+          "add_condition": "",
+          "reduce_condition": "",
+          "stop_condition": "",
+          "confidence": "高"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "基本面缺失大量字段（行业、业务、成长指标、盈利指标、安全指标、估值指标）",
+            "消息面完全缺失"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "688375",
+        "name": "国博电子",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": 124.59,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": "成本  124.59"
+      },
+      "price_snapshot": {
+        "close": 101.91,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "688375",
+        "name": "国博电子",
+        "close": 101.91,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 108.0,
+            "date": "2026-05-18",
+            "reason": "swing笔底背驰(力度比=37.71%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "688375",
+        "close": 101.91,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 102.43,
+        "above_ema5": false,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "国博电子",
+        "industry": null,
+        "business": null,
+        "market_cap": 60740000000.0,
+        "pe": 134.72,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "STOP",
+        "confidence": "high",
+        "primary_reason": "跌破成本价超过8%，当前101.91，成本124.59",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破成本价124.59且跌破日线中枢下沿",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "继续持有；基本面数据不足，消息面中性。LLM分析不可用（JSON parse error）",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "原始基本面字段较少，只能形成有限判断。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "公司画像主要依赖代码与市值信息，业务描述仍不足。",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "market_cap"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "成长性数据不完整，只能做弱判断。",
+            "details": [],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "盈利质量只能从利润率粗看，现金流与ROE数据不足。",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "财务安全性需要结合现金和有息负债继续确认。",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "估值字段不足，无法判断贵不贵。",
+            "details": [],
+            "data_gaps": [
+              "pe",
+              "pb"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [],
+          "chanlun_relation": "基本面只作为结构判断的补充，当前动作仍以缠论规则位为主。"
+        },
+        "news_analysis": {
+          "rating": "中性",
+          "summary": "暂未抓到可确认的个股相关新闻，消息面影响偏中性。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "继续跟踪公告、财报和行业催化"
+          ],
+          "data_gaps": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "chanlun_structure_comment": "",
+        "integrated_decision": {
+          "action": "HOLD",
+          "reason": "LLM分析不可用（JSON parse error）",
+          "add_condition": "",
+          "reduce_condition": "",
+          "stop_condition": "",
+          "confidence": "中"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "llm_enabled": false
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "000988",
+        "name": "华工科技",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 170.32,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "000988",
+        "name": "华工科技",
+        "close": 170.32,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "000988",
+        "close": 170.32,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 169.52,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "华工科技",
+        "industry": null,
+        "business": null,
+        "market_cap": 171169000000.0,
+        "pe": 100.78,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "HOLD",
+        "confidence": "medium",
+        "primary_reason": "日线处于中枢内，未见明确卖点",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "华工科技(000988)基本面数据严重缺失，缠论结构无中枢无买卖点，消息面空白，综合判断需等待更多信息，建议观望。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "基本面数据严重缺失，仅获取到市值和PE，无法全面评估公司质地。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足，未提供主营业务、核心产品、收入来源等信息。",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "business"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "数据不足，缺少营收/利润同比增长率。",
+            "details": [],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy",
+              "deducted_profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "数据不足，缺少毛利率、净利率、ROE及经营现金流。",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe",
+              "operating_cashflow"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "数据不足，缺少资产负债率、有息负债、商誉及现金储备。",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio",
+              "interest_bearing_debt",
+              "goodwill",
+              "cash"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "市值约1711.69亿元，PE 100.78倍，但缺少PB/PS及历史分位，无法判断贵贱。",
+            "details": [
+              "市值: 1711.69亿",
+              "PE: 100.78"
+            ],
+            "data_gaps": [
+              "pb",
+              "ps",
+              "行业对比",
+              "历史分位"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "goodwill",
+            "interest_bearing_debt"
+          ],
+          "chanlun_relation": "基本面缺失，无法与缠论结构关联。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "无新闻数据，无法分析消息面。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [],
+          "data_gaps": [
+            "news_raw为空"
+          ]
+        },
+        "chanlun_structure_comment": "日线级别无中枢，当前处于无趋势状态，无买卖点；30分钟线收盘站上EMA5，但同样无中枢和买卖点，走势混沌。注意：规则判定称“日线处于中枢内”，与实际无中枢数据矛盾，以数据结构为准。",
+        "integrated_decision": {
+          "action": "WATCH",
+          "reason": "基本面数据严重缺失，缠论结构无明确信号，消息面空白，无法做出操作决策。",
+          "add_condition": "等待30分钟级别形成中枢和买点，且基本面数据补充后重新评估。",
+          "reduce_condition": "若跌破近期低点（需观察盘面），或基本面恶化。",
+          "stop_condition": "信息不足，无法设定。",
+          "confidence": "低"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "goodwill",
+            "interest_bearing_debt",
+            "news_raw"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "300139",
+        "name": "晓程科技",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 50.57,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "300139",
+        "name": "晓程科技",
+        "close": 50.57,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "300139",
+        "close": 50.57,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 50.31,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "晓程科技",
+        "industry": null,
+        "business": null,
+        "market_cap": 11816000000.0,
+        "pe": 74.77,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "HOLD",
+        "confidence": "medium",
+        "primary_reason": "日线处于中枢内，未见明确卖点",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "继续持有；基本面数据不足，消息面中性。LLM分析不可用（JSON parse error）",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "原始基本面字段较少，只能形成有限判断。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "公司画像主要依赖代码与市值信息，业务描述仍不足。",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "market_cap"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "成长性数据不完整，只能做弱判断。",
+            "details": [],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "盈利质量只能从利润率粗看，现金流与ROE数据不足。",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "财务安全性需要结合现金和有息负债继续确认。",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "估值字段不足，无法判断贵不贵。",
+            "details": [],
+            "data_gaps": [
+              "pe",
+              "pb"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [],
+          "chanlun_relation": "基本面只作为结构判断的补充，当前动作仍以缠论规则位为主。"
+        },
+        "news_analysis": {
+          "rating": "中性",
+          "summary": "暂未抓到可确认的个股相关新闻，消息面影响偏中性。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "继续跟踪公告、财报和行业催化"
+          ],
+          "data_gaps": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "chanlun_structure_comment": "",
+        "integrated_decision": {
+          "action": "HOLD",
+          "reason": "LLM分析不可用（JSON parse error）",
+          "add_condition": "",
+          "reduce_condition": "",
+          "stop_condition": "",
+          "confidence": "中"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "llm_enabled": false
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "300408",
+        "name": "三环集团",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 116.93,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "300408",
+        "name": "三环集团",
+        "close": 116.93,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 50.25,
+            "date": "2026-03-23",
+            "reason": "swing笔底背驰(力度比=84.99%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "300408",
+        "close": 116.93,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 115.41,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "三环集团",
+        "industry": null,
+        "business": null,
+        "market_cap": 218636000000.0,
+        "pe": 77.9,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "HOLD",
+        "confidence": "medium",
+        "primary_reason": "日线处于中枢内，未见明确卖点",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "继续持有；基本面数据不足，消息面中性。LLM分析不可用（JSON parse error）",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "原始基本面字段较少，只能形成有限判断。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "公司画像主要依赖代码与市值信息，业务描述仍不足。",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "market_cap"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "成长性数据不完整，只能做弱判断。",
+            "details": [],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "盈利质量只能从利润率粗看，现金流与ROE数据不足。",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "财务安全性需要结合现金和有息负债继续确认。",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "估值字段不足，无法判断贵不贵。",
+            "details": [],
+            "data_gaps": [
+              "pe",
+              "pb"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [],
+          "chanlun_relation": "基本面只作为结构判断的补充，当前动作仍以缠论规则位为主。"
+        },
+        "news_analysis": {
+          "rating": "中性",
+          "summary": "暂未抓到可确认的个股相关新闻，消息面影响偏中性。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "继续跟踪公告、财报和行业催化"
+          ],
+          "data_gaps": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "chanlun_structure_comment": "",
+        "integrated_decision": {
+          "action": "HOLD",
+          "reason": "LLM分析不可用（JSON parse error）",
+          "add_condition": "",
+          "reduce_condition": "",
+          "stop_condition": "",
+          "confidence": "中"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "近期待确认公司相关新闻"
+          ]
+        },
+        "llm_enabled": false
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "688167",
+        "name": "炬光科技",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 463.01,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "688167",
+        "name": "炬光科技",
+        "close": 463.01,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 282.0,
+            "date": "2026-03-23",
+            "reason": "swing笔底背驰(力度比=53.90%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "688167",
+        "close": 463.01,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 446.62,
+            "date": "2026-05-26 11:30:00",
+            "reason": "swing笔底背驰(力度比=26.39%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 462.5,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "炬光科技",
+        "industry": null,
+        "business": null,
+        "market_cap": 41606000000.0,
+        "pe": -21.1653,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "HOLD",
+        "confidence": "medium",
+        "primary_reason": "日线处于中枢内，未见明确卖点",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "基本面严重缺失，PE亏损，缠论无中枢且仅弱买点未确认，消息面空白，建议观望。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "核心财务数据严重缺失，仅知市值416亿，市盈率为负（亏损），无法评估基本面质量。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足",
+            "details": [
+              "主营业务、核心产品、收入来源等数据缺失，无法描述业务模式及产业链位置。"
+            ],
+            "data_gaps": [
+              "industry",
+              "business"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "数据不足",
+            "details": [
+              "营收同比、净利润同比、扣非净利润同比等成长性指标缺失，无法判断增长或衰退趋势。"
+            ],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy",
+              "deducted_profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "数据不足",
+            "details": [
+              "毛利率、净利率、ROE、经营现金流等盈利质量指标缺失，无法评估利润的现金支撑情况。"
+            ],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe",
+              "operating_cashflow"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "数据不足",
+            "details": [
+              "资产负债率、有息负债、商誉、现金储备等债务及流动性指标缺失，无法判断抗风险能力。"
+            ],
+            "data_gaps": [
+              "debt_ratio",
+              "interest_bearing_debt",
+              "goodwill",
+              "cash"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "数据不足，亏损状态，PE为负，无参考意义",
+            "details": [
+              "市盈率(P/E)为-21.17，表明公司处于亏损状态，传统PE估值失效，需结合PS/PB等指标，但相关数据缺失。"
+            ],
+            "data_gaps": [
+              "pb",
+              "ps",
+              "行业平均估值",
+              "历史分位"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [
+              "业绩亏损风险（市盈率为负，公司尚未盈利）"
+            ],
+            "catalysts": []
+          },
+          "data_gaps": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "accounts_receivable",
+            "inventory",
+            "interest_bearing_debt",
+            "goodwill"
+          ],
+          "chanlun_relation": "基本面亏损可能压制估值修复，当前缠论结构为无中枢，缺乏趋势指引，需等待中枢形成后再结合基本面变化判断。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "无相关新闻，无法进行消息面分析。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [
+            "关注公司后续公告，尤其是业绩预告、订单签订、行业政策变化等"
+          ],
+          "data_gaps": [
+            "新闻数据缺失"
+          ]
+        },
+        "chanlun_structure_comment": "日线及30分钟级别均为无中枢状态，显示出趋势延续性不强。日线仅有一个弱底背驰参考买点282.0（3月23日），30分钟弱底背驰买点446.62（5月26日），当前价格463.01已高于30分钟EMA5（462.5），但无中枢和强底分型确认，买点可靠性低，建议等待中枢形成或更明确信号。",
+        "integrated_decision": {
+          "action": "WATCH",
+          "reason": "基本面数据严重缺失且PE亏损，缠论无中枢仅弱买点未确认，消息面空白，建议观望，避免盲目操作。",
+          "add_condition": "出现日线级别中枢且向上突破，或基本面反转信号（如季报扭亏、新增重大合同），同时放量确认。",
+          "reduce_condition": "跌破近期低点446.62或关键心理支撑，或基本面恶化迹象（如大股东减持、业绩快报继续亏损）。",
+          "stop_condition": "跌破日线底背驰参考点282.0，结合基本面出现不可逆恶化。",
+          "confidence": "低"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "accounts_receivable",
+            "inventory",
+            "interest_bearing_debt",
+            "goodwill",
+            "新闻数据"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "301217",
+        "name": "铜冠铜箔",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": null,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": ""
+      },
+      "price_snapshot": {
+        "close": 102.45,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "301217",
+        "name": "铜冠铜箔",
+        "close": 102.45,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 100
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "301217",
+        "close": 102.45,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 82.8,
+            "date": "2026-05-21 15:00:00",
+            "reason": "swing笔底背驰(力度比=54.65%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 100.43,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "铜冠铜箔",
+        "industry": null,
+        "business": null,
+        "market_cap": 84933000000.0,
+        "pe": 517.11,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "ADD_ON_CONFIRM",
+        "confidence": "low",
+        "primary_reason": "30min出现买点但日线未确认，等待日线确认后再加仓",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破关键支撑位",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "铜冠铜箔基本面数据严重不足，PE极高，无消息催化，30分钟现弱底背驰买点但日线无结构，建议观望等待日线确认再加仓。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "核心财务数据大面积缺失，仅知PE高达517.11，无法评估经营状况和估值合理性。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足，无法判断主营业务、核心产品及收入来源。",
+            "details": [
+              "行业、业务描述等信息缺失，无法分析产业链位置和生意模式。"
+            ],
+            "data_gaps": [
+              "industry",
+              "business"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "数据不足，无法判断营收/净利润增长趋势。",
+            "details": [
+              "营收同比、净利润同比、扣非净利润同比数据均缺失，无法评估增长/停滞/衰退。"
+            ],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy",
+              "deducted_profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "数据不足，无法判断盈利质量。",
+            "details": [
+              "毛利率、净利率、ROE、经营现金流等关键指标缺失，无法判断利润是否有现金流支撑。"
+            ],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe",
+              "operating_cashflow"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "数据不足，无法评估财务风险。",
+            "details": [
+              "资产负债率、有息负债、商誉、现金储备等数据缺失，无法判断抗风险能力。"
+            ],
+            "data_gaps": [
+              "debt_ratio",
+              "interest_bearing_debt",
+              "goodwill",
+              "cash"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "PE极高（517.11），但缺少行业对比和历史分位，无法判断合理性。",
+            "details": [
+              "当前PE为517.11，远高于常见合理区间，但成长性数据缺失，无法评估PEG。",
+              "PB、PS缺失，无法多维度估值参考。"
+            ],
+            "data_gaps": [
+              "pb",
+              "ps",
+              "行业估值对比",
+              "历史估值分位"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [
+              "估值极高（PE 517.11），可能存在泡沫风险",
+              "基本面数据大面积缺失，无法识别潜在财务风险"
+            ],
+            "catalysts": []
+          },
+          "data_gaps": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash"
+          ],
+          "chanlun_relation": "日线和30分钟均无中枢，走势结构不清晰，基本面数据不足，难以形成共振。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "未获取到任何相关新闻，无法分析消息面影响。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [],
+          "data_gaps": [
+            "无新闻数据"
+          ]
+        },
+        "chanlun_structure_comment": "日线级别：无中枢，趋势方向不明。30分钟级别：出现一个弱强度swing底背驰参考买点（价格82.8），但当前价格已升至102.45，远离买点；均线EMA5 100.43，价格站上EMA5，但未形成中枢，走势可能进入中阴阶段。需等待日线级别出现底分型或中枢形成以确认趋势。",
+        "integrated_decision": {
+          "action": "ADD_ON_CONFIRM",
+          "reason": "30分钟暗藏弱买点，但日线无结构配合，且基本面数据极度匮乏，消息面真空，需谨慎。",
+          "add_condition": "等待30分钟确认信号（如回踩买点附近不破）且日线出现底分型或站上关键均线。",
+          "reduce_condition": "出现卖点或跌破关键位。",
+          "stop_condition": "跌破关键支撑位（如30分钟买点82.8）。",
+          "confidence": "低"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "新闻数据"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    },
+    {
+      "holding": {
+        "account": "代理账户A",
+        "code": "688811",
+        "name": "有研复材",
+        "source": "manual",
+        "quantity": null,
+        "cost_price": 32.65,
+        "market_price": null,
+        "market_value": null,
+        "pnl": null,
+        "pnl_pct": null,
+        "note": "成本  32.65"
+      },
+      "price_snapshot": {
+        "close": 33.48,
+        "date": ""
+      },
+      "chanlun_daily": {
+        "status": "ok",
+        "code": "688811",
+        "name": "有研复材",
+        "close": 33.48,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [],
+        "sell_points": [],
+        "divergence": null,
+        "kline_count": 30
+      },
+      "chanlun_30min": {
+        "status": "ok",
+        "code": "688811",
+        "close": 33.48,
+        "trend_type": "无中枢",
+        "pivots": [],
+        "current_pivot": null,
+        "position": "无中枢",
+        "buy_points": [
+          {
+            "type": "swing底背驰参考",
+            "price": 31.23,
+            "date": "2026-05-26 10:00:00",
+            "reason": "swing笔底背驰(力度比=48.46%)，仅供参考",
+            "strength": "弱"
+          }
+        ],
+        "sell_points": [],
+        "divergence": null,
+        "ema5": 33.16,
+        "above_ema5": true,
+        "kline_count": 80
+      },
+      "fundamentals": {
+        "company_name": "有研复材",
+        "industry": null,
+        "business": null,
+        "market_cap": 3084000000.0,
+        "pe": 237.95,
+        "pb": null,
+        "ps": null,
+        "roe": null,
+        "gross_margin": null,
+        "net_margin": null,
+        "revenue_yoy": null,
+        "profit_yoy": null,
+        "deducted_profit_yoy": null,
+        "operating_cashflow": null,
+        "accounts_receivable": null,
+        "inventory": null,
+        "debt_ratio": null,
+        "interest_bearing_debt": null,
+        "goodwill": null,
+        "cash": null,
+        "source": "eastmoney",
+        "updated_at": "2026-05-26 19:02",
+        "missing_fields": [
+          "industry",
+          "business",
+          "pb",
+          "ps",
+          "roe",
+          "gross_margin",
+          "net_margin",
+          "revenue_yoy",
+          "profit_yoy",
+          "deducted_profit_yoy",
+          "operating_cashflow",
+          "debt_ratio",
+          "cash"
+        ],
+        "risk_flags": [],
+        "status": "ok"
+      },
+      "news": {
+        "positive": [],
+        "negative": [],
+        "neutral": [],
+        "already_priced_in": "uncertain",
+        "summary": "无有效新闻"
+      },
+      "news_raw": [],
+      "rule_action": {
+        "action": "ADD_ON_CONFIRM",
+        "confidence": "low",
+        "primary_reason": "30min出现买点但日线未确认，等待日线确认后再加仓",
+        "hold_condition": "维持当前仓位",
+        "add_condition": "等待30min确认信号",
+        "reduce_condition": "出现卖点或跌破关键位",
+        "stop_condition": "跌破成本价32.65且跌破日线中枢下沿",
+        "invalidated_by": [
+          "跌破关键位"
+        ]
+      },
+      "llm_review": {
+        "executive_summary": "基本面数据严重缺失，消息面平静，缠论30分钟出现底背驰买点但日线无中枢确认，维持观望，等待日线确认信号。",
+        "fundamental_analysis": {
+          "rating": "数据不足",
+          "summary": "基本面数据严重缺失，仅获取市值和PE，无法评估。",
+          "business": {
+            "title": "公司是干什么的",
+            "conclusion": "数据不足，无法判断主营业务、核心产品及商业模式。",
+            "details": [],
+            "data_gaps": [
+              "industry",
+              "business"
+            ]
+          },
+          "growth": {
+            "title": "成长性",
+            "conclusion": "数据不足，无法判断营收/净利润增长趋势。",
+            "details": [],
+            "data_gaps": [
+              "revenue_yoy",
+              "profit_yoy",
+              "deducted_profit_yoy"
+            ]
+          },
+          "profit_quality": {
+            "title": "盈利质量",
+            "conclusion": "数据不足，无法评估毛利率、净利率、ROE及现金流。",
+            "details": [],
+            "data_gaps": [
+              "gross_margin",
+              "net_margin",
+              "roe",
+              "operating_cashflow"
+            ]
+          },
+          "financial_safety": {
+            "title": "财务安全性",
+            "conclusion": "数据不足，无法评估杠杆、偿债能力及现金储备。",
+            "details": [],
+            "data_gaps": [
+              "debt_ratio",
+              "interest_bearing_debt",
+              "goodwill",
+              "cash"
+            ]
+          },
+          "valuation": {
+            "title": "估值是否合理",
+            "conclusion": "PE为237.95，处于较高水平，但缺乏行业对比和历史分位，无法判断合理性。",
+            "details": [
+              "当前市值约30.84亿，PE 237.95"
+            ],
+            "data_gaps": [
+              "pb",
+              "ps",
+              "行业平均PE",
+              "历史PE分位"
+            ]
+          },
+          "risks_and_catalysts": {
+            "risks": [],
+            "catalysts": []
+          },
+          "data_gaps": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash"
+          ],
+          "chanlun_relation": "基本面数据缺失，无法与缠论结构建立联系。"
+        },
+        "news_analysis": {
+          "rating": "数据不足",
+          "summary": "消息面无任何新闻数据，无法判断催化或风险。",
+          "key_news": [],
+          "risk_news": [],
+          "follow_up": [],
+          "data_gaps": [
+            "news_raw为空"
+          ]
+        },
+        "chanlun_structure_comment": "日线级别无中枢，整体趋势不明。30分钟级别同样未形成中枢，但出现swing底背驰参考买点（31.23元），当前价格33.48元位于EMA5（33.16）之上，短期多头占优，但需日线出现底分型或突破关键位确认。",
+        "integrated_decision": {
+          "action": "ADD_ON_CONFIRM",
+          "reason": "30分钟底背驰买点出现，但日线未确认，基本面与消息面数据不足，等待日线确认信号。",
+          "add_condition": "等待30分钟确认信号",
+          "reduce_condition": "出现卖点或跌破关键位",
+          "stop_condition": "跌破成本价32.65且跌破日线中枢下沿",
+          "confidence": "低"
+        },
+        "data_quality": {
+          "fundamental_complete": false,
+          "news_complete": false,
+          "missing_fields": [
+            "industry",
+            "business",
+            "pb",
+            "ps",
+            "roe",
+            "gross_margin",
+            "net_margin",
+            "revenue_yoy",
+            "profit_yoy",
+            "deducted_profit_yoy",
+            "operating_cashflow",
+            "debt_ratio",
+            "cash",
+            "news_raw"
+          ]
+        },
+        "llm_enabled": true
+      },
+      "risks": []
+    }
+  ],
+  "generated_at": "2026-05-26 19:08:45"
+}
