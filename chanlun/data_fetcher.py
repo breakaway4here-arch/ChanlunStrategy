@@ -45,6 +45,7 @@ STOCK_CACHE_PATH_FALLBACK = os.path.join(BASE_DIR, "..", "stock_names_cache.json
 # HTTP Session
 # ------------------------------------------------------------
 SESSION = requests.Session()
+SESSION.trust_env = False
 SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
