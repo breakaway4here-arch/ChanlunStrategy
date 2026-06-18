@@ -499,14 +499,47 @@ def collect_daily_data():
     print("[2/4] 获取板块成分股 ...")
     seen_codes = set()
     all_stocks = []
+    consecutive_failures = 0
     for sector in sectors:
         stocks = fetch_sector_stocks(sector["code"])
+        if not stocks:
+            consecutive_failures += 1
+            # 连续 5 个板块全部失败 → 代理大概率已挂，直接放弃剩余请求
+            if consecutive_failures >= 5:
+                print(f"  连续 {consecutive_failures} 个板块API失败，跳过剩余板块")
+                break
+        else:
+            consecutive_failures = 0
         for st in stocks:
             if st["code"] not in seen_codes:
                 seen_codes.add(st["code"])
                 st["sector"] = sector["name"]
                 all_stocks.append(st)
     print(f"  共 {len(all_stocks)} 只成分股（去重后）")
+
+    # 兜底：板块API全部不可用时（如本地代理停止导致DNS劫持），
+    # 从 K 线缓存中恢复股票列表，保证日报仍能产出
+    if not all_stocks:
+        from pathlib import Path
+        from config import KLINE_CACHE_DIR
+        cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
+        if cache_dir.exists():
+            cached = list(cache_dir.glob("*.json"))
+            code_to_name = get_code_to_name()
+            for f in cached:
+                code = f.stem
+                # 跳过非标准6位代码（如指数）
+                if not code or len(code) != 6 or not code.isdigit():
+                    continue
+                # 跳过北交所/新三板（92/87/83/43开头）
+                if code[:2] in ("92", "87", "83", "43"):
+                    continue
+                name = code_to_name.get(code, code)
+                all_stocks.append({"code": code, "name": name, "sector": ""})
+            if all_stocks:
+                print(f"  [FALLBACK] 板块API全部不可用，从 K线缓存恢复 {len(all_stocks)} 只股票")
+            else:
+                print(f"  [FALLBACK] K线缓存中无可用股票")
 
     print(f"[3/4] 批量获取日线（{len(all_stocks)} 只）...")
     t0 = time.time()
