@@ -1,0 +1,21 @@
+# 持仓账户配置示例
+# 复制为 accounts.yaml 并修改
+
+accounts:
+  - name: 广发易淘金
+    type: excel
+    path: /Users/yangfan/yf_source/stock-shared-data/holdings/广发易淘金PC版-持仓.xlsx
+
+  - name: 其他账户A
+    type: manual
+    holdings:
+      - name: 中际旭创
+      - name: 新易盛
+      - code: "300750"
+        name: 宁德时代
+
+  - name: 其他账户B
+    type: manual
+    holdings:
+      - name: 比亚迪
+        note: 只知道持有，未录入成本

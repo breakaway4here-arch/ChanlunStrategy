@@ -8,3 +8,6 @@ config.json
 docs/*.md
 daily_run.log
 .cache/
+stock_names_cache.json
+holdings/accounts.yaml
+docs/stock-review/data/*.json
