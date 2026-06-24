@@ -38,7 +38,10 @@ from .kline_cache import (
 # 路径
 # ------------------------------------------------------------
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-STOCK_CACHE_PATH = os.path.join(os.path.dirname(BASE_DIR), "stock_names_cache.json")
+STOCK_CACHE_PATH = os.environ.get(
+    "STOCK_NAMES_CACHE_FILE",
+    "/Users/yangfan/yf_source/stock-shared-data/stock_names_cache.json",
+)
 STOCK_CACHE_PATH_FALLBACK = os.path.join(BASE_DIR, "..", "stock_names_cache.json")
 
 # ------------------------------------------------------------
