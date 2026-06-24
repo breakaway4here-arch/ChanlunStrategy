@@ -54,6 +54,7 @@ from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
+from chanlun.next_day_boom import build_next_day_boom_candidates
 
 
 # ============================================================
@@ -615,6 +616,16 @@ def main(debug=False):
     print("  获取市场指数 ...")
     market_indices = fetch_market_indices()
 
+    # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
+    next_day_boom = build_next_day_boom_candidates(
+        picks_fusion=fusion_scored,
+        startup_watchlist=startup_watchlist,
+        market=market_indices,
+    )
+    print(f"  次日大涨模式: {next_day_boom.get('mode')} "
+          f"候选={len(next_day_boom.get('candidates', []))} "
+          f"原因={next_day_boom.get('reason', '')}")
+
     # 上证缠论结构
     print("  分析上证缠论结构 ...")
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
@@ -715,6 +726,7 @@ def main(debug=False):
         "sell_signals": sell_signals,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
+        "next_day_boom": next_day_boom,
     }
 
     # 生成 HTML（debug 模式输出到独立目录，隔离上线数据）

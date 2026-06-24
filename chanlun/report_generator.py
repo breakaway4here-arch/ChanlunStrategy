@@ -480,6 +480,40 @@ def _serialize_startup_watchlist(watchlist):
     return result
 
 
+def _serialize_next_day_boom(data):
+    """Serialize next-day boom selector output."""
+    data = data or {}
+    candidates = []
+    for c in data.get("candidates", []) or []:
+        candidates.append({
+            "rank": c.get("rank"),
+            "code": c.get("code", ""),
+            "name": c.get("name", ""),
+            "sector": c.get("sector", ""),
+            "source_pool": c.get("source_pool", ""),
+            "source_type": c.get("source_type", ""),
+            "boom_score": c.get("boom_score", 0),
+            "boom_reason": c.get("boom_reason", ""),
+            "change_pct": c.get("change_pct", 0),
+            "volume_ratio": c.get("volume_ratio", 0),
+            "market_change_pct": c.get("market_change_pct", data.get("market_change_pct", 0)),
+            "ma_bullish": c.get("ma_bullish", False),
+            "startup_reason": c.get("startup_reason", ""),
+            "confirmed_by": c.get("confirmed_by", ""),
+            "confirmations": c.get("confirmations", []),
+            "reference_price": c.get("reference_price"),
+        })
+    return {
+        "mode": data.get("mode", "disabled"),
+        "reason": data.get("reason", ""),
+        "market_change_pct": data.get("market_change_pct", 0),
+        "enable_threshold_pct": data.get("enable_threshold_pct", 1.0),
+        "top_n": data.get("top_n", len(candidates)),
+        "source_counts": data.get("source_counts", {}),
+        "candidates": candidates,
+    }
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -732,6 +766,7 @@ def generate_report(report_data, output_dir=None):
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
+        "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "recent_reviews": build_recent_reviews(
             date_str,
             output_dir or os.path.join(
@@ -1972,6 +2007,10 @@ body {{
     <div id="selectionSummaryCards"></div>
     <div id="signalSummary"></div>
     <div id="versionDiff"></div>
+    <div id="nextDayBoomSection">
+        <div class="section-title">次日大涨候选 <span style="font-size:13px;color:#ffcb66;" id="nextDayBoomCount"></span></div>
+        <div id="nextDayBoomContent"></div>
+    </div>
     <div id="startupWatchSection">
         <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
         <div id="startupWatchContent"></div>
@@ -2176,6 +2215,7 @@ async function init() {{
                     sell_signals: day.sell_signals || [],
                     diagnostics: day.diagnostics || {{}},
                     startup_watchlist: day.startup_watchlist || [],
+                    next_day_boom: day.next_day_boom || {{}},
                 }};
                 return reports;
             }})()
@@ -2255,6 +2295,7 @@ function renderAll() {{
     renderForecast();
     renderSellSignals();
     renderLimitUp();
+    renderNextDayBoom();
     renderStartupWatchlist();
     renderRecentReviews();
     switchVersion('fusion');
@@ -2781,6 +2822,71 @@ function renderLimitUp() {{
     }});
     html += '</div>';
     document.getElementById('limitUpContent').innerHTML = html;
+}}
+
+// ========== 次日大涨候选 ==========
+function renderNextDayBoom() {{
+    var data = REPORT_DATA.next_day_boom || {{}};
+    var section = document.getElementById('nextDayBoomSection');
+    var countEl = document.getElementById('nextDayBoomCount');
+    var box = document.getElementById('nextDayBoomContent');
+    if (!section || !box) return;
+
+    var hasData = data.mode || (data.candidates && data.candidates.length);
+    if (!hasData) {{
+        section.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }}
+
+    section.style.display = '';
+    var candidates = data.candidates || [];
+    if (countEl) {{
+        countEl.textContent = data.mode === 'enabled'
+            ? '(' + candidates.length + ' 只)'
+            : '(关闭)';
+    }}
+
+    var marketPct = Number(data.market_change_pct || 0);
+    var marketText = (marketPct >= 0 ? '+' : '') + marketPct.toFixed(2) + '%';
+    var metaHtml = '<div class="table-meta">' +
+        '<span>模式：' + escapeHtml(data.mode === 'enabled' ? '开启' : '关闭') +
+        ' · 上证 ' + escapeHtml(marketText) + '</span>' +
+        '<span class="table-note">' + escapeHtml(data.reason || '') + '</span>' +
+        '</div>';
+
+    if (!candidates.length) {{
+        box.innerHTML = '<div class="table-shell">' + metaHtml +
+            '<div style="padding:18px;color:#90a0b5;font-size:13px;">当前没有符合次日大涨模式的候选。</div>' +
+            '</div>';
+        return;
+    }}
+
+    var html = '<div class="table-shell">' + metaHtml +
+        '<table class="chan-table"><thead><tr>' +
+        '<th>Rank</th><th>代码</th><th>名称</th><th>来源</th><th>板块</th>' +
+        '<th>评分</th><th>涨幅</th><th>量比</th><th>理由</th><th>启动原因</th>' +
+        '</tr></thead><tbody>';
+    candidates.forEach(function(c) {{
+        var chg = Number(c.change_pct || 0);
+        var vr = Number(c.volume_ratio || 0);
+        var sourceText = c.source_pool === 'fusion' ? '融合启动' : '启动观察';
+        var sourceClass = c.source_pool === 'fusion' ? 'pass' : 'block';
+        html += '<tr>' +
+            '<td class="num-condensed">' + escapeHtml(c.rank || '-') + '</td>' +
+            '<td class="primary-cell">' + escapeHtml(c.code || '') + '</td>' +
+            '<td>' + escapeHtml(c.name || '') + '</td>' +
+            '<td><span class="decision-chip ' + sourceClass + '">' + escapeHtml(sourceText) + '</span></td>' +
+            '<td><div class="secondary-cell" style="margin-top:0;">' + escapeHtml(c.sector || '-') + '</div></td>' +
+            '<td class="num-condensed" style="color:#ffcb66;">' + Number(c.boom_score || 0).toFixed(0) + '</td>' +
+            '<td class="num-condensed ' + (chg >= 0 ? 'up' : 'down') + '">' + (chg >= 0 ? '+' : '') + chg.toFixed(2) + '%</td>' +
+            '<td class="num-condensed">' + (vr ? vr.toFixed(2) + 'x' : '-') + '</td>' +
+            '<td style="color:#dfe6e9;font-size:13px;">' + escapeHtml(c.boom_reason || '') + '</td>' +
+            '<td style="color:#90a0b5;font-size:12px;">' + escapeHtml(c.startup_reason || '') + '</td>' +
+            '</tr>';
+    }});
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
 }}
 
 // ========== 启动观察 ==========
@@ -3496,6 +3602,7 @@ function showHistory(dateStr) {{
         forecast: report.forecast || {{}},
         sell_signals: report.sell_signals || [],
         startup_watchlist: report.startup_watchlist || [],
+        next_day_boom: report.next_day_boom || {{}},
     }};
     updateHeaderDate(dateStr);
     renderMarketCards();
@@ -3507,6 +3614,7 @@ function showHistory(dateStr) {{
     renderForecast();
     renderSellSignals();
     renderLimitUp();
+    renderNextDayBoom();
     renderStartupWatchlist();
     switchVersion(CURRENT_VERSION);
     var tabs = document.querySelectorAll('.history-tab');
@@ -3649,6 +3757,7 @@ def update_data_json(report_data, output_dir=None):
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
+        "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
     }
     existing["reports"][date_str] = day_entry
 

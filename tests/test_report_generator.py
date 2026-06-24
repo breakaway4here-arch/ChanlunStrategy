@@ -658,5 +658,50 @@ class TestLayoutRefresh(unittest.TestCase):
         self.assertIn("fetch(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json')", self.html)
 
 
+class TestNextDayBoomRendering(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_next_day_boom_")
+        report_data = _make_minimal_report_data()
+        report_data["next_day_boom"] = {
+            "mode": "enabled",
+            "reason": "上证涨幅超过1%，开启次日大涨模式",
+            "market_change_pct": 1.23,
+            "candidates": [{
+                "rank": 1,
+                "code": "600001",
+                "name": "大涨候选",
+                "sector": "测试板块",
+                "source_pool": "fusion",
+                "source_type": "强势启动候选",
+                "boom_score": 52,
+                "boom_reason": "融合强势启动；量比甜区1.3-1.6",
+                "change_pct": 5.6,
+                "volume_ratio": 1.45,
+                "market_change_pct": 1.23,
+                "startup_reason": "低位放量启动",
+            }],
+        }
+        generate_report(report_data, output_dir=cls.tmpdir)
+        with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
+            cls.html = f.read()
+        with open(os.path.join(cls.tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
+            cls.day_data = json.load(f)
+
+    def test_daily_json_contains_next_day_boom(self):
+        self.assertEqual(self.day_data["next_day_boom"]["mode"], "enabled")
+        self.assertEqual(self.day_data["next_day_boom"]["candidates"][0]["code"], "600001")
+
+    def test_html_has_next_day_boom_section(self):
+        self.assertIn('id="nextDayBoomSection"', self.html)
+        self.assertIn('id="nextDayBoomContent"', self.html)
+        self.assertIn("function renderNextDayBoom", self.html)
+
+    def test_history_switch_refreshes_next_day_boom(self):
+        self.assertIn("next_day_boom: report.next_day_boom || {}", self.html)
+        self.assertIn("renderNextDayBoom();", self.html)
+
+
 if __name__ == "__main__":
     unittest.main()
