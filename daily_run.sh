@@ -3,7 +3,7 @@
 # 由 launchd 每个工作日 14:35 触发，15:05 做一次补偿触发
 
 source ~/.zshrc 2>/dev/null || true
-cd /Users/yangfan/yf_source/JQ_gu/chanlun_strategy
+cd /Users/yangfan/yf_source/ChanlunStrategy
 
 TODAY=$(date '+%Y-%m-%d')
 TODAY_DATA_PATH="docs/data/${TODAY}.json"
