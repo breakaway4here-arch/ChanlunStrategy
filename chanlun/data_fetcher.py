@@ -63,6 +63,15 @@ _EASTMONEY_BASE_URLS = [
     "https://push2delay.eastmoney.com/api/qt/clist/get",
 ]
 _EASTMONEY_TIMEOUT = 15
+_INDEX_SOURCE_MAX_DIFF_PCT = 0.3
+
+
+class MarketDataUnavailable(RuntimeError):
+    """Raised when market index data cannot be trusted enough to publish."""
+
+
+class MarketDataConflict(MarketDataUnavailable):
+    """Raised when multiple live market sources disagree beyond tolerance."""
 
 
 def _collect_proxy_config():
@@ -314,6 +323,146 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
         return None
 
 
+def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
+    """获取日线K线。东方财富历史K线 API。"""
+    params = {
+        "secid": _em_secid(code),
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": "101",
+        "fqt": "1",
+        "end": "20500101",
+        "lmt": str(count),
+    }
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    try:
+        resp = SESSION.get(url, params=params, timeout=15)
+        data = resp.json()
+        klines = data.get("data", {}).get("klines", [])
+        if not klines:
+            return None
+        raw_lines = []
+        for line in klines:
+            parts = str(line).split(",")
+            if len(parts) < 6:
+                continue
+            # 统一为腾讯解析格式: 日期, 开盘, 收盘, 最高, 最低, 成交量
+            raw_lines.append([parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]])
+        if not raw_lines:
+            return None
+        return _parse_tencent_kline(raw_lines)
+    except Exception as e:
+        print(f"[ERROR] 东方财富日线失败 {code}: {e}")
+        return None
+
+
+def _fetch_daily_kline_sina_quote_remote(code, count=DAY_LOOKBACK):
+    """Fetch latest index quote from Sina and synthesize a 2-bar kline."""
+    sc = _sina_code(code)
+    url = f"https://hq.sinajs.cn/list={sc}"
+    try:
+        resp = SESSION.get(
+            url,
+            timeout=10,
+            headers={
+                "Referer": "https://finance.sina.com.cn",
+                "User-Agent": SESSION.headers.get("User-Agent", "Mozilla/5.0"),
+            },
+        )
+        text = resp.text
+        if '="' not in text:
+            return None
+        payload = text.split('="', 1)[1].rsplit('"', 1)[0]
+        parts = payload.split(",")
+        if len(parts) < 31:
+            return None
+        open_price = float(parts[1])
+        prev_close = float(parts[2])
+        current = float(parts[3])
+        high = float(parts[4])
+        low = float(parts[5])
+        volume = float(parts[8] or 0)
+        quote_date = parts[30]
+        if not quote_date or prev_close <= 0 or current <= 0:
+            return None
+        return {
+            "dates": [quote_date, quote_date],
+            "opens": np.array([prev_close, open_price]),
+            "highs": np.array([prev_close, high]),
+            "lows": np.array([prev_close, low]),
+            "closes": np.array([prev_close, current]),
+            "volumes": np.array([0.0, volume]),
+        }
+    except Exception as e:
+        print(f"[ERROR] 新浪实时指数失败 {code}: {e}")
+        return None
+
+
+def _latest_date(kline):
+    dates = (kline or {}).get("dates", [])
+    return str(dates[-1]).split(" ")[0] if dates else ""
+
+
+def _latest_change_pct(kline):
+    closes = (kline or {}).get("closes", [])
+    if closes is None or len(closes) < 2:
+        return None
+    prev = float(closes[-2])
+    curr = float(closes[-1])
+    if prev <= 0:
+        return None
+    return (curr - prev) / prev * 100
+
+
+def _validate_index_kline(code, source, kline, required_date=None, min_bars=2):
+    if not kline or len(kline.get("closes", [])) < min_bars:
+        raise MarketDataUnavailable(f"{source} {code} 无有效指数K线")
+    latest = _latest_date(kline)
+    if required_date and latest != required_date:
+        raise MarketDataUnavailable(f"{source} {code} 指数日期{latest}不是报告日{required_date}")
+    chg = _latest_change_pct(kline)
+    if chg is None:
+        raise MarketDataUnavailable(f"{source} {code} 指数涨跌幅无法验算")
+    return chg
+
+
+def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
+    """Fetch index daily kline from live sources only; stale cache is not accepted."""
+    min_bars = 2 if count <= 3 else min(20, count)
+    sources = [
+        ("tencent", _fetch_daily_kline_remote),
+        ("eastmoney", _fetch_daily_kline_eastmoney_remote),
+        ("sina_quote", _fetch_daily_kline_sina_quote_remote),
+    ]
+    valid = []
+    errors = []
+    for source, fetcher in sources:
+        kline = fetcher(code, count=count)
+        try:
+            chg = _validate_index_kline(
+                code, source, kline, required_date=required_date, min_bars=min_bars
+            )
+        except MarketDataUnavailable as e:
+            errors.append(str(e))
+            continue
+        valid.append((source, kline, chg))
+
+    if not valid:
+        raise MarketDataUnavailable(f"{code} 指数多源取数失败: {'; '.join(errors)}")
+
+    base_source, base_kline, base_chg = valid[0]
+    for source, _kline, chg in valid[1:]:
+        if abs(chg - base_chg) > _INDEX_SOURCE_MAX_DIFF_PCT:
+            raise MarketDataConflict(
+                f"{code} 指数源冲突: {base_source}={base_chg:.2f}%, {source}={chg:.2f}%"
+            )
+
+    result = dict(base_kline)
+    result["source"] = base_source
+    return result
+
+
 def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
     """Fetch daily kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
@@ -354,9 +503,9 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
     return None
 
 
-def fetch_shanghai_index():
+def fetch_shanghai_index(required_date=None):
     """获取上证指数日线"""
-    return fetch_daily_kline("000001", count=DAY_LOOKBACK)
+    return fetch_verified_index_kline("000001", count=DAY_LOOKBACK, required_date=required_date)
 
 
 # ============================================================
@@ -593,7 +742,7 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
 # ============================================================
 # Phase 1 主流程
 # ============================================================
-def collect_daily_data():
+def collect_daily_data(required_date=None):
     """
     完整数据采集流程:
     1. 获取 TOP20 资金流入板块
@@ -678,7 +827,7 @@ def collect_daily_data():
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
 
     print("[4/4] 获取上证指数日线 ...")
-    sh_kline = fetch_shanghai_index()
+    sh_kline = fetch_shanghai_index(required_date=required_date)
     print(f"  上证数据: {len(sh_kline['closes']) if sh_kline else 0} 根K线")
 
     print("Phase 1 完成\n")

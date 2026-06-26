@@ -38,7 +38,7 @@ from config import (
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
-    fetch_daily_kline, fetch_kline,
+    fetch_daily_kline, fetch_kline, fetch_verified_index_kline,
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool,
 )
@@ -72,21 +72,21 @@ MARKET_INDICES = {
 }
 
 
-def fetch_market_indices():
+def fetch_market_indices(report_date=None, index_codes=None):
     """拉取主要市场指数行情"""
+    index_codes = index_codes or MARKET_INDICES
     indices = {}
-    for name, code in MARKET_INDICES.items():
-        kline = fetch_kline(code, klt="101", count=3)
-        if kline and len(kline["closes"]) >= 2:
-            prev = kline["closes"][-2]
-            curr = kline["closes"][-1]
-            chg_pct = (curr - prev) / prev * 100 if prev > 0 else 0
-            indices[name] = {
-                "close": round(float(curr), 2),
-                "change_pct": round(float(chg_pct), 2),
-            }
-        else:
-            indices[name] = {"close": 0, "change_pct": 0}
+    for name, code in index_codes.items():
+        kline = fetch_verified_index_kline(code, count=3, required_date=report_date)
+        prev = float(kline["closes"][-2])
+        curr = float(kline["closes"][-1])
+        chg_pct = (curr - prev) / prev * 100 if prev > 0 else 0
+        indices[name] = {
+            "close": round(curr, 2),
+            "change_pct": round(float(chg_pct), 2),
+            "date": str(kline["dates"][-1]).split(" ")[0],
+            "source": kline.get("source", ""),
+        }
     return indices
 
 
@@ -217,7 +217,7 @@ def main(debug=False):
             "stocks": stocks_with_kline,
         }
     else:
-        daily_data = collect_daily_data()
+        daily_data = collect_daily_data(required_date=today)
 
     sectors = daily_data["sectors"]
     sh_kline = daily_data["sh_index"]
@@ -653,7 +653,7 @@ def main(debug=False):
 
     # 市场指数
     print("  获取市场指数 ...")
-    market_indices = fetch_market_indices()
+    market_indices = fetch_market_indices(report_date=today)
 
     # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
     next_day_boom = build_next_day_boom_candidates(
