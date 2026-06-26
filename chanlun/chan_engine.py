@@ -4,7 +4,17 @@ This module keeps legacy imports and behavior stable while implementation is
 split into dedicated modules.
 """
 
-from config import THIRD_BUY_MAX_CHASE_PCT, USE_SEGMENT_BREAK_BUILDER
+from config import (
+    BI_MIN_KLINE_COUNT,
+    DIVERGENCE_PLATEAU,
+    MACD_FAST,
+    MACD_SIGNAL,
+    MACD_SLOW,
+    PIVOT_MIN_SEGMENTS,
+    SEGMENT_MIN_STROKES,
+    THIRD_BUY_MAX_CHASE_PCT,
+    USE_SEGMENT_BREAK_BUILDER,
+)
 
 from .engine_core import (
     build_segments_by_break,

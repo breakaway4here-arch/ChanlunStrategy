@@ -3,20 +3,35 @@ import unittest
 
 
 from chanlun.chan_engine import (
+    BI_MIN_KLINE_COUNT,
+    DIVERGENCE_PLATEAU,
     Fractal,
-    Stroke,
-    Segment,
-    Pivot,
     ChanResult,
+    MACD_FAST,
+    MACD_SIGNAL,
+    MACD_SLOW,
+    PIVOT_MIN_SEGMENTS,
+    Pivot,
+    SEGMENT_MIN_STROKES,
+    Segment,
+    Stroke,
+    THIRD_BUY_MAX_CHASE_PCT,
+    USE_SEGMENT_BREAK_BUILDER,
     calc_macd,
-    inclusion_process,
-    find_fractals,
-    build_strokes,
+    build_segments_fixed_window,
     build_segments_by_break,
-    find_pivots,
+    build_stroke_pivots,
+    build_strokes,
+    build_strokes_swing,
     classify_trend,
     check_divergence,
+    find_fractals,
+    find_pivots,
+    inclusion_process,
     locate_buy_sell_points,
+    prune_strokes,
+    stroke_high,
+    stroke_low,
     analyze,
 )
 
@@ -28,11 +43,26 @@ class ChanEngineImportCompatibilityTests(unittest.TestCase):
         self.assertTrue(callable(find_fractals))
         self.assertTrue(callable(build_strokes))
         self.assertTrue(callable(build_segments_by_break))
+        self.assertTrue(callable(build_segments_fixed_window))
         self.assertTrue(callable(find_pivots))
         self.assertTrue(callable(classify_trend))
         self.assertTrue(callable(check_divergence))
         self.assertTrue(callable(locate_buy_sell_points))
+        self.assertTrue(callable(build_strokes_swing))
+        self.assertTrue(callable(prune_strokes))
+        self.assertTrue(callable(build_stroke_pivots))
+        self.assertTrue(callable(stroke_high))
+        self.assertTrue(callable(stroke_low))
         self.assertTrue(callable(analyze))
+        self.assertGreaterEqual(BI_MIN_KLINE_COUNT, 1)
+        self.assertGreaterEqual(SEGMENT_MIN_STROKES, 1)
+        self.assertGreaterEqual(PIVOT_MIN_SEGMENTS, 1)
+        self.assertGreater(MACD_FAST, 0)
+        self.assertGreater(MACD_SLOW, 0)
+        self.assertGreater(MACD_SIGNAL, 0)
+        self.assertGreater(DIVERGENCE_PLATEAU, 0)
+        self.assertGreater(THIRD_BUY_MAX_CHASE_PCT, 0)
+        self.assertIsInstance(USE_SEGMENT_BREAK_BUILDER, bool)
 
         fractal = Fractal(type="top", index=1, price=10.0)
         stroke = Stroke(start_idx=0, end_idx=2, start_price=10.0, end_price=12.0, direction="up")

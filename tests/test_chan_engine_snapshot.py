@@ -5,6 +5,8 @@ import numpy as np
 from chanlun.chan_engine import analyze
 
 
+# Baseline generated from the legacy chan_engine.py in parent commit
+# 9e1dd4652fd3dea9117694b7d9f0caffb6a57acb, before the Phase 1 module split.
 FIXTURE_PATH = "tests/fixtures/chan_engine_legacy_snapshot.json"
 
 
