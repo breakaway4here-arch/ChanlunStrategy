@@ -1,0 +1,1575 @@
+{
+  "legacy_mixed": {
+    "fractals": [
+      {
+        "type": "top",
+        "index": 5,
+        "price": 14.277406
+      },
+      {
+        "type": "bottom",
+        "index": 9,
+        "price": 12.026529
+      },
+      {
+        "type": "top",
+        "index": 14,
+        "price": 14.558999
+      },
+      {
+        "type": "bottom",
+        "index": 22,
+        "price": 10.485972
+      },
+      {
+        "type": "top",
+        "index": 30,
+        "price": 15.768772
+      },
+      {
+        "type": "bottom",
+        "index": 33,
+        "price": 12.380211
+      },
+      {
+        "type": "top",
+        "index": 35,
+        "price": 13.824371
+      },
+      {
+        "type": "bottom",
+        "index": 37,
+        "price": 12.070075
+      },
+      {
+        "type": "top",
+        "index": 40,
+        "price": 14.938257
+      },
+      {
+        "type": "bottom",
+        "index": 42,
+        "price": 11.194966
+      },
+      {
+        "type": "top",
+        "index": 45,
+        "price": 14.304015
+      },
+      {
+        "type": "bottom",
+        "index": 51,
+        "price": 10.344212
+      },
+      {
+        "type": "top",
+        "index": 57,
+        "price": 14.835849
+      },
+      {
+        "type": "bottom",
+        "index": 61,
+        "price": 12.055781
+      }
+    ],
+    "strokes": [
+      {
+        "start_idx": 5,
+        "end_idx": 9,
+        "start_price": 14.277406,
+        "end_price": 12.026529,
+        "direction": "down"
+      },
+      {
+        "start_idx": 9,
+        "end_idx": 14,
+        "start_price": 12.026529,
+        "end_price": 14.558999,
+        "direction": "up"
+      },
+      {
+        "start_idx": 14,
+        "end_idx": 22,
+        "start_price": 14.558999,
+        "end_price": 10.485972,
+        "direction": "down"
+      },
+      {
+        "start_idx": 22,
+        "end_idx": 30,
+        "start_price": 10.485972,
+        "end_price": 15.768772,
+        "direction": "up"
+      },
+      {
+        "start_idx": 30,
+        "end_idx": 37,
+        "start_price": 15.768772,
+        "end_price": 12.070075,
+        "direction": "down"
+      },
+      {
+        "start_idx": 37,
+        "end_idx": 45,
+        "start_price": 12.070075,
+        "end_price": 14.304015,
+        "direction": "up"
+      },
+      {
+        "start_idx": 45,
+        "end_idx": 51,
+        "start_price": 14.304015,
+        "end_price": 10.344212,
+        "direction": "down"
+      },
+      {
+        "start_idx": 51,
+        "end_idx": 57,
+        "start_price": 10.344212,
+        "end_price": 14.835849,
+        "direction": "up"
+      },
+      {
+        "start_idx": 57,
+        "end_idx": 61,
+        "start_price": 14.835849,
+        "end_price": 12.055781,
+        "direction": "down"
+      }
+    ],
+    "segments": [
+      {
+        "start_idx": 5,
+        "end_idx": 22,
+        "direction": "down",
+        "high": 14.558999,
+        "low": 10.485972,
+        "confirmed": true,
+        "destroyed_by_idx": 30
+      },
+      {
+        "start_idx": 9,
+        "end_idx": 45,
+        "direction": "up",
+        "high": 15.768772,
+        "low": 10.485972,
+        "confirmed": true,
+        "destroyed_by_idx": 51
+      },
+      {
+        "start_idx": 30,
+        "end_idx": 51,
+        "direction": "down",
+        "high": 15.768772,
+        "low": 10.344212,
+        "confirmed": true,
+        "destroyed_by_idx": 57
+      },
+      {
+        "start_idx": 37,
+        "end_idx": 61,
+        "direction": "up",
+        "high": 14.835849,
+        "low": 10.344212,
+        "confirmed": false,
+        "destroyed_by_idx": null
+      }
+    ],
+    "pivots": [
+      {
+        "ZD": 10.49,
+        "ZG": 14.56,
+        "start_idx": 5,
+        "end_idx": 51,
+        "level": "本级别"
+      }
+    ],
+    "divergence": null,
+    "buy_points": [],
+    "sell_points": [],
+    "trend_type": "盘整",
+    "input_lengths": {
+      "closes": 70,
+      "highs": 70,
+      "lows": 70,
+      "opens": 70,
+      "volumes": 70,
+      "dates": 70
+    },
+    "input_tail": {
+      "closes": [
+        14.328346,
+        14.655957,
+        15.110168,
+        15.46547,
+        15.966168
+      ],
+      "highs": [
+        14.928346,
+        15.255957,
+        15.710168,
+        16.06547,
+        16.566168
+      ],
+      "lows": [
+        13.728346,
+        14.055957,
+        14.510168,
+        14.86547,
+        15.366168
+      ],
+      "opens": [
+        14.328346,
+        14.655957,
+        15.110168,
+        15.46547,
+        15.966168
+      ],
+      "volumes": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "dates": [
+        65,
+        66,
+        67,
+        68,
+        69
+      ]
+    },
+    "macd_tail": {
+      "dif": [
+        0.321671,
+        0.388279,
+        0.472274,
+        0.561042,
+        0.664138
+      ],
+      "dea": [
+        0.119003,
+        0.172858,
+        0.232741,
+        0.298401,
+        0.371549
+      ],
+      "hist": [
+        0.405337,
+        0.430843,
+        0.479065,
+        0.525282,
+        0.585179
+      ]
+    },
+    "swing_waves": [
+      {
+        "start_idx": 0,
+        "end_idx": 5,
+        "start_price": 9.88,
+        "end_price": 14.28,
+        "direction": "up"
+      },
+      {
+        "start_idx": 5,
+        "end_idx": 6,
+        "start_price": 14.28,
+        "end_price": 12.34,
+        "direction": "down"
+      },
+      {
+        "start_idx": 6,
+        "end_idx": 10,
+        "start_price": 12.34,
+        "end_price": 14.57,
+        "direction": "up"
+      },
+      {
+        "start_idx": 10,
+        "end_idx": 12,
+        "start_price": 14.57,
+        "end_price": 12.49,
+        "direction": "down"
+      },
+      {
+        "start_idx": 12,
+        "end_idx": 14,
+        "start_price": 12.49,
+        "end_price": 14.56,
+        "direction": "up"
+      },
+      {
+        "start_idx": 14,
+        "end_idx": 22,
+        "start_price": 14.56,
+        "end_price": 10.49,
+        "direction": "down"
+      },
+      {
+        "start_idx": 22,
+        "end_idx": 30,
+        "start_price": 10.49,
+        "end_price": 15.77,
+        "direction": "up"
+      },
+      {
+        "start_idx": 30,
+        "end_idx": 33,
+        "start_price": 15.77,
+        "end_price": 12.38,
+        "direction": "down"
+      },
+      {
+        "start_idx": 33,
+        "end_idx": 35,
+        "start_price": 12.38,
+        "end_price": 13.82,
+        "direction": "up"
+      },
+      {
+        "start_idx": 35,
+        "end_idx": 37,
+        "start_price": 13.82,
+        "end_price": 12.07,
+        "direction": "down"
+      },
+      {
+        "start_idx": 37,
+        "end_idx": 40,
+        "start_price": 12.07,
+        "end_price": 14.94,
+        "direction": "up"
+      },
+      {
+        "start_idx": 40,
+        "end_idx": 42,
+        "start_price": 14.94,
+        "end_price": 11.19,
+        "direction": "down"
+      },
+      {
+        "start_idx": 42,
+        "end_idx": 45,
+        "start_price": 11.19,
+        "end_price": 14.3,
+        "direction": "up"
+      },
+      {
+        "start_idx": 45,
+        "end_idx": 51,
+        "start_price": 14.3,
+        "end_price": 10.34,
+        "direction": "down"
+      },
+      {
+        "start_idx": 51,
+        "end_idx": 57,
+        "start_price": 10.34,
+        "end_price": 14.84,
+        "direction": "up"
+      },
+      {
+        "start_idx": 57,
+        "end_idx": 61,
+        "start_price": 14.84,
+        "end_price": 12.06,
+        "direction": "down"
+      },
+      {
+        "start_idx": 61,
+        "end_idx": 69,
+        "start_price": 12.06,
+        "end_price": 16.57,
+        "direction": "up"
+      }
+    ],
+    "swing_zones": [
+      {
+        "ZD": 12.49,
+        "ZG": 13.82,
+        "start_idx": 0,
+        "end_idx": 69,
+        "level": "笔中枢"
+      }
+    ]
+  },
+  "sideways": {
+    "fractals": [
+      {
+        "type": "top",
+        "index": 4,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 10,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 14,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 20,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 24,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 30,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 34,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 40,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 44,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 50,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 54,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 60,
+        "price": 8.6
+      },
+      {
+        "type": "top",
+        "index": 64,
+        "price": 11.4
+      },
+      {
+        "type": "bottom",
+        "index": 70,
+        "price": 8.6
+      }
+    ],
+    "strokes": [
+      {
+        "start_idx": 4,
+        "end_idx": 10,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 10,
+        "end_idx": 14,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 14,
+        "end_idx": 20,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 20,
+        "end_idx": 24,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 24,
+        "end_idx": 30,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 30,
+        "end_idx": 34,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 34,
+        "end_idx": 40,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 40,
+        "end_idx": 44,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 44,
+        "end_idx": 50,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 50,
+        "end_idx": 54,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 54,
+        "end_idx": 60,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 60,
+        "end_idx": 64,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 64,
+        "end_idx": 70,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      }
+    ],
+    "segments": [
+      {
+        "start_idx": 4,
+        "end_idx": 70,
+        "direction": "down",
+        "high": 11.4,
+        "low": 8.6,
+        "confirmed": false,
+        "destroyed_by_idx": null
+      }
+    ],
+    "pivots": [],
+    "divergence": null,
+    "buy_points": [],
+    "sell_points": [],
+    "trend_type": "无中枢",
+    "input_lengths": {
+      "closes": 80,
+      "highs": 80,
+      "lows": 80,
+      "opens": 80,
+      "volumes": 80,
+      "dates": 80
+    },
+    "input_tail": {
+      "closes": [
+        9.2,
+        9.6,
+        10.0,
+        10.4,
+        10.8
+      ],
+      "highs": [
+        9.8,
+        10.2,
+        10.6,
+        11.0,
+        11.4
+      ],
+      "lows": [
+        8.6,
+        9.0,
+        9.4,
+        9.8,
+        10.2
+      ],
+      "opens": [
+        9.2,
+        9.6,
+        10.0,
+        10.4,
+        10.8
+      ],
+      "volumes": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "dates": [
+        75,
+        76,
+        77,
+        78,
+        79
+      ]
+    },
+    "macd_tail": {
+      "dif": [
+        -0.008338,
+        -0.038725,
+        -0.030182,
+        0.008764,
+        0.071086
+      ],
+      "dea": [
+        0.007153,
+        -0.002022,
+        -0.007654,
+        -0.004371,
+        0.010721
+      ],
+      "hist": [
+        -0.030982,
+        -0.073404,
+        -0.045055,
+        0.02627,
+        0.120731
+      ]
+    },
+    "swing_waves": [
+      {
+        "start_idx": 0,
+        "end_idx": 4,
+        "start_price": 9.8,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 4,
+        "end_idx": 5,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 5,
+        "end_idx": 9,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 9,
+        "end_idx": 10,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 10,
+        "end_idx": 14,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 14,
+        "end_idx": 15,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 15,
+        "end_idx": 19,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 19,
+        "end_idx": 20,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 20,
+        "end_idx": 24,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 24,
+        "end_idx": 25,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 25,
+        "end_idx": 29,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 29,
+        "end_idx": 30,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 30,
+        "end_idx": 34,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 34,
+        "end_idx": 35,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 35,
+        "end_idx": 39,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 39,
+        "end_idx": 40,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 40,
+        "end_idx": 44,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 44,
+        "end_idx": 45,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 45,
+        "end_idx": 49,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 49,
+        "end_idx": 50,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 50,
+        "end_idx": 54,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 54,
+        "end_idx": 55,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 55,
+        "end_idx": 59,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 59,
+        "end_idx": 60,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 60,
+        "end_idx": 64,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 64,
+        "end_idx": 65,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 65,
+        "end_idx": 69,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 69,
+        "end_idx": 70,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 70,
+        "end_idx": 74,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 74,
+        "end_idx": 75,
+        "start_price": 11.4,
+        "end_price": 8.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 75,
+        "end_idx": 79,
+        "start_price": 8.6,
+        "end_price": 11.4,
+        "direction": "up"
+      }
+    ],
+    "swing_zones": [
+      {
+        "ZD": 9.8,
+        "ZG": 11.4,
+        "start_idx": 0,
+        "end_idx": 79,
+        "level": "笔中枢"
+      }
+    ]
+  },
+  "trend_up": {
+    "fractals": [],
+    "strokes": [],
+    "segments": [],
+    "pivots": [],
+    "divergence": null,
+    "buy_points": [],
+    "sell_points": [],
+    "trend_type": "无中枢",
+    "input_lengths": {
+      "closes": 80,
+      "highs": 80,
+      "lows": 80,
+      "opens": 80,
+      "volumes": 80,
+      "dates": 80
+    },
+    "input_tail": {
+      "closes": [
+        28.75,
+        29.0,
+        29.25,
+        29.5,
+        29.75
+      ],
+      "highs": [
+        29.35,
+        29.6,
+        29.85,
+        30.1,
+        30.35
+      ],
+      "lows": [
+        28.15,
+        28.4,
+        28.65,
+        28.9,
+        29.15
+      ],
+      "opens": [
+        28.75,
+        29.0,
+        29.25,
+        29.5,
+        29.75
+      ],
+      "volumes": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "dates": [
+        75,
+        76,
+        77,
+        78,
+        79
+      ]
+    },
+    "macd_tail": {
+      "dif": [
+        1.75,
+        1.75,
+        1.75,
+        1.75,
+        1.75
+      ],
+      "dea": [
+        1.75,
+        1.75,
+        1.75,
+        1.75,
+        1.75
+      ],
+      "hist": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    "swing_waves": [
+      {
+        "start_idx": 0,
+        "end_idx": 79,
+        "start_price": 10.6,
+        "end_price": 30.35,
+        "direction": "up"
+      }
+    ],
+    "swing_zones": []
+  },
+  "trend_down": {
+    "fractals": [],
+    "strokes": [],
+    "segments": [],
+    "pivots": [],
+    "divergence": null,
+    "buy_points": [],
+    "sell_points": [],
+    "trend_type": "无中枢",
+    "input_lengths": {
+      "closes": 80,
+      "highs": 80,
+      "lows": 80,
+      "opens": 80,
+      "volumes": 80,
+      "dates": 80
+    },
+    "input_tail": {
+      "closes": [
+        9.5,
+        9.2,
+        8.9,
+        8.6,
+        8.3
+      ],
+      "highs": [
+        10.1,
+        9.8,
+        9.5,
+        9.2,
+        8.9
+      ],
+      "lows": [
+        8.9,
+        8.6,
+        8.3,
+        8.0,
+        7.7
+      ],
+      "opens": [
+        9.5,
+        9.2,
+        8.9,
+        8.6,
+        8.3
+      ],
+      "volumes": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "dates": [
+        75,
+        76,
+        77,
+        78,
+        79
+      ]
+    },
+    "macd_tail": {
+      "dif": [
+        -2.1,
+        -2.1,
+        -2.1,
+        -2.1,
+        -2.1
+      ],
+      "dea": [
+        -2.1,
+        -2.1,
+        -2.1,
+        -2.1,
+        -2.1
+      ],
+      "hist": [
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0,
+        -0.0
+      ]
+    },
+    "swing_waves": [
+      {
+        "start_idx": 0,
+        "end_idx": 79,
+        "start_price": 31.4,
+        "end_price": 7.7,
+        "direction": "down"
+      }
+    ],
+    "swing_zones": []
+  },
+  "volatile_with_pivots": {
+    "fractals": [
+      {
+        "type": "top",
+        "index": 3,
+        "price": 17.0
+      },
+      {
+        "type": "bottom",
+        "index": 8,
+        "price": 10.7
+      },
+      {
+        "type": "top",
+        "index": 11,
+        "price": 15.5
+      },
+      {
+        "type": "bottom",
+        "index": 14,
+        "price": 10.4
+      },
+      {
+        "type": "top",
+        "index": 17,
+        "price": 16.3
+      },
+      {
+        "type": "bottom",
+        "index": 24,
+        "price": 10.3
+      },
+      {
+        "type": "top",
+        "index": 29,
+        "price": 16.2
+      },
+      {
+        "type": "bottom",
+        "index": 34,
+        "price": 9.9
+      },
+      {
+        "type": "top",
+        "index": 37,
+        "price": 16.4
+      },
+      {
+        "type": "bottom",
+        "index": 40,
+        "price": 10.1
+      },
+      {
+        "type": "top",
+        "index": 45,
+        "price": 15.9
+      },
+      {
+        "type": "bottom",
+        "index": 48,
+        "price": 9.6
+      },
+      {
+        "type": "top",
+        "index": 53,
+        "price": 15.6
+      },
+      {
+        "type": "bottom",
+        "index": 58,
+        "price": 9.5
+      },
+      {
+        "type": "top",
+        "index": 65,
+        "price": 16.0
+      },
+      {
+        "type": "bottom",
+        "index": 70,
+        "price": 10.2
+      },
+      {
+        "type": "top",
+        "index": 73,
+        "price": 16.2
+      },
+      {
+        "type": "bottom",
+        "index": 78,
+        "price": 10.4
+      },
+      {
+        "type": "top",
+        "index": 83,
+        "price": 15.7
+      },
+      {
+        "type": "bottom",
+        "index": 88,
+        "price": 10.1
+      }
+    ],
+    "strokes": [
+      {
+        "start_idx": 3,
+        "end_idx": 8,
+        "start_price": 17.0,
+        "end_price": 10.7,
+        "direction": "down"
+      },
+      {
+        "start_idx": 8,
+        "end_idx": 17,
+        "start_price": 10.7,
+        "end_price": 16.3,
+        "direction": "up"
+      },
+      {
+        "start_idx": 17,
+        "end_idx": 24,
+        "start_price": 16.3,
+        "end_price": 10.3,
+        "direction": "down"
+      },
+      {
+        "start_idx": 24,
+        "end_idx": 29,
+        "start_price": 10.3,
+        "end_price": 16.2,
+        "direction": "up"
+      },
+      {
+        "start_idx": 29,
+        "end_idx": 34,
+        "start_price": 16.2,
+        "end_price": 9.9,
+        "direction": "down"
+      },
+      {
+        "start_idx": 34,
+        "end_idx": 45,
+        "start_price": 9.9,
+        "end_price": 15.9,
+        "direction": "up"
+      },
+      {
+        "start_idx": 45,
+        "end_idx": 58,
+        "start_price": 15.9,
+        "end_price": 9.5,
+        "direction": "down"
+      },
+      {
+        "start_idx": 58,
+        "end_idx": 65,
+        "start_price": 9.5,
+        "end_price": 16.0,
+        "direction": "up"
+      },
+      {
+        "start_idx": 65,
+        "end_idx": 70,
+        "start_price": 16.0,
+        "end_price": 10.2,
+        "direction": "down"
+      },
+      {
+        "start_idx": 70,
+        "end_idx": 83,
+        "start_price": 10.2,
+        "end_price": 15.7,
+        "direction": "up"
+      },
+      {
+        "start_idx": 83,
+        "end_idx": 88,
+        "start_price": 15.7,
+        "end_price": 10.1,
+        "direction": "down"
+      }
+    ],
+    "segments": [
+      {
+        "start_idx": 3,
+        "end_idx": 88,
+        "direction": "down",
+        "high": 17.0,
+        "low": 9.5,
+        "confirmed": false,
+        "destroyed_by_idx": null
+      }
+    ],
+    "pivots": [],
+    "divergence": null,
+    "buy_points": [],
+    "sell_points": [],
+    "trend_type": "无中枢",
+    "input_lengths": {
+      "closes": 90,
+      "highs": 90,
+      "lows": 90,
+      "opens": 90,
+      "volumes": 90,
+      "dates": 90
+    },
+    "input_tail": {
+      "closes": [
+        14.5,
+        12.1,
+        15.9,
+        10.7,
+        16.2
+      ],
+      "highs": [
+        15.1,
+        12.7,
+        16.5,
+        11.3,
+        16.8
+      ],
+      "lows": [
+        13.9,
+        11.5,
+        15.3,
+        10.1,
+        15.6
+      ],
+      "opens": [
+        14.5,
+        12.1,
+        15.9,
+        10.7,
+        16.2
+      ],
+      "volumes": [
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0,
+        1000.0
+      ],
+      "dates": [
+        85,
+        86,
+        87,
+        88,
+        89
+      ]
+    },
+    "macd_tail": {
+      "dif": [
+        -0.050824,
+        -0.129562,
+        0.113359,
+        -0.112425,
+        0.150707
+      ],
+      "dea": [
+        -0.029778,
+        -0.049735,
+        -0.017116,
+        -0.036178,
+        0.001199
+      ],
+      "hist": [
+        -0.04209,
+        -0.159653,
+        0.260951,
+        -0.152493,
+        0.299016
+      ]
+    },
+    "swing_waves": [
+      {
+        "start_idx": 0,
+        "end_idx": 3,
+        "start_price": 12.6,
+        "end_price": 17.0,
+        "direction": "up"
+      },
+      {
+        "start_idx": 3,
+        "end_idx": 4,
+        "start_price": 17.0,
+        "end_price": 11.2,
+        "direction": "down"
+      },
+      {
+        "start_idx": 4,
+        "end_idx": 7,
+        "start_price": 11.2,
+        "end_price": 17.2,
+        "direction": "up"
+      },
+      {
+        "start_idx": 7,
+        "end_idx": 8,
+        "start_price": 17.2,
+        "end_price": 10.7,
+        "direction": "down"
+      },
+      {
+        "start_idx": 8,
+        "end_idx": 11,
+        "start_price": 10.7,
+        "end_price": 15.5,
+        "direction": "up"
+      },
+      {
+        "start_idx": 11,
+        "end_idx": 12,
+        "start_price": 15.5,
+        "end_price": 10.2,
+        "direction": "down"
+      },
+      {
+        "start_idx": 12,
+        "end_idx": 15,
+        "start_price": 10.2,
+        "end_price": 16.9,
+        "direction": "up"
+      },
+      {
+        "start_idx": 15,
+        "end_idx": 18,
+        "start_price": 16.9,
+        "end_price": 10.0,
+        "direction": "down"
+      },
+      {
+        "start_idx": 18,
+        "end_idx": 25,
+        "start_price": 10.0,
+        "end_price": 16.6,
+        "direction": "up"
+      },
+      {
+        "start_idx": 25,
+        "end_idx": 28,
+        "start_price": 16.6,
+        "end_price": 10.8,
+        "direction": "down"
+      },
+      {
+        "start_idx": 28,
+        "end_idx": 29,
+        "start_price": 10.8,
+        "end_price": 16.2,
+        "direction": "up"
+      },
+      {
+        "start_idx": 29,
+        "end_idx": 34,
+        "start_price": 16.2,
+        "end_price": 9.9,
+        "direction": "down"
+      },
+      {
+        "start_idx": 34,
+        "end_idx": 37,
+        "start_price": 9.9,
+        "end_price": 16.4,
+        "direction": "up"
+      },
+      {
+        "start_idx": 37,
+        "end_idx": 40,
+        "start_price": 16.4,
+        "end_price": 10.1,
+        "direction": "down"
+      },
+      {
+        "start_idx": 40,
+        "end_idx": 41,
+        "start_price": 10.1,
+        "end_price": 16.7,
+        "direction": "up"
+      },
+      {
+        "start_idx": 41,
+        "end_idx": 44,
+        "start_price": 16.7,
+        "end_price": 10.5,
+        "direction": "down"
+      },
+      {
+        "start_idx": 44,
+        "end_idx": 45,
+        "start_price": 10.5,
+        "end_price": 15.9,
+        "direction": "up"
+      },
+      {
+        "start_idx": 45,
+        "end_idx": 48,
+        "start_price": 15.9,
+        "end_price": 9.6,
+        "direction": "down"
+      },
+      {
+        "start_idx": 48,
+        "end_idx": 49,
+        "start_price": 9.6,
+        "end_price": 17.1,
+        "direction": "up"
+      },
+      {
+        "start_idx": 49,
+        "end_idx": 54,
+        "start_price": 17.1,
+        "end_price": 9.8,
+        "direction": "down"
+      },
+      {
+        "start_idx": 54,
+        "end_idx": 59,
+        "start_price": 9.8,
+        "end_price": 17.0,
+        "direction": "up"
+      },
+      {
+        "start_idx": 59,
+        "end_idx": 64,
+        "start_price": 17.0,
+        "end_price": 10.0,
+        "direction": "down"
+      },
+      {
+        "start_idx": 64,
+        "end_idx": 65,
+        "start_price": 10.0,
+        "end_price": 16.0,
+        "direction": "up"
+      },
+      {
+        "start_idx": 65,
+        "end_idx": 70,
+        "start_price": 16.0,
+        "end_price": 10.2,
+        "direction": "down"
+      },
+      {
+        "start_idx": 70,
+        "end_idx": 73,
+        "start_price": 10.2,
+        "end_price": 16.2,
+        "direction": "up"
+      },
+      {
+        "start_idx": 73,
+        "end_idx": 74,
+        "start_price": 16.2,
+        "end_price": 10.3,
+        "direction": "down"
+      },
+      {
+        "start_idx": 74,
+        "end_idx": 77,
+        "start_price": 10.3,
+        "end_price": 16.6,
+        "direction": "up"
+      },
+      {
+        "start_idx": 77,
+        "end_idx": 78,
+        "start_price": 16.6,
+        "end_price": 10.4,
+        "direction": "down"
+      },
+      {
+        "start_idx": 78,
+        "end_idx": 83,
+        "start_price": 10.4,
+        "end_price": 15.7,
+        "direction": "up"
+      },
+      {
+        "start_idx": 83,
+        "end_idx": 84,
+        "start_price": 15.7,
+        "end_price": 9.7,
+        "direction": "down"
+      },
+      {
+        "start_idx": 84,
+        "end_idx": 89,
+        "start_price": 9.7,
+        "end_price": 16.8,
+        "direction": "up"
+      }
+    ],
+    "swing_zones": [
+      {
+        "ZD": 12.6,
+        "ZG": 15.5,
+        "start_idx": 0,
+        "end_idx": 89,
+        "level": "笔中枢"
+      }
+    ]
+  }
+}

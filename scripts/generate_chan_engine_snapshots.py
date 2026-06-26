@@ -1,13 +1,18 @@
+"""Generate deterministic ChanLun legacy snapshot fixtures.
+
+Only run this intentionally when accepting a deliberate legacy behavior change.
+Do not use this script to make failing snapshot tests pass without reviewing the diff.
+"""
+
 import json
-import unittest
+import os
 import numpy as np
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze
-
-
-# Baseline generated from the legacy chan_engine.py in parent commit
-# 9e1dd4652fd3dea9117694b7d9f0caffb6a57acb, before the Phase 1 module split.
-FIXTURE_PATH = "tests/fixtures/chan_engine_snapshots.json"
 
 
 def _round_float(value, digits=6):
@@ -64,10 +69,7 @@ def _serialize_result(result):
             }
             for s in result.segments
         ],
-        "pivots": [
-            _serialize_pivot(p)
-            for p in result.pivots
-        ],
+        "pivots": [_serialize_pivot(p) for p in result.pivots],
         "divergence": None if result.divergence is None else {
             "type": result.divergence.get("type"),
             "is_divergence": result.divergence.get("is_divergence"),
@@ -146,6 +148,7 @@ def _make_kline(closes):
     }
 
 
+# These scenarios must stay in sync with tests/test_chan_engine_snapshot.py.
 SCENARIOS = {
     "legacy_mixed": [
         9.28154636, 10.19840561, 11.32783692, 11.83613004, 12.43887384, 13.67740631,
@@ -178,26 +181,27 @@ SCENARIOS = {
 }
 
 
-class ChanEngineSnapshotTests(unittest.TestCase):
-    def test_snapshot_matches_legacy_output(self):
-        with open(FIXTURE_PATH, "r", encoding="utf-8") as f:
-            baseline = json.load(f)
-        for name, closes in SCENARIOS.items():
-            with self.subTest(name=name):
-                kline = _make_kline(closes)
-                result = analyze(
-                    name,
-                    name,
-                    kline["dates"],
-                    kline["opens"],
-                    kline["highs"],
-                    kline["lows"],
-                    kline["closes"],
-                    kline["volumes"],
-                )
-                payload = _serialize_result(result)
-                self.assertEqual(payload, baseline[name])
+def main():
+    payload = {}
+    for name, closes in SCENARIOS.items():
+        kline = _make_kline(closes)
+        result = analyze(
+            code=name,
+            name=name,
+            dates=kline["dates"],
+            opens=kline["opens"],
+            highs=kline["highs"],
+            lows=kline["lows"],
+            closes=kline["closes"],
+            volumes=kline["volumes"],
+        )
+        payload[name] = _serialize_result(result)
+
+    path = "tests/fixtures/chan_engine_snapshots.json"
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    print(f"wrote {path}")
 
 
 if __name__ == "__main__":
-    unittest.main()
+    main()

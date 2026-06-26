@@ -7,6 +7,7 @@ from chanlun.chan_engine import (
     DIVERGENCE_PLATEAU,
     Fractal,
     ChanResult,
+    ema,
     MACD_FAST,
     MACD_SIGNAL,
     MACD_SLOW,
@@ -34,6 +35,40 @@ from chanlun.chan_engine import (
     stroke_low,
     analyze,
 )
+
+EXPECTED_PUBLIC_NAMES = {
+    "BI_MIN_KLINE_COUNT",
+    "SEGMENT_MIN_STROKES",
+    "PIVOT_MIN_SEGMENTS",
+    "MACD_FAST",
+    "MACD_SLOW",
+    "MACD_SIGNAL",
+    "DIVERGENCE_PLATEAU",
+    "THIRD_BUY_MAX_CHASE_PCT",
+    "USE_SEGMENT_BREAK_BUILDER",
+    "Fractal",
+    "Stroke",
+    "Segment",
+    "Pivot",
+    "ChanResult",
+    "analyze",
+    "ema",
+    "calc_macd",
+    "inclusion_process",
+    "find_fractals",
+    "build_strokes",
+    "stroke_high",
+    "stroke_low",
+    "build_segments_by_break",
+    "build_segments_fixed_window",
+    "find_pivots",
+    "classify_trend",
+    "check_divergence",
+    "locate_buy_sell_points",
+    "build_strokes_swing",
+    "prune_strokes",
+    "build_stroke_pivots",
+}
 
 
 class ChanEngineImportCompatibilityTests(unittest.TestCase):
@@ -96,6 +131,12 @@ class ChanEngineImportCompatibilityTests(unittest.TestCase):
             pivots=result.pivots,
         )
         self.assertIn(diverg, (None, dict))
+
+    def test_public_all_contains_legacy_exports(self):
+        import chanlun.chan_engine as ce
+        self.assertTrue(EXPECTED_PUBLIC_NAMES.issubset(set(ce.__all__)))
+        for name in EXPECTED_PUBLIC_NAMES:
+            self.assertTrue(hasattr(ce, name), name)
 
 
 if __name__ == "__main__":
