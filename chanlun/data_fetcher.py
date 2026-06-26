@@ -22,8 +22,11 @@ from config import (
     KLINE_CACHE_FORCE_REFRESH,
     DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
     MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
+    MIN15_KLINE_CACHE_RETENTION_TRADING_DAYS,
     DAY_KLINE_INCREMENTAL_FETCH_COUNT,
     MIN30_KLINE_INCREMENTAL_FETCH_COUNT,
+    MIN15_KLINE_INCREMENTAL_FETCH_COUNT,
+    MIN15_LOOKBACK_BARS,
 )
 from .kline_cache import (
     cached_kline_if_sufficient,
@@ -40,9 +43,10 @@ from .kline_cache import (
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STOCK_CACHE_PATH = os.environ.get(
     "STOCK_NAMES_CACHE_FILE",
-    "/Users/yangfan/yf_source/stock-shared-data/stock_names_cache.json",
+    os.path.join(BASE_DIR, "stock_names_cache.json"),
 )
-STOCK_CACHE_PATH_FALLBACK = os.path.join(BASE_DIR, "..", "stock_names_cache.json")
+STOCK_CACHE_PATH_FALLBACK = "/Users/yangfan/yf_source/stock-shared-data/stock_names_cache.json"
+STOCK_CACHE_PATH_LEGACY_FALLBACK = os.path.join(os.path.dirname(BASE_DIR), "stock_names_cache.json")
 
 # ------------------------------------------------------------
 # HTTP Session
@@ -153,7 +157,7 @@ def _sina_code(code):
 # 股票名称缓存
 # ============================================================
 def _load_stock_name_cache():
-    for p in (STOCK_CACHE_PATH, STOCK_CACHE_PATH_FALLBACK):
+    for p in (STOCK_CACHE_PATH, STOCK_CACHE_PATH_FALLBACK, STOCK_CACHE_PATH_LEGACY_FALLBACK):
         rp = os.path.normpath(p)
         if os.path.exists(rp):
             with open(rp, "r", encoding="utf-8") as f:
@@ -356,17 +360,16 @@ def fetch_shanghai_index():
 
 
 # ============================================================
-# 30分钟 K 线 — 新浪
+# 分钟 K 线 — 新浪
 # ============================================================
-def _fetch_30min_kline_remote(code, count=80):
-    """
-    获取30分钟K线。新浪 API（最大约100根）。
-    返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
-    """
+def _fetch_sina_minute_kline_remote(code, scale, count):
+    """Fetch minute kline from Sina."""
     sc = _sina_code(code)
-    # 新浪API datalen上限约100，取min(count, 100)
-    datalen = min(count, 100)
-    url = f"https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/CN_MarketData.getKLineData?symbol={sc}&scale=30&datalen={datalen}"
+    datalen = min(count, 240)
+    url = (
+        "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"CN_MarketData.getKLineData?symbol={sc}&scale={scale}&datalen={datalen}"
+    )
     try:
         resp = SESSION.get(url, timeout=15)
         klines = resp.json()
@@ -391,8 +394,23 @@ def _fetch_30min_kline_remote(code, count=80):
             "volumes": np.array(volumes),
         }
     except Exception as e:
-        print(f"[ERROR] 获取30分钟K线失败 {code}: {e}")
+        print(f"[ERROR] 获取{scale}分钟K线失败 {code}: {e}")
         return None
+
+
+def _fetch_30min_kline_remote(code, count=80):
+    """
+    获取30分钟K线。新浪 API。
+    返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
+    """
+    return _fetch_sina_minute_kline_remote(code, scale=30, count=count)
+
+
+def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
+    """
+    获取15分钟K线。罗姐池需要至少177根来计算生命线。
+    """
+    return _fetch_sina_minute_kline_remote(code, scale=15, count=count)
 
 
 def fetch_30min_kline(code, count=80, force_refresh=False):
@@ -434,18 +452,59 @@ def fetch_30min_kline(code, count=80, force_refresh=False):
     return None
 
 
+def fetch_15min_kline(code, count=MIN15_LOOKBACK_BARS, force_refresh=False):
+    """Fetch 15min kline with incremental cache support."""
+    force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    cached_records = read_cached_records("15min", code)
+    cached_enough = len(cached_records) >= count
+
+    if force:
+        remote_count = count
+    elif cached_enough:
+        remote_count = min(MIN15_KLINE_INCREMENTAL_FETCH_COUNT, count)
+    else:
+        remote_count = count
+
+    remote = _fetch_15min_kline_remote(code, count=remote_count)
+
+    if remote:
+        merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
+        write_cached_records(
+            "15min", code, merged,
+            source="sina",
+            keep_trading_days=MIN15_KLINE_CACHE_RETENTION_TRADING_DAYS,
+        )
+        CACHE_STATS["15min_write"] = CACHE_STATS.get("15min_write", 0) + 1
+        cached = cached_kline_if_sufficient("15min", code, count)
+        if cached is not None:
+            CACHE_STATS["15min_hit"] = CACHE_STATS.get("15min_hit", 0) + 1
+            return cached
+        CACHE_STATS["15min_miss"] = CACHE_STATS.get("15min_miss", 0) + 1
+        return remote
+
+    cached = cached_kline_if_sufficient("15min", code, count)
+    if cached is not None:
+        CACHE_STATS["15min_hit"] = CACHE_STATS.get("15min_hit", 0) + 1
+        print(f"  [CACHE FALLBACK] 15min {code} remote failed, using cache")
+        return cached
+    CACHE_STATS["15min_miss"] = CACHE_STATS.get("15min_miss", 0) + 1
+    return None
+
+
 # ============================================================
 # K 线通用入口（用于 market indices 等场景）
 # ============================================================
 def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
     """
     通用K线获取入口。
-    klt: 101=日线, 30=30分钟 (兼容旧接口)
+    klt: 101=日线, 30=30分钟, 15=15分钟 (兼容旧接口)
     """
     if klt in ("101", "day", "1d"):
         return fetch_daily_kline(code, count=count)
     elif klt in ("30", "min30", "30min"):
         return fetch_30min_kline(code, count=count)
+    elif klt in ("15", "min15", "15min"):
+        return fetch_15min_kline(code, count=count)
     else:
         return fetch_daily_kline(code, count=count)
 
@@ -497,6 +556,28 @@ def batch_fetch_30min_klines(stocks, max_workers=8):
         code = stock["code"]
         klines = fetch_30min_kline(code)
         if klines and len(klines.get("closes", [])) >= 40:
+            return {"code": code, "name": stock.get("name", ""), "klines": klines}
+        return None
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_fetch_one, s): s for s in stocks}
+        for future in as_completed(futures):
+            res = future.result()
+            if res:
+                results.append(res)
+    return results
+
+
+def batch_fetch_15min_klines(stocks, max_workers=8):
+    """
+    并发批量获取15分钟K线。
+    """
+    results = []
+
+    def _fetch_one(stock):
+        code = stock["code"]
+        klines = fetch_15min_kline(code)
+        if klines and len(klines.get("closes", [])) >= 180:
             return {"code": code, "name": stock.get("name", ""), "klines": klines}
         return None
 
@@ -617,6 +698,19 @@ def collect_30min_data(target_stocks):
     print(f"  批量获取30分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_30min_klines(target_stocks)
+    print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
+    return results
+
+
+def collect_15min_data(target_stocks):
+    """
+    为目标池股票拉取15分钟K线。
+    """
+    if not target_stocks:
+        return []
+    print(f"  批量获取15分钟K线（{len(target_stocks)} 只）...")
+    t0 = time.time()
+    results = batch_fetch_15min_klines(target_stocks)
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
 

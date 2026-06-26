@@ -151,6 +151,32 @@ class KlineCacheTest(unittest.TestCase):
         self.assertEqual(calls, [16])
         self.assertEqual(len(kline["dates"]), 80)
 
+    def test_fetch_15min_uses_incremental_remote_count_when_cache_sufficient(self):
+        records = []
+        for i in range(220):
+            records.append({
+                "date": f"2026-05-{20 + (i // 32):02d} {9 + ((i % 32) // 4):02d}:{(i % 4) * 15:02d}:00",
+                "open": 1,
+                "high": 2,
+                "low": 1,
+                "close": 2,
+                "volume": 10,
+            })
+
+        calls = []
+
+        def fake_remote(_code, count=220):
+            calls.append(count)
+            return _make_15min_kline_dict(count)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
+                write_cached_records("15min", "600519", records, "test", keep_trading_days=10)
+                with patch.object(data_fetcher, "_fetch_15min_kline_remote", fake_remote):
+                    kline = data_fetcher.fetch_15min_kline("600519", count=220)
+        self.assertEqual(calls, [32])
+        self.assertEqual(len(kline["dates"]), 220)
+
     def test_prune_records_by_trading_days_keeps_same_day_30min_bars_together(self):
         records = [
             {"date": "2026-05-13 09:30:00", "open": 1, "high": 1, "low": 1, "close": 1, "volume": 1},
@@ -164,6 +190,14 @@ class KlineCacheTest(unittest.TestCase):
         self.assertIn("2026-05-26 09:30:00", dates)
         self.assertIn("2026-05-27 09:30:00", dates)
         self.assertNotIn("2026-05-13 09:30:00", dates)
+
+    def test_stock_name_cache_uses_project_cache_before_parent_cache(self):
+        self.assertTrue(
+            data_fetcher.STOCK_CACHE_PATH.endswith("chanlun_strategy/stock_names_cache.json"),
+            data_fetcher.STOCK_CACHE_PATH,
+        )
+        code_to_name = data_fetcher._build_code_to_name()
+        self.assertEqual(code_to_name["601878"], "浙商证券")
 
 
 def _make_kline_dict(count, start):
@@ -180,6 +214,19 @@ def _make_kline_dict(count, start):
 
 def _make_30min_kline_dict(count):
     dates = [f"2026-05-26 {9 + (i // 2):02d}:{'30' if i % 2 == 0 else '00'}:00"
+             for i in range(count)]
+    return {
+        "dates": dates,
+        "opens": np.ones(count),
+        "highs": np.ones(count) * 2,
+        "lows": np.ones(count),
+        "closes": np.ones(count) * 1.5,
+        "volumes": np.ones(count) * 100,
+    }
+
+
+def _make_15min_kline_dict(count):
+    dates = [f"2026-05-{20 + (i // 32):02d} {9 + ((i % 32) // 4):02d}:{(i % 4) * 15:02d}:00"
              for i in range(count)]
     return {
         "dates": dates,

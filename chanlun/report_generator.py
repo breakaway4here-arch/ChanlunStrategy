@@ -336,6 +336,7 @@ def _serialize_picks(picks):
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
             "pivots": p.get("pivots", {}),
             "trend_type": p.get("trend_type", ""),
+            "gf_dma_health": p.get("gf_dma_health", {}),
             "score": p.get("score", 0),
             "sector": p.get("sector", ""),
             "resonance": p.get("resonance", {}),
@@ -514,6 +515,42 @@ def _serialize_next_day_boom(data):
     }
 
 
+def _serialize_luojie_pool(data):
+    """Serialize LuoJie pool output."""
+    data = data or {}
+    candidates = []
+    for c in data.get("candidates", []) or []:
+        candidates.append({
+            "rank": c.get("rank"),
+            "code": c.get("code", ""),
+            "name": c.get("name", ""),
+            "sector": c.get("sector", ""),
+            "theme_labels": c.get("theme_labels", []),
+            "tier": c.get("tier", ""),
+            "score": c.get("score", 0),
+            "close": c.get("close", 0),
+            "life_line": c.get("life_line", 0),
+            "ma13": c.get("ma13", 0),
+            "ma77": c.get("ma77", 0),
+            "distance_life_pct": c.get("distance_life_pct", 0),
+            "distance_ma77_pct": c.get("distance_ma77_pct", 0),
+            "macd_status": c.get("macd_status", ""),
+            "macd_above_zero": c.get("macd_above_zero", False),
+            "buy_point_type": c.get("buy_point_type", "-"),
+            "pivot_status": c.get("pivot_status", ""),
+            "risk_line": c.get("risk_line", 0),
+            "reduce_line": c.get("reduce_line", 0),
+            "reason": c.get("reason", ""),
+        })
+    return {
+        "mode": data.get("mode", "disabled"),
+        "reason": data.get("reason", ""),
+        "params": data.get("params", {}),
+        "diagnostics": data.get("diagnostics", {}),
+        "candidates": candidates,
+    }
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -523,6 +560,7 @@ def _serialize_picks_light(picks):
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
             "best_buy_point": _serialize_bp(p.get("best_buy_point", {})),
+            "gf_dma_health": p.get("gf_dma_health", {}),
             "buy_points_30min": [_serialize_bp(b) for b in p.get("buy_points_30min", [])],
             "pivots": p.get("pivots", {}),
             "trend_type": p.get("trend_type", ""),
@@ -767,6 +805,7 @@ def generate_report(report_data, output_dir=None):
         "diagnostics": report_data.get("diagnostics", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
+        "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
         "recent_reviews": build_recent_reviews(
             date_str,
             output_dir or os.path.join(
@@ -2011,6 +2050,10 @@ body {{
         <div class="section-title">次日大涨候选 <span style="font-size:13px;color:#ffcb66;" id="nextDayBoomCount"></span></div>
         <div id="nextDayBoomContent"></div>
     </div>
+    <div id="luojiePoolSection">
+        <div class="section-title">罗姐池 <span style="font-size:13px;color:#74b9ff;" id="luojiePoolCount"></span></div>
+        <div id="luojiePoolContent"></div>
+    </div>
     <div id="startupWatchSection">
         <div class="section-title">启动观察 <span style="font-size:13px;color:#ffa502;" id="startupWatchCount"></span></div>
         <div id="startupWatchContent"></div>
@@ -2216,6 +2259,7 @@ async function init() {{
                     diagnostics: day.diagnostics || {{}},
                     startup_watchlist: day.startup_watchlist || [],
                     next_day_boom: day.next_day_boom || {{}},
+                    luojie_pool: day.luojie_pool || {{}},
                 }};
                 return reports;
             }})()
@@ -2296,6 +2340,7 @@ function renderAll() {{
     renderSellSignals();
     renderLimitUp();
     renderNextDayBoom();
+    renderLuojiePool();
     renderStartupWatchlist();
     renderRecentReviews();
     switchVersion('fusion');
@@ -2889,6 +2934,77 @@ function renderNextDayBoom() {{
     box.innerHTML = html;
 }}
 
+// ========== 罗姐池 ==========
+function renderLuojiePool() {{
+    var data = REPORT_DATA.luojie_pool || {{}};
+    var section = document.getElementById('luojiePoolSection');
+    var countEl = document.getElementById('luojiePoolCount');
+    var box = document.getElementById('luojiePoolContent');
+    if (!section || !box) return;
+
+    var hasData = data.mode || (data.candidates && data.candidates.length);
+    if (!hasData) {{
+        section.style.display = 'none';
+        box.innerHTML = '';
+        return;
+    }}
+
+    section.style.display = '';
+    var candidates = data.candidates || [];
+    if (countEl) {{
+        countEl.textContent = data.mode === 'enabled'
+            ? '(' + candidates.length + ' 只)'
+            : '(关闭)';
+    }}
+
+    var diag = data.diagnostics || {{}};
+    var metaHtml = '<div class="table-meta">' +
+        '<span>方向：六网 / 质量层 / 赛道层 / 数字货币 · 主题候选 ' +
+        escapeHtml(diag.theme_candidates || 0) + ' · 入池 ' + escapeHtml(candidates.length) + '</span>' +
+        '<span class="table-note">' + escapeHtml(data.reason || '') + '</span>' +
+        '</div>';
+
+    if (!candidates.length) {{
+        box.innerHTML = '<div class="table-shell">' + metaHtml +
+            '<div style="padding:18px;color:#90a0b5;font-size:13px;">当前没有符合罗姐池生命线模式的候选。</div>' +
+            '</div>';
+        return;
+    }}
+
+    var html = '<div class="table-shell">' + metaHtml +
+        '<table class="chan-table"><thead><tr>' +
+        '<th>Rank</th><th>代码</th><th>名称</th><th>主题</th><th>分层</th>' +
+        '<th>现价</th><th>生命线</th><th>MA77</th><th>距生命线</th><th>距MA77</th>' +
+        '<th>MACD</th><th>买点</th><th>中枢</th><th>风控</th><th>理由</th>' +
+        '</tr></thead><tbody>';
+    candidates.forEach(function(c) {{
+        var themes = (c.theme_labels || []).map(function(t) {{ return escapeHtml(t); }}).join('<br>');
+        var tierClass = c.tier === '主升候选' || c.tier === '买点候选' ? 'pass' : 'block';
+        var lifeDist = Number(c.distance_life_pct || 0);
+        var ma77Dist = Number(c.distance_ma77_pct || 0);
+        html += '<tr>' +
+            '<td class="num-condensed">' + escapeHtml(c.rank || '-') + '</td>' +
+            '<td class="primary-cell">' + escapeHtml(c.code || '') + '</td>' +
+            '<td>' + escapeHtml(c.name || '') + '<div class="secondary-cell">' + escapeHtml(c.sector || '-') + '</div></td>' +
+            '<td style="color:#90a0b5;font-size:12px;">' + themes + '</td>' +
+            '<td><span class="decision-chip ' + tierClass + '">' + escapeHtml(c.tier || '-') + '</span></td>' +
+            '<td class="num-condensed">' + Number(c.close || 0).toFixed(2) + '</td>' +
+            '<td class="num-condensed">' + Number(c.life_line || 0).toFixed(2) + '</td>' +
+            '<td class="num-condensed">' + Number(c.ma77 || 0).toFixed(2) + '</td>' +
+            '<td class="num-condensed ' + (lifeDist >= 0 ? 'up' : 'down') + '">' + (lifeDist >= 0 ? '+' : '') + lifeDist.toFixed(2) + '%</td>' +
+            '<td class="num-condensed ' + (ma77Dist >= 0 ? 'up' : 'down') + '">' + (ma77Dist >= 0 ? '+' : '') + ma77Dist.toFixed(2) + '%</td>' +
+            '<td style="font-size:12px;color:#dfe6e9;">' + escapeHtml(c.macd_status || '-') + '</td>' +
+            '<td><span class="buy-tag candidate">' + escapeHtml(c.buy_point_type || '-') + '</span></td>' +
+            '<td style="font-size:12px;color:#90a0b5;">' + escapeHtml(c.pivot_status || '-') + '</td>' +
+            '<td style="font-size:12px;color:#ffcb66;">减 ' + Number(c.reduce_line || 0).toFixed(2) +
+            '<br>离 ' + Number(c.risk_line || 0).toFixed(2) + '</td>' +
+            '<td style="font-size:12px;color:#dfe6e9;">' + escapeHtml(c.reason || '') + '</td>' +
+            '</tr>';
+    }});
+    html += '</tbody></table></div>';
+    box.innerHTML = html;
+}}
+
 // ========== 启动观察 ==========
 function renderStartupWatchlist() {{
     var watchlist = REPORT_DATA.startup_watchlist || [];
@@ -3004,13 +3120,14 @@ function renderPickTable(ver) {{
         '<th>代码</th><th>名称</th><th>板块</th><th>信号类型</th>' +
         '<th>启动形态</th><th>30min确认</th>' +
         '<th>信号年龄</th><th>距参考价</th>' +
+        '<th>走势健康</th>' +
         '<th>评分</th>';
     if (isFusion) {{
         html += '<th>融合版</th><th>止损</th>';
     }}
     html += '</tr></thead><tbody>';
 
-    var colspan = isFusion ? 11 : 9;
+    var colspan = isFusion ? 12 : 10;
 
     if (picks.length === 0) {{
         var diag = REPORT_DATA.diagnostics || {{}};
@@ -3066,6 +3183,15 @@ function renderPickTable(ver) {{
         // One-line reason
         var shortReason = bp.startup_reason || bp.reason || '-';
         if (shortReason.length > 40) shortReason = shortReason.substring(0, 40) + '...';
+        var gf = p.gf_dma_health || {{}};
+        var gfLabel = gf.label || '-';
+        var gfScore = gf.score !== undefined && gf.score !== null ? Math.round(gf.score) : null;
+        var gfSummary = gfLabel;
+        if (gfScore !== null) {{
+            gfSummary += ' ' + gfScore + '分';
+        }}
+        var gfColor = (gf.fomo_risk === 'high' || gfLabel === '强势过热') ? '#ff7675' : (gf.fomo_risk === 'medium' ? '#ff9f43' : '#74b9ff');
+        var gfDetailSummary = gf.summary || '暂无走势健康摘要';
 
         // Startup form label
         var isStartup = bp.type === '强势启动候选';
@@ -3095,6 +3221,9 @@ function renderPickTable(ver) {{
         html += '<td class="num-condensed" style="color:' + ageColor + ';font-size:12px;">' + ageLabel + '</td>';
         html += '<td><div class="metric-stack"><span class="metric-main" style="color:' + distColor + ';">' + distStr + '</span>' +
             '<span class="metric-sub">' + escapeHtml(shortReason) + '</span></div></td>';
+        html += '<td><span style="color:' + gfColor + ';font-weight:bold;font-size:13px;">' +
+            escapeHtml(gfSummary) + '</span><br>' +
+            '<span class="metric-sub">' + escapeHtml(gfDetailSummary) + '</span></td>';
         html += '<td><div class="metric-stack"><span class="num-condensed"><span class="score-bar" style="width:' + barW + 'px;"></span>' + score.toFixed(1) + '</span>' +
             '<span class="metric-sub">' + escapeHtml(resonance.level || '未标注共振') + '</span></div></td>';
         if (isFusion) {{
@@ -3166,6 +3295,11 @@ function renderPickTable(ver) {{
         detail += '<div class="detail-group">' +
             '<div class="detail-group-title">结构状态</div>' +
             '<strong>走势类型：</strong>' + escapeHtml(p.trend_type || '-') + '<br>' +
+            '<strong>走势健康：</strong>' + escapeHtml(gfSummary) + '<br>' +
+            (gf.summary ? '<strong>健康摘要：</strong>' + escapeHtml(gf.summary) + '<br>' : '') +
+            (gf.fomo_risk ? '<strong>FOMO 风险：</strong>' + escapeHtml(gf.fomo_risk) + '<br>' : '') +
+            (gf.alignment ? '<strong>趋势排列：</strong>' + escapeHtml(gf.alignment) + '<br>' : '') +
+            (gf.pullback_health ? '<strong>回撤健康：</strong>' + escapeHtml(gf.pullback_health) + '<br>' : '') +
             '<strong>日线中枢数量：</strong>' + (p.pivots ? (p.pivots.count || 0) : 0) + '<br>' +
             (p.pivot_zg && p.pivot_zd ? '<strong>中枢区间：</strong>[' + p.pivot_zd + ' — ' + p.pivot_zg + ']<br>' : '') +
             '<strong>共振等级：</strong>' + (resonance.level || '-') +
@@ -3214,6 +3348,7 @@ function renderPickTable(ver) {{
                 '</div>' +
                 '<div class="pick-card-grid">' +
                 '<div><div class="pick-row-label">距参考价</div><div class="pick-row-value" style="color:' + distColor + ';">' + distStr + '</div></div>' +
+                '<div><div class="pick-row-label">走势健康</div><div class="pick-row-value" style="color:' + gfColor + ';">' + escapeHtml(gfSummary) + '</div></div>' +
                 '<div><div class="pick-row-label">评分</div><div class="pick-row-value">' + score.toFixed(1) + ' · ' + escapeHtml(resonance.level || '未标注') + '</div></div>' +
                 '<div><div class="pick-row-label">信号年龄</div><div class="pick-row-value" style="color:' + ageColor + ';">' + ageLabel + '</div></div>' +
                 '<div><div class="pick-row-label">30min确认</div><div class="pick-row-value" style="color:' + confirmColor + ';">' + escapeHtml(confirmDisplay) + '</div></div>' +
@@ -3603,6 +3738,7 @@ function showHistory(dateStr) {{
         sell_signals: report.sell_signals || [],
         startup_watchlist: report.startup_watchlist || [],
         next_day_boom: report.next_day_boom || {{}},
+        luojie_pool: report.luojie_pool || {{}},
     }};
     updateHeaderDate(dateStr);
     renderMarketCards();
@@ -3615,6 +3751,7 @@ function showHistory(dateStr) {{
     renderSellSignals();
     renderLimitUp();
     renderNextDayBoom();
+    renderLuojiePool();
     renderStartupWatchlist();
     switchVersion(CURRENT_VERSION);
     var tabs = document.querySelectorAll('.history-tab');
@@ -3758,6 +3895,7 @@ def update_data_json(report_data, output_dir=None):
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
+        "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
     }
     existing["reports"][date_str] = day_entry
 

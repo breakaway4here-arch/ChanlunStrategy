@@ -125,10 +125,13 @@ class TestReportGenerator(unittest.TestCase):
     def test_serialize_picks_json_encodable(self):
         """Serialized picks can be JSON-encoded (no numpy types leak)."""
         pick = make_pick()
+        pick["gf_dma_health"] = {"label": "强势健康", "score": 78, "summary": "趋势健康"}
         serialized = _serialize_picks([pick])
         encoded = json.dumps(serialized, cls=NpEncoder)
         decoded = json.loads(encoded)
         self.assertEqual(decoded[0]["code"], "600519")
+        self.assertIn("gf_dma_health", decoded[0])
+        self.assertEqual(decoded[0]["gf_dma_health"]["label"], "强势健康")
         self.assertIn("buy_points_30min", decoded[0])
         self.assertEqual(decoded[0]["buy_points_30min"], [])
 
@@ -701,6 +704,56 @@ class TestNextDayBoomRendering(unittest.TestCase):
     def test_history_switch_refreshes_next_day_boom(self):
         self.assertIn("next_day_boom: report.next_day_boom || {}", self.html)
         self.assertIn("renderNextDayBoom();", self.html)
+
+
+class TestLuojiePoolRendering(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_luojie_pool_")
+        report_data = _make_minimal_report_data()
+        report_data["luojie_pool"] = {
+            "mode": "enabled",
+            "reason": "硬编码国家队方向 + 15min生命线筛选",
+            "diagnostics": {"theme_candidates": 1, "candidates": 1},
+            "candidates": [{
+                "rank": 1,
+                "code": "600001",
+                "name": "罗姐候选",
+                "sector": "通信设备",
+                "theme_labels": ["六网/新一代通信网", "赛道层/光模块"],
+                "tier": "主升候选",
+                "close": 18.88,
+                "life_line": 17.20,
+                "ma77": 17.80,
+                "distance_life_pct": 9.77,
+                "distance_ma77_pct": 6.07,
+                "macd_status": "DIF/DEA双线0轴上",
+                "buy_point_type": "三买",
+                "pivot_status": "中枢在生命线上",
+                "risk_line": 17.20,
+                "reduce_line": 17.80,
+                "reason": "三买后主升确认",
+            }],
+        }
+        generate_report(report_data, output_dir=cls.tmpdir)
+        with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
+            cls.html = f.read()
+        with open(os.path.join(cls.tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
+            cls.day_data = json.load(f)
+
+    def test_daily_json_contains_luojie_pool(self):
+        self.assertEqual(self.day_data["luojie_pool"]["mode"], "enabled")
+        self.assertEqual(self.day_data["luojie_pool"]["candidates"][0]["code"], "600001")
+
+    def test_html_has_luojie_pool_section(self):
+        self.assertIn('id="luojiePoolSection"', self.html)
+        self.assertIn('id="luojiePoolContent"', self.html)
+        self.assertIn("function renderLuojiePool", self.html)
+
+    def test_history_switch_refreshes_luojie_pool(self):
+        self.assertIn("luojie_pool: report.luojie_pool || {}", self.html)
+        self.assertIn("renderLuojiePool();", self.html)
 
 
 if __name__ == "__main__":

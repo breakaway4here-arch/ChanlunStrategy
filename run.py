@@ -37,7 +37,7 @@ from config import (
     SIGNAL_MAX_AGE_TRADING_DAYS,
 )
 from chanlun.data_fetcher import (
-    collect_daily_data, collect_30min_data,
+    collect_daily_data, collect_30min_data, collect_15min_data,
     fetch_daily_kline, fetch_kline,
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool,
@@ -55,6 +55,8 @@ from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
+from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
+from chanlun.research_frameworks import calc_gf_dma_health
 
 
 # ============================================================
@@ -159,6 +161,12 @@ def _downgrade_to_formal_only(pool):
         s["resonance"] = {"level": "弱", "reason": "30分钟数据缺失，未做次级别确认"}
         result.append(s)
     return result
+
+
+def _attach_gf_dma_health(picks):
+    for stock in picks:
+        stock["gf_dma_health"] = calc_gf_dma_health(stock)
+    return picks
 
 
 # ============================================================
@@ -336,6 +344,35 @@ def main(debug=False):
           f"高位={startup_diag.get('dropped_high_position', 0)}, "
           f"无量={startup_diag.get('dropped_no_volume', 0)}, "
           f"无突破={startup_diag.get('dropped_no_breakout', 0)}")
+
+    # ================================================================
+    # Phase 4.6: 罗姐池（国家队硬方向 + 15min生命线）
+    # ================================================================
+    print("=" * 60)
+    print("Phase 4.6: 罗姐池")
+    print("=" * 60)
+
+    luojie_theme_stocks = prefilter_luojie_theme_candidates(stocks_with_kline)
+    print(f"  国家队硬方向主题预筛: {len(luojie_theme_stocks)} 只")
+    min15_data_list = collect_15min_data(luojie_theme_stocks)
+    chan_results_15min = []
+    if min15_data_list:
+        seed_map = {s["code"]: s for s in luojie_theme_stocks}
+        print(f"  15分钟数据获取: {len(min15_data_list)} 只, 缠论分析 ...")
+        for d in min15_data_list:
+            kline = d["klines"]
+            seed = seed_map.get(d["code"], {})
+            result = analyze(
+                code=d["code"], name=seed.get("name", d.get("name", "")),
+                dates=kline["dates"], opens=kline["opens"],
+                highs=kline["highs"], lows=kline["lows"],
+                closes=kline["closes"], volumes=kline["volumes"],
+            )
+            chan_results_15min.append(result)
+    luojie_pool = build_luojie_pool(luojie_theme_stocks, chan_results_15min)
+    print(f"  罗姐池: 主题={luojie_pool.get('diagnostics', {}).get('theme_candidates', 0)} "
+          f"15min={luojie_pool.get('diagnostics', {}).get('with_15min', 0)} "
+          f"入池={len(luojie_pool.get('candidates', []))}")
 
     # ================================================================
     # Phase 5: 30min fetch + analysis + candidate upgrade
@@ -599,6 +636,8 @@ def main(debug=False):
     # Score
     pure_scored = apply_scores(pure_confirmed, version="pure")
     fusion_scored = apply_scores(fusion_confirmed, version="fusion", sector_rank_map=sectors)
+    pure_scored = _attach_gf_dma_health(pure_scored)
+    fusion_scored = _attach_gf_dma_health(fusion_scored)
 
     print(f"  纯净版最终推荐: {len(pure_scored)} 只")
     if pure_scored:
@@ -693,6 +732,7 @@ def main(debug=False):
             "startup_candidates": len(startup_candidates),
             "startup_watchlist": len(startup_watchlist),
         },
+        "luojie_pool": luojie_pool.get("diagnostics", {}),
         "signal_recency": {
             "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
             "pure_input": recency_pure_diag["input"],
@@ -727,6 +767,7 @@ def main(debug=False):
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
         "next_day_boom": next_day_boom,
+        "luojie_pool": luojie_pool,
     }
 
     # 生成 HTML（debug 模式输出到独立目录，隔离上线数据）
