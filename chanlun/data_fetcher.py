@@ -54,6 +54,56 @@ SESSION.headers.update({
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 })
 
+_EASTMONEY_BASE_URLS = [
+    "https://push2.eastmoney.com/api/qt/clist/get",
+    "https://push2delay.eastmoney.com/api/qt/clist/get",
+]
+_EASTMONEY_TIMEOUT = 15
+
+
+def _collect_proxy_config():
+    proxies = {}
+    for env_key in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        value = os.environ.get(env_key)
+        if value:
+            key = env_key.lower().startswith("https") and "https" or "http"
+            proxies[key] = value
+    return proxies if proxies else None
+
+
+def _fetch_eastmoney_json(params):
+    """
+    fetch EASTMONEY clist API with:
+      1) 优先走代理（若配置）
+      2) 失败后回退直连
+      3) push2 / push2delay 双源兜底
+    """
+    proxy_settings = _collect_proxy_config()
+    last_error = None
+
+    # 先按 proxy -> base-url 组合尝试
+    if proxy_settings:
+        for url in _EASTMONEY_BASE_URLS:
+            try:
+                resp = SESSION.get(url, params=params, timeout=_EASTMONEY_TIMEOUT, proxies=proxy_settings)
+                resp.raise_for_status()
+                return resp.json()
+            except Exception as e:
+                last_error = e
+                print(f"[WARN] 东方财富请求（代理）失败: {url} -> {e}")
+
+    # 再按无代理 -> base-url 尝试
+    for url in _EASTMONEY_BASE_URLS:
+        try:
+            resp = SESSION.get(url, params=params, timeout=_EASTMONEY_TIMEOUT)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last_error = e
+            print(f"[WARN] 东方财富请求（直连）失败: {url} -> {e}")
+
+    raise last_error
+
 
 # ============================================================
 # 代码格式转换
@@ -134,7 +184,6 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
     获取行业板块资金流向 TOP N。
     返回: [{"code": "BKxxxx", "name": "板块名", "change_pct": 1.5, "flow": 123456789, "flow_str": "1.23亿"}, ...]
     """
-    url = "https://push2.eastmoney.com/api/qt/clist/get"
     params = {
         "pn": "1", "pz": str(top_n), "po": "1", "np": "1",
         "fltt": "2", "invt": "2",
@@ -143,8 +192,7 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
         "fields": "f12,f14,f3,f62,f184,f66",
     }
     try:
-        resp = SESSION.get(url, params=params, timeout=15)
-        data = resp.json()
+        data = _fetch_eastmoney_json(params)
         items = data.get("data", {}).get("diff", [])
         result = []
         for it in items:
@@ -169,7 +217,6 @@ def fetch_sector_stocks(sector_code):
     获取板块内成分股列表。
     返回: [{"code": "600519", "name": "贵州茅台", "change_pct": 1.5}, ...]
     """
-    url = "https://push2.eastmoney.com/api/qt/clist/get"
     all_stocks = []
     page = 1
     while True:
@@ -180,8 +227,7 @@ def fetch_sector_stocks(sector_code):
             "fields": "f12,f14,f3,f2",
         }
         try:
-            resp = SESSION.get(url, params=params, timeout=15)
-            data = resp.json()
+            data = _fetch_eastmoney_json(params)
             stock_data = data.get("data")
             if not stock_data:
                 break
@@ -583,7 +629,6 @@ def fetch_sector_outflow(top_n=5):
     获取行业板块资金流出 TOP N（净流出最大）。
     复用 fetch_sector_flow 相同 API，改为升序排列取负值最大。
     """
-    url = "https://push2.eastmoney.com/api/qt/clist/get"
     params = {
         "pn": "1", "pz": str(top_n * 3), "po": "0", "np": "1",
         "fltt": "2", "invt": "2",
@@ -592,8 +637,7 @@ def fetch_sector_outflow(top_n=5):
         "fields": "f12,f14,f3,f62,f184,f66",
     }
     try:
-        resp = SESSION.get(url, params=params, timeout=15)
-        data = resp.json()
+        data = _fetch_eastmoney_json(params)
         items = data.get("data", {}).get("diff", [])
         result = []
         for it in items:
