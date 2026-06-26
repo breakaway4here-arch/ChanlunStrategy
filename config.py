@@ -37,6 +37,9 @@ PURE_WEIGHT_POSITION = 0.25
 # 融合版参数
 # ============================================================
 
+# 三买追踪参数
+THIRD_BUY_MAX_CHASE_PCT = 0.08
+
 # 大盘趋势 — 强趋势
 FUSION_DIVERGENCE_TREND = 0.85       # 强趋势背驰阈值（宽松）
 FUSION_BUY_POINTS_TREND = ["三买"]  # 强趋势优先（类二买 phase1 禁用）

@@ -1,0 +1,190 @@
+{
+  "fractals": [
+    {
+      "type": "top",
+      "index": 5,
+      "price": 14.27740631
+    },
+    {
+      "type": "bottom",
+      "index": 9,
+      "price": 12.02652898
+    },
+    {
+      "type": "top",
+      "index": 14,
+      "price": 14.55899872
+    },
+    {
+      "type": "bottom",
+      "index": 22,
+      "price": 10.48597163
+    },
+    {
+      "type": "top",
+      "index": 30,
+      "price": 15.76877223
+    },
+    {
+      "type": "bottom",
+      "index": 33,
+      "price": 12.38021066
+    },
+    {
+      "type": "top",
+      "index": 35,
+      "price": 13.82437081
+    },
+    {
+      "type": "bottom",
+      "index": 37,
+      "price": 12.07007478
+    },
+    {
+      "type": "top",
+      "index": 40,
+      "price": 14.93825745
+    },
+    {
+      "type": "bottom",
+      "index": 42,
+      "price": 11.19496552
+    },
+    {
+      "type": "top",
+      "index": 45,
+      "price": 14.30401526
+    },
+    {
+      "type": "bottom",
+      "index": 51,
+      "price": 10.34421176
+    },
+    {
+      "type": "top",
+      "index": 57,
+      "price": 14.83584919
+    },
+    {
+      "type": "bottom",
+      "index": 61,
+      "price": 12.05578085
+    }
+  ],
+  "strokes": [
+    {
+      "start_idx": 5,
+      "end_idx": 9,
+      "start_price": 14.27740631,
+      "end_price": 12.02652898,
+      "direction": "down"
+    },
+    {
+      "start_idx": 9,
+      "end_idx": 14,
+      "start_price": 12.02652898,
+      "end_price": 14.55899872,
+      "direction": "up"
+    },
+    {
+      "start_idx": 14,
+      "end_idx": 22,
+      "start_price": 14.55899872,
+      "end_price": 10.48597163,
+      "direction": "down"
+    },
+    {
+      "start_idx": 22,
+      "end_idx": 30,
+      "start_price": 10.48597163,
+      "end_price": 15.76877223,
+      "direction": "up"
+    },
+    {
+      "start_idx": 30,
+      "end_idx": 37,
+      "start_price": 15.76877223,
+      "end_price": 12.07007478,
+      "direction": "down"
+    },
+    {
+      "start_idx": 37,
+      "end_idx": 45,
+      "start_price": 12.07007478,
+      "end_price": 14.30401526,
+      "direction": "up"
+    },
+    {
+      "start_idx": 45,
+      "end_idx": 51,
+      "start_price": 14.30401526,
+      "end_price": 10.34421176,
+      "direction": "down"
+    },
+    {
+      "start_idx": 51,
+      "end_idx": 57,
+      "start_price": 10.34421176,
+      "end_price": 14.83584919,
+      "direction": "up"
+    },
+    {
+      "start_idx": 57,
+      "end_idx": 61,
+      "start_price": 14.83584919,
+      "end_price": 12.05578085,
+      "direction": "down"
+    }
+  ],
+  "segments": [
+    {
+      "start_idx": 5,
+      "end_idx": 22,
+      "direction": "down",
+      "high": 14.55899872,
+      "low": 10.48597163,
+      "confirmed": true,
+      "destroyed_by_idx": 30
+    },
+    {
+      "start_idx": 9,
+      "end_idx": 45,
+      "direction": "up",
+      "high": 15.76877223,
+      "low": 10.48597163,
+      "confirmed": true,
+      "destroyed_by_idx": 51
+    },
+    {
+      "start_idx": 30,
+      "end_idx": 51,
+      "direction": "down",
+      "high": 15.76877223,
+      "low": 10.34421176,
+      "confirmed": true,
+      "destroyed_by_idx": 57
+    },
+    {
+      "start_idx": 37,
+      "end_idx": 61,
+      "direction": "up",
+      "high": 14.83584919,
+      "low": 10.34421176,
+      "confirmed": false,
+      "destroyed_by_idx": null
+    }
+  ],
+  "pivots": [
+    {
+      "ZD": 10.49,
+      "ZG": 14.56,
+      "start_idx": 5,
+      "end_idx": 51,
+      "level": "本级别"
+    }
+  ],
+  "divergence": null,
+  "buy_points": [],
+  "sell_points": [],
+  "trend_type": "盘整"
+}
