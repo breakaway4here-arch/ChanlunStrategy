@@ -32,14 +32,41 @@ def analyze_with_macd_provider(
     volumes,
     macd_provider,
 ):
-    """Run the ChanLun pipeline with MACD supplied by the given provider."""
+    """Backward-compatible entry using legacy inclusion behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=macd_provider,
+        inclusion_provider=inclusion_process,
+    )
+
+
+def analyze_with_providers(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    macd_provider,
+    inclusion_provider,
+):
     n = len(closes)
     if n < 10:
         return None
 
     dif, dea, hist = macd_provider(closes)
 
-    merged_high, merged_low, idx_map = inclusion_process(highs, lows)
+    merged_high, merged_low, idx_map = inclusion_provider(highs, lows)
     fractals = find_fractals(merged_high, merged_low, idx_map, dates)
     strokes = build_strokes(fractals, merged_high, merged_low)
     segments = build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)

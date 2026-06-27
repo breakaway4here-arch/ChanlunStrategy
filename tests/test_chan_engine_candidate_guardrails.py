@@ -25,6 +25,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         source = inspect.getsource(candidate.calc_macd_candidate)
         self.assertNotIn("calc_macd(", source)
 
+    def test_candidate_inclusion_does_not_call_legacy_inclusion(self):
+        source = inspect.getsource(candidate.inclusion_process_candidate)
+        self.assertNotIn("inclusion_process(", source)
+
+    def test_candidate_inclusion_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_inclusion))
+        self.assertNotIn("analyze_with_candidate_inclusion", ce.__all__)
+
     def test_legacy_and_candidate_share_pipeline_helper(self):
         self.assertIn("analyze_with_macd_provider", inspect.getsource(ce.analyze))
         self.assertIn(
