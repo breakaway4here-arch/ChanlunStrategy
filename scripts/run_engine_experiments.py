@@ -17,6 +17,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.engine_experiments import get_experiment, list_experiments
+from chanlun.historical_experiment_metrics import (
+    run_historical_experiment_return_metrics,
+    supports_historical_return_metrics,
+)
 from chanlun.experiment_gates import evaluate_promotion_gates
 
 
@@ -93,11 +97,21 @@ def _run_compare(experiment: str, workspace: Path) -> Tuple[Dict[str, Any], Path
     return payload, output_path
 
 
-def _build_result(payload: Dict[str, Any], experiment_name: str) -> Dict[str, Any]:
+def _build_result(
+    payload: Dict[str, Any],
+    experiment_name: str,
+    historical_return_metrics: bool = False,
+) -> Dict[str, Any]:
     summary = payload.get("summary") or {}
     recommendation_diff = summary.get("recommendation_diff", {})
     return_metrics = summary.get("return_metrics", {})
     coverage = summary.get("coverage")
+
+    if historical_return_metrics and supports_historical_return_metrics(experiment_name):
+        historical_payload = run_historical_experiment_return_metrics(experiment_name)
+        if historical_payload:
+            return_metrics = historical_payload.get("return_metrics", return_metrics)
+            coverage = historical_payload.get("coverage", coverage)
 
     experiment_def = get_experiment(experiment_name)
     gate_result = evaluate_promotion_gates(
@@ -123,13 +137,20 @@ def _build_result(payload: Dict[str, Any], experiment_name: str) -> Dict[str, An
     }
 
 
-def _run_payload(experiments: Iterable[str]) -> Dict[str, Any]:
+def _run_payload(
+    experiments: Iterable[str],
+    historical_return_metrics: bool = False,
+) -> Dict[str, Any]:
     results = []
     with tempfile.TemporaryDirectory(prefix="chanlun_phase5_4_") as tmpdir:
         workspace = Path(tmpdir)
         for experiment in experiments:
             payload, output_path = _run_compare(experiment, workspace)
-            result = _build_result(payload, experiment)
+            result = _build_result(
+                payload,
+                experiment_name=experiment,
+                historical_return_metrics=historical_return_metrics,
+            )
             results.append(result)
             try:
                 if output_path.exists():
@@ -161,6 +182,11 @@ def main(argv: Optional[List[str]] = None) -> int:
     )
     parser.add_argument("--output-json", required=True, help="JSON report output path")
     parser.add_argument("--output-md", required=True, help="Markdown report output path")
+    parser.add_argument(
+        "--historical-return-metrics",
+        action="store_true",
+        help="attach historical return metrics for supported signal experiments",
+    )
     args = parser.parse_args(argv)
 
     experiments = _normalize_experiments(args.experiments)
@@ -176,7 +202,12 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     try:
         payload = {"generated_at": datetime.now().isoformat()}
-        payload.update(_run_payload(experiments))
+        payload.update(
+            _run_payload(
+                experiments=experiments,
+                historical_return_metrics=args.historical_return_metrics,
+            )
+        )
         _write_outputs(args.output_json, args.output_md, payload)
     except (RuntimeError, OSError, ValueError) as exc:
         print(f"run failed: {exc}", file=sys.stderr)

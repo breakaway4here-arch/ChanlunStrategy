@@ -102,3 +102,76 @@ class EngineExperimentRunnerScriptTests(TestCase):
                     ]
                 )
                 self.assertEqual(code, 1)
+
+    @patch("scripts.run_engine_experiments.run_historical_experiment_return_metrics")
+    @patch("scripts.run_engine_experiments._run_compare")
+    def test_historical_return_metrics_flag_controls_override(
+        self,
+        run_compare_mock,
+        historical_metrics_mock,
+    ):
+        compare_payload = {
+            "summary": {
+                "structure_equal": True,
+                "recommendation_diff": {"same": 1},
+                "return_metrics": {"status": "no_market_data", "legacy": None, "experiment": None},
+                "coverage": {"evaluated": 0},
+                "experiment": "signal_delay1_by_type_guard",
+            }
+        }
+        output_path = Path(tempfile.gettempdir()) / "engine_experiment_runner_script_payload.json"
+        run_compare_mock.return_value = (compare_payload, output_path)
+
+        historical_payload = {
+            "return_metrics": {"legacy": {"n": 1}, "experiment": {"n": 1}},
+            "coverage": {"evaluated": 12},
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            json_output = Path(tmpdir) / "engine_experiments.json"
+            md_output = Path(tmpdir) / "engine_experiments.md"
+
+            historical_metrics_mock.return_value = None
+            code_without_flag = main(
+                [
+                    "--experiments",
+                    "signal_delay1_by_type_guard",
+                    "--output-json",
+                    str(json_output),
+                    "--output-md",
+                    str(md_output),
+                ]
+            )
+            self.assertEqual(code_without_flag, 0)
+            payload = json.loads(json_output.read_text(encoding="utf-8"))
+            self.assertEqual(payload["experiments"][0]["coverage"]["evaluated"], 0)
+            self.assertEqual(
+                payload["experiments"][0]["return_metrics"],
+                {"status": "no_market_data", "legacy": None, "experiment": None},
+            )
+            historical_metrics_mock.assert_not_called()
+
+            historical_metrics_mock.reset_mock()
+            historical_metrics_mock.return_value = historical_payload
+            code_with_flag = main(
+                [
+                    "--experiments",
+                    "signal_delay1_by_type_guard",
+                    "--output-json",
+                    str(json_output),
+                    "--output-md",
+                    str(md_output),
+                    "--historical-return-metrics",
+                ]
+            )
+            self.assertEqual(code_with_flag, 0)
+            payload_with_flag = json.loads(json_output.read_text(encoding="utf-8"))
+            self.assertEqual(payload_with_flag["experiments"][0]["coverage"]["evaluated"], 12)
+            self.assertEqual(
+                payload_with_flag["experiments"][0]["return_metrics"]["legacy"]["n"],
+                1,
+            )
+            self.assertEqual(
+                payload_with_flag["experiments"][0]["return_metrics"]["experiment"]["n"],
+                1,
+            )
