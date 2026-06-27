@@ -57,7 +57,10 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
     )
 
 
-def _render_markdown(results: List[Dict[str, Any]]) -> str:
+def _render_markdown(payload: Dict[str, Any]) -> str:
+    results = payload.get("policies", []) if isinstance(payload, dict) else []
+    execution = (payload or {}).get("execution") or {}
+
     lines = [
         "# ChanLun Policy Backtest",
         "",
@@ -97,6 +100,22 @@ def _render_markdown(results: List[Dict[str, Any]]) -> str:
             reason_text = ", ".join(f"{k}:{v}" for k, v in sorted(coverage.items()))
             lines.append(f"- {name}: {reason_text}")
         lines.append("")
+
+    if execution:
+        lines.append("## Execution Summary")
+        lines.extend(
+            [
+                f"- shared_baseline: {execution.get('shared_baseline', 'n/a')}",
+                f"- snapshot_rows: {execution.get('snapshot_rows', 'n/a')}",
+                f"- unique_codes: {execution.get('unique_codes', 'n/a')}",
+                f"- fetch_attempts: {execution.get('fetch_attempts', 'n/a')}",
+                f"- cache_hits: {execution.get('cache_hits', 'n/a')}",
+                f"- kline_missing: {execution.get('kline_missing', 'n/a')}",
+                f"- kline_invalid: {execution.get('kline_invalid', 'n/a')}",
+                f"- baseline_rows: {execution.get('baseline_rows', 'n/a')}",
+                "",
+            ],
+        )
     return "\n".join(lines)
 
 
@@ -111,7 +130,7 @@ def _write_outputs(output_json: str, output_md: str, payload: Dict[str, Any]) ->
         json.dump(payload, f, ensure_ascii=False, indent=2)
 
     with md_path.open("w", encoding="utf-8") as f:
-        f.write(_render_markdown(payload.get("policies", [])))
+        f.write(_render_markdown(payload))
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:

@@ -68,6 +68,16 @@ def _fake_payload():
             },
         ],
         "baseline_reference": "signal_delay1_by_type_guard",
+        "execution": {
+            "shared_baseline": True,
+            "snapshot_rows": 10,
+            "unique_codes": 6,
+            "fetch_attempts": 6,
+            "cache_hits": 4,
+            "kline_missing": 1,
+            "kline_invalid": 0,
+            "baseline_rows": 9,
+        },
     }
 
 
@@ -111,6 +121,10 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             self.assertIn("Generated:", text)
             self.assertIn("delay1_v1_cooldown3", text)
             self.assertIn("Filtered By Reason", text)
+            self.assertIn("Execution Summary", text)
+            self.assertIn("shared_baseline: True", text)
+            self.assertIn("fetch_attempts: 6", text)
+            self.assertIn("cache_hits: 4", text)
 
     @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
     def test_multiple_policies_in_arg(self, run_mock):

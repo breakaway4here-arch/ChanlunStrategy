@@ -143,6 +143,11 @@ def _build_shared_baseline_context(
     snapshot_index_map: Dict[str, int],
 ) -> Dict[str, object]:
     kline_cache: Dict[str, Optional[dict]] = {}
+    unique_codes = set()
+    fetch_attempts = 0
+    cache_hits = 0
+    kline_missing = 0
+    kline_invalid = 0
     picks_seen = 0
     baseline_evaluated = 0
     baseline_filtered = 0
@@ -155,12 +160,24 @@ def _build_shared_baseline_context(
         if not code:
             continue
 
-        kline = _fetch_daily_kline_cached(str(code), kline_cache)
+        code_str = str(code)
+        unique_codes.add(code_str)
+        if code_str in kline_cache:
+            cache_hits += 1
+            kline = kline_cache[code_str]
+        else:
+            fetch_attempts += 1
+            kline = _fetch_daily_kline_cached(code_str, kline_cache)
+            if code_str not in kline_cache:
+                kline_cache[code_str] = kline
+
         if kline is None:
+            kline_missing += 1
             continue
 
         normalized_kline = _normalize_kline(kline)
-        if normalized_kline is None:
+        if not normalized_kline:
+            kline_invalid += 1
             continue
 
         if should_drop_pick_for_experiment(_BASELINE_EXPERIMENT, pick):
@@ -188,11 +205,22 @@ def _build_shared_baseline_context(
         "baseline_evaluated": baseline_evaluated,
         "baseline_filtered": baseline_filtered,
     }
+    execution = {
+        "shared_baseline": True,
+        "snapshot_rows": len(rows),
+        "unique_codes": len(unique_codes),
+        "fetch_attempts": fetch_attempts,
+        "cache_hits": cache_hits,
+        "kline_missing": kline_missing,
+        "kline_invalid": kline_invalid,
+        "baseline_rows": len(evaluated_rows),
+    }
 
     return {
         "coverage": coverage,
         "baseline_samples": baseline_samples,
         "evaluated_rows": evaluated_rows,
+        "execution": execution,
     }
 
 
@@ -390,7 +418,19 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
         raise ValueError(f"unsupported policies: {', '.join(unknown)}")
 
     if not names:
-        return {"policies": []}
+        return {
+            "policies": [],
+            "execution": {
+                "shared_baseline": True,
+                "snapshot_rows": 0,
+                "unique_codes": 0,
+                "fetch_attempts": 0,
+                "cache_hits": 0,
+                "kline_missing": 0,
+                "kline_invalid": 0,
+                "baseline_rows": 0,
+            },
+        }
 
     rows = _build_snapshot_rows()
     snapshot_index_map = _build_snapshot_day_index(rows)
@@ -399,6 +439,7 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
     baseline_samples = cast(List[dict], baseline_context["baseline_samples"])
     baseline_rows = cast(List[dict], baseline_context["evaluated_rows"])
     baseline_coverage = cast(Dict[str, int], baseline_context["coverage"])
+    execution = cast(Dict[str, object], baseline_context.get("execution", {}))
 
     baseline_summary = summarize_return_samples(baseline_samples)
 
@@ -420,4 +461,5 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
         "requested_policies": names,
         "base_index_name": base_name,
         "snapshot_rows": len(rows),
+        "execution": execution,
     }

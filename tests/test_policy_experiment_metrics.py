@@ -299,6 +299,129 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
     @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_execution_summary_reports_shared_cache_counters(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-07", "picks_pure", _make_pick(code="000002")),
+                ("2026-01-05", "picks_fusion", _make_pick(code="000001")),
+                ("2026-01-06", "picks_fusion", _make_pick(code="000001")),
+            ],
+        )
+        fetch_mock.side_effect = lambda code, *_args, **_kwargs: {
+            "000001": {
+                "dates": [
+                    "2026-01-01",
+                    "2026-01-02",
+                    "2026-01-03",
+                    "2026-01-04",
+                    "2026-01-05",
+                    "2026-01-06",
+                    "2026-01-07",
+                ],
+                "opens": [1, 1, 1, 1, 1, 1, 1],
+                "highs": [1, 1, 1, 1, 1, 1, 1],
+                "lows": [1, 1, 1, 1, 1, 1, 1],
+                "closes": [1, 1, 1, 1, 1, 1, 1],
+            },
+            "000002": {
+                "dates": [
+                    "2026-01-01",
+                    "2026-01-02",
+                    "2026-01-03",
+                    "2026-01-04",
+                    "2026-01-05",
+                    "2026-01-06",
+                    "2026-01-07",
+                ],
+                "opens": [1, 1, 1, 1, 1, 1, 1],
+                "highs": [1, 1, 1, 1, 1, 1, 1],
+                "lows": [1, 1, 1, 1, 1, 1, 1],
+                "closes": [1, 1, 1, 1, 1, 1, 1],
+            },
+        }.get(code)
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(["delay1_v1"])
+        execution = payload.get("execution") or {}
+        self.assertTrue(execution["shared_baseline"])
+        self.assertEqual(execution["snapshot_rows"], 3)
+        self.assertEqual(execution["unique_codes"], 2)
+        self.assertEqual(execution["fetch_attempts"], 2)
+        self.assertEqual(execution["cache_hits"], 1)
+        self.assertEqual(execution["baseline_rows"], 3)
+        self.assertEqual(execution["kline_missing"], 0)
+        self.assertEqual(execution["kline_invalid"], 0)
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._normalize_kline")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_execution_summary_reports_missing_and_invalid_kline_rows(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        normalize_mock,
+        fetch_mock,
+    ):
+        invalid_kline = object()
+        valid_kline = {
+            "dates": ["2026-01-01", "2026-01-02"],
+            "opens": [1, 1],
+            "highs": [1, 1],
+            "lows": [1, 1],
+            "closes": [1, 1],
+        }
+
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-05", "picks_pure", _make_pick(code="000001")),
+                ("2026-01-06", "picks_pure", _make_pick(code="000002")),
+                ("2026-01-07", "picks_pure", _make_pick(code="000003")),
+            ],
+        )
+        fetch_mock.side_effect = lambda code, *_args, **_kwargs: {
+            "000001": None,
+            "000002": invalid_kline,
+            "000003": valid_kline,
+        }.get(code)
+        normalize_mock.side_effect = lambda kline: {} if kline is invalid_kline else {
+            "dates": ["x"],
+            "opens": [1.0],
+            "highs": [1.0],
+            "lows": [1.0],
+            "closes": [1.0],
+        }
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(["delay1_v1"])
+        execution = payload.get("execution") or {}
+        self.assertTrue(execution["shared_baseline"])
+        self.assertEqual(execution["snapshot_rows"], 3)
+        self.assertEqual(execution["unique_codes"], 3)
+        self.assertEqual(execution["fetch_attempts"], 3)
+        self.assertEqual(execution["cache_hits"], 0)
+        self.assertEqual(execution["kline_missing"], 1)
+        self.assertEqual(execution["kline_invalid"], 1)
+        self.assertEqual(execution["baseline_rows"], 1)
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
     def test_multiple_policies_keep_cooldown_state_independent(
         self,
         iter_snapshot_mock,
