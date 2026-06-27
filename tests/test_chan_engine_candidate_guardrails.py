@@ -41,6 +41,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_fractal))
         self.assertNotIn("analyze_with_candidate_fractal", ce.__all__)
 
+    def test_candidate_stroke_does_not_call_legacy_build_strokes(self):
+        source = inspect.getsource(candidate.build_strokes_candidate)
+        self.assertNotIn("build_strokes(", source)
+
+    def test_candidate_stroke_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_stroke))
+        self.assertNotIn("analyze_with_candidate_stroke", ce.__all__)
+
     def test_legacy_and_candidate_share_pipeline_helper(self):
         self.assertIn("analyze_with_macd_provider", inspect.getsource(ce.analyze))
         self.assertIn(

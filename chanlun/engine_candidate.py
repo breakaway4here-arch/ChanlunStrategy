@@ -4,13 +4,14 @@ import numpy as np
 
 from config import BI_MIN_KLINE_COUNT, MACD_FAST, MACD_SIGNAL, MACD_SLOW
 
-from .engine_core import calc_macd, inclusion_process
+from .engine_core import calc_macd, find_fractals, inclusion_process
 from .engine_pipeline import (
     analyze_with_inclusion_provider,
     analyze_with_macd_provider,
     analyze_with_providers,
+    analyze_with_fractal_provider,
 )
-from .engine_types import Fractal
+from .engine_types import Fractal, Stroke
 
 
 def _ema_candidate(data, period):
@@ -205,6 +206,75 @@ def analyze_with_candidate_inclusion(code, name, dates, opens, highs, lows, clos
 
 def analyze_with_candidate_fractal(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with fractals supplied by the candidate component."""
+    return analyze_with_fractal_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        find_fractals_candidate,
+    )
+
+
+def build_strokes_candidate(fractals, highs, lows):
+    """Candidate stroke implementation, currently locked to legacy parity."""
+    strokes = []
+    i = 0
+    while i < len(fractals) - 1:
+        f1 = fractals[i]
+
+        j = i + 1
+        found = False
+        while j < len(fractals):
+            if fractals[j].type == f1.type:
+                j += 1
+                continue
+
+            f2 = fractals[j]
+            kline_count = abs(f2.index - f1.index) + 1
+            if kline_count < BI_MIN_KLINE_COUNT:
+                j += 1
+                continue
+
+            direction = None
+            if f1.type == "bottom" and f2.type == "top":
+                if f2.price > f1.price and f2.index > f1.index:
+                    direction = "up"
+                    found = True
+                    break
+            elif f1.type == "top" and f2.type == "bottom":
+                if f2.price < f1.price and f2.index > f1.index:
+                    direction = "down"
+                    found = True
+                    break
+
+            j += 1
+
+        if not found:
+            i += 1
+            continue
+
+        strokes.append(
+            Stroke(
+                start_idx=f1.index,
+                end_idx=f2.index,
+                start_price=f1.price,
+                end_price=f2.price,
+                direction=direction,
+                start_fractal=f1,
+                end_fractal=f2,
+            )
+        )
+        i = j
+
+    return strokes
+
+
+def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with strokes supplied by the candidate component."""
     return analyze_with_providers(
         code,
         name,
@@ -216,5 +286,6 @@ def analyze_with_candidate_fractal(code, name, dates, opens, highs, lows, closes
         volumes,
         macd_provider=calc_macd,
         inclusion_provider=inclusion_process,
-        fractal_provider=find_fractals_candidate,
+        fractal_provider=find_fractals,
+        stroke_provider=build_strokes_candidate,
     )
