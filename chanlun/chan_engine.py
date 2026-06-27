@@ -45,7 +45,7 @@ from .engine_swing import (
 )
 from .engine_types import ChanResult, Fractal, Pivot, Segment, Stroke
 from .engine_compare import compare_chan_results, serialize_chan_result
-from .engine_pipeline import analyze_with_macd_provider
+from .engine_pipeline import LEGACY_PROVIDERS, analyze_with_provider_bundle
 
 
 __all__ = [
@@ -87,7 +87,7 @@ __all__ = [
 
 def analyze(code, name, dates, opens, highs, lows, closes, volumes):
     """对一只股票进行完整的缠论分析。"""
-    return analyze_with_macd_provider(
+    return analyze_with_provider_bundle(
         code,
         name,
         dates,
@@ -96,7 +96,7 @@ def analyze(code, name, dates, opens, highs, lows, closes, volumes):
         lows,
         closes,
         volumes,
-        calc_macd,
+        providers=LEGACY_PROVIDERS,
     )
 
 

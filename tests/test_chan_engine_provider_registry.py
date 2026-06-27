@@ -1,5 +1,8 @@
 import unittest
 
+import inspect
+
+import chanlun.chan_engine as ce
 from chanlun.chan_engine import analyze, compare_chan_results
 from chanlun.engine_candidate import (
     CANDIDATE_ANALYZERS,
@@ -26,6 +29,11 @@ EXPECTED_CANDIDATE_KEYS = [
 
 
 class ChanEngineProviderRegistryTests(unittest.TestCase):
+    def test_public_analyze_uses_legacy_provider_bundle(self):
+        source = inspect.getsource(ce.analyze)
+        self.assertIn("analyze_with_provider_bundle", source)
+        self.assertIn("LEGACY_PROVIDERS", source)
+
     def test_legacy_provider_bundle_matches_public_analyze(self):
         for name, closes in SCENARIOS.items():
             with self.subTest(name=name):

@@ -121,12 +121,21 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_segment))
         self.assertNotIn("analyze_with_candidate_segment", ce.__all__)
 
-    def test_legacy_and_candidate_share_pipeline_helper(self):
-        self.assertIn("analyze_with_macd_provider", inspect.getsource(ce.analyze))
+    def test_legacy_analyze_uses_legacy_provider_bundle(self):
+        source = inspect.getsource(ce.analyze)
+        self.assertIn("analyze_with_provider_bundle", source)
+        self.assertIn("LEGACY_PROVIDERS", source)
+
+    def test_candidate_macd_uses_pipeline_macd_provider(self):
         self.assertIn(
             "analyze_with_macd_provider",
             inspect.getsource(candidate.analyze_with_candidate_macd),
         )
+
+    def test_provider_bundle_helpers_are_not_public_chan_engine_exports(self):
+        self.assertNotIn("EngineProviders", ce.__all__)
+        self.assertNotIn("LEGACY_PROVIDERS", ce.__all__)
+        self.assertNotIn("analyze_with_provider_bundle", ce.__all__)
 
     def test_candidate_pivot_uses_pipeline_pivot_provider(self):
         self.assertIn(
