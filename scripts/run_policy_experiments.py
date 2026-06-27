@@ -44,6 +44,7 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
     )
     entry_label = execution_model.get("entry_label", "-")
     entry_mode = execution_model.get("entry_mode", "-")
+    exit_model = execution_model.get("exit_model", "-")
     not_evaluable = coverage.get("policy_not_evaluable", "-")
     return (
         f"| {name}"
@@ -58,6 +59,7 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
         f"| {coverage.get('policy_filtered', 'n/a')}"
         f"| {entry_label}"
         f"| {entry_mode}"
+        f"| {exit_model}"
         f"| {not_evaluable}"
         f"| {coverage.get('retained_ratio_pct', 'n/a')}"
         f"| {reasons or '-'} |"
@@ -127,8 +129,8 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
         "",
         f"- Generated: {datetime.now().isoformat()}",
         "",
-        "| Policy | Snapshot Days | Picks Seen | Baseline n | Baseline T+3 | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Entry Model | Entry Mode | Not Evaluable | Retained % | Filtered By Reason |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Policy | Snapshot Days | Picks Seen | Baseline n | Baseline T+3 | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Entry Model | Entry Mode | Exit Model | Not Evaluable | Retained % | Filtered By Reason |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     lines.extend(_table_row(item.get("policy"), item) for item in results)
     lines.append("")

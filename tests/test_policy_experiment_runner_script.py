@@ -251,6 +251,7 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
                 "execution_model": {
                     "entry_label": "entry_next_open",
                     "entry_mode": "delay1_open",
+                    "exit_model": "exit_stop_loss_5pct",
                 },
                 "delta": {
                     "t3_mean_delta": 0.2,
@@ -276,9 +277,11 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             text = output_md.read_text(encoding="utf-8")
             self.assertIn("Entry Model", text)
             self.assertIn("Entry Mode", text)
+            self.assertIn("Exit Model", text)
             self.assertIn("Not Evaluable", text)
             self.assertIn("entry_next_open", text)
             self.assertIn("delay1_open", text)
+            self.assertIn("exit_stop_loss_5pct", text)
             self.assertIn("1", text)
 
     @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")

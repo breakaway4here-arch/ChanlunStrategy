@@ -12,6 +12,7 @@ from chanlun.historical_experiment_metrics import (
     entry_mode_for_pick,
     should_drop_pick_for_experiment,
 )
+from chanlun.backtest_execution import evaluate_exit_returns
 from chanlun.backtest_metrics import summarize_return_samples
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
 
@@ -79,6 +80,38 @@ POLICY_EXPERIMENTS = {
         "bottom_trend_reasons": ("market_unknown",),
         "entry_label": "entry_next_open",
         "entry_mode": "delay1_open",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_t3": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_next_open",
+        "entry_mode": "delay1_open",
+        "exit_model": "exit_t3",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop_loss_5pct": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_next_open",
+        "entry_mode": "delay1_open",
+        "exit_model": "exit_stop_loss_5pct",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_take_profit_8pct_or_t3": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_next_open",
+        "entry_mode": "delay1_open",
+        "exit_model": "exit_take_profit_8pct_or_t3",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop5_take8_conservative": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_next_open",
+        "entry_mode": "delay1_open",
+        "exit_model": "exit_stop5_take8_conservative",
     },
     "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close": {
         "cooldown_days": None,
@@ -471,6 +504,7 @@ def _run_one_policy(
     cfg = POLICY_EXPERIMENTS.get(name, {})
     entry_mode = cfg.get("entry_mode")
     entry_label = cfg.get("entry_label")
+    exit_model = cfg.get("exit_model")
 
     for item in rows:
         snap_date = item["snap_date"]
@@ -496,11 +530,19 @@ def _run_one_policy(
         _record_breakdown(policy_breakdown, pick, accepted=True)
 
         if entry_mode:
-            policy_sample = _evaluate_pick_sample(
-                item.get("normalized_kline"),
-                snap_date,
-                entry_mode,
-            )
+            if exit_model:
+                policy_sample = evaluate_exit_returns(
+                    item.get("normalized_kline"),
+                    snap_date,
+                    entry_mode,
+                    exit_model,
+                )
+            else:
+                policy_sample = _evaluate_pick_sample(
+                    item.get("normalized_kline"),
+                    snap_date,
+                    entry_mode,
+                )
             if policy_sample is None:
                 policy_not_evaluable += 1
                 _record_cooldown_accept(name, pick, state)
@@ -537,6 +579,7 @@ def _run_one_policy(
         "execution_model": {
             "entry_label": entry_label or "baseline_type_guard",
             "entry_mode": entry_mode or "baseline_type_guard",
+            "exit_model": exit_model or "exit_t3",
         },
         "breakdown": policy_breakdown,
         "delta": {

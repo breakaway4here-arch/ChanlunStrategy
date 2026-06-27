@@ -57,6 +57,10 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "delay1_v1_bottom_quality_market_known_guard_entry_signal_close",
                 "delay1_v1_bottom_quality_market_known_guard_entry_next_open",
                 "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close",
+                "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_t3",
+                "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop_loss_5pct",
+                "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_take_profit_8pct_or_t3",
+                "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop5_take8_conservative",
                 "delay1_v1_bottom_quality_market_or_ma_guard",
             },
         )
@@ -67,6 +71,10 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "delay1_v1_bottom_quality_market_known_guard_entry_signal_close",
             "delay1_v1_bottom_quality_market_known_guard_entry_next_open",
             "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close",
+            "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_t3",
+            "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop_loss_5pct",
+            "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_take_profit_8pct_or_t3",
+            "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop5_take8_conservative",
         )
         picks = (
             _make_pick(
@@ -772,8 +780,112 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
         self.assertEqual(result["policy_summary"]["t3_mean"], 2.0)
         self.assertEqual(result["execution_model"]["entry_label"], "entry_next_open")
         self.assertEqual(result["execution_model"]["entry_mode"], "delay1_open")
+        self.assertEqual(result["execution_model"]["exit_model"], "exit_t3")
         self.assertIn("delay1_close", observed_entry_modes)
         self.assertIn("delay1_open", observed_entry_modes)
+
+    @patch("chanlun.policy_experiment_metrics.evaluate_exit_returns")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_exit_variant_calls_exit_evaluator(
+        self,
+        iter_snapshot_mock,
+        fetch_mock,
+        evaluate_pick_mock,
+        evaluate_exit_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                (
+                    "2026-01-02",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="strong",
+                    ),
+                ),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07"],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+        evaluate_exit_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 2.0,
+            "max_up_3d": 1.5,
+            "max_dd_3d": -0.2,
+            "exit_model": "exit_stop_loss_5pct",
+            "exit_reason": "t3_close",
+            "exit_return_pct": 2.0,
+            "exit_day_index": 3,
+        }
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop_loss_5pct"],
+        )
+        result = payload["policies"][0]
+        coverage = result["coverage"]
+        self.assertEqual(coverage["policy_not_evaluable"], 0)
+        self.assertEqual(coverage["policy_evaluated"], 1)
+        self.assertEqual(result["execution_model"]["entry_label"], "entry_next_open")
+        self.assertEqual(result["execution_model"]["entry_mode"], "delay1_open")
+        self.assertEqual(result["execution_model"]["exit_model"], "exit_stop_loss_5pct")
+        evaluate_exit_mock.assert_called_once()
+        evaluate_exit_mock.assert_called_with(
+            fetch_mock.return_value,
+            "2026-01-02",
+            "delay1_open",
+            "exit_stop_loss_5pct",
+        )
+
+    @patch("chanlun.policy_experiment_metrics.evaluate_exit_returns")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_exit_variant_not_evaluable_counted(self, iter_snapshot_mock, fetch_mock, evaluate_pick_mock, evaluate_exit_mock):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                (
+                    "2026-01-02",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="strong",
+                    ),
+                ),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07"],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+        evaluate_exit_mock.return_value = None
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_take_profit_8pct_or_t3"],
+        )
+        result = payload["policies"][0]
+        coverage = result["coverage"]
+        self.assertEqual(coverage["policy_not_evaluable"], 1)
+        self.assertEqual(coverage["policy_evaluated"], 0)
+        self.assertIsNone(result["policy_summary"])
+        evaluate_exit_mock.assert_called_once()
+        evaluate_exit_mock.assert_called_with(
+            fetch_mock.return_value,
+            "2026-01-02",
+            "delay1_open",
+            "exit_take_profit_8pct_or_t3",
+        )
 
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
