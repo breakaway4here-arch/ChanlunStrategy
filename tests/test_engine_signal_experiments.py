@@ -1,5 +1,6 @@
 import unittest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 from chanlun import engine_signal_experiments as signal_experiments
 
@@ -125,6 +126,61 @@ class EngineSignalExperimentTests(unittest.TestCase):
         buy_points, sell_points = signal_experiments.locate_buy_sell_points_p0_p1_guard(self.result)
         self.assertEqual([point["index"] for point in buy_points], [4])
         self.assertIs(sell_points, mock_locate.return_value[1])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_drops_newly_formed_bottom_candidate(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {"type": "底背驰候选", "index": 2, "price": 10.1},
+                {"type": "底背驰候选", "index": 0, "price": 9.8},
+                {"type": "一买", "index": 2, "price": 10.3},
+            ],
+            [{"type": "一卖", "index": 3}],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3])
+        buy_points, sell_points = signal_experiments.locate_buy_sell_points_delay1_by_type_guard(self.result)
+        self.assertEqual([point["index"] for point in buy_points], [0, 2])
+        self.assertIs(sell_points, mock_locate.return_value[1])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_keeps_older_bottom_candidate(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {"type": "底背驰候选", "index": 1, "price": 10.5},
+                {"type": "底背驰候选", "index": 2, "price": 10.9},
+            ],
+            [],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3, 4])
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard(self.result)
+        self.assertEqual([point["index"] for point in buy_points], [1, 2])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_noop_with_missing_index_or_closes(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {"type": "底背驰候选", "price": 9.9},
+                {"type": "底背驰候选", "index": 0, "price": 9.8},
+                {"type": "强势启动候选", "index": 2, "price": 12},
+            ],
+            [],
+        )
+        self.result = SimpleNamespace(closes=None)
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard(self.result)
+        self.assertEqual([point["index"] for point in buy_points if "index" in point], [0, 2])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_does_not_filter_strong_startup(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {"type": "强势启动候选", "index": 2, "price": 13.3},
+                {"type": "底背驰候选", "index": 2, "price": 12.1},
+            ],
+            [],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3])
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard(self.result)
+        self.assertEqual([point["type"] for point in buy_points], ["强势启动候选"])
 
 
 if __name__ == "__main__":

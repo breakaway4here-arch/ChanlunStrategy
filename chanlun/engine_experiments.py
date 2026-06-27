@@ -16,6 +16,7 @@ from .engine_candidate import (
 from .engine_signal_experiments import (
     locate_buy_sell_points_p0_distance_guard,
     locate_buy_sell_points_p0_p1_guard,
+    locate_buy_sell_points_delay1_by_type_guard,
     locate_buy_sell_points_p1_confirmation_guard,
 )
 from .engine_pipeline import LEGACY_PROVIDERS, EngineProviders, with_provider_overrides
@@ -110,6 +111,15 @@ EXPERIMENT_REGISTRY = {
         module="signal",
         description="Apply both distance and confirmation guards to signal buy points.",
         overrides={"signal_provider": locate_buy_sell_points_p0_p1_guard},
+        risk="medium",
+    ),
+    "signal_delay1_by_type_guard": ExperimentDefinition(
+        name="signal_delay1_by_type_guard",
+        module="signal",
+        description="Delay-confirm only 底背驰候选 signals by type, no-op for others.",
+        overrides={
+            "signal_provider": locate_buy_sell_points_delay1_by_type_guard,
+        },
         risk="medium",
     ),
     "all_v1": ExperimentDefinition(
