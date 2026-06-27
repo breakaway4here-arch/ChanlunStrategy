@@ -66,6 +66,27 @@ POLICY_EXPERIMENTS = {
         "bottom_quality_reasons": "all",
         "bottom_trend_reasons": ("market_unknown",),
     },
+    "delay1_v1_bottom_quality_market_known_guard_entry_signal_close": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_signal_close",
+        "entry_mode": "immediate_close",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_next_open": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_next_open",
+        "entry_mode": "delay1_open",
+    },
+    "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+        "entry_label": "entry_confirm_close",
+        "entry_mode": "delay1_close",
+    },
     "delay1_v1_bottom_quality_market_or_ma_guard": {
         "cooldown_days": None,
         "bottom_quality_reasons": "all",
@@ -292,6 +313,7 @@ def _build_shared_baseline_context(
                 "snap_date": str(snap_date),
                 "pick": pick,
                 "baseline_sample": baseline_sample,
+                "normalized_kline": normalized_kline,
             },
         )
 
@@ -440,11 +462,15 @@ def _run_one_policy(
     policy_filtered_by_reason = Counter()
     policy_filtered_detail_by_reason = Counter()
     policy_samples: List[dict] = []
+    policy_not_evaluable = 0
     policy_breakdown: Dict[str, Dict[str, dict]] = {
         "market_regime": {},
         "best_buy_point_type": {},
         "confirmations": {},
     }
+    cfg = POLICY_EXPERIMENTS.get(name, {})
+    entry_mode = cfg.get("entry_mode")
+    entry_label = cfg.get("entry_label")
 
     for item in rows:
         snap_date = item["snap_date"]
@@ -467,8 +493,20 @@ def _run_one_policy(
             policy_filtered_by_reason[reason] += 1
 
         policy_sample = item.get("baseline_sample")
+        _record_breakdown(policy_breakdown, pick, accepted=True)
+
+        if entry_mode:
+            policy_sample = _evaluate_pick_sample(
+                item.get("normalized_kline"),
+                snap_date,
+                entry_mode,
+            )
+            if policy_sample is None:
+                policy_not_evaluable += 1
+                _record_cooldown_accept(name, pick, state)
+                continue
+
         if policy_sample is not None:
-            _record_breakdown(policy_breakdown, pick, accepted=True)
             policy_samples.append(policy_sample)
             policy_evaluated += 1
 
@@ -490,11 +528,16 @@ def _run_one_policy(
             "policy_filtered": policy_filtered,
             "policy_filtered_by_reason": dict(policy_filtered_by_reason),
             "policy_filtered_detail_by_reason": dict(policy_filtered_detail_by_reason),
+            "policy_not_evaluable": policy_not_evaluable,
             "retained_ratio_pct": retained_ratio,
         },
         "baseline_summary": dict(baseline_summary) if baseline_summary is not None else None,
         "policy_summary": policy_summary,
         "baseline_policy": _BASELINE_EXPERIMENT,
+        "execution_model": {
+            "entry_label": entry_label or "baseline_type_guard",
+            "entry_mode": entry_mode or "baseline_type_guard",
+        },
         "breakdown": policy_breakdown,
         "delta": {
             "t3_mean_delta": _summarize_delta(baseline_summary, policy_summary, "t3_mean"),

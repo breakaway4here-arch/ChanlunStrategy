@@ -36,11 +36,15 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
     baseline = result.get("baseline_summary") or {}
     policy = result.get("policy_summary") or {}
     delta = result.get("delta") or {}
+    execution_model = result.get("execution_model") or {}
     reasons = ", ".join(
         f"{key}:{value}" for key, value in sorted(
             (result.get("coverage", {}).get("policy_filtered_by_reason", {}) or {}).items(),
         )
     )
+    entry_label = execution_model.get("entry_label", "-")
+    entry_mode = execution_model.get("entry_mode", "-")
+    not_evaluable = coverage.get("policy_not_evaluable", "-")
     return (
         f"| {name}"
         f"| {coverage.get('snapshot_days', 'n/a')}"
@@ -52,6 +56,9 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
         f"| {delta.get('t3_mean_delta') if delta else 'n/a'}"
         f"| {delta.get('t3_win_rate_delta') if delta else 'n/a'}"
         f"| {coverage.get('policy_filtered', 'n/a')}"
+        f"| {entry_label}"
+        f"| {entry_mode}"
+        f"| {not_evaluable}"
         f"| {coverage.get('retained_ratio_pct', 'n/a')}"
         f"| {reasons or '-'} |"
     )
@@ -120,8 +127,8 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
         "",
         f"- Generated: {datetime.now().isoformat()}",
         "",
-        "| Policy | Snapshot Days | Picks Seen | Baseline n | Baseline T+3 | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Retained % | Filtered By Reason |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Policy | Snapshot Days | Picks Seen | Baseline n | Baseline T+3 | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Entry Model | Entry Mode | Not Evaluable | Retained % | Filtered By Reason |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     lines.extend(_table_row(item.get("policy"), item) for item in results)
     lines.append("")

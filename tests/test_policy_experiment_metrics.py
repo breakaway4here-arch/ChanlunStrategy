@@ -54,9 +54,54 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "delay1_v1_bottom_missing_shape_guard",
                 "delay1_v1_bottom_quality_market_strong_guard",
                 "delay1_v1_bottom_quality_market_known_guard",
+                "delay1_v1_bottom_quality_market_known_guard_entry_signal_close",
+                "delay1_v1_bottom_quality_market_known_guard_entry_next_open",
+                "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close",
                 "delay1_v1_bottom_quality_market_or_ma_guard",
             },
         )
+
+    def test_execution_variant_policy_has_same_filters_as_known_market_guard(self):
+        base_policy = "delay1_v1_bottom_quality_market_known_guard"
+        variant_policies = (
+            "delay1_v1_bottom_quality_market_known_guard_entry_signal_close",
+            "delay1_v1_bottom_quality_market_known_guard_entry_next_open",
+            "delay1_v1_bottom_quality_market_known_guard_entry_confirm_close",
+        )
+        picks = (
+            _make_pick(
+                point_type="底背驰候选",
+                distance=1.8,
+                confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                market_regime="strong",
+            ),
+            _make_pick(
+                point_type="底背驰候选",
+                distance=7.0,
+                confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                market_regime="strong",
+            ),
+            _make_pick(
+                point_type="底背驰候选",
+                distance=None,
+                confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                market_regime="strong",
+            ),
+            _make_pick(
+                point_type="底背驰候选",
+                distance=1.8,
+                confirmations=[],
+                market_regime="weak",
+                ma_bullish=True,
+            ),
+        )
+
+        for variant in variant_policies:
+            for pick in picks:
+                base_filtered, base_reason = should_filter_for_policy(base_policy, pick, {})
+                variant_filtered, variant_reason = should_filter_for_policy(variant, pick, {})
+                self.assertEqual(base_filtered, variant_filtered)
+                self.assertEqual(base_reason, variant_reason)
 
     def test_bottom_quality_guard_reasons(self):
         pick = _make_pick(
@@ -657,6 +702,133 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
         self.assertIn("delta", result)
         self.assertEqual(result["delta"]["t3_mean_delta"], 0.0)
         self.assertEqual(payload["requested_policies"], ["delay1_v1"])
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_execution_variant_re_evaluates_with_explicit_entry_mode(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                (
+                    "2026-01-02",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="strong",
+                    ),
+                ),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07"],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+
+        observed_entry_modes = []
+
+        def evaluate_side_effect(_normalized_kline, _snap_date, entry_mode):
+            observed_entry_modes.append(entry_mode)
+            if entry_mode == "delay1_close":
+                return {
+                    "t1_close_pct": 1.0,
+                    "t3_close_pct": 1.0,
+                    "max_up_3d": 0.5,
+                    "max_dd_3d": -0.2,
+                }
+            if entry_mode == "delay1_open":
+                return {
+                    "t1_close_pct": 2.0,
+                    "t3_close_pct": 2.0,
+                    "max_up_3d": 1.5,
+                    "max_dd_3d": -0.1,
+                }
+            return {
+                "t1_close_pct": 3.0,
+                "t3_close_pct": 3.0,
+                "max_up_3d": 2.0,
+                "max_dd_3d": -0.05,
+            }
+
+        evaluate_mock.side_effect = evaluate_side_effect
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1_bottom_quality_market_known_guard_entry_next_open"],
+        )
+        result = payload["policies"][0]
+        coverage = result["coverage"]
+        self.assertEqual(coverage["policy_not_evaluable"], 0)
+        self.assertEqual(coverage["policy_evaluated"], 1)
+        self.assertEqual(coverage["policy_filtered"], 0)
+        self.assertEqual(result["policy_summary"]["n"], 1)
+        self.assertEqual(result["policy_summary"]["t3_mean"], 2.0)
+        self.assertEqual(result["execution_model"]["entry_label"], "entry_next_open")
+        self.assertEqual(result["execution_model"]["entry_mode"], "delay1_open")
+        self.assertIn("delay1_close", observed_entry_modes)
+        self.assertIn("delay1_open", observed_entry_modes)
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_execution_variant_records_policy_not_evaluable(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                (
+                    "2026-01-02",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="strong",
+                    ),
+                ),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07"],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+
+        def evaluate_side_effect(_normalized_kline, _snap_date, entry_mode):
+            if entry_mode == "immediate_close":
+                return None
+            return {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": 1.0,
+                "max_up_3d": 0.5,
+                "max_dd_3d": -0.2,
+            }
+
+        evaluate_mock.side_effect = evaluate_side_effect
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1_bottom_quality_market_known_guard_entry_signal_close"],
+        )
+        result = payload["policies"][0]
+        coverage = result["coverage"]
+        self.assertEqual(coverage["policy_not_evaluable"], 1)
+        self.assertEqual(coverage["policy_evaluated"], 0)
+        self.assertEqual(result["policy_summary"], None)
+        self.assertEqual(
+            result["breakdown"]["market_regime"]["strong"]["accepted"],
+            1,
+        )
 
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
