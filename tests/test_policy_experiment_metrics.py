@@ -3,6 +3,7 @@ from unittest.mock import patch
 
 from chanlun.policy_experiment_metrics import (
     list_policy_experiments,
+    bottom_quality_guard_reasons,
     should_filter_for_policy,
     run_policy_experiment_metrics,
 )
@@ -41,8 +42,71 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "delay1_v1_cooldown5",
                 "delay1_v1_bottom_quality_guard",
                 "delay1_v1_cooldown3_bottom_quality",
+                "delay1_v1_bottom_missing_key_guard",
+                "delay1_v1_bottom_missing_distance_guard",
+                "delay1_v1_bottom_invalid_distance_guard",
+                "delay1_v1_bottom_distance_gt6_guard",
+                "delay1_v1_bottom_missing_shape_guard",
             },
         )
+
+    def test_bottom_quality_guard_reasons(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_quality_guard_reasons(pick), [])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=1.8,
+            confirmations=["30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_quality_guard_reasons(pick), ["missing_key_protection"])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_quality_guard_reasons(pick), ["missing_distance"])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance="invalid",
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_quality_guard_reasons(pick), ["invalid_distance"])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=7.1,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_quality_guard_reasons(pick), ["distance_gt_6"])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=1.8,
+            confirmations=["关键位不破"],
+        )
+        self.assertEqual(
+            bottom_quality_guard_reasons(pick),
+            ["missing_bottom_shape_or_stop_drop"],
+        )
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance="invalid",
+            confirmations=["止跌结构"],
+        )
+        self.assertEqual(
+            bottom_quality_guard_reasons(pick),
+            ["missing_key_protection", "invalid_distance"],
+        )
+
+        pick = {"best_buy_point": {"type": "强势启动候选"}}
+        self.assertEqual(bottom_quality_guard_reasons(pick), [])
 
     def test_bottom_quality_guard_filters_missing_key_reference_distance_or_confirmations(self):
         pick = _make_pick(
@@ -50,7 +114,9 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             distance=2.0,
             confirmations=["30min底分型"],
         )
-        self.assertTrue(should_filter_for_policy("delay1_v1_bottom_quality_guard", pick, {})[0])
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_quality_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_quality_guard")
 
         pick = _make_pick(
             point_type="底背驰候选",
@@ -91,6 +157,59 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
 
         pick = _make_pick(point_type="强势启动候选")
         filtered, _reason = should_filter_for_policy("delay1_v1_bottom_quality_guard", pick, {})
+        self.assertFalse(filtered)
+
+    def test_bottom_quality_single_reason_policies(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=2.0,
+            confirmations=["30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_missing_key_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_missing_key_protection")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_missing_distance_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_missing_distance")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance="abc",
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_invalid_distance_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_invalid_distance")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=7.5,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_distance_gt6_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_distance_gt_6")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=2.0,
+            confirmations=["关键位不破"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_missing_shape_guard", pick, {})
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_missing_shape_or_stop_drop")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            distance=2.0,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy("delay1_v1_bottom_missing_shape_guard", pick, {})
         self.assertFalse(filtered)
 
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
@@ -162,6 +281,51 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
         self.assertIn("delta", result)
         self.assertEqual(result["delta"]["t3_mean_delta"], 0.0)
         self.assertEqual(payload["requested_policies"], ["delay1_v1"])
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_bottom_quality_guard_reports_detailed_reason_breakdown(self, iter_snapshot_mock, evaluate_mock, fetch_mock):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-02", "picks_pure", _make_pick(distance=None, confirmations=["止跌结构"])),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05", "2026-01-06", "2026-01-07"],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(["delay1_v1_bottom_quality_guard"])
+        self.assertEqual(len(payload["policies"]), 1)
+        result = payload["policies"][0]
+        self.assertEqual(result["coverage"]["policy_filtered"], 1)
+        self.assertEqual(result["coverage"]["policy_filtered_by_reason"]["bottom_quality_guard"], 1)
+        self.assertEqual(
+            result["coverage"]["policy_filtered_detail_by_reason"]["bottom_missing_key_protection"],
+            1,
+        )
+        self.assertEqual(
+            result["coverage"]["policy_filtered_detail_by_reason"]["bottom_missing_distance"],
+            1,
+        )
+        self.assertNotIn(
+            "bottom_missing_key_protection",
+            result["coverage"]["policy_filtered_by_reason"],
+        )
+
+    def test_run_policy_experiment_metrics_rejects_unknown_policy(self):
+        with self.assertRaisesRegex(ValueError, "unsupported policies"):
+            run_policy_experiment_metrics(["delay1_v1_not_exists"])
 
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")

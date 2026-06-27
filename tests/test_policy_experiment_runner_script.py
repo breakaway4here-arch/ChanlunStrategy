@@ -133,6 +133,56 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             self.assertIn("delay1_v1_cooldown3", text)
             self.assertIn("delay1_v1_bottom_quality_guard", text)
 
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_new_reason_policy_output_in_markdown(self, run_mock):
+        payload = _fake_payload()
+        payload["policies"] = [
+            {
+                "policy": "delay1_v1_bottom_missing_shape_guard",
+                "coverage": {
+                    "snapshot_days": 5,
+                    "picks_seen": 5,
+                    "baseline_evaluated": 5,
+                    "policy_evaluated": 4,
+                    "baseline_filtered": 0,
+                    "policy_filtered": 1,
+                    "policy_filtered_by_reason": {"bottom_missing_shape_or_stop_drop": 1},
+                    "retained_ratio_pct": 80.0,
+                },
+                "baseline_summary": {
+                    "n": 5,
+                    "t3_mean": 1.2,
+                },
+                "policy_summary": {
+                    "n": 4,
+                    "t3_mean": 1.6,
+                },
+                "delta": {
+                    "t3_mean_delta": 0.4,
+                    "t3_win_rate_delta": 1.0,
+                    "t3_loss_5pct_rate_delta": -1.0,
+                    "big_drop_5pct_rate_delta": 0.0,
+                },
+            }
+        ]
+        run_mock.return_value = payload
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_json = Path(tmpdir) / "policy_backtest_single.json"
+            output_md = Path(tmpdir) / "policy_backtest_single.md"
+            rc = main([
+                "--policies",
+                "delay1_v1_bottom_missing_shape_guard",
+                "--output-json",
+                str(output_json),
+                "--output-md",
+                str(output_md),
+            ])
+            self.assertEqual(rc, 0)
+            payload = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertEqual(len(payload["policies"]), 1)
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("bottom_missing_shape_or_stop_drop", text)
+
 
 if __name__ == "__main__":
     unittest.main()

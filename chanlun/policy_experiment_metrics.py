@@ -30,15 +30,42 @@ POLICY_EXPERIMENTS = {
     },
     "delay1_v1_bottom_quality_guard": {
         "cooldown_days": None,
-        "bottom_quality_guard": True,
+        "bottom_quality_reasons": "all",
     },
     "delay1_v1_cooldown3_bottom_quality": {
         "cooldown_days": 3,
-        "bottom_quality_guard": True,
+        "bottom_quality_reasons": "all",
+    },
+    "delay1_v1_bottom_missing_key_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": ("missing_key_protection",),
+    },
+    "delay1_v1_bottom_missing_distance_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": ("missing_distance",),
+    },
+    "delay1_v1_bottom_invalid_distance_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": ("invalid_distance",),
+    },
+    "delay1_v1_bottom_distance_gt6_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": ("distance_gt_6",),
+    },
+    "delay1_v1_bottom_missing_shape_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": ("missing_bottom_shape_or_stop_drop",),
     },
 }
 
 _BASELINE_EXPERIMENT = "signal_delay1_by_type_guard"
+_BOTTOM_QUALITY_REASON_LABELS = {
+    "missing_key_protection": "bottom_missing_key_protection",
+    "missing_distance": "bottom_missing_distance",
+    "invalid_distance": "bottom_invalid_distance",
+    "distance_gt_6": "bottom_distance_gt_6",
+    "missing_bottom_shape_or_stop_drop": "bottom_missing_shape_or_stop_drop",
+}
 
 
 def list_policy_experiments() -> list:
@@ -56,41 +83,46 @@ def _as_str_list(values) -> List[str]:
     return [str(item) for item in values]
 
 
-def _pick_type(pick: Optional[dict]) -> str:
-    bbp = (pick or {}).get("best_buy_point") or {}
-    return str(bbp.get("type") or "")
-
-
-def _bottom_quality_guard_fails(pick: Optional[dict]) -> bool:
+def bottom_quality_guard_reasons(pick: Optional[dict]) -> List[str]:
     bbp = (pick or {}).get("best_buy_point")
-    if not isinstance(bbp, dict):
-        return False
-    if bbp.get("type") != "底背驰候选":
-        return False
+    if not isinstance(bbp, dict) or bbp.get("type") != "底背驰候选":
+        return []
 
     confirmations = _as_str_list(bbp.get("confirmations"))
     has_key_protection = "关键位不破" in confirmations
     has_30m_bottom = "30min底分型" in confirmations
     has_stop_drop = "止跌结构" in confirmations
+
+    reasons = []
+
     if not has_key_protection:
-        return True
+        reasons.append("missing_key_protection")
 
     distance = bbp.get("distance_from_reference_pct")
     if distance is None:
-        return True
-
-    try:
-        distance = float(distance)
-    except (TypeError, ValueError):
-        return True
-
-    if distance > 6:
-        return True
+        reasons.append("missing_distance")
+    else:
+        try:
+            distance = float(distance)
+        except (TypeError, ValueError):
+            reasons.append("invalid_distance")
+        else:
+            if distance > 6:
+                reasons.append("distance_gt_6")
 
     if (not has_30m_bottom) and (not has_stop_drop):
-        return True
+        reasons.append("missing_bottom_shape_or_stop_drop")
 
-    return False
+    return reasons
+
+
+def _bottom_quality_reason_label(reason: str) -> str:
+    return _BOTTOM_QUALITY_REASON_LABELS.get(reason, reason)
+
+
+def _pick_type(pick: Optional[dict]) -> str:
+    bbp = (pick or {}).get("best_buy_point") or {}
+    return str(bbp.get("type") or "")
 
 
 def _build_snapshot_rows() -> list:
@@ -168,8 +200,16 @@ def should_filter_for_policy(name: str, pick: dict, state: dict) -> Tuple[bool, 
     if not supports_policy_experiment(name):
         return False, "unsupported"
 
-    if POLICY_EXPERIMENTS[name]["bottom_quality_guard"] and _bottom_quality_guard_fails(pick):
-        return True, "bottom_quality_guard"
+    cfg = POLICY_EXPERIMENTS[name]
+    quality_reasons = cfg.get("bottom_quality_reasons")
+    guard_reasons = bottom_quality_guard_reasons(pick)
+    if quality_reasons == "all":
+        if guard_reasons:
+            return True, "bottom_quality_guard"
+
+    for reason in _as_str_list(quality_reasons):
+        if reason in guard_reasons:
+            return True, _bottom_quality_reason_label(reason)
 
     if _is_cooldown_hit(name, pick, state):
         return True, "cooldown"
@@ -206,6 +246,7 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
     baseline_filtered = 0
     policy_filtered = 0
     policy_filtered_by_reason = Counter()
+    policy_filtered_detail_by_reason = Counter()
     baseline_samples: List[dict] = []
     policy_samples: List[dict] = []
 
@@ -242,6 +283,11 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
             policy_filtered += 1
             if reason:
                 policy_filtered_by_reason[reason] += 1
+            if reason == "bottom_quality_guard":
+                for detail_reason in bottom_quality_guard_reasons(pick):
+                    policy_filtered_detail_by_reason[
+                        _bottom_quality_reason_label(detail_reason)
+                    ] += 1
             continue
         elif reason:
             policy_filtered_by_reason[reason] += 1
@@ -268,6 +314,7 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
             "baseline_filtered": baseline_filtered,
             "policy_filtered": policy_filtered,
             "policy_filtered_by_reason": dict(policy_filtered_by_reason),
+            "policy_filtered_detail_by_reason": dict(policy_filtered_detail_by_reason),
             "retained_ratio_pct": retained_ratio,
         },
         "baseline_summary": baseline_summary,

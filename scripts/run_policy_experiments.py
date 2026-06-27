@@ -1,4 +1,4 @@
-"""Run Phase 6.6 policy-only backtest experiments."""
+"""Run Phase 6.7 policy-only backtest experiments."""
 
 from __future__ import annotations
 
@@ -81,6 +81,22 @@ def _render_markdown(results: List[Dict[str, Any]]) -> str:
     if not results:
         lines.append("- no policy results")
     lines.append("")
+
+    has_detail_reasons = any(
+        (item.get("coverage") or {}).get("policy_filtered_detail_by_reason")
+        for item in results
+    )
+    if has_detail_reasons:
+        lines.append("## Filter Detail Reason Summary")
+        for item in results:
+            name = item.get("policy", "unknown")
+            coverage = (item.get("coverage") or {}).get("policy_filtered_detail_by_reason", {})
+            if not coverage:
+                lines.append(f"- {name}: none")
+                continue
+            reason_text = ", ".join(f"{k}:{v}" for k, v in sorted(coverage.items()))
+            lines.append(f"- {name}: {reason_text}")
+        lines.append("")
     return "\n".join(lines)
 
 
@@ -99,7 +115,7 @@ def _write_outputs(output_json: str, output_md: str, payload: Dict[str, Any]) ->
 
 
 def main(argv: Optional[Iterable[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="Run phase 6.6 policy backtest experiments.")
+    parser = argparse.ArgumentParser(description="Run phase 6.7 policy backtest experiments.")
     parser.add_argument("--policies", required=True, help="Comma-separated policy names")
     parser.add_argument("--output-json", required=True, help="Output JSON path")
     parser.add_argument("--output-md", required=True, help="Output Markdown path")
