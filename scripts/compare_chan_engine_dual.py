@@ -11,21 +11,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze_dual
+from chanlun.engine_dual_metrics import (
+    build_aggregate_dual_business_metrics,
+    result_to_recommendations,
+)
 from chanlun.engine_candidate import CANDIDATE_ANALYZERS
 from chanlun.engine_experiments import build_experiment_provider_bundle, list_experiments
-from chanlun.experiment_metrics import compare_recommendations
 from chanlun.engine_pipeline import analyze_with_provider_bundle
 from tests.test_chan_engine_snapshot import SCENARIOS
-
-
-def _to_recommendations(result):
-    if result is None or not getattr(result, "buy_points", None):
-        return []
-    return [
-        {"code": result.code, "best_buy_point": bp}
-        for bp in result.buy_points
-        if isinstance(bp, dict)
-    ]
 
 
 def _make_kline(closes):
@@ -55,25 +48,6 @@ def _analyze_with_experiment_bundle(providers):
         )
 
     return analyze
-
-
-def _calculate_business_metrics(legacy_results, candidate_results, scenario_count):
-    return {
-        "recommendation_diff": compare_recommendations(
-            legacy_results,
-            candidate_results,
-        ),
-        "return_metrics": {
-            "status": "no_market_data",
-            "legacy": None,
-            "experiment": None,
-        },
-        "coverage": {
-            "evaluated": 0,
-            "skipped_no_market_data": scenario_count,
-            "reason": "Phase 5.2 runs on in-memory SCENARIOS only; no market fetch",
-        },
-    }
 
 
 def main():
@@ -132,14 +106,27 @@ def main():
         scenarios[name] = comparison
         all_equal = all_equal and comparison["equal"]
         if args.business_metrics:
-            legacy_recommendations.extend(_to_recommendations(payload.get("legacy")))
-            candidate_recommendations.extend(_to_recommendations(payload.get("candidate")))
+            legacy_recommendations.extend(
+                result_to_recommendations(payload.get("legacy"))
+            )
+            candidate_recommendations.extend(
+                result_to_recommendations(payload.get("candidate"))
+            )
 
     if args.business_metrics:
-        business_metrics = _calculate_business_metrics(
+        business_metrics = build_aggregate_dual_business_metrics(
             legacy_recommendations,
             candidate_recommendations,
-            scenario_count=len(scenarios),
+            return_metrics={
+                "status": "no_market_data",
+                "legacy": None,
+                "experiment": None,
+            },
+            coverage={
+                "evaluated": 0,
+                "skipped_no_market_data": len(scenarios),
+                "reason": "Phase 5.2 runs on in-memory SCENARIOS only; no market fetch",
+            },
         )
 
     report = {

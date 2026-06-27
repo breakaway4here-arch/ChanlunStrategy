@@ -71,6 +71,65 @@ class ChanEngineDualGuardrailTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "^unknown candidate: missing$"):
             ce.analyze_dual(candidate="missing", **kline)
 
+    def test_analyze_dual_default_has_no_business_metrics(self):
+        kline = make_kline()
+        payload = ce.analyze_dual(**kline)
+        self.assertNotIn("business_metrics", payload)
+
+    def test_analyze_dual_business_metrics_accepts_dict(self):
+        kline = make_kline()
+        payload = ce.analyze_dual(
+            **kline,
+            business_metrics={
+                "status": "dict_input",
+                "return_metrics": {"status": "ok"},
+            },
+        )
+        self.assertIn("business_metrics", payload)
+        self.assertEqual(
+            payload["business_metrics"],
+            {
+                "status": "dict_input",
+                "return_metrics": {"status": "ok"},
+            },
+        )
+
+    def test_analyze_dual_business_metrics_accepts_callable(self):
+        kline = make_kline()
+        received = {}
+
+        def _collector(legacy, candidate, comparison):
+            received["legacy"] = legacy
+            received["candidate"] = candidate
+            received["comparison"] = comparison
+            return {
+                "legacy": legacy.code,
+                "candidate": candidate.code,
+                "equal": comparison["equal"],
+            }
+
+        payload = ce.analyze_dual(
+            **kline,
+            business_metrics=_collector,
+        )
+        self.assertIn("business_metrics", payload)
+        self.assertEqual(payload["business_metrics"]["legacy"], "TEST")
+        self.assertEqual(payload["business_metrics"]["candidate"], "TEST")
+        self.assertTrue(payload["business_metrics"]["equal"])
+        self.assertIs(received["legacy"], payload["legacy"])
+        self.assertIs(received["candidate"], payload["candidate"])
+        self.assertIs(received["comparison"], payload["comparison"])
+
+    def test_analyze_dual_business_metrics_callable_not_provided(self):
+        kline = make_kline()
+
+        def _collector(**kwargs):
+            return None
+
+        payload = ce.analyze_dual(**kline, business_metrics=_collector)
+        self.assertIn("business_metrics", payload)
+        self.assertEqual(payload["business_metrics"], {"status": "not_provided"})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -112,6 +112,7 @@ def analyze_dual(
     *,
     candidate=None,
     candidate_analyzer=None,
+    business_metrics=None,
 ):
     """Run legacy analyze() and a candidate analyzer, then compare outputs."""
     if candidate is not None and candidate_analyzer is not None:
@@ -135,8 +136,24 @@ def analyze_dual(
     else:
         analyzer = candidate_analyzer or analyze
     candidate_result = analyzer(**kwargs)
-    return {
+    comparison = compare_chan_results(legacy, candidate_result)
+    result = {
         "legacy": legacy,
         "candidate": candidate_result,
-        "comparison": compare_chan_results(legacy, candidate_result),
+        "comparison": comparison,
     }
+    if business_metrics is None:
+        return result
+
+    if callable(business_metrics):
+        result["business_metrics"] = business_metrics(
+            legacy=legacy,
+            candidate=candidate_result,
+            comparison=comparison,
+        )
+    else:
+        result["business_metrics"] = business_metrics
+    if result["business_metrics"] is None:
+        result["business_metrics"] = {"status": "not_provided"}
+
+    return result
