@@ -737,17 +737,10 @@ def check_divergence_candidate(closes, segments, dif, dea, hist, pivots=None):
 
 
 def candidate_provider_bundle(candidate_name):
-    """Return the legacy provider stack with one candidate component substituted."""
-    if candidate_name == "all":
-        return all_candidate_provider_bundle()
+    """Compatibility wrapper that resolves candidate names through the candidate registry."""
+    from .engine_candidate_registry import build_candidate_provider_bundle
 
-    experiment_name = _LEGACY_CANDIDATE_TO_EXPERIMENT.get(candidate_name)
-    if experiment_name is None:
-        raise ValueError(f"unknown candidate provider bundle: {candidate_name}")
-
-    from .engine_experiments import build_experiment_provider_bundle
-
-    return build_experiment_provider_bundle(experiment_name)
+    return build_candidate_provider_bundle(candidate_name)
 
 
 def _analyze_with_bundle(

@@ -10,6 +10,13 @@ from chanlun.engine_candidate import (
     analyze_with_all_candidate_components,
     candidate_provider_bundle,
 )
+from chanlun.engine_candidate_registry import (
+    CANDIDATE_REGISTRY,
+    build_candidate_analyzer,
+    build_candidate_provider_bundle as build_candidate_provider_bundle_registry,
+    get_candidate_definition,
+    list_candidate_definitions,
+)
 from chanlun.engine_pipeline import (
     EngineProviders,
     LEGACY_PROVIDERS,
@@ -126,6 +133,94 @@ class ChanEngineProviderRegistryTests(unittest.TestCase):
                 for field in PROVIDER_FIELDS:
                     expected_name = expected_overrides.get(field, legacy_names[field])
                     self.assertEqual(names[field], expected_name)
+
+    def test_candidate_registry_contains_aliases_and_canonical_names(self):
+        for name in ["signal", "pivot", "all"]:
+            self.assertIn(name, CANDIDATE_REGISTRY)
+        for name in [
+            "signal_v1",
+            "signal_delay1_by_type_guard",
+            "all_v1",
+        ]:
+            self.assertIn(name, CANDIDATE_REGISTRY)
+
+    def test_candidate_definition_lookup(self):
+        self.assertEqual(
+            get_candidate_definition("signal").experiment,
+            "signal_v1",
+        )
+        self.assertEqual(
+            get_candidate_definition("signal_v1").module,
+            "signal",
+        )
+        with self.assertRaises(ValueError):
+            get_candidate_definition("unknown")
+
+    def test_registry_builder_is_stable_set(self):
+        names = set(list_candidate_definitions())
+        for name in ["signal", "pivot", "all"]:
+            self.assertIn(name, names)
+        self.assertIn("signal_v1", names)
+        self.assertIn("signal_delay1_by_type_guard", names)
+        self.assertIn("all_v1", names)
+
+    def test_build_candidate_provider_bundle_matches_registry(self):
+        legacy_names = _provider_names(LEGACY_PROVIDERS)
+        for candidate_name, expected_overrides in {
+            "signal": {"signal_provider": "locate_buy_sell_points_candidate"},
+            "signal_delay1_by_type_guard": {"signal_provider": "locate_buy_sell_points_delay1_by_type_guard"},
+            "all": {
+                "macd_provider": "calc_macd_candidate",
+                "inclusion_provider": "inclusion_process_candidate",
+                "fractal_provider": "find_fractals_candidate",
+                "stroke_provider": "build_strokes_candidate",
+                "segment_provider": "build_segments_candidate",
+                "pivot_provider": "find_pivots_candidate",
+                "trend_provider": "classify_trend_candidate",
+                "divergence_provider": "check_divergence_candidate",
+                "signal_provider": "locate_buy_sell_points_candidate",
+            },
+        }.items():
+            with self.subTest(candidate_name=candidate_name):
+                registry_bundle = build_candidate_provider_bundle_registry(candidate_name)
+                compatibility_bundle = candidate_provider_bundle(candidate_name)
+                self.assertEqual(_provider_names(registry_bundle), _provider_names(compatibility_bundle))
+                for field in PROVIDER_FIELDS:
+                    expected_name = expected_overrides.get(field, legacy_names[field])
+                    self.assertEqual(_provider_names(registry_bundle)[field], expected_name)
+
+    def test_registry_unknown_candidate_provider_bundle_is_rejected(self):
+        with self.assertRaises(ValueError):
+            build_candidate_provider_bundle_registry("missing")
+
+    def test_build_candidate_analyzer(self):
+        for candidate_name, closes in SCENARIOS.items():
+            with self.subTest(candidate_name=candidate_name):
+                if len(closes) < 10:
+                    continue
+                kline = _make_kline(closes)
+                analyzer = build_candidate_analyzer("signal")
+                result = analyzer(
+                    code=candidate_name,
+                    name=candidate_name,
+                    dates=kline["dates"],
+                    opens=kline["opens"],
+                    highs=kline["highs"],
+                    lows=kline["lows"],
+                    closes=kline["closes"],
+                    volumes=kline["volumes"],
+                )
+                self.assertEqual(result.code, candidate_name)
+                self.assertEqual(result.name, candidate_name)
+                break
+
+        self.assertTrue(callable(build_candidate_analyzer("signal")))
+        self.assertEqual(
+            build_candidate_analyzer("signal").__name__,
+            "analyze_with_candidate_signal",
+        )
+        with self.assertRaises(ValueError):
+            build_candidate_analyzer("unknown")
 
     def test_unknown_candidate_provider_bundle_is_rejected(self):
         with self.assertRaises(ValueError):
