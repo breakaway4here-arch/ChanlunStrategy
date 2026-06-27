@@ -8,6 +8,7 @@ from config import (
     MACD_SIGNAL,
     MACD_SLOW,
     SEGMENT_MIN_STROKES,
+    PIVOT_MIN_SEGMENTS,
     USE_SEGMENT_BREAK_BUILDER,
 )
 
@@ -20,11 +21,12 @@ from .engine_core import (
 from .engine_pipeline import (
     analyze_with_inclusion_provider,
     analyze_with_macd_provider,
-    analyze_with_providers,
+    analyze_with_segment_provider,
     analyze_with_fractal_provider,
     analyze_with_stroke_provider,
+    build_segments_with_config,
 )
-from .engine_types import Fractal, Segment, Stroke
+from .engine_types import Fractal, Pivot, Segment, Stroke
 
 
 def _ema_candidate(data, period):
@@ -318,6 +320,49 @@ def build_segments_candidate(strokes):
     return build_segments_fixed_window_candidate(strokes)
 
 
+def find_pivots_candidate(segments):
+    """Candidate pivot implementation, currently locked to legacy parity."""
+    if len(segments) < PIVOT_MIN_SEGMENTS:
+        return []
+
+    pivots = []
+    i = 0
+    while i <= len(segments) - PIVOT_MIN_SEGMENTS:
+        s1, s2, s3 = segments[i], segments[i + 1], segments[i + 2]
+        zd = max(s1.low, s2.low, s3.low)
+        zg = min(s1.high, s2.high, s3.high)
+
+        if zg > zd:
+            pivot_segs = [s1, s2, s3]
+            j = i + 3
+            while j < len(segments):
+                next_seg = segments[j]
+                new_zd = max(zd, next_seg.low)
+                new_zg = min(zg, next_seg.high)
+
+                if new_zg > new_zd:
+                    zd = new_zd
+                    zg = new_zg
+                    pivot_segs.append(next_seg)
+                    j += 1
+                    continue
+
+                break
+
+            pivots.append(Pivot(
+                ZD=round(zd, 2),
+                ZG=round(zg, 2),
+                segments=pivot_segs,
+                start_idx=pivot_segs[0].start_idx,
+                end_idx=pivot_segs[-1].end_idx,
+            ))
+            i = j
+        else:
+            i += 1
+
+    return pivots
+
+
 def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with MACD supplied by the candidate component."""
     return analyze_with_macd_provider(
@@ -419,7 +464,7 @@ def build_strokes_candidate(fractals, highs, lows):
 
 def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with segments supplied by the candidate component."""
-    return analyze_with_providers(
+    return analyze_with_segment_provider(
         code,
         name,
         dates,
@@ -428,11 +473,23 @@ def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes
         lows,
         closes,
         volumes,
-        macd_provider=calc_macd,
-        inclusion_provider=inclusion_process,
-        fractal_provider=find_fractals,
-        stroke_provider=build_strokes,
         segment_provider=build_segments_candidate,
+    )
+
+
+def analyze_with_candidate_pivot(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with pivots supplied by the candidate component."""
+    return analyze_with_segment_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots_candidate,
     )
 
 

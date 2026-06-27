@@ -49,6 +49,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_stroke))
         self.assertNotIn("analyze_with_candidate_stroke", ce.__all__)
 
+    def test_candidate_pivot_does_not_call_legacy_find_pivots(self):
+        source = inspect.getsource(candidate.find_pivots_candidate)
+        self.assertNotIn("find_pivots(", source)
+
+    def test_candidate_pivot_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_pivot))
+        self.assertNotIn("analyze_with_candidate_pivot", ce.__all__)
+
     def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
         for fn in (
             candidate.build_segments_by_break_candidate,
@@ -68,4 +76,10 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertIn(
             "analyze_with_macd_provider",
             inspect.getsource(candidate.analyze_with_candidate_macd),
+        )
+
+    def test_candidate_pivot_uses_pipeline_pivot_provider(self):
+        self.assertIn(
+            "pivot_provider",
+            inspect.getsource(candidate.analyze_with_candidate_pivot),
         )

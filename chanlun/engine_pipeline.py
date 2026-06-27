@@ -52,6 +52,7 @@ def analyze_with_macd_provider(
         fractal_provider=find_fractals,
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
     )
 
 
@@ -81,6 +82,7 @@ def analyze_with_inclusion_provider(
         fractal_provider=find_fractals,
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
     )
 
 
@@ -110,6 +112,7 @@ def analyze_with_fractal_provider(
         fractal_provider=fractal_provider,
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
     )
 
 
@@ -140,6 +143,39 @@ def analyze_with_stroke_provider(
         fractal_provider=find_fractals,
         stroke_provider=stroke_provider,
         segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
+    )
+
+
+def analyze_with_segment_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    segment_provider,
+    pivot_provider=find_pivots,
+):
+    """Backward-compatible entry using legacy MACD, inclusion, fractal, and stroke behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+        stroke_provider=build_strokes,
+        segment_provider=segment_provider,
+        pivot_provider=pivot_provider,
     )
 
 
@@ -158,6 +194,7 @@ def analyze_with_providers(
     fractal_provider,
     stroke_provider,
     segment_provider,
+    pivot_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -170,7 +207,7 @@ def analyze_with_providers(
     strokes = stroke_provider(fractals, merged_high, merged_low)
     segments = segment_provider(strokes)
     confirmed_segments = [s for s in segments if s.confirmed]
-    pivots = find_pivots(confirmed_segments)
+    pivots = pivot_provider(confirmed_segments)
     trend_type = classify_trend(pivots, confirmed_segments)
     divergence = check_divergence(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
 
