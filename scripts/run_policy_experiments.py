@@ -57,6 +57,60 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
     )
 
 
+def _format_reason_counts(reasons: Dict[str, Any]) -> str:
+    if not reasons:
+        return "-"
+    return ", ".join(
+        f"{reason}:{count}" for reason, count in sorted(reasons.items(), key=lambda item: item[0])
+    )
+
+
+def _render_breakdown_section(results: List[Dict[str, Any]]) -> List[str]:
+    lines: List[str] = []
+    if not any((result.get("breakdown") for result in results)):
+        return lines
+
+    lines.append("## Breakdown Summary")
+
+    for result in results:
+        breakdown = result.get("breakdown") or {}
+        if not breakdown:
+            continue
+
+        policy_name = result.get("policy", "unknown")
+        lines.append(f"### {policy_name}")
+
+        for dimension in ("market_regime", "best_buy_point_type", "confirmations"):
+            dimension_data = breakdown.get(dimension) or {}
+            lines.append(f"#### {dimension}")
+            if not dimension_data:
+                lines.append("- no buckets")
+                continue
+
+            items = list(dimension_data.items())
+            if dimension == "confirmations":
+                items = sorted(
+                    items,
+                    key=lambda item: (-int(item[1].get("total", 0)), str(item[0])),
+                )[:10]
+            else:
+                items = sorted(items, key=lambda item: str(item[0]))
+
+            for bucket, stats in items:
+                lines.append(
+                    "- {bucket}: total={total}, accepted={accepted}, filtered={filtered}, reasons={reasons}".format(
+                        bucket=bucket,
+                        total=stats.get("total", 0),
+                        accepted=stats.get("accepted", 0),
+                        filtered=stats.get("filtered", 0),
+                        reasons=_format_reason_counts(stats.get("filter_reasons") or {}),
+                    )
+                )
+
+    lines.append("")
+    return lines
+
+
 def _render_markdown(payload: Dict[str, Any]) -> str:
     results = payload.get("policies", []) if isinstance(payload, dict) else []
     execution = (payload or {}).get("execution") or {}
@@ -71,6 +125,7 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
     ]
     lines.extend(_table_row(item.get("policy"), item) for item in results)
     lines.append("")
+    lines.extend(_render_breakdown_section(results))
 
     lines.append("## Filter Reason Summary")
     for item in results:

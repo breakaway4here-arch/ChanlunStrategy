@@ -699,6 +699,87 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             result["coverage"]["policy_filtered_by_reason"],
         )
 
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_run_policy_experiment_metrics_includes_breakdown(self, iter_snapshot_mock, evaluate_mock, fetch_mock):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                (
+                    "2026-01-01",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="strong",
+                    ),
+                ),
+                (
+                    "2026-01-02",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="底背驰候选",
+                        distance=1.8,
+                        confirmations=["关键位不破", "30min底分型", "止跌结构"],
+                        market_regime="",
+                    ),
+                ),
+                (
+                    "2026-01-03",
+                    "picks_pure",
+                    _make_pick(
+                        point_type="强势启动候选",
+                        confirmations=[],
+                        market_regime="strong",
+                    ),
+                ),
+            ],
+        )
+        fetch_mock.side_effect = lambda code, *_args, **_kwargs: {
+            "000001": {
+                "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"],
+                "opens": [1, 1, 1, 1, 1],
+                "highs": [1, 1, 1, 1, 1],
+                "lows": [1, 1, 1, 1, 1],
+                "closes": [1, 1, 1, 1, 1],
+            }
+        }.get(code)
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(["delay1_v1_bottom_quality_market_known_guard"])
+        result = payload["policies"][0]
+        breakdown = result["breakdown"]
+        self.assertEqual(breakdown["market_regime"]["strong"]["accepted"], 2)
+        self.assertEqual(breakdown["market_regime"]["unknown"]["filtered"], 1)
+        self.assertEqual(
+            breakdown["market_regime"]["unknown"]["filter_reasons"]["bottom_market_unknown"],
+            1,
+        )
+        self.assertEqual(
+            breakdown["best_buy_point_type"]["底背驰候选"]["total"],
+            2,
+        )
+        self.assertEqual(
+            breakdown["best_buy_point_type"]["强势启动候选"]["accepted"],
+            1,
+        )
+        confirmation_bucket_key = next(
+            key
+            for key in breakdown["confirmations"].keys()
+            if "关键位不破" in key and "30min底分型" in key
+        )
+        self.assertEqual(
+            breakdown["confirmations"][confirmation_bucket_key]["filtered"],
+            1,
+        )
+        self.assertEqual(breakdown["confirmations"]["none"]["accepted"], 1)
+
     def test_run_policy_experiment_metrics_rejects_unknown_policy(self):
         with self.assertRaisesRegex(ValueError, "unsupported policies"):
             run_policy_experiment_metrics(["delay1_v1_not_exists"])

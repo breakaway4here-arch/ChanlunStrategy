@@ -103,6 +103,59 @@ def _as_str_list(values) -> List[str]:
     return [str(item) for item in values]
 
 
+def _market_regime_bucket(pick: Optional[dict]) -> str:
+    value = str((pick or {}).get("market_regime") or "").strip().lower()
+    return value or "unknown"
+
+
+def _best_buy_point_type_bucket(pick: Optional[dict]) -> str:
+    bbp = (pick or {}).get("best_buy_point")
+    value = str((bbp or {}).get("type") or "").strip()
+    return value or "unknown"
+
+
+def _confirmations_bucket(pick: Optional[dict]) -> str:
+    bbp = (pick or {}).get("best_buy_point")
+    values = sorted(_as_str_list((bbp or {}).get("confirmations")))
+    return " + ".join(values) if values else "none"
+
+
+def _new_breakdown_bucket() -> Dict[str, object]:
+    return {
+        "total": 0,
+        "accepted": 0,
+        "filtered": 0,
+        "filter_reasons": {},
+    }
+
+
+def _record_breakdown(
+    breakdown: Dict[str, Dict[str, dict]],
+    pick: Optional[dict],
+    accepted: bool,
+    filter_reason: str = "",
+) -> None:
+    dimensions = {
+        "market_regime": _market_regime_bucket(pick),
+        "best_buy_point_type": _best_buy_point_type_bucket(pick),
+        "confirmations": _confirmations_bucket(pick),
+    }
+    for dimension_name, bucket in dimensions.items():
+        dimension = breakdown.setdefault(dimension_name, {})
+        bucket_value = dimension.setdefault(
+            bucket,
+            _new_breakdown_bucket(),
+        )
+        bucket_value["total"] += 1
+        if accepted:
+            bucket_value["accepted"] += 1
+        else:
+            bucket_value["filtered"] += 1
+            if filter_reason:
+                reasons = bucket_value.setdefault("filter_reasons", {})
+                reasons[filter_reason] = int(reasons.get(filter_reason, 0)) + 1
+
+
 def bottom_quality_guard_reasons(pick: Optional[dict]) -> List[str]:
     bbp = (pick or {}).get("best_buy_point")
     if not isinstance(bbp, dict) or bbp.get("type") != "底背驰候选":
@@ -387,6 +440,11 @@ def _run_one_policy(
     policy_filtered_by_reason = Counter()
     policy_filtered_detail_by_reason = Counter()
     policy_samples: List[dict] = []
+    policy_breakdown: Dict[str, Dict[str, dict]] = {
+        "market_regime": {},
+        "best_buy_point_type": {},
+        "confirmations": {},
+    }
 
     for item in rows:
         snap_date = item["snap_date"]
@@ -395,6 +453,7 @@ def _run_one_policy(
         state["snap_date"] = snap_date
         filtered, reason = should_filter_for_policy(name, pick, state)
         if filtered:
+            _record_breakdown(policy_breakdown, pick, accepted=False, filter_reason=reason)
             policy_filtered += 1
             if reason:
                 policy_filtered_by_reason[reason] += 1
@@ -409,6 +468,7 @@ def _run_one_policy(
 
         policy_sample = item.get("baseline_sample")
         if policy_sample is not None:
+            _record_breakdown(policy_breakdown, pick, accepted=True)
             policy_samples.append(policy_sample)
             policy_evaluated += 1
 
@@ -435,6 +495,7 @@ def _run_one_policy(
         "baseline_summary": dict(baseline_summary) if baseline_summary is not None else None,
         "policy_summary": policy_summary,
         "baseline_policy": _BASELINE_EXPERIMENT,
+        "breakdown": policy_breakdown,
         "delta": {
             "t3_mean_delta": _summarize_delta(baseline_summary, policy_summary, "t3_mean"),
             "t3_win_rate_delta": _summarize_delta(baseline_summary, policy_summary, "t3_win_rate"),

@@ -81,6 +81,52 @@ def _fake_payload():
     }
 
 
+def _build_simple_breakdown():
+    return {
+        "market_regime": {
+            "strong": {
+                "total": 4,
+                "accepted": 2,
+                "filtered": 2,
+                "filter_reasons": {
+                    "bottom_quality_guard": 1,
+                    "bottom_market_unknown": 1,
+                },
+            },
+            "unknown": {
+                "total": 1,
+                "accepted": 0,
+                "filtered": 1,
+                "filter_reasons": {
+                    "bottom_market_unknown": 1,
+                },
+            },
+        },
+        "best_buy_point_type": {
+            "底背驰候选": {
+                "total": 5,
+                "accepted": 3,
+                "filtered": 2,
+                "filter_reasons": {},
+            }
+        },
+        "confirmations": {
+            "关键位不破 + 30min底分型": {
+                "total": 4,
+                "accepted": 3,
+                "filtered": 1,
+                "filter_reasons": {},
+            },
+            "none": {
+                "total": 1,
+                "accepted": 1,
+                "filtered": 0,
+                "filter_reasons": {},
+            },
+        },
+    }
+
+
 class PolicyExperimentRunnerScriptTests(unittest.TestCase):
     def test_unknown_policy_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -146,6 +192,94 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             text = output_md.read_text(encoding="utf-8")
             self.assertIn("delay1_v1_cooldown3", text)
             self.assertIn("delay1_v1_bottom_quality_guard", text)
+
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_markdown_includes_breakdown_summary(self, run_mock):
+        payload = _fake_payload()
+        for item in payload["policies"]:
+            item["breakdown"] = _build_simple_breakdown()
+        run_mock.return_value = payload
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_json = Path(tmpdir) / "policy_backtest_single.json"
+            output_md = Path(tmpdir) / "policy_backtest_single.md"
+            rc = main([
+                "--policies",
+                "delay1_v1",
+                "--output-json",
+                str(output_json),
+                "--output-md",
+                str(output_md),
+            ])
+            self.assertEqual(rc, 0)
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("## Breakdown Summary", text)
+            self.assertIn("### delay1_v1_cooldown3", text)
+            self.assertIn("#### market_regime", text)
+            self.assertIn("#### best_buy_point_type", text)
+            self.assertIn("#### confirmations", text)
+            self.assertIn(
+                "unknown: total=1, accepted=0, filtered=1, reasons=bottom_market_unknown:1",
+                text,
+            )
+            self.assertIn("bottom_market_unknown:1", text)
+
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_markdown_confirmations_top_10(self, run_mock):
+        payload = _fake_payload()
+        confirmations = {}
+        for idx in range(12):
+            confirmations[f"bucket_{idx}"] = {
+                "total": 12 - idx,
+                "accepted": idx,
+                "filtered": 12 - idx,
+                "filter_reasons": {},
+            }
+        payload["policies"] = [
+            {
+                "policy": "delay1_v1_cooldown3",
+                "coverage": {
+                    "snapshot_days": 3,
+                    "picks_seen": 3,
+                    "baseline_evaluated": 3,
+                    "policy_evaluated": 3,
+                    "baseline_filtered": 0,
+                    "policy_filtered": 0,
+                    "policy_filtered_by_reason": {},
+                    "retained_ratio_pct": 100.0,
+                },
+                "baseline_summary": {"n": 3, "t3_mean": 1.2},
+                "policy_summary": {"n": 3, "t3_mean": 1.4},
+                "delta": {
+                    "t3_mean_delta": 0.2,
+                    "t3_win_rate_delta": 1.0,
+                    "t3_loss_5pct_rate_delta": -2.0,
+                    "big_drop_5pct_rate_delta": 0.0,
+                },
+                "breakdown": {
+                    "market_regime": {},
+                    "best_buy_point_type": {},
+                    "confirmations": confirmations,
+                },
+            }
+        ]
+        run_mock.return_value = payload
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_json = Path(tmpdir) / "policy_backtest_top10.json"
+            output_md = Path(tmpdir) / "policy_backtest_top10.md"
+            rc = main([
+                "--policies",
+                "delay1_v1_cooldown3",
+                "--output-json",
+                str(output_json),
+                "--output-md",
+                str(output_md),
+            ])
+            self.assertEqual(rc, 0)
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("bucket_0", text)
+            self.assertIn("bucket_9", text)
+            self.assertNotIn("bucket_10", text)
+            self.assertNotIn("bucket_11", text)
 
     @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
     def test_new_reason_policy_output_in_markdown(self, run_mock):
