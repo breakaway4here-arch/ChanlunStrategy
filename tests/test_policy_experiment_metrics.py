@@ -4,6 +4,7 @@ from unittest.mock import patch
 from chanlun.policy_experiment_metrics import (
     list_policy_experiments,
     bottom_quality_guard_reasons,
+    bottom_trend_guard_reasons,
     should_filter_for_policy,
     run_policy_experiment_metrics,
 )
@@ -15,6 +16,8 @@ def _make_pick(
     distance=None,
     index=0,
     confirmations=None,
+    market_regime=None,
+    ma_bullish=None,
 ):
     bbp = {
         "type": point_type,
@@ -27,6 +30,8 @@ def _make_pick(
     return {
         "code": code,
         "best_buy_point": bbp,
+        "market_regime": market_regime,
+        "ma_bullish": ma_bullish,
         "closes": [1, 2, 3, 4, 5, 6, 7],
     }
 
@@ -47,6 +52,9 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "delay1_v1_bottom_invalid_distance_guard",
                 "delay1_v1_bottom_distance_gt6_guard",
                 "delay1_v1_bottom_missing_shape_guard",
+                "delay1_v1_bottom_quality_market_strong_guard",
+                "delay1_v1_bottom_quality_market_known_guard",
+                "delay1_v1_bottom_quality_market_or_ma_guard",
             },
         )
 
@@ -107,6 +115,157 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
 
         pick = {"best_buy_point": {"type": "强势启动候选"}}
         self.assertEqual(bottom_quality_guard_reasons(pick), [])
+
+    def test_bottom_trend_guard_reasons(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="strong",
+            ma_bullish=False,
+            distance=1.0,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_trend_guard_reasons(pick), [])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=False,
+            distance=1.0,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(
+            bottom_trend_guard_reasons(pick),
+            ["market_not_strong", "market_not_strong_no_ma"],
+        )
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=True,
+            distance=1.0,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_trend_guard_reasons(pick), ["market_not_strong"])
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="",
+            ma_bullish=True,
+            distance=1.0,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        self.assertEqual(bottom_trend_guard_reasons(pick), ["market_unknown", "market_not_strong"])
+
+        pick = {"best_buy_point": {"type": "强势启动候选"}, "market_regime": None}
+        self.assertEqual(bottom_trend_guard_reasons(pick), [])
+
+    def test_bottom_trend_guard_filters(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="strong",
+            ma_bullish=False,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_strong_guard",
+            pick,
+            {},
+        )
+        self.assertFalse(filtered)
+        self.assertEqual(reason, "")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=True,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_strong_guard",
+            pick,
+            {},
+        )
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_market_not_strong")
+
+    def test_bottom_trend_guard_order_quality_before_trend(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=False,
+            distance="invalid",
+            confirmations=["30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_or_ma_guard",
+            pick,
+            {},
+        )
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_quality_guard")
+
+    def test_bottom_trend_known_and_or_ma_policies(self):
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime=None,
+            ma_bullish=True,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_known_guard",
+            pick,
+            {},
+        )
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_market_unknown")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=False,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_or_ma_guard",
+            pick,
+            {},
+        )
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_market_not_strong_no_ma")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="",
+            ma_bullish=False,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_or_ma_guard",
+            pick,
+            {},
+        )
+        self.assertTrue(filtered)
+        self.assertEqual(reason, "bottom_market_not_strong_no_ma")
+
+        pick = _make_pick(
+            point_type="底背驰候选",
+            market_regime="weak",
+            ma_bullish=True,
+            distance=1.8,
+            confirmations=["关键位不破", "30min底分型", "止跌结构"],
+        )
+        filtered, reason = should_filter_for_policy(
+            "delay1_v1_bottom_quality_market_or_ma_guard",
+            pick,
+            {},
+        )
+        self.assertFalse(filtered)
+        self.assertEqual(reason, "")
 
     def test_bottom_quality_guard_filters_missing_key_reference_distance_or_confirmations(self):
         pick = _make_pick(

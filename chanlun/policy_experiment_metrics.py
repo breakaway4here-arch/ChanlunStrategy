@@ -56,6 +56,21 @@ POLICY_EXPERIMENTS = {
         "cooldown_days": None,
         "bottom_quality_reasons": ("missing_bottom_shape_or_stop_drop",),
     },
+    "delay1_v1_bottom_quality_market_strong_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_not_strong",),
+    },
+    "delay1_v1_bottom_quality_market_known_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_unknown",),
+    },
+    "delay1_v1_bottom_quality_market_or_ma_guard": {
+        "cooldown_days": None,
+        "bottom_quality_reasons": "all",
+        "bottom_trend_reasons": ("market_not_strong_no_ma",),
+    },
 }
 
 _BASELINE_EXPERIMENT = "signal_delay1_by_type_guard"
@@ -65,6 +80,11 @@ _BOTTOM_QUALITY_REASON_LABELS = {
     "invalid_distance": "bottom_invalid_distance",
     "distance_gt_6": "bottom_distance_gt_6",
     "missing_bottom_shape_or_stop_drop": "bottom_missing_shape_or_stop_drop",
+}
+_BOTTOM_TREND_REASON_LABELS = {
+    "market_not_strong": "bottom_market_not_strong",
+    "market_unknown": "bottom_market_unknown",
+    "market_not_strong_no_ma": "bottom_market_not_strong_no_ma",
 }
 
 
@@ -116,8 +136,31 @@ def bottom_quality_guard_reasons(pick: Optional[dict]) -> List[str]:
     return reasons
 
 
+def bottom_trend_guard_reasons(pick: Optional[dict]) -> List[str]:
+    bbp = (pick or {}).get("best_buy_point")
+    if not isinstance(bbp, dict) or bbp.get("type") != "底背驰候选":
+        return []
+
+    regime = (pick or {}).get("market_regime")
+    regime_text = str(regime or "").strip().lower()
+    ma_bullish = (pick or {}).get("ma_bullish") is True
+
+    reasons = []
+    if not regime_text:
+        reasons.append("market_unknown")
+    if regime_text != "strong":
+        reasons.append("market_not_strong")
+    if regime_text != "strong" and not ma_bullish:
+        reasons.append("market_not_strong_no_ma")
+    return reasons
+
+
 def _bottom_quality_reason_label(reason: str) -> str:
     return _BOTTOM_QUALITY_REASON_LABELS.get(reason, reason)
+
+
+def _bottom_trend_reason_label(reason: str) -> str:
+    return _BOTTOM_TREND_REASON_LABELS.get(reason, reason)
 
 
 def _pick_type(pick: Optional[dict]) -> str:
@@ -296,6 +339,12 @@ def should_filter_for_policy(name: str, pick: dict, state: dict) -> Tuple[bool, 
     for reason in _as_str_list(quality_reasons):
         if reason in guard_reasons:
             return True, _bottom_quality_reason_label(reason)
+
+    trend_reasons = cfg.get("bottom_trend_reasons")
+    trend_guard_reasons = bottom_trend_guard_reasons(pick)
+    for reason in _as_str_list(trend_reasons):
+        if reason in trend_guard_reasons:
+            return True, _bottom_trend_reason_label(reason)
 
     if _is_cooldown_hit(name, pick, state):
         return True, "cooldown"
