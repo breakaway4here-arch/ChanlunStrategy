@@ -44,6 +44,7 @@ from .engine_swing import (
     prune_strokes,
 )
 from .engine_types import ChanResult, Fractal, Pivot, Segment, Stroke
+from .engine_compare import compare_chan_results, serialize_chan_result
 
 
 __all__ = [
@@ -78,6 +79,9 @@ __all__ = [
     "build_strokes_swing",
     "prune_strokes",
     "build_stroke_pivots",
+    "compare_chan_results",
+    "serialize_chan_result",
+    "analyze_dual",
 ]
 
 def analyze(code, name, dates, opens, highs, lows, closes, volumes):
@@ -144,3 +148,36 @@ def analyze(code, name, dates, opens, highs, lows, closes, volumes):
     result.sell_points = sell_points
 
     return result
+
+
+def analyze_dual(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    candidate_analyzer=None,
+):
+    """Run legacy analyze() and an opt-in candidate analyzer, then compare outputs."""
+    kwargs = {
+        "code": code,
+        "name": name,
+        "dates": dates,
+        "opens": opens,
+        "highs": highs,
+        "lows": lows,
+        "closes": closes,
+        "volumes": volumes,
+    }
+    legacy = analyze(**kwargs)
+    analyzer = candidate_analyzer or analyze
+    candidate = analyzer(**kwargs)
+    return {
+        "legacy": legacy,
+        "candidate": candidate,
+        "comparison": compare_chan_results(legacy, candidate),
+    }

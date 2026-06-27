@@ -34,6 +34,9 @@ from chanlun.chan_engine import (
     stroke_high,
     stroke_low,
     analyze,
+    analyze_dual,
+    compare_chan_results,
+    serialize_chan_result,
 )
 
 EXPECTED_PUBLIC_NAMES = {
@@ -68,6 +71,9 @@ EXPECTED_PUBLIC_NAMES = {
     "build_strokes_swing",
     "prune_strokes",
     "build_stroke_pivots",
+    "analyze_dual",
+    "compare_chan_results",
+    "serialize_chan_result",
 }
 
 
@@ -89,6 +95,9 @@ class ChanEngineImportCompatibilityTests(unittest.TestCase):
         self.assertTrue(callable(stroke_high))
         self.assertTrue(callable(stroke_low))
         self.assertTrue(callable(analyze))
+        self.assertTrue(callable(analyze_dual))
+        self.assertTrue(callable(compare_chan_results))
+        self.assertTrue(callable(serialize_chan_result))
         self.assertGreaterEqual(BI_MIN_KLINE_COUNT, 1)
         self.assertGreaterEqual(SEGMENT_MIN_STROKES, 1)
         self.assertGreaterEqual(PIVOT_MIN_SEGMENTS, 1)
