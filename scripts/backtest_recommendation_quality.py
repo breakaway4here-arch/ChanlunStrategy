@@ -16,8 +16,10 @@ from collections import defaultdict
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
+from config import DAY_LOOKBACK
 from chanlun.data_fetcher import fetch_daily_kline  # noqa: E402
 from chanlun.backtest_metrics import summarize_return_samples  # noqa: E402
+from chanlun.backtest_execution import evaluate_forward_returns  # noqa: E402
 
 
 DATA_DIR = os.path.join(ROOT, "docs", "data")
@@ -40,61 +42,34 @@ def iter_snapshot_picks():
 
 
 def daily_kline_after(code, snap_date, horizon=5):
-    """Fetch enough daily kline to cover snap_date + horizon trading days."""
-    k = fetch_daily_kline(code, count=180)
+    """Fetch a kline slice that should include snap_date and at least `horizon` bars after."""
+    k = fetch_daily_kline(code, count=DAY_LOOKBACK)
     if not k:
         return None
     dates = list(k["dates"])
-    if snap_date not in dates:
+    if str(snap_date) not in [str(d).split(" ")[0] for d in dates]:
         return None
-    idx = dates.index(snap_date)
-    closes = list(k["closes"])
-    highs = list(k["highs"])
-    lows = list(k["lows"])
-    opens = list(k["opens"])
-    end = min(idx + 1 + horizon, len(dates))
-    forward = {
-        "ref_close": float(closes[idx]),
-        "ref_date": dates[idx],
-        "forward_dates": dates[idx + 1 : end],
-        "forward_opens": [float(x) for x in opens[idx + 1 : end]],
-        "forward_closes": [float(x) for x in closes[idx + 1 : end]],
-        "forward_highs": [float(x) for x in highs[idx + 1 : end]],
-        "forward_lows": [float(x) for x in lows[idx + 1 : end]],
+    return {
+        "dates": [str(d).split(" ")[0] for d in dates],
+        "opens": [float(x) for x in k["opens"]],
+        "highs": [float(x) for x in k["highs"]],
+        "lows": [float(x) for x in k["lows"]],
+        "closes": [float(x) for x in k["closes"]],
     }
-    return forward
 
 
 def evaluate(pick, snap_date):
-    """Compute returns relative to recommendation-day close."""
-    code = pick["code"]
-    forward = daily_kline_after(code, snap_date, horizon=5)
-    if not forward or not forward["forward_closes"]:
-        return None
-    ref = forward["ref_close"]
-    if ref <= 0:
+    """Compute returns relative to recommendation-day close (legacy behavior)."""
+    kline = daily_kline_after(pick["code"], snap_date, horizon=5)
+    if not kline:
         return None
 
-    closes = forward["forward_closes"]
-    highs = forward["forward_highs"]
-    lows = forward["forward_lows"]
-    horizon3 = min(3, len(closes))
-
-    def pct(x):
-        return (x - ref) / ref * 100.0
-
-    t1_close_pct = pct(closes[0]) if len(closes) >= 1 else None
-    t3_close_pct = pct(closes[horizon3 - 1]) if horizon3 >= 1 else None
-    max_up_3d = max(pct(x) for x in highs[:horizon3]) if horizon3 else None
-    max_dd_3d = min(pct(x) for x in lows[:horizon3]) if horizon3 else None
-
-    return {
-        "t1_close_pct": t1_close_pct,
-        "t3_close_pct": t3_close_pct,
-        "max_up_3d": max_up_3d,
-        "max_dd_3d": max_dd_3d,
-        "n_forward_days": len(closes),
-    }
+    return evaluate_forward_returns(
+        kline,
+        snap_date,
+        entry_mode="immediate_close",
+        horizon=5,
+    )
 
 
 def bucket_key(pick):
