@@ -26,7 +26,6 @@ from .engine_core import (
 from .engine_pipeline import (
     analyze_with_provider_bundle,
     LEGACY_PROVIDERS,
-    with_provider_overrides,
     EngineProviders,
 )
 from .engine_types import Fractal, Pivot, Segment, Stroke
@@ -739,11 +738,16 @@ def check_divergence_candidate(closes, segments, dif, dea, hist, pivots=None):
 
 def candidate_provider_bundle(candidate_name):
     """Return the legacy provider stack with one candidate component substituted."""
-    try:
-        overrides = _CANDIDATE_PROVIDER_OVERRIDES[candidate_name]
-    except KeyError as exc:
-        raise ValueError(f"unknown candidate provider bundle: {candidate_name}") from exc
-    return with_provider_overrides(LEGACY_PROVIDERS, **overrides)
+    if candidate_name == "all":
+        return all_candidate_provider_bundle()
+
+    experiment_name = _LEGACY_CANDIDATE_TO_EXPERIMENT.get(candidate_name)
+    if experiment_name is None:
+        raise ValueError(f"unknown candidate provider bundle: {candidate_name}")
+
+    from .engine_experiments import build_experiment_provider_bundle
+
+    return build_experiment_provider_bundle(experiment_name)
 
 
 def _analyze_with_bundle(
@@ -1013,4 +1017,17 @@ CANDIDATE_ANALYZERS = {
     "divergence": analyze_with_candidate_divergence,
     "signal": analyze_with_candidate_signal,
     "all": analyze_with_all_candidate_components,
+}
+
+
+_LEGACY_CANDIDATE_TO_EXPERIMENT = {
+    "macd": "macd_v1",
+    "inclusion": "inclusion_v1",
+    "fractal": "fractal_v1",
+    "stroke": "stroke_v1",
+    "segment": "segment_v1",
+    "pivot": "pivot_v1",
+    "trend": "trend_v1",
+    "divergence": "divergence_v1",
+    "signal": "signal_v1",
 }
