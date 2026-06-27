@@ -4,6 +4,7 @@ import unittest
 import run
 import chanlun.chan_engine as ce
 import chanlun.engine_candidate as candidate
+import chanlun.engine_pipeline as pipeline
 
 
 class ChanEngineCandidateGuardrailTests(unittest.TestCase):
@@ -154,3 +155,8 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
             list(candidate._CANDIDATE_PROVIDER_OVERRIDES),
             ["macd", "inclusion", "fractal", "stroke", "segment", "pivot", "trend", "divergence", "signal"],
         )
+
+    def test_pipeline_no_longer_exposes_legacy_provider_wrappers(self):
+        for provider in ("macd", "inclusion", "fractal", "stroke", "pivot", "segment", "trend", "divergence"):
+            name = f"analyze_with_{provider}_provider"
+            self.assertFalse(hasattr(pipeline, name), name)

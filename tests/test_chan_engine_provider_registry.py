@@ -16,6 +16,7 @@ from chanlun.engine_pipeline import (
     analyze_with_provider_bundle,
     with_provider_overrides,
 )
+import chanlun.engine_pipeline as pipeline
 from tests.test_chan_engine_candidate_macd import _make_kline
 from tests.test_chan_engine_snapshot import SCENARIOS
 
@@ -129,6 +130,13 @@ class ChanEngineProviderRegistryTests(unittest.TestCase):
     def test_unknown_candidate_provider_bundle_is_rejected(self):
         with self.assertRaises(ValueError):
             candidate_provider_bundle("missing")
+
+    def test_pipeline_provider_entrypoints_are_bundle_based(self):
+        self.assertTrue(callable(pipeline.analyze_with_provider_bundle))
+        self.assertTrue(callable(pipeline.analyze_with_providers))
+        for provider in ("macd", "inclusion", "fractal", "stroke", "pivot", "segment", "trend", "divergence"):
+            name = f"analyze_with_{provider}_provider"
+            self.assertFalse(hasattr(pipeline, name), name)
 
 
 if __name__ == "__main__":
