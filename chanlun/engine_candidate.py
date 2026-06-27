@@ -24,15 +24,9 @@ from .engine_core import (
     inclusion_process,
 )
 from .engine_pipeline import (
-    analyze_with_inclusion_provider,
-    analyze_with_macd_provider,
-    analyze_with_divergence_provider,
-    analyze_with_pivot_provider,
-    analyze_with_segment_provider,
-    analyze_with_fractal_provider,
-    analyze_with_stroke_provider,
-    analyze_with_trend_provider,
     analyze_with_provider_bundle,
+    LEGACY_PROVIDERS,
+    with_provider_overrides,
     EngineProviders,
 )
 from .engine_types import Fractal, Pivot, Segment, Stroke
@@ -743,9 +737,27 @@ def check_divergence_candidate(closes, segments, dif, dea, hist, pivots=None):
     }
 
 
-def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
-    """Run legacy pipeline with MACD supplied by the candidate component."""
-    return analyze_with_macd_provider(
+def candidate_provider_bundle(candidate_name):
+    """Return the legacy provider stack with one candidate component substituted."""
+    try:
+        overrides = _CANDIDATE_PROVIDER_OVERRIDES[candidate_name]
+    except KeyError as exc:
+        raise ValueError(f"unknown candidate provider bundle: {candidate_name}") from exc
+    return with_provider_overrides(LEGACY_PROVIDERS, **overrides)
+
+
+def _analyze_with_bundle(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    providers,
+):
+    return analyze_with_provider_bundle(
         code,
         name,
         dates,
@@ -754,13 +766,28 @@ def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, v
         lows,
         closes,
         volumes,
-        calc_macd_candidate,
+        providers=providers,
+    )
+
+
+def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with MACD supplied by the candidate component."""
+    return _analyze_with_bundle(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        candidate_provider_bundle("macd"),
     )
 
 
 def analyze_with_candidate_inclusion(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with inclusion supplied by the candidate component."""
-    return analyze_with_inclusion_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -769,13 +796,13 @@ def analyze_with_candidate_inclusion(code, name, dates, opens, highs, lows, clos
         lows,
         closes,
         volumes,
-        inclusion_process_candidate,
+        candidate_provider_bundle("inclusion"),
     )
 
 
 def analyze_with_candidate_fractal(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with fractals supplied by the candidate component."""
-    return analyze_with_fractal_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -784,7 +811,7 @@ def analyze_with_candidate_fractal(code, name, dates, opens, highs, lows, closes
         lows,
         closes,
         volumes,
-        find_fractals_candidate,
+        candidate_provider_bundle("fractal"),
     )
 
 
@@ -844,7 +871,7 @@ def build_strokes_candidate(fractals, highs, lows):
 
 def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with segments supplied by the candidate component."""
-    return analyze_with_segment_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -853,13 +880,13 @@ def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes
         lows,
         closes,
         volumes,
-        segment_provider=build_segments_candidate,
+        candidate_provider_bundle("segment"),
     )
 
 
 def analyze_with_candidate_pivot(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with pivots supplied by the candidate component."""
-    return analyze_with_pivot_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -868,13 +895,13 @@ def analyze_with_candidate_pivot(code, name, dates, opens, highs, lows, closes, 
         lows,
         closes,
         volumes,
-        pivot_provider=find_pivots_candidate,
+        candidate_provider_bundle("pivot"),
     )
 
 
 def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with strokes supplied by the candidate component."""
-    return analyze_with_stroke_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -883,13 +910,13 @@ def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes,
         lows,
         closes,
         volumes,
-        stroke_provider=build_strokes_candidate,
+        candidate_provider_bundle("stroke"),
     )
 
 
 def analyze_with_candidate_trend(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with trend classification supplied by the candidate component."""
-    return analyze_with_trend_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -898,13 +925,13 @@ def analyze_with_candidate_trend(code, name, dates, opens, highs, lows, closes, 
         lows,
         closes,
         volumes,
-        trend_provider=classify_trend_candidate,
+        candidate_provider_bundle("trend"),
     )
 
 
 def analyze_with_candidate_divergence(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with divergence detection supplied by the candidate component."""
-    return analyze_with_divergence_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -913,13 +940,13 @@ def analyze_with_candidate_divergence(code, name, dates, opens, highs, lows, clo
         lows,
         closes,
         volumes,
-        divergence_provider=check_divergence_candidate,
+        candidate_provider_bundle("divergence"),
     )
 
 
 def analyze_with_candidate_signal(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with signal detection supplied by the candidate component."""
-    return analyze_with_divergence_provider(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -928,14 +955,13 @@ def analyze_with_candidate_signal(code, name, dates, opens, highs, lows, closes,
         lows,
         closes,
         volumes,
-        divergence_provider=check_divergence,
-        signal_provider=locate_buy_sell_points_candidate,
+        candidate_provider_bundle("signal"),
     )
 
 
 def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows, closes, volumes):
     """Run the full candidate provider stack, opt-in only for dual-compare validation."""
-    return analyze_with_provider_bundle(
+    return _analyze_with_bundle(
         code,
         name,
         dates,
@@ -944,7 +970,7 @@ def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows,
         lows,
         closes,
         volumes,
-        providers=all_candidate_provider_bundle(),
+        all_candidate_provider_bundle(),
     )
 
 
@@ -961,6 +987,19 @@ def all_candidate_provider_bundle():
         divergence_provider=check_divergence_candidate,
         signal_provider=locate_buy_sell_points_candidate,
     )
+
+
+_CANDIDATE_PROVIDER_OVERRIDES = {
+    "macd": {"macd_provider": calc_macd_candidate},
+    "inclusion": {"inclusion_provider": inclusion_process_candidate},
+    "fractal": {"fractal_provider": find_fractals_candidate},
+    "stroke": {"stroke_provider": build_strokes_candidate},
+    "segment": {"segment_provider": build_segments_candidate},
+    "pivot": {"pivot_provider": find_pivots_candidate},
+    "trend": {"trend_provider": classify_trend_candidate},
+    "divergence": {"divergence_provider": check_divergence_candidate},
+    "signal": {"signal_provider": locate_buy_sell_points_candidate},
+}
 
 
 CANDIDATE_ANALYZERS = {

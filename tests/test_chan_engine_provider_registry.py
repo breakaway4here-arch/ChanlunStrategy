@@ -8,8 +8,14 @@ from chanlun.engine_candidate import (
     CANDIDATE_ANALYZERS,
     all_candidate_provider_bundle,
     analyze_with_all_candidate_components,
+    candidate_provider_bundle,
 )
-from chanlun.engine_pipeline import LEGACY_PROVIDERS, EngineProviders, analyze_with_provider_bundle
+from chanlun.engine_pipeline import (
+    EngineProviders,
+    LEGACY_PROVIDERS,
+    analyze_with_provider_bundle,
+    with_provider_overrides,
+)
 from tests.test_chan_engine_candidate_macd import _make_kline
 from tests.test_chan_engine_snapshot import SCENARIOS
 
@@ -26,6 +32,22 @@ EXPECTED_CANDIDATE_KEYS = [
     "signal",
     "all",
 ]
+
+PROVIDER_FIELDS = [
+    "macd_provider",
+    "inclusion_provider",
+    "fractal_provider",
+    "stroke_provider",
+    "segment_provider",
+    "pivot_provider",
+    "trend_provider",
+    "divergence_provider",
+    "signal_provider",
+]
+
+
+def _provider_names(providers):
+    return {field: getattr(providers, field).__name__ for field in PROVIDER_FIELDS}
 
 
 class ChanEngineProviderRegistryTests(unittest.TestCase):
@@ -74,6 +96,39 @@ class ChanEngineProviderRegistryTests(unittest.TestCase):
         for analyzer in CANDIDATE_ANALYZERS.values():
             self.assertTrue(callable(analyzer))
         self.assertIs(CANDIDATE_ANALYZERS["all"], analyze_with_all_candidate_components)
+
+    def test_with_provider_overrides_returns_new_bundle(self):
+        providers = with_provider_overrides(LEGACY_PROVIDERS, macd_provider=lambda closes: closes)
+        self.assertIsInstance(providers, EngineProviders)
+        self.assertIsNot(providers, LEGACY_PROVIDERS)
+        self.assertIsNot(providers.macd_provider, LEGACY_PROVIDERS.macd_provider)
+        self.assertIs(providers.inclusion_provider, LEGACY_PROVIDERS.inclusion_provider)
+
+    def test_single_candidate_provider_bundles_override_only_their_component(self):
+        expected = {
+            "macd": {"macd_provider": "calc_macd_candidate"},
+            "inclusion": {"inclusion_provider": "inclusion_process_candidate"},
+            "fractal": {"fractal_provider": "find_fractals_candidate"},
+            "stroke": {"stroke_provider": "build_strokes_candidate"},
+            "segment": {"segment_provider": "build_segments_candidate"},
+            "pivot": {"pivot_provider": "find_pivots_candidate"},
+            "trend": {"trend_provider": "classify_trend_candidate"},
+            "divergence": {"divergence_provider": "check_divergence_candidate"},
+            "signal": {"signal_provider": "locate_buy_sell_points_candidate"},
+        }
+        legacy_names = _provider_names(LEGACY_PROVIDERS)
+
+        for candidate_name, expected_overrides in expected.items():
+            with self.subTest(candidate_name=candidate_name):
+                providers = candidate_provider_bundle(candidate_name)
+                names = _provider_names(providers)
+                for field in PROVIDER_FIELDS:
+                    expected_name = expected_overrides.get(field, legacy_names[field])
+                    self.assertEqual(names[field], expected_name)
+
+    def test_unknown_candidate_provider_bundle_is_rejected(self):
+        with self.assertRaises(ValueError):
+            candidate_provider_bundle("missing")
 
 
 if __name__ == "__main__":

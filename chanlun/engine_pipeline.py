@@ -1,6 +1,6 @@
 """Shared ChanLun analysis pipeline used by legacy and candidate analyzers."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from config import USE_SEGMENT_BREAK_BUILDER
 
@@ -52,6 +52,11 @@ LEGACY_PROVIDERS = EngineProviders(
     divergence_provider=check_divergence,
     signal_provider=locate_buy_sell_points,
 )
+
+
+def with_provider_overrides(providers, **overrides):
+    """Return a provider bundle with selected provider fields replaced."""
+    return replace(providers, **overrides)
 
 
 def analyze_with_macd_provider(

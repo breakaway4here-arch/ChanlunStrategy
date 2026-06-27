@@ -100,12 +100,7 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(candidate.CANDIDATE_ANALYZERS)
         self.assertNotIn("CANDIDATE_ANALYZERS", ce.__all__)
         self.assertNotIn("all_candidate_provider_bundle", ce.__all__)
-
-    def test_candidate_signal_uses_pipeline_signal_provider(self):
-        self.assertIn(
-            "signal_provider",
-            inspect.getsource(candidate.analyze_with_candidate_signal),
-        )
+        self.assertNotIn("candidate_provider_bundle", ce.__all__)
 
     def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
         for fn in (
@@ -126,34 +121,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertIn("analyze_with_provider_bundle", source)
         self.assertIn("LEGACY_PROVIDERS", source)
 
-    def test_candidate_macd_uses_pipeline_macd_provider(self):
-        self.assertIn(
-            "analyze_with_macd_provider",
-            inspect.getsource(candidate.analyze_with_candidate_macd),
-        )
+    def test_candidate_analyzers_use_provider_bundle_path(self):
+        for analyzer in candidate.CANDIDATE_ANALYZERS.values():
+            self.assertIn("_analyze_with_bundle", inspect.getsource(analyzer))
 
     def test_provider_bundle_helpers_are_not_public_chan_engine_exports(self):
         self.assertNotIn("EngineProviders", ce.__all__)
         self.assertNotIn("LEGACY_PROVIDERS", ce.__all__)
         self.assertNotIn("analyze_with_provider_bundle", ce.__all__)
-
-    def test_candidate_pivot_uses_pipeline_pivot_provider(self):
-        self.assertIn(
-            "pivot_provider",
-            inspect.getsource(candidate.analyze_with_candidate_pivot),
-        )
-
-    def test_candidate_trend_uses_pipeline_trend_provider(self):
-        self.assertIn(
-            "trend_provider",
-            inspect.getsource(candidate.analyze_with_candidate_trend),
-        )
-
-    def test_candidate_divergence_uses_pipeline_divergence_provider(self):
-        self.assertIn(
-            "divergence_provider",
-            inspect.getsource(candidate.analyze_with_candidate_divergence),
-        )
 
     def test_all_candidate_analyzer_is_not_public_chan_engine_export(self):
         self.assertTrue(callable(candidate.analyze_with_all_candidate_components))
@@ -173,3 +148,9 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
             "locate_buy_sell_points_candidate",
         ):
             self.assertIn(provider_name, source)
+
+    def test_candidate_provider_override_registry_has_stable_keys(self):
+        self.assertEqual(
+            list(candidate._CANDIDATE_PROVIDER_OVERRIDES),
+            ["macd", "inclusion", "fractal", "stroke", "segment", "pivot", "trend", "divergence", "signal"],
+        )
