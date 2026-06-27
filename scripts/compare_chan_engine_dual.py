@@ -11,6 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze_dual
+from chanlun.engine_candidate import analyze_with_candidate_macd
 from tests.test_chan_engine_snapshot import SCENARIOS
 
 
@@ -29,10 +30,19 @@ def _make_kline(closes):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="run_outputs/chan_engine_dual_compare.json")
+    parser.add_argument(
+        "--candidate",
+        choices=("legacy", "macd"),
+        default="legacy",
+    )
     args = parser.parse_args()
 
     scenarios = {}
     all_equal = True
+    candidate_analyzer = None
+    if args.candidate == "macd":
+        candidate_analyzer = analyze_with_candidate_macd
+
     for name, closes in SCENARIOS.items():
         kline = _make_kline(closes)
         payload = analyze_dual(
@@ -44,6 +54,7 @@ def main():
             lows=kline["lows"],
             closes=kline["closes"],
             volumes=kline["volumes"],
+            candidate_analyzer=candidate_analyzer,
         )
         comparison = payload["comparison"]
         scenarios[name] = comparison
@@ -53,6 +64,7 @@ def main():
         "summary": {
             "all_equal": all_equal,
             "scenario_count": len(scenarios),
+            "candidate": args.candidate,
         },
         "scenarios": scenarios,
     }
