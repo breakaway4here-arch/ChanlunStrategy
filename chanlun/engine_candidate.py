@@ -31,9 +31,9 @@ from .engine_pipeline import (
     analyze_with_segment_provider,
     analyze_with_fractal_provider,
     analyze_with_stroke_provider,
-    analyze_with_providers,
     analyze_with_trend_provider,
-    build_segments_with_config,
+    analyze_with_provider_bundle,
+    EngineProviders,
 )
 from .engine_types import Fractal, Pivot, Segment, Stroke
 
@@ -935,7 +935,7 @@ def analyze_with_candidate_signal(code, name, dates, opens, highs, lows, closes,
 
 def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows, closes, volumes):
     """Run the full candidate provider stack, opt-in only for dual-compare validation."""
-    return analyze_with_providers(
+    return analyze_with_provider_bundle(
         code,
         name,
         dates,
@@ -944,6 +944,13 @@ def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows,
         lows,
         closes,
         volumes,
+        providers=all_candidate_provider_bundle(),
+    )
+
+
+def all_candidate_provider_bundle():
+    """Return the full candidate provider stack used by the all-candidate analyzer."""
+    return EngineProviders(
         macd_provider=calc_macd_candidate,
         inclusion_provider=inclusion_process_candidate,
         fractal_provider=find_fractals_candidate,
@@ -954,3 +961,17 @@ def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows,
         divergence_provider=check_divergence_candidate,
         signal_provider=locate_buy_sell_points_candidate,
     )
+
+
+CANDIDATE_ANALYZERS = {
+    "macd": analyze_with_candidate_macd,
+    "inclusion": analyze_with_candidate_inclusion,
+    "fractal": analyze_with_candidate_fractal,
+    "stroke": analyze_with_candidate_stroke,
+    "segment": analyze_with_candidate_segment,
+    "pivot": analyze_with_candidate_pivot,
+    "trend": analyze_with_candidate_trend,
+    "divergence": analyze_with_candidate_divergence,
+    "signal": analyze_with_candidate_signal,
+    "all": analyze_with_all_candidate_components,
+}

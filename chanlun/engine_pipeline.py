@@ -1,5 +1,7 @@
 """Shared ChanLun analysis pipeline used by legacy and candidate analyzers."""
 
+from dataclasses import dataclass
+
 from config import USE_SEGMENT_BREAK_BUILDER
 
 from .engine_core import (
@@ -24,6 +26,32 @@ from .engine_types import ChanResult
 
 def build_segments_with_config(strokes):
     return build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
+
+
+@dataclass(frozen=True)
+class EngineProviders:
+    macd_provider: object
+    inclusion_provider: object
+    fractal_provider: object
+    stroke_provider: object
+    segment_provider: object
+    pivot_provider: object
+    trend_provider: object
+    divergence_provider: object
+    signal_provider: object
+
+
+LEGACY_PROVIDERS = EngineProviders(
+    macd_provider=calc_macd,
+    inclusion_provider=inclusion_process,
+    fractal_provider=find_fractals,
+    stroke_provider=build_strokes,
+    segment_provider=build_segments_with_config,
+    pivot_provider=find_pivots,
+    trend_provider=classify_trend,
+    divergence_provider=check_divergence,
+    signal_provider=locate_buy_sell_points,
+)
 
 
 def analyze_with_macd_provider(
@@ -56,6 +84,40 @@ def analyze_with_macd_provider(
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
         signal_provider=locate_buy_sell_points,
+    )
+
+
+def analyze_with_provider_bundle(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    providers: EngineProviders,
+):
+    """Run analysis using a named provider bundle."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=providers.macd_provider,
+        inclusion_provider=providers.inclusion_provider,
+        fractal_provider=providers.fractal_provider,
+        stroke_provider=providers.stroke_provider,
+        segment_provider=providers.segment_provider,
+        pivot_provider=providers.pivot_provider,
+        trend_provider=providers.trend_provider,
+        divergence_provider=providers.divergence_provider,
+        signal_provider=providers.signal_provider,
     )
 
 

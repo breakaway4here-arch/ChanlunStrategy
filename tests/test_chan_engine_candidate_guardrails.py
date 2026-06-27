@@ -96,6 +96,11 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_signal))
         self.assertNotIn("analyze_with_candidate_signal", ce.__all__)
 
+    def test_candidate_registry_is_not_public_chan_engine_export(self):
+        self.assertTrue(candidate.CANDIDATE_ANALYZERS)
+        self.assertNotIn("CANDIDATE_ANALYZERS", ce.__all__)
+        self.assertNotIn("all_candidate_provider_bundle", ce.__all__)
+
     def test_candidate_signal_uses_pipeline_signal_provider(self):
         self.assertIn(
             "signal_provider",
@@ -145,8 +150,8 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_all_candidate_components))
         self.assertNotIn("analyze_with_all_candidate_components", ce.__all__)
 
-    def test_all_candidate_analyzer_uses_all_candidate_providers(self):
-        source = inspect.getsource(candidate.analyze_with_all_candidate_components)
+    def test_all_candidate_provider_bundle_uses_all_candidate_providers(self):
+        source = inspect.getsource(candidate.all_candidate_provider_bundle)
         for provider_name in (
             "calc_macd_candidate",
             "inclusion_process_candidate",

@@ -11,18 +11,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze_dual
-from chanlun.engine_candidate import (
-    analyze_with_all_candidate_components,
-    analyze_with_candidate_divergence,
-    analyze_with_candidate_inclusion,
-    analyze_with_candidate_signal,
-    analyze_with_candidate_macd,
-    analyze_with_candidate_fractal,
-    analyze_with_candidate_pivot,
-    analyze_with_candidate_segment,
-    analyze_with_candidate_trend,
-    analyze_with_candidate_stroke,
-)
+from chanlun.engine_candidate import CANDIDATE_ANALYZERS
 from tests.test_chan_engine_snapshot import SCENARIOS
 
 
@@ -43,27 +32,14 @@ def main():
     parser.add_argument("--output", default="run_outputs/chan_engine_dual_compare.json")
     parser.add_argument(
         "--candidate",
-        choices=("legacy", "macd", "inclusion", "fractal", "stroke", "segment", "pivot", "trend", "divergence", "signal", "all"),
+        choices=("legacy", *CANDIDATE_ANALYZERS.keys()),
         default="legacy",
     )
     args = parser.parse_args()
 
     scenarios = {}
     all_equal = True
-    candidate_analyzers = {
-        "legacy": None,
-        "macd": analyze_with_candidate_macd,
-        "inclusion": analyze_with_candidate_inclusion,
-        "fractal": analyze_with_candidate_fractal,
-        "stroke": analyze_with_candidate_stroke,
-        "segment": analyze_with_candidate_segment,
-        "pivot": analyze_with_candidate_pivot,
-        "trend": analyze_with_candidate_trend,
-        "divergence": analyze_with_candidate_divergence,
-        "signal": analyze_with_candidate_signal,
-        "all": analyze_with_all_candidate_components,
-    }
-    candidate_analyzer = candidate_analyzers[args.candidate]
+    candidate_analyzer = None if args.candidate == "legacy" else CANDIDATE_ANALYZERS[args.candidate]
 
     for name, closes in SCENARIOS.items():
         kline = _make_kline(closes)
