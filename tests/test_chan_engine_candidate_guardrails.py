@@ -49,6 +49,20 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_stroke))
         self.assertNotIn("analyze_with_candidate_stroke", ce.__all__)
 
+    def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
+        for fn in (
+            candidate.build_segments_by_break_candidate,
+            candidate.build_segments_fixed_window_candidate,
+            candidate.build_segments_candidate,
+        ):
+            source = inspect.getsource(fn)
+            self.assertNotIn("build_segments_by_break(strokes", source)
+            self.assertNotIn("build_segments_fixed_window(strokes", source)
+
+    def test_candidate_segment_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_segment))
+        self.assertNotIn("analyze_with_candidate_segment", ce.__all__)
+
     def test_legacy_and_candidate_share_pipeline_helper(self):
         self.assertIn("analyze_with_macd_provider", inspect.getsource(ce.analyze))
         self.assertIn(

@@ -22,6 +22,10 @@ from .engine_swing import (
 from .engine_types import ChanResult
 
 
+def build_segments_with_config(strokes):
+    return build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
+
+
 def analyze_with_macd_provider(
     code,
     name,
@@ -47,6 +51,7 @@ def analyze_with_macd_provider(
         inclusion_provider=inclusion_process,
         fractal_provider=find_fractals,
         stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
     )
 
 
@@ -75,6 +80,7 @@ def analyze_with_inclusion_provider(
         inclusion_provider=inclusion_provider,
         fractal_provider=find_fractals,
         stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
     )
 
 
@@ -103,6 +109,37 @@ def analyze_with_fractal_provider(
         inclusion_provider=inclusion_process,
         fractal_provider=fractal_provider,
         stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
+    )
+
+
+def analyze_with_stroke_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    stroke_provider,
+):
+    """Backward-compatible entry using legacy MACD, inclusion, fractal, and segment behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+        stroke_provider=stroke_provider,
+        segment_provider=build_segments_with_config,
     )
 
 
@@ -120,6 +157,7 @@ def analyze_with_providers(
     inclusion_provider,
     fractal_provider,
     stroke_provider,
+    segment_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -130,7 +168,7 @@ def analyze_with_providers(
     merged_high, merged_low, idx_map = inclusion_provider(highs, lows)
     fractals = fractal_provider(merged_high, merged_low, idx_map, dates)
     strokes = stroke_provider(fractals, merged_high, merged_low)
-    segments = build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
+    segments = segment_provider(strokes)
     confirmed_segments = [s for s in segments if s.confirmed]
     pivots = find_pivots(confirmed_segments)
     trend_type = classify_trend(pivots, confirmed_segments)

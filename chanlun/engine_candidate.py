@@ -2,16 +2,29 @@
 
 import numpy as np
 
-from config import BI_MIN_KLINE_COUNT, MACD_FAST, MACD_SIGNAL, MACD_SLOW
+from config import (
+    BI_MIN_KLINE_COUNT,
+    MACD_FAST,
+    MACD_SIGNAL,
+    MACD_SLOW,
+    SEGMENT_MIN_STROKES,
+    USE_SEGMENT_BREAK_BUILDER,
+)
 
-from .engine_core import calc_macd, find_fractals, inclusion_process
+from .engine_core import (
+    build_strokes,
+    calc_macd,
+    find_fractals,
+    inclusion_process,
+)
 from .engine_pipeline import (
     analyze_with_inclusion_provider,
     analyze_with_macd_provider,
     analyze_with_providers,
     analyze_with_fractal_provider,
+    analyze_with_stroke_provider,
 )
-from .engine_types import Fractal, Stroke
+from .engine_types import Fractal, Segment, Stroke
 
 
 def _ema_candidate(data, period):
@@ -174,6 +187,137 @@ def find_fractals_candidate(highs, lows, idx_map, dates=None):
     return filtered
 
 
+def _stroke_high_candidate(stroke):
+    return max(stroke.start_price, stroke.end_price)
+
+
+def _stroke_low_candidate(stroke):
+    return min(stroke.start_price, stroke.end_price)
+
+
+def _is_alternating_candidate(strokes):
+    return all(strokes[i].direction != strokes[i + 1].direction for i in range(len(strokes) - 1))
+
+
+def _make_segment_candidate(strokes, confirmed=True, destroyed_by_idx=None):
+    return Segment(
+        strokes=strokes[:],
+        start_idx=strokes[0].start_idx,
+        end_idx=strokes[-1].end_idx,
+        direction=strokes[0].direction,
+        high=max(_stroke_high_candidate(s) for s in strokes),
+        low=min(_stroke_low_candidate(s) for s in strokes),
+        confirmed=confirmed,
+        destroyed_by_idx=destroyed_by_idx,
+    )
+
+
+def _segment_destroyed_candidate(candidate, direction):
+    if len(candidate) < 4:
+        return False
+
+    last = candidate[-1]
+
+    if direction == "up" and last.direction == "down":
+        prior_down_lows = [_stroke_low_candidate(s) for s in candidate[:-1] if s.direction == "down"]
+        return bool(prior_down_lows) and _stroke_low_candidate(last) < min(prior_down_lows)
+
+    if direction == "down" and last.direction == "up":
+        prior_up_highs = [_stroke_high_candidate(s) for s in candidate[:-1] if s.direction == "up"]
+        return bool(prior_up_highs) and _stroke_high_candidate(last) > max(prior_up_highs)
+
+    return False
+
+
+def build_segments_by_break_candidate(strokes):
+    """Candidate break-confirmed segment implementation, currently locked to legacy parity."""
+    if len(strokes) < 3:
+        return []
+
+    segments = []
+    i = 0
+    n = len(strokes)
+
+    while i <= n - 3:
+        while i <= n - 3 and not _is_alternating_candidate(strokes[i:i + 3]):
+            i += 1
+        if i > n - 3:
+            break
+
+        current = strokes[i:i + 3]
+        j = i + 3
+        closed = False
+
+        while j < n:
+            current.append(strokes[j])
+            if not _is_alternating_candidate(current[-3:]):
+                j += 1
+                continue
+
+            if _segment_destroyed_candidate(current, current[0].direction):
+                old = current[:-1]
+                segments.append(_make_segment_candidate(old, confirmed=True, destroyed_by_idx=strokes[j].end_idx))
+                i = max(j - 2, i + 1)
+                closed = True
+                break
+
+            j += 1
+
+        if not closed:
+            segments.append(_make_segment_candidate(current, confirmed=False))
+            break
+
+    return segments
+
+
+def build_segments_fixed_window_candidate(strokes):
+    """Candidate fixed-window segment fallback, currently locked to legacy parity."""
+    if len(strokes) < SEGMENT_MIN_STROKES:
+        return []
+
+    segments = []
+    step = SEGMENT_MIN_STROKES - 1
+    i = 0
+    while i <= len(strokes) - SEGMENT_MIN_STROKES:
+        seg_strokes = strokes[i:i + SEGMENT_MIN_STROKES]
+
+        if any(seg_strokes[k].direction == seg_strokes[k + 1].direction
+               for k in range(len(seg_strokes) - 1)):
+            i += 1
+            continue
+
+        direction = seg_strokes[0].direction
+
+        high = float("-inf")
+        low = float("inf")
+        for s in seg_strokes:
+            if s.start_fractal is not None:
+                high = max(high, s.start_fractal.price)
+                low = min(low, s.start_fractal.price)
+            if s.end_fractal is not None:
+                high = max(high, s.end_fractal.price)
+                low = min(low, s.end_fractal.price)
+
+        segments.append(Segment(
+            strokes=seg_strokes,
+            start_idx=seg_strokes[0].start_idx,
+            end_idx=seg_strokes[-1].start_idx,
+            direction=direction,
+            high=high,
+            low=low,
+        ))
+        i += step
+
+    return segments
+
+
+def build_segments_candidate(strokes):
+    """Candidate configured segment implementation, currently locked to legacy parity."""
+    if USE_SEGMENT_BREAK_BUILDER:
+        return build_segments_by_break_candidate(strokes)
+    return build_segments_fixed_window_candidate(strokes)
+
+
 def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with MACD supplied by the candidate component."""
     return analyze_with_macd_provider(
@@ -273,8 +417,8 @@ def build_strokes_candidate(fractals, highs, lows):
     return strokes
 
 
-def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes, volumes):
-    """Run legacy pipeline with strokes supplied by the candidate component."""
+def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with segments supplied by the candidate component."""
     return analyze_with_providers(
         code,
         name,
@@ -287,5 +431,21 @@ def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes,
         macd_provider=calc_macd,
         inclusion_provider=inclusion_process,
         fractal_provider=find_fractals,
+        stroke_provider=build_strokes,
+        segment_provider=build_segments_candidate,
+    )
+
+
+def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with strokes supplied by the candidate component."""
+    return analyze_with_stroke_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
         stroke_provider=build_strokes_candidate,
     )

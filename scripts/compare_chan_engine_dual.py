@@ -15,6 +15,7 @@ from chanlun.engine_candidate import (
     analyze_with_candidate_inclusion,
     analyze_with_candidate_macd,
     analyze_with_candidate_fractal,
+    analyze_with_candidate_segment,
     analyze_with_candidate_stroke,
 )
 from tests.test_chan_engine_snapshot import SCENARIOS
@@ -37,7 +38,7 @@ def main():
     parser.add_argument("--output", default="run_outputs/chan_engine_dual_compare.json")
     parser.add_argument(
         "--candidate",
-        choices=("legacy", "macd", "inclusion", "fractal", "stroke"),
+        choices=("legacy", "macd", "inclusion", "fractal", "stroke", "segment"),
         default="legacy",
     )
     args = parser.parse_args()
@@ -50,6 +51,7 @@ def main():
         "inclusion": analyze_with_candidate_inclusion,
         "fractal": analyze_with_candidate_fractal,
         "stroke": analyze_with_candidate_stroke,
+        "segment": analyze_with_candidate_segment,
     }
     candidate_analyzer = candidate_analyzers[args.candidate]
 
