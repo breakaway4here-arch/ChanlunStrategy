@@ -3,6 +3,7 @@
 from config import USE_SEGMENT_BREAK_BUILDER
 
 from .engine_core import (
+    calc_macd,
     build_segments_by_break,
     build_segments_fixed_window,
     build_strokes,
@@ -44,6 +45,34 @@ def analyze_with_macd_provider(
         volumes,
         macd_provider=macd_provider,
         inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+    )
+
+
+def analyze_with_inclusion_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    inclusion_provider,
+):
+    """Backward-compatible entry using legacy MACD behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_provider,
+        fractal_provider=find_fractals,
     )
 
 
@@ -59,6 +88,7 @@ def analyze_with_providers(
     *,
     macd_provider,
     inclusion_provider,
+    fractal_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -67,7 +97,7 @@ def analyze_with_providers(
     dif, dea, hist = macd_provider(closes)
 
     merged_high, merged_low, idx_map = inclusion_provider(highs, lows)
-    fractals = find_fractals(merged_high, merged_low, idx_map, dates)
+    fractals = fractal_provider(merged_high, merged_low, idx_map, dates)
     strokes = build_strokes(fractals, merged_high, merged_low)
     segments = build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
     confirmed_segments = [s for s in segments if s.confirmed]

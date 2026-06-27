@@ -33,6 +33,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_inclusion))
         self.assertNotIn("analyze_with_candidate_inclusion", ce.__all__)
 
+    def test_candidate_fractal_does_not_call_legacy_find_fractals(self):
+        source = inspect.getsource(candidate.find_fractals_candidate)
+        self.assertNotIn("find_fractals(", source)
+
+    def test_candidate_fractal_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_fractal))
+        self.assertNotIn("analyze_with_candidate_fractal", ce.__all__)
+
     def test_legacy_and_candidate_share_pipeline_helper(self):
         self.assertIn("analyze_with_macd_provider", inspect.getsource(ce.analyze))
         self.assertIn(
