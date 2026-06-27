@@ -53,6 +53,7 @@ def analyze_with_macd_provider(
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
+        trend_provider=classify_trend,
     )
 
 
@@ -83,6 +84,7 @@ def analyze_with_inclusion_provider(
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
+        trend_provider=classify_trend,
     )
 
 
@@ -113,6 +115,7 @@ def analyze_with_fractal_provider(
         stroke_provider=build_strokes,
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
+        trend_provider=classify_trend,
     )
 
 
@@ -144,6 +147,40 @@ def analyze_with_stroke_provider(
         stroke_provider=stroke_provider,
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
+        trend_provider=classify_trend,
+    )
+
+
+def analyze_with_pivot_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    pivot_provider,
+    trend_provider=classify_trend,
+):
+    """Backward-compatible entry using legacy MACD, inclusion, fractal, and stroke behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+        stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
+        pivot_provider=pivot_provider,
+        trend_provider=trend_provider,
     )
 
 
@@ -176,6 +213,7 @@ def analyze_with_segment_provider(
         stroke_provider=build_strokes,
         segment_provider=segment_provider,
         pivot_provider=pivot_provider,
+        trend_provider=classify_trend,
     )
 
 
@@ -195,6 +233,7 @@ def analyze_with_providers(
     stroke_provider,
     segment_provider,
     pivot_provider,
+    trend_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -208,7 +247,7 @@ def analyze_with_providers(
     segments = segment_provider(strokes)
     confirmed_segments = [s for s in segments if s.confirmed]
     pivots = pivot_provider(confirmed_segments)
-    trend_type = classify_trend(pivots, confirmed_segments)
+    trend_type = trend_provider(pivots, confirmed_segments)
     divergence = check_divergence(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
 
     swing_waves_raw = build_strokes_swing(highs, lows, closes, min_bars=2, min_swing_pct=0.06)

@@ -57,6 +57,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_pivot))
         self.assertNotIn("analyze_with_candidate_pivot", ce.__all__)
 
+    def test_candidate_trend_does_not_call_legacy_classify_trend(self):
+        source = inspect.getsource(candidate.classify_trend_candidate)
+        self.assertNotIn("classify_trend(", source)
+
+    def test_candidate_trend_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_trend))
+        self.assertNotIn("analyze_with_candidate_trend", ce.__all__)
+
     def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
         for fn in (
             candidate.build_segments_by_break_candidate,
@@ -82,4 +90,10 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertIn(
             "pivot_provider",
             inspect.getsource(candidate.analyze_with_candidate_pivot),
+        )
+
+    def test_candidate_trend_uses_pipeline_trend_provider(self):
+        self.assertIn(
+            "trend_provider",
+            inspect.getsource(candidate.analyze_with_candidate_trend),
         )

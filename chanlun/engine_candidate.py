@@ -15,12 +15,14 @@ from config import (
 from .engine_core import (
     build_strokes,
     calc_macd,
+    find_pivots,
     find_fractals,
     inclusion_process,
 )
 from .engine_pipeline import (
     analyze_with_inclusion_provider,
     analyze_with_macd_provider,
+    analyze_with_pivot_provider,
     analyze_with_segment_provider,
     analyze_with_fractal_provider,
     analyze_with_stroke_provider,
@@ -363,6 +365,28 @@ def find_pivots_candidate(segments):
     return pivots
 
 
+def classify_trend_candidate(pivots, segments):
+    """Candidate trend classifier, currently locked to legacy parity."""
+    if len(pivots) == 0:
+        return "无中枢"
+    if len(pivots) == 1:
+        return "盘整"
+
+    moves_up = 0
+    moves_down = 0
+    for i in range(1, len(pivots)):
+        if pivots[i].ZD > pivots[i - 1].ZG:
+            moves_up += 1
+        elif pivots[i].ZG < pivots[i - 1].ZD:
+            moves_down += 1
+
+    if moves_up >= 1 and moves_up >= moves_down:
+        return "上涨趋势"
+    elif moves_down >= 1 and moves_down >= moves_up:
+        return "下跌趋势"
+    return "盘整"
+
+
 def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with MACD supplied by the candidate component."""
     return analyze_with_macd_provider(
@@ -479,7 +503,7 @@ def analyze_with_candidate_segment(code, name, dates, opens, highs, lows, closes
 
 def analyze_with_candidate_pivot(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with pivots supplied by the candidate component."""
-    return analyze_with_segment_provider(
+    return analyze_with_pivot_provider(
         code,
         name,
         dates,
@@ -488,7 +512,6 @@ def analyze_with_candidate_pivot(code, name, dates, opens, highs, lows, closes, 
         lows,
         closes,
         volumes,
-        segment_provider=build_segments_with_config,
         pivot_provider=find_pivots_candidate,
     )
 
@@ -505,4 +528,20 @@ def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes,
         closes,
         volumes,
         stroke_provider=build_strokes_candidate,
+    )
+
+
+def analyze_with_candidate_trend(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with trend classification supplied by the candidate component."""
+    return analyze_with_pivot_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        pivot_provider=find_pivots,
+        trend_provider=classify_trend_candidate,
     )
