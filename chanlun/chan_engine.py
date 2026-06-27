@@ -110,9 +110,13 @@ def analyze_dual(
     closes,
     volumes,
     *,
+    candidate=None,
     candidate_analyzer=None,
 ):
-    """Run legacy analyze() and an opt-in candidate analyzer, then compare outputs."""
+    """Run legacy analyze() and a candidate analyzer, then compare outputs."""
+    if candidate is not None and candidate_analyzer is not None:
+        raise ValueError("candidate and candidate_analyzer are mutually exclusive")
+
     kwargs = {
         "code": code,
         "name": name,
@@ -124,10 +128,15 @@ def analyze_dual(
         "volumes": volumes,
     }
     legacy = analyze(**kwargs)
-    analyzer = candidate_analyzer or analyze
-    candidate = analyzer(**kwargs)
+    if candidate is not None:
+        from .engine_candidate_registry import build_candidate_analyzer
+
+        analyzer = build_candidate_analyzer(candidate)
+    else:
+        analyzer = candidate_analyzer or analyze
+    candidate_result = analyzer(**kwargs)
     return {
         "legacy": legacy,
-        "candidate": candidate,
-        "comparison": compare_chan_results(legacy, candidate),
+        "candidate": candidate_result,
+        "comparison": compare_chan_results(legacy, candidate_result),
     }

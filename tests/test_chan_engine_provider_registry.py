@@ -194,32 +194,37 @@ class ChanEngineProviderRegistryTests(unittest.TestCase):
             build_candidate_provider_bundle_registry("missing")
 
     def test_build_candidate_analyzer(self):
-        for candidate_name, closes in SCENARIOS.items():
+        for candidate_name in ["signal", "signal_v1", "signal_delay1_by_type_guard"]:
             with self.subTest(candidate_name=candidate_name):
-                if len(closes) < 10:
-                    continue
-                kline = _make_kline(closes)
-                analyzer = build_candidate_analyzer("signal")
-                result = analyzer(
-                    code=candidate_name,
-                    name=candidate_name,
-                    dates=kline["dates"],
-                    opens=kline["opens"],
-                    highs=kline["highs"],
-                    lows=kline["lows"],
-                    closes=kline["closes"],
-                    volumes=kline["volumes"],
+                analyzer = build_candidate_analyzer(candidate_name)
+                self.assertTrue(callable(analyzer))
+                self.assertEqual(
+                    analyzer.__name__,
+                    f"analyze_with_candidate_{candidate_name}",
                 )
-                self.assertEqual(result.code, candidate_name)
-                self.assertEqual(result.name, candidate_name)
-                break
 
-        self.assertTrue(callable(build_candidate_analyzer("signal")))
-        self.assertEqual(
-            build_candidate_analyzer("signal").__name__,
-            "analyze_with_candidate_signal",
-        )
-        with self.assertRaises(ValueError):
+                payload = None
+                for series_name, closes in SCENARIOS.items():
+                    if len(closes) < 10:
+                        continue
+                    kline = _make_kline(closes)
+                    payload = analyzer(
+                        code=series_name,
+                        name=series_name,
+                        dates=kline["dates"],
+                        opens=kline["opens"],
+                        highs=kline["highs"],
+                        lows=kline["lows"],
+                        closes=kline["closes"],
+                        volumes=kline["volumes"],
+                    )
+                    break
+
+                if payload is None:
+                    self.fail("No scenario has >=10 bars for candidate analyzer smoke test")
+                self.assertEqual(payload.code, series_name)
+                self.assertEqual(payload.name, series_name)
+        with self.assertRaisesRegex(ValueError, "^unknown candidate: unknown$"):
             build_candidate_analyzer("unknown")
 
     def test_unknown_candidate_provider_bundle_is_rejected(self):
