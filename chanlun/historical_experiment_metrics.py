@@ -14,6 +14,7 @@ from scripts.backtest_recommendation_quality import iter_snapshot_picks
 
 _SUPPORTED_SIGNAL_EXPERIMENTS = {
     "signal_delay1_by_type_guard",
+    "signal_delay1_by_type_guard_v2",
     "signal_p0_distance_guard",
     "signal_p1_confirmation_guard",
     "signal_p0_p1_guard",
@@ -63,6 +64,37 @@ def should_drop_pick_for_signal_delay1_by_type_guard(point: dict, closes) -> boo
     return _is_signal_newly_formed(point, closes, required_bars=1)
 
 
+def _is_delay1_v2_rescue_point(point: dict) -> bool:
+    if not isinstance(point, dict):
+        return False
+
+    confirmations = point.get("confirmations")
+    if not _is_str_list(confirmations):
+        return False
+
+    distance = point.get("distance_from_reference_pct")
+    if not isinstance(distance, Real):
+        return False
+
+    contains_key_protection = "关键位不破" in confirmations
+    contains_ema5_recover = "EMA5收复" in confirmations
+    contains_stop_drop = "止跌结构" in confirmations
+    is_near_reference = distance <= 3
+
+    return (
+        contains_key_protection
+        and contains_ema5_recover
+        and contains_stop_drop
+        and is_near_reference
+    )
+
+
+def should_drop_pick_for_signal_delay1_by_type_guard_v2(point: dict, closes) -> bool:
+    if not should_drop_pick_for_signal_delay1_by_type_guard(point, closes):
+        return False
+    return not _is_delay1_v2_rescue_point(point)
+
+
 def _is_str_list(value) -> bool:
     return isinstance(value, (list, tuple)) and all(isinstance(v, str) for v in value)
 
@@ -106,6 +138,9 @@ def should_drop_pick_for_experiment(experiment_name: str, pick: dict) -> bool:
     if experiment_name == "signal_delay1_by_type_guard":
         closes = (pick or {}).get("closes")
         return should_drop_pick_for_signal_delay1_by_type_guard(best_buy_point, closes)
+    if experiment_name == "signal_delay1_by_type_guard_v2":
+        closes = (pick or {}).get("closes")
+        return should_drop_pick_for_signal_delay1_by_type_guard_v2(best_buy_point, closes)
     if experiment_name == "signal_p0_distance_guard":
         return _should_drop_p0_distance(best_buy_point)
     if experiment_name == "signal_p1_confirmation_guard":
@@ -116,7 +151,7 @@ def should_drop_pick_for_experiment(experiment_name: str, pick: dict) -> bool:
 
 
 def _entry_mode_for_pick(experiment_name: str, pick: dict) -> str:
-    if experiment_name != "signal_delay1_by_type_guard":
+    if experiment_name not in {"signal_delay1_by_type_guard", "signal_delay1_by_type_guard_v2"}:
         return _ENTRY_MODE_IMMEDIATE
 
     if not isinstance(pick, dict):

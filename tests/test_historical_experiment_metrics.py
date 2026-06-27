@@ -66,6 +66,62 @@ class HistoricalExperimentMetricsTests(unittest.TestCase):
             {"best_buy_point": point, "closes": [1, 2, 3, 4], "code": "000001"},
         ))
 
+    def test_should_drop_pick_for_signal_delay1_by_type_guard_v2_when_newly_formed(self):
+        self.assertTrue(should_drop_pick_for_experiment(
+            "signal_delay1_by_type_guard_v2",
+            {
+                "best_buy_point": {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "distance_from_reference_pct": 3.1,
+                },
+                "closes": [1, 2, 3, 4],
+                "code": "000001",
+            },
+        ))
+
+    def test_should_not_drop_pick_for_signal_delay1_by_type_guard_v2_with_rescue(self):
+        self.assertFalse(should_drop_pick_for_experiment(
+            "signal_delay1_by_type_guard_v2",
+            {
+                "best_buy_point": {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "distance_from_reference_pct": 2.8,
+                },
+                "closes": [1, 2, 3, 4],
+                "code": "000001",
+            },
+        ))
+
+    def test_should_drop_signal_delay1_by_type_guard_v2_when_missing_fields(self):
+        self.assertTrue(should_drop_pick_for_experiment(
+            "signal_delay1_by_type_guard_v2",
+            {
+                "best_buy_point": {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "distance_from_reference_pct": 2.8,
+                },
+                "closes": [1, 2, 3, 4],
+                "code": "000001",
+            },
+        ))
+        self.assertTrue(should_drop_pick_for_experiment(
+            "signal_delay1_by_type_guard_v2",
+            {
+                "best_buy_point": {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                },
+                "closes": [1, 2, 3, 4],
+                "code": "000001",
+            },
+        ))
+
     def test_should_not_drop_when_missing_index_or_closes(self):
         self.assertFalse(should_drop_pick_for_experiment(
             "signal_delay1_by_type_guard",
@@ -169,6 +225,27 @@ class HistoricalExperimentMetricsTests(unittest.TestCase):
             "immediate_close",
         )
         self.assertEqual(
+            entry_mode_for_pick(
+                "signal_delay1_by_type_guard_v2",
+                {"best_buy_point": {"type": "底背驰候选"}},
+            ),
+            "delay1_close",
+        )
+        self.assertEqual(
+            entry_mode_for_pick(
+                "signal_delay1_by_type_guard_v2",
+                {"best_buy_point": {"type": "强势启动候选"}},
+            ),
+            "delay1_open",
+        )
+        self.assertEqual(
+            entry_mode_for_pick(
+                "signal_delay1_by_type_guard_v2",
+                {"best_buy_point": {"type": "一买"}},
+            ),
+            "immediate_close",
+        )
+        self.assertEqual(
             entry_mode_for_pick("signal_p0_distance_guard", {"best_buy_point": {"type": "底背驰候选"}}),
             "immediate_close",
         )
@@ -184,6 +261,25 @@ class HistoricalExperimentMetricsTests(unittest.TestCase):
         fetch_kline_mock.return_value = fake_kline()
 
         payload = run_historical_experiment_return_metrics("signal_delay1_by_type_guard")
+        self.assertIsNotNone(payload)
+        self.assertIn("return_metrics", payload)
+        self.assertIn("coverage", payload)
+        coverage = payload["coverage"]
+        self.assertGreater(coverage.get("evaluated", 0), 0)
+        self.assertGreater(coverage.get("legacy_evaluated", 0), 0)
+        self.assertEqual(payload["return_metrics"]["experiment"]["n"], 2)
+
+    @patch("chanlun.historical_experiment_metrics.fetch_daily_kline")
+    @patch("chanlun.historical_experiment_metrics.iter_snapshot_picks")
+    def test_historical_metrics_returns_nonempty_for_signal_delay1_by_type_guard_v2(
+        self,
+        iter_snapshot_mock,
+        fetch_kline_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(fake_snapshots_with_types())
+        fetch_kline_mock.return_value = fake_kline()
+
+        payload = run_historical_experiment_return_metrics("signal_delay1_by_type_guard_v2")
         self.assertIsNotNone(payload)
         self.assertIn("return_metrics", payload)
         self.assertIn("coverage", payload)

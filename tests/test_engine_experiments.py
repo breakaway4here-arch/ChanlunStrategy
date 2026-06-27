@@ -42,6 +42,7 @@ class EngineExperimentTests(unittest.TestCase):
         self.assertIn("signal_p1_confirmation_guard", experiments)
         self.assertIn("signal_p0_p1_guard", experiments)
         self.assertIn("signal_delay1_by_type_guard", experiments)
+        self.assertIn("signal_delay1_by_type_guard_v2", experiments)
 
     def test_unknown_experiment_raises(self):
         with self.assertRaises(ValueError):
@@ -83,12 +84,32 @@ class EngineExperimentTests(unittest.TestCase):
         self.assertIs(providers.trend_provider, LEGACY_PROVIDERS.trend_provider)
         self.assertIs(providers.divergence_provider, LEGACY_PROVIDERS.divergence_provider)
 
+    def test_build_experiment_provider_bundle_signal_delay1_by_type_guard_v2_overrides_only_signal(self):
+        providers = build_experiment_provider_bundle("signal_delay1_by_type_guard_v2")
+        self.assertIsInstance(providers, EngineProviders)
+        self.assertEqual(
+            providers.signal_provider.__name__,
+            "locate_buy_sell_points_delay1_by_type_guard_v2",
+        )
+        self.assertIs(providers.macd_provider, LEGACY_PROVIDERS.macd_provider)
+        self.assertIs(providers.inclusion_provider, LEGACY_PROVIDERS.inclusion_provider)
+        self.assertIs(providers.fractal_provider, LEGACY_PROVIDERS.fractal_provider)
+        self.assertIs(providers.stroke_provider, LEGACY_PROVIDERS.stroke_provider)
+        self.assertIs(providers.segment_provider, LEGACY_PROVIDERS.segment_provider)
+        self.assertIs(providers.pivot_provider, LEGACY_PROVIDERS.pivot_provider)
+        self.assertIs(providers.trend_provider, LEGACY_PROVIDERS.trend_provider)
+        self.assertIs(providers.divergence_provider, LEGACY_PROVIDERS.divergence_provider)
+
     def test_signal_p0_p1_guard_risk_is_medium(self):
         exp = get_experiment("signal_p0_p1_guard")
         self.assertEqual(exp.risk, "medium")
 
     def test_signal_delay1_by_type_guard_risk_is_medium(self):
         exp = get_experiment("signal_delay1_by_type_guard")
+        self.assertEqual(exp.risk, "medium")
+
+    def test_signal_delay1_by_type_guard_v2_risk_is_medium(self):
+        exp = get_experiment("signal_delay1_by_type_guard_v2")
         self.assertEqual(exp.risk, "medium")
 
 

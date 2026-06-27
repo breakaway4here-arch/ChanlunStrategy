@@ -170,6 +170,90 @@ class EngineSignalExperimentTests(unittest.TestCase):
         self.assertEqual([point["index"] for point in buy_points if "index" in point], [0, 2])
 
     @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_v2_filters_regular_bottom_candidate(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {
+                    "type": "底背驰候选",
+                    "index": 2,
+                    "distance_from_reference_pct": 2.9,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "price": 10.1,
+                },
+                {"type": "底背驰候选", "index": 2, "price": 9.7},
+                {"type": "三买", "index": 2, "price": 10.3},
+            ],
+            [{"type": "一卖", "index": 3}],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3])
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard_v2(self.result)
+        self.assertEqual([point["index"] for point in buy_points], [2, 2])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_v2_rescues_confirmed_candidate(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {
+                    "type": "底背驰候选",
+                    "index": 2,
+                    "distance_from_reference_pct": 3.0,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "price": 10.1,
+                },
+                {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "distance_from_reference_pct": 3.2,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "price": 9.8,
+                },
+                {
+                    "type": "底背驰候选",
+                    "index": 1,
+                    "distance_from_reference_pct": 2.8,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "price": 10.5,
+                },
+                {
+                    "type": "强势启动候选",
+                    "index": 2,
+                    "price": 12.0,
+                },
+            ],
+            [{"type": "一卖", "index": 3}],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3, 4])
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard_v2(self.result)
+        self.assertEqual([point["type"] + ":" + str(point["index"]) for point in buy_points], [
+            "底背驰候选:2",
+            "底背驰候选:1",
+            "强势启动候选:2",
+        ])
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
+    def test_delay1_by_type_guard_v2_no_rescue_without_confirmations(self, mock_locate):
+        mock_locate.return_value = (
+            [
+                {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "distance_from_reference_pct": 2.8,
+                    "price": 10.1,
+                },
+                {
+                    "type": "底背驰候选",
+                    "index": 3,
+                    "confirmations": ["关键位不破", "EMA5收复", "止跌结构"],
+                    "price": 9.8,
+                },
+            ],
+            [],
+        )
+        self.result = SimpleNamespace(closes=[1, 2, 3, 4])
+        buy_points, _ = signal_experiments.locate_buy_sell_points_delay1_by_type_guard_v2(self.result)
+        self.assertEqual(len(buy_points), 0)
+
+    @patch("chanlun.engine_signal_experiments.locate_buy_sell_points")
     def test_delay1_by_type_guard_does_not_filter_strong_startup(self, mock_locate):
         mock_locate.return_value = (
             [
