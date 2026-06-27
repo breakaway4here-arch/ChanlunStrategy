@@ -55,6 +55,7 @@ def analyze_with_macd_provider(
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -87,6 +88,7 @@ def analyze_with_inclusion_provider(
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -119,6 +121,7 @@ def analyze_with_fractal_provider(
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -152,6 +155,7 @@ def analyze_with_stroke_provider(
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -186,6 +190,7 @@ def analyze_with_pivot_provider(
         pivot_provider=pivot_provider,
         trend_provider=trend_provider,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -220,6 +225,7 @@ def analyze_with_segment_provider(
         pivot_provider=pivot_provider,
         trend_provider=classify_trend,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -254,6 +260,7 @@ def analyze_with_trend_provider(
         pivot_provider=find_pivots,
         trend_provider=trend_provider,
         divergence_provider=divergence_provider,
+        signal_provider=locate_buy_sell_points,
     )
 
 
@@ -275,6 +282,7 @@ def analyze_with_providers(
     pivot_provider,
     trend_provider,
     divergence_provider,
+    signal_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -317,7 +325,42 @@ def analyze_with_providers(
         macd_hist=hist,
     )
 
-    buy_points, sell_points = locate_buy_sell_points(result)
+    buy_points, sell_points = signal_provider(result)
     result.buy_points = buy_points
     result.sell_points = sell_points
     return result
+
+
+def analyze_with_divergence_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    divergence_provider,
+    signal_provider=locate_buy_sell_points,
+):
+    """Backward-compatible entry using legacy structure and signal behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+        stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
+        trend_provider=classify_trend,
+        divergence_provider=divergence_provider,
+        signal_provider=signal_provider,
+    )

@@ -73,6 +73,35 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_divergence))
         self.assertNotIn("analyze_with_candidate_divergence", ce.__all__)
 
+    def test_candidate_signal_does_not_call_legacy_signal_locator(self):
+        source = inspect.getsource(candidate.locate_buy_sell_points_candidate)
+        self.assertNotIn("locate_buy_sell_points(", source)
+
+    def test_candidate_signal_helpers_do_not_call_legacy_signal_helpers(self):
+        for fn in (
+            candidate._detect_swing_divergence_ref_candidate,
+            candidate._find_second_buy_point_candidate,
+            candidate._find_third_buy_point_candidate,
+            candidate._find_pivot_buy_points_candidate,
+            candidate._segment_extreme_index_candidate,
+        ):
+            source = inspect.getsource(fn)
+            self.assertNotIn("_detect_swing_divergence_ref(", source)
+            self.assertNotIn("_find_second_buy_point(", source)
+            self.assertNotIn("_find_third_buy_point(", source)
+            self.assertNotIn("_find_pivot_buy_points(", source)
+            self.assertNotIn("_segment_extreme_index(", source)
+
+    def test_candidate_signal_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_signal))
+        self.assertNotIn("analyze_with_candidate_signal", ce.__all__)
+
+    def test_candidate_signal_uses_pipeline_signal_provider(self):
+        self.assertIn(
+            "signal_provider",
+            inspect.getsource(candidate.analyze_with_candidate_signal),
+        )
+
     def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
         for fn in (
             candidate.build_segments_by_break_candidate,
