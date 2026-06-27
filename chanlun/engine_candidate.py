@@ -1,75 +1,59 @@
 """Candidate ChanLun engine components for offline dual-compare validation."""
 
-from .engine_core import (
-    build_segments_by_break,
-    build_segments_fixed_window,
-    build_strokes,
-    calc_macd,
-    check_divergence,
-    classify_trend,
-    find_fractals,
-    find_pivots,
-    inclusion_process,
-)
-from .engine_swing import (
-    build_stroke_pivots,
-    build_strokes_swing,
-    prune_strokes,
-)
-from .engine_types import ChanResult
-from .engine_signals import locate_buy_sell_points
-from config import USE_SEGMENT_BREAK_BUILDER
+import numpy as np
+
+from config import MACD_FAST, MACD_SIGNAL, MACD_SLOW
+
+from .engine_pipeline import analyze_with_macd_provider
+
+
+def _ema_candidate(data, period):
+    n = len(data)
+    if n < period:
+        return np.full_like(data, np.nan, dtype=float)
+
+    alpha = 2.0 / (period + 1)
+    result = np.full_like(data, np.nan, dtype=float)
+
+    start = 0
+    while start < n and np.isnan(data[start]):
+        start += 1
+    if start >= n:
+        return result
+
+    valid_data = data[start:]
+    if len(valid_data) < period:
+        return result
+
+    result[start + period - 1] = np.mean(valid_data[:period])
+    for i in range(start + period, n):
+        if np.isnan(data[i]):
+            result[i] = result[i - 1]
+        else:
+            result[i] = alpha * data[i] + (1 - alpha) * result[i - 1]
+    return result
 
 
 def calc_macd_candidate(closes):
     """Candidate MACD implementation, currently locked to legacy parity."""
-    return calc_macd(closes)
+    ema_fast = _ema_candidate(closes, MACD_FAST)
+    ema_slow = _ema_candidate(closes, MACD_SLOW)
+    dif = ema_fast - ema_slow
+    dea = _ema_candidate(dif, MACD_SIGNAL)
+    hist = 2.0 * (dif - dea)
+    return dif, dea, hist
 
 
 def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with MACD supplied by the candidate component."""
-    n = len(closes)
-    if n < 10:
-        return None
-
-    dif, dea, hist = calc_macd_candidate(closes)
-
-    merged_high, merged_low, idx_map = inclusion_process(highs, lows)
-    fractals = find_fractals(merged_high, merged_low, idx_map, dates)
-    strokes = build_strokes(fractals, merged_high, merged_low)
-    segments = build_segments_by_break(strokes) if USE_SEGMENT_BREAK_BUILDER else build_segments_fixed_window(strokes)
-    confirmed_segments = [s for s in segments if s.confirmed]
-    pivots = find_pivots(confirmed_segments)
-    trend_type = classify_trend(pivots, confirmed_segments)
-    divergence = check_divergence(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
-
-    swing_waves_raw = build_strokes_swing(highs, lows, closes, min_bars=2, min_swing_pct=0.06)
-    swing_waves = prune_strokes(swing_waves_raw, min_pct=0.06)
-    swing_zones = build_stroke_pivots(swing_waves)
-
-    result = ChanResult(
-        code=code,
-        name=name,
-        closes=closes,
-        highs=highs,
-        lows=lows,
-        opens=opens,
-        volumes=volumes,
-        dates=list(dates),
-        fractals=fractals,
-        strokes=strokes,
-        segments=segments,
-        pivots=pivots,
-        swing_waves=swing_waves,
-        swing_zones=swing_zones,
-        divergence=divergence,
-        trend_type=trend_type,
-        macd_dif=dif,
-        macd_dea=dea,
-        macd_hist=hist,
+    return analyze_with_macd_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        calc_macd_candidate,
     )
-
-    buy_points, sell_points = locate_buy_sell_points(result)
-    result.buy_points = buy_points
-    result.sell_points = sell_points
-    return result
