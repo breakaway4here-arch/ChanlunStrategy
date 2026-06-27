@@ -192,9 +192,9 @@ class KlineCacheTest(unittest.TestCase):
         self.assertNotIn("2026-05-13 09:30:00", dates)
 
     def test_stock_name_cache_uses_project_cache_before_parent_cache(self):
-        self.assertTrue(
-            data_fetcher.STOCK_CACHE_PATH.endswith("chanlun_strategy/stock_names_cache.json"),
-            data_fetcher.STOCK_CACHE_PATH,
+        self.assertEqual(
+            Path(data_fetcher.STOCK_CACHE_PATH),
+            Path(data_fetcher.BASE_DIR) / "stock_names_cache.json",
         )
         code_to_name = data_fetcher._build_code_to_name()
         self.assertEqual(code_to_name["601878"], "浙商证券")
