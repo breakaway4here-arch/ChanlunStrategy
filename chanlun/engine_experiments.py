@@ -13,6 +13,11 @@ from .engine_candidate import (
     inclusion_process_candidate,
     locate_buy_sell_points_candidate,
 )
+from .engine_signal_experiments import (
+    locate_buy_sell_points_p0_distance_guard,
+    locate_buy_sell_points_p0_p1_guard,
+    locate_buy_sell_points_p1_confirmation_guard,
+)
 from .engine_pipeline import LEGACY_PROVIDERS, EngineProviders, with_provider_overrides
 
 
@@ -85,6 +90,27 @@ EXPERIMENT_REGISTRY = {
         module="signal",
         description="Candidate signal implementation.",
         overrides={"signal_provider": locate_buy_sell_points_candidate},
+    ),
+    "signal_p0_distance_guard": ExperimentDefinition(
+        name="signal_p0_distance_guard",
+        module="signal",
+        description="Guard buy points by distance_from_reference_pct for 底背驰候选.",
+        overrides={"signal_provider": locate_buy_sell_points_p0_distance_guard},
+        risk="medium",
+    ),
+    "signal_p1_confirmation_guard": ExperimentDefinition(
+        name="signal_p1_confirmation_guard",
+        module="signal",
+        description="Guard buy points by confirmation pattern.",
+        overrides={"signal_provider": locate_buy_sell_points_p1_confirmation_guard},
+        risk="medium",
+    ),
+    "signal_p0_p1_guard": ExperimentDefinition(
+        name="signal_p0_p1_guard",
+        module="signal",
+        description="Apply both distance and confirmation guards to signal buy points.",
+        overrides={"signal_provider": locate_buy_sell_points_p0_p1_guard},
+        risk="medium",
     ),
     "all_v1": ExperimentDefinition(
         name="all_v1",

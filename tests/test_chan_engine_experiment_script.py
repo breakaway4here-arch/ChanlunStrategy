@@ -28,6 +28,32 @@ class ChanEngineExperimentScriptTests(unittest.TestCase):
             self.assertEqual(payload["summary"].get("experiment"), "signal_v1")
             self.assertTrue(payload["summary"]["all_equal"])
 
+    def test_script_can_run_experiment_signal_p0_p1_guard_with_business_metrics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "experiment_signal_p0_p1_guard_metrics.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/compare_chan_engine_dual.py",
+                    "--experiment",
+                    "signal_p0_p1_guard",
+                    "--business-metrics",
+                    "--output",
+                    str(output),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("wrote", completed.stdout)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            summary = payload["summary"]
+            self.assertEqual(summary.get("experiment"), "signal_p0_p1_guard")
+            self.assertIn("structure_equal", summary)
+            self.assertIn("recommendation_diff", summary)
+            self.assertIn("return_metrics", summary)
+            self.assertIn("coverage", summary)
+
     def test_script_can_run_experiment_signal_v1_with_business_metrics(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "experiment_signal_v1_metrics.json"
