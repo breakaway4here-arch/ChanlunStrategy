@@ -247,6 +247,100 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
         self.assertEqual(result["coverage"]["policy_evaluated"], 1)
         self.assertEqual(result["coverage"]["policy_filtered_by_reason"].get("cooldown"), 3)
 
+    @patch("chanlun.historical_experiment_metrics.fetch_daily_kline")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_multiple_policies_share_kline_fetch_across_codes(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-05", "picks_fusion", _make_pick(code="000001")),
+                ("2026-01-06", "picks_fusion", _make_pick(code="000001")),
+                ("2026-01-07", "picks_pure", _make_pick(code="000002")),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": [
+                "2026-01-01",
+                "2026-01-02",
+                "2026-01-03",
+                "2026-01-04",
+                "2026-01-05",
+                "2026-01-06",
+                "2026-01-07",
+            ],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1", "delay1_v1_bottom_quality_guard"],
+        )
+        self.assertEqual(len(payload["policies"]), 2)
+        self.assertEqual(fetch_mock.call_count, 2)
+        policy_names = [item["policy"] for item in payload["policies"]]
+        self.assertEqual(policy_names, ["delay1_v1", "delay1_v1_bottom_quality_guard"])
+        for item in payload["policies"]:
+            self.assertEqual(item["coverage"]["baseline_evaluated"], 3)
+            self.assertEqual(item["coverage"]["baseline_filtered"], 0)
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_multiple_policies_keep_cooldown_state_independent(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-01", "picks_fusion", _make_pick()),
+                ("2026-01-02", "picks_fusion", _make_pick()),
+                ("2026-01-03", "picks_fusion", _make_pick()),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": [
+                "2026-01-01",
+                "2026-01-02",
+                "2026-01-03",
+                "2026-01-04",
+                "2026-01-05",
+                "2026-01-06",
+                "2026-01-07",
+            ],
+            "opens": [1, 1, 1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1, 1, 1],
+        }
+        evaluate_mock.return_value = {
+            "t1_close_pct": 1.0,
+            "t3_close_pct": 1.0,
+            "max_up_3d": 0.5,
+            "max_dd_3d": -0.2,
+        }
+
+        payload = run_policy_experiment_metrics(
+            ["delay1_v1", "delay1_v1_cooldown3"],
+        )
+        policy_map = {item["policy"]: item for item in payload["policies"]}
+        self.assertEqual(policy_map["delay1_v1"]["coverage"]["policy_evaluated"], 3)
+        self.assertEqual(policy_map["delay1_v1_cooldown3"]["coverage"]["policy_evaluated"], 1)
+
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
     @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")

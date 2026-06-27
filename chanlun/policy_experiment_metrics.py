@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from chanlun.historical_experiment_metrics import (
     _evaluate_pick_sample,
@@ -138,6 +138,64 @@ def _build_snapshot_day_index(rows: Sequence[Tuple[str, str, dict]]) -> Dict[str
     return {snap_date: idx for idx, snap_date in enumerate(dates)}
 
 
+def _build_shared_baseline_context(
+    rows: Sequence[Tuple[str, str, dict]],
+    snapshot_index_map: Dict[str, int],
+) -> Dict[str, object]:
+    kline_cache: Dict[str, Optional[dict]] = {}
+    picks_seen = 0
+    baseline_evaluated = 0
+    baseline_filtered = 0
+    baseline_samples: List[dict] = []
+    evaluated_rows: List[dict] = []
+
+    for snap_date, _version, pick in rows:
+        picks_seen += 1
+        code = (pick or {}).get("code")
+        if not code:
+            continue
+
+        kline = _fetch_daily_kline_cached(str(code), kline_cache)
+        if kline is None:
+            continue
+
+        normalized_kline = _normalize_kline(kline)
+        if normalized_kline is None:
+            continue
+
+        if should_drop_pick_for_experiment(_BASELINE_EXPERIMENT, pick):
+            baseline_filtered += 1
+            continue
+
+        entry_mode = entry_mode_for_pick(_BASELINE_EXPERIMENT, pick)
+        baseline_sample = _evaluate_pick_sample(normalized_kline, snap_date, entry_mode)
+        if baseline_sample is None:
+            continue
+
+        baseline_evaluated += 1
+        baseline_samples.append(baseline_sample)
+        evaluated_rows.append(
+            {
+                "snap_date": str(snap_date),
+                "pick": pick,
+                "baseline_sample": baseline_sample,
+            },
+        )
+
+    coverage = {
+        "snapshot_days": len(snapshot_index_map),
+        "picks_seen": picks_seen,
+        "baseline_evaluated": baseline_evaluated,
+        "baseline_filtered": baseline_filtered,
+    }
+
+    return {
+        "coverage": coverage,
+        "baseline_samples": baseline_samples,
+        "evaluated_rows": evaluated_rows,
+    }
+
+
 def _is_cooldown_hit(name: str, pick: dict, state: dict) -> bool:
     cfg = POLICY_EXPERIMENTS.get(name)
     if not cfg:
@@ -230,54 +288,34 @@ def _summarize_delta(base: Optional[dict], policy: Optional[dict], key: str) -> 
         return None
 
 
-def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
-    snapshot_index_map = _build_snapshot_day_index(rows)
+def _run_one_policy(
+    name: str,
+    rows: Sequence[dict],
+    snapshot_index_map: Dict[str, int],
+    baseline_summary: Optional[dict],
+    baseline_coverage: Dict[str, int],
+) -> Dict:
     state = {
         "snapshot_index_map": snapshot_index_map,
         "cooldown_last_seen": {},
         "snap_date": None,
     }
-    snaps = sorted(snapshot_index_map.keys())
 
-    picks_seen = 0
-    kline_cache: Dict[str, Optional[dict]] = {}
-    baseline_evaluated = 0
+    picks_seen = baseline_coverage.get("picks_seen", 0)
+    baseline_evaluated = baseline_coverage.get("baseline_evaluated", 0)
+    baseline_filtered = baseline_coverage.get("baseline_filtered", 0)
+
     policy_evaluated = 0
-    baseline_filtered = 0
     policy_filtered = 0
     policy_filtered_by_reason = Counter()
     policy_filtered_detail_by_reason = Counter()
-    baseline_samples: List[dict] = []
     policy_samples: List[dict] = []
 
-    for snap_date, _version, pick in rows:
-        picks_seen += 1
-        code = (pick or {}).get("code")
-        if not code:
-            continue
+    for item in rows:
+        snap_date = item["snap_date"]
+        pick = item.get("pick")
 
-        kline = _fetch_daily_kline_cached(code, kline_cache)
-        if kline is None:
-            continue
-
-        normalized_kline = _normalize_kline(kline)
-        if normalized_kline is None:
-            continue
-
-        if should_drop_pick_for_experiment(_BASELINE_EXPERIMENT, pick):
-            baseline_filtered += 1
-            continue
-
-        baseline_entry_mode = entry_mode_for_pick(_BASELINE_EXPERIMENT, pick)
-        baseline_sample = _evaluate_pick_sample(normalized_kline, snap_date, baseline_entry_mode)
-        if baseline_sample is not None:
-            baseline_samples.append(baseline_sample)
-            baseline_evaluated += 1
-
-        if baseline_sample is None:
-            continue
-
-        state["snap_date"] = str(snap_date)
+        state["snap_date"] = snap_date
         filtered, reason = should_filter_for_policy(name, pick, state)
         if filtered:
             policy_filtered += 1
@@ -292,22 +330,22 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
         elif reason:
             policy_filtered_by_reason[reason] += 1
 
-        entry_mode = entry_mode_for_pick(_BASELINE_EXPERIMENT, pick)
-        policy_sample = _evaluate_pick_sample(normalized_kline, snap_date, entry_mode)
+        policy_sample = item.get("baseline_sample")
         if policy_sample is not None:
             policy_samples.append(policy_sample)
             policy_evaluated += 1
 
         _record_cooldown_accept(name, pick, state)
 
-    baseline_summary = summarize_return_samples(baseline_samples)
     policy_summary = summarize_return_samples(policy_samples)
-    retained_ratio = round(policy_evaluated / baseline_evaluated * 100, 2) if baseline_evaluated else 0.0
+    retained_ratio = (
+        round(policy_evaluated / baseline_evaluated * 100, 2) if baseline_evaluated else 0.0
+    )
 
     return {
         "policy": name,
         "coverage": {
-            "snapshot_days": len(snaps),
+            "snapshot_days": len(snapshot_index_map),
             "picks_seen": picks_seen,
             "baseline_evaluated": baseline_evaluated,
             "policy_evaluated": policy_evaluated,
@@ -317,7 +355,7 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
             "policy_filtered_detail_by_reason": dict(policy_filtered_detail_by_reason),
             "retained_ratio_pct": retained_ratio,
         },
-        "baseline_summary": baseline_summary,
+        "baseline_summary": dict(baseline_summary) if baseline_summary is not None else None,
         "policy_summary": policy_summary,
         "baseline_policy": _BASELINE_EXPERIMENT,
         "delta": {
@@ -338,7 +376,6 @@ def _run_one_policy(name: str, rows: Sequence[Tuple[str, str, dict]]) -> Dict:
 
 
 def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) -> Dict:
-    rows = _build_snapshot_rows()
     if policy_names is None:
         policy_names = list_policy_experiments()
 
@@ -355,9 +392,30 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
     if not names:
         return {"policies": []}
 
+    rows = _build_snapshot_rows()
+    snapshot_index_map = _build_snapshot_day_index(rows)
+
+    baseline_context = _build_shared_baseline_context(rows, snapshot_index_map)
+    baseline_samples = cast(List[dict], baseline_context["baseline_samples"])
+    baseline_rows = cast(List[dict], baseline_context["evaluated_rows"])
+    baseline_coverage = cast(Dict[str, int], baseline_context["coverage"])
+
+    baseline_summary = summarize_return_samples(baseline_samples)
+
+    policy_results = [
+        _run_one_policy(
+            name,
+            baseline_rows,
+            snapshot_index_map,
+            baseline_summary,
+            baseline_coverage,
+        )
+        for name in names
+    ]
+
     base_name = names[0] if names else _BASELINE_EXPERIMENT
     return {
-        "policies": [_run_one_policy(name, rows) for name in names],
+        "policies": policy_results,
         "baseline_reference": _BASELINE_EXPERIMENT,
         "requested_policies": names,
         "base_index_name": base_name,
