@@ -140,3 +140,22 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
             "divergence_provider",
             inspect.getsource(candidate.analyze_with_candidate_divergence),
         )
+
+    def test_all_candidate_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_all_candidate_components))
+        self.assertNotIn("analyze_with_all_candidate_components", ce.__all__)
+
+    def test_all_candidate_analyzer_uses_all_candidate_providers(self):
+        source = inspect.getsource(candidate.analyze_with_all_candidate_components)
+        for provider_name in (
+            "calc_macd_candidate",
+            "inclusion_process_candidate",
+            "find_fractals_candidate",
+            "build_strokes_candidate",
+            "build_segments_candidate",
+            "find_pivots_candidate",
+            "classify_trend_candidate",
+            "check_divergence_candidate",
+            "locate_buy_sell_points_candidate",
+        ):
+            self.assertIn(provider_name, source)

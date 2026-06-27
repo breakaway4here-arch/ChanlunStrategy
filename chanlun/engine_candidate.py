@@ -31,6 +31,7 @@ from .engine_pipeline import (
     analyze_with_segment_provider,
     analyze_with_fractal_provider,
     analyze_with_stroke_provider,
+    analyze_with_providers,
     analyze_with_trend_provider,
     build_segments_with_config,
 )
@@ -928,5 +929,28 @@ def analyze_with_candidate_signal(code, name, dates, opens, highs, lows, closes,
         closes,
         volumes,
         divergence_provider=check_divergence,
+        signal_provider=locate_buy_sell_points_candidate,
+    )
+
+
+def analyze_with_all_candidate_components(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run the full candidate provider stack, opt-in only for dual-compare validation."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd_candidate,
+        inclusion_provider=inclusion_process_candidate,
+        fractal_provider=find_fractals_candidate,
+        stroke_provider=build_strokes_candidate,
+        segment_provider=build_segments_candidate,
+        pivot_provider=find_pivots_candidate,
+        trend_provider=classify_trend_candidate,
+        divergence_provider=check_divergence_candidate,
         signal_provider=locate_buy_sell_points_candidate,
     )
