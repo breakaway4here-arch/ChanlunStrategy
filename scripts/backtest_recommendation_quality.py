@@ -11,13 +11,13 @@ import json
 import os
 import sys
 from collections import defaultdict
-from statistics import mean, median
 
 # Make 'chanlun' import work when running from chanlun_strategy/
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.data_fetcher import fetch_daily_kline  # noqa: E402
+from chanlun.backtest_metrics import summarize_return_samples  # noqa: E402
 
 
 DATA_DIR = os.path.join(ROOT, "docs", "data")
@@ -128,32 +128,8 @@ def distance_bucket(pick):
 
 
 def summarize(samples):
-    if not samples:
-        return None
-    t1 = [s["t1_close_pct"] for s in samples if s["t1_close_pct"] is not None]
-    t3 = [s["t3_close_pct"] for s in samples if s["t3_close_pct"] is not None]
-    up = [s["max_up_3d"] for s in samples if s["max_up_3d"] is not None]
-    dd = [s["max_dd_3d"] for s in samples if s["max_dd_3d"] is not None]
-    n_total = len(samples)
-    n_t3 = len(t3)
-    win_t3 = sum(1 for x in t3 if x > 0)
-    loss_5pct = sum(1 for x in t3 if x <= -5)
-    big_drop = sum(1 for x in dd if x <= -5)
-    big_run = sum(1 for x in up if x >= 5)
-    return {
-        "n": n_total,
-        "n_evaluable": n_t3,
-        "t1_mean": round(mean(t1), 2) if t1 else None,
-        "t1_median": round(median(t1), 2) if t1 else None,
-        "t3_mean": round(mean(t3), 2) if t3 else None,
-        "t3_median": round(median(t3), 2) if t3 else None,
-        "t3_win_rate": round(win_t3 / n_t3 * 100, 1) if n_t3 else None,
-        "t3_loss_5pct_rate": round(loss_5pct / n_t3 * 100, 1) if n_t3 else None,
-        "max_up_3d_mean": round(mean(up), 2) if up else None,
-        "max_dd_3d_mean": round(mean(dd), 2) if dd else None,
-        "big_drop_5pct_rate": round(big_drop / len(dd) * 100, 1) if dd else None,
-        "big_run_5pct_rate": round(big_run / len(up) * 100, 1) if up else None,
-    }
+    """Backward-compatible wrapper for existing callers."""
+    return summarize_return_samples(samples)
 
 
 def main():
