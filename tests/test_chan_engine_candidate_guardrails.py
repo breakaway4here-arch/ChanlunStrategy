@@ -65,6 +65,14 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertTrue(callable(candidate.analyze_with_candidate_trend))
         self.assertNotIn("analyze_with_candidate_trend", ce.__all__)
 
+    def test_candidate_divergence_does_not_call_legacy_check_divergence(self):
+        source = inspect.getsource(candidate.check_divergence_candidate)
+        self.assertNotIn("check_divergence(", source)
+
+    def test_candidate_divergence_analyzer_is_not_public_chan_engine_export(self):
+        self.assertTrue(callable(candidate.analyze_with_candidate_divergence))
+        self.assertNotIn("analyze_with_candidate_divergence", ce.__all__)
+
     def test_candidate_segment_builders_do_not_call_legacy_segment_builders(self):
         for fn in (
             candidate.build_segments_by_break_candidate,
@@ -96,4 +104,10 @@ class ChanEngineCandidateGuardrailTests(unittest.TestCase):
         self.assertIn(
             "trend_provider",
             inspect.getsource(candidate.analyze_with_candidate_trend),
+        )
+
+    def test_candidate_divergence_uses_pipeline_divergence_provider(self):
+        self.assertIn(
+            "divergence_provider",
+            inspect.getsource(candidate.analyze_with_candidate_divergence),
         )

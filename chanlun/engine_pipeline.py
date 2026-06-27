@@ -54,6 +54,7 @@ def analyze_with_macd_provider(
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
+        divergence_provider=check_divergence,
     )
 
 
@@ -85,6 +86,7 @@ def analyze_with_inclusion_provider(
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
+        divergence_provider=check_divergence,
     )
 
 
@@ -116,6 +118,7 @@ def analyze_with_fractal_provider(
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
+        divergence_provider=check_divergence,
     )
 
 
@@ -148,6 +151,7 @@ def analyze_with_stroke_provider(
         segment_provider=build_segments_with_config,
         pivot_provider=find_pivots,
         trend_provider=classify_trend,
+        divergence_provider=check_divergence,
     )
 
 
@@ -181,6 +185,7 @@ def analyze_with_pivot_provider(
         segment_provider=build_segments_with_config,
         pivot_provider=pivot_provider,
         trend_provider=trend_provider,
+        divergence_provider=check_divergence,
     )
 
 
@@ -214,6 +219,41 @@ def analyze_with_segment_provider(
         segment_provider=segment_provider,
         pivot_provider=pivot_provider,
         trend_provider=classify_trend,
+        divergence_provider=check_divergence,
+    )
+
+
+def analyze_with_trend_provider(
+    code,
+    name,
+    dates,
+    opens,
+    highs,
+    lows,
+    closes,
+    volumes,
+    *,
+    trend_provider,
+    divergence_provider=check_divergence,
+):
+    """Backward-compatible entry using legacy structure behavior."""
+    return analyze_with_providers(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        macd_provider=calc_macd,
+        inclusion_provider=inclusion_process,
+        fractal_provider=find_fractals,
+        stroke_provider=build_strokes,
+        segment_provider=build_segments_with_config,
+        pivot_provider=find_pivots,
+        trend_provider=trend_provider,
+        divergence_provider=divergence_provider,
     )
 
 
@@ -234,6 +274,7 @@ def analyze_with_providers(
     segment_provider,
     pivot_provider,
     trend_provider,
+    divergence_provider,
 ):
     n = len(closes)
     if n < 10:
@@ -248,7 +289,7 @@ def analyze_with_providers(
     confirmed_segments = [s for s in segments if s.confirmed]
     pivots = pivot_provider(confirmed_segments)
     trend_type = trend_provider(pivots, confirmed_segments)
-    divergence = check_divergence(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
+    divergence = divergence_provider(closes, confirmed_segments, dif, dea, hist, pivots=pivots)
 
     swing_waves_raw = build_strokes_swing(highs, lows, closes, min_bars=2, min_swing_pct=0.06)
     swing_waves = prune_strokes(swing_waves_raw, min_pct=0.06)

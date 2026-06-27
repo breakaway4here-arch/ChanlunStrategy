@@ -12,6 +12,7 @@ sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze_dual
 from chanlun.engine_candidate import (
+    analyze_with_candidate_divergence,
     analyze_with_candidate_inclusion,
     analyze_with_candidate_macd,
     analyze_with_candidate_fractal,
@@ -40,7 +41,7 @@ def main():
     parser.add_argument("--output", default="run_outputs/chan_engine_dual_compare.json")
     parser.add_argument(
         "--candidate",
-        choices=("legacy", "macd", "inclusion", "fractal", "stroke", "segment", "pivot", "trend"),
+        choices=("legacy", "macd", "inclusion", "fractal", "stroke", "segment", "pivot", "trend", "divergence"),
         default="legacy",
     )
     args = parser.parse_args()
@@ -56,6 +57,7 @@ def main():
         "segment": analyze_with_candidate_segment,
         "pivot": analyze_with_candidate_pivot,
         "trend": analyze_with_candidate_trend,
+        "divergence": analyze_with_candidate_divergence,
     }
     candidate_analyzer = candidate_analyzers[args.candidate]
 

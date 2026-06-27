@@ -15,6 +15,7 @@ from config import (
 from .engine_core import (
     build_strokes,
     calc_macd,
+    classify_trend,
     find_pivots,
     find_fractals,
     inclusion_process,
@@ -26,6 +27,7 @@ from .engine_pipeline import (
     analyze_with_segment_provider,
     analyze_with_fractal_provider,
     analyze_with_stroke_provider,
+    analyze_with_trend_provider,
     build_segments_with_config,
 )
 from .engine_types import Fractal, Pivot, Segment, Stroke
@@ -387,6 +389,75 @@ def classify_trend_candidate(pivots, segments):
     return "盘整"
 
 
+def check_divergence_candidate(closes, segments, dif, dea, hist, pivots=None):
+    """Candidate divergence detector, currently locked to legacy parity."""
+    if len(segments) < 2:
+        return None
+
+    last_seg = segments[-1]
+    prev_seg = None
+    for segment in reversed(segments[:-1]):
+        if segment.direction == last_seg.direction:
+            prev_seg = segment
+            break
+
+    if prev_seg is None:
+        return None
+
+    def calc_macd_area(segment):
+        start, end = segment.start_idx, segment.end_idx
+        if start >= len(hist) or end >= len(hist):
+            return 0.0
+        seg_hist = hist[start:end + 1]
+        seg_hist = seg_hist[~np.isnan(seg_hist)]
+        if len(seg_hist) == 0:
+            return 0.0
+        return float(np.sum(np.abs(seg_hist)))
+
+    last_area = calc_macd_area(last_seg)
+    prev_area = calc_macd_area(prev_seg)
+
+    if prev_area == 0:
+        return None
+
+    area_ratio = last_area / prev_area
+
+    has_trend = pivots and len(pivots) >= 2
+    prefix = "趋势" if has_trend else "盘整"
+
+    is_divergence = False
+    div_type = ""
+    if last_seg.direction == "up":
+        if last_seg.high > prev_seg.high and area_ratio < 1.0:
+            is_divergence = True
+            div_type = prefix + "顶背驰"
+    else:
+        if last_seg.low < prev_seg.low and area_ratio < 1.0:
+            is_divergence = True
+            div_type = prefix + "底背驰"
+
+    hist_div = False
+    if last_seg.direction == "up":
+        last_hist_max = np.max(hist[last_seg.start_idx:last_seg.end_idx + 1])
+        prev_hist_max = np.max(hist[prev_seg.start_idx:prev_seg.end_idx + 1])
+        if last_seg.high > prev_seg.high and last_hist_max < prev_hist_max:
+            hist_div = True
+    else:
+        last_hist_min = np.min(hist[last_seg.start_idx:last_seg.end_idx + 1])
+        prev_hist_min = np.min(hist[prev_seg.start_idx:prev_seg.end_idx + 1])
+        if last_seg.low < prev_seg.low and abs(last_hist_min) < abs(prev_hist_min):
+            hist_div = True
+
+    return {
+        "type": div_type,
+        "is_divergence": is_divergence or hist_div,
+        "area_ratio": round(area_ratio, 4),
+        "hist_divergence": hist_div,
+        "prev_segment": (prev_seg.start_idx, prev_seg.end_idx),
+        "last_segment": (last_seg.start_idx, last_seg.end_idx),
+    }
+
+
 def analyze_with_candidate_macd(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with MACD supplied by the candidate component."""
     return analyze_with_macd_provider(
@@ -533,7 +604,7 @@ def analyze_with_candidate_stroke(code, name, dates, opens, highs, lows, closes,
 
 def analyze_with_candidate_trend(code, name, dates, opens, highs, lows, closes, volumes):
     """Run legacy pipeline with trend classification supplied by the candidate component."""
-    return analyze_with_pivot_provider(
+    return analyze_with_trend_provider(
         code,
         name,
         dates,
@@ -542,6 +613,21 @@ def analyze_with_candidate_trend(code, name, dates, opens, highs, lows, closes, 
         lows,
         closes,
         volumes,
-        pivot_provider=find_pivots,
         trend_provider=classify_trend_candidate,
+    )
+
+
+def analyze_with_candidate_divergence(code, name, dates, opens, highs, lows, closes, volumes):
+    """Run legacy pipeline with divergence detection supplied by the candidate component."""
+    return analyze_with_trend_provider(
+        code,
+        name,
+        dates,
+        opens,
+        highs,
+        lows,
+        closes,
+        volumes,
+        trend_provider=classify_trend,
+        divergence_provider=check_divergence_candidate,
     )
