@@ -7,6 +7,22 @@ from pathlib import Path
 
 
 class ChanEngineExperimentScriptTests(unittest.TestCase):
+    def test_script_help_contains_candidate_and_experiment(self):
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "scripts/compare_chan_engine_dual.py",
+                "--help",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        output = completed.stdout + completed.stderr
+        self.assertIn("candidate registry", output)
+        self.assertIn("--candidate", output)
+        self.assertIn("--experiment", output)
+
     def test_script_can_run_experiment_signal_v1(self):
         with tempfile.TemporaryDirectory() as tmp:
             output = Path(tmp) / "experiment_signal_v1.json"

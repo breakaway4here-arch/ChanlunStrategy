@@ -45,11 +45,16 @@ def main():
         "--candidate",
         choices=("legacy", *list_candidate_definitions()),
         default=None,
+        help=(
+            "candidate registry name (e.g. signal, signal_v1, "
+            "signal_delay1_by_type_guard)"
+        ),
     )
     mode.add_argument(
         "--experiment",
         choices=tuple(list_experiments()),
         default=None,
+        help="compatibility alias for experiment registry names",
     )
     args = parser.parse_args()
 

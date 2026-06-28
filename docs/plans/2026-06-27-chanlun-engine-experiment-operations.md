@@ -10,7 +10,29 @@
 4. 在 `overrides` 中放入本实验替换的 provider（例如 `signal_provider`）。
 5. 加入相应单测覆盖（至少 `tests/test_engine_experiments.py` 的 registry 校验）。
 
-## 如何跑单个实验 compare
+## 如何跑单个对比
+
+当前推荐入口：
+
+```bash
+python3 scripts/compare_chan_engine_dual.py \
+  --candidate <registry_name> \
+  --business-metrics \
+  --output /tmp/candidate_<registry_name>.json
+```
+
+示例：
+
+```bash
+python3 scripts/compare_chan_engine_dual.py --candidate signal_v1 --business-metrics --output /tmp/signal_v1.json
+python3 scripts/compare_chan_engine_dual.py --candidate signal_delay1_by_type_guard --business-metrics --output /tmp/signal_delay1_by_type_guard.json
+```
+
+`--experiment <实验名>` 仍保留为兼容入口（旧文档/旧脚本调用），新流程建议统一使用 `--candidate`。
+
+## 如何跑单个实验 compare（兼容入口）
+
+该入口仍可用于旧脚本/旧批量报告兼容；新流程优先使用上一节的 `--candidate <registry_name>`。
 
 ```bash
 python3 scripts/compare_chan_engine_dual.py \
