@@ -11,13 +11,12 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.chan_engine import analyze_dual
+from chanlun.engine_candidate_registry import list_candidate_definitions
 from chanlun.engine_dual_metrics import (
     build_aggregate_dual_business_metrics,
     result_to_recommendations,
 )
-from chanlun.engine_candidate import CANDIDATE_ANALYZERS
-from chanlun.engine_experiments import build_experiment_provider_bundle, list_experiments
-from chanlun.engine_pipeline import analyze_with_provider_bundle
+from chanlun.engine_experiments import list_experiments
 from tests.test_chan_engine_snapshot import SCENARIOS
 
 
@@ -33,23 +32,6 @@ def _make_kline(closes):
     }
 
 
-def _analyze_with_experiment_bundle(providers):
-    def analyze(code, name, dates, opens, highs, lows, closes, volumes):
-        return analyze_with_provider_bundle(
-            code,
-            name,
-            dates,
-            opens,
-            highs,
-            lows,
-            closes,
-            volumes,
-            providers=providers,
-        )
-
-    return analyze
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", default="run_outputs/chan_engine_dual_compare.json")
@@ -61,7 +43,7 @@ def main():
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument(
         "--candidate",
-        choices=("legacy", *CANDIDATE_ANALYZERS.keys()),
+        choices=("legacy", *list_candidate_definitions()),
         default=None,
     )
     mode.add_argument(
@@ -77,16 +59,15 @@ def main():
     if candidate_name is None and experiment_name is None:
         candidate_name = "legacy"
 
+    if experiment_name is not None:
+        dual_candidate = None if experiment_name == "legacy" else experiment_name
+        summary_candidate = "legacy"
+    else:
+        dual_candidate = None if candidate_name == "legacy" else candidate_name
+        summary_candidate = candidate_name
+
     scenarios = {}
     all_equal = True
-    candidate_analyzer = None
-    if experiment_name is not None:
-        experiment_providers = build_experiment_provider_bundle(experiment_name)
-        candidate_analyzer = _analyze_with_experiment_bundle(experiment_providers)
-        candidate_name = "legacy"
-    elif candidate_name != "legacy":
-        candidate_analyzer = CANDIDATE_ANALYZERS[candidate_name]
-
     legacy_recommendations = []
     candidate_recommendations = []
     for name, closes in SCENARIOS.items():
@@ -100,7 +81,7 @@ def main():
             lows=kline["lows"],
             closes=kline["closes"],
             volumes=kline["volumes"],
-            candidate_analyzer=candidate_analyzer,
+            candidate=dual_candidate,
         )
         comparison = payload["comparison"]
         scenarios[name] = comparison
@@ -133,10 +114,13 @@ def main():
         "summary": {
             "all_equal": all_equal,
             "scenario_count": len(scenarios),
-            "candidate": candidate_name,
+            "candidate": summary_candidate,
         },
         "scenarios": scenarios,
     }
+
+    if dual_candidate is not None:
+        report["summary"]["candidate_registry_name"] = dual_candidate
 
     if args.business_metrics:
         report["summary"].update(

@@ -123,6 +123,54 @@ class ChanEngineExperimentScriptTests(unittest.TestCase):
             self.assertEqual(payload["summary"]["candidate"], "signal")
             self.assertTrue(payload["summary"]["all_equal"])
 
+    def test_candidate_signal_v1_uses_registry_entry(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "candidate_signal_v1.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/compare_chan_engine_dual.py",
+                    "--candidate",
+                    "signal_v1",
+                    "--output",
+                    str(output),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("wrote", completed.stdout)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary"]["candidate"], "signal_v1")
+            self.assertEqual(
+                payload["summary"].get("candidate_registry_name"),
+                "signal_v1",
+            )
+
+    def test_candidate_signal_delay1_by_type_guard_still_runs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp) / "candidate_signal_delay1_by_type_guard.json"
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    "scripts/compare_chan_engine_dual.py",
+                    "--candidate",
+                    "signal_delay1_by_type_guard",
+                    "--output",
+                    str(output),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertIn("wrote", completed.stdout)
+            payload = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(payload["summary"]["candidate"], "signal_delay1_by_type_guard")
+            self.assertEqual(
+                payload["summary"].get("candidate_registry_name"),
+                "signal_delay1_by_type_guard",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
