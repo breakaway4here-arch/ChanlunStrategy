@@ -16,6 +16,8 @@ HIGH_VOLATILITY_MIN = 0.18
 _LOW_VOLATILITY_MAX = float(LOW_VOLATILITY_MAX)
 _HIGH_VOLATILITY_MIN = float(HIGH_VOLATILITY_MIN)
 _FUSION_PROFILE_STRICT = "fusion_strict"
+_FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1 = "fusion_strict_startup_rescue_v1"
+_DEFAULT_FUSION_PROFILE = _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1
 _FUSION_PROFILE_MID = "fusion_mid"
 _FUSION_PROFILE_LOOSE = "fusion_loose"
 _FUSION_PROFILE_MID_TREND = "fusion_mid_trend"
@@ -27,7 +29,12 @@ _FUSION_PROFILE_LOOSE_VOLATILITY = "fusion_loose_volatility"
 
 def list_quality_profiles() -> list[str]:
     """Return supported quality profiles."""
-    return [_FUSION_PROFILE_STRICT, _FUSION_PROFILE_MID, _FUSION_PROFILE_LOOSE]
+    return [
+        _FUSION_PROFILE_STRICT,
+        _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1,
+        _FUSION_PROFILE_MID,
+        _FUSION_PROFILE_LOOSE,
+    ]
 
 
 def list_quality_profile_variants(profile: str) -> list[str]:
@@ -46,11 +53,12 @@ def list_quality_profile_variants(profile: str) -> list[str]:
 
 def _normalize_profile(profile: str | None) -> str:
     if not profile:
-        return _FUSION_PROFILE_STRICT
+        return _DEFAULT_FUSION_PROFILE
     if profile in {"strict", "fusion"}:
         return _FUSION_PROFILE_STRICT
     if profile in {
         _FUSION_PROFILE_STRICT,
+        _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1,
         _FUSION_PROFILE_MID,
         _FUSION_PROFILE_LOOSE,
         _FUSION_PROFILE_MID_TREND,
@@ -65,7 +73,10 @@ def _normalize_profile(profile: str | None) -> str:
 
 def _build_signal_profile_config(profile: str) -> dict:
     normalized = _normalize_profile(profile)
-    if normalized == _FUSION_PROFILE_STRICT:
+    if normalized in {
+        _FUSION_PROFILE_STRICT,
+        _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1,
+    }:
         return {
             "min_trend_strength": 2.0,
             "max_volatility": _LOW_VOLATILITY_MAX,
@@ -126,11 +137,19 @@ def _is_profile_a_candidate(context: dict, profile: str) -> bool:
     volatility = _to_float(context.get("volatility"))
     trend_type = context.get("trend_type")
     signal_type = str((context.get("signal_type") or context.get("type") or ""))
+    market_env = context.get("market_env")
 
     cfg = _build_signal_profile_config(profile)
     is_choppy = _to_bool_choppy(trend_type)
     if is_choppy:
         return False
+
+    if (
+        profile == _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1
+        and trend_strength == 1.0
+        and signal_type == "强势启动候选"
+    ):
+        return not _is_strong_market_env(market_env)
 
     if trend_strength is not None and trend_strength <= 0:
         return False
@@ -400,6 +419,15 @@ def build_signal_context(result_or_pick: Any, signal: Optional[Mapping[str, Any]
     if explicit_volatility is None:
         explicit_volatility = _build_volatility(closes)
 
+    market_env = (
+        signal_obj.get("market_env")
+        or signal_obj.get("market_regime")
+        or signal_obj.get("market_trend")
+        or _get_from_obj(source, "market_env", None)
+        or _get_from_obj(source, "market_regime", None)
+        or _get_from_obj(source, "market_trend", None)
+    )
+
     return {
         "closes": closes,
         "highs": highs,
@@ -412,11 +440,16 @@ def build_signal_context(result_or_pick: Any, signal: Optional[Mapping[str, Any]
         "trend_strength": trend_strength,
         "strength": trend_strength,
         "volatility": explicit_volatility,
+        "market_env": market_env,
         "signal_index": signal_obj.get("index") if isinstance(signal_obj, Mapping) else None,
     }
 
 
-def classify_signal(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> str:
+def _is_strong_market_env(value: Any) -> bool:
+    return str(value or "").strip().lower() == "strong"
+
+
+def classify_signal(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> str:
     """Classify signal quality: A (trade), B (observe), C (filtered)."""
     if not isinstance(signal, Mapping):
         return "B"
@@ -435,6 +468,12 @@ def classify_signal(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> str:
             "trend_type": context.get("trend_type"),
             "type": context.get("type"),
             "signal_type": signal.get("type", context.get("type", "")),
+            "market_env": (
+                context.get("market_env")
+                or signal.get("market_env")
+                or signal.get("market_regime")
+                or signal.get("market_trend")
+            ),
         },
         normalized_profile,
     ):
@@ -482,7 +521,7 @@ def classify_signal(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> str:
     return "B"
 
 
-def explain_signal_rejection(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> list[str]:
+def explain_signal_rejection(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> list[str]:
     """Return reasons why a signal is not A-class under a quality profile."""
     if not isinstance(signal, Mapping):
         return ["invalid_signal"]
@@ -500,6 +539,12 @@ def explain_signal_rejection(signal: Any, profile: str = _FUSION_PROFILE_STRICT)
     segment = context.get("segment")
     volatility = _to_float(context.get("volatility"))
     trend_type = context.get("trend_type")
+    market_env = (
+        context.get("market_env")
+        or signal.get("market_env")
+        or signal.get("market_regime")
+        or signal.get("market_trend")
+    )
     cfg = _build_signal_profile_config(normalized_profile)
     reasons = []
 
@@ -530,10 +575,19 @@ def explain_signal_rejection(signal: Any, profile: str = _FUSION_PROFILE_STRICT)
     elif not _profile_has_required_structure(pivot, segment, structure_mode):
         reasons.append("missing_pivot_or_strong_segment")
 
+    signal_type = str(signal.get("type", context.get("type", "")))
+    if (
+        normalized_profile == _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1
+        and trend_strength == 1.0
+        and signal_type == "强势启动候选"
+        and _is_strong_market_env(market_env)
+    ):
+        reasons.append("strong_market_rescue_guard")
+
     return reasons or ["not_a"]
 
 
-def tag_signal_quality(signal: Mapping[str, Any], profile: str = _FUSION_PROFILE_STRICT) -> dict:
+def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION_PROFILE) -> dict:
     """Return a copy of signal with additive `category` field."""
     if not isinstance(signal, Mapping):
         return signal
@@ -548,7 +602,7 @@ def tag_signal_quality(signal: Mapping[str, Any], profile: str = _FUSION_PROFILE
 
 def tag_signal_quality_in_place(
     signal: Mapping[str, Any],
-    profile: str = _FUSION_PROFILE_STRICT,
+    profile: str = _DEFAULT_FUSION_PROFILE,
 ) -> Mapping[str, Any]:
     """Mutate and return signal with additive `category` field."""
     if not isinstance(signal, dict):
@@ -563,7 +617,7 @@ def tag_signal_quality_in_place(
 def tag_signal_quality_many(
     signals: Iterable[Mapping[str, Any]],
     in_place: bool = False,
-    profile: str = _FUSION_PROFILE_STRICT,
+    profile: str = _DEFAULT_FUSION_PROFILE,
 ):
     """Tag a collection of signals and return list of tagged signals."""
     out = []
@@ -581,7 +635,10 @@ def tag_signal_quality_many(
     return out
 
 
-def filter_executable_signals(signals: Iterable[Mapping[str, Any]], profile: str = _FUSION_PROFILE_STRICT):
+def filter_executable_signals(
+    signals: Iterable[Mapping[str, Any]],
+    profile: str = _DEFAULT_FUSION_PROFILE,
+):
     """Keep only A-class signals for execution intent."""
     if signals is None:
         return []

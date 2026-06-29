@@ -126,7 +126,12 @@ class SignalQualityClassifierTests(unittest.TestCase):
     def test_list_quality_profiles(self):
         self.assertEqual(
             list_quality_profiles(),
-            ["fusion_strict", "fusion_mid", "fusion_loose"],
+            [
+                "fusion_strict",
+                "fusion_strict_startup_rescue_v1",
+                "fusion_mid",
+                "fusion_loose",
+            ],
         )
 
     def test_classify_signal_fusion_mid_relaxes_trend(self):
@@ -139,6 +144,102 @@ class SignalQualityClassifierTests(unittest.TestCase):
         }
         self.assertEqual(classify_signal(signal, profile="fusion_mid"), "A")
         self.assertEqual(classify_signal(signal), "B")
+
+    def test_classify_signal_startup_rescue_only_rescues_weak_startup(self):
+        startup = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.15,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+        strong_startup = {
+            **startup,
+            "market_env": "strong",
+        }
+        strong_startup_with_context = {
+            **strong_startup,
+            "context": {
+                "trend_strength": 1.0,
+                "volatility": 0.15,
+                "pivot": None,
+                "segment": {"high": 12, "low": 10},
+            },
+        }
+        strict_original = {
+            "type": "强势启动候选",
+            "trend_strength": 2.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "strong",
+        }
+        bottom = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        low_absorb = {
+            "type": "中枢低吸候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        choppy_startup = {
+            **startup,
+            "trend_type": "震荡区",
+        }
+
+        self.assertEqual(
+            classify_signal(startup, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            classify_signal(strong_startup, profile="fusion_strict_startup_rescue_v1"),
+            "B",
+        )
+        self.assertEqual(
+            classify_signal(
+                strong_startup_with_context,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            "B",
+        )
+        self.assertEqual(
+            classify_signal(bottom, profile="fusion_strict_startup_rescue_v1"),
+            "B",
+        )
+        self.assertEqual(
+            classify_signal(low_absorb, profile="fusion_strict_startup_rescue_v1"),
+            "B",
+        )
+        self.assertEqual(
+            classify_signal(choppy_startup, profile="fusion_strict_startup_rescue_v1"),
+            "C",
+        )
+        self.assertEqual(
+            classify_signal(strict_original, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            classify_signal(strong_startup, profile="fusion_strict"),
+            "B",
+        )
+
+    def test_classify_signal_default_profile_is_startup_rescue_v1(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.15,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+        self.assertEqual(classify_signal(signal), "A")
 
     def test_classify_signal_fusion_mid_does_not_relax_structure_with_trend(self):
         signal = {

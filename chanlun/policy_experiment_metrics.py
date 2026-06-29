@@ -22,8 +22,14 @@ from chanlun.signal_quality_classifier import (
     list_quality_profile_variants,
 )
 
-FUSION_PROFILES = ("fusion_strict", "fusion_mid", "fusion_loose")
+FUSION_PROFILES = (
+    "fusion_strict_startup_rescue_v1",
+    "fusion_strict",
+    "fusion_mid",
+    "fusion_loose",
+)
 _FUSION_STRICT = "fusion_strict"
+_FUSION_STRICT_STARTUP_RESCUE_V1 = "fusion_strict_startup_rescue_v1"
 _FUSION_MID = "fusion_mid"
 _FUSION_LOOSE = "fusion_loose"
 _ENTRY_MODE_IMMEDIATE = "immediate_close"
@@ -746,7 +752,12 @@ def _run_fusion_threshold_scan(profile_names: List[str]) -> Dict[str, object]:
         rejected = [item.get("candidate") for item in profile_rows if not item.get("accepted")]
         selected_reason = "meets target criteria"
     else:
-        selected = "fusion_strict"
+        if _FUSION_STRICT_STARTUP_RESCUE_V1 in names:
+            selected = _FUSION_STRICT_STARTUP_RESCUE_V1
+        elif names:
+            selected = names[0]
+        else:
+            selected = _FUSION_STRICT
         accepted_profiles = []
         rejected = [item.get("candidate") for item in profile_rows if item.get("candidate") != selected]
         selected_reason = "no profile met all target criteria"
