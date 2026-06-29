@@ -13,6 +13,7 @@ from config import (
     LIMIT_UP_THRESHOLD, LIMIT_DOWN_THRESHOLD,
 )
 from .data_fetcher import is_st_stock
+from .signal_quality_classifier import build_signal_context, tag_signal_quality_in_place
 
 
 def _has_macd_bullish_signal(min30_result):
@@ -105,8 +106,17 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
         if not valid_buy_points:
             continue
 
+        for bp in valid_buy_points:
+            bp["context"] = build_signal_context(result, bp)
+            tag_signal_quality_in_place(bp)
+
         # 选最优买点
-        best_bp = _pick_best_buy_point(valid_buy_points)
+        executable_bps = [bp for bp in valid_buy_points if bp.get("category") == "A"]
+        best_executable_bp = _pick_best_buy_point(executable_bps) if executable_bps else None
+        if executable_bps:
+            best_bp = best_executable_bp
+        else:
+            best_bp = _pick_best_buy_point(valid_buy_points)
 
         # --- 构建输出 ---
         sector_name = sector_stocks.get(code, {}).get("sector", "") if sector_stocks else ""
@@ -118,7 +128,9 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
             "code": code,
             "name": name,
             "buy_points": valid_buy_points,
+            "executable_buy_points": executable_bps,
             "best_buy_point": best_bp,
+            "best_executable_buy_point": best_executable_bp,
             "pivots": pivot_info,
             "trend_type": result.trend_type,
             "divergence": result.divergence,

@@ -19,7 +19,11 @@ sys.path.insert(0, ROOT)
 from config import DAY_LOOKBACK
 from chanlun.data_fetcher import fetch_daily_kline  # noqa: E402
 from chanlun.backtest_metrics import summarize_return_samples  # noqa: E402
-from chanlun.backtest_execution import evaluate_forward_returns  # noqa: E402
+from chanlun.backtest_execution import (  # noqa: E402
+    evaluate_forward_returns,
+    execute_signal,
+)
+from chanlun.signal_quality_classifier import build_signal_context  # noqa: E402
 
 
 DATA_DIR = os.path.join(ROOT, "docs", "data")
@@ -81,6 +85,17 @@ def bucket_key(pick):
     )
 
 
+def _pick_intent(pick):
+    bbp = (pick or {}).get("best_buy_point")
+    if not isinstance(bbp, dict):
+        return execute_signal({})
+
+    if bbp.get("context") is None:
+        bbp = dict(bbp)
+        bbp["context"] = build_signal_context(pick, bbp)
+    return execute_signal(bbp)
+
+
 def confirm_combo_key(pick):
     bbp = pick.get("best_buy_point") or {}
     sigs = tuple(sorted(bbp.get("confirmations") or []))
@@ -111,6 +126,7 @@ def main():
     print(f"Scanning {len(SNAPSHOT_DAYS)} snapshot days: {SNAPSHOT_DAYS}")
     buckets = defaultdict(list)
     overall = defaultdict(list)  # by version
+    a_only = defaultdict(list)
     combo_buckets = defaultdict(list)   # (ver, type, signals)
     dist_buckets = defaultdict(list)    # (ver, type, dist_bucket)
     skipped_no_kline = 0
@@ -125,6 +141,8 @@ def main():
         key = (ver,) + bucket_key(pick)
         buckets[key].append(res)
         overall[ver].append(res)
+        if _pick_intent(pick).get("category") == "A":
+            a_only[ver].append(res)
         ct, sigs = confirm_combo_key(pick)
         combo_buckets[(ver, ct, sigs)].append(res)
         dist_buckets[(ver, ct, distance_bucket(pick))].append(res)
@@ -181,6 +199,28 @@ def main():
         print(f"  [{ver}] type={btype} dist={dbucket}")
         print(f"    n={s['n']} t3_mean={s['t3_mean']} win={s['t3_win_rate']}% "
               f"loss5%={s['t3_loss_5pct_rate']}% dd_mean={s['max_dd_3d_mean']}")
+
+    print()
+    print("=== ABC-A Execution Intent Comparison ===")
+    for ver in ("picks_pure", "picks_fusion"):
+        baseline = summarize(overall[ver])
+        a_only_summary = summarize(a_only[ver])
+        baseline_n = baseline["n"] if baseline else 0
+        a_n = a_only_summary["n"] if a_only_summary else 0
+        if baseline_n:
+            reduction = round((baseline_n - a_n) / baseline_n * 100, 2)
+        else:
+            reduction = 0.0
+        print(f"[{ver}]")
+        print(f"  evaluated={baseline_n}, A_only={a_n}, reduction={reduction}%")
+        print(f"  baseline_t3_win_rate={baseline['t3_win_rate'] if baseline else None}% "
+              f"-> A_t3_win_rate={a_only_summary['t3_win_rate'] if a_only_summary else None}%")
+        print(f"  baseline_t3_mean={baseline['t3_mean'] if baseline else None} "
+              f"-> A_t3_mean={a_only_summary['t3_mean'] if a_only_summary else None}")
+        print(f"  baseline_max_dd_mean={baseline['max_dd_3d_mean'] if baseline else None} "
+              f"-> A_max_dd_mean={a_only_summary['max_dd_3d_mean'] if a_only_summary else None}")
+        if baseline:
+            print(f"  coverage_gap={baseline_n - a_n}")
 
 
 if __name__ == "__main__":

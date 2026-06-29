@@ -4,6 +4,7 @@ from chanlun.backtest_execution import (
     SUPPORTED_EXIT_MODELS,
     evaluate_exit_returns,
     evaluate_forward_returns,
+    execute_signal,
 )
 
 
@@ -125,6 +126,26 @@ class BacktestExecutionTests(unittest.TestCase):
                 "exit_stop5_take8_conservative",
             },
         )
+
+    def test_execute_signal_for_a(self):
+        action = execute_signal({"category": "A"})
+        self.assertEqual(action["action"], "place_order")
+        self.assertTrue(action["execute"])
+
+    def test_execute_signal_for_b(self):
+        action = execute_signal({"category": "B"})
+        self.assertEqual(action["action"], "log_only")
+        self.assertFalse(action["execute"])
+
+    def test_execute_signal_for_c(self):
+        action = execute_signal({"category": "C"})
+        self.assertEqual(action["action"], "ignore")
+        self.assertFalse(action["execute"])
+
+    def test_execute_signal_from_classification(self):
+        action = execute_signal({"trend_strength": 2, "pivot": {"ZG": 10}, "segment": {"high": 11}, "volatility": 0.05})
+        self.assertEqual(action["action"], "place_order")
+        self.assertEqual(action["category"], "A")
 
 
 if __name__ == "__main__":

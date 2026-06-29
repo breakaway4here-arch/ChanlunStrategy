@@ -61,6 +61,31 @@ class TestSwingSeedConstruction(unittest.TestCase):
         self.assertTrue(seed.get("seed_reason"))
         self.assertEqual(diag.get("swing_seed_count", 0), 1)
 
+    def test_pool_buy_points_keep_quality_category_and_prefers_a_for_best(self):
+        """A/B/C labels stay in buy_points; best_buy_point prefers A when available."""
+        closes = ([10, 10.2, 10.4, 10.6, 10.8, 11.0, 11.2, 11.4, 11.5, 11.6] * 6)[:60]
+        result = make_result(
+            code="000003",
+            closes=closes,
+            volumes=[100000] * len(closes),
+            buy_points=[
+                {"type": "一买", "tier": "formal", "price": 10.7, "index": len(closes) - 1, "trend_strength": 1, "volatility": 0.12},
+                {"type": "一买", "tier": "formal", "price": 10.9, "index": len(closes) - 1, "trend_strength": 2, "volatility": 0.05},
+            ],
+        )
+        result.segments = [{"high": 11.5, "low": 10.0}]
+        result.pivots = [{"ZG": 11.4, "ZD": 10.2}]
+        result.trend_type = "上涨趋势"
+
+        pool, _ = build_daily_structure_pool([result], sector_stocks={}, mode="pure")
+        self.assertEqual(len(pool), 1)
+        self.assertEqual(pool[0]["buy_points"][0]["category"], "B")
+        self.assertEqual(pool[0]["buy_points"][1]["category"], "A")
+        self.assertEqual(len(pool[0]["executable_buy_points"]), 1)
+        self.assertEqual(pool[0]["best_buy_point"]["category"], "A")
+        self.assertEqual(pool[0]["best_executable_buy_point"]["category"], "A")
+        self.assertEqual(pool[0]["best_buy_point"]["price"], 10.9)
+
 
 if __name__ == "__main__":
     unittest.main()

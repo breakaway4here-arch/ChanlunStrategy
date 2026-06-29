@@ -16,6 +16,10 @@ from .signal_policy import (
     is_formal_buy, is_upgradeable_reference, is_blocked_buy,
     is_candidate_seed, is_reference_only,
 )
+from .signal_quality_classifier import (
+    build_signal_context,
+    tag_signal_quality_in_place,
+)
 from .screener_pure import _get_pivot_info, _pick_best_buy_point
 
 
@@ -99,6 +103,10 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
             diag["buy_point_type_counts"][t] = diag["buy_point_type_counts"].get(t, 0) + 1
 
         # Try to build swing seeds from reference bps with position guard
+        for bp in result.buy_points:
+            bp["context"] = build_signal_context(result, bp)
+            tag_signal_quality_in_place(bp)
+
         pivot_info = _get_pivot_info(result)
         swing_seeds = []
         remaining_reference = []
@@ -145,13 +153,20 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
         all_bps = formal_bps + upgradeable_bps + swing_seeds + reference_bps + blocked_bps
 
         # Best from formal+upgradeable only (seeds need 30min upgrade first)
-        best_bp = _pick_best_buy_point(formal_bps + upgradeable_bps) if (formal_bps or upgradeable_bps) else None
+        executable_bps = [bp for bp in formal_bps + upgradeable_bps if bp.get("category") == "A"]
+        best_executable_bp = _pick_best_buy_point(executable_bps) if executable_bps else None
+        if executable_bps:
+            best_bp = best_executable_bp
+        else:
+            best_bp = _pick_best_buy_point(formal_bps + upgradeable_bps) if (formal_bps or upgradeable_bps) else None
 
         stock_entry = {
             "code": code,
             "name": name,
             "buy_points": all_bps,             # all buy points for upgrade logic
+            "executable_buy_points": executable_bps,
             "best_buy_point": best_bp,
+            "best_executable_buy_point": best_executable_bp,
             "pivots": pivot_info,
             "trend_type": result.trend_type,
             "divergence": result.divergence,

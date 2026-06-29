@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from .signal_quality_classifier import classify_signal
+
 SUPPORTED_EXIT_MODELS = {
     "exit_t3",
     "exit_stop_loss_5pct",
@@ -13,6 +15,24 @@ SUPPORTED_EXIT_MODELS = {
 def _as_list(values):
     """Convert list/tuple/numpy array-like inputs to a plain Python list."""
     return list(values) if values is not None else []
+
+
+def execute_signal(signal):
+    """Resolve side-effect-free execution intent from signal quality category.
+
+    Returns a plain intent dict and never triggers external actions.
+    """
+    if signal is None:
+        category = "C"
+    else:
+        category = signal.get("category")
+        if category is None:
+            category = classify_signal(signal)
+    if category == "A":
+        return {"action": "place_order", "category": "A", "execute": True}
+    if category == "B":
+        return {"action": "log_only", "category": "B", "execute": False}
+    return {"action": "ignore", "category": "C", "execute": False}
 
 
 def _find_snap_index(dates, snap_date):
