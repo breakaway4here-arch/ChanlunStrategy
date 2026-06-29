@@ -709,10 +709,25 @@ def _copy_if_changed(src_path, dst_path):
     return True
 
 
+def _report_asset_source_dir():
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(root_dir, "chanlun", "report_assets")
+
+
+def _report_asset_version():
+    digest = hashlib.sha256()
+    source_dir = _report_asset_source_dir()
+    for asset in REPORT_V2_ASSETS:
+        digest.update(asset.encode("utf-8"))
+        digest.update(b"\0")
+        with open(os.path.join(source_dir, asset), "rb") as f:
+            digest.update(f.read())
+    return digest.hexdigest()[:12]
+
+
 def copy_report_assets(output_dir):
     """Copy shared v2 assets to output_dir/assets with stable-content semantics."""
-    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    source_dir = os.path.join(root_dir, "chanlun", "report_assets")
+    source_dir = _report_asset_source_dir()
     target_dir = os.path.join(output_dir, "assets")
 
     copied = 0
@@ -726,8 +741,9 @@ def copy_report_assets(output_dir):
     return copied
 
 
-def _build_report_v2_html(date_str, bootstrap_json, asset_prefix=""):
+def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
     """Build the lightweight v2 HTML shell."""
+    asset_query = f"?v={asset_version}" if asset_version else ""
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -736,7 +752,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix=""):
 <title>缠论选股日报 — {date_str}</title>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
 <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
-<link rel="stylesheet" href="{asset_prefix}assets/report-v2.css">
+<link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
 </head>
 <body>
 <div id="app"></div>
@@ -750,7 +766,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix=""):
   window.CHANLUN_BOOTSTRAP.isFileProtocol = (window.location.protocol === 'file:');
 }})();
 </script>
-<script src="{asset_prefix}assets/report-v2.js" defer></script>
+<script src="{asset_prefix}assets/report-v2.js{asset_query}" defer></script>
 </body>
 </html>"""
 
@@ -944,14 +960,25 @@ def _generate_report_v2(report_data, output_dir=None):
     write_daily_data_json(daily_data, data_dir)
     write_data_manifest(date_str, data_dir)
     copy_report_assets(output_dir)
+    asset_version = _report_asset_version()
 
     index_path = os.path.join(output_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as f:
-        f.write(_build_report_v2_html(date_str, bootstrap_data_json, asset_prefix=""))
+        f.write(_build_report_v2_html(
+            date_str,
+            bootstrap_data_json,
+            asset_prefix="",
+            asset_version=asset_version,
+        ))
 
     archive_path = os.path.join(date_dir, "index.html")
     with open(archive_path, "w", encoding="utf-8") as f:
-        f.write(_build_report_v2_html(date_str, bootstrap_data_json, asset_prefix="../"))
+        f.write(_build_report_v2_html(
+            date_str,
+            bootstrap_data_json,
+            asset_prefix="../",
+            asset_version=asset_version,
+        ))
 
     print(f"  日报已生成: {index_path}")
     print(f"  数据已写入: {data_dir}")

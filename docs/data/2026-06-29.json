@@ -15839,7 +15839,7 @@
       "best_buy_point": {
         "type": "强势启动候选",
         "tier": "candidate",
-        "index": 35,
+        "index": 27,
         "price": 12.57,
         "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10",
         "strength": "中",
@@ -15921,14 +15921,6 @@
       "market_regime": "",
       "fusion_admission": {},
       "dates": [
-        "2026-05-08",
-        "2026-05-11",
-        "2026-05-12",
-        "2026-05-13",
-        "2026-05-14",
-        "2026-05-15",
-        "2026-05-18",
-        "2026-05-19",
         "2026-05-20",
         "2026-05-21",
         "2026-05-22",
@@ -15959,14 +15951,6 @@
         "2026-06-29"
       ],
       "closes": [
-        15.861,
-        15.881,
-        15.201,
-        14.881,
-        14.881,
-        14.881,
-        14.521,
-        14.381,
         14.191,
         14.081,
         13.581,
@@ -15997,14 +15981,6 @@
         12.57
       ],
       "opens": [
-        16.071,
-        15.881,
-        15.881,
-        15.201,
-        14.901,
-        14.881,
-        14.721,
-        14.501,
         14.321,
         14.191,
         14.151,
@@ -16035,14 +16011,6 @@
         12.17
       ],
       "highs": [
-        16.241,
-        16.111,
-        15.911,
-        15.251,
-        15.151,
-        15.071,
-        14.851,
-        14.621,
         14.401,
         14.391,
         14.211,
@@ -16073,14 +16041,6 @@
         12.91
       ],
       "lows": [
-        15.831,
-        15.661,
-        15.121,
-        14.791,
-        14.791,
-        14.561,
-        14.251,
-        14.101,
         14.151,
         14.051,
         13.401,
@@ -16111,14 +16071,6 @@
         11.95
       ],
       "volumes": [
-        315232.0,
-        511808.0,
-        861850.0,
-        781071.0,
-        690879.0,
-        515824.0,
-        758070.0,
-        571369.0,
         314886.0,
         416455.0,
         912134.0,
@@ -16149,14 +16101,6 @@
         1050358.0
       ],
       "macd_hist": [
-        -0.05721266388867857,
-        -0.05689700561261585,
-        -0.1385287648379605,
-        -0.22097985303394374,
-        -0.25827529584048103,
-        -0.26472430454448437,
-        -0.2968466559654426,
-        -0.3146203088303169,
         -0.32813343422476704,
         -0.32730905449634484,
         -0.3665731939028902,
@@ -16242,7 +16186,7 @@
         {
           "type": "强势启动候选",
           "tier": "candidate",
-          "index": 35,
+          "index": 27,
           "price": 12.57,
           "reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10",
           "strength": "中",
@@ -35047,11 +34991,11 @@
       "version": "fusion",
       "ref_price": 9.84,
       "stop_loss": null,
-      "current_price": 8.49,
-      "change_pct": -13.72,
+      "current_price": 8.44,
+      "change_pct": -14.23,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35061,11 +35005,11 @@
       "version": "fusion",
       "ref_price": 54.14,
       "stop_loss": null,
-      "current_price": 48.58,
-      "change_pct": -10.27,
+      "current_price": 46.91,
+      "change_pct": -13.35,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35089,11 +35033,11 @@
       "version": "fusion",
       "ref_price": 4.68,
       "stop_loss": null,
-      "current_price": 4.66,
-      "change_pct": -0.43,
+      "current_price": 4.56,
+      "change_pct": -2.56,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35103,11 +35047,11 @@
       "version": "fusion",
       "ref_price": 40.78,
       "stop_loss": null,
-      "current_price": 42.69,
-      "change_pct": 4.68,
+      "current_price": 44.1,
+      "change_pct": 8.14,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35117,11 +35061,11 @@
       "version": "fusion",
       "ref_price": 43.78,
       "stop_loss": null,
-      "current_price": 37.15,
-      "change_pct": -15.14,
+      "current_price": 37.74,
+      "change_pct": -13.8,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35131,11 +35075,11 @@
       "version": "fusion",
       "ref_price": 19.52,
       "stop_loss": null,
-      "current_price": 17.84,
-      "change_pct": -8.61,
+      "current_price": 17.56,
+      "change_pct": -10.04,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35145,11 +35089,11 @@
       "version": "fusion",
       "ref_price": 23.9,
       "stop_loss": null,
-      "current_price": 26.41,
-      "change_pct": 10.5,
+      "current_price": 26.03,
+      "change_pct": 8.91,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35159,11 +35103,11 @@
       "version": "fusion",
       "ref_price": 18.7,
       "stop_loss": null,
-      "current_price": 22.15,
-      "change_pct": 18.45,
+      "current_price": 21.75,
+      "change_pct": 16.31,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35173,11 +35117,11 @@
       "version": "fusion",
       "ref_price": 21.79,
       "stop_loss": null,
-      "current_price": 21.77,
-      "change_pct": -0.09,
+      "current_price": 20.6,
+      "change_pct": -5.46,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35187,11 +35131,11 @@
       "version": "fusion",
       "ref_price": 90.5,
       "stop_loss": null,
-      "current_price": 81.44,
-      "change_pct": -10.01,
+      "current_price": 74.89,
+      "change_pct": -17.25,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35215,11 +35159,11 @@
       "version": "fusion",
       "ref_price": 13.74,
       "stop_loss": null,
-      "current_price": 13.35,
-      "change_pct": -2.84,
+      "current_price": 12.71,
+      "change_pct": -7.5,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35229,11 +35173,11 @@
       "version": "fusion",
       "ref_price": 9.03,
       "stop_loss": null,
-      "current_price": 7.54,
-      "change_pct": -16.5,
+      "current_price": 7.14,
+      "change_pct": -20.93,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35243,11 +35187,11 @@
       "version": "fusion",
       "ref_price": 24.29,
       "stop_loss": null,
-      "current_price": 23.1,
-      "change_pct": -4.9,
+      "current_price": 21.84,
+      "change_pct": -10.09,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35257,11 +35201,11 @@
       "version": "fusion",
       "ref_price": 40.58,
       "stop_loss": null,
-      "current_price": 37.2,
-      "change_pct": -8.33,
+      "current_price": 34.41,
+      "change_pct": -15.2,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35271,11 +35215,11 @@
       "version": "fusion",
       "ref_price": 31.48,
       "stop_loss": null,
-      "current_price": 28.5,
-      "change_pct": -9.47,
+      "current_price": 29.36,
+      "change_pct": -6.73,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35285,11 +35229,11 @@
       "version": "fusion",
       "ref_price": 29.75,
       "stop_loss": null,
-      "current_price": 28.57,
-      "change_pct": -3.97,
+      "current_price": 27.75,
+      "change_pct": -6.72,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35299,11 +35243,11 @@
       "version": "fusion",
       "ref_price": 56.65,
       "stop_loss": null,
-      "current_price": 57.3,
-      "change_pct": 1.15,
+      "current_price": 58.76,
+      "change_pct": 3.72,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35313,11 +35257,11 @@
       "version": "fusion",
       "ref_price": 14.01,
       "stop_loss": null,
-      "current_price": 16.65,
-      "change_pct": 18.84,
+      "current_price": 16.16,
+      "change_pct": 15.35,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35327,11 +35271,11 @@
       "version": "fusion",
       "ref_price": 28.22,
       "stop_loss": null,
-      "current_price": 30.21,
-      "change_pct": 7.05,
+      "current_price": 29.1,
+      "change_pct": 3.12,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35341,11 +35285,11 @@
       "version": "fusion",
       "ref_price": 9.93,
       "stop_loss": null,
-      "current_price": 7.3,
-      "change_pct": -26.49,
+      "current_price": 7.15,
+      "change_pct": -28.0,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35355,11 +35299,11 @@
       "version": "fusion",
       "ref_price": 39.85,
       "stop_loss": null,
-      "current_price": 38.26,
-      "change_pct": -3.99,
+      "current_price": 38.61,
+      "change_pct": -3.11,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35369,11 +35313,11 @@
       "version": "fusion",
       "ref_price": 24.11,
       "stop_loss": null,
-      "current_price": 23.36,
-      "change_pct": -3.11,
+      "current_price": 22.96,
+      "change_pct": -4.77,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35383,11 +35327,11 @@
       "version": "fusion",
       "ref_price": 45.68,
       "stop_loss": null,
-      "current_price": 46.69,
-      "change_pct": 2.21,
+      "current_price": 49.18,
+      "change_pct": 7.66,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35397,11 +35341,11 @@
       "version": "fusion",
       "ref_price": 28.51,
       "stop_loss": null,
-      "current_price": 30.4,
-      "change_pct": 6.63,
+      "current_price": 27.36,
+      "change_pct": -4.03,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35411,11 +35355,11 @@
       "version": "fusion",
       "ref_price": 21.16,
       "stop_loss": null,
-      "current_price": 21.65,
-      "change_pct": 2.32,
+      "current_price": 20.31,
+      "change_pct": -4.02,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35425,11 +35369,11 @@
       "version": "fusion",
       "ref_price": 39.16,
       "stop_loss": null,
-      "current_price": 38.19,
-      "change_pct": -2.48,
+      "current_price": 41.34,
+      "change_pct": 5.57,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35439,11 +35383,11 @@
       "version": "fusion",
       "ref_price": 29.56,
       "stop_loss": null,
-      "current_price": 30.22,
-      "change_pct": 2.23,
+      "current_price": 29.33,
+      "change_pct": -0.78,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35453,11 +35397,11 @@
       "version": "fusion",
       "ref_price": 119.27,
       "stop_loss": null,
-      "current_price": 109.99,
-      "change_pct": -7.78,
+      "current_price": 114.24,
+      "change_pct": -4.22,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35481,11 +35425,11 @@
       "version": "fusion",
       "ref_price": 56.84,
       "stop_loss": null,
-      "current_price": 49.52,
-      "change_pct": -12.88,
+      "current_price": 48.16,
+      "change_pct": -15.27,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 5
+      "lookback_days": 6
     },
     {
       "rec_date": "2026-06-19",
@@ -35509,11 +35453,11 @@
       "version": "fusion",
       "ref_price": 28.43,
       "stop_loss": null,
-      "current_price": 27.39,
-      "change_pct": -3.66,
+      "current_price": 30.4,
+      "change_pct": 6.93,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 1
+      "lookback_days": 4
     },
     {
       "rec_date": "2026-06-23",
@@ -35523,11 +35467,11 @@
       "version": "fusion",
       "ref_price": 14.66,
       "stop_loss": null,
-      "current_price": 14.26,
-      "change_pct": -2.73,
+      "current_price": 13.76,
+      "change_pct": -6.14,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 3
+      "lookback_days": 4
     },
     {
       "rec_date": "2026-06-24",
@@ -35537,11 +35481,11 @@
       "version": "fusion",
       "ref_price": 28.25,
       "stop_loss": null,
-      "current_price": 28.25,
-      "change_pct": 0.0,
+      "current_price": 33.02,
+      "change_pct": 16.88,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 0
+      "lookback_days": 3
     },
     {
       "rec_date": "2026-06-24",
@@ -35551,11 +35495,11 @@
       "version": "fusion",
       "ref_price": 34.15,
       "stop_loss": null,
-      "current_price": 34.15,
-      "change_pct": 0.0,
+      "current_price": 32.99,
+      "change_pct": -3.4,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 0
+      "lookback_days": 3
     },
     {
       "rec_date": "2026-06-24",
@@ -35565,11 +35509,11 @@
       "version": "fusion",
       "ref_price": 75.27,
       "stop_loss": null,
-      "current_price": 68.0,
-      "change_pct": -9.66,
+      "current_price": 65.3,
+      "change_pct": -13.25,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 2
+      "lookback_days": 3
     },
     {
       "rec_date": "2026-06-24",
@@ -35607,11 +35551,11 @@
       "version": "fusion",
       "ref_price": 7.33,
       "stop_loss": null,
-      "current_price": 7.17,
-      "change_pct": -2.18,
+      "current_price": 7.1,
+      "change_pct": -3.14,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 0
+      "lookback_days": 1
     },
     {
       "rec_date": "2026-06-26",
@@ -35621,11 +35565,11 @@
       "version": "fusion",
       "ref_price": 261.93,
       "stop_loss": null,
-      "current_price": 220.64,
-      "change_pct": -15.76,
+      "current_price": 263.6,
+      "change_pct": 0.64,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 0
+      "lookback_days": 1
     },
     {
       "rec_date": "2026-06-26",
@@ -35635,11 +35579,11 @@
       "version": "fusion",
       "ref_price": 2.44,
       "stop_loss": null,
-      "current_price": 2.34,
-      "change_pct": -4.1,
+      "current_price": 2.45,
+      "change_pct": 0.41,
       "stop_triggered": false,
       "trigger_date": null,
-      "lookback_days": 0
+      "lookback_days": 1
     }
   ],
   "workspace": {

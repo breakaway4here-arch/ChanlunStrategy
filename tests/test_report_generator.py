@@ -249,6 +249,8 @@ class TestAccessControl(unittest.TestCase):
     def test_assets_and_bootstrap_paths(self):
         self.assertIn("assets/report-v2.css", self.html)
         self.assertIn("assets/report-v2.js", self.html)
+        self.assertRegex(self.html, r"assets/report-v2\.css\?v=[0-9a-f]{12}")
+        self.assertRegex(self.html, r"assets/report-v2\.js\?v=[0-9a-f]{12}")
         self.assertIn("window.location.protocol === 'file:'", self.html)
         self.assertIn("dataBasePrefix", self.html)
         self.assertIn("window.CHANLUN_BOOTSTRAP.dataBasePrefix = dataBasePrefix;", self.html)
@@ -868,6 +870,8 @@ class TestLayoutRefresh(unittest.TestCase):
             archive_html = f.read()
         self.assertIn("../assets/report-v2.css", archive_html)
         self.assertIn("../assets/report-v2.js", archive_html)
+        self.assertRegex(archive_html, r"\.\./assets/report-v2\.css\?v=[0-9a-f]{12}")
+        self.assertRegex(archive_html, r"\.\./assets/report-v2\.js\?v=[0-9a-f]{12}")
 
 
 class TestNextDayBoomRendering(unittest.TestCase):
