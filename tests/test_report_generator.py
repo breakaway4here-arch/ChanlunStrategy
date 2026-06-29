@@ -224,6 +224,16 @@ class TestAccessControl(unittest.TestCase):
     def test_resolve_granted_in_html(self):
         """HTML contains async resolveGranted function."""
         self.assertIn("function resolveGranted", self.html)
+        self.assertIn("function getQueryParam", self.html)
+        self.assertNotIn("new URLSearchParams(window.location.search);\n    var key", self.html)
+
+    def test_public_latest_inline_fallback_in_html(self):
+        """Public latest page can fall back to embedded data if JSON fetch fails."""
+        self.assertIn("function fetchJsonWithTimeout", self.html)
+        self.assertIn("function renderInlineReportFallback", self.html)
+        self.assertIn("if (renderInlineReportFallback()) return;", self.html)
+        self.assertIn("if (!GRANTED && DATA_BASE_PREFIX !== '') return false;", self.html)
+        self.assertIn("HISTORY_DATA = filterHistoryData(buildSingleDayHistory(INLINE_REPORT_DATA, PAGE_DATE), [PAGE_DATE]);", self.html)
 
     def test_get_visible_dates_in_html(self):
         """HTML contains the latest-date visibility helper instead of allowlists."""
@@ -685,8 +695,8 @@ class TestLayoutRefresh(unittest.TestCase):
     def test_archive_pages_use_resolved_data_base_prefix(self):
         self.assertIn("function getDataBasePrefix()", self.html)
         self.assertIn("var DATA_BASE_PREFIX = getDataBasePrefix();", self.html)
-        self.assertIn("fetch(DATA_BASE_PREFIX + 'data.json')", self.html)
-        self.assertIn("fetch(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json')", self.html)
+        self.assertIn("fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data.json')", self.html)
+        self.assertIn("fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json')", self.html)
 
 
 class TestNextDayBoomRendering(unittest.TestCase):

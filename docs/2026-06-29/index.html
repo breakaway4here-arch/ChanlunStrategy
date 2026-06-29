@@ -1330,8 +1330,7 @@ async function sha256Hex(text) {
 
 async function resolveGranted() {
     if (!ACCESS_CONTROL_ENABLED) return true;
-    var params = new URLSearchParams(window.location.search);
-    var key = params.get('key') || '';
+    var key = getQueryParam('key') || '';
     if (!key) return false;
     try {
         var hash = await sha256Hex(key + ACCESS_KEY_SALT);
@@ -1339,6 +1338,27 @@ async function resolveGranted() {
     } catch(e) {
         return false;
     }
+}
+
+function getQueryParam(name) {
+    try {
+        if (typeof URLSearchParams !== 'undefined') {
+            var params = new URLSearchParams(window.location.search);
+            return params.get(name) || '';
+        }
+    } catch(e) {}
+
+    var query = (window.location.search || '').replace(/^\?/, '');
+    if (!query) return '';
+    var pairs = query.split('&');
+    for (var i = 0; i < pairs.length; i++) {
+        var parts = pairs[i].split('=');
+        var key = decodeURIComponent((parts[0] || '').replace(/\+/g, ' '));
+        if (key === name) {
+            return decodeURIComponent((parts.slice(1).join('=') || '').replace(/\+/g, ' '));
+        }
+    }
+    return '';
 }
 
 function isTradingDay(dateStr) {
@@ -1389,6 +1409,27 @@ function filterHistoryData(historyData, visibleDates) {
         }
     });
     return filtered;
+}
+
+function buildSingleDayHistory(day, dateStr) {
+    var reports = {};
+    reports[dateStr] = {
+        market: day.market || {},
+        chanlun_structure: day.chanlun_structure || {},
+        picks_pure: day.picks_pure || [],
+        picks_fusion: day.picks_fusion || [],
+        sector_flow: day.sector_flow || [],
+        sector_outflow: day.sector_outflow || [],
+        limit_up_pool: day.limit_up_pool || [],
+        events: day.events || [],
+        forecast: day.forecast || {},
+        sell_signals: day.sell_signals || [],
+        diagnostics: day.diagnostics || {},
+        startup_watchlist: day.startup_watchlist || [],
+        next_day_boom: day.next_day_boom || {},
+        luojie_pool: day.luojie_pool || {},
+    };
+    return { dates: [dateStr], reports: reports };
 }
 
 // ========== 数据加载 ==========
@@ -32210,6 +32251,39 @@ function getDataBasePrefix() {
     return /\/\d{4}-\d{2}-\d{2}$/.test(path) ? '../' : '';
 }
 
+function fetchJsonWithTimeout(url, timeoutMs) {
+    timeoutMs = timeoutMs || 8000;
+    if (typeof AbortController === 'undefined') {
+        return fetch(url).then(function(resp) {
+            if (!resp.ok) throw new Error('Failed to load ' + url);
+            return resp.json();
+        });
+    }
+
+    var controller = new AbortController();
+    var timer = setTimeout(function() { controller.abort(); }, timeoutMs);
+    return fetch(url, { signal: controller.signal }).then(function(resp) {
+        clearTimeout(timer);
+        if (!resp.ok) throw new Error('Failed to load ' + url);
+        return resp.json();
+    }, function(err) {
+        clearTimeout(timer);
+        throw err;
+    });
+}
+
+function renderInlineReportFallback() {
+    if (!INLINE_REPORT_DATA || INLINE_REPORT_DATA.date !== PAGE_DATE) return false;
+    if (!GRANTED && DATA_BASE_PREFIX !== '') return false;
+    REPORT_DATA = INLINE_REPORT_DATA;
+    REPORT_DATA.date = PAGE_DATE;
+    updateHeaderDate(PAGE_DATE);
+    HISTORY_DATA = filterHistoryData(buildSingleDayHistory(INLINE_REPORT_DATA, PAGE_DATE), [PAGE_DATE]);
+    renderAll();
+    renderHistoryTabs();
+    return true;
+}
+
 async function init() {
     // 全局 resize：遍历所有已渲染图表
     window.addEventListener('resize', function() {
@@ -32219,34 +32293,16 @@ async function init() {
         });
     });
 
-    GRANTED = await resolveGranted();
+    try {
+        GRANTED = await resolveGranted();
+    } catch(e) {
+        console.error(e);
+        GRANTED = false;
+    }
 
     if (window.location.protocol === 'file:') {
         REPORT_DATA = INLINE_REPORT_DATA;
-        HISTORY_DATA = {
-            dates: [PAGE_DATE],
-            reports: (function() {
-                var day = INLINE_REPORT_DATA;
-                var reports = {};
-                reports[PAGE_DATE] = {
-                    market: day.market || {},
-                    chanlun_structure: day.chanlun_structure || {},
-                    picks_pure: day.picks_pure || [],
-                    picks_fusion: day.picks_fusion || [],
-                    sector_flow: day.sector_flow || [],
-                    sector_outflow: day.sector_outflow || [],
-                    limit_up_pool: day.limit_up_pool || [],
-                    events: day.events || [],
-                    forecast: day.forecast || {},
-                    sell_signals: day.sell_signals || [],
-                    diagnostics: day.diagnostics || {},
-                    startup_watchlist: day.startup_watchlist || [],
-                    next_day_boom: day.next_day_boom || {},
-                    luojie_pool: day.luojie_pool || {},
-                };
-                return reports;
-            })()
-        };
+        HISTORY_DATA = buildSingleDayHistory(INLINE_REPORT_DATA, PAGE_DATE);
         updateHeaderDate(PAGE_DATE);
         renderAll();
         renderHistoryTabs();
@@ -32255,9 +32311,7 @@ async function init() {
 
     try {
         // 加载 data.json 获取所有可用日期
-        var manifestResp = await fetch(DATA_BASE_PREFIX + 'data.json');
-        if (!manifestResp.ok) throw new Error('Failed to load data.json');
-        var manifest = await manifestResp.json();
+        var manifest = await fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data.json');
         var allDates = manifest.dates || [];
         var visibleDates = getVisibleDates(allDates, GRANTED);
         var resolvedDate = resolveInitialDate(PAGE_DATE, allDates, GRANTED);
@@ -32268,9 +32322,7 @@ async function init() {
         }
 
         // 加载实际日期的数据
-        var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json');
-        if (!dataResp.ok) throw new Error('Failed to load data for ' + resolvedDate);
-        REPORT_DATA = await dataResp.json();
+        REPORT_DATA = await fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json');
         REPORT_DATA.date = resolvedDate;
         updateHeaderDate(resolvedDate);
 
@@ -32284,20 +32336,18 @@ async function init() {
         if (GRANTED) {
             // 最终 fallback：仅授权访问时允许回退到归档页自身数据
             try {
-                var dataResp = await fetch(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
-                if (dataResp.ok) {
-                    REPORT_DATA = await dataResp.json();
-                    REPORT_DATA.date = PAGE_DATE;
-                    updateHeaderDate(PAGE_DATE);
-                    HISTORY_DATA = filterHistoryData({ dates: [PAGE_DATE], reports: {} }, [PAGE_DATE]);
-                    renderAll();
-                    renderHistoryTabs();
-                    return;
-                }
+                REPORT_DATA = await fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data/' + PAGE_DATE + '.json');
+                REPORT_DATA.date = PAGE_DATE;
+                updateHeaderDate(PAGE_DATE);
+                HISTORY_DATA = filterHistoryData(buildSingleDayHistory(REPORT_DATA, PAGE_DATE), [PAGE_DATE]);
+                renderAll();
+                renderHistoryTabs();
+                return;
             } catch(e2) {
                 console.error(e2);
             }
         }
+        if (renderInlineReportFallback()) return;
         renderNoPublicData();
     }
 }
