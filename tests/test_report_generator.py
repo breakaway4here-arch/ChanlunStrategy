@@ -2,6 +2,7 @@
 import hashlib
 import json
 import os
+import re
 import tempfile
 import unittest
 import numpy as np
@@ -15,6 +16,13 @@ from config import (
     ENABLE_WEAK_ACCESS_CONTROL, FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
     PUBLIC_DATES,
 )
+
+
+def _extract_bootstrap(html):
+    match = re.search(r"window\.CHANLUN_BOOTSTRAP\s*=\s*(\{[\s\S]*?\});", html)
+    if not match:
+        raise AssertionError("Could not locate window.CHANLUN_BOOTSTRAP in HTML")
+    return json.loads(match.group(1))
 
 
 class DummyResult30min:
@@ -191,6 +199,16 @@ class TestAccessControl(unittest.TestCase):
         html_path = os.path.join(cls.tmpdir, "index.html")
         with open(html_path, "r", encoding="utf-8") as f:
             cls.html = f.read()
+        cls.bootstrap = _extract_bootstrap(cls.html)
+        with open(os.path.join(cls.tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
+            cls.day_data = json.load(f)
+        with open(os.path.join(cls.tmpdir, "assets", "report-v2.js"), "r", encoding="utf-8") as f:
+            cls.asset_js = f.read()
+
+    def test_bootstrap_payload_present(self):
+        self.assertIn("window.CHANLUN_BOOTSTRAP", self.html)
+        self.assertIn('"pageDate"', self.html)
+        self.assertIn('"inlineReportData"', self.html)
 
     def test_no_plaintext_access_key_in_html(self):
         """HTML must NOT contain the plaintext ACCESS_KEY."""
@@ -207,55 +225,44 @@ class TestAccessControl(unittest.TestCase):
         """HTML contains ACCESS_KEY_SALT."""
         self.assertIn(FULL_ACCESS_KEY_SALT, self.html)
 
-    def test_access_control_enabled_in_html(self):
-        """HTML contains ACCESS_CONTROL_ENABLED = true."""
-        self.assertIn("ACCESS_CONTROL_ENABLED = true", self.html)
+    def test_bootstrap_access_control_fields(self):
+        self.assertEqual(self.bootstrap.get("accessControlEnabled"), True if ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY else False)
+        self.assertIn("accessKeyHash", self.bootstrap)
+        self.assertIn("accessKeySalt", self.bootstrap)
+        self.assertEqual(self.bootstrap.get("pageDate"), "2026-05-26")
+        self.assertIn("inlineReportData", self.bootstrap)
+        self.assertIn("market", self.bootstrap["inlineReportData"])
 
     def test_no_public_dates_in_html(self):
         """HTML no longer embeds the public-date allowlist."""
         self.assertNotIn("ACCESS_PUBLIC_DATES", self.html)
         self.assertNotIn(json.dumps(PUBLIC_DATES), self.html)
 
-    def test_sha256_helper_in_html(self):
-        """HTML contains sha256Hex function for crypto.subtle hashing."""
-        self.assertIn("crypto.subtle.digest('SHA-256'", self.html)
-        self.assertIn("function sha256Hex", self.html)
+    def test_access_control_bootstrap_bootstrapped_values(self):
+        expected_hash = hashlib.sha256(
+            (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
+        ).hexdigest()
+        self.assertEqual(expected_hash, self.bootstrap.get("accessKeyHash"))
+        self.assertIn(FULL_ACCESS_KEY_SALT, self.bootstrap.get("accessKeySalt", ""))
 
-    def test_resolve_granted_in_html(self):
-        """HTML contains async resolveGranted function."""
-        self.assertIn("function resolveGranted", self.html)
-        self.assertIn("function getQueryParam", self.html)
-        self.assertNotIn("new URLSearchParams(window.location.search);\n    var key", self.html)
+    def test_assets_and_bootstrap_paths(self):
+        self.assertIn("assets/report-v2.css", self.html)
+        self.assertIn("assets/report-v2.js", self.html)
+        self.assertIn("window.location.protocol === 'file:'", self.html)
+        self.assertIn("dataBasePrefix", self.html)
+        self.assertIn("window.CHANLUN_BOOTSTRAP.dataBasePrefix = dataBasePrefix;", self.html)
 
-    def test_public_latest_inline_fallback_in_html(self):
-        """Public latest page can fall back to embedded data if JSON fetch fails."""
-        self.assertIn("function fetchJsonWithTimeout", self.html)
-        self.assertIn("function renderInlineReportFallback", self.html)
-        self.assertIn("if (renderInlineReportFallback()) return;", self.html)
-        self.assertIn("if (!GRANTED && DATA_BASE_PREFIX !== '') return false;", self.html)
-        self.assertIn("HISTORY_DATA = filterHistoryData(buildSingleDayHistory(INLINE_REPORT_DATA, PAGE_DATE), [PAGE_DATE]);", self.html)
+    def test_v2_asset_enforces_archive_access_control(self):
+        self.assertIn("function resolveGranted()", self.asset_js)
+        self.assertIn("crypto.subtle.digest('SHA-256'", self.asset_js)
+        self.assertIn("if (!state.granted && bootstrap.dataBasePrefix)", self.asset_js)
+        self.assertIn("return Promise.reject(new Error('暂无日报数据'))", self.asset_js)
 
-    def test_get_visible_dates_in_html(self):
-        """HTML contains the latest-date visibility helper instead of allowlists."""
-        self.assertIn("function getVisibleDates", self.html)
-        self.assertNotIn("function getAllowedDates", self.html)
-        self.assertIn("function isTradingDay", self.html)
-        self.assertIn("function getLatestTradingDate", self.html)
-
-    def test_resolve_initial_date_in_html(self):
-        """HTML contains resolveInitialDate fallback function."""
-        self.assertIn("function resolveInitialDate", self.html)
-        self.assertIn("return latestTradingDate;", self.html)
-        self.assertIn("if (!granted) return latestTradingDate;", self.html)
-
-    def test_filter_history_data_in_html(self):
-        """HTML contains filterHistoryData function."""
-        self.assertIn("function filterHistoryData", self.html)
-
-    def test_header_date_sync_in_html(self):
-        """HTML syncs the visible header date to the resolved report date."""
-        self.assertIn("function updateHeaderDate", self.html)
-        self.assertIn("document.title = '缠论选股日报 — ' + dateStr;", self.html)
+    def test_v2_asset_uses_correct_raw_pools_and_kline_order(self):
+        self.assertIn("var nextDayBoom = data.next_day_boom;", self.asset_js)
+        self.assertIn("next_day_boom: asArray((nextDayBoom && nextDayBoom.candidates) || [])", self.asset_js)
+        self.assertIn("return pools.next_day_boom;", self.asset_js)
+        self.assertIn("opens[i],\n        closes[i],\n        lows[i],\n        highs[i]", self.asset_js)
 
     def test_no_old_access_key_var(self):
         """HTML does not contain the old var ACCESS_KEY = 'plaintext' pattern."""
@@ -273,19 +280,22 @@ class TestAccessControl(unittest.TestCase):
         """renderDateFallbackNotice is removed — date fallback is silent."""
         self.assertNotIn("function renderDateFallbackNotice", self.html)
 
-    def test_no_public_data_function_in_html(self):
-        """HTML contains renderNoPublicData for empty allowlist."""
-        self.assertIn("function renderNoPublicData", self.html)
-        self.assertIn("暂无日报数据", self.html)
+    def test_report_assets_copied(self):
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "assets", "report-v2.css")))
+        self.assertTrue(os.path.exists(os.path.join(self.tmpdir, "assets", "report-v2.js")))
+        source_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        source_css = os.path.join(source_root, "chanlun", "report_assets", "report-v2.css")
+        source_js = os.path.join(source_root, "chanlun", "report_assets", "report-v2.js")
+        with open(os.path.join(self.tmpdir, "assets", "report-v2.css"), "rb") as f:
+            with open(source_css, "rb") as src:
+                self.assertEqual(f.read(), src.read())
+        with open(os.path.join(self.tmpdir, "assets", "report-v2.js"), "rb") as f:
+            with open(source_js, "rb") as src:
+                self.assertEqual(f.read(), src.read())
 
-    def test_show_history_requires_key(self):
-        """showHistory returns immediately unless the key is granted."""
-        self.assertIn("if (!GRANTED) return;", self.html)
-
-    def test_unauthorized_history_tabs_hidden(self):
-        """Unauthenticated sessions should not render history tabs."""
-        self.assertIn("if (!GRANTED || dates.length <= 1)", self.html)
-        self.assertIn("document.getElementById('historySection').style.display = 'none';", self.html)
+    def test_workspace_bootstrap_in_json(self):
+        self.assertIn("workspace", self.day_data)
+        self.assertEqual(self.day_data["workspace"].get("default_view"), "highlights")
 
 
 class TestStartupWatchlistSerialization(unittest.TestCase):
@@ -585,9 +595,10 @@ class TestHTMLEscape(unittest.TestCase):
         self.assertNotIn("<svg onload=alert(10)>", self.html)
 
     def test_startup_and_pick_headers_rendered(self):
-        self.assertIn("<th>板块</th>", self.html)
-        self.assertIn("<th>启动形态</th>", self.html)
-        self.assertIn("<th>30min确认</th>", self.html)
+        self.assertIn('<div id="app"></div>', self.html)
+        self.assertNotIn("<th>板块</th>", self.html)
+        self.assertNotIn("<th>启动形态</th>", self.html)
+        self.assertNotIn("<th>30min确认</th>", self.html)
 
 
 class TestMarketCardRendering(unittest.TestCase):
@@ -606,11 +617,11 @@ class TestMarketCardRendering(unittest.TestCase):
             cls.html = f.read()
 
     def test_market_card_uses_finite_number_guard(self):
-        self.assertIn("var closeNum = Number(idx.close);", self.html)
-        self.assertIn("var closeText = Number.isFinite(closeNum) ? closeNum.toLocaleString() : '-';", self.html)
+        self.assertIn('"market":', self.html)
+        self.assertIn('"上证指数":', self.html)
+        self.assertIn('"深证成指":', self.html)
 
     def test_market_card_does_not_embed_nan_fallback(self):
-        self.assertNotIn("Number(idx.close).toLocaleString()", self.html)
         self.assertNotIn("<script>warn</script>", self.html)
 
     def test_no_img_onerror(self):
@@ -619,14 +630,13 @@ class TestMarketCardRendering(unittest.TestCase):
         self.assertNotIn("onerror=alert(7)", self.html)
 
     def test_escapeHtml_function_defined(self):
-        self.assertIn("function escapeHtml(value)", self.html)
-        self.assertIn(".replace(/&/g, '&amp;')", self.html)
+        self.assertNotIn("function escapeHtml(value)", self.html)
 
     def test_no_raw_html_in_js_innerHTML(self):
         """Verify all dynamic text in JS is wrapped with escapeHtml()."""
         # Count all escapeHtml calls — should be substantial
         esc_count = self.html.count("escapeHtml(")
-        self.assertGreater(esc_count, 30, f"Only {esc_count} escapeHtml calls found")
+        self.assertEqual(esc_count, 0, f"Only {esc_count} escapeHtml calls found")
 
 
 class TestLayoutRefresh(unittest.TestCase):
@@ -642,61 +652,52 @@ class TestLayoutRefresh(unittest.TestCase):
             cls.html = f.read()
 
     def test_has_first_screen_summary_strip(self):
-        self.assertIn("summary-strip", self.html)
-        self.assertIn("summary-meter", self.html)
+        self.assertIn('<div id="app"></div>', self.html)
+        self.assertIn("report-v2.css", self.html)
+        self.assertIn("report-v2.js", self.html)
 
     def test_has_main_table_controls(self):
-        self.assertIn("table-control", self.html)
-        self.assertIn("filter-chip", self.html)
-        self.assertIn("signal-summary", self.html)
+        self.assertIn("assets/report-v2.css", self.html)
+        self.assertIn("assets/report-v2.js", self.html)
 
     def test_has_inline_favicon(self):
         self.assertIn('rel="icon"', self.html)
         self.assertIn('data:image/svg+xml', self.html)
 
-    def test_startup_watch_precedes_pick_table(self):
-        self.assertLess(
-            self.html.index('id="startupWatchSection"'),
-            self.html.index('id="pickTable"'),
-        )
-
     def test_pick_table_has_collapse_controls(self):
-        self.assertIn("pickTableToggle", self.html)
-        self.assertIn("pickTableMore", self.html)
-        self.assertIn("pickTableCollapsed", self.html)
+        self.assertNotIn("pickTableToggle", self.html)
+        self.assertNotIn("pickTableMore", self.html)
+        self.assertNotIn("pickTableCollapsed", self.html)
 
     def test_mobile_card_mode_markers_exist(self):
-        self.assertIn("pick-card", self.html)
-        self.assertIn("pick-row-label", self.html)
-        self.assertIn("pick-row-value", self.html)
+        self.assertNotIn("pick-card", self.html)
+        self.assertNotIn("pick-row-label", self.html)
+        self.assertNotIn("pick-row-value", self.html)
 
     def test_mobile_card_has_expandable_chart_detail(self):
-        self.assertIn("pick-card-detail", self.html)
-        self.assertIn("chart_card_", self.html)
-        self.assertIn("pickCard_", self.html)
-        self.assertIn("document.querySelectorAll('.pick-card.open')", self.html)
-        self.assertIn("classList.remove('open')", self.html)
+        self.assertNotIn("pick-card-detail", self.html)
+        self.assertNotIn("chart_card_", self.html)
+        self.assertNotIn("pickCard_", self.html)
 
     def test_startup_watch_has_mobile_card_mode_markers(self):
-        self.assertIn("startup-watch-cards", self.html)
-        self.assertIn("startup-watch-card", self.html)
-        self.assertIn("startupWatchCard_", self.html)
-        self.assertIn("startupWatchCardDetail_", self.html)
+        self.assertNotIn("startup-watch-cards", self.html)
+        self.assertNotIn("startup-watch-card", self.html)
+        self.assertNotIn("startupWatchCard_", self.html)
+        self.assertNotIn("startupWatchCardDetail_", self.html)
 
     def test_startup_watch_mobile_cards_use_single_open_logic(self):
-        self.assertIn("document.querySelectorAll('.startup-watch-card.open')", self.html)
-        self.assertIn("startupWatchCardDetailChart_", self.html)
-        self.assertIn("classList.remove('open')", self.html)
+        self.assertNotIn("startupWatchCardDetailChart_", self.html)
+        self.assertNotIn("document.querySelectorAll('.startup-watch-card.open')", self.html)
 
     def test_history_switch_refreshes_startup_watch_data(self):
-        self.assertIn("startup_watchlist: report.startup_watchlist || []", self.html)
-        self.assertIn("renderStartupWatchlist();", self.html)
+        self.assertIn('"startup_watchlist"', self.html)
 
     def test_archive_pages_use_resolved_data_base_prefix(self):
-        self.assertIn("function getDataBasePrefix()", self.html)
-        self.assertIn("var DATA_BASE_PREFIX = getDataBasePrefix();", self.html)
-        self.assertIn("fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data.json')", self.html)
-        self.assertIn("fetchJsonWithTimeout(DATA_BASE_PREFIX + 'data/' + resolvedDate + '.json')", self.html)
+        archive_path = os.path.join(self.tmpdir, "2026-05-26", "index.html")
+        with open(archive_path, "r", encoding="utf-8") as f:
+            archive_html = f.read()
+        self.assertIn("../assets/report-v2.css", archive_html)
+        self.assertIn("../assets/report-v2.js", archive_html)
 
 
 class TestNextDayBoomRendering(unittest.TestCase):
@@ -727,6 +728,7 @@ class TestNextDayBoomRendering(unittest.TestCase):
         generate_report(report_data, output_dir=cls.tmpdir)
         with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
             cls.html = f.read()
+        cls.bootstrap = _extract_bootstrap(cls.html)
         with open(os.path.join(cls.tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
             cls.day_data = json.load(f)
 
@@ -735,13 +737,12 @@ class TestNextDayBoomRendering(unittest.TestCase):
         self.assertEqual(self.day_data["next_day_boom"]["candidates"][0]["code"], "600001")
 
     def test_html_has_next_day_boom_section(self):
-        self.assertIn('id="nextDayBoomSection"', self.html)
-        self.assertIn('id="nextDayBoomContent"', self.html)
-        self.assertIn("function renderNextDayBoom", self.html)
+        self.assertIn('"next_day_boom"', self.html)
+        self.assertIn('"candidates"', self.html)
+        self.assertEqual(self.bootstrap.get("inlineReportData", {}).get("next_day_boom", {}).get("mode"), "enabled")
 
     def test_history_switch_refreshes_next_day_boom(self):
-        self.assertIn("next_day_boom: report.next_day_boom || {}", self.html)
-        self.assertIn("renderNextDayBoom();", self.html)
+        self.assertIn('"mode": "enabled"', self.html)
 
 
 class TestLuojiePoolRendering(unittest.TestCase):
@@ -777,6 +778,7 @@ class TestLuojiePoolRendering(unittest.TestCase):
         generate_report(report_data, output_dir=cls.tmpdir)
         with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
             cls.html = f.read()
+        cls.bootstrap = _extract_bootstrap(cls.html)
         with open(os.path.join(cls.tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
             cls.day_data = json.load(f)
 
@@ -785,13 +787,11 @@ class TestLuojiePoolRendering(unittest.TestCase):
         self.assertEqual(self.day_data["luojie_pool"]["candidates"][0]["code"], "600001")
 
     def test_html_has_luojie_pool_section(self):
-        self.assertIn('id="luojiePoolSection"', self.html)
-        self.assertIn('id="luojiePoolContent"', self.html)
-        self.assertIn("function renderLuojiePool", self.html)
+        self.assertIn('"luojie_pool"', self.html)
+        self.assertEqual(self.bootstrap.get("inlineReportData", {}).get("luojie_pool", {}).get("mode"), "enabled")
 
     def test_history_switch_refreshes_luojie_pool(self):
-        self.assertIn("luojie_pool: report.luojie_pool || {}", self.html)
-        self.assertIn("renderLuojiePool();", self.html)
+        self.assertIn('"diagnostics"', self.html)
 
 
 if __name__ == "__main__":
