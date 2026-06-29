@@ -34,6 +34,7 @@ from .kline_cache import (
     write_cached_records,
     merge_kline_records,
     kline_dict_to_records,
+    records_to_kline_dict,
     CACHE_STATS,
 )
 
@@ -64,6 +65,8 @@ _EASTMONEY_BASE_URLS = [
 ]
 _EASTMONEY_TIMEOUT = 15
 _INDEX_SOURCE_MAX_DIFF_PCT = 0.3
+_INDEX_PREV_CLOSE_MAX_DIFF_RATIO = 0.0002
+_INDEX_PREV_CLOSE_MAX_DIFF_ABS = 0.05
 
 
 class MarketDataUnavailable(RuntimeError):
@@ -323,6 +326,23 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
         return None
 
 
+def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
+    """Fetch unadjusted daily kline from Tencent. Indexes do not need qfq."""
+    tc = _tencent_code(code)
+    url = f"https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param={tc},day,,,{count}"
+    try:
+        resp = SESSION.get(url, timeout=15)
+        data = resp.json()
+        stock_data = data.get("data", {}).get(tc, {})
+        klines = stock_data.get("day", [])
+        if not klines:
+            return None
+        return _parse_tencent_kline(klines[-count:])
+    except Exception as e:
+        print(f"[ERROR] 腾讯非复权日线失败 {code}: {e}")
+        return None
+
+
 def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
     """获取日线K线。东方财富历史K线 API。"""
     params = {
@@ -354,6 +374,41 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
         return _parse_tencent_kline(raw_lines)
     except Exception as e:
         print(f"[ERROR] 东方财富日线失败 {code}: {e}")
+        return None
+
+
+def _fetch_daily_kline_sina_daily_remote(code, count=DAY_LOOKBACK):
+    """Fetch daily kline from Sina daily endpoint."""
+    sc = _sina_code(code)
+    url = (
+        "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
+        f"CN_MarketData.getKLineData?symbol={sc}&scale=240&datalen={count}"
+    )
+    try:
+        resp = SESSION.get(
+            url,
+            timeout=15,
+            headers={
+                "Referer": "https://finance.sina.com.cn",
+                "User-Agent": SESSION.headers.get("User-Agent", "Mozilla/5.0"),
+            },
+        )
+        klines = resp.json()
+        raw_lines = []
+        for item in klines or []:
+            raw_lines.append([
+                item["day"],
+                item["open"],
+                item["close"],
+                item["high"],
+                item["low"],
+                item["volume"],
+            ])
+        if not raw_lines:
+            return None
+        return _parse_tencent_kline(raw_lines[-count:])
+    except Exception as e:
+        print(f"[ERROR] 新浪日线失败 {code}: {e}")
         return None
 
 
@@ -415,6 +470,52 @@ def _latest_change_pct(kline):
     return (curr - prev) / prev * 100
 
 
+def _close_matches(expected, actual):
+    expected = float(expected)
+    actual = float(actual)
+    tolerance = max(_INDEX_PREV_CLOSE_MAX_DIFF_ABS, abs(expected) * _INDEX_PREV_CLOSE_MAX_DIFF_RATIO)
+    return abs(expected - actual) <= tolerance
+
+
+def _cached_index_kline(code, count):
+    records = sorted(read_cached_records("day", code), key=lambda r: r["date"])
+    if len(records) < max(2, min(20, count)):
+        return None
+    return records_to_kline_dict(records[-count:])
+
+
+def _splice_realtime_index_bar(history, quote, count, source, required_date=None):
+    if not history or not quote:
+        return None
+    if len(history.get("closes", [])) < max(2, min(20, count) - 1):
+        return None
+    if len(quote.get("closes", [])) < 2:
+        return None
+
+    quote_date = _latest_date(quote)
+    if required_date and quote_date != required_date:
+        return None
+
+    history_close = float(history["closes"][-1])
+    quote_prev_close = float(quote["closes"][-2])
+    if not _close_matches(history_close, quote_prev_close):
+        return None
+
+    history_records = kline_dict_to_records(history)
+    today_record = {
+        "date": quote_date,
+        "open": float(quote["opens"][-1]),
+        "high": float(quote["highs"][-1]),
+        "low": float(quote["lows"][-1]),
+        "close": float(quote["closes"][-1]),
+        "volume": float(quote["volumes"][-1]),
+    }
+    merged = merge_kline_records(history_records, [today_record])
+    result = records_to_kline_dict(merged[-count:])
+    result["source"] = source
+    return result
+
+
 def _validate_index_kline(code, source, kline, required_date=None, min_bars=2):
     if not kline or len(kline.get("closes", [])) < min_bars:
         raise MarketDataUnavailable(f"{source} {code} 无有效指数K线")
@@ -432,13 +533,19 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
     min_bars = 2 if count <= 3 else min(20, count)
     sources = [
         ("tencent", _fetch_daily_kline_remote),
+        ("tencent_plain", _fetch_daily_kline_tencent_plain_remote),
         ("eastmoney", _fetch_daily_kline_eastmoney_remote),
-        ("sina_quote", _fetch_daily_kline_sina_quote_remote),
+        ("sina_daily", _fetch_daily_kline_sina_daily_remote),
     ]
+    if count <= 3:
+        sources.append(("sina_quote", _fetch_daily_kline_sina_quote_remote))
+
     valid = []
     errors = []
+    fetched = {}
     for source, fetcher in sources:
         kline = fetcher(code, count=count)
+        fetched[source] = kline
         try:
             chg = _validate_index_kline(
                 code, source, kline, required_date=required_date, min_bars=min_bars
@@ -447,6 +554,25 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
             errors.append(str(e))
             continue
         valid.append((source, kline, chg))
+
+    if count > 3 and required_date:
+        quote = _fetch_daily_kline_sina_quote_remote(code, count=2)
+        splice_sources = [
+            ("sina_daily+sina_quote", fetched.get("sina_daily")),
+            ("cache+sina_quote", _cached_index_kline(code, count)),
+        ]
+        for source, history in splice_sources:
+            kline = _splice_realtime_index_bar(
+                history, quote, count=count, source=source, required_date=required_date
+            )
+            try:
+                chg = _validate_index_kline(
+                    code, source, kline, required_date=required_date, min_bars=min_bars
+                )
+            except MarketDataUnavailable as e:
+                errors.append(str(e))
+                continue
+            valid.append((source, kline, chg))
 
     if not valid:
         raise MarketDataUnavailable(f"{code} 指数多源取数失败: {'; '.join(errors)}")

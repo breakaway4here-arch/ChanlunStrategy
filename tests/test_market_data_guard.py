@@ -24,7 +24,9 @@ class TestMarketDataGuard(unittest.TestCase):
 
     def test_market_indices_raise_when_no_source_has_valid_today_data(self):
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=None):
             with self.assertRaises(data_fetcher.MarketDataUnavailable):
                 run.fetch_market_indices(report_date="2026-06-26")
@@ -45,7 +47,9 @@ class TestMarketDataGuard(unittest.TestCase):
     def test_market_indices_reject_stale_index_data(self):
         stale = _kline(["2026-06-24", "2026-06-25"], [4100, 4120])
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=stale), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=stale), \
              patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=stale), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=stale), \
              patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=stale):
             with self.assertRaises(data_fetcher.MarketDataUnavailable):
                 run.fetch_market_indices(report_date="2026-06-26")
@@ -53,7 +57,9 @@ class TestMarketDataGuard(unittest.TestCase):
     def test_market_indices_use_second_source_when_first_source_fails(self):
         fresh = _kline(["2026-06-25", "2026-06-26"], [4120.28, 4027.26])
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=fresh), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=None):
             result = run.fetch_market_indices(
                 report_date="2026-06-26",
@@ -64,10 +70,53 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(result["上证指数"]["change_pct"], -2.26)
         self.assertEqual(result["上证指数"]["source"], "eastmoney")
 
+    def test_long_index_analysis_uses_tencent_plain_history_when_qfq_is_blocked(self):
+        history = _kline([f"2026-01-{i:02d}" for i in range(1, 21)] + ["2026-06-26"], list(range(1, 22)))
+        with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=history), \
+             patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=None):
+            result = data_fetcher.fetch_shanghai_index(required_date="2026-06-26")
+
+        self.assertEqual(result["source"], "tencent_plain")
+        self.assertEqual(result["dates"][-1], "2026-06-26")
+
+    def test_long_index_analysis_splices_sina_history_with_verified_realtime_bar(self):
+        history = _kline([f"2026-01-{i:02d}" for i in range(1, 20)] + ["2026-06-26"], list(range(1, 21)))
+        quote = _kline(["2026-06-29", "2026-06-29"], [20.0, 21.0])
+        with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=history), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=quote):
+            result = data_fetcher.fetch_shanghai_index(required_date="2026-06-29")
+
+        self.assertEqual(result["source"], "sina_daily+sina_quote")
+        self.assertEqual(result["dates"][-2:], ["2026-06-26", "2026-06-29"])
+        self.assertEqual(float(result["closes"][-2]), 20.0)
+        self.assertEqual(float(result["closes"][-1]), 21.0)
+
+    def test_long_index_analysis_rejects_cache_splice_when_quote_prev_close_mismatches(self):
+        stale_cache = [{"date": f"2026-01-{i:02d}", "open": 1, "high": 1, "low": 1, "close": i, "volume": 1}
+                       for i in range(1, 20)]
+        stale_cache.append({"date": "2026-06-24", "open": 1, "high": 1, "low": 1, "close": 99, "volume": 1})
+        quote = _kline(["2026-06-29", "2026-06-29"], [20.0, 21.0])
+        with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=quote), \
+             patch.object(data_fetcher, "read_cached_records", return_value=stale_cache):
+            with self.assertRaises(data_fetcher.MarketDataUnavailable):
+                data_fetcher.fetch_shanghai_index(required_date="2026-06-29")
+
     def test_long_index_analysis_rejects_quote_only_source(self):
         quote_only = _kline(["2026-06-26", "2026-06-26"], [4120.28, 4027.26])
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_eastmoney_remote", return_value=None), \
+             patch.object(data_fetcher, "_fetch_daily_kline_sina_daily_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=quote_only):
             with self.assertRaises(data_fetcher.MarketDataUnavailable):
                 data_fetcher.fetch_shanghai_index(required_date="2026-06-26")
