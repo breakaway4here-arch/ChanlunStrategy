@@ -239,6 +239,22 @@ def _best_buy_point_type_bucket(pick: Optional[dict]) -> str:
     return value or "unknown"
 
 
+def _sample_failed(sample: Optional[dict]) -> bool:
+    try:
+        value = sample.get("t3_close_pct")
+    except AttributeError:
+        return False
+    return value is not None and float(value) <= 0.0
+
+
+def _sample_severe_drawdown(sample: Optional[dict]) -> bool:
+    try:
+        value = sample.get("max_dd_3d")
+    except AttributeError:
+        return False
+    return value is not None and float(value) <= -5.0
+
+
 def _confirmations_bucket(pick: Optional[dict]) -> str:
     bbp = (pick or {}).get("best_buy_point")
     values = sorted(_as_str_list((bbp or {}).get("confirmations")))
@@ -654,6 +670,7 @@ def _summarize_fusion_variant(
     reject_reasons = Counter()
     tier_counts = Counter()
     horizon_counts = Counter()
+    accepted_audit_rows: List[dict] = []
     rejected_samples = 0
     for item in baseline_rows:
         pick = item.get("pick")
@@ -667,11 +684,68 @@ def _summarize_fusion_variant(
                 profile=variant_name,
             ) or "T+3"
             horizon_counts[horizon] += 1
+            accepted_audit_rows.append(
+                {
+                    "sample": item.get("baseline_sample"),
+                    "quality_tier": tier,
+                    "expected_horizon": horizon,
+                    "signal_type": _best_buy_point_type_bucket(pick),
+                    "market_env": _market_regime_bucket(pick),
+                },
+            )
             continue
 
         rejected_samples += 1
         for reason in _fusion_profile_reject_reasons(pick, variant_name):
             reject_reasons[reason] += 1
+
+    def _build_failure_sample_audit(rows: Sequence[dict]) -> dict:
+        total = len(rows)
+        failed_rows = [row for row in rows if _sample_failed(row.get("sample"))]
+        severe_rows = [row for row in rows if _sample_severe_drawdown(row.get("sample"))]
+
+        total_by_condition: Counter = Counter()
+        failed_by_condition: Counter = Counter()
+        for row in rows:
+            conditions = [
+                f"quality_tier:{row.get('quality_tier') or 'unknown'}",
+                f"expected_horizon:{row.get('expected_horizon') or 'unknown'}",
+                f"signal_type:{row.get('signal_type') or 'unknown'}",
+                f"market_env:{row.get('market_env') or 'unknown'}",
+            ]
+            for condition in conditions:
+                total_by_condition[condition] += 1
+                if _sample_failed(row.get("sample")):
+                    failed_by_condition[condition] += 1
+
+        overall_failure_rate = (
+            len(failed_rows) / total * 100.0
+        ) if total else 0.0
+        candidate_conditions = []
+        for condition, failed_count in sorted(failed_by_condition.items()):
+            condition_total = total_by_condition.get(condition, 0)
+            if condition_total <= 0:
+                continue
+            raw_failure_rate = failed_count / condition_total * 100.0
+            failure_rate = round(raw_failure_rate, 2)
+            if raw_failure_rate > overall_failure_rate:
+                candidate_conditions.append(
+                    {
+                        "condition": condition.replace(":", "="),
+                        "failed_samples": failed_count,
+                        "failure_rate_pct": failure_rate,
+                    },
+                )
+
+        return {
+            "samples": total,
+            "failed_samples": len(failed_rows),
+            "failure_rate_pct": _to_pct(len(failed_rows), total),
+            "severe_drawdown_samples": len(severe_rows),
+            "severe_drawdown_rate_pct": _to_pct(len(severe_rows), total),
+            "bucket_distribution": dict(sorted(failed_by_condition.items())),
+            "candidate_conditions": candidate_conditions,
+        }
 
     profile_summary = summarize_return_samples(profile_samples)
     samples_after = profile_summary.get("n") if profile_summary else 0
@@ -702,6 +776,7 @@ def _summarize_fusion_variant(
         "top_reject_reason": (
             reject_reasons.most_common(1)[0][0] if reject_reasons else None
         ),
+        "failure_sample_audit": _build_failure_sample_audit(accepted_audit_rows),
     }
     row["accepted"] = _is_fusion_profile_accepted(row)
     return row

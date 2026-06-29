@@ -1107,7 +1107,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
     ):
         iter_snapshot_mock.side_effect = lambda: iter(
             [
-                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=2.0, volatility=0.05, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=0, code="000001")),
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(best_type="强势启动候选", trend_strength=2.0, volatility=0.05, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=0, code="000001")),
                 ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.6, volatility=0.08, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=1, code="000002")),
                 ("2026-01-01", "picks_fusion", _make_fusion_pick(best_type="强势启动候选", trend_strength=1.0, volatility=0.08, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=2, code="000003", market_regime="weak")),
                 ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.0, volatility=0.11, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=3, code="000004")),
@@ -1209,6 +1209,38 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             rescue_profile["expected_horizon_distribution"],
             {"T+1": 1, "T+3": 1},
         )
+        rescue_audit = rescue_profile["failure_sample_audit"]
+        self.assertEqual(rescue_audit["samples"], 2)
+        self.assertEqual(rescue_audit["failed_samples"], 1)
+        self.assertEqual(rescue_audit["failure_rate_pct"], 50.0)
+        self.assertEqual(rescue_audit["bucket_distribution"]["quality_tier:A-"], 1)
+        self.assertEqual(rescue_audit["bucket_distribution"]["expected_horizon:T+1"], 1)
+        self.assertEqual(
+            rescue_audit["bucket_distribution"]["signal_type:强势启动候选"],
+            1,
+        )
+        self.assertEqual(rescue_audit["bucket_distribution"]["market_env:weak"], 1)
+        candidate_conditions = {
+            item["condition"]: item
+            for item in rescue_audit["candidate_conditions"]
+        }
+        self.assertEqual(
+            candidate_conditions["quality_tier=A-"]["failed_samples"],
+            1,
+        )
+        self.assertEqual(
+            candidate_conditions["quality_tier=A-"]["failure_rate_pct"],
+            100.0,
+        )
+        self.assertEqual(
+            candidate_conditions["expected_horizon=T+1"]["failed_samples"],
+            1,
+        )
+        self.assertEqual(
+            candidate_conditions["expected_horizon=T+1"]["failure_rate_pct"],
+            100.0,
+        )
+        self.assertNotIn("signal_type=强势启动候选", candidate_conditions)
         self.assertEqual(mid_profile["samples_after"], 2)
         self.assertEqual(mid_profile["rejected_samples"], 4)
         self.assertEqual(mid_profile["variant"], "fusion_mid_trend")
