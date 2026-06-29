@@ -757,6 +757,9 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_recent_reviews_show_real_review_fields(self):
         self.assertIn("buildReviewMeta(rec)", self.asset_js)
         self.assertIn("buildReviewDataLine(rec)", self.asset_js)
+        self.assertIn("asArray((data || {}).recent_reviews);", self.asset_js)
+        self.assertNotIn("recent_reviews).slice(0, 6)", self.asset_js)
+        self.assertIn('class="review-list"', self.asset_js)
         self.assertIn("'推荐日 ' + date", self.asset_js)
         self.assertIn("推荐 ' + formatNumber(refPrice, 2)", self.asset_js)
         self.assertIn("现价 ' + formatNumber(currentPrice, 2)", self.asset_js)

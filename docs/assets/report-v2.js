@@ -1438,7 +1438,7 @@
   }
 
   function renderRecentReviewsCard(data) {
-    var rows = asArray((data || {}).recent_reviews).slice(0, 6);
+    var rows = asArray((data || {}).recent_reviews);
     var body = rows.length ? rows.map(function (item) {
       var rec = item || {};
       var outcome = buildReviewOutcome(rec);
@@ -1455,6 +1455,9 @@
         + '  <strong class="review-outcome ' + outcome.tone + '">' + escapeHtml(outcome.text) + '</strong>'
         + '</div>';
     }).join('') : '<div class="decision-empty">暂无回看记录</div>';
+    if (rows.length) {
+      body = '<div class="review-list">' + body + '</div>';
+    }
     return renderDecisionCard({
       title: '策略回看',
       subtitle: '近期信号反馈',

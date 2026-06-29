@@ -1192,6 +1192,13 @@ body {
   gap: 10px;
 }
 
+.review-list {
+  max-height: 430px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
 .review-main,
 .review-detail,
 .diagnostics-details summary {
@@ -1543,6 +1550,10 @@ body {
 
   .review-detail {
     grid-column: 1 / -1;
+  }
+
+  .review-list {
+    max-height: 360px;
   }
 
   .diagnostics-details summary {
