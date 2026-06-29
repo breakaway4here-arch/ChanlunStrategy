@@ -274,13 +274,20 @@ class TestAccessControl(unittest.TestCase):
 
     def test_v2_asset_has_mobile_and_long_pool_interaction_guards(self):
         self.assertIn('class="candidate-list-shell"', self.asset_js)
+        self.assertIn('class="mobile-drawer-toolbar"', self.asset_js)
+        self.assertIn('class="mobile-drawer-floating-close"', self.asset_js)
         self.assertIn("nodes.drawerPanel.scrollTop = 0;", self.asset_js)
+        self.assertIn("function syncMobileDrawerViewport()", self.asset_js)
+        self.assertIn("window.visualViewport", self.asset_js)
         self.assertIn("图钉为买点/信号标记", self.asset_js)
         self.assertIn("@media (min-width: 1181px)", self.asset_css)
         self.assertIn(".candidate-list-shell", self.asset_css)
         self.assertIn("max-height: calc(100vh - 230px);", self.asset_css)
-        self.assertIn("position: sticky;", self.asset_css)
-        self.assertIn("top: max(10px, env(safe-area-inset-top));", self.asset_css)
+        self.assertIn(".mobile-drawer-toolbar", self.asset_css)
+        self.assertIn(".mobile-drawer-floating-close", self.asset_css)
+        self.assertIn("var(--mobile-drawer-bottom-offset, 16px)", self.asset_css)
+        self.assertIn("min-width: 76px;", self.asset_css)
+        self.assertIn("height: 42px;", self.asset_css)
 
     def test_no_old_access_key_var(self):
         """HTML does not contain the old var ACCESS_KEY = 'plaintext' pattern."""

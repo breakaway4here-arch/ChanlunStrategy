@@ -378,8 +378,11 @@
       + '  </section>'
       + '  <div class="mobile-drawer" id="mobileDrawer">'
       + '    <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop"></div>'
+      + '    <button class="mobile-drawer-floating-close" id="mobileDrawerClose">关闭</button>'
       + '    <div class="mobile-drawer-panel" id="mobileDrawerPanel">'
-      + '      <button class="mobile-drawer-close" id="mobileDrawerClose">关闭</button>'
+      + '      <div class="mobile-drawer-toolbar">'
+      + '        <span>股票详情</span>'
+      + '      </div>'
       + '      <div id="mobileDrawerContent"></div>'
       + '    </div>'
       + '  </div>'
@@ -1580,6 +1583,7 @@
       state.activeItem = item;
     }
     if (!state.activeItem) return;
+    syncMobileDrawerViewport();
     nodes.drawerContent.innerHTML = '';
     renderCandidateDetail(state.activeItem, nodes.drawerContent);
     nodes.drawer.classList.add('is-open');
@@ -1592,6 +1596,18 @@
         state.chartInstance.resize();
       }
     }, 40);
+  }
+
+  function syncMobileDrawerViewport() {
+    if (!state.isMobile) return;
+    var bottomOffset = 16;
+    if (window.visualViewport) {
+      bottomOffset = Math.max(
+        16,
+        window.innerHeight - window.visualViewport.height - window.visualViewport.offsetTop + 16
+      );
+    }
+    document.documentElement.style.setProperty('--mobile-drawer-bottom-offset', bottomOffset + 'px');
   }
 
   function closeMobileDetailDrawer() {
@@ -1758,10 +1774,15 @@
 
     window.addEventListener('resize', function () {
       syncViewport();
+      syncMobileDrawerViewport();
       if (state.chartInstance) {
         state.chartInstance.resize();
       }
     });
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', syncMobileDrawerViewport);
+      window.visualViewport.addEventListener('scroll', syncMobileDrawerViewport);
+    }
   }
 
   window.initReportV2 = initReportV2;
