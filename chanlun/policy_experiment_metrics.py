@@ -17,6 +17,7 @@ from chanlun.backtest_metrics import summarize_return_samples
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
 from chanlun.signal_quality_classifier import (
     build_signal_context,
+    calculate_signal_recommendation_score,
     classify_signal,
     classify_signal_tier,
     classify_signal_expected_horizon,
@@ -226,6 +227,29 @@ def _as_str_list(values) -> List[str]:
     if values is None:
         return []
     return [str(item) for item in values]
+
+
+def _score_bucket(score: Optional[float]) -> str:
+    if score is None:
+        return "unknown"
+    if score >= 85:
+        return "high"
+    if score >= 70:
+        return "medium"
+    return "low"
+
+
+def _build_score_summary(scores: Sequence[float]) -> dict:
+    values = [float(x) for x in scores if x is not None]
+    if not values:
+        return {"count": 0, "mean": None, "min": None, "max": None}
+
+    return {
+        "count": len(values),
+        "mean": round(sum(values) / len(values), 2),
+        "min": round(min(values), 2),
+        "max": round(max(values), 2),
+    }
 
 
 def _market_regime_bucket(pick: Optional[dict]) -> str:
@@ -670,6 +694,8 @@ def _summarize_fusion_variant(
     reject_reasons = Counter()
     tier_counts = Counter()
     horizon_counts = Counter()
+    score_bucket_counts = Counter()
+    score_values: List[float] = []
     accepted_audit_rows: List[dict] = []
     rejected_samples = 0
     for item in baseline_rows:
@@ -677,6 +703,10 @@ def _summarize_fusion_variant(
         if _is_fusion_profile_a(pick, variant_name):
             profile_samples.append(item["baseline_sample"])
             signal = _build_fusion_pick_signal(pick)
+            score = calculate_signal_recommendation_score(signal, profile=variant_name)
+            if score is not None:
+                score_values.append(score)
+                score_bucket_counts[_score_bucket(score)] += 1
             tier = classify_signal_tier(signal, profile=variant_name) or "A"
             tier_counts[tier] += 1
             horizon = classify_signal_expected_horizon(
@@ -771,6 +801,10 @@ def _summarize_fusion_variant(
         "n_after": samples_after,
         "quality_tier_distribution": dict(sorted(tier_counts.items())),
         "expected_horizon_distribution": dict(sorted(horizon_counts.items())),
+        "recommendation_score_summary": _build_score_summary(score_values),
+        "recommendation_score_bucket_distribution": dict(
+            sorted(score_bucket_counts.items()),
+        ),
         "rejected_samples": rejected_samples,
         "reject_reason_distribution": dict(sorted(reject_reasons.items())),
         "top_reject_reason": (

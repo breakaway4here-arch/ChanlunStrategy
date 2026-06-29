@@ -707,45 +707,134 @@ def classify_signal_expected_horizon(
     return "T+3"
 
 
+def explain_signal_recommendation_score(
+    signal: Any,
+    profile: str = _DEFAULT_FUSION_PROFILE,
+) -> List[str]:
+    if not isinstance(signal, Mapping):
+        return []
+
+    normalized_profile = _normalize_profile(profile)
+    if classify_signal(signal, profile=normalized_profile) != "A":
+        return []
+
+    signal_obj, context = _context_for_signal(signal)
+    tier = signal_obj.get("quality_tier")
+    if tier not in {"A+", "A", "A-"}:
+        tier = classify_signal_tier(signal_obj, profile=normalized_profile)
+    if tier not in {"A+", "A", "A-"}:
+        return []
+
+    horizon = signal_obj.get("expected_horizon")
+    if horizon not in {"T+1", "T+3", "T+5"}:
+        horizon = classify_signal_expected_horizon(signal_obj, profile=normalized_profile)
+
+    tier_reasons = signal_obj.get("quality_tier_reasons")
+    if not isinstance(tier_reasons, list):
+        tier_reasons = explain_signal_tier(signal_obj, profile=normalized_profile)
+
+    market_env = (
+        context.get("market_env")
+        or signal_obj.get("market_env")
+        or signal_obj.get("market_regime")
+        or signal_obj.get("market_trend")
+    )
+
+    reasons = [f"tier:{tier}"]
+    if horizon == "T+5":
+        reasons.append("longer_horizon_bonus")
+    if horizon == "T+1":
+        reasons.append("short_horizon_penalty")
+    if _is_strong_market_env(market_env):
+        reasons.append("strong_market_audit_penalty")
+    if "startup_rescue" in tier_reasons:
+        reasons.append("startup_rescue_penalty")
+    if "volatility_near_limit" in tier_reasons:
+        reasons.append("volatility_near_limit_penalty")
+    return reasons
+
+
+def calculate_signal_recommendation_score(
+    signal: Any,
+    profile: str = _DEFAULT_FUSION_PROFILE,
+) -> Optional[float]:
+    reasons = explain_signal_recommendation_score(signal, profile=profile)
+    if not reasons:
+        return None
+
+    tier_reason = reasons[0]
+    if tier_reason == "tier:A+":
+        score = 92.0
+    elif tier_reason == "tier:A-":
+        score = 64.0
+    else:
+        score = 78.0
+
+    deltas = {
+        "longer_horizon_bonus": 3.0,
+        "short_horizon_penalty": -3.0,
+        "strong_market_audit_penalty": -4.0,
+        "startup_rescue_penalty": -4.0,
+        "volatility_near_limit_penalty": -6.0,
+    }
+    for reason in reasons[1:]:
+        score += deltas.get(reason, 0.0)
+
+    return max(0.0, min(100.0, round(score, 1)))
+
+
 def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION_PROFILE) -> dict:
     """Return a copy of signal with additive `category` field."""
     if not isinstance(signal, Mapping):
         return signal
+    normalized_profile = _normalize_profile(profile)
     out = dict(signal)
     if not isinstance(out.get("context"), Mapping):
         out["context"] = build_signal_context(signal, signal)
     else:
         out["context"] = dict(out["context"])
-    out["category"] = classify_signal(out, profile=_normalize_profile(profile))
+    out["category"] = classify_signal(out, profile=normalized_profile)
     if out["category"] == "A":
-        tier = classify_signal_tier(out, profile=_normalize_profile(profile))
+        tier = classify_signal_tier(out, profile=normalized_profile)
         if tier:
             out["quality_tier"] = tier
             out["quality_tier_reasons"] = explain_signal_tier(
                 out,
-                profile=_normalize_profile(profile),
+                profile=normalized_profile,
             )
         else:
             out.pop("quality_tier", None)
             out.pop("quality_tier_reasons", None)
         horizon = classify_signal_expected_horizon(
             out,
-            profile=_normalize_profile(profile),
+            profile=normalized_profile,
         )
         if horizon:
             out["expected_horizon"] = horizon
             out["expected_horizon_reasons"] = explain_signal_expected_horizon(
                 out,
-                profile=_normalize_profile(profile),
+                profile=normalized_profile,
             )
         else:
             out.pop("expected_horizon", None)
             out.pop("expected_horizon_reasons", None)
+        score = calculate_signal_recommendation_score(out, profile=normalized_profile)
+        if score is not None:
+            out["recommendation_score"] = score
+            out["recommendation_score_reasons"] = explain_signal_recommendation_score(
+                out,
+                profile=normalized_profile,
+            )
+        else:
+            out.pop("recommendation_score", None)
+            out.pop("recommendation_score_reasons", None)
     else:
         out.pop("quality_tier", None)
         out.pop("quality_tier_reasons", None)
         out.pop("expected_horizon", None)
         out.pop("expected_horizon_reasons", None)
+        out.pop("recommendation_score", None)
+        out.pop("recommendation_score_reasons", None)
     return out
 
 
@@ -757,38 +846,52 @@ def tag_signal_quality_in_place(
     if not isinstance(signal, dict):
         return signal
 
+    normalized_profile = _normalize_profile(profile)
+
     if not isinstance(signal.get("context"), Mapping):
         signal["context"] = build_signal_context(signal, signal)
-    signal["category"] = classify_signal(signal, profile=_normalize_profile(profile))
+    signal["category"] = classify_signal(signal, profile=normalized_profile)
     if signal["category"] == "A":
-        tier = classify_signal_tier(signal, profile=_normalize_profile(profile))
+        tier = classify_signal_tier(signal, profile=normalized_profile)
         if tier:
             signal["quality_tier"] = tier
             signal["quality_tier_reasons"] = explain_signal_tier(
                 signal,
-                profile=_normalize_profile(profile),
+                profile=normalized_profile,
             )
         else:
             signal.pop("quality_tier", None)
             signal.pop("quality_tier_reasons", None)
         horizon = classify_signal_expected_horizon(
             signal,
-            profile=_normalize_profile(profile),
+            profile=normalized_profile,
         )
         if horizon:
             signal["expected_horizon"] = horizon
             signal["expected_horizon_reasons"] = explain_signal_expected_horizon(
                 signal,
-                profile=_normalize_profile(profile),
+                profile=normalized_profile,
             )
         else:
             signal.pop("expected_horizon", None)
             signal.pop("expected_horizon_reasons", None)
+        score = calculate_signal_recommendation_score(signal, profile=normalized_profile)
+        if score is not None:
+            signal["recommendation_score"] = score
+            signal["recommendation_score_reasons"] = explain_signal_recommendation_score(
+                signal,
+                profile=normalized_profile,
+            )
+        else:
+            signal.pop("recommendation_score", None)
+            signal.pop("recommendation_score_reasons", None)
     else:
         signal.pop("quality_tier", None)
         signal.pop("quality_tier_reasons", None)
         signal.pop("expected_horizon", None)
         signal.pop("expected_horizon_reasons", None)
+        signal.pop("recommendation_score", None)
+        signal.pop("recommendation_score_reasons", None)
     return signal
 
 

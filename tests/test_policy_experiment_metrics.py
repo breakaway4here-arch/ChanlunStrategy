@@ -1209,6 +1209,26 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             rescue_profile["expected_horizon_distribution"],
             {"T+1": 1, "T+3": 1},
         )
+        self.assertEqual(
+            rescue_profile["recommendation_score_bucket_distribution"],
+            {"low": 1, "medium": 1},
+        )
+        self.assertEqual(
+            rescue_profile["recommendation_score_summary"]["count"],
+            2,
+        )
+        self.assertEqual(
+            rescue_profile["recommendation_score_summary"]["min"],
+            57.0,
+        )
+        self.assertEqual(
+            rescue_profile["recommendation_score_summary"]["max"],
+            78.0,
+        )
+        self.assertEqual(
+            rescue_profile["recommendation_score_summary"]["mean"],
+            67.5,
+        )
         rescue_audit = rescue_profile["failure_sample_audit"]
         self.assertEqual(rescue_audit["samples"], 2)
         self.assertEqual(rescue_audit["failed_samples"], 1)

@@ -10,6 +10,8 @@ from chanlun.signal_quality_classifier import (
     explain_signal_tier,
     explain_signal_rejection,
     explain_signal_expected_horizon,
+    calculate_signal_recommendation_score,
+    explain_signal_recommendation_score,
     list_quality_profiles,
     tag_signal_quality,
     tag_signal_quality_in_place,
@@ -431,6 +433,104 @@ class SignalQualityClassifierTests(unittest.TestCase):
             ["fast_confirm_or_exit"],
         )
 
+    def test_recommendation_score_for_a_plus(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 3.0,
+            "volatility": 0.05,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "strong",
+        }
+
+        self.assertEqual(
+            calculate_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            91.0,
+        )
+        self.assertEqual(
+            explain_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["tier:A+", "longer_horizon_bonus", "strong_market_audit_penalty"],
+        )
+
+    def test_recommendation_score_for_standard_a(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2.0,
+            "volatility": 0.07,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            calculate_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            78.0,
+        )
+        self.assertEqual(
+            explain_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["tier:A"],
+        )
+
+    def test_recommendation_score_for_startup_rescue(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            calculate_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            57.0,
+        )
+        self.assertEqual(
+            explain_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["tier:A-", "short_horizon_penalty", "startup_rescue_penalty"],
+        )
+
+    def test_recommendation_score_ignores_non_a(self):
+        signal = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+
+        self.assertIsNone(
+            calculate_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+        )
+        self.assertEqual(
+            explain_signal_recommendation_score(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            [],
+        )
+
     def test_expected_horizon_ignores_non_a_signals(self):
         signal = {
             "type": "底背驰候选",
@@ -488,11 +588,18 @@ class SignalQualityClassifierTests(unittest.TestCase):
             tagged_a["expected_horizon_reasons"],
             ["fast_confirm_or_exit"],
         )
+        self.assertEqual(tagged_a["recommendation_score"], 57.0)
+        self.assertEqual(
+            tagged_a["recommendation_score_reasons"],
+            ["tier:A-", "short_horizon_penalty", "startup_rescue_penalty"],
+        )
         self.assertEqual(tagged_b["category"], "B")
         self.assertNotIn("quality_tier", tagged_b)
         self.assertNotIn("quality_tier_reasons", tagged_b)
         self.assertNotIn("expected_horizon", tagged_b)
         self.assertNotIn("expected_horizon_reasons", tagged_b)
+        self.assertNotIn("recommendation_score", tagged_b)
+        self.assertNotIn("recommendation_score_reasons", tagged_b)
 
     def test_tag_signal_quality_profile(self):
         signal = {
