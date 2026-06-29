@@ -5,12 +5,13 @@ import os
 import re
 import tempfile
 import unittest
+from unittest import mock
 import numpy as np
 
 from chanlun.report_generator import (
     _serialize_picks, _serialize_bp, _serialize_startup_watchlist,
     build_chart_window, build_chart_annotations, build_startup_watch_chart_annotations,
-    _safe_list, NpEncoder, generate_report,
+    _safe_list, NpEncoder, generate_report, build_recent_reviews,
 )
 from config import (
     ENABLE_WEAK_ACCESS_CONTROL, FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
@@ -472,6 +473,39 @@ class TestBuildStartupWatchChartAnnotations(unittest.TestCase):
         self.assertEqual(len(ref_lines), 0)
 
 
+class TestBuildRecentReviews(unittest.TestCase):
+
+    def test_computes_current_change_even_when_recommendation_date_missing_from_kline(self):
+        with tempfile.TemporaryDirectory(prefix="test_recent_reviews_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as f:
+                json.dump({"dates": ["2026-06-19", "2026-06-29"], "latest": "2026-06-29"}, f)
+            with open(os.path.join(data_dir, "2026-06-19.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "picks_fusion": [{
+                        "code": "000001",
+                        "name": "回看样例",
+                        "best_buy_point": {"type": "强势启动候选", "price": 10.0},
+                        "stop_loss": 8.0,
+                    }]
+                }, f)
+
+            kline = {
+                "dates": ["2026-06-20", "2026-06-29"],
+                "closes": [11.0, 12.0],
+                "lows": [10.5, 11.5],
+            }
+            with mock.patch("chanlun.data_fetcher.fetch_daily_kline", return_value=kline):
+                rows = build_recent_reviews("2026-06-29", tmpdir)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["ref_price"], 10.0)
+        self.assertEqual(rows[0]["current_price"], 12.0)
+        self.assertEqual(rows[0]["change_pct"], 20.0)
+        self.assertEqual(rows[0]["lookback_days"], 2)
+
+
 class TestHTMLEscape(unittest.TestCase):
 
     @classmethod
@@ -723,8 +757,11 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_recent_reviews_show_real_review_fields(self):
         self.assertIn("buildReviewMeta(rec)", self.asset_js)
         self.assertIn("buildReviewDataLine(rec)", self.asset_js)
-        self.assertIn("参考 ' + formatNumber(refPrice, 2)", self.asset_js)
-        self.assertIn("return { text: '待回看', tone: 'is-neutral' };", self.asset_js)
+        self.assertIn("'推荐日 ' + date", self.asset_js)
+        self.assertIn("推荐 ' + formatNumber(refPrice, 2)", self.asset_js)
+        self.assertIn("现价 ' + formatNumber(currentPrice, 2)", self.asset_js)
+        self.assertIn("formatPct(change, true)", self.asset_js)
+        self.assertNotIn("待回看", self.asset_js)
         self.assertIn('class="review-outcome ', self.asset_js)
 
     def test_diagnostics_card_defaults_to_collapsed_details(self):

@@ -838,21 +838,29 @@ def build_recent_reviews(date_str, output_dir):
     enriched = []
     for row in rows:
         kline = fetch_daily_kline(row["code"], count=30)
-        if not kline or not kline.get("dates"):
-            continue
-        dates = list(kline["dates"])
-        rec = row["rec_date"]
-        if rec not in dates:
+        dates_value = kline.get("dates") if kline else None
+        closes_value = kline.get("closes") if kline else None
+        lows_value = kline.get("lows") if kline else None
+        dates_raw = list(dates_value) if dates_value is not None else []
+        closes_raw = list(closes_value) if closes_value is not None else []
+        lows_raw = list(lows_value) if lows_value is not None else []
+        if not dates_raw or not closes_raw:
             enriched.append({**row, "current_price": None, "change_pct": None,
                              "stop_triggered": None, "lookback_days": 0,
                              "trigger_date": None})
             continue
-        idx = dates.index(rec)
-        forward_lows = [float(x) for x in kline["lows"][idx + 1:]]
-        forward_dates = dates[idx + 1:]
-        closes = [float(x) for x in kline["closes"]]
+        dates = [str(d).split()[0] for d in dates_raw]
+        rec = row["rec_date"]
+        closes = [float(x) for x in closes_raw]
         latest_close = closes[-1]
         change_pct = round((latest_close - row["ref_price"]) / row["ref_price"] * 100, 2)
+
+        if rec in dates:
+            start_idx = dates.index(rec) + 1
+        else:
+            start_idx = next((i for i, d in enumerate(dates) if d > rec), len(dates))
+        forward_lows = [float(x) for x in lows_raw[start_idx:]]
+        forward_dates = dates[start_idx:]
 
         stop = row.get("stop_loss")
         stop_triggered = False

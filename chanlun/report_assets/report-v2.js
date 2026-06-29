@@ -1396,7 +1396,7 @@
     var date = formatDateLabel(rec.rec_date || rec.date);
     var type = normalizeString(rec.type || rec.signal_type);
     var version = normalizeString(rec.version);
-    if (date !== '--') parts.push(date);
+    if (date !== '--') parts.push('推荐日 ' + date);
     if (type) parts.push(type);
     if (version) parts.push(version);
     return parts.join(' · ') || '近期信号';
@@ -1408,11 +1408,11 @@
     var currentPrice = safeNumber(rec.current_price, null);
     var lookbackDays = safeNumber(rec.lookback_days, null);
     var triggerDate = normalizeString(rec.trigger_date);
-    if (refPrice !== null) parts.push('参考 ' + formatNumber(refPrice, 2));
+    if (refPrice !== null) parts.push('推荐 ' + formatNumber(refPrice, 2));
     if (currentPrice !== null) parts.push('现价 ' + formatNumber(currentPrice, 2));
     if (lookbackDays !== null && lookbackDays > 0) parts.push('回看 ' + formatNumber(lookbackDays, 0) + '日');
     if (triggerDate) parts.push('触发 ' + formatDateLabel(triggerDate));
-    return parts.join(' · ') || '等待行情回看';
+    return parts.join(' · ') || '暂无现价';
   }
 
   function buildReviewOutcome(rec) {
@@ -1434,7 +1434,7 @@
     if (normalizeString(rec.result || rec.outcome)) {
       return { text: normalizeString(rec.result || rec.outcome), tone: 'is-neutral' };
     }
-    return { text: '待回看', tone: 'is-neutral' };
+    return { text: '暂无现价', tone: 'is-neutral' };
   }
 
   function renderRecentReviewsCard(data) {
