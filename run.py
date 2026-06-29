@@ -39,6 +39,7 @@ from config import (
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
     fetch_daily_kline, fetch_kline, fetch_verified_index_kline,
+    MarketDataUnavailable,
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool,
 )
@@ -70,6 +71,7 @@ MARKET_INDICES = {
     "沪深300": "000300",
     "中证500": "000905",
 }
+PREVIEW_OUTPUT_DIR = "docs-preview"
 
 
 def fetch_market_indices(report_date=None, index_codes=None):
@@ -88,6 +90,22 @@ def fetch_market_indices(report_date=None, index_codes=None):
             "source": kline.get("source", ""),
         }
     return indices
+
+
+def build_unverified_market_indices(report_date=None, reason="", index_codes=None):
+    """Build explicit unverified market placeholders for preview-only reports."""
+    index_codes = index_codes or MARKET_INDICES
+    return {
+        name: {
+            "close": None,
+            "change_pct": None,
+            "date": report_date or "",
+            "source": "",
+            "status": "unverified",
+            "reason": reason,
+        }
+        for name in index_codes
+    }
 
 
 def analyze_shanghai_chanlun(sh_kline):
@@ -172,10 +190,11 @@ def _attach_gf_dma_health(picks):
 # ============================================================
 # 主流程
 # ============================================================
-def main(debug=False):
+def main(debug=False, preview=False):
     today = datetime.now().strftime("%Y-%m-%d")
     print(f"缠论选股系统启动 — {today} 14:35")
     print(f"调试模式: {debug}")
+    print(f"预览模式: {preview}")
 
     # ================================================================
     # Phase 1: 数据采集
@@ -217,10 +236,14 @@ def main(debug=False):
             "stocks": stocks_with_kline,
         }
     else:
-        daily_data = collect_daily_data(required_date=today)
+        daily_data = collect_daily_data(
+            required_date=today,
+            allow_missing_index=preview,
+        )
 
     sectors = daily_data["sectors"]
     sh_kline = daily_data["sh_index"]
+    index_error = daily_data.get("index_error", "")
     stocks_with_kline = daily_data["stocks"]
     sh_closes = sh_kline["closes"] if sh_kline else None
     sh_volumes = sh_kline["volumes"] if sh_kline else None
@@ -653,7 +676,19 @@ def main(debug=False):
 
     # 市场指数
     print("  获取市场指数 ...")
-    market_indices = fetch_market_indices(report_date=today)
+    market_data_status = "verified"
+    try:
+        market_indices = fetch_market_indices(report_date=today)
+    except MarketDataUnavailable as e:
+        if not preview:
+            raise
+        market_data_status = "unverified"
+        index_error = str(e)
+        print(f"  [PREVIEW] 市场指数未校验，生成预览报告: {index_error}")
+        market_indices = build_unverified_market_indices(
+            report_date=today,
+            reason=index_error,
+        )
 
     # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
     next_day_boom = build_next_day_boom_candidates(
@@ -707,6 +742,12 @@ def main(debug=False):
         status = imp.get("status", "skipped")
         event_status_counts[status] = event_status_counts.get(status, 0) + 1
 
+    preview_note = ""
+    if preview:
+        preview_note = "预览模式输出，仅用于查看候选，不作为正式日报。"
+        if market_data_status != "verified":
+            preview_note = "指数未完成多源校验，仅用于查看候选，不作为正式日报。"
+
     # Chart annotation coverage
     picks_with_annotations = sum(
         1 for p in pure_scored
@@ -750,6 +791,12 @@ def main(debug=False):
                 recency_watch_diag.get("dropped_details", [])
             ),
         },
+        "preview": {
+            "enabled": bool(preview),
+            "market_data_status": market_data_status,
+            "market_data_error": index_error,
+            "note": preview_note,
+        },
     }
     report_data = {
         "date": today,
@@ -770,8 +817,8 @@ def main(debug=False):
         "luojie_pool": luojie_pool,
     }
 
-    # 生成 HTML（debug 模式输出到独立目录，隔离上线数据）
-    output_dir_name = DEBUG_OUTPUT_DIR if debug else OUTPUT_DIR
+    # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
+    output_dir_name = DEBUG_OUTPUT_DIR if debug else (PREVIEW_OUTPUT_DIR if preview else OUTPUT_DIR)
     output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_dir_name)
     generate_report(report_data, output_dir)
     update_data_json(report_data, output_dir)
@@ -786,10 +833,11 @@ def main(debug=False):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="缠论选股系统")
     parser.add_argument("--debug", action="store_true", help="调试模式，仅用少量股票")
+    parser.add_argument("--preview", action="store_true", help="预览模式：指数校验失败时输出本地预览，不作为正式日报")
     parser.add_argument("--refresh-cache", action="store_true", help="强制刷新K线缓存")
     args = parser.parse_args()
     from chanlun.data_fetcher import set_force_refresh_cache
     if args.refresh_cache:
         set_force_refresh_cache(True)
         print("[CACHE] 强制刷新K线缓存")
-    main(debug=args.debug)
+    main(debug=args.debug, preview=args.preview)

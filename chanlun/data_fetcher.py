@@ -742,7 +742,7 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
 # ============================================================
 # Phase 1 主流程
 # ============================================================
-def collect_daily_data(required_date=None):
+def collect_daily_data(required_date=None, allow_missing_index=False):
     """
     完整数据采集流程:
     1. 获取 TOP20 资金流入板块
@@ -827,7 +827,15 @@ def collect_daily_data(required_date=None):
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
 
     print("[4/4] 获取上证指数日线 ...")
-    sh_kline = fetch_shanghai_index(required_date=required_date)
+    index_error = ""
+    try:
+        sh_kline = fetch_shanghai_index(required_date=required_date)
+    except MarketDataUnavailable as e:
+        if not allow_missing_index:
+            raise
+        index_error = str(e)
+        sh_kline = None
+        print(f"  [PREVIEW] 上证指数未校验，继续生成预览: {index_error}")
     print(f"  上证数据: {len(sh_kline['closes']) if sh_kline else 0} 根K线")
 
     print("Phase 1 完成\n")
@@ -835,6 +843,7 @@ def collect_daily_data(required_date=None):
         "sectors": sectors,
         "sh_index": sh_kline,
         "stocks": stocks_with_kline,
+        "index_error": index_error,
     }
 
 

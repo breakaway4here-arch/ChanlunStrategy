@@ -29,6 +29,19 @@ class TestMarketDataGuard(unittest.TestCase):
             with self.assertRaises(data_fetcher.MarketDataUnavailable):
                 run.fetch_market_indices(report_date="2026-06-26")
 
+    def test_preview_market_indices_mark_unverified_without_live_data(self):
+        result = run.build_unverified_market_indices(
+            report_date="2026-06-26",
+            reason="000001 指数多源取数失败",
+            index_codes={"上证指数": "000001"},
+        )
+
+        self.assertEqual(result["上证指数"]["status"], "unverified")
+        self.assertEqual(result["上证指数"]["date"], "2026-06-26")
+        self.assertIsNone(result["上证指数"]["close"])
+        self.assertIsNone(result["上证指数"]["change_pct"])
+        self.assertIn("多源取数失败", result["上证指数"]["reason"])
+
     def test_market_indices_reject_stale_index_data(self):
         stale = _kline(["2026-06-24", "2026-06-25"], [4100, 4120])
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=stale), \
@@ -58,6 +71,26 @@ class TestMarketDataGuard(unittest.TestCase):
              patch.object(data_fetcher, "_fetch_daily_kline_sina_quote_remote", return_value=quote_only):
             with self.assertRaises(data_fetcher.MarketDataUnavailable):
                 data_fetcher.fetch_shanghai_index(required_date="2026-06-26")
+
+    def test_collect_daily_data_preview_can_continue_without_index(self):
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "测试板块", "flow_str": "1亿"}
+        ]), \
+             patch.object(data_fetcher, "fetch_sector_stocks", return_value=[
+                 {"code": "600000", "name": "测试股"}
+             ]), \
+             patch.object(data_fetcher, "batch_fetch_daily_klines", return_value=[
+                 {"code": "600000", "name": "测试股", "klines": _kline(["2026-06-25", "2026-06-26"], [10, 11])}
+             ]), \
+             patch.object(data_fetcher, "fetch_shanghai_index", side_effect=data_fetcher.MarketDataUnavailable("000001 指数多源取数失败")):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-26",
+                allow_missing_index=True,
+            )
+
+        self.assertIsNone(result["sh_index"])
+        self.assertEqual(result["index_error"], "000001 指数多源取数失败")
+        self.assertEqual(len(result["stocks"]), 1)
 
 
 class TestDailyRunScriptGuard(unittest.TestCase):
