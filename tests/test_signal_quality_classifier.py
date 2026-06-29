@@ -4,6 +4,7 @@ from chanlun.signal_quality_classifier import (
     LOW_VOLATILITY_MAX,
     HIGH_VOLATILITY_MIN,
     build_signal_context,
+    build_signal_recommendation_reason,
     classify_signal,
     classify_signal_tier,
     classify_signal_expected_horizon,
@@ -314,6 +315,85 @@ class SignalQualityClassifierTests(unittest.TestCase):
             ["startup_rescue"],
         )
 
+    def test_recommendation_reason_for_a_plus(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 3.0,
+            "volatility": 0.05,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "strong",
+        }
+
+        self.assertEqual(
+            build_signal_recommendation_reason(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            {
+                "text": "A+：高强度低波动结构，预期T+5持有，适合作为核心观察。",
+                "tags": ["高强度", "低波动", "完整结构", "T+5"],
+            },
+        )
+
+    def test_recommendation_reason_for_standard_a(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2.0,
+            "volatility": 0.07,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            build_signal_recommendation_reason(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            {
+                "text": "A：标准A类结构，预期T+3观察，适合按计划跟踪。",
+                "tags": ["标准A类", "T+3"],
+            },
+        )
+
+    def test_recommendation_reason_for_startup_rescue(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            build_signal_recommendation_reason(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            {
+                "text": "A-：弱市强势启动修复信号，预期T+1快进快出，需等待后续确认。",
+                "tags": ["启动修复", "T+1", "需确认"],
+            },
+        )
+
+    def test_recommendation_reason_ignores_non_a(self):
+        signal = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+
+        self.assertIsNone(
+            build_signal_recommendation_reason(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+        )
+
     def test_classify_signal_tier_marks_standard_a(self):
         signal = {
             "type": "一买",
@@ -593,6 +673,14 @@ class SignalQualityClassifierTests(unittest.TestCase):
             tagged_a["recommendation_score_reasons"],
             ["tier:A-", "short_horizon_penalty", "startup_rescue_penalty"],
         )
+        self.assertEqual(
+            tagged_a["recommendation_reason"],
+            "A-：弱市强势启动修复信号，预期T+1快进快出，需等待后续确认。",
+        )
+        self.assertEqual(
+            tagged_a["recommendation_reason_tags"],
+            ["启动修复", "T+1", "需确认"],
+        )
         self.assertEqual(tagged_b["category"], "B")
         self.assertNotIn("quality_tier", tagged_b)
         self.assertNotIn("quality_tier_reasons", tagged_b)
@@ -600,6 +688,8 @@ class SignalQualityClassifierTests(unittest.TestCase):
         self.assertNotIn("expected_horizon_reasons", tagged_b)
         self.assertNotIn("recommendation_score", tagged_b)
         self.assertNotIn("recommendation_score_reasons", tagged_b)
+        self.assertNotIn("recommendation_reason", tagged_b)
+        self.assertNotIn("recommendation_reason_tags", tagged_b)
 
     def test_tag_signal_quality_profile(self):
         signal = {

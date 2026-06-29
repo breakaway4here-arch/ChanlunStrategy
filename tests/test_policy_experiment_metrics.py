@@ -1229,6 +1229,16 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             rescue_profile["recommendation_score_summary"]["mean"],
             67.5,
         )
+        self.assertEqual(
+            rescue_profile["recommendation_reason_tag_distribution"],
+            {
+                "标准A类": 1,
+                "T+3": 1,
+                "启动修复": 1,
+                "T+1": 1,
+                "需确认": 1,
+            },
+        )
         rescue_audit = rescue_profile["failure_sample_audit"]
         self.assertEqual(rescue_audit["samples"], 2)
         self.assertEqual(rescue_audit["failed_samples"], 1)

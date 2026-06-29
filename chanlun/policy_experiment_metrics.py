@@ -17,6 +17,7 @@ from chanlun.backtest_metrics import summarize_return_samples
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
 from chanlun.signal_quality_classifier import (
     build_signal_context,
+    build_signal_recommendation_reason,
     calculate_signal_recommendation_score,
     classify_signal,
     classify_signal_tier,
@@ -694,6 +695,7 @@ def _summarize_fusion_variant(
     reject_reasons = Counter()
     tier_counts = Counter()
     horizon_counts = Counter()
+    reason_tag_counts = Counter()
     score_bucket_counts = Counter()
     score_values: List[float] = []
     accepted_audit_rows: List[dict] = []
@@ -714,6 +716,10 @@ def _summarize_fusion_variant(
                 profile=variant_name,
             ) or "T+3"
             horizon_counts[horizon] += 1
+            reason = build_signal_recommendation_reason(signal, profile=variant_name)
+            if reason:
+                for tag in reason.get("tags", []):
+                    reason_tag_counts[str(tag)] += 1
             accepted_audit_rows.append(
                 {
                     "sample": item.get("baseline_sample"),
@@ -801,6 +807,9 @@ def _summarize_fusion_variant(
         "n_after": samples_after,
         "quality_tier_distribution": dict(sorted(tier_counts.items())),
         "expected_horizon_distribution": dict(sorted(horizon_counts.items())),
+        "recommendation_reason_tag_distribution": dict(
+            sorted(reason_tag_counts.items()),
+        ),
         "recommendation_score_summary": _build_score_summary(score_values),
         "recommendation_score_bucket_distribution": dict(
             sorted(score_bucket_counts.items()),

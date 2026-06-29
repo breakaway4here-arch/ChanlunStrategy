@@ -682,6 +682,55 @@ def explain_signal_expected_horizon(
     return ["default_swing"]
 
 
+def build_signal_recommendation_reason(
+    signal: Any,
+    profile: str = _DEFAULT_FUSION_PROFILE,
+) -> Optional[dict]:
+    if not isinstance(signal, Mapping):
+        return None
+
+    normalized_profile = _normalize_profile(profile)
+
+    if classify_signal(signal, profile=normalized_profile) != "A":
+        return None
+
+    tier = signal.get("quality_tier")
+    if tier not in {"A+", "A", "A-"}:
+        tier = classify_signal_tier(signal, profile=normalized_profile)
+
+    if tier not in {"A+", "A", "A-"}:
+        return None
+
+    tier_reasons = signal.get("quality_tier_reasons")
+    if not isinstance(tier_reasons, list):
+        tier_reasons = explain_signal_tier(signal, profile=normalized_profile)
+
+    if tier == "A+":
+        return {
+            "text": "A+：高强度低波动结构，预期T+5持有，适合作为核心观察。",
+            "tags": ["高强度", "低波动", "完整结构", "T+5"],
+        }
+    if tier == "A-":
+        if "startup_rescue" in tier_reasons:
+            return {
+                "text": "A-：弱市强势启动修复信号，预期T+1快进快出，需等待后续确认。",
+                "tags": ["启动修复", "T+1", "需确认"],
+            }
+        if "volatility_near_limit" in tier_reasons:
+            return {
+                "text": "A-：波动接近上限，预期T+1观察，需控制回撤风险。",
+                "tags": ["波动偏高", "T+1", "控回撤"],
+            }
+        return {
+            "text": "A-：低位A类信号，预期T+1观察，仓位应更保守。",
+            "tags": ["低位A类", "T+1", "保守仓位"],
+        }
+    return {
+        "text": "A：标准A类结构，预期T+3观察，适合按计划跟踪。",
+        "tags": ["标准A类", "T+3"],
+    }
+
+
 def classify_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> Optional[str]:
     reasons = explain_signal_tier(signal, profile=profile)
     if not reasons:
@@ -828,6 +877,13 @@ def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION
         else:
             out.pop("recommendation_score", None)
             out.pop("recommendation_score_reasons", None)
+        reason = build_signal_recommendation_reason(out, profile=normalized_profile)
+        if reason:
+            out["recommendation_reason"] = reason["text"]
+            out["recommendation_reason_tags"] = reason["tags"]
+        else:
+            out.pop("recommendation_reason", None)
+            out.pop("recommendation_reason_tags", None)
     else:
         out.pop("quality_tier", None)
         out.pop("quality_tier_reasons", None)
@@ -835,6 +891,8 @@ def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION
         out.pop("expected_horizon_reasons", None)
         out.pop("recommendation_score", None)
         out.pop("recommendation_score_reasons", None)
+        out.pop("recommendation_reason", None)
+        out.pop("recommendation_reason_tags", None)
     return out
 
 
@@ -885,6 +943,13 @@ def tag_signal_quality_in_place(
         else:
             signal.pop("recommendation_score", None)
             signal.pop("recommendation_score_reasons", None)
+        reason = build_signal_recommendation_reason(signal, profile=normalized_profile)
+        if reason:
+            signal["recommendation_reason"] = reason["text"]
+            signal["recommendation_reason_tags"] = reason["tags"]
+        else:
+            signal.pop("recommendation_reason", None)
+            signal.pop("recommendation_reason_tags", None)
     else:
         signal.pop("quality_tier", None)
         signal.pop("quality_tier_reasons", None)
@@ -892,6 +957,8 @@ def tag_signal_quality_in_place(
         signal.pop("expected_horizon_reasons", None)
         signal.pop("recommendation_score", None)
         signal.pop("recommendation_score_reasons", None)
+        signal.pop("recommendation_reason", None)
+        signal.pop("recommendation_reason_tags", None)
     return signal
 
 
