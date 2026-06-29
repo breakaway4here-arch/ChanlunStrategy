@@ -659,7 +659,18 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             "code": "600000",
             "sell_points": [{"reason": "涨停冲顶"}]
         }];
-        report_data["recent_reviews"] = [{"name": "复盘示例", "code": "000001", "change_pct": 2.4}];
+        report_data["recent_reviews"] = [{
+            "rec_date": "2026-06-19",
+            "name": "复盘示例",
+            "code": "000001",
+            "type": "强势启动候选",
+            "version": "fusion",
+            "ref_price": 9.84,
+            "current_price": None,
+            "change_pct": None,
+            "lookback_days": 0,
+            "trigger_date": None,
+        }];
         generate_report(report_data, output_dir=cls.tmpdir)
         with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
             cls.html = f.read()
@@ -686,6 +697,10 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             'function renderMarketTemperatureCard',
             'function renderSectorFlowCard',
             'function renderSellSignalsCard',
+            'function getReviewName',
+            'function buildReviewMeta',
+            'function buildReviewDataLine',
+            'function buildReviewOutcome',
         ]:
             self.assertIn(helper, self.asset_js)
 
@@ -704,6 +719,19 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
         self.assertEqual(self.asset_js.count("renderDecisionCard({"), 7)
+
+    def test_recent_reviews_show_real_review_fields(self):
+        self.assertIn("buildReviewMeta(rec)", self.asset_js)
+        self.assertIn("buildReviewDataLine(rec)", self.asset_js)
+        self.assertIn("参考 ' + formatNumber(refPrice, 2)", self.asset_js)
+        self.assertIn("return { text: '待回看', tone: 'is-neutral' };", self.asset_js)
+        self.assertIn('class="review-outcome ', self.asset_js)
+
+    def test_diagnostics_card_defaults_to_collapsed_details(self):
+        self.assertIn('<details class="diagnostics-details">', self.asset_js)
+        self.assertNotIn('<details class="diagnostics-details" open', self.asset_js)
+        self.assertIn('后台数据诊断', self.asset_js)
+        self.assertIn('点击展开', self.asset_js)
 
     def test_market_temperature_card_references_score_label_components(self):
         self.assertIn('var temperature = buildMarketTemperature(data || {});', self.asset_js)

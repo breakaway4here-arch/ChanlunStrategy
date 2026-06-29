@@ -1387,22 +1387,78 @@
     });
   }
 
+  function getReviewName(rec) {
+    return normalizeString(rec.name || rec.display_name || rec.stock_name || rec.code || '--');
+  }
+
+  function buildReviewMeta(rec) {
+    var parts = [];
+    var date = formatDateLabel(rec.rec_date || rec.date);
+    var type = normalizeString(rec.type || rec.signal_type);
+    var version = normalizeString(rec.version);
+    if (date !== '--') parts.push(date);
+    if (type) parts.push(type);
+    if (version) parts.push(version);
+    return parts.join(' · ') || '近期信号';
+  }
+
+  function buildReviewDataLine(rec) {
+    var parts = [];
+    var refPrice = safeNumber(rec.ref_price, null);
+    var currentPrice = safeNumber(rec.current_price, null);
+    var lookbackDays = safeNumber(rec.lookback_days, null);
+    var triggerDate = normalizeString(rec.trigger_date);
+    if (refPrice !== null) parts.push('参考 ' + formatNumber(refPrice, 2));
+    if (currentPrice !== null) parts.push('现价 ' + formatNumber(currentPrice, 2));
+    if (lookbackDays !== null && lookbackDays > 0) parts.push('回看 ' + formatNumber(lookbackDays, 0) + '日');
+    if (triggerDate) parts.push('触发 ' + formatDateLabel(triggerDate));
+    return parts.join(' · ') || '等待行情回看';
+  }
+
+  function buildReviewOutcome(rec) {
+    var change = safeNumber(rec.change_pct, null);
+    var refPrice = safeNumber(rec.ref_price, null);
+    var currentPrice = safeNumber(rec.current_price, null);
+    if (change === null && refPrice !== null && currentPrice !== null && refPrice !== 0) {
+      change = ((currentPrice - refPrice) / refPrice) * 100;
+    }
+    if (change !== null) {
+      return {
+        text: formatPct(change, true),
+        tone: change >= 0 ? 'is-up' : 'is-down'
+      };
+    }
+    if (rec.stop_triggered === true) {
+      return { text: '触止损', tone: 'is-down' };
+    }
+    if (normalizeString(rec.result || rec.outcome)) {
+      return { text: normalizeString(rec.result || rec.outcome), tone: 'is-neutral' };
+    }
+    return { text: '待回看', tone: 'is-neutral' };
+  }
+
   function renderRecentReviewsCard(data) {
     var rows = asArray((data || {}).recent_reviews).slice(0, 6);
     var body = rows.length ? rows.map(function (item) {
       var rec = item || {};
-      var change = safeNumber(rec.change_pct, null);
-      var tone = change === null ? '' : change >= 0 ? 'is-up' : 'is-down';
+      var outcome = buildReviewOutcome(rec);
       return ''
         + '<div class="review-row">'
-        + '  <span><strong>' + escapeHtml(rec.name || '--') + '</strong> ' + escapeHtml(rec.code || '') + '</span>'
-        + '  <strong class="' + tone + '">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</strong>'
+        + '  <div class="review-main">'
+        + '    <strong>' + escapeHtml(getReviewName(rec)) + '</strong>'
+        + '    <span>' + escapeHtml(rec.code || '') + '</span>'
+        + '  </div>'
+        + '  <div class="review-detail">'
+        + '    <span>' + escapeHtml(buildReviewMeta(rec)) + '</span>'
+        + '    <small>' + escapeHtml(buildReviewDataLine(rec)) + '</small>'
+        + '  </div>'
+        + '  <strong class="review-outcome ' + outcome.tone + '">' + escapeHtml(outcome.text) + '</strong>'
         + '</div>';
     }).join('') : '<div class="decision-empty">暂无回看记录</div>';
     return renderDecisionCard({
       title: '策略回看',
       subtitle: '近期信号反馈',
-      badge: { text: rows.length ? '反馈' : '暂无', tone: rows.length ? 'info' : 'neutral' },
+      badge: { text: rows.length ? rows.length + '条' : '暂无', tone: rows.length ? 'info' : 'neutral' },
       className: 'recent-reviews-card',
       bodyHtml: body,
     });
@@ -1410,8 +1466,9 @@
 
   function renderDiagnosticsCard(data) {
     var diagnostics = (data || {}).diagnostics || {};
-    var keys = Object.keys(diagnostics).slice(0, 6);
-    var body = keys.length ? keys.map(function (key) {
+    var allKeys = Object.keys(diagnostics);
+    var keys = allKeys.slice(0, 8);
+    var rowsHtml = keys.length ? keys.map(function (key) {
       var value = diagnostics[key];
       var text = '';
       if (value && typeof value === 'object') {
@@ -1425,6 +1482,17 @@
         + '  <span>' + escapeHtml(text || '已记录') + '</span>'
         + '</div>';
     }).join('') : '<div class="decision-empty">暂无诊断信息</div>';
+    var summaryText = keys.length
+      ? '已记录 ' + allKeys.length + ' 项，点击展开'
+      : '暂无诊断信息';
+    var body = ''
+      + '<details class="diagnostics-details">'
+      + '  <summary>'
+      + '    <strong>后台数据诊断</strong>'
+      + '    <span>' + escapeHtml(summaryText) + '</span>'
+      + '  </summary>'
+      + '  <div class="diagnostics-list">' + rowsHtml + '</div>'
+      + '</details>';
     return renderDecisionCard({
       title: '数据诊断',
       subtitle: '数据完整性与生成状态',

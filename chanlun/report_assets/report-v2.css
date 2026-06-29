@@ -1185,6 +1185,97 @@ body {
   font-size: 12px;
 }
 
+.review-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.review-main,
+.review-detail,
+.diagnostics-details summary {
+  min-width: 0;
+}
+
+.review-main strong,
+.review-main span,
+.review-detail span,
+.review-detail small,
+.diagnostics-details summary strong,
+.diagnostics-details summary span {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.review-main span,
+.review-detail span,
+.review-detail small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.review-outcome {
+  white-space: nowrap;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.review-outcome.is-neutral {
+  color: var(--primary);
+  background: var(--primary-soft);
+  border: 1px solid rgba(81, 103, 246, 0.22);
+}
+
+.diagnostics-card .decision-card-body {
+  padding-top: 4px;
+}
+
+.diagnostics-details {
+  border-top: 1px solid var(--border-soft);
+}
+
+.diagnostics-details:first-child {
+  border-top: 0;
+}
+
+.diagnostics-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.diagnostics-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.diagnostics-details summary span {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.diagnostics-details summary::after {
+  content: '+';
+  flex: 0 0 auto;
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.diagnostics-details[open] summary::after {
+  content: '-';
+}
+
+.diagnostics-list {
+  padding-bottom: 2px;
+}
+
 .stock-signal-main strong {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -1444,6 +1535,18 @@ body {
   .candidate-tags {
     grid-column: 1;
     margin-top: 2px;
+  }
+
+  .review-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .review-detail {
+    grid-column: 1 / -1;
+  }
+
+  .diagnostics-details summary {
+    align-items: flex-start;
   }
 
   .candidate-rank,
