@@ -216,6 +216,61 @@
     return pools[key] || [];
   }
 
+  function hasChartData(item) {
+    if (!item) return false;
+    var dates = asArray(item.dates);
+    var opens = asArray(item.opens);
+    var highs = asArray(item.highs);
+    var lows = asArray(item.lows);
+    var closes = asArray(item.closes);
+    return Math.min(dates.length, opens.length, highs.length, lows.length, closes.length) >= 2;
+  }
+
+  function mergeChartCandidate(primary, chartSource) {
+    if (!primary) {
+      return chartSource || null;
+    }
+    if (!chartSource || chartSource === primary || !hasChartData(chartSource)) {
+      return primary;
+    }
+    return {
+      ...chartSource,
+      ...primary,
+      dates: chartSource.dates,
+      opens: chartSource.opens,
+      highs: chartSource.highs,
+      lows: chartSource.lows,
+      closes: chartSource.closes,
+      volumes: chartSource.volumes,
+      macd_hist: chartSource.macd_hist,
+      chart_annotations: primary.chart_annotations || chartSource.chart_annotations,
+      buy_points: primary.buy_points || chartSource.buy_points,
+      reference_buy_points: primary.reference_buy_points || chartSource.reference_buy_points,
+      blocked_buy_points: primary.blocked_buy_points || chartSource.blocked_buy_points,
+    };
+  }
+
+  function findChartCandidate(targetCode, excludeItem) {
+    var pools = getRawPools();
+    var allPools = [
+      pools.picks_fusion,
+      pools.picks_pure,
+      pools.startup_watchlist,
+      pools.next_day_boom,
+      pools.luojie_pool,
+    ];
+
+    for (var i = 0; i < allPools.length; i += 1) {
+      var candidate = allPools[i].find(function (item) {
+        return item !== excludeItem && toCodeKey(item && item.code) === targetCode && hasChartData(item);
+      });
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   function findRawCandidate(ref) {
     if (!ref || !ref.code) {
       return null;
@@ -230,7 +285,7 @@
       }) || null;
     }
     if (found) {
-      return found;
+      return hasChartData(found) ? found : mergeChartCandidate(found, findChartCandidate(targetCode, found));
     }
 
     var pools = getRawPools();
@@ -247,7 +302,7 @@
         return toCodeKey(item && item.code) === targetCode;
       });
       if (candidate) {
-        return candidate;
+        return hasChartData(candidate) ? candidate : mergeChartCandidate(candidate, findChartCandidate(targetCode, candidate));
       }
     }
     return null;
@@ -307,7 +362,7 @@
       + '    <nav class="workspace-tabs" id="workspaceTabs"></nav>'
       + '    <div class="view-description" id="viewDescription"></div>'
       + '    <div class="workspace-body">'
-      + '      <div>'
+      + '      <div class="candidate-list-shell">'
       + '        <div class="candidate-list" id="candidateList"></div>'
       + '      </div>'
       + '      <aside class="detail-panel workspace-detail" id="detailPanel"></aside>'
@@ -997,6 +1052,7 @@
       + '<div class="detail-section">'
       + '  <h3 class="detail-section-title">03 图表</h3>'
       + '  <div class="chart-panel">'
+      + '    <div class="chart-help">图钉为买点/信号标记，虚线为参考价和现价；拖动或滚动底部缩放条查看细节。</div>'
       + '    <div id="chartCanvas" class="chart-canvas"></div>'
       + '  </div>'
       + '</div>';
@@ -1528,6 +1584,9 @@
     renderCandidateDetail(state.activeItem, nodes.drawerContent);
     nodes.drawer.classList.add('is-open');
     document.body.style.overflow = 'hidden';
+    if (nodes.drawerPanel) {
+      nodes.drawerPanel.scrollTop = 0;
+    }
     setTimeout(function () {
       if (state.chartInstance) {
         state.chartInstance.resize();
