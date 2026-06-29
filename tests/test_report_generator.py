@@ -639,6 +639,71 @@ class TestMarketCardRendering(unittest.TestCase):
         self.assertEqual(esc_count, 0, f"Only {esc_count} escapeHtml calls found")
 
 
+class TestReportV2AuxiliaryHeader(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmpdir = tempfile.mkdtemp(prefix="test_v2_aux_")
+        report_data = _make_minimal_report_data()
+        report_data["market"] = {
+            "上证指数": {"close": 3000.12, "change_pct": 1.05},
+            "深证成指": {"close": 12450.55, "change_pct": -0.56},
+        }
+        report_data["sector_flow"] = [
+            {"name": "AI", "flow": 1200},
+            {"name": "新能源", "flow": -900},
+        ]
+        report_data["sector_outflow"] = [{"name": "消费", "flow": -3200}];
+        report_data["sell_signals"] = [{
+            "name": "测试股",
+            "code": "600000",
+            "sell_points": [{"reason": "涨停冲顶"}]
+        }];
+        report_data["recent_reviews"] = [{"name": "复盘示例", "code": "000001", "change_pct": 2.4}];
+        generate_report(report_data, output_dir=cls.tmpdir)
+        with open(os.path.join(cls.tmpdir, "index.html"), "r", encoding="utf-8") as f:
+            cls.html = f.read()
+        with open(os.path.join(cls.tmpdir, "assets", "report-v2.js"), "r", encoding="utf-8") as f:
+            cls.asset_js = f.read()
+
+    def test_auxiliary_center_title(self):
+        self.assertIn('辅助决策中心', self.asset_js)
+
+    def test_market_overview_helper_presence(self):
+        for helper in [
+            'function getMarketItems',
+            'function buildMarketSummary',
+            'function buildMarketStyleHint',
+            'function renderMarketRegime',
+            'function renderMarketIndexCards',
+            'function renderDecisionCard',
+            'function renderStatusBadge',
+            'function renderMarketTemperatureCard',
+            'function renderSectorFlowCard',
+            'function renderSellSignalsCard',
+        ]:
+            self.assertIn(helper, self.asset_js)
+
+    def test_auxiliary_center_modules(self):
+        module_names = ['市场温度', '板块资金', '涨停情绪', '事件驱动', '卖出提醒', '策略回看', '数据诊断']
+        for name in module_names:
+            self.assertIn("title: '" + name + "'", self.asset_js)
+        self.assertEqual(self.asset_js.count("renderDecisionCard({"), 7)
+
+    def test_old_top_chips_removed(self):
+        self.assertNotIn('metric-chip', self.asset_js)
+        self.assertNotIn("看点 <strong>", self.asset_js)
+        self.assertNotIn("主推 <strong>", self.asset_js)
+        self.assertNotIn("加速 <strong>", self.asset_js)
+        self.assertNotIn("罗姐池 <strong>", self.asset_js)
+        self.assertNotIn("等确认 <strong>", self.asset_js)
+        self.assertNotIn("基准 <strong>", self.asset_js)
+
+    def test_tab_counts_preserved(self):
+        self.assertIn('<span class="workspace-tab-count">(', self.asset_js)
+        self.assertIn('views.length', self.asset_js)
+
+
 class TestLayoutRefresh(unittest.TestCase):
 
     @classmethod

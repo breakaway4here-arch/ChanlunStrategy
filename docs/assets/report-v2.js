@@ -249,7 +249,7 @@
     var app = document.getElementById('app') || document.body;
     app.innerHTML = ''
       + '<div class="report-shell" id="reportShell">'
-      + '  <header class="report-header">'
+      + '  <header class="report-header market-header">'
       + '    <div class="report-title-wrap">'
       + '      <h1 class="report-title"></h1>'
       + '      <div class="report-subtitle"></div>'
@@ -266,13 +266,12 @@
       + '      <aside class="detail-panel workspace-detail" id="detailPanel"></aside>'
       + '    </div>'
       + '  </section>'
-      + '  <section class="aux-center">'
-      + '    <details id="auxCenter">'
+      + '  <section class="aux-center decision-center">'
+      + '    <details id="auxCenter" open>'
       + '      <summary>'
-      + '        <span>辅助信息</span>'
-      + '        <span class="aux-summary-sub">市场、板块、涨停、事件、卖出、回看、诊断</span>'
+      + '        <span><strong>辅助决策中心</strong><small>市场、资金、情绪、事件、风险、回看、诊断</small></span>'
       + '      </summary>'
-      + '      <div class="aux-grid" id="auxGrid"></div>'
+      + '      <div class="aux-grid decision-grid" id="auxGrid"></div>'
       + '    </details>'
       + '  </section>'
       + '  <div class="mobile-drawer" id="mobileDrawer">'
@@ -306,33 +305,158 @@
     if (!nodes.headerTitle || !state.data) return;
     var data = state.data || {};
     var dateLabel = data.date || getBootstrap().pageDate || formatDateLabel(new Date().toISOString());
-    var ws = state.workspace || {};
-    var views = ws.views || {};
-    var market = data.market || {};
-    var marketState = '--';
-    if (isNaN(0) === false && market && Object.keys(market).length > 0) {
-      var first = market[Object.keys(market)[0]];
-      if (first && first.change_pct !== null && first.change_pct !== undefined) {
-        marketState = (first.change_pct >= 0 ? '强' : '弱');
-      }
-    }
-
-    var totalViews = getCandidateViews();
-    var totalMain = asArray(views.main).length;
-    var totalAccel = asArray(views.acceleration).length;
-    var totalLuojie = asArray(views.luojie).length;
-    var totalConfirm = asArray(views.confirming).length;
-    var totalBase = asArray(views.baseline).length;
+    var summary = buildMarketSummary(data.market || {});
 
     setTextNode(nodes.headerTitle, '缠论策略日报');
-    setTextNode(nodes.headerSubtitle, dateLabel + ' · ' + marketState + ' · 交易观测台');
-    nodes.headerMetrics.innerHTML = ''
-      + '<span class="metric-chip">看点 <strong>' + asArray(views.highlights).length + '</strong></span>'
-      + '<span class="metric-chip">主推 <strong>' + totalMain + '</strong></span>'
-      + '<span class="metric-chip">加速 <strong>' + totalAccel + '</strong></span>'
-      + '<span class="metric-chip">罗姐池 <strong>' + totalLuojie + '</strong></span>'
-      + '<span class="metric-chip">等确认 <strong>' + totalConfirm + '</strong></span>'
-      + '<span class="metric-chip">基准 <strong>' + totalBase + '</strong></span>';
+    setTextNode(nodes.headerSubtitle, dateLabel + ' · 交易观测台');
+    nodes.headerMetrics.innerHTML = renderMarketRegime(summary) + renderMarketIndexCards(summary.items);
+  }
+
+  function getMarketItems(market) {
+    var source = market || {};
+    return Object.keys(source).map(function (name) {
+      var rec = source[name] || {};
+      return {
+        name: normalizeString(name),
+        close: safeNumber(rec.close, null),
+        change_pct: safeNumber(rec.change_pct, null),
+        date: normalizeString(rec.date || ''),
+        source: normalizeString(rec.source || ''),
+      };
+    }).filter(function (item) {
+      return item.close !== null || item.change_pct !== null;
+    });
+  }
+
+  function buildMarketSummary(market) {
+    var items = getMarketItems(market);
+    if (items.length === 0) {
+      return {
+        status: '数据不足',
+        tone: 'neutral',
+        pace: '暂不判断',
+        note: '暂无市场指数数据',
+        avgChange: null,
+        upCount: 0,
+        downCount: 0,
+        best: null,
+        worst: null,
+        items: [],
+      };
+    }
+
+    var validChanges = items.filter(function (item) {
+      return item.change_pct !== null;
+    });
+    var total = validChanges.reduce(function (sum, item) {
+      return sum + item.change_pct;
+    }, 0);
+    var avgChange = validChanges.length ? total / validChanges.length : null;
+    var upCount = validChanges.filter(function (item) {
+      return item.change_pct > 0;
+    }).length;
+    var downCount = validChanges.filter(function (item) {
+      return item.change_pct < 0;
+    }).length;
+    var sorted = validChanges.slice().sort(function (a, b) {
+      return b.change_pct - a.change_pct;
+    });
+    var best = sorted[0] || null;
+    var worst = sorted[sorted.length - 1] || null;
+    var status = '震荡';
+    var tone = 'neutral';
+    var pace = '精选等待';
+
+    if (avgChange === null) {
+      status = '数据不足';
+      tone = 'neutral';
+      pace = '暂不判断';
+    } else if (avgChange >= 1.0 && upCount >= 4) {
+      status = '偏强';
+      tone = 'positive';
+      pace = '积极观察';
+    } else if (avgChange >= 0.3 && upCount >= downCount) {
+      status = '修复';
+      tone = 'info';
+      pace = '轻仓试错';
+    } else if (avgChange <= -0.3 || downCount > upCount) {
+      status = '偏弱';
+      tone = 'danger';
+      pace = '防守观察';
+    }
+
+    return {
+      status: status,
+      tone: tone,
+      pace: pace,
+      note: buildMarketStyleHint(best),
+      avgChange: avgChange,
+      upCount: upCount,
+      downCount: downCount,
+      best: best,
+      worst: worst,
+      items: items,
+    };
+  }
+
+  function buildMarketStyleHint(best) {
+    if (!best) return '风格不明确，继续观察。';
+    if (best.name === '科创50' && best.change_pct > 1.5) {
+      return '科创50领涨，成长风格占优。';
+    }
+    if (best.name === '创业板指' && best.change_pct > 1.0) {
+      return '创业板活跃，题材修复较强。';
+    }
+    if (best.name === '沪深300') {
+      return '沪深300领先，权重修复较强。';
+    }
+    if (best.name === '中证500') {
+      return '中证500领先，中小盘扩散较好。';
+    }
+    return best.name + '相对领先，继续观察持续性。';
+  }
+
+  function renderMarketRegime(summary) {
+    var avgText = summary.avgChange === null ? '--' : formatPct(summary.avgChange, true);
+    var widthText = summary.upCount + '/' + summary.items.length;
+    return ''
+      + '<div class="market-regime-row">'
+      + '  <div class="market-regime-card">'
+      + '    <span class="market-label">市场状态</span>'
+      + '    <strong class="market-value is-' + escapeHtml(summary.tone) + '">' + escapeHtml(summary.status) + '</strong>'
+      + '    <span class="market-note">' + escapeHtml(summary.note) + '</span>'
+      + '  </div>'
+      + '  <div class="market-regime-card">'
+      + '    <span class="market-label">操作节奏</span>'
+      + '    <strong class="market-value">' + escapeHtml(summary.pace) + '</strong>'
+      + '    <span class="market-note">主推与共振优先，风险标签优先过滤。</span>'
+      + '  </div>'
+      + '  <div class="market-regime-card">'
+      + '    <span class="market-label">市场广度</span>'
+      + '    <strong class="market-value">' + escapeHtml(widthText) + '</strong>'
+      + '    <span class="market-note">平均涨幅 ' + escapeHtml(avgText) + '</span>'
+      + '  </div>'
+      + '</div>';
+  }
+
+  function renderMarketIndexCards(items) {
+    var list = asArray(items);
+    if (list.length === 0) {
+      return '<div class="market-index-empty">暂无市场指数数据</div>';
+    }
+    return ''
+      + '<div class="market-index-grid">'
+      + list.map(function (item) {
+        var change = safeNumber(item.change_pct, null);
+        var tone = change === null ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+        return ''
+          + '<div class="market-index-card is-' + escapeHtml(tone) + '">'
+          + '  <span class="market-index-name">' + escapeHtml(item.name) + '</span>'
+          + '  <strong class="market-index-close">' + escapeHtml(item.close === null ? '--' : formatNumber(item.close, 2)) + '</strong>'
+          + '  <span class="market-index-change">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</span>'
+          + '</div>';
+      }).join('')
+      + '</div>';
   }
 
   function renderWorkspaceTabs() {
@@ -872,89 +996,208 @@
     }, 0);
   }
 
-  function renderAuxiliarySection(title, rows) {
-    var list = asArray(rows);
-    if (list.length === 0) {
-      return ''
-        + '<section class="aux-module">'
-        + '  <h3>' + escapeHtml(title) + '</h3>'
-        + '  <div class="text-item aux-empty">暂无数据</div>'
-        + '</section>';
-    }
+  function renderStatusBadge(badge) {
+    if (!badge || !badge.text) return '';
+    var tone = normalizeString(badge.tone || 'neutral');
+    return '<span class="status-badge is-' + escapeHtml(tone) + '">' + escapeHtml(badge.text) + '</span>';
+  }
+
+  function renderDecisionCard(config) {
+    var className = normalizeString(config.className || '');
+    var bodyHtml = config.bodyHtml || '<div class="decision-empty">暂无数据</div>';
     return ''
-      + '<section class="aux-module">'
-      + '  <h3>' + escapeHtml(title) + '</h3>'
-      + '  <ul>'
-      + list.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('')
-      + '  </ul>'
+      + '<section class="decision-card ' + escapeHtml(className) + '">'
+      + '  <div class="decision-card-head">'
+      + '    <div>'
+      + '      <h3>' + escapeHtml(config.title || '') + '</h3>'
+      + '      <p>' + escapeHtml(config.subtitle || '') + '</p>'
+      + '    </div>'
+      + renderStatusBadge(config.badge)
+      + '  </div>'
+      + '  <div class="decision-card-body">' + bodyHtml + '</div>'
       + '</section>';
+  }
+
+  function renderMetricPair(label, value, className) {
+    return ''
+      + '<div class="metric-pair">'
+      + '  <span>' + escapeHtml(label) + '</span>'
+      + '  <strong class="' + escapeHtml(className || '') + '">' + escapeHtml(value) + '</strong>'
+      + '</div>';
+  }
+
+  function renderMarketTemperatureCard(data) {
+    var summary = buildMarketSummary((data || {}).market || {});
+    var avgText = summary.avgChange === null ? '--' : formatPct(summary.avgChange, true);
+    var body = ''
+      + '<div class="metric-pair-grid">'
+      + renderMetricPair('平均涨幅', avgText, summary.avgChange === null ? '' : summary.avgChange >= 0 ? 'is-up' : 'is-down')
+      + renderMetricPair('上涨指数', summary.upCount + '/' + summary.items.length, '')
+      + '</div>'
+      + '<div class="decision-note">' + escapeHtml(summary.note) + '</div>';
+    if (summary.best) {
+      body += '<div class="decision-note">最强：' + escapeHtml(summary.best.name + ' ' + formatPct(summary.best.change_pct, true)) + '</div>';
+    }
+    return renderDecisionCard({
+      title: '市场温度',
+      subtitle: '主要指数强弱与交易环境',
+      badge: { text: summary.status, tone: summary.tone },
+      className: 'market-temperature-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderFlowRow(kind, item) {
+    var rec = item || {};
+    var flow = rec.flow_str || rec.net_flow_str || rec.amount_str || formatNumber(rec.flow || rec.net_flow || rec.amount, 2);
+    var tone = kind === '流入' ? 'in' : 'out';
+    return ''
+      + '<div class="flow-row">'
+      + '  <span class="flow-chip is-' + escapeHtml(tone) + '">' + escapeHtml(kind) + '</span>'
+      + '  <span class="flow-name">' + escapeHtml(normalizeString(rec.name || rec.sector || '--')) + '</span>'
+      + '  <strong class="flow-value ' + (tone === 'in' ? 'is-up' : 'is-down') + '">' + escapeHtml(normalizeString(flow || '--')) + '</strong>'
+      + '</div>';
+  }
+
+  function renderSectorFlowCard(data) {
+    var sectorIn = asArray((data || {}).sector_flow).slice(0, 5);
+    var sectorOut = asArray((data || {}).sector_outflow).slice(0, 5);
+    var inHtml = sectorIn.length ? sectorIn.map(function (item) { return renderFlowRow('流入', item); }).join('') : '<div class="decision-empty">暂无流入数据</div>';
+    var outHtml = sectorOut.length ? sectorOut.map(function (item) { return renderFlowRow('流出', item); }).join('') : '<div class="decision-empty">暂无流出数据</div>';
+    var body = ''
+      + '<div class="flow-columns">'
+      + '  <div><div class="mini-section-title">流入 Top5</div>' + inHtml + '</div>'
+      + '  <div><div class="mini-section-title">流出 Top5</div>' + outHtml + '</div>'
+      + '</div>';
+    return renderDecisionCard({
+      title: '板块资金',
+      subtitle: '资金流入与流出方向',
+      badge: { text: sectorIn.length || sectorOut.length ? '资金方向' : '暂无', tone: sectorIn.length ? 'positive' : 'neutral' },
+      className: 'sector-flow-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderLimitUpCard(data) {
+    var rows = asArray((data || {}).limit_up_pool).slice(0, 6);
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      return ''
+        + '<div class="stock-signal-row">'
+        + '  <div class="stock-signal-main"><strong>' + escapeHtml(rec.name || '--') + '</strong><span>' + escapeHtml(rec.code || '') + '</span></div>'
+        + '  <div class="stock-signal-reason"><span class="tag-chip">题材</span>' + escapeHtml(rec.reason || rec.note || '原因未标注') + '</div>'
+        + '</div>';
+    }).join('') : '<div class="decision-empty">暂无涨停池</div>';
+    return renderDecisionCard({
+      title: '涨停情绪',
+      subtitle: '短线情绪观察',
+      badge: { text: rows.length ? rows.length + '只' : '暂无', tone: rows.length ? 'warning' : 'neutral' },
+      className: 'limit-up-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderEventsCard(data) {
+    var rows = asArray((data || {}).events).slice(0, 6);
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      var summary = rec.impact && rec.impact.summary ? rec.impact.summary : (rec.summary || rec.brief || '暂无影响摘要');
+      return ''
+        + '<div class="event-row">'
+        + '  <strong>' + escapeHtml(rec.title || rec.display_title || '未命名事件') + '</strong>'
+        + '  <span class="event-summary">影响：' + escapeHtml(summary) + '</span>'
+        + '</div>';
+    }).join('') : '<div class="decision-empty">暂无事件</div>';
+    return renderDecisionCard({
+      title: '事件驱动',
+      subtitle: '题材催化与影响摘要',
+      badge: { text: rows.length ? '待确认' : '暂无', tone: rows.length ? 'info' : 'neutral' },
+      className: 'events-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderSellSignalsCard(data) {
+    var rows = asArray((data || {}).sell_signals).slice(0, 6);
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      var firstPoint = rec.sell_points && rec.sell_points.length ? rec.sell_points[0] : null;
+      var reason = firstPoint && firstPoint.reason ? firstPoint.reason : (rec.reason || '暂无卖出理由');
+      var action = firstPoint && firstPoint.action ? firstPoint.action : '优先处理';
+      return ''
+        + '<div class="stock-signal-row is-risk-row">'
+        + '  <div class="stock-signal-main"><strong>' + escapeHtml(rec.name || '--') + '</strong><span>' + escapeHtml(rec.code || '') + '</span></div>'
+        + '  <div class="stock-signal-reason"><span class="tag-chip is-risk">风险</span>' + escapeHtml(reason) + '</div>'
+        + '  <div class="decision-note">动作：' + escapeHtml(action) + '</div>'
+        + '</div>';
+    }).join('') : '<div class="decision-empty">暂无卖出信号</div>';
+    return renderDecisionCard({
+      title: '卖出提醒',
+      subtitle: '风险优先展示',
+      badge: { text: rows.length ? '风险' : '暂无', tone: rows.length ? 'danger' : 'neutral' },
+      className: 'sell-signals-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderRecentReviewsCard(data) {
+    var rows = asArray((data || {}).recent_reviews).slice(0, 6);
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      var change = safeNumber(rec.change_pct, null);
+      var tone = change === null ? '' : change >= 0 ? 'is-up' : 'is-down';
+      return ''
+        + '<div class="review-row">'
+        + '  <span><strong>' + escapeHtml(rec.name || '--') + '</strong> ' + escapeHtml(rec.code || '') + '</span>'
+        + '  <strong class="' + tone + '">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</strong>'
+        + '</div>';
+    }).join('') : '<div class="decision-empty">暂无回看记录</div>';
+    return renderDecisionCard({
+      title: '策略回看',
+      subtitle: '近期信号反馈',
+      badge: { text: rows.length ? '反馈' : '暂无', tone: rows.length ? 'info' : 'neutral' },
+      className: 'recent-reviews-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderDiagnosticsCard(data) {
+    var diagnostics = (data || {}).diagnostics || {};
+    var keys = Object.keys(diagnostics).slice(0, 6);
+    var body = keys.length ? keys.map(function (key) {
+      var value = diagnostics[key];
+      var text = '';
+      if (value && typeof value === 'object') {
+        text = normalizeString(value.status || value.summary || '已记录');
+      } else {
+        text = normalizeString(value);
+      }
+      return ''
+        + '<div class="diagnostic-row">'
+        + '  <strong>' + escapeHtml(key) + '</strong>'
+        + '  <span>' + escapeHtml(text || '已记录') + '</span>'
+        + '</div>';
+    }).join('') : '<div class="decision-empty">暂无诊断信息</div>';
+    return renderDecisionCard({
+      title: '数据诊断',
+      subtitle: '数据完整性与生成状态',
+      badge: { text: keys.length ? '正常' : '暂无', tone: keys.length ? 'positive' : 'neutral' },
+      className: 'diagnostics-card',
+      bodyHtml: body,
+    });
   }
 
   function renderAuxiliaryCenter() {
     if (!nodes.auxGrid) return;
     var data = state.data || {};
-
-    var marketRows = [];
-    var market = data.market || {};
-    Object.keys(market).forEach(function (name) {
-      var rec = market[name] || {};
-      if (rec.change_pct !== undefined && rec.close !== undefined) {
-        marketRows.push(name + '：' + formatNumber(rec.close, 2) + ' ' + formatPct(rec.change_pct, true));
-      }
-    });
-    if (marketRows.length === 0) marketRows.push('暂无市场数据');
-
-    var sectorRows = [];
-    var sectorIn = asArray(data.sector_flow).slice(0, 5);
-    var sectorOut = asArray(data.sector_outflow).slice(0, 5);
-    for (var i = 0; i < sectorIn.length; i += 1) {
-      sectorRows.push('入场 ' + normalizeString(sectorIn[i].name) + '：' + normalizeString(sectorIn[i].flow_str || formatNumber(sectorIn[i].flow, 2)));
-    }
-    for (var o = 0; o < sectorOut.length; o += 1) {
-      sectorRows.push('流出 ' + normalizeString(sectorOut[o].name) + '：' + normalizeString(sectorOut[o].flow_str || formatNumber(sectorOut[o].flow, 2)));
-    }
-    if (sectorRows.length === 0) sectorRows.push('暂无板块净流向信息');
-
-    var limitRows = asArray(data.limit_up_pool).slice(0, 6).map(function (item) {
-      return normalizeString(item.name) + ' ' + normalizeString(item.code) + ' (' + normalizeString(item.reason || '无') + ')';
-    });
-    if (limitRows.length === 0) limitRows.push('暂无涨停池');
-
-    var eventsRows = asArray(data.events).slice(0, 6).map(function (item) {
-      return normalizeString(item.title || item.display_title || '未命名事件') + '：' + normalizeString(item.impact && item.impact.summary ? item.impact.summary : item.summary || item.brief || '');
-    });
-    if (eventsRows.length === 0) eventsRows.push('暂无事件');
-
-    var sellRows = asArray(data.sell_signals).slice(0, 6).map(function (item) {
-      return normalizeString(item.name) + ' ' + normalizeString(item.code) + '：' + normalizeString(item.sell_points && item.sell_points.length ? item.sell_points[0].reason : '暂无卖出理由');
-    });
-    if (sellRows.length === 0) sellRows.push('暂无卖出信号');
-
-    var reviewRows = asArray(data.recent_reviews).slice(0, 6).map(function (item) {
-      return normalizeString(item.name) + ' ' + normalizeString(item.code) + '：' + formatPct(item.change_pct, true);
-    });
-    if (reviewRows.length === 0) reviewRows.push('暂无回看记录');
-
-    var diagRows = [];
-    var diagnostics = data.diagnostics || {};
-    Object.keys(diagnostics).forEach(function (key) {
-      var value = diagnostics[key];
-      if (value && typeof value === 'object') {
-        diagRows.push(key + '：' + normalizeString(value.status || value.summary || '已记录'));
-      } else {
-        diagRows.push(key + '：' + normalizeString(value));
-      }
-    });
-    if (diagRows.length === 0) diagRows.push('暂无诊断信息');
-
     nodes.auxGrid.innerHTML = ''
-      + renderAuxiliarySection('市场', marketRows)
-      + renderAuxiliarySection('板块', sectorRows)
-      + renderAuxiliarySection('涨停', limitRows)
-      + renderAuxiliarySection('事件', eventsRows)
-      + renderAuxiliarySection('卖出', sellRows)
-      + renderAuxiliarySection('回看', reviewRows)
-      + renderAuxiliarySection('诊断', diagRows);
+      + renderMarketTemperatureCard(data)
+      + renderSectorFlowCard(data)
+      + renderLimitUpCard(data)
+      + renderEventsCard(data)
+      + renderSellSignalsCard(data)
+      + renderRecentReviewsCard(data)
+      + renderDiagnosticsCard(data);
   }
 
   function openMobileDetailDrawer(item) {
