@@ -5,6 +5,8 @@ from chanlun.signal_quality_classifier import (
     HIGH_VOLATILITY_MIN,
     build_signal_context,
     classify_signal,
+    explain_signal_rejection,
+    list_quality_profiles,
     tag_signal_quality,
     tag_signal_quality_in_place,
     tag_signal_quality_many,
@@ -120,6 +122,118 @@ class SignalQualityClassifierTests(unittest.TestCase):
         ]
         self.assertEqual(len(filter_executable_signals(signals)), 1)
         self.assertEqual(filter_executable_signals(signals)[0]["trend_strength"], 2)
+
+    def test_list_quality_profiles(self):
+        self.assertEqual(
+            list_quality_profiles(),
+            ["fusion_strict", "fusion_mid", "fusion_loose"],
+        )
+
+    def test_classify_signal_fusion_mid_relaxes_trend(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 1.6,
+            "volatility": 0.09,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        self.assertEqual(classify_signal(signal, profile="fusion_mid"), "A")
+        self.assertEqual(classify_signal(signal), "B")
+
+    def test_classify_signal_fusion_mid_does_not_relax_structure_with_trend(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 1.6,
+            "volatility": 0.09,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": None,
+        }
+        self.assertEqual(classify_signal(signal, profile="fusion_mid"), "B")
+
+    def test_classify_signal_fusion_loose_allows_weak_strength(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 1.0,
+            "volatility": 0.09,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        self.assertEqual(classify_signal(signal, profile="fusion_loose"), "A")
+        self.assertEqual(classify_signal(signal), "B")
+
+    def test_tag_signal_quality_profile(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 1.6,
+            "volatility": 0.09,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        out = tag_signal_quality(signal, profile="fusion_mid")
+        self.assertNotIn("category", signal)
+        self.assertEqual(out.get("category"), "A")
+        out_strict = tag_signal_quality(signal)
+        self.assertEqual(out_strict.get("category"), "B")
+
+    def test_unknown_profile_raises(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2,
+            "volatility": LOW_VOLATILITY_MAX,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        with self.assertRaises(ValueError):
+            classify_signal(signal, profile="unknown")
+        with self.assertRaises(ValueError):
+            tag_signal_quality(signal, profile="unknown")
+        with self.assertRaises(ValueError):
+            filter_executable_signals([signal], profile="unknown")
+
+    def test_explain_signal_rejection_returns_empty_for_a(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+        self.assertEqual(explain_signal_rejection(signal), [])
+
+    def test_explain_signal_rejection_reports_bottleneck_reasons(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 1,
+            "volatility": 0.2,
+            "pivot": None,
+            "segment": None,
+        }
+        reasons = explain_signal_rejection(signal, profile="fusion_strict")
+        self.assertIn("trend_strength_below_min", reasons)
+        self.assertIn("volatility_above_max", reasons)
+        self.assertIn("high_volatility", reasons)
+        self.assertIn("missing_pivot", reasons)
+        self.assertIn("missing_segment", reasons)
+
+    def test_filter_executable_signals_profile_flexible(self):
+        signals = [
+            {
+                "type": "一买",
+                "trend_strength": 1.0,
+                "volatility": 0.09,
+                "pivot": {"ZG": 12, "ZD": 10},
+                "segment": {"high": 12, "low": 10},
+            },
+            {
+                "type": "一买",
+                "trend_strength": 0,
+                "volatility": 0.05,
+                "pivot": {"ZG": 12, "ZD": 10},
+                "segment": {"high": 12, "low": 10},
+            },
+        ]
+        self.assertEqual(len(filter_executable_signals(signals, profile="fusion_loose")), 1)
+        self.assertEqual(len(filter_executable_signals(signals, profile="fusion_strict")), 0)
 
     def test_build_signal_context_from_result_and_pick(self):
         result = {

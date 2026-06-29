@@ -440,6 +440,52 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             text = output_md.read_text(encoding="utf-8")
             self.assertIn("bottom_market_not_strong", text)
 
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_business_metrics_flag_noop_keeps_payload(self, run_mock):
+        payload = _fake_payload()
+        payload["fusion_threshold_scan"] = {
+            "profiles": [
+                {
+                    "candidate": "fusion_strict",
+                    "samples_before": 100,
+                    "samples_after": 25,
+                    "coverage": 0.25,
+                    "coverage_pct": 25.0,
+                    "t3_mean_before": 1.2,
+                    "t3_mean_after": 1.4,
+                    "t3_win_rate_before": 45.0,
+                    "t3_win_rate_after": 52.0,
+                    "drawdown_mean_before": -5.0,
+                    "drawdown_mean_after": -4.8,
+                    "accepted": True,
+                }
+            ],
+            "selected": {"candidate": "fusion_strict", "reason": "meets target criteria", "accepted": True},
+            "rejected": ["fusion_mid", "fusion_loose"],
+            "pareto_frontier": ["fusion_strict"],
+        }
+        run_mock.return_value = payload
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_json = Path(tmpdir) / "policy_backtest.json"
+            output_md = Path(tmpdir) / "policy_backtest.md"
+            rc = main([
+                "--policies",
+                "fusion_strict,fusion_mid,fusion_loose",
+                "--business-metrics",
+                "--output-json",
+                str(output_json),
+                "--output-md",
+                str(output_md),
+            ])
+
+            self.assertEqual(rc, 0)
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("## Fusion Threshold Scan", text)
+            self.assertIn("Fusion Threshold Scan", text)
+            self.assertIn("Selected Candidate", text)
+            self.assertIn("fusion_strict", text)
+
 
 if __name__ == "__main__":
     unittest.main()

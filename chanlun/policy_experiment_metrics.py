@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import Dict, Iterable, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from chanlun.historical_experiment_metrics import (
     _evaluate_pick_sample,
@@ -15,6 +15,18 @@ from chanlun.historical_experiment_metrics import (
 from chanlun.backtest_execution import evaluate_exit_returns
 from chanlun.backtest_metrics import summarize_return_samples
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
+from chanlun.signal_quality_classifier import (
+    build_signal_context,
+    classify_signal,
+    explain_signal_rejection,
+    list_quality_profile_variants,
+)
+
+FUSION_PROFILES = ("fusion_strict", "fusion_mid", "fusion_loose")
+_FUSION_STRICT = "fusion_strict"
+_FUSION_MID = "fusion_mid"
+_FUSION_LOOSE = "fusion_loose"
+_ENTRY_MODE_IMMEDIATE = "immediate_close"
 
 POLICY_EXPERIMENTS = {
     "delay1_v1": {
@@ -144,11 +156,62 @@ _BOTTOM_TREND_REASON_LABELS = {
 
 def list_policy_experiments() -> list:
     """Return registered policy experiment names."""
-    return list(POLICY_EXPERIMENTS.keys())
+    return list(POLICY_EXPERIMENTS.keys()) + list(FUSION_PROFILES)
 
 
 def supports_policy_experiment(name: str) -> bool:
-    return name in POLICY_EXPERIMENTS
+    if name in POLICY_EXPERIMENTS:
+        return True
+    return name in FUSION_PROFILES
+
+
+def _is_fusion_profile(name: str) -> bool:
+    return name in FUSION_PROFILES
+
+
+def _to_ratio(value: int, total: int) -> float:
+    if total <= 0:
+        return 0.0
+    return round(value / total, 4)
+
+
+def _to_pct(value: int, total: int) -> float:
+    if total <= 0:
+        return 0.0
+    return round(value / total * 100, 2)
+
+
+def _build_fusion_pick_signal(pick: Optional[dict]) -> dict:
+    if not isinstance(pick, dict):
+        return {}
+    best_buy_point = pick.get("best_buy_point")
+    if isinstance(best_buy_point, dict):
+        signal = dict(best_buy_point)
+        signal["context"] = build_signal_context(pick, signal)
+        return signal
+    return {}
+
+
+def _is_fusion_profile_a(pick: Optional[dict], profile: str) -> bool:
+    signal = _build_fusion_pick_signal(pick)
+    if not signal:
+        return False
+    return classify_signal(signal, profile=profile) == "A"
+
+
+def _fusion_profile_reject_reasons(pick: Optional[dict], profile: str) -> List[str]:
+    signal = _build_fusion_pick_signal(pick)
+    if not signal:
+        return ["missing_best_buy_point"]
+    return explain_signal_rejection(signal, profile=profile)
+
+
+def _build_picks_fusion_snapshot_rows() -> list:
+    return [
+        (snap_date, version, pick)
+        for snap_date, version, pick in iter_snapshot_picks()
+        if version == "picks_fusion"
+    ]
 
 
 def _as_str_list(values) -> List[str]:
@@ -375,6 +438,343 @@ def _build_shared_baseline_context(
     }
 
 
+def _build_fusion_baseline_context(
+    rows: Sequence[Tuple[str, str, dict]],
+    snapshot_index_map: Dict[str, int],
+) -> Dict[str, object]:
+    kline_cache: Dict[str, Optional[dict]] = {}
+    unique_codes = set()
+    fetch_attempts = 0
+    cache_hits = 0
+    kline_missing = 0
+    kline_invalid = 0
+    picks_seen = 0
+    baseline_evaluated = 0
+    baseline_samples: List[dict] = []
+    evaluated_rows: List[dict] = []
+
+    for snap_date, version, pick in rows:
+        if version != "picks_fusion":
+            continue
+
+        picks_seen += 1
+        code = (pick or {}).get("code")
+        if not code:
+            continue
+
+        code_str = str(code)
+        unique_codes.add(code_str)
+        if code_str in kline_cache:
+            cache_hits += 1
+            kline = kline_cache[code_str]
+        else:
+            fetch_attempts += 1
+            kline = _fetch_daily_kline_cached(code_str, kline_cache)
+            if code_str not in kline_cache:
+                kline_cache[code_str] = kline
+
+        if kline is None:
+            kline_missing += 1
+            continue
+
+        normalized_kline = _normalize_kline(kline)
+        if not normalized_kline:
+            kline_invalid += 1
+            continue
+
+        baseline_sample = _evaluate_pick_sample(
+            normalized_kline,
+            snap_date,
+            _ENTRY_MODE_IMMEDIATE,
+        )
+        if baseline_sample is None:
+            continue
+
+        baseline_evaluated += 1
+        baseline_samples.append(baseline_sample)
+        evaluated_rows.append(
+            {
+                "snap_date": str(snap_date),
+                "pick": pick,
+                "baseline_sample": baseline_sample,
+                "normalized_kline": normalized_kline,
+            },
+        )
+
+    coverage = {
+        "snapshot_days": len(snapshot_index_map),
+        "picks_seen": picks_seen,
+        "baseline_evaluated": baseline_evaluated,
+        "baseline_filtered": 0,
+        "version": "picks_fusion",
+    }
+    execution = {
+        "shared_baseline": True,
+        "snapshot_rows": len(rows),
+        "unique_codes": len(unique_codes),
+        "fetch_attempts": fetch_attempts,
+        "cache_hits": cache_hits,
+        "kline_missing": kline_missing,
+        "kline_invalid": kline_invalid,
+        "baseline_rows": len(evaluated_rows),
+    }
+
+    return {
+        "coverage": coverage,
+        "baseline_samples": baseline_samples,
+        "evaluated_rows": evaluated_rows,
+        "execution": execution,
+    }
+
+
+def _is_fusion_profile_accepted(profile_summary: Optional[dict]) -> bool:
+    if not isinstance(profile_summary, dict):
+        return False
+
+    coverage = profile_summary.get("coverage", 0.0) or 0.0
+    t3_mean = profile_summary.get("t3_mean_after")
+    win_rate = profile_summary.get("t3_win_rate_after")
+    drawdown = profile_summary.get("drawdown_mean_after")
+    return (
+        0.25 <= coverage <= 0.35
+        and t3_mean is not None
+        and t3_mean > 0.80
+        and win_rate is not None
+        and win_rate >= 49.0
+        and drawdown is not None
+        and drawdown >= -4.60
+    )
+
+
+def _fusion_reject_reason(profile_summary: dict) -> str:
+    reasons = []
+    coverage = profile_summary.get("coverage", 0.0) or 0.0
+    t3_mean = profile_summary.get("t3_mean_after")
+    win_rate = profile_summary.get("t3_win_rate_after")
+    drawdown = profile_summary.get("drawdown_mean_after")
+    if coverage < 0.25:
+        reasons.append("coverage below 25%")
+    elif coverage > 0.35:
+        reasons.append("coverage above 35%")
+    if t3_mean is None or t3_mean <= 0.80:
+        reasons.append("T+3 mean <= 0.80")
+    if win_rate is None or win_rate < 49.0:
+        reasons.append("T+3 win rate < 49%")
+    if drawdown is None or drawdown < -4.60:
+        reasons.append("drawdown worse than -4.60")
+    return ", ".join(reasons) if reasons else "accepted"
+
+
+def _pareto_frontier(items: List[dict]) -> List[str]:
+    candidates = [item for item in items if item.get("n_after", 0) > 0]
+    frontier: List[str] = []
+
+    for item in candidates:
+        dominated = False
+        for other in candidates:
+            if item is other:
+                continue
+            if _dominates(other, item):
+                dominated = True
+                break
+        if not dominated:
+            frontier.append(item.get("candidate"))
+
+    return frontier
+
+
+def _dominates(left: dict, right: dict) -> bool:
+    left_cov = _to_float(left.get("coverage"))
+    right_cov = _to_float(right.get("coverage"))
+    left_t3 = left.get("t3_mean_after")
+    right_t3 = right.get("t3_mean_after")
+    if None in (left_cov, right_cov, left_t3, right_t3):
+        return False
+
+    better_or_equal = (
+        float(left_cov) >= float(right_cov)
+        and float(left_t3) >= float(right_t3)
+    )
+    strictly_better = (
+        float(left_cov) > float(right_cov)
+        or float(left_t3) > float(right_t3)
+    )
+    return better_or_equal and strictly_better
+
+
+def _to_float(value: Any) -> Optional[float]:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _rank_fusion_profiles(items: List[dict], prefer_coverage: bool = False) -> List[dict]:
+    if prefer_coverage:
+        return sorted(
+            items,
+            key=lambda item: (
+                item.get("coverage") or 0.0,
+                item.get("t3_mean_after") if item.get("t3_mean_after") is not None else -999,
+                item.get("drawdown_mean_after") if item.get("drawdown_mean_after") is not None else -999,
+            ),
+            reverse=True,
+        )
+    return sorted(
+        items,
+        key=lambda item: (
+            1 if item.get("accepted") else 0,
+            item.get("t3_mean_after") if item.get("t3_mean_after") is not None else -999,
+            item.get("coverage") or 0.0,
+            item.get("drawdown_mean_after") if item.get("drawdown_mean_after") is not None else -999,
+        ),
+        reverse=True,
+    )
+
+
+def _summarize_fusion_variant(
+    candidate_name: str,
+    variant_name: str,
+    baseline_rows: Sequence[dict],
+    baseline_n: int,
+    t3_mean_before: Optional[float],
+    t3_win_rate_before: Optional[float],
+    drawdown_before: Optional[float],
+) -> dict:
+    profile_samples: List[dict] = []
+    reject_reasons = Counter()
+    rejected_samples = 0
+    for item in baseline_rows:
+        pick = item.get("pick")
+        if _is_fusion_profile_a(pick, variant_name):
+            profile_samples.append(item["baseline_sample"])
+            continue
+
+        rejected_samples += 1
+        for reason in _fusion_profile_reject_reasons(pick, variant_name):
+            reject_reasons[reason] += 1
+
+    profile_summary = summarize_return_samples(profile_samples)
+    samples_after = profile_summary.get("n") if profile_summary else 0
+    coverage = _to_ratio(samples_after, baseline_n)
+    coverage_pct = _to_pct(samples_after, baseline_n)
+    t3_mean_after = profile_summary.get("t3_mean") if profile_summary else None
+    t3_win_rate_after = profile_summary.get("t3_win_rate") if profile_summary else None
+    drawdown_after = profile_summary.get("max_dd_3d_mean") if profile_summary else None
+
+    row = {
+        "candidate": candidate_name,
+        "variant": variant_name,
+        "samples_before": baseline_n,
+        "samples_after": samples_after,
+        "coverage": coverage,
+        "coverage_pct": coverage_pct,
+        "t3_mean_before": t3_mean_before,
+        "t3_mean_after": t3_mean_after,
+        "t3_win_rate_before": t3_win_rate_before,
+        "t3_win_rate_after": t3_win_rate_after,
+        "drawdown_mean_before": drawdown_before,
+        "drawdown_mean_after": drawdown_after,
+        "n_after": samples_after,
+        "rejected_samples": rejected_samples,
+        "reject_reason_distribution": dict(sorted(reject_reasons.items())),
+        "top_reject_reason": (
+            reject_reasons.most_common(1)[0][0] if reject_reasons else None
+        ),
+    }
+    row["accepted"] = _is_fusion_profile_accepted(row)
+    return row
+
+
+def _run_fusion_threshold_scan(profile_names: List[str]) -> Dict[str, object]:
+    names = [name for name in profile_names if name in FUSION_PROFILES]
+    rows = _build_picks_fusion_snapshot_rows()
+    snapshot_index_map = _build_snapshot_day_index(rows)
+    baseline_context = _build_fusion_baseline_context(rows, snapshot_index_map)
+    baseline_samples = cast(List[dict], baseline_context["baseline_samples"])
+    baseline_rows = cast(List[dict], baseline_context["evaluated_rows"])
+    baseline_coverage = cast(Dict[str, int], baseline_context["coverage"])
+    execution = cast(Dict[str, object], baseline_context.get("execution", {}))
+
+    baseline_summary = summarize_return_samples(baseline_samples)
+    baseline_n = baseline_summary.get("n") if baseline_summary else 0
+    t3_mean_before = baseline_summary.get("t3_mean") if baseline_summary else None
+    t3_win_rate_before = baseline_summary.get("t3_win_rate") if baseline_summary else None
+    drawdown_before = baseline_summary.get("max_dd_3d_mean") if baseline_summary else None
+
+    variant_results: Dict[str, List[dict]] = {}
+    profile_rows: List[dict] = []
+    for name in names:
+        variants = list_quality_profile_variants(name)
+        variant_rows = [
+            _summarize_fusion_variant(
+                name,
+                variant,
+                baseline_rows,
+                baseline_n,
+                t3_mean_before,
+                t3_win_rate_before,
+                drawdown_before,
+            )
+            for variant in variants
+        ]
+        variant_results[name] = variant_rows
+        if not variant_rows:
+            continue
+        best = _rank_fusion_profiles(
+            variant_rows,
+            prefer_coverage=(name == _FUSION_LOOSE),
+        )[0]
+        profile_rows.append(dict(best))
+
+    baseline_metrics = {
+        "samples": baseline_n,
+        "t3_mean_before": t3_mean_before,
+        "t3_win_rate_before": t3_win_rate_before,
+        "drawdown_mean_before": drawdown_before,
+    }
+
+    pareto = _pareto_frontier(profile_rows)
+    accepted_profiles = [
+        item for item in profile_rows
+        if item.get("accepted") and item.get("candidate") in pareto
+    ]
+    if accepted_profiles:
+        ranked = _rank_fusion_profiles(accepted_profiles)
+        selected = ranked[0]["candidate"]
+        rejected = [item.get("candidate") for item in profile_rows if not item.get("accepted")]
+        selected_reason = "meets target criteria"
+    else:
+        selected = "fusion_strict"
+        accepted_profiles = []
+        rejected = [item.get("candidate") for item in profile_rows if item.get("candidate") != selected]
+        selected_reason = "no profile met all target criteria"
+    rejected_reasons = {
+        item.get("candidate"): _fusion_reject_reason(item)
+        for item in profile_rows
+        if item.get("candidate") in rejected
+    }
+
+    return {
+        "profiles": profile_rows,
+        "variant_results": variant_results,
+        "baseline_reference": "picks_fusion",
+        "snapshot_rows": len(rows),
+        "snapshot_coverage": baseline_coverage,
+        "baseline_metrics": baseline_metrics,
+        "selected": {
+            "candidate": selected,
+            "reason": selected_reason,
+            "accepted": selected in [item.get("candidate") for item in accepted_profiles],
+        },
+        "rejected": rejected,
+        "rejected_reasons": rejected_reasons,
+        "pareto_frontier": pareto,
+        "execution": execution,
+    }
+
+
 def _is_cooldown_hit(name: str, pick: dict, state: dict) -> bool:
     cfg = POLICY_EXPERIMENTS.get(name)
     if not cfg:
@@ -436,6 +836,8 @@ def should_filter_for_policy(name: str, pick: dict, state: dict) -> Tuple[bool, 
         state = {}
     if not supports_policy_experiment(name):
         return False, "unsupported"
+    if _is_fusion_profile(name):
+        return False, ""
 
     cfg = POLICY_EXPERIMENTS[name]
     quality_reasons = cfg.get("bottom_quality_reasons")
@@ -616,6 +1018,12 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
     if not names:
         return {
             "policies": [],
+            "fusion_threshold_scan": {
+                "profiles": [],
+                "selected": {},
+                "rejected": [],
+                "pareto_frontier": [],
+            },
             "execution": {
                 "shared_baseline": True,
                 "snapshot_rows": 0,
@@ -630,32 +1038,74 @@ def run_policy_experiment_metrics(policy_names: Optional[Iterable[str]] = None) 
 
     rows = _build_snapshot_rows()
     snapshot_index_map = _build_snapshot_day_index(rows)
+    legacy_names = [name for name in names if not _is_fusion_profile(name)]
+    fusion_names = [name for name in names if _is_fusion_profile(name)]
 
-    baseline_context = _build_shared_baseline_context(rows, snapshot_index_map)
-    baseline_samples = cast(List[dict], baseline_context["baseline_samples"])
-    baseline_rows = cast(List[dict], baseline_context["evaluated_rows"])
-    baseline_coverage = cast(Dict[str, int], baseline_context["coverage"])
-    execution = cast(Dict[str, object], baseline_context.get("execution", {}))
-
-    baseline_summary = summarize_return_samples(baseline_samples)
-
-    policy_results = [
-        _run_one_policy(
-            name,
-            baseline_rows,
-            snapshot_index_map,
-            baseline_summary,
-            baseline_coverage,
-        )
-        for name in names
-    ]
-
-    base_name = names[0] if names else _BASELINE_EXPERIMENT
-    return {
-        "policies": policy_results,
-        "baseline_reference": _BASELINE_EXPERIMENT,
-        "requested_policies": names,
-        "base_index_name": base_name,
-        "snapshot_rows": len(rows),
-        "execution": execution,
+    payload: Dict[str, object] = {
+        "policies": [],
+        "fusion_threshold_scan": {
+            "profiles": [],
+            "selected": {},
+            "rejected": [],
+            "pareto_frontier": [],
+        },
     }
+    payload["requested_policies"] = names
+
+    if legacy_names:
+        baseline_context = _build_shared_baseline_context(rows, snapshot_index_map)
+        baseline_samples = cast(List[dict], baseline_context["baseline_samples"])
+        baseline_rows = cast(List[dict], baseline_context["evaluated_rows"])
+        baseline_coverage = cast(Dict[str, int], baseline_context["coverage"])
+        baseline_summary = summarize_return_samples(baseline_samples)
+        execution = cast(Dict[str, object], baseline_context.get("execution", {}))
+        payload["execution"] = execution
+
+        payload["policies"] = [
+            _run_one_policy(
+                name,
+                baseline_rows,
+                snapshot_index_map,
+                baseline_summary,
+                baseline_coverage,
+            )
+            for name in legacy_names
+        ]
+
+    if fusion_names:
+        payload["fusion_threshold_scan"] = _run_fusion_threshold_scan(fusion_names)
+        # For pure fusion scans, keep execution aligned with fusion path.
+        if not legacy_names:
+            payload["execution"] = payload["fusion_threshold_scan"].get("execution", {})
+
+    if "baseline_reference" not in payload:
+        if legacy_names:
+            payload["baseline_reference"] = _BASELINE_EXPERIMENT
+        else:
+            payload["baseline_reference"] = "picks_fusion"
+
+    if "base_index_name" not in payload:
+        if payload.get("policies"):
+            payload["base_index_name"] = legacy_names[0] if legacy_names else _BASELINE_EXPERIMENT
+        elif fusion_names:
+            payload["base_index_name"] = "picks_fusion"
+
+    if not payload.get("snapshot_rows"):
+        if fusion_names:
+            payload["snapshot_rows"] = payload["fusion_threshold_scan"].get("snapshot_rows", len(rows))
+        else:
+            payload["snapshot_rows"] = len(rows)
+
+    if "execution" not in payload:
+        payload["execution"] = {
+            "shared_baseline": True,
+            "snapshot_rows": len(rows),
+            "unique_codes": 0,
+            "fetch_attempts": 0,
+            "cache_hits": 0,
+            "kline_missing": 0,
+            "kline_invalid": 0,
+            "baseline_rows": 0,
+        }
+
+    return payload

@@ -15,6 +15,140 @@ HIGH_VOLATILITY_MIN = 0.18
 
 _LOW_VOLATILITY_MAX = float(LOW_VOLATILITY_MAX)
 _HIGH_VOLATILITY_MIN = float(HIGH_VOLATILITY_MIN)
+_FUSION_PROFILE_STRICT = "fusion_strict"
+_FUSION_PROFILE_MID = "fusion_mid"
+_FUSION_PROFILE_LOOSE = "fusion_loose"
+_FUSION_PROFILE_MID_TREND = "fusion_mid_trend"
+_FUSION_PROFILE_MID_VOLATILITY = "fusion_mid_volatility"
+_FUSION_PROFILE_MID_STRUCTURE = "fusion_mid_structure"
+_FUSION_PROFILE_LOOSE_TREND = "fusion_loose_trend"
+_FUSION_PROFILE_LOOSE_VOLATILITY = "fusion_loose_volatility"
+
+
+def list_quality_profiles() -> list[str]:
+    """Return supported quality profiles."""
+    return [_FUSION_PROFILE_STRICT, _FUSION_PROFILE_MID, _FUSION_PROFILE_LOOSE]
+
+
+def list_quality_profile_variants(profile: str) -> list[str]:
+    """Return concrete scan variants for a public quality profile."""
+    normalized = _normalize_profile(profile)
+    if normalized == _FUSION_PROFILE_MID:
+        return [
+            _FUSION_PROFILE_MID_TREND,
+            _FUSION_PROFILE_MID_VOLATILITY,
+            _FUSION_PROFILE_MID_STRUCTURE,
+        ]
+    if normalized == _FUSION_PROFILE_LOOSE:
+        return [_FUSION_PROFILE_LOOSE_TREND, _FUSION_PROFILE_LOOSE_VOLATILITY]
+    return [normalized]
+
+
+def _normalize_profile(profile: str | None) -> str:
+    if not profile:
+        return _FUSION_PROFILE_STRICT
+    if profile in {"strict", "fusion"}:
+        return _FUSION_PROFILE_STRICT
+    if profile in {
+        _FUSION_PROFILE_STRICT,
+        _FUSION_PROFILE_MID,
+        _FUSION_PROFILE_LOOSE,
+        _FUSION_PROFILE_MID_TREND,
+        _FUSION_PROFILE_MID_VOLATILITY,
+        _FUSION_PROFILE_MID_STRUCTURE,
+        _FUSION_PROFILE_LOOSE_TREND,
+        _FUSION_PROFILE_LOOSE_VOLATILITY,
+    }:
+        return str(profile)
+    raise ValueError(f"unknown quality profile: {profile}")
+
+
+def _build_signal_profile_config(profile: str) -> dict:
+    normalized = _normalize_profile(profile)
+    if normalized == _FUSION_PROFILE_STRICT:
+        return {
+            "min_trend_strength": 2.0,
+            "max_volatility": _LOW_VOLATILITY_MAX,
+            "structure_mode": "strict",
+        }
+    if normalized in {_FUSION_PROFILE_MID, _FUSION_PROFILE_MID_TREND}:
+        return {
+            "min_trend_strength": 1.5,
+            "max_volatility": _LOW_VOLATILITY_MAX,
+            "structure_mode": "strict",
+        }
+    if normalized == _FUSION_PROFILE_MID_VOLATILITY:
+        return {
+            "min_trend_strength": 2.0,
+            "max_volatility": _LOW_VOLATILITY_MAX * 1.15,
+            "structure_mode": "strict",
+        }
+    if normalized == _FUSION_PROFILE_MID_STRUCTURE:
+        return {
+            "min_trend_strength": 2.0,
+            "max_volatility": _LOW_VOLATILITY_MAX,
+            "structure_mode": "relaxed",
+        }
+    if normalized in {_FUSION_PROFILE_LOOSE, _FUSION_PROFILE_LOOSE_TREND}:
+        return {
+            "min_trend_strength": 1.0,
+            "max_volatility": _LOW_VOLATILITY_MAX,
+            "structure_mode": "strict",
+        }
+    # A second loose upper-bound point that only relaxes volatility further.
+    return {
+        "min_trend_strength": 2.0,
+        "max_volatility": _LOW_VOLATILITY_MAX * 1.30,
+        "structure_mode": "strict",
+    }
+
+
+def _profile_has_pivot_or_strong_segment(pivot: Any, segment: Any) -> bool:
+    if bool(pivot):
+        return True
+    if isinstance(segment, Mapping):
+        signal_trend = _to_float(segment.get("trend_strength"))
+        if signal_trend is not None and signal_trend >= 2:
+            return True
+    return False
+
+
+def _profile_has_required_structure(pivot: Any, segment: Any, mode: str) -> bool:
+    if mode == "strict":
+        return bool(pivot) and bool(segment)
+    return _profile_has_pivot_or_strong_segment(pivot, segment)
+
+
+def _is_profile_a_candidate(context: dict, profile: str) -> bool:
+    trend_strength = _to_float(context.get("trend_strength"))
+    pivot = context.get("pivot")
+    segment = context.get("segment")
+    volatility = _to_float(context.get("volatility"))
+    trend_type = context.get("trend_type")
+    signal_type = str((context.get("signal_type") or context.get("type") or ""))
+
+    cfg = _build_signal_profile_config(profile)
+    is_choppy = _to_bool_choppy(trend_type)
+    if is_choppy:
+        return False
+
+    if trend_strength is not None and trend_strength <= 0:
+        return False
+
+    if trend_strength is None:
+        return False
+    if trend_strength < cfg["min_trend_strength"]:
+        return False
+
+    if volatility is not None:
+        if volatility > cfg["max_volatility"]:
+            return False
+        if volatility >= _HIGH_VOLATILITY_MIN:
+            return False
+    else:
+        return False
+
+    return _profile_has_required_structure(pivot, segment, cfg["structure_mode"])
 
 
 def _to_float(value: Any) -> Optional[float]:
@@ -282,7 +416,7 @@ def build_signal_context(result_or_pick: Any, signal: Optional[Mapping[str, Any]
     }
 
 
-def classify_signal(signal: Any) -> str:
+def classify_signal(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> str:
     """Classify signal quality: A (trade), B (observe), C (filtered)."""
     if not isinstance(signal, Mapping):
         return "B"
@@ -290,13 +424,28 @@ def classify_signal(signal: Any) -> str:
     context = signal.get("context")
     if not isinstance(context, Mapping):
         context = build_signal_context(signal, signal)
+    normalized_profile = _normalize_profile(profile)
+
+    if _is_profile_a_candidate(
+        {
+            "trend_strength": context.get("trend_strength"),
+            "pivot": context.get("pivot"),
+            "segment": context.get("segment"),
+            "volatility": context.get("volatility"),
+            "trend_type": context.get("trend_type"),
+            "type": context.get("type"),
+            "signal_type": signal.get("type", context.get("type", "")),
+        },
+        normalized_profile,
+    ):
+        return "A"
 
     trend_strength = _to_float(context.get("trend_strength"))
     pivot = context.get("pivot")
     segment = context.get("segment")
     volatility = _to_float(context.get("volatility"))
     trend_type = context.get("trend_type")
-    signal_type = str(signal.get("type", ""))
+    signal_type = str(signal.get("type", context.get("type", "")))
 
     # Explicitly blocked / known-candidate types can still be ranked
     # by strength and market structure, with choppy and weak ones demoted.
@@ -312,14 +461,13 @@ def classify_signal(signal: Any) -> str:
     if is_choppy:
         return "C"
 
+    cfg = _build_signal_profile_config(normalized_profile)
     if not structure_incomplete:
-        if trend_strength is not None and trend_strength >= 2 and volatility is not None:
-            if volatility <= _LOW_VOLATILITY_MAX:
-                return "A"
+        if trend_strength is not None and trend_strength >= cfg["min_trend_strength"] and volatility is not None:
             if volatility >= _HIGH_VOLATILITY_MIN:
                 return "C" if signal_type == "震荡区" else "B"
 
-    if trend_strength == 1:
+    if trend_strength == 1 or trend_strength < cfg["min_trend_strength"]:
         return "B"
 
     if structure_incomplete:
@@ -334,7 +482,58 @@ def classify_signal(signal: Any) -> str:
     return "B"
 
 
-def tag_signal_quality(signal: Mapping[str, Any]) -> dict:
+def explain_signal_rejection(signal: Any, profile: str = _FUSION_PROFILE_STRICT) -> list[str]:
+    """Return reasons why a signal is not A-class under a quality profile."""
+    if not isinstance(signal, Mapping):
+        return ["invalid_signal"]
+
+    context = signal.get("context")
+    if not isinstance(context, Mapping):
+        context = build_signal_context(signal, signal)
+
+    normalized_profile = _normalize_profile(profile)
+    if classify_signal(signal, profile=normalized_profile) == "A":
+        return []
+
+    trend_strength = _to_float(context.get("trend_strength"))
+    pivot = context.get("pivot")
+    segment = context.get("segment")
+    volatility = _to_float(context.get("volatility"))
+    trend_type = context.get("trend_type")
+    cfg = _build_signal_profile_config(normalized_profile)
+    reasons = []
+
+    if _to_bool_choppy(trend_type):
+        reasons.append("choppy_trend")
+
+    if trend_strength is None:
+        reasons.append("missing_trend_strength")
+    elif trend_strength <= 0:
+        reasons.append("trend_strength_lte_0")
+    elif trend_strength < cfg["min_trend_strength"]:
+        reasons.append("trend_strength_below_min")
+
+    if volatility is None:
+        reasons.append("missing_volatility")
+    else:
+        if volatility > cfg["max_volatility"]:
+            reasons.append("volatility_above_max")
+        if volatility >= _HIGH_VOLATILITY_MIN:
+            reasons.append("high_volatility")
+
+    structure_mode = cfg["structure_mode"]
+    if structure_mode == "strict":
+        if not pivot:
+            reasons.append("missing_pivot")
+        if not segment:
+            reasons.append("missing_segment")
+    elif not _profile_has_required_structure(pivot, segment, structure_mode):
+        reasons.append("missing_pivot_or_strong_segment")
+
+    return reasons or ["not_a"]
+
+
+def tag_signal_quality(signal: Mapping[str, Any], profile: str = _FUSION_PROFILE_STRICT) -> dict:
     """Return a copy of signal with additive `category` field."""
     if not isinstance(signal, Mapping):
         return signal
@@ -343,22 +542,29 @@ def tag_signal_quality(signal: Mapping[str, Any]) -> dict:
         out["context"] = build_signal_context(signal, signal)
     else:
         out["context"] = dict(out["context"])
-    out["category"] = classify_signal(out)
+    out["category"] = classify_signal(out, profile=_normalize_profile(profile))
     return out
 
 
-def tag_signal_quality_in_place(signal: Mapping[str, Any]) -> Mapping[str, Any]:
+def tag_signal_quality_in_place(
+    signal: Mapping[str, Any],
+    profile: str = _FUSION_PROFILE_STRICT,
+) -> Mapping[str, Any]:
     """Mutate and return signal with additive `category` field."""
     if not isinstance(signal, dict):
         return signal
 
     if not isinstance(signal.get("context"), Mapping):
         signal["context"] = build_signal_context(signal, signal)
-    signal["category"] = classify_signal(signal)
+    signal["category"] = classify_signal(signal, profile=_normalize_profile(profile))
     return signal
 
 
-def tag_signal_quality_many(signals: Iterable[Mapping[str, Any]], in_place: bool = False):
+def tag_signal_quality_many(
+    signals: Iterable[Mapping[str, Any]],
+    in_place: bool = False,
+    profile: str = _FUSION_PROFILE_STRICT,
+):
     """Tag a collection of signals and return list of tagged signals."""
     out = []
     if signals is None:
@@ -367,15 +573,15 @@ def tag_signal_quality_many(signals: Iterable[Mapping[str, Any]], in_place: bool
     for signal in signals:
         if in_place:
             if isinstance(signal, dict):
-                out.append(tag_signal_quality_in_place(signal))
+                out.append(tag_signal_quality_in_place(signal, profile=profile))
             else:
-                out.append(tag_signal_quality(signal))
+                out.append(tag_signal_quality(signal, profile=profile))
         else:
-            out.append(tag_signal_quality(signal))
+            out.append(tag_signal_quality(signal, profile=profile))
     return out
 
 
-def filter_executable_signals(signals: Iterable[Mapping[str, Any]]):
+def filter_executable_signals(signals: Iterable[Mapping[str, Any]], profile: str = _FUSION_PROFILE_STRICT):
     """Keep only A-class signals for execution intent."""
     if signals is None:
         return []
@@ -384,7 +590,7 @@ def filter_executable_signals(signals: Iterable[Mapping[str, Any]]):
     for signal in signals:
         if not isinstance(signal, Mapping):
             continue
-        sig = tag_signal_quality(signal)
+        sig = tag_signal_quality(signal, profile=profile)
         if sig.get("category") == "A":
             actionable.append(sig)
     return actionable

@@ -36,6 +36,28 @@ def _make_pick(
     }
 
 
+def _make_fusion_pick(
+    code="000001",
+    best_type="一买",
+    trend_strength=2.0,
+    volatility=0.05,
+    pivot=None,
+    segment=None,
+    signal_index=0,
+):
+    return {
+        "code": code,
+        "best_buy_point": {
+            "type": best_type,
+            "trend_strength": trend_strength,
+            "volatility": volatility,
+            "pivot": pivot,
+            "segment": segment,
+            "index": signal_index,
+        },
+    }
+
+
 class PolicyExperimentMetricsTests(unittest.TestCase):
     def test_list_policy_experiments(self):
         names = set(list_policy_experiments())
@@ -62,6 +84,9 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_take_profit_8pct_or_t3",
                 "delay1_v1_bottom_quality_market_known_guard_entry_next_open_exit_stop5_take8_conservative",
                 "delay1_v1_bottom_quality_market_or_ma_guard",
+                "fusion_strict",
+                "fusion_mid",
+                "fusion_loose",
             },
         )
 
@@ -1067,6 +1092,114 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
     def test_run_policy_experiment_metrics_rejects_unknown_policy(self):
         with self.assertRaisesRegex(ValueError, "unsupported policies"):
             run_policy_experiment_metrics(["delay1_v1_not_exists"])
+
+    @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
+    @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")
+    @patch("chanlun.policy_experiment_metrics.iter_snapshot_picks")
+    def test_run_policy_experiment_metrics_fusion_threshold_scan(
+        self,
+        iter_snapshot_mock,
+        evaluate_mock,
+        fetch_mock,
+    ):
+        iter_snapshot_mock.side_effect = lambda: iter(
+            [
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=2.0, volatility=0.05, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=0, code="000001")),
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.6, volatility=0.08, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=1, code="000002")),
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.0, volatility=0.08, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=2, code="000003")),
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.0, volatility=0.11, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=3, code="000004")),
+                ("2026-01-01", "picks_fusion", _make_fusion_pick(trend_strength=1.0, volatility=0.11, pivot={"ZG": 12, "ZD": 10}, segment={"high": 12, "low": 10}, signal_index=4, code="000005")),
+                ("2026-01-01", "picks_pure", _make_fusion_pick(code="000006")),
+            ],
+        )
+        fetch_mock.return_value = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04", "2026-01-05"],
+            "opens": [1, 1, 1, 1, 1],
+            "highs": [1, 1, 1, 1, 1],
+            "lows": [1, 1, 1, 1, 1],
+            "closes": [1, 1, 1, 1, 1],
+        }
+        evaluate_mock.side_effect = [
+            {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": 2.0,
+                "max_up_3d": 0.5,
+                "max_dd_3d": -5.0,
+            },
+            {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": 2.5,
+                "max_up_3d": 1.0,
+                "max_dd_3d": -4.8,
+            },
+            {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": -0.5,
+                "max_up_3d": -0.5,
+                "max_dd_3d": -4.7,
+            },
+            {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": -1.0,
+                "max_up_3d": -1.0,
+                "max_dd_3d": -5.5,
+            },
+            {
+                "t1_close_pct": 1.0,
+                "t3_close_pct": 0.5,
+                "max_up_3d": 0.5,
+                "max_dd_3d": -6.0,
+            },
+        ]
+
+        payload = run_policy_experiment_metrics(
+            ["fusion_strict", "fusion_mid", "fusion_loose"],
+        )
+        self.assertEqual(payload["policies"], [])
+        scan = payload.get("fusion_threshold_scan")
+        self.assertIsNotNone(scan)
+        self.assertIn("profiles", scan)
+        self.assertEqual(len(scan["profiles"]), 3)
+
+        strict_profile = next(item for item in scan["profiles"] if item["candidate"] == "fusion_strict")
+        mid_profile = next(item for item in scan["profiles"] if item["candidate"] == "fusion_mid")
+        loose_profile = next(item for item in scan["profiles"] if item["candidate"] == "fusion_loose")
+
+        self.assertEqual(strict_profile["samples_before"], 5)
+        self.assertEqual(strict_profile["samples_after"], 1)
+        self.assertEqual(strict_profile["rejected_samples"], 4)
+        self.assertEqual(
+            strict_profile["reject_reason_distribution"]["trend_strength_below_min"],
+            4,
+        )
+        self.assertEqual(
+            strict_profile["reject_reason_distribution"]["volatility_above_max"],
+            2,
+        )
+        self.assertEqual(mid_profile["samples_after"], 2)
+        self.assertEqual(mid_profile["rejected_samples"], 3)
+        self.assertEqual(mid_profile["variant"], "fusion_mid_trend")
+        self.assertEqual(
+            mid_profile["reject_reason_distribution"]["trend_strength_below_min"],
+            3,
+        )
+        self.assertEqual(loose_profile["samples_after"], 3)
+        self.assertEqual(payload["baseline_reference"], "picks_fusion")
+
+        selected = scan["selected"]
+        self.assertEqual(selected["candidate"], "fusion_strict")
+        self.assertEqual(selected["accepted"], False)
+        self.assertEqual(set(scan["rejected"]), {"fusion_mid", "fusion_loose"})
+
+        self.assertEqual(scan["baseline_metrics"]["samples"], 5)
+        self.assertEqual(scan["baseline_metrics"]["t3_mean_before"], 0.7)
+        self.assertEqual(scan["baseline_metrics"]["t3_win_rate_before"], 60.0)
+        self.assertEqual(scan["baseline_metrics"]["drawdown_mean_before"], -5.2)
+        self.assertEqual(scan["execution"]["baseline_rows"], 5)
+        self.assertEqual(scan["snapshot_rows"], 5)
+
+        pareto = scan["pareto_frontier"]
+        self.assertEqual(set(pareto), {"fusion_mid", "fusion_loose"})
 
     @patch("chanlun.policy_experiment_metrics._fetch_daily_kline_cached")
     @patch("chanlun.policy_experiment_metrics._evaluate_pick_sample")

@@ -120,9 +120,89 @@ def _render_breakdown_section(results: List[Dict[str, Any]]) -> List[str]:
     return lines
 
 
+def _render_fusion_threshold_section(scan: Dict[str, Any]) -> List[str]:
+    profiles = scan.get("profiles") or []
+    if not isinstance(profiles, list) or not profiles:
+        return ["## Fusion Threshold Scan", "- no profiles"]
+
+    lines: List[str] = [
+        "## Fusion Threshold Scan",
+        "",
+        "| Candidate | Variant | samples_before | samples_after | coverage | coverage_pct | "
+        "t3_mean_before | t3_mean_after | t3_win_rate_before | t3_win_rate_after | "
+        "drawdown_mean_before | drawdown_mean_after | accepted |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+    ]
+    for profile in profiles:
+        lines.append(
+            "| {candidate} | {variant} | {samples_before} | {samples_after} | {coverage} | {coverage_pct} | "
+            "{t3_mean_before} | {t3_mean_after} | {t3_win_rate_before} | {t3_win_rate_after} | "
+            "{drawdown_mean_before} | {drawdown_mean_after} | {accepted} |".format(
+                candidate=profile.get("candidate", "-"),
+                variant=profile.get("variant", "-"),
+                samples_before=profile.get("samples_before", "n/a"),
+                samples_after=profile.get("samples_after", "n/a"),
+                coverage=profile.get("coverage", "n/a"),
+                coverage_pct=profile.get("coverage_pct", "n/a"),
+                t3_mean_before=profile.get("t3_mean_before", "n/a"),
+                t3_mean_after=profile.get("t3_mean_after", "n/a"),
+                t3_win_rate_before=profile.get("t3_win_rate_before", "n/a"),
+                t3_win_rate_after=profile.get("t3_win_rate_after", "n/a"),
+                drawdown_mean_before=profile.get("drawdown_mean_before", "n/a"),
+                drawdown_mean_after=profile.get("drawdown_mean_after", "n/a"),
+                accepted=profile.get("accepted", False),
+            )
+        )
+    lines.append("")
+
+    lines.append("### Reject Reason Distribution")
+    for profile in profiles:
+        candidate = profile.get("candidate", "-")
+        variant = profile.get("variant", "-")
+        reasons = profile.get("reject_reason_distribution") or {}
+        if not reasons:
+            lines.append(f"- {candidate} ({variant}): none")
+            continue
+        reason_text = ", ".join(
+            f"{reason}:{count}" for reason, count in sorted(reasons.items())
+        )
+        lines.append(f"- {candidate} ({variant}): {reason_text}")
+    lines.append("")
+
+    selected = scan.get("selected") or {}
+    lines.append("### Selected Candidate")
+    if selected:
+        lines.append(
+            f"- {selected.get('candidate', '-')}: {selected.get('reason', '-')}, "
+            f"accepted={selected.get('accepted', False)}"
+        )
+    else:
+        lines.append("- no selected candidate")
+
+    pareto = scan.get("pareto_frontier") or []
+    lines.append("### Pareto Frontier")
+    if pareto:
+        lines.append("- " + ", ".join(str(item) for item in pareto))
+    else:
+        lines.append("- none")
+
+    rejected = scan.get("rejected") or []
+    rejected_reasons = scan.get("rejected_reasons") or {}
+    lines.append("### Rejected")
+    if rejected:
+        for item in rejected:
+            reason = rejected_reasons.get(item, "rejected")
+            lines.append(f"- {item}: {reason}")
+    else:
+        lines.append("- none")
+    lines.append("")
+    return lines
+
+
 def _render_markdown(payload: Dict[str, Any]) -> str:
     results = payload.get("policies", []) if isinstance(payload, dict) else []
     execution = (payload or {}).get("execution") or {}
+    fusion_threshold_scan = (payload or {}).get("fusion_threshold_scan") if isinstance(payload, dict) else None
 
     lines = [
         "# ChanLun Policy Backtest",
@@ -135,6 +215,8 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
     lines.extend(_table_row(item.get("policy"), item) for item in results)
     lines.append("")
     lines.extend(_render_breakdown_section(results))
+    if isinstance(fusion_threshold_scan, dict):
+        lines.extend(_render_fusion_threshold_section(fusion_threshold_scan))
 
     lines.append("## Filter Reason Summary")
     for item in results:
@@ -202,6 +284,11 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--policies", required=True, help="Comma-separated policy names")
     parser.add_argument("--output-json", required=True, help="Output JSON path")
     parser.add_argument("--output-md", required=True, help="Output Markdown path")
+    parser.add_argument(
+        "--business-metrics",
+        action="store_true",
+        help="Compatibility flag; currently no-op.",
+    )
 
     args = parser.parse_args(argv)
     policies = _normalize_policies(args.policies)
