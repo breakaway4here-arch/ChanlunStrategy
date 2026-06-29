@@ -678,9 +678,24 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             'function renderMarketIndexCards',
             'function renderDecisionCard',
             'function renderStatusBadge',
+            'function buildMarketTemperature',
+            'function getMarketTemperatureLabel',
+            'function getMarketTemperatureTone',
+            'function getMarketTemperatureSummary',
+            'function clamp',
             'function renderMarketTemperatureCard',
             'function renderSectorFlowCard',
             'function renderSellSignalsCard',
+        ]:
+            self.assertIn(helper, self.asset_js)
+
+    def test_class_mapping_helpers_presence(self):
+        for helper in [
+            'function getActionClass',
+            'function getRiskClass',
+            'function getSourceClass',
+            'function getRankClass',
+            'function getResonanceClass',
         ]:
             self.assertIn(helper, self.asset_js)
 
@@ -689,6 +704,25 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
         self.assertEqual(self.asset_js.count("renderDecisionCard({"), 7)
+
+    def test_market_temperature_card_references_score_label_components(self):
+        self.assertIn('var temperature = buildMarketTemperature(data || {});', self.asset_js)
+        self.assertIn('class="market-temp-gauge is-', self.asset_js)
+        self.assertIn('class="gauge-meter"', self.asset_js)
+        self.assertIn("renderMetricPair('市场温度', temperature.score + ' / 100'", self.asset_js)
+        self.assertIn('badge: { text: temperature.label, tone: temperature.tone }', self.asset_js)
+        self.assertIn('components.breadth_score', self.asset_js)
+        self.assertIn('components.index_score', self.asset_js)
+
+    def test_market_temperature_fallback_semantics_in_js(self):
+        self.assertIn('var avgIndexChange = 0;', self.asset_js)
+        self.assertIn('var breadthScore = 50;', self.asset_js)
+        self.assertIn('var limitScore = clamp(50 + limitUpCount * 2, 0, 90);', self.asset_js)
+        self.assertIn('var volumeRatio = 1;', self.asset_js)
+        self.assertIn('var sectorScore;', self.asset_js)
+        self.assertIn('var rawScore =', self.asset_js)
+        self.assertIn('riskPenalty += limitDownCount ? Math.min(12, limitDownCount * 1.2) : 0;', self.asset_js)
+        self.assertIn('return {', self.asset_js)
 
     def test_old_top_chips_removed(self):
         self.assertNotIn('metric-chip', self.asset_js)
@@ -702,6 +736,9 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_tab_counts_preserved(self):
         self.assertIn('<span class="workspace-tab-count">(', self.asset_js)
         self.assertIn('views.length', self.asset_js)
+
+    def test_candidate_rows_do_not_fabricate_risk_tags(self):
+        self.assertNotIn("riskFlags = ['无新增'];", self.asset_js)
 
 
 class TestLayoutRefresh(unittest.TestCase):

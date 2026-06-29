@@ -116,6 +116,53 @@
     return Array.isArray(value) ? value : [];
   }
 
+  function clamp(value, min, max) {
+    var num = safeNumber(value, null);
+    if (num === null) return min;
+    return Math.max(min, Math.min(max, num));
+  }
+
+  function getActionClass(action) {
+    if (action === '可上车') return 'tag tag-action-buy';
+    if (action === '等回踩') return 'tag tag-action-wait';
+    if (action === '盯盘') return 'tag tag-action-watch';
+    if (action === '慎追') return 'tag tag-action-risk';
+    if (action === '仅观察') return 'tag tag-action-neutral';
+    return 'tag tag-action-neutral';
+  }
+
+  function getRiskClass(risk) {
+    var label = normalizeString(risk);
+    if (label.indexOf('过热') !== -1) return 'tag tag-risk is-hot';
+    if (label.indexOf('过期') !== -1) return 'tag tag-risk is-expiry';
+    return 'tag tag-risk';
+  }
+
+  function getSourceClass(label) {
+    var text = normalizeString(label);
+    if (text === '主推') return 'tag tag-main';
+    if (text === '加速') return 'tag tag-acceleration';
+    if (text === '罗姐池') return 'tag tag-luojie';
+    if (text === '等确认') return 'tag tag-confirming';
+    if (text === '基准') return 'tag tag-baseline';
+    return 'tag tag-baseline';
+  }
+
+  function getRankClass(rank) {
+    var value = safeNumber(rank, 0);
+    if (value === 1) return 'rank-badge rank-01';
+    if (value === 2) return 'rank-badge rank-02';
+    if (value === 3) return 'rank-badge rank-03';
+    return 'rank-badge rank-normal';
+  }
+
+  function getResonanceClass(label) {
+    var text = normalizeString(label);
+    if (text === '强共振') return 'tag tag-resonance is-strong';
+    if (text === '共振·防守') return 'tag tag-resonance is-defensive';
+    return 'tag tag-resonance';
+  }
+
   function getBootstrap() {
     return window.CHANLUN_BOOTSTRAP || {};
   }
@@ -416,6 +463,193 @@
     return best.name + '相对领先，继续观察持续性。';
   }
 
+  function getMarketTemperatureLabel(score) {
+    if (score >= 90) return '过热';
+    if (score >= 75) return '热';
+    if (score >= 60) return '偏强';
+    if (score >= 45) return '平衡';
+    if (score >= 30) return '偏冷';
+    return '冰点';
+  }
+
+  function getMarketTemperatureTone(score) {
+    if (score >= 90) return 'overheat';
+    if (score >= 75) return 'hot';
+    if (score >= 60) return 'strong';
+    if (score >= 45) return 'neutral';
+    if (score >= 30) return 'cold';
+    return 'ice';
+  }
+
+  function getMarketTemperatureSummary(score) {
+    if (score >= 90) return '市场热度较高，追高与追击迹象明显，请严格控位。';
+    if (score >= 75) return '市场偏热，机会较多，但注意控制回撤。';
+    if (score >= 60) return '市场温度偏强，积极观察可执行机会。';
+    if (score >= 45) return '市场温度平衡，精选优质标的。';
+    if (score >= 30) return '市场偏冷，优先等待更强信号。';
+    return '市场温度较冷，防守和筛选效率优先。';
+  }
+
+  function buildMarketTemperature(data) {
+    data = data || {};
+    var market = data.market || {};
+    var marketItems = getMarketItems(market);
+    var items = asArray(marketItems);
+    var validItems = items.filter(function (item) {
+      return item.change_pct !== null;
+    });
+    var advanceCount = safeNumber(data.advance_count, null);
+    var declineCount = safeNumber(data.decline_count, null);
+    var flatCount = safeNumber(data.flat_count, null);
+    var limitUpCount = asArray(data.limit_up_pool).length;
+    var limitDownCount = safeNumber(data.limit_down_count, 0);
+    var prevLimitUpCount = safeNumber(data.prev_limit_up_count, null);
+    var turnover = safeNumber(data.turnover, null);
+    var prevTurnover = safeNumber(data.prev_turnover, null);
+    var turnoverMA5 = safeNumber(data.turnover_ma5, null);
+    var sectorIn = asArray(data.sector_flow);
+    var sectorOut = asArray(data.sector_outflow);
+    var diagnosticsHasError = data.diagnostics && data.diagnostics.error ? true : false;
+    var sellSignals = asArray(data.sell_signals);
+    var rawTemperature = data.market_temperature || {};
+
+    if (Number.isFinite(safeNumber(rawTemperature.score, NaN))) {
+      var preScore = clamp(rawTemperature.score, 0, 100);
+      var preComponents = rawTemperature.components || {};
+      return {
+        score: preScore,
+        label: getMarketTemperatureLabel(preScore),
+        tone: getMarketTemperatureTone(preScore),
+        components: {
+          breadth_score: safeNumber(preComponents.breadth_score, 50),
+          index_score: safeNumber(preComponents.index_score, 50),
+          limit_score: safeNumber(preComponents.limit_score, 50),
+          volume_score: safeNumber(preComponents.volume_score, 55),
+          sector_score: safeNumber(preComponents.sector_score, 50),
+          risk_penalty: safeNumber(preComponents.risk_penalty, 0),
+        },
+        summary: normalizeString(rawTemperature.summary || getMarketTemperatureSummary(preScore)),
+      };
+    }
+
+    var avgIndexChange = 0;
+    if (validItems.length > 0) {
+      avgIndexChange = validItems.reduce(function (sum, item) {
+        return sum + item.change_pct;
+      }, 0) / validItems.length;
+    }
+    var indexScore = validItems.length > 0 ? clamp(50 + avgIndexChange * 18, 0, 100) : 50;
+
+    var breadthScore = 50;
+    if (advanceCount !== null && declineCount !== null) {
+      var denom = advanceCount + declineCount + (flatCount !== null ? flatCount : 0);
+      if (denom > 0) {
+        breadthScore = clamp((advanceCount / denom) * 100, 0, 100);
+      }
+    } else if (validItems.length > 0) {
+      var upCount = validItems.filter(function (item) {
+        return item.change_pct > 0;
+      }).length;
+      breadthScore = clamp((upCount / validItems.length) * 100, 0, 100);
+    }
+
+    var limitScore = clamp(50 + limitUpCount * 2, 0, 90);
+    if (prevLimitUpCount !== null) {
+      limitScore = clamp(limitScore + clamp((limitUpCount - prevLimitUpCount) * 0.8, -10, 10), 0, 90);
+    }
+
+    var volumeScore = 55;
+    var volumeRatio = 1;
+    if (turnover !== null && turnoverMA5 !== null && turnoverMA5 !== 0) {
+      volumeRatio = turnover / turnoverMA5;
+      volumeScore = clamp(50 + (volumeRatio - 1) * 80, 20, 90);
+    } else if (turnover !== null && prevTurnover !== null && prevTurnover !== 0) {
+      volumeRatio = turnover / prevTurnover;
+      volumeScore = clamp(50 + (volumeRatio - 1) * 80, 20, 90);
+    }
+
+    var sectorScore;
+    if (sectorIn.length === 0 && sectorOut.length === 0) {
+      sectorScore = 50;
+    } else {
+      var sectorScoreByValue = null;
+      var inCount = 0;
+      var outCount = 0;
+      var netSectorFlow = 0;
+      for (var i = 0; i < sectorIn.length; i += 1) {
+        var inItem = sectorIn[i] || {};
+        var inFlow = safeNumber(inItem.flow, safeNumber(inItem.net_flow, safeNumber(inItem.amount, null)));
+        if (inFlow !== null) {
+          sectorScoreByValue = 0;
+          if (inFlow > 0) {
+            inCount += 1;
+          }
+          netSectorFlow += inFlow;
+        }
+      }
+      for (var j = 0; j < sectorOut.length; j += 1) {
+        var outItem = sectorOut[j] || {};
+        var outFlow = safeNumber(outItem.flow, safeNumber(outItem.net_flow, safeNumber(outItem.amount, null)));
+        if (outFlow !== null) {
+          sectorScoreByValue = 0;
+          if (outFlow < 0) {
+            outCount += 1;
+          }
+          netSectorFlow += outFlow;
+        }
+      }
+
+      if (sectorScoreByValue === 0) {
+        sectorScore = clamp(50 + inCount * 4 - outCount * 3, 20, 85);
+      } else {
+        sectorScore = clamp(50 + netSectorFlow / 10, 20, 85);
+      }
+    }
+
+    var hotRiskCount = 0;
+    var allRisks = [];
+    if (Array.isArray(data.hot_risk_flags)) {
+      allRisks = data.hot_risk_flags.slice(0);
+    }
+    for (var r = 0; r < allRisks.length; r += 1) {
+      if (normalizeString(allRisks[r]).indexOf('涨幅过热') !== -1) {
+        hotRiskCount += 1;
+      }
+    }
+    var riskPenalty = Math.min(15, sellSignals.length * 1.5);
+    riskPenalty += Math.min(10, hotRiskCount * 1);
+    riskPenalty += limitDownCount ? Math.min(12, limitDownCount * 1.2) : 0;
+    riskPenalty += diagnosticsHasError ? 10 : 0;
+
+    if (rawTemperature.risk_penalty !== undefined && rawTemperature.risk_penalty !== null) {
+      riskPenalty = clamp(rawTemperature.risk_penalty, 0, 30);
+    }
+
+    var rawScore =
+      breadthScore * 0.30
+      + indexScore * 0.20
+      + limitScore * 0.20
+      + volumeScore * 0.15
+      + sectorScore * 0.10
+      - riskPenalty * 0.05;
+
+    var score = Math.round(clamp(rawScore, 0, 100));
+    return {
+      score: score,
+      label: getMarketTemperatureLabel(score),
+      tone: getMarketTemperatureTone(score),
+      components: {
+        breadth_score: Math.round(breadthScore),
+        index_score: Math.round(indexScore),
+        limit_score: Math.round(limitScore),
+        volume_score: Math.round(volumeScore),
+        sector_score: Math.round(sectorScore),
+        risk_penalty: Math.round(riskPenalty),
+      },
+      summary: getMarketTemperatureSummary(score),
+    };
+  }
+
   function renderMarketRegime(summary) {
     var avgText = summary.avgChange === null ? '--' : formatPct(summary.avgChange, true);
     var widthText = summary.upCount + '/' + summary.items.length;
@@ -524,13 +758,14 @@
       var name = normalizeString(item.name || '');
       var sector = normalizeString(item.sector || '');
       var change = safeNumber(item.change_pct, null);
+      var rankClass = getRankClass(rank);
       var changeCls = '';
       if (change === null) {
         changeCls = '';
       } else if (change > 0) {
-        changeCls = ' is-up';
+        changeCls = 'is-up';
       } else if (change < 0) {
-        changeCls = ' is-down';
+        changeCls = 'is-down';
       }
 
       var sourceLabels = asArray(item.source_labels);
@@ -541,20 +776,27 @@
       }
 
       var resonance = normalizeString(item.resonance_label || '');
-      var action = normalizeString(item.action || '');
+      var action = normalizeString(item.action || '待判定');
       var riskFlags = asArray(item.risk_flags);
 
-      var sourceHtml = '';
+      var tagHtml = '';
       for (var s = 0; s < sourceLabels.length; s += 1) {
         if (sourceLabels[s]) {
-          sourceHtml += makeChip(sourceLabels[s], 'source-chip');
+          tagHtml += makeChip(sourceLabels[s], getSourceClass(sourceLabels[s]));
         }
       }
       if (resonance) {
-        sourceHtml += makeChip(resonance, 'resonance-chip');
+        tagHtml += makeChip(resonance, getResonanceClass(resonance));
+      }
+      if (action) {
+        tagHtml += makeChip(action, getActionClass(action));
       }
 
-      var actionCls = action.indexOf('慎追') !== -1 || action.indexOf('仅观察') !== -1 ? ' action-pill is-risk' : ' action-pill';
+      for (var r = 0; r < riskFlags.length; r += 1) {
+        if (riskFlags[r]) {
+          tagHtml += makeChip(riskFlags[r], getRiskClass(riskFlags[r]));
+        }
+      }
 
       row.type = 'button';
       row.className = 'candidate-row';
@@ -562,17 +804,15 @@
       row.setAttribute('data-name', name);
       row.innerHTML = ''
         + '<div class="candidate-row-main">'
-        + '  <span class="candidate-rank">' + escapeHtml((i + 1).toString().padStart(2, '0')) + '</span>'
-        + '  <span>'
+        + '  <span class="' + escapeHtml(rankClass) + '">' + escapeHtml((rank || i + 1).toString().padStart(2, '0')) + '</span>'
+        + '  <div class="candidate-identity">'
         + '    <span class="candidate-name">' + escapeHtml(name || ('未命名 ' + String(code))) + '</span>'
         + '    <span class="candidate-code"> ' + escapeHtml(code) + '</span>'
         + (sector ? ' <span class="candidate-code">· ' + escapeHtml(sector) + '</span>' : '')
-        + '  </span>'
-        + '  <span class="candidate-change' + changeCls + '">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</span>'
-        + '  <span class="' + actionCls + '">' + escapeHtml(action || '待判定') + '</span>'
+        + '  </div>'
+        + '  <div class="candidate-price' + (changeCls ? ' ' + changeCls : '') + '">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</div>'
         + '</div>'
-        + '<div class="candidate-row-sub">' + sourceHtml + '</div>'
-        + (riskFlags.length > 0 ? ('<div class="candidate-row-risk">' + riskFlags.map(function (itemRisk) { return makeChip(itemRisk, 'risk-chip'); }).join('') + '</div>') : '')
+        + '<div class="candidate-tags">' + tagHtml + '</div>'
       ;
       if (state.activeItem && state.activeItem.code === code) {
         row.classList.add('is-selected');
@@ -1027,21 +1267,28 @@
   }
 
   function renderMarketTemperatureCard(data) {
-    var summary = buildMarketSummary((data || {}).market || {});
-    var avgText = summary.avgChange === null ? '--' : formatPct(summary.avgChange, true);
+    var temperature = buildMarketTemperature(data || {});
+    var components = temperature.components || {};
+    var gaugeStyle = '--gauge-score: ' + escapeHtml(temperature.score) + ';';
     var body = ''
-      + '<div class="metric-pair-grid">'
-      + renderMetricPair('平均涨幅', avgText, summary.avgChange === null ? '' : summary.avgChange >= 0 ? 'is-up' : 'is-down')
-      + renderMetricPair('上涨指数', summary.upCount + '/' + summary.items.length, '')
+      + '<div class="market-temp-gauge is-' + escapeHtml(temperature.tone) + '" style="' + gaugeStyle + '">'
+      + '  <div class="gauge-meter" aria-hidden="true"></div>'
+      + '  <div class="gauge-value">' + escapeHtml(temperature.score + ' / 100') + '</div>'
+      + '  <div class="gauge-summary">' + escapeHtml(temperature.summary) + '</div>'
       + '</div>'
-      + '<div class="decision-note">' + escapeHtml(summary.note) + '</div>';
-    if (summary.best) {
-      body += '<div class="decision-note">最强：' + escapeHtml(summary.best.name + ' ' + formatPct(summary.best.change_pct, true)) + '</div>';
-    }
+      + '<div class="metric-pair-grid">'
+      + renderMetricPair('市场温度', temperature.score + ' / 100', 'is-' + escapeHtml(temperature.tone))
+      + renderMetricPair('广度得分', (components.breadth_score === null || components.breadth_score === undefined) ? '--' : components.breadth_score, '')
+      + renderMetricPair('指数得分', (components.index_score === null || components.index_score === undefined) ? '--' : components.index_score, '')
+      + renderMetricPair('涨停得分', (components.limit_score === null || components.limit_score === undefined) ? '--' : components.limit_score, '')
+      + renderMetricPair('量能得分', (components.volume_score === null || components.volume_score === undefined) ? '--' : components.volume_score, '')
+      + renderMetricPair('板块得分', (components.sector_score === null || components.sector_score === undefined) ? '--' : components.sector_score, '')
+      + renderMetricPair('风险扣分', (components.risk_penalty === null || components.risk_penalty === undefined) ? '--' : components.risk_penalty, components.risk_penalty > 0 ? 'is-weak' : '')
+      + '</div>';
     return renderDecisionCard({
       title: '市场温度',
-      subtitle: '主要指数强弱与交易环境',
-      badge: { text: summary.status, tone: summary.tone },
+      subtitle: '指数、宽度、情绪的复合温度',
+      badge: { text: temperature.label, tone: temperature.tone },
       className: 'market-temperature-card',
       bodyHtml: body,
     });
