@@ -5,6 +5,8 @@ from chanlun.signal_quality_classifier import (
     HIGH_VOLATILITY_MIN,
     build_signal_context,
     classify_signal,
+    classify_signal_tier,
+    explain_signal_tier,
     explain_signal_rejection,
     list_quality_profiles,
     tag_signal_quality,
@@ -261,6 +263,129 @@ class SignalQualityClassifierTests(unittest.TestCase):
         }
         self.assertEqual(classify_signal(signal, profile="fusion_loose"), "A")
         self.assertEqual(classify_signal(signal), "B")
+
+    def test_classify_signal_tier_marks_high_confidence_as_a_plus(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 3.0,
+            "volatility": 0.05,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "strong",
+        }
+
+        self.assertEqual(
+            classify_signal(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            classify_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A+",
+        )
+        self.assertEqual(
+            explain_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            ["strong_trend", "low_volatility", "complete_structure"],
+        )
+
+    def test_classify_signal_tier_marks_rescue_as_a_minus(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            classify_signal(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            classify_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A-",
+        )
+        self.assertEqual(
+            explain_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            ["startup_rescue"],
+        )
+
+    def test_classify_signal_tier_marks_standard_a(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2.0,
+            "volatility": 0.07,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            classify_signal(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            classify_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            "A",
+        )
+        self.assertEqual(
+            explain_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            ["standard_a"],
+        )
+
+    def test_classify_signal_tier_ignores_non_a_signals(self):
+        signal = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+
+        self.assertEqual(
+            classify_signal(signal, profile="fusion_strict_startup_rescue_v1"),
+            "B",
+        )
+        self.assertIsNone(
+            classify_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+        )
+        self.assertEqual(
+            explain_signal_tier(signal, profile="fusion_strict_startup_rescue_v1"),
+            [],
+        )
+
+    def test_tag_signal_quality_adds_quality_tier_for_a_only(self):
+        a_signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+        b_signal = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+
+        tagged_a = tag_signal_quality(
+            a_signal,
+            profile="fusion_strict_startup_rescue_v1",
+        )
+        tagged_b = tag_signal_quality(
+            b_signal,
+            profile="fusion_strict_startup_rescue_v1",
+        )
+
+        self.assertEqual(tagged_a["category"], "A")
+        self.assertEqual(tagged_a["quality_tier"], "A-")
+        self.assertEqual(tagged_a["quality_tier_reasons"], ["startup_rescue"])
+        self.assertEqual(tagged_b["category"], "B")
+        self.assertNotIn("quality_tier", tagged_b)
+        self.assertNotIn("quality_tier_reasons", tagged_b)
 
     def test_tag_signal_quality_profile(self):
         signal = {

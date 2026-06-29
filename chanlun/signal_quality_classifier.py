@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from statistics import pstdev
-from typing import Any, Iterable, List, Mapping, Optional
+from typing import Any, Iterable, List, Mapping, Optional, Tuple
 
 LOW_VOLATILITY_MAX = 0.10
 HIGH_VOLATILITY_MIN = 0.18
@@ -449,6 +449,38 @@ def _is_strong_market_env(value: Any) -> bool:
     return str(value or "").strip().lower() == "strong"
 
 
+def _context_for_signal(signal: Any) -> Tuple[Mapping[str, Any], Mapping[str, Any]]:
+    if not isinstance(signal, Mapping):
+        return {}, {}
+    context = signal.get("context")
+    if not isinstance(context, Mapping):
+        context = build_signal_context(signal, signal)
+    return signal, context
+
+
+def _is_startup_rescue_candidate(
+    context: Mapping[str, Any],
+    signal: Mapping[str, Any],
+    profile: str,
+) -> bool:
+    signal_type = str(signal.get("type", context.get("type", "")))
+    market_env = (
+        context.get("market_env")
+        or signal.get("market_env")
+        or signal.get("market_regime")
+        or signal.get("market_trend")
+    )
+    trend_strength = _to_float(context.get("trend_strength"))
+    trend_type = context.get("trend_type")
+    return (
+        profile == _FUSION_PROFILE_STRICT_STARTUP_RESCUE_V1
+        and trend_strength == 1.0
+        and signal_type == "强势启动候选"
+        and not _is_strong_market_env(market_env)
+        and not _to_bool_choppy(trend_type)
+    )
+
+
 def classify_signal(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> str:
     """Classify signal quality: A (trade), B (observe), C (filtered)."""
     if not isinstance(signal, Mapping):
@@ -587,6 +619,56 @@ def explain_signal_rejection(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE
     return reasons or ["not_a"]
 
 
+def explain_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> List[str]:
+    if not isinstance(signal, Mapping):
+        return []
+
+    normalized_profile = _normalize_profile(profile)
+    if classify_signal(signal, profile=normalized_profile) != "A":
+        return []
+
+    signal_obj, context = _context_for_signal(signal)
+    trend_strength = _to_float(context.get("trend_strength"))
+    volatility = _to_float(context.get("volatility"))
+    pivot = context.get("pivot")
+    segment = context.get("segment")
+    trend_type = context.get("trend_type")
+
+    reasons: List[str] = []
+    if _is_startup_rescue_candidate(context, signal_obj, normalized_profile):
+        reasons.append("startup_rescue")
+
+    if volatility is not None and _LOW_VOLATILITY_MAX >= volatility > 0.08:
+        reasons.append("volatility_near_limit")
+
+    if reasons:
+        return reasons
+
+    if (
+        trend_strength is not None
+        and trend_strength >= 2.5
+        and volatility is not None
+        and volatility <= _LOW_VOLATILITY_MAX
+        and bool(pivot)
+        and bool(segment)
+        and not _to_bool_choppy(trend_type)
+    ):
+        return ["strong_trend", "low_volatility", "complete_structure"]
+
+    return ["standard_a"]
+
+
+def classify_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> Optional[str]:
+    reasons = explain_signal_tier(signal, profile=profile)
+    if not reasons:
+        return None
+    if "startup_rescue" in reasons or "volatility_near_limit" in reasons:
+        return "A-"
+    if reasons == ["strong_trend", "low_volatility", "complete_structure"]:
+        return "A+"
+    return "A"
+
+
 def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION_PROFILE) -> dict:
     """Return a copy of signal with additive `category` field."""
     if not isinstance(signal, Mapping):
@@ -597,6 +679,17 @@ def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION
     else:
         out["context"] = dict(out["context"])
     out["category"] = classify_signal(out, profile=_normalize_profile(profile))
+    if out["category"] == "A":
+        tier = classify_signal_tier(out, profile=_normalize_profile(profile))
+        if tier:
+            out["quality_tier"] = tier
+            out["quality_tier_reasons"] = explain_signal_tier(
+                out,
+                profile=_normalize_profile(profile),
+            )
+    else:
+        out.pop("quality_tier", None)
+        out.pop("quality_tier_reasons", None)
     return out
 
 
@@ -611,6 +704,17 @@ def tag_signal_quality_in_place(
     if not isinstance(signal.get("context"), Mapping):
         signal["context"] = build_signal_context(signal, signal)
     signal["category"] = classify_signal(signal, profile=_normalize_profile(profile))
+    if signal["category"] == "A":
+        tier = classify_signal_tier(signal, profile=_normalize_profile(profile))
+        if tier:
+            signal["quality_tier"] = tier
+            signal["quality_tier_reasons"] = explain_signal_tier(
+                signal,
+                profile=_normalize_profile(profile),
+            )
+    else:
+        signal.pop("quality_tier", None)
+        signal.pop("quality_tier_reasons", None)
     return signal
 
 

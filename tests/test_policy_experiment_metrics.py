@@ -1201,6 +1201,10 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             rescue_profile["reject_reason_distribution"]["trend_strength_below_min"],
             4,
         )
+        self.assertEqual(
+            rescue_profile["quality_tier_distribution"],
+            {"A": 1, "A-": 1},
+        )
         self.assertEqual(mid_profile["samples_after"], 2)
         self.assertEqual(mid_profile["rejected_samples"], 4)
         self.assertEqual(mid_profile["variant"], "fusion_mid_trend")

@@ -18,6 +18,7 @@ from scripts.backtest_recommendation_quality import iter_snapshot_picks
 from chanlun.signal_quality_classifier import (
     build_signal_context,
     classify_signal,
+    classify_signal_tier,
     explain_signal_rejection,
     list_quality_profile_variants,
 )
@@ -650,11 +651,15 @@ def _summarize_fusion_variant(
 ) -> dict:
     profile_samples: List[dict] = []
     reject_reasons = Counter()
+    tier_counts = Counter()
     rejected_samples = 0
     for item in baseline_rows:
         pick = item.get("pick")
         if _is_fusion_profile_a(pick, variant_name):
             profile_samples.append(item["baseline_sample"])
+            signal = _build_fusion_pick_signal(pick)
+            tier = classify_signal_tier(signal, profile=variant_name) or "A"
+            tier_counts[tier] += 1
             continue
 
         rejected_samples += 1
@@ -683,6 +688,7 @@ def _summarize_fusion_variant(
         "drawdown_mean_before": drawdown_before,
         "drawdown_mean_after": drawdown_after,
         "n_after": samples_after,
+        "quality_tier_distribution": dict(sorted(tier_counts.items())),
         "rejected_samples": rejected_samples,
         "reject_reason_distribution": dict(sorted(reject_reasons.items())),
         "top_reject_reason": (
