@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import shutil
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -273,6 +274,39 @@ def _serialize_macd(pick, _slice, closes_sliced):
     return raw if raw else [0.0] * len(closes_sliced)
 
 
+def _serialize_signal_context_for_report(context):
+    """Keep classifier context JSON-safe for report output."""
+    if not isinstance(context, Mapping):
+        return {}
+
+    result = {}
+    for key in (
+        "trend_strength",
+        "volatility",
+        "trend_type",
+        "market_env",
+        "type",
+        "signal_type",
+    ):
+        if key in context:
+            result[key] = context.get(key)
+
+    if "pivot" in context:
+        result["has_pivot"] = context.get("pivot") is not None
+    if "segment" in context:
+        result["has_segment"] = context.get("segment") is not None
+    return result
+
+
+def _sanitize_buy_point_for_report(bp):
+    if not bp:
+        return {}
+    item = dict(bp)
+    if "context" in item:
+        item["context"] = _serialize_signal_context_for_report(item.get("context"))
+    return item
+
+
 def _serialize_picks(picks):
     """将 picks 列表转为 JSON-safe 格式，使用动态图表窗口"""
     result = []
@@ -291,7 +325,7 @@ def _serialize_picks(picks):
         def _adjust_bp(bp):
             if not bp or not bp.get("type"):
                 return None
-            d = dict(bp)
+            d = _sanitize_buy_point_for_report(bp)
             orig_idx = d.get("index", 0)
             if slice_start <= orig_idx < slice_end:
                 d["index"] = orig_idx - index_offset
@@ -301,7 +335,7 @@ def _serialize_picks(picks):
         def _adjust_bp_keep(bp):
             if not bp or not bp.get("type"):
                 return {}
-            d = dict(bp)
+            d = _sanitize_buy_point_for_report(bp)
             orig_idx = d.get("index", 0)
             if slice_start <= orig_idx < slice_end:
                 d["index"] = orig_idx - index_offset

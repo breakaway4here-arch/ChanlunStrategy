@@ -27,6 +27,12 @@ class DummyResult30min:
         self.volumes = np.array([1000.0, 2000.0])
 
 
+class DummySegment:
+    def __init__(self):
+        self.start_idx = 10
+        self.end_idx = 20
+
+
 def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
     n = 60
     pick = {
@@ -134,6 +140,28 @@ class TestReportGenerator(unittest.TestCase):
         self.assertEqual(decoded[0]["gf_dma_health"]["label"], "强势健康")
         self.assertIn("buy_points_30min", decoded[0])
         self.assertEqual(decoded[0]["buy_points_30min"], [])
+
+    def test_serialize_picks_sanitizes_signal_context_runtime_objects(self):
+        """Signal classifier context may contain runtime ChanLun objects."""
+        pick = make_pick()
+        pick["best_buy_point"]["context"] = {
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "market_env": "weak",
+            "signal_type": "强势启动候选",
+            "pivot": object(),
+            "segment": DummySegment(),
+        }
+        serialized = _serialize_picks([pick])
+        encoded = json.dumps(serialized, cls=NpEncoder)
+        decoded = json.loads(encoded)
+        context = decoded[0]["best_buy_point"]["context"]
+        self.assertEqual(context["trend_strength"], 1.0)
+        self.assertEqual(context["market_env"], "weak")
+        self.assertTrue(context["has_pivot"])
+        self.assertTrue(context["has_segment"])
+        self.assertNotIn("pivot", context)
+        self.assertNotIn("segment", context)
 
 
 def _make_minimal_report_data():
