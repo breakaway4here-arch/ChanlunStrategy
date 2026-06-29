@@ -658,6 +658,30 @@ def explain_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> 
     return ["standard_a"]
 
 
+def explain_signal_expected_horizon(
+    signal: Any,
+    profile: str = _DEFAULT_FUSION_PROFILE,
+) -> List[str]:
+    if not isinstance(signal, Mapping):
+        return []
+
+    normalized_profile = _normalize_profile(profile)
+    if classify_signal(signal, profile=normalized_profile) != "A":
+        return []
+
+    tier = signal.get("quality_tier")
+    if tier not in {"A+", "A", "A-"}:
+        tier = classify_signal_tier(signal, profile=normalized_profile)
+
+    if tier == "A+":
+        return ["high_confidence_hold"]
+    if tier == "A-":
+        return ["fast_confirm_or_exit"]
+    if tier == "A":
+        return ["standard_swing"]
+    return ["default_swing"]
+
+
 def classify_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) -> Optional[str]:
     reasons = explain_signal_tier(signal, profile=profile)
     if not reasons:
@@ -667,6 +691,20 @@ def classify_signal_tier(signal: Any, profile: str = _DEFAULT_FUSION_PROFILE) ->
     if reasons == ["strong_trend", "low_volatility", "complete_structure"]:
         return "A+"
     return "A"
+
+
+def classify_signal_expected_horizon(
+    signal: Any,
+    profile: str = _DEFAULT_FUSION_PROFILE,
+) -> Optional[str]:
+    reasons = explain_signal_expected_horizon(signal, profile=profile)
+    if not reasons:
+        return None
+    if "high_confidence_hold" in reasons:
+        return "T+5"
+    if "fast_confirm_or_exit" in reasons:
+        return "T+1"
+    return "T+3"
 
 
 def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION_PROFILE) -> dict:
@@ -687,9 +725,27 @@ def tag_signal_quality(signal: Mapping[str, Any], profile: str = _DEFAULT_FUSION
                 out,
                 profile=_normalize_profile(profile),
             )
+        else:
+            out.pop("quality_tier", None)
+            out.pop("quality_tier_reasons", None)
+        horizon = classify_signal_expected_horizon(
+            out,
+            profile=_normalize_profile(profile),
+        )
+        if horizon:
+            out["expected_horizon"] = horizon
+            out["expected_horizon_reasons"] = explain_signal_expected_horizon(
+                out,
+                profile=_normalize_profile(profile),
+            )
+        else:
+            out.pop("expected_horizon", None)
+            out.pop("expected_horizon_reasons", None)
     else:
         out.pop("quality_tier", None)
         out.pop("quality_tier_reasons", None)
+        out.pop("expected_horizon", None)
+        out.pop("expected_horizon_reasons", None)
     return out
 
 
@@ -712,9 +768,27 @@ def tag_signal_quality_in_place(
                 signal,
                 profile=_normalize_profile(profile),
             )
+        else:
+            signal.pop("quality_tier", None)
+            signal.pop("quality_tier_reasons", None)
+        horizon = classify_signal_expected_horizon(
+            signal,
+            profile=_normalize_profile(profile),
+        )
+        if horizon:
+            signal["expected_horizon"] = horizon
+            signal["expected_horizon_reasons"] = explain_signal_expected_horizon(
+                signal,
+                profile=_normalize_profile(profile),
+            )
+        else:
+            signal.pop("expected_horizon", None)
+            signal.pop("expected_horizon_reasons", None)
     else:
         signal.pop("quality_tier", None)
         signal.pop("quality_tier_reasons", None)
+        signal.pop("expected_horizon", None)
+        signal.pop("expected_horizon_reasons", None)
     return signal
 
 

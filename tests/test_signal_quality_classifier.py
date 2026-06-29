@@ -6,8 +6,10 @@ from chanlun.signal_quality_classifier import (
     build_signal_context,
     classify_signal,
     classify_signal_tier,
+    classify_signal_expected_horizon,
     explain_signal_tier,
     explain_signal_rejection,
+    explain_signal_expected_horizon,
     list_quality_profiles,
     tag_signal_quality,
     tag_signal_quality_in_place,
@@ -354,6 +356,104 @@ class SignalQualityClassifierTests(unittest.TestCase):
             [],
         )
 
+    def test_expected_horizon_maps_a_plus_to_t5(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 3.0,
+            "volatility": 0.05,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "strong",
+        }
+
+        self.assertEqual(
+            classify_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            "T+5",
+        )
+        self.assertEqual(
+            explain_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["high_confidence_hold"],
+        )
+
+    def test_expected_horizon_maps_standard_a_to_t3(self):
+        signal = {
+            "type": "一买",
+            "trend_strength": 2.0,
+            "volatility": 0.07,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            classify_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            "T+3",
+        )
+        self.assertEqual(
+            explain_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["standard_swing"],
+        )
+
+    def test_expected_horizon_maps_a_minus_to_t1(self):
+        signal = {
+            "type": "强势启动候选",
+            "trend_strength": 1.0,
+            "volatility": 0.05,
+            "pivot": None,
+            "segment": {"high": 12, "low": 10},
+            "market_env": "weak",
+        }
+
+        self.assertEqual(
+            classify_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            "T+1",
+        )
+        self.assertEqual(
+            explain_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            ["fast_confirm_or_exit"],
+        )
+
+    def test_expected_horizon_ignores_non_a_signals(self):
+        signal = {
+            "type": "底背驰候选",
+            "trend_strength": 1.0,
+            "volatility": 0.08,
+            "pivot": {"ZG": 12, "ZD": 10},
+            "segment": {"high": 12, "low": 10},
+        }
+
+        self.assertIsNone(
+            classify_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+        )
+        self.assertEqual(
+            explain_signal_expected_horizon(
+                signal,
+                profile="fusion_strict_startup_rescue_v1",
+            ),
+            [],
+        )
+
     def test_tag_signal_quality_adds_quality_tier_for_a_only(self):
         a_signal = {
             "type": "强势启动候选",
@@ -383,9 +483,16 @@ class SignalQualityClassifierTests(unittest.TestCase):
         self.assertEqual(tagged_a["category"], "A")
         self.assertEqual(tagged_a["quality_tier"], "A-")
         self.assertEqual(tagged_a["quality_tier_reasons"], ["startup_rescue"])
+        self.assertEqual(tagged_a["expected_horizon"], "T+1")
+        self.assertEqual(
+            tagged_a["expected_horizon_reasons"],
+            ["fast_confirm_or_exit"],
+        )
         self.assertEqual(tagged_b["category"], "B")
         self.assertNotIn("quality_tier", tagged_b)
         self.assertNotIn("quality_tier_reasons", tagged_b)
+        self.assertNotIn("expected_horizon", tagged_b)
+        self.assertNotIn("expected_horizon_reasons", tagged_b)
 
     def test_tag_signal_quality_profile(self):
         signal = {
