@@ -357,6 +357,7 @@ def _serialize_picks(picks):
         else:
             curr_price = 0
         dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
+        change_pct = _compute_pick_change_pct(p, bp)
 
         # Attach computed fields to bp for serialization
         bp_enhanced = dict(bp) if bp else {}
@@ -368,6 +369,7 @@ def _serialize_picks(picks):
             "code": p.get("code", ""),
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
+            "change_pct": change_pct,
             "best_buy_point": _adjust_bp_keep(bp_enhanced),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
             "pivots": p.get("pivots", {}),
@@ -591,11 +593,13 @@ def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
     for p in picks:
+        bp = p.get("best_buy_point", {})
         item = {
             "code": p.get("code", ""),
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
-            "best_buy_point": _serialize_bp(p.get("best_buy_point", {})),
+            "change_pct": _compute_pick_change_pct(p, bp),
+            "best_buy_point": _serialize_bp(bp),
             "gf_dma_health": p.get("gf_dma_health", {}),
             "buy_points_30min": [_serialize_bp(b) for b in p.get("buy_points_30min", [])],
             "pivots": p.get("pivots", {}),
@@ -620,6 +624,30 @@ def _serialize_picks_light(picks):
         }
         result.append(item)
     return result
+
+
+def _compute_pick_change_pct(pick, best_buy_point=None):
+    for value in (
+        pick.get("change_pct"),
+        (best_buy_point or {}).get("change_pct"),
+    ):
+        if value is not None:
+            try:
+                return round(float(value), 2)
+            except (TypeError, ValueError):
+                pass
+
+    closes = _safe_list(pick.get("closes", []))
+    if len(closes) < 2:
+        return None
+    try:
+        prev_close = float(closes[-2])
+        latest_close = float(closes[-1])
+    except (TypeError, ValueError):
+        return None
+    if prev_close == 0:
+        return None
+    return round((latest_close - prev_close) / prev_close * 100, 2)
 
 
 def _serialize_bp(bp):

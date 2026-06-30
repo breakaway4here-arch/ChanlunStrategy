@@ -127,6 +127,17 @@ class TestReportGenerator(unittest.TestCase):
         self.assertEqual(s["fusion_admission"]["passed"], True)
         self.assertEqual(s["market_regime"], "strong")
 
+    def test_serialize_picks_computes_top_level_change_pct_from_latest_closes(self):
+        """Candidate rows need a top-level change_pct for list rendering."""
+        pick = make_pick()
+        pick["closes"] = np.array([10.0, 10.5, 10.29])
+        pick["dates"] = ["2026-06-26", "2026-06-29", "2026-06-30"]
+        pick["best_buy_point"].pop("change_pct", None)
+
+        serialized = _serialize_picks([pick])
+
+        self.assertEqual(serialized[0]["change_pct"], -2.0)
+
     def test_build_chart_window_covers_key_points(self):
         """Window covers reference index, best_buy_point index, and latest bar."""
         pick = make_pick()
@@ -831,6 +842,10 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
 
     def test_candidate_rows_do_not_fabricate_risk_tags(self):
         self.assertNotIn("riskFlags = ['无新增'];", self.asset_js)
+
+    def test_candidate_rows_use_change_pct_fallback_helper(self):
+        self.assertIn("function getCandidateChangePct", self.asset_js)
+        self.assertIn("var change = getCandidateChangePct(item);", self.asset_js)
 
 
 class TestLayoutRefresh(unittest.TestCase):

@@ -108,6 +108,23 @@
     return m ? m[0] : normalizeString(dateStr);
   }
 
+  function getCandidateChangePct(item) {
+    var rec = item || {};
+    var direct = safeNumber(rec.change_pct, null);
+    if (direct !== null) return direct;
+
+    var bp = rec.best_buy_point || {};
+    var bpChange = safeNumber(bp.change_pct, null);
+    if (bpChange !== null) return bpChange;
+
+    var closes = asArray(rec.closes);
+    if (closes.length < 2) return null;
+    var prevClose = safeNumber(closes[closes.length - 2], null);
+    var latestClose = safeNumber(closes[closes.length - 1], null);
+    if (prevClose === null || latestClose === null || prevClose === 0) return null;
+    return ((latestClose - prevClose) / prevClose) * 100;
+  }
+
   function toCodeKey(value) {
     return normalizeString(value).trim();
   }
@@ -815,7 +832,7 @@
       var code = normalizeString(item.code || '');
       var name = normalizeString(item.name || '');
       var sector = normalizeString(item.sector || '');
-      var change = safeNumber(item.change_pct, null);
+      var change = getCandidateChangePct(item);
       var rankClass = getRankClass(rank);
       var changeCls = '';
       if (change === null) {
