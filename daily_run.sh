@@ -25,6 +25,25 @@ is_today_output_ready() {
     [ "$data_mtime" = "$TODAY" ] && [ "$index_mtime" = "$TODAY" ]
 }
 
+push_with_proxy_fallback() {
+    local proxy
+
+    for proxy in 127.0.0.1:17891 127.0.0.1:7897; do
+        echo "尝试推送（GitHub proxy: ${proxy}）..."
+        if git \
+            -c "http.https://github.com.proxy=${proxy}" \
+            -c "https.https://github.com.proxy=${proxy}" \
+            push; then
+            echo "推送成功 $(date '+%H:%M:%S')，使用代理 ${proxy}"
+            return 0
+        fi
+        echo "代理 ${proxy} 推送失败，尝试下一个"
+    done
+
+    echo "推送失败：127.0.0.1:17891 与 127.0.0.1:7897 均不可用"
+    return 1
+}
+
 echo "=== 缠论选股日报 $(date '+%Y-%m-%d %H:%M:%S') ==="
 
 if is_today_output_ready; then
@@ -43,8 +62,9 @@ if [ $run_status -eq 0 ]; then
         git add docs/index.html docs/data.json docs/data/ docs/20*/
         if ! git diff --cached --quiet; then
             git commit -m "chore: 自动更新 ${TODAY} 日报数据"
-            git push
-            echo "推送成功 $(date '+%H:%M:%S')"
+            if ! push_with_proxy_fallback; then
+                exit 1
+            fi
         else
             echo "无数据变更，跳过推送"
         fi
