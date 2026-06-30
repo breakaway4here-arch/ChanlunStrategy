@@ -101,6 +101,7 @@ def _build_candidate_from_fusion(pick, bp, market_change_pct):
         "code": pick.get("code", ""),
         "name": pick.get("name", ""),
         "sector": pick.get("sector", ""),
+        **_data_contract_fields(pick),
         "source_pool": "fusion",
         "source_type": bp.get("type", "强势启动候选"),
         "boom_score": score,
@@ -130,6 +131,7 @@ def _build_candidate_from_watch(item, market_change_pct):
         "code": item.get("code", ""),
         "name": item.get("name", ""),
         "sector": item.get("sector", ""),
+        **_data_contract_fields(item),
         "source_pool": "watch",
         "source_type": item.get("type", "强势启动观察"),
         "boom_score": score,
@@ -197,6 +199,16 @@ def _score_startup(source_pool, change_pct, volume_ratio, ma_bullish, startup_si
         reasons.append("突破20日平台")
 
     return score, reasons
+
+
+def _data_contract_fields(item):
+    return {
+        "sector_tags": item.get("sector_tags", []),
+        "sector_rank": item.get("sector_rank"),
+        "sector_flow": item.get("sector_flow"),
+        "sector_strength_label": item.get("sector_strength_label", ""),
+        "data_status": item.get("data_status", {}),
+    }
 
 
 def _sort_key(candidate):

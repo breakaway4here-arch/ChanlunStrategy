@@ -55,7 +55,16 @@ class TestBuildLuojiePool(unittest.TestCase):
         result = _result(closes=closes, lows=lows, buy_points=[bp], pivots=[pivot])
 
         pool = build_luojie_pool(
-            stocks=[{"code": "600001", "name": "测试通信", "sector": "通信设备"}],
+            stocks=[{
+                "code": "600001",
+                "name": "测试通信",
+                "sector": "通信设备",
+                "sector_tags": ["通信设备", "光模块"],
+                "sector_rank": 5,
+                "sector_flow": 123456,
+                "sector_strength_label": "资金流入TOP5",
+                "data_status": {"daily": "verified"},
+            }],
             min15_results=[result],
         )
 
@@ -66,6 +75,11 @@ class TestBuildLuojiePool(unittest.TestCase):
         self.assertEqual(candidate["buy_point_type"], "三买")
         self.assertGreater(candidate["life_line"], 0)
         self.assertTrue(candidate["macd_above_zero"])
+        self.assertEqual(candidate["sector_tags"], ["通信设备", "光模块"])
+        self.assertEqual(candidate["sector_rank"], 5)
+        self.assertEqual(candidate["sector_flow"], 123456)
+        self.assertEqual(candidate["sector_strength_label"], "资金流入TOP5")
+        self.assertEqual(candidate["data_status"]["daily"], "verified")
 
     def test_drops_stock_when_macd_double_lines_not_above_zero(self):
         closes = _rising_array()

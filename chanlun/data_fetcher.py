@@ -459,6 +459,41 @@ def _latest_date(kline):
     return str(dates[-1]).split(" ")[0] if dates else ""
 
 
+def _kline_latest_date(kline):
+    dates = (kline or {}).get("dates", [])
+    return str(dates[-1]).split(" ")[0] if dates else ""
+
+
+def build_kline_status(kline, required_date=None, source="unknown"):
+    if not kline:
+        return {
+            "daily": "missing",
+            "latest_date": "",
+            "source": source,
+            "bars": 0,
+            "stale": True,
+        }
+
+    latest_date = _kline_latest_date(kline)
+    bars = len(kline.get("closes", []))
+    if required_date and latest_date != required_date:
+        return {
+            "daily": "stale_cache",
+            "latest_date": latest_date,
+            "source": kline.get("source", source),
+            "bars": bars,
+            "stale": True,
+        }
+
+    return {
+        "daily": "verified",
+        "latest_date": latest_date,
+        "source": kline.get("source", source),
+        "bars": bars,
+        "stale": False,
+    }
+
+
 def _latest_change_pct(kline):
     closes = (kline or {}).get("closes", [])
     if closes is None or len(closes) < 2:
@@ -787,29 +822,50 @@ def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
 # ============================================================
 # 批量获取
 # ============================================================
-def batch_fetch_daily_klines(stocks, max_workers=10):
+def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_stale=False):
     """
     并发批量获取日线。
     stocks: [{"code": "600519", "name": "茅台", "sector": "...", ...}, ...]
-    返回: [{"code": ..., "name": ..., "sector": ..., "klines": {...}}, ...]
+    返回: [{"code": ..., "name": ..., "sector": ..., "sector_tags": [...], "klines": {...}, "data_status": {...}}, ...]
     """
     results = []
 
     def _fetch_one(stock):
         code = stock["code"]
+        kline_source = stock.get("source", "unknown")
         klines = fetch_daily_kline(code)
-        if not klines:
-            print(f"  [DEBUG] {code} {stock.get('name','')} 拉取失败")
+        status = build_kline_status(
+            klines, required_date=required_date, source=kline_source,
+        )
+        stock["data_status"] = status
+
+        if not klines or len(klines.get("closes", [])) < 60:
+            if status["daily"] == "missing":
+                print(f"  [DEBUG] {code} {stock.get('name','')} 拉取失败")
+            else:
+                print(f"  [DEBUG] {code} {stock.get('name','')} K线不足60根(实际{len(klines.get('closes',[]))})，可能新股/停牌")
+            status["daily"] = "missing"
+            status["stale"] = required_date is not None
+            stock["data_status"] = status
             return None
-        if len(klines.get("closes", [])) < 60:
-            print(f"  [DEBUG] {code} {stock.get('name','')} K线不足60根(实际{len(klines.get('closes',[]))})，可能新股/停牌")
+
+        if status["daily"] != "verified" and not allow_stale:
+            print(
+                f"  [STALE] {code} {stock.get('name','')} "
+                f"latest={status['latest_date']} required={required_date}"
+            )
             return None
         return {
             "code": code,
             "name": stock.get("name", ""),
             "sector": stock.get("sector", ""),
+            "sector_tags": list(stock.get("sector_tags", [])),
+            "sector_rank": stock.get("sector_rank"),
+            "sector_flow": stock.get("sector_flow"),
+            "sector_strength_label": stock.get("sector_strength_label", ""),
             "change_pct": stock.get("change_pct", 0),
             "klines": klines,
+            "data_status": status,
         }
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -881,6 +937,9 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     print("=" * 60)
 
     print("[1/4] 获取板块资金流向 TOP20 ...")
+    used_fallback_sector_source = False
+    warnings = []
+    fallback_used = False
     sectors = fetch_sector_flow(TOP_SECTOR_COUNT)
     if not sectors:
         # API 不可用时（如周末），使用热门板块兜底
@@ -895,17 +954,21 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         ]
         sectors = [{"code": c, "name": n, "change_pct": 0, "flow": 0, "flow_str": "0"}
                    for c, n in FALLBACK_SECTORS]
+        used_fallback_sector_source = True
+        fallback_used = True
+        warnings.append("板块资金流向接口不可用，使用静态TOP20板块兜底")
         print(f"  板块API超时，使用兜底 {len(sectors)} 个板块")
     else:
         print(f"  获取到 {len(sectors)} 个板块")
     for s in sectors[:5]:
-        print(f"    {s['name']}: 净流入 {s['flow_str']}")
+        print(f"    {s.get('name','')}: 净流入 {s.get('flow_str', '0')}")
 
     print("[2/4] 获取板块成分股 ...")
-    seen_codes = set()
-    all_stocks = []
+    stock_map = {}
     consecutive_failures = 0
-    for sector in sectors:
+    sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
+    stock_pool_source = "sector_components"
+    for sector_rank, sector in enumerate(sectors, start=1):
         stocks = fetch_sector_stocks(sector["code"])
         if not stocks:
             consecutive_failures += 1
@@ -916,15 +979,30 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         else:
             consecutive_failures = 0
         for st in stocks:
-            if st["code"] not in seen_codes:
-                seen_codes.add(st["code"])
-                st["sector"] = sector["name"]
-                all_stocks.append(st)
-    print(f"  共 {len(all_stocks)} 只成分股（去重后）")
+            code = st["code"]
+            if code in stock_map:
+                tags = stock_map[code].setdefault("sector_tags", [])
+                if sector["name"] not in tags and sector["name"] != stock_map[code].get("sector", ""):
+                    tags.append(sector["name"])
+            else:
+                sector_strength_label = (
+                    sector.get("sector_strength_label")
+                    or sector.get("strength_label")
+                    or f"资金流入TOP{sector_rank}"
+                )
+                stock_map[code] = {
+                    "code": code,
+                    "name": st.get("name", ""),
+                    "change_pct": st.get("change_pct", 0),
+                    "sector": sector["name"],
+                    "sector_tags": [sector["name"]],
+                    "sector_rank": sector_rank,
+                    "sector_flow": sector.get("flow"),
+                    "sector_strength_label": sector_strength_label,
+                }
+    print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
-    # 兜底：板块API全部不可用时（如本地代理停止导致DNS劫持），
-    # 从 K 线缓存中恢复股票列表，保证日报仍能产出
-    if not all_stocks:
+    if not stock_map:
         from pathlib import Path
         from config import KLINE_CACHE_DIR
         cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
@@ -940,17 +1018,47 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
                 if code[:2] in ("92", "87", "83", "43"):
                     continue
                 name = code_to_name.get(code, code)
-                all_stocks.append({"code": code, "name": name, "sector": ""})
-            if all_stocks:
-                print(f"  [FALLBACK] 板块API全部不可用，从 K线缓存恢复 {len(all_stocks)} 只股票")
+                stock_map[code] = {
+                    "code": code,
+                    "name": name,
+                    "change_pct": 0,
+                    "sector": "",
+                    "sector_tags": [],
+                    "sector_rank": None,
+                    "sector_flow": None,
+                    "sector_strength_label": "",
+                    "source": "kline_cache",
+                }
+            if stock_map:
+                print(f"  [FALLBACK] 板块API全部不可用，从 K线缓存恢复 {len(stock_map)} 只股票")
+                stock_pool_source = "kline_cache"
+                sector_source = "fallback_static"
+                fallback_used = True
+                warnings.append("板块成分抓取失败，从 K线缓存恢复股票池")
+                warnings.append("板块API全部不可用，使用 K线缓存兜底")
             else:
                 print(f"  [FALLBACK] K线缓存中无可用股票")
+                warnings.append("K线缓存为空，无法回退")
 
+    all_stocks = list(stock_map.values())
     print(f"[3/4] 批量获取日线（{len(all_stocks)} 只）...")
     t0 = time.time()
-    stocks_with_kline = batch_fetch_daily_klines(all_stocks)
+    stocks_with_kline = batch_fetch_daily_klines(
+        all_stocks,
+        required_date=required_date,
+        allow_stale=allow_missing_index,
+    )
     elapsed = time.time() - t0
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
+
+    stale_stock_count = 0
+    missing_daily_count = 0
+    for st in all_stocks:
+        status = st.get("data_status") or {}
+        if status.get("daily") == "stale_cache":
+            stale_stock_count += 1
+        elif status.get("daily") == "missing":
+            missing_daily_count += 1
 
     print("[4/4] 获取上证指数日线 ...")
     index_error = ""
@@ -964,12 +1072,37 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         print(f"  [PREVIEW] 上证指数未校验，继续生成预览: {index_error}")
     print(f"  上证数据: {len(sh_kline['closes']) if sh_kline else 0} 根K线")
 
+    if not sectors:
+        sector_source = "empty"
+
+    data_quality = {
+        "report_date": required_date or "",
+        "is_trading_day": bool(sh_kline),
+        "is_official": bool(
+            sh_kline
+            and stocks_with_kline
+            and not allow_missing_index
+            and not fallback_used
+            and stale_stock_count == 0
+            and missing_daily_count == 0
+        ),
+        "market_status": "verified" if sh_kline else "unverified",
+        "stock_pool_source": stock_pool_source,
+        "sector_source": sector_source,
+        "stale_stock_count": stale_stock_count,
+        "missing_daily_count": missing_daily_count,
+        "missing_30min_count": 0,
+        "fallback_used": fallback_used,
+        "warnings": warnings,
+    }
+
     print("Phase 1 完成\n")
     return {
         "sectors": sectors,
         "sh_index": sh_kline,
         "stocks": stocks_with_kline,
         "index_error": index_error,
+        "data_quality": data_quality,
     }
 
 

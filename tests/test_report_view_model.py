@@ -13,11 +13,13 @@ def _fusion_pick(
     distance=1.8,
     change_pct=2.6,
     reason="底背驰候选强市通过",
+    sector="测试板块",
+    sector_tags=None,
 ):
     return {
         "code": code,
         "name": name,
-        "sector": "测试板块",
+        "sector": sector,
         "score": score,
         "best_buy_point": {
             "type": "底背驰候选",
@@ -40,6 +42,7 @@ def _fusion_pick(
         "buy_points": [{"type": "二买"}],
         "reference_buy_points": [{"type": "参考"}],
         "blocked_buy_points": [{"type": "拦截"}],
+        "sector_tags": list(sector_tags or []),
     }
 
 
@@ -165,6 +168,86 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(item["ref"]["pool"], "picks_fusion")
         self.assertIn("source:main", item["rank_trace"])
         self.assertIn("source:acceleration", item["rank_trace"])
+
+    def test_workspace_item_has_info_tags(self):
+        report_data = _report_data({"picks_fusion": [_fusion_pick()]})
+
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+        tags = {(tag["type"], tag["label"]) for tag in item["info_tags"]}
+
+        self.assertIn(("sector", "测试板块"), tags)
+        self.assertIn(("source", "主推"), tags)
+        self.assertIn(("signal", "底背驰候选"), tags)
+
+    def test_workspace_info_tags_include_extra_sector_tags(self):
+        pick = _fusion_pick(code="600005", name="半导体票", sector="电子")
+        pick["sector_tags"] = ["电子", "半导体", "AI"]
+
+        report_data = _report_data({"picks_fusion": [pick]})
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+
+        sector_labels = [tag["label"] for tag in item["info_tags"] if tag["type"] == "sector"]
+
+        self.assertIn("电子", sector_labels)
+        self.assertIn("半导体", sector_labels)
+        self.assertIn("AI", sector_labels)
+
+    def test_workspace_data_badges_reflect_stale_status(self):
+        pick = _fusion_pick(code="600006", name="延时票")
+        pick["data_status"] = {"daily": "stale_cache"}
+
+        report_data = _report_data({"picks_fusion": [pick]})
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+
+        badge_labels = [badge["label"] for badge in item["data_badges"]]
+
+        self.assertIn("缓存兜底", badge_labels)
+        self.assertIn("数据非最新", badge_labels)
+
+    def test_workspace_does_not_claim_verified_when_market_unverified(self):
+        pick = _fusion_pick(code="600007", name="非交易态票")
+        report_data = _report_data(
+            {
+                "data_quality": {"market_status": "unverified", "fallback_used": False},
+                "picks_fusion": [pick],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+        badge_labels = [badge["label"] for badge in item["data_badges"]]
+
+        self.assertNotIn("数据已校验", badge_labels)
+
+    def test_workspace_does_not_claim_verified_without_row_status(self):
+        pick = _fusion_pick(code="600008", name="无状态票")
+        report_data = _report_data(
+            {
+                "data_quality": {"market_status": "verified", "fallback_used": False},
+                "picks_fusion": [pick],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+        badge_labels = [badge["label"] for badge in item["data_badges"]]
+
+        self.assertNotIn("数据已校验", badge_labels)
+        self.assertIn("数据状态未标记", badge_labels)
+
+    def test_workspace_claims_verified_with_row_status(self):
+        pick = _fusion_pick(code="600009", name="已校验票")
+        pick["data_status"] = {"daily": "verified"}
+        report_data = _report_data({"picks_fusion": [pick]})
+
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+        badge_labels = [badge["label"] for badge in item["data_badges"]]
+
+        self.assertIn("数据已校验", badge_labels)
 
     def test_no_acceleration_without_enabled_mode(self):
         report_data = _report_data(

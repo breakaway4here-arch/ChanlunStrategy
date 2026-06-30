@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from collections.abc import Mapping
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from run import fetch_market_indices  # noqa: E402
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -47,6 +48,55 @@ def _as_mapping(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
+
+def _coerce_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _is_stale_data_row(row: Any) -> bool:
+    data_status = _as_mapping(_as_mapping(row).get("data_status"))
+    return data_status.get("daily") == "stale_cache"
+
+
+def _data_status_daily(row: Any) -> str:
+    return str(_as_mapping(_as_mapping(row).get("data_status")).get("daily") or "")
+
+
+def _has_valid_row_data_status(row: Any) -> bool:
+    return _data_status_daily(row) in {"verified", "stale_cache", "missing", "preview"}
+
+
+def _iter_workspace_rows(report: Mapping[str, Any]):
+    workspace = _as_mapping(report.get("workspace"))
+    views = _as_mapping(workspace.get("views"))
+    for view, rows in views.items():
+        if not isinstance(rows, (list, tuple)):
+            continue
+        for row in rows:
+            if isinstance(row, Mapping):
+                yield str(view), row
+
+
+def _iter_raw_candidates(report: Mapping[str, Any]):
+    for pool_name in (
+        "picks_fusion",
+        "picks_pure",
+        "startup_watchlist",
+        "next_day_boom",
+        "luojie_pool",
+    ):
+        for row in _resolve_candidate_candidates(report, pool_name):
+            yield pool_name, row
 
 
 def _resolve_change_pct(row: Optional[Mapping[str, Any]]) -> Optional[float]:
@@ -174,6 +224,24 @@ def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
     views = _as_mapping(workspace.get("views"))
     picks_fusion = _resolve_candidate_candidates(report, "picks_fusion")
     picks_pure = _resolve_candidate_candidates(report, "picks_pure")
+    dq_value = report.get("data_quality")
+    data_quality: dict[str, Any] = {}
+    is_data_quality_present = "data_quality" in report
+    if is_data_quality_present and not isinstance(dq_value, Mapping):
+        errors.append("data_quality must be a mapping")
+    else:
+        data_quality = _as_mapping(dq_value)
+
+    is_official = bool(data_quality.get("is_official"))
+    if is_official:
+        if data_quality.get("market_status") != "verified":
+            errors.append("official report requires data_quality.market_status == 'verified'")
+        if data_quality.get("fallback_used") is not False:
+            errors.append("official report requires data_quality.fallback_used == False")
+        if _coerce_int(data_quality.get("stale_stock_count"), default=-1) != 0:
+            errors.append("official report requires data_quality.stale_stock_count == 0")
+        if _coerce_int(data_quality.get("missing_daily_count"), default=-1) != 0:
+            errors.append("official report requires data_quality.missing_daily_count == 0")
 
     if picks_fusion and not _as_mapping(views).get("main"):
         errors.append("main view missing while picks_fusion is non-empty")
@@ -197,6 +265,23 @@ def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
                     current = _resolve_current_price(raw)
                 if current is None:
                     errors.append(f"{view} row missing displayable current_price: code={row.get('code')}")
+            if is_official and _is_stale_data_row(row):
+                errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
+            raw = _resolve_raw_candidate(report, _as_mapping(row.get("ref")))
+            if is_official and _is_stale_data_row(raw):
+                errors.append(f"{view} raw candidate has stale daily cache in official report: code={row.get('code')}")
+
+    if is_official:
+        for view, row in _iter_workspace_rows(report):
+            if not _has_valid_row_data_status(row):
+                errors.append(f"{view} row missing valid data_status in official report: code={row.get('code')}")
+            if _is_stale_data_row(row):
+                errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
+        for pool_name, row in _iter_raw_candidates(report):
+            if not _has_valid_row_data_status(row):
+                errors.append(f"{pool_name} candidate missing valid data_status in official report: code={row.get('code')}")
+            if _is_stale_data_row(row):
+                errors.append(f"{pool_name} candidate has stale daily cache in official report: code={row.get('code')}")
 
     return errors
 

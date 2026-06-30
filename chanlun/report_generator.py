@@ -374,6 +374,11 @@ def _serialize_picks(picks):
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
             "pivots": p.get("pivots", {}),
             "trend_type": p.get("trend_type", ""),
+            "sector_tags": p.get("sector_tags", []),
+            "sector_rank": p.get("sector_rank"),
+            "sector_flow": p.get("sector_flow"),
+            "sector_strength_label": p.get("sector_strength_label", ""),
+            "data_status": p.get("data_status", {}),
             "gf_dma_health": p.get("gf_dma_health", {}),
             "score": p.get("score", 0),
             "sector": p.get("sector", ""),
@@ -479,6 +484,11 @@ def _serialize_startup_watchlist(watchlist):
             "code": w.get("code", ""),
             "name": w.get("name", ""),
             "sector": w.get("sector", ""),
+            "sector_tags": w.get("sector_tags", []),
+            "sector_rank": w.get("sector_rank"),
+            "sector_flow": w.get("sector_flow"),
+            "sector_strength_label": w.get("sector_strength_label", ""),
+            "data_status": w.get("data_status", {}),
             "type": w.get("type", "强势启动观察"),
             "tier": w.get("tier", "watch"),
             "source_type": w.get("source_type", ""),
@@ -529,6 +539,11 @@ def _serialize_next_day_boom(data):
             "code": c.get("code", ""),
             "name": c.get("name", ""),
             "sector": c.get("sector", ""),
+            "sector_tags": c.get("sector_tags", []),
+            "sector_rank": c.get("sector_rank"),
+            "sector_flow": c.get("sector_flow"),
+            "sector_strength_label": c.get("sector_strength_label", ""),
+            "data_status": c.get("data_status", {}),
             "source_pool": c.get("source_pool", ""),
             "source_type": c.get("source_type", ""),
             "boom_score": c.get("boom_score", 0),
@@ -563,6 +578,11 @@ def _serialize_luojie_pool(data):
             "code": c.get("code", ""),
             "name": c.get("name", ""),
             "sector": c.get("sector", ""),
+            "sector_tags": c.get("sector_tags", []),
+            "sector_rank": c.get("sector_rank"),
+            "sector_flow": c.get("sector_flow"),
+            "sector_strength_label": c.get("sector_strength_label", ""),
+            "data_status": c.get("data_status", {}),
             "theme_labels": c.get("theme_labels", []),
             "tier": c.get("tier", ""),
             "score": c.get("score", 0),
@@ -830,7 +850,7 @@ def build_recent_reviews(date_str, output_dir):
     except (json.JSONDecodeError, OSError):
         return []
 
-    all_dates = sorted(manifest.get("dates", []))
+    all_dates = sorted(manifest.get("trading_dates") or manifest.get("dates", []))
     past_dates = [d for d in all_dates if d < date_str][-RECENT_REVIEW_DAYS:]
     if not past_dates:
         return []
@@ -891,13 +911,15 @@ def build_recent_reviews(date_str, output_dir):
         if not dates_raw or not closes_raw:
             enriched.append({**row, "current_price": None, "change_pct": None,
                              "stop_triggered": None, "lookback_days": 0,
-                             "trigger_date": None})
+                             "trigger_date": None, "current_date": "", "data_status": "missing"})
             continue
         dates = [str(d).split()[0] for d in dates_raw]
         rec = row["rec_date"]
         closes = [float(x) for x in closes_raw]
         latest_close = closes[-1]
         change_pct = round((latest_close - row["ref_price"]) / row["ref_price"] * 100, 2)
+        current_date = dates[-1] if dates else ""
+        data_status = "verified" if current_date == date_str else "stale_cache"
 
         if rec in dates:
             start_idx = dates.index(rec) + 1
@@ -923,6 +945,8 @@ def build_recent_reviews(date_str, output_dir):
             "stop_triggered": stop_triggered,
             "trigger_date": trigger_date,
             "lookback_days": len(forward_dates),
+            "current_date": current_date,
+            "data_status": data_status,
         })
 
     enriched.sort(key=lambda r: (r["rec_date"], r["code"]))
@@ -955,6 +979,7 @@ def _generate_report_v2(report_data, output_dir=None):
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
+        "data_quality": report_data.get("data_quality", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
@@ -986,7 +1011,13 @@ def _generate_report_v2(report_data, output_dir=None):
     os.makedirs(data_dir, exist_ok=True)
 
     write_daily_data_json(daily_data, data_dir)
-    write_data_manifest(date_str, data_dir)
+    dq = daily_data.get("data_quality", {})
+    write_data_manifest(
+        date_str,
+        data_dir,
+        is_trading_day=dq.get("is_trading_day", True),
+        is_official=dq.get("is_official", True),
+    )
     copy_report_assets(output_dir)
     asset_version = _report_asset_version()
 
@@ -1030,20 +1061,52 @@ def write_daily_data_json(daily_data, data_dir):
         json.dump(daily_data, f, ensure_ascii=False, cls=NpEncoder, indent=2)
 
 
-def write_data_manifest(date_str, data_dir):
-    """维护 docs/data/index.json — 日期列表 + 最新日期"""
+def write_data_manifest(date_str, data_dir, is_trading_day=True, is_official=True):
+    """维护 docs/data/index.json — 日期列表 + 交易日列表 + 最新日期"""
     manifest_path = os.path.join(data_dir, "index.json")
-    existing = {"dates": [], "latest": date_str}
+    existing = {
+        "dates": [],
+        "trading_dates": [],
+        "latest": date_str,
+        "latest_trading_date": "",
+        "date_meta": {},
+    }
     if os.path.exists(manifest_path):
         with open(manifest_path, "r", encoding="utf-8") as f:
             try:
                 existing = json.load(f)
             except json.JSONDecodeError:
                 pass
-    if date_str not in existing.get("dates", []):
-        existing.setdefault("dates", []).append(date_str)
-        existing["dates"].sort()
+
+    dates = sorted(set(_safe_list(existing.get("dates", [])) + [date_str]))
+    trading_dates = existing.get("trading_dates")
+    if trading_dates is None:
+        trading_dates = list(dates)
+    trading_dates = sorted(set(_safe_list(trading_dates)))
+
+    if is_trading_day:
+        trading_dates = sorted(set(trading_dates + [date_str]))
+    else:
+        trading_dates = [d for d in trading_dates if d != date_str]
+
+    existing["dates"] = dates
+    existing["trading_dates"] = trading_dates
     existing["latest"] = date_str
+    existing["latest_trading_date"] = (
+        date_str if is_trading_day else (
+            sorted(trading_dates)[-1] if trading_dates else ""
+        )
+    )
+
+    date_meta = existing.get("date_meta", {})
+    if not isinstance(date_meta, dict):
+        date_meta = {}
+    date_meta[date_str] = {
+        "is_trading_day": bool(is_trading_day),
+        "is_official": bool(is_official),
+    }
+    existing["date_meta"] = date_meta
+
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(existing, f, ensure_ascii=False, indent=2)
 
@@ -1086,6 +1149,7 @@ def update_data_json(report_data, output_dir=None):
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
+        "data_quality": report_data.get("data_quality", {}),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
     }

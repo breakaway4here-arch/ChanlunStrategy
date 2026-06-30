@@ -10,8 +10,10 @@ import numpy as np
 
 from chanlun.report_generator import (
     _serialize_picks, _serialize_bp, _serialize_startup_watchlist,
+    _serialize_next_day_boom, _serialize_luojie_pool,
     build_chart_window, build_chart_annotations, build_startup_watch_chart_annotations,
-    _safe_list, NpEncoder, generate_report, build_recent_reviews,
+    _safe_list, NpEncoder, generate_report, build_recent_reviews, write_data_manifest,
+    update_data_json,
 )
 from config import (
     ENABLE_WEAK_ACCESS_CONTROL, FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
@@ -126,6 +128,22 @@ class TestReportGenerator(unittest.TestCase):
         s = serialized[0]
         self.assertEqual(s["fusion_admission"]["passed"], True)
         self.assertEqual(s["market_regime"], "strong")
+
+    def test_serialize_picks_preserves_sector_and_status_metadata(self):
+        pick = make_pick()
+        pick["sector_tags"] = ["制造", "新能源"]
+        pick["sector_rank"] = 3
+        pick["sector_flow"] = {"total": 12000000}
+        pick["sector_strength_label"] = "高"
+        pick["data_status"] = {"daily": "verified", "bars": 20}
+
+        serialized = _serialize_picks([pick])
+        s = serialized[0]
+        self.assertEqual(s["sector_tags"], ["制造", "新能源"])
+        self.assertEqual(s["sector_rank"], 3)
+        self.assertEqual(s["sector_flow"], {"total": 12000000})
+        self.assertEqual(s["sector_strength_label"], "高")
+        self.assertEqual(s["data_status"], {"daily": "verified", "bars": 20})
 
     def test_serialize_picks_computes_top_level_change_pct_from_latest_closes(self):
         """Candidate rows need a top-level change_pct for list rendering."""
@@ -457,6 +475,23 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         result = _serialize_startup_watchlist([items])
         json.dumps(result, cls=NpEncoder)
 
+    def test_preserves_sector_and_status_metadata(self):
+        items = self._make_watch_item()
+        items["sector_tags"] = ["测试板块", "机器人"]
+        items["sector_rank"] = 4
+        items["sector_flow"] = 123456
+        items["sector_strength_label"] = "资金流入TOP4"
+        items["data_status"] = {"daily": "verified", "latest_date": "2026-05-26"}
+
+        result = _serialize_startup_watchlist([items])
+        sw = result[0]
+
+        self.assertEqual(sw["sector_tags"], ["测试板块", "机器人"])
+        self.assertEqual(sw["sector_rank"], 4)
+        self.assertEqual(sw["sector_flow"], 123456)
+        self.assertEqual(sw["sector_strength_label"], "资金流入TOP4")
+        self.assertEqual(sw["data_status"]["daily"], "verified")
+
 
 class TestBuildStartupWatchChartAnnotations(unittest.TestCase):
 
@@ -539,6 +574,148 @@ class TestBuildRecentReviews(unittest.TestCase):
         self.assertEqual(rows[0]["current_price"], 12.0)
         self.assertEqual(rows[0]["change_pct"], 20.0)
         self.assertEqual(rows[0]["lookback_days"], 2)
+
+    def test_uses_trading_dates_and_marks_stale_or_verified(self):
+        with tempfile.TemporaryDirectory(prefix="test_recent_reviews_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "dates": ["2026-06-20", "2026-06-29"],
+                    "trading_dates": ["2026-06-29"],
+                    "latest": "2026-06-30",
+                    "latest_trading_date": "2026-06-29",
+                }, f)
+            with open(os.path.join(data_dir, "2026-06-20.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "picks_fusion": [{
+                        "code": "000001",
+                        "name": "应跳过",
+                        "best_buy_point": {"type": "强势启动候选", "price": 9.0},
+                        "stop_loss": 8.0,
+                    }]
+                }, f)
+            with open(os.path.join(data_dir, "2026-06-29.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "picks_fusion": [{
+                        "code": "000002",
+                        "name": "回看样例",
+                        "best_buy_point": {"type": "强势启动候选", "price": 10.0},
+                        "stop_loss": 8.0,
+                    }]
+                }, f)
+
+            kline = {
+                "dates": ["2026-06-20", "2026-06-29"],
+                "closes": [11.0, 12.0],
+                "lows": [10.5, 11.5],
+            }
+            with mock.patch("chanlun.data_fetcher.fetch_daily_kline", return_value=kline):
+                rows = build_recent_reviews("2026-06-30", tmpdir)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["code"], "000002")
+        self.assertEqual(rows[0]["current_date"], "2026-06-29")
+        self.assertEqual(rows[0]["data_status"], "stale_cache")
+
+    def test_build_recent_reviews_missing_kline_marks_missing_status(self):
+        with tempfile.TemporaryDirectory(prefix="test_recent_reviews_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "dates": ["2026-06-29"],
+                    "trading_dates": ["2026-06-29"],
+                    "latest": "2026-06-30",
+                    "latest_trading_date": "2026-06-29",
+                }, f)
+            with open(os.path.join(data_dir, "2026-06-29.json"), "w", encoding="utf-8") as f:
+                json.dump({
+                    "picks_fusion": [{
+                        "code": "000001",
+                        "name": "回看样例",
+                        "best_buy_point": {"type": "强势启动候选", "price": 10.0},
+                        "stop_loss": 8.0,
+                    }]
+                }, f)
+
+            with mock.patch("chanlun.data_fetcher.fetch_daily_kline", return_value=None):
+                rows = build_recent_reviews("2026-06-30", tmpdir)
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["code"], "000001")
+        self.assertEqual(rows[0]["data_status"], "missing")
+        self.assertEqual(rows[0]["current_price"], None)
+        self.assertEqual(rows[0]["current_date"], "")
+
+
+class TestDataManifestAndQuality(unittest.TestCase):
+
+    def test_manifest_keeps_trading_dates_separate_from_dates(self):
+        with tempfile.TemporaryDirectory(prefix="test_manifest_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            write_data_manifest("2026-06-20", data_dir, is_trading_day=False, is_official=False)
+            write_data_manifest("2026-06-30", data_dir, is_trading_day=True, is_official=True)
+
+            with open(os.path.join(data_dir, "index.json"), "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+
+        self.assertIn("2026-06-20", manifest["dates"])
+        self.assertNotIn("2026-06-20", manifest["trading_dates"])
+        self.assertIn("2026-06-30", manifest["dates"])
+        self.assertIn("2026-06-30", manifest["trading_dates"])
+        self.assertEqual(manifest["latest"], "2026-06-30")
+        self.assertEqual(manifest["latest_trading_date"], "2026-06-30")
+
+    def test_manifest_handles_old_manifest_when_writing_non_trading_date(self):
+        with tempfile.TemporaryDirectory(prefix="test_manifest_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            old_manifest = {
+                "dates": ["2026-06-29"],
+                "latest": "2026-06-29",
+            }
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as f:
+                json.dump(old_manifest, f, ensure_ascii=False, indent=2)
+
+            write_data_manifest("2026-06-30", data_dir, is_trading_day=False, is_official=False)
+
+            with open(os.path.join(data_dir, "index.json"), "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+
+        self.assertEqual(manifest["trading_dates"], ["2026-06-29"])
+        self.assertEqual(manifest["latest"], "2026-06-30")
+        self.assertEqual(manifest["latest_trading_date"], "2026-06-29")
+        self.assertEqual(manifest["date_meta"]["2026-06-30"]["is_trading_day"], False)
+
+    def test_data_quality_written_to_daily_json_and_data_json(self):
+        with tempfile.TemporaryDirectory(prefix="test_dq_") as tmpdir:
+            report_data = _make_minimal_report_data()
+            report_data["date"] = "2026-06-30"
+            report_data["data_quality"] = {
+                "is_trading_day": True,
+                "is_official": True,
+                "market_status": "verified",
+            }
+
+            generate_report(report_data, output_dir=tmpdir)
+            update_data_json(report_data, output_dir=tmpdir)
+
+            with open(os.path.join(tmpdir, "data", "2026-06-30.json"), "r", encoding="utf-8") as f:
+                daily_data = json.load(f)
+            with open(os.path.join(tmpdir, "data", "index.json"), "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+            with open(os.path.join(tmpdir, "data.json"), "r", encoding="utf-8") as f:
+                aggregate = json.load(f)
+
+        self.assertEqual(daily_data["data_quality"], report_data["data_quality"])
+        self.assertEqual(manifest["latest"], "2026-06-30")
+        self.assertEqual(manifest["date_meta"]["2026-06-30"], {
+            "is_trading_day": True,
+            "is_official": True,
+        })
+        self.assertEqual(aggregate["reports"]["2026-06-30"]["data_quality"], report_data["data_quality"])
 
 
 class TestHTMLEscape(unittest.TestCase):
@@ -945,6 +1122,11 @@ class TestNextDayBoomRendering(unittest.TestCase):
                 "code": "600001",
                 "name": "大涨候选",
                 "sector": "测试板块",
+                "sector_tags": ["测试板块", "机器人"],
+                "sector_rank": 2,
+                "sector_flow": 8888,
+                "sector_strength_label": "资金流入TOP2",
+                "data_status": {"daily": "verified"},
                 "source_pool": "fusion",
                 "source_type": "强势启动候选",
                 "boom_score": 52,
@@ -974,6 +1156,14 @@ class TestNextDayBoomRendering(unittest.TestCase):
     def test_history_switch_refreshes_next_day_boom(self):
         self.assertIn('"mode": "enabled"', self.html)
 
+    def test_next_day_boom_preserves_sector_and_status_metadata(self):
+        candidate = self.day_data["next_day_boom"]["candidates"][0]
+        self.assertEqual(candidate["sector_tags"], ["测试板块", "机器人"])
+        self.assertEqual(candidate["sector_rank"], 2)
+        self.assertEqual(candidate["sector_flow"], 8888)
+        self.assertEqual(candidate["sector_strength_label"], "资金流入TOP2")
+        self.assertEqual(candidate["data_status"]["daily"], "verified")
+
 
 class TestLuojiePoolRendering(unittest.TestCase):
 
@@ -990,6 +1180,11 @@ class TestLuojiePoolRendering(unittest.TestCase):
                 "code": "600001",
                 "name": "罗姐候选",
                 "sector": "通信设备",
+                "sector_tags": ["通信设备", "光模块"],
+                "sector_rank": 5,
+                "sector_flow": 6666,
+                "sector_strength_label": "资金流入TOP5",
+                "data_status": {"daily": "verified"},
                 "theme_labels": ["六网/新一代通信网", "赛道层/光模块"],
                 "tier": "主升候选",
                 "close": 18.88,
@@ -1022,6 +1217,14 @@ class TestLuojiePoolRendering(unittest.TestCase):
 
     def test_history_switch_refreshes_luojie_pool(self):
         self.assertIn('"diagnostics"', self.html)
+
+    def test_luojie_pool_preserves_sector_and_status_metadata(self):
+        candidate = self.day_data["luojie_pool"]["candidates"][0]
+        self.assertEqual(candidate["sector_tags"], ["通信设备", "光模块"])
+        self.assertEqual(candidate["sector_rank"], 5)
+        self.assertEqual(candidate["sector_flow"], 6666)
+        self.assertEqual(candidate["sector_strength_label"], "资金流入TOP5")
+        self.assertEqual(candidate["data_status"]["daily"], "verified")
 
 
 if __name__ == "__main__":

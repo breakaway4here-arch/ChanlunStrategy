@@ -10,6 +10,11 @@ def _fusion_pick(code, name, change_pct=5.0, volume_ratio=1.5, ma_bullish=True):
         "score": 41,
         "ma_bullish": ma_bullish,
         "sector": "测试板块",
+        "sector_tags": ["测试板块", "机器人"],
+        "sector_rank": 2,
+        "sector_flow": 123456,
+        "sector_strength_label": "资金流入TOP2",
+        "data_status": {"daily": "verified"},
         "best_buy_point": {
             "type": "强势启动候选",
             "tier": "candidate",
@@ -28,6 +33,11 @@ def _watch_item(code, name, change_pct=10.0, volume_ratio=1.5):
         "code": code,
         "name": name,
         "sector": "测试板块",
+        "sector_tags": ["测试板块", "涨停"],
+        "sector_rank": 3,
+        "sector_flow": 654321,
+        "sector_strength_label": "资金流入TOP3",
+        "data_status": {"daily": "verified"},
         "type": "强势启动观察",
         "tier": "watch",
         "change_pct": change_pct,
@@ -63,6 +73,11 @@ class TestNextDayBoomCandidates(unittest.TestCase):
         self.assertEqual([c["code"] for c in result["candidates"]], ["600001", "600002"])
         self.assertEqual(result["candidates"][0]["rank"], 1)
         self.assertGreater(result["candidates"][0]["boom_score"], result["candidates"][1]["boom_score"])
+        self.assertEqual(result["candidates"][0]["sector_tags"], ["测试板块", "机器人"])
+        self.assertEqual(result["candidates"][0]["sector_rank"], 2)
+        self.assertEqual(result["candidates"][0]["sector_strength_label"], "资金流入TOP2")
+        self.assertEqual(result["candidates"][0]["data_status"]["daily"], "verified")
+        self.assertEqual(result["candidates"][1]["sector_tags"], ["测试板块", "涨停"])
 
     def test_deduplicates_same_code_with_higher_scored_source(self):
         result = build_next_day_boom_candidates(

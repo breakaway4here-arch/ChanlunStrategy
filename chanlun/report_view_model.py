@@ -303,6 +303,97 @@ def _extract_confirming_metrics(item: Mapping[str, Any]) -> dict[str, float | No
     }
 
 
+def _build_info_tags(
+    raw: Mapping[str, Any],
+    source: str,
+    risk_flags: list[str],
+) -> list[dict[str, str]]:
+    tags: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add_tag(tag_type: str, label: str) -> None:
+        if not tag_type or not label:
+            return
+        key = (tag_type, label)
+        if key in seen:
+            return
+        seen.add(key)
+        tags.append({"type": tag_type, "label": label})
+
+    _add_tag("sector", _safe_str(raw.get("sector")))
+
+    extra_sectors = [
+        _safe_str(tag)
+        for tag in (_get_list(raw.get("sector_tags")))
+        if _safe_str(tag) and _safe_str(tag) != _safe_str(raw.get("sector"))
+    ]
+    for sector in extra_sectors[:2]:
+        _add_tag("sector", sector)
+
+    source_label = _safe_str(SOURCE_LABELS.get(source, ""))
+    _add_tag("source", source_label)
+
+    bp = _to_dict(raw.get("best_buy_point"))
+    signal = _safe_str(bp.get("type")) or _safe_str(raw.get("type")) or _safe_str(raw.get("source_type"))
+    _add_tag("signal", signal)
+
+    confirm = _safe_str(bp.get("sublevel_confirm_label")) or _safe_str(raw.get("sublevel_confirm_label"))
+    if confirm:
+        confirm = confirm.strip()
+        if confirm and not confirm.startswith("30min"):
+            confirm = f"30min {confirm}"
+    else:
+        confirmed_by = _safe_str(bp.get("confirmed_by"))
+        if confirmed_by and len(confirmed_by) <= 12:
+            confirm = confirmed_by
+    _add_tag("confirm", confirm)
+
+    for risk in risk_flags[:2]:
+        _add_tag("risk", risk)
+
+    return tags
+
+
+def _build_data_badges(raw: Mapping[str, Any], data_quality: Mapping[str, Any] | None = None) -> list[dict[str, str]]:
+    badges: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    def _add_badge(badge_type: str, label: str) -> None:
+        if not badge_type or not label:
+            return
+        key = (badge_type, label)
+        if key in seen:
+            return
+        seen.add(key)
+        badges.append({"type": badge_type, "label": label})
+
+    data_status = _to_dict(raw.get("data_status"))
+    row_daily_status = _safe_str(data_status.get("daily"))
+    dq = _to_dict(data_quality)
+    market_status = _safe_str(dq.get("market_status"))
+    fallback_used = bool(dq.get("fallback_used"))
+
+    if row_daily_status == "verified":
+        _add_badge("quality", "数据已校验")
+        return badges
+    if row_daily_status == "stale_cache":
+        _add_badge("quality", "缓存兜底")
+        _add_badge("risk", "数据非最新")
+        return badges
+    if row_daily_status == "missing":
+        _add_badge("quality", "日线缺失")
+        return badges
+
+    if not data_status and fallback_used:
+        _add_badge("quality", "含兜底数据")
+    elif market_status == "unverified":
+        _add_badge("quality", "数据未校验")
+    else:
+        _add_badge("quality", "数据状态未标记")
+
+    return badges
+
+
 def _safe_str(value: Any) -> str:
     if value is None:
         return ""
@@ -457,6 +548,7 @@ def _primary_metric_bundle(
 def _build_item(
     sources: Iterable[str],
     by_source: dict[str, Mapping[str, Any]],
+    data_quality: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     ordered_sources = _sorted_sources(sources)
     code = ""
@@ -496,6 +588,8 @@ def _build_item(
         "name": name,
         "sector": sector,
         "sources": ordered_sources,
+        "info_tags": _build_info_tags(preferred_raw, preferred, all_risk_flags),
+        "data_badges": _build_data_badges(preferred_raw, data_quality),
         "source_labels": [_safe_str(SOURCE_LABELS[s]) for s in ordered_sources if s in SOURCE_LABELS],
         "resonance_label": _resonance_label(ordered_sources),
         "view_rank": 0,
@@ -643,10 +737,15 @@ def _build_view_items(
     view_source: str,
     source_to_item: dict[str, Mapping[str, Any]],
     source_for_ranking: str | None = None,
+    data_quality: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for code, raw in source_to_item.items():
-        row = _build_item([source_for_ranking or view_source], {source_for_ranking or view_source: raw})
+        row = _build_item(
+            [source_for_ranking or view_source],
+            {source_for_ranking or view_source: raw},
+            data_quality=data_quality,
+        )
         row["view_rank"] = 0
         rows.append(row)
     rows.sort(key=lambda row: (row["watch_score"], row["code"]), reverse=True)
@@ -657,6 +756,7 @@ def _build_view_items(
 
 def _build_highlights(
     views: dict[str, dict[str, Mapping[str, Any]]],
+    data_quality: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Mapping[str, Any]]] = {}
     source_map = {
@@ -672,7 +772,10 @@ def _build_highlights(
             if source not in bucket["by_source"]:
                 bucket["by_source"][source] = raw
 
-    rows = [_build_item(list(bucket["by_source"].keys()), bucket["by_source"]) for bucket in merged.values()]
+    rows = [
+        _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
+        for bucket in merged.values()
+    ]
     rows.sort(key=lambda row: (row["watch_score"], row["code"]), reverse=True)
     top_rows = rows[:10]
     for rank, row in enumerate(top_rows, start=1):
@@ -690,13 +793,14 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     """
     data = _to_dict(report_data)
     views = _collect_views(data)
+    data_quality = data.get("data_quality")
 
     view_items = {
-        view: _build_view_items(view, source_data)
+        view: _build_view_items(view, source_data, data_quality=data_quality)
         for view, source_data in views.items()
     }
 
-    highlights = _build_highlights(views)
+    highlights = _build_highlights(views, data_quality=data_quality)
     view_items["highlights"] = highlights
 
     # Re-rank highlights and each view after dedupe/sorting.

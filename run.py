@@ -230,10 +230,24 @@ def main(debug=False, preview=False):
             if kline:
                 name = name_map.get(code, st.get("name", code))
                 stocks_with_kline.append({"code": code, "name": name, "klines": kline})
+        data_quality = {
+            "report_date": today,
+            "is_trading_day": bool(sh_kline),
+            "is_official": False,
+            "market_status": "verified" if sh_kline else "unverified",
+            "stock_pool_source": "manual_debug",
+            "sector_source": "eastmoney" if sectors else "empty",
+            "stale_stock_count": 0,
+            "missing_daily_count": 0,
+            "missing_30min_count": 0,
+            "fallback_used": False,
+            "warnings": ["debug mode"],
+        }
         daily_data = {
             "sectors": sectors,
             "sh_index": sh_kline,
             "stocks": stocks_with_kline,
+            "data_quality": data_quality,
         }
     else:
         daily_data = collect_daily_data(
@@ -241,6 +255,7 @@ def main(debug=False, preview=False):
             allow_missing_index=preview,
         )
 
+    data_quality = daily_data.get("data_quality", {})
     sectors = daily_data["sectors"]
     sh_kline = daily_data["sh_index"]
     index_error = daily_data.get("index_error", "")
@@ -293,7 +308,18 @@ def main(debug=False, preview=False):
     for stock in stocks_with_kline:
         sec = stock.get("sector", "")
         chg = stock.get("change_pct", 0)
-        sector_stocks[stock["code"]] = {"sector": sec, "change_pct": chg}
+        stock_sector_tags = stock.get("sector_tags")
+        if not isinstance(stock_sector_tags, list):
+            stock_sector_tags = []
+        sector_stocks[stock["code"]] = {
+            "sector": sec,
+            "change_pct": chg,
+            "sector_tags": list(stock_sector_tags),
+            "sector_rank": stock.get("sector_rank"),
+            "sector_flow": stock.get("sector_flow"),
+            "sector_strength_label": stock.get("sector_strength_label", ""),
+            "data_status": stock.get("data_status") if isinstance(stock.get("data_status"), dict) else {},
+        }
     print(f"  板块映射: {len(sector_stocks)} 只")
 
     # 收集卖出信号（一卖/顶背驰 → 风险提示）
@@ -358,8 +384,44 @@ def main(debug=False, preview=False):
     print("Phase 4.5: Strong startup scan")
     print("=" * 60)
 
+    def _attach_sector_metadata(row):
+        """Attach sector metadata from sector_stocks without overwriting explicit row values."""
+        if not isinstance(row, dict):
+            return {}
+
+        code = row.get("code")
+        sector_meta = sector_stocks.get(code, {}) if code else {}
+        merged = dict(row)
+
+        if merged.get("sector") is None or "sector" not in merged or merged["sector"] == "":
+            merged["sector"] = sector_meta.get("sector", merged.get("sector", ""))
+
+        if (
+            "sector_tags" not in merged
+            or not isinstance(merged.get("sector_tags"), list)
+            or not merged.get("sector_tags")
+        ):
+            merged["sector_tags"] = list(sector_meta.get("sector_tags", []))
+
+        if "sector_rank" not in merged or merged.get("sector_rank") is None:
+            merged["sector_rank"] = sector_meta.get("sector_rank")
+
+        if "sector_flow" not in merged or merged.get("sector_flow") is None:
+            merged["sector_flow"] = sector_meta.get("sector_flow")
+
+        if not merged.get("sector_strength_label"):
+            merged["sector_strength_label"] = sector_meta.get("sector_strength_label", "")
+
+        if not isinstance(merged.get("data_status"), dict) or not merged.get("data_status"):
+            merged["data_status"] = sector_meta.get("data_status", {})
+
+        return merged
+
     startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
         chan_results, sector_stocks)
+    startup_seeds = [_attach_sector_metadata(s) for s in startup_seeds]
+    startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
+
     print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
           f"启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
           f"涨停观察: {startup_diag.get('watch_due_to_limit_up', 0)}")
@@ -433,7 +495,7 @@ def main(debug=False, preview=False):
             # All startup seeds → watch (no 30min data to confirm)
             if startup_seeds:
                 for s in startup_seeds:
-                    startup_watchlist.append({
+                    startup_watchlist.append(_attach_sector_metadata({
                         "code": s["code"], "name": s["name"],
                         "type": "强势启动观察", "tier": "watch",
                         "source_type": "日线强势启动",
@@ -445,7 +507,7 @@ def main(debug=False, preview=False):
                         "avoid_chase": True,
                         "watch_reason": "缺少30分钟数据，等待次日确认",
                         "next_day_conditions": ["回踩不破突破位", "30min出现二买/三买确认"],
-                    })
+                    }))
             startup_upgrade_diag = {"startup_candidate": 0,
                                      "watch_due_to_no_30min_confirm": len(startup_seeds)}
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
@@ -495,6 +557,7 @@ def main(debug=False, preview=False):
                 print(f"  candidate={startup_upgrade_diag['startup_candidate']}, "
                       f"watch_no_confirm={startup_upgrade_diag['watch_due_to_no_30min_confirm']}, "
                       f"dropped_no_30min_data={startup_upgrade_diag.get('dropped_no_30min_confirm', 0)}")
+                startup_additional_watchlist = [_attach_sector_metadata(item) for item in startup_additional_watchlist]
                 startup_watchlist = startup_watchlist + startup_additional_watchlist
                 # Normalize startup candidates to match regular pick structure
                 if startup_candidates:
@@ -529,7 +592,6 @@ def main(debug=False, preview=False):
                             "pivots": sc.get("pivot_info", {}),
                             "trend_type": "",
                             "score": 0,
-                            "sector": "",
                             "resonance": {},
                             "ma_bullish": False,
                             "fusion_admission": {},
@@ -560,6 +622,7 @@ def main(debug=False, preview=False):
                             "change_pct": sc.get("change_pct", 0),
                             "volume_ratio": sc.get("volume_ratio", 0),
                         }
+                        pick = _attach_sector_metadata(pick)
                         # Annotate startup quality labels on best_buy_point
                         pick["best_buy_point"] = annotate_startup_quality(pick["best_buy_point"])
                         normalized.append(pick)
@@ -659,6 +722,8 @@ def main(debug=False, preview=False):
     # Score
     pure_scored = apply_scores(pure_confirmed, version="pure")
     fusion_scored = apply_scores(fusion_confirmed, version="fusion", sector_rank_map=sectors)
+    pure_scored = [_attach_sector_metadata(p) for p in pure_scored]
+    fusion_scored = [_attach_sector_metadata(p) for p in fusion_scored]
     pure_scored = _attach_gf_dma_health(pure_scored)
     fusion_scored = _attach_gf_dma_health(fusion_scored)
 
@@ -767,6 +832,7 @@ def main(debug=False, preview=False):
             "total_picks": len(pure_scored),
             "with_annotations": picks_with_annotations,
         },
+        "data_quality": data_quality,
         "strong_startup": {
             "daily_scan": startup_diag,
             "upgrade": startup_upgrade_diag,
@@ -811,6 +877,7 @@ def main(debug=False, preview=False):
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
+        "data_quality": data_quality,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
         "next_day_boom": next_day_boom,

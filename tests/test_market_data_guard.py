@@ -23,6 +23,186 @@ def _kline(dates, closes):
 
 class TestMarketDataGuard(unittest.TestCase):
 
+    def test_build_kline_status_marks_verified_and_stale(self):
+        verified = _kline(
+            ["2026-06-29", "2026-06-30"],
+            [10.0] * 2,
+        )
+        stale = _kline(
+            ["2026-06-29", "2026-06-29"],
+            [10.0] * 2,
+        )
+
+        verified_status = data_fetcher.build_kline_status(
+            verified,
+            required_date="2026-06-30",
+            source="tencent",
+        )
+        stale_status = data_fetcher.build_kline_status(
+            stale,
+            required_date="2026-06-30",
+            source="tencent",
+        )
+
+        self.assertEqual(
+            verified_status,
+            {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        )
+        self.assertEqual(
+            stale_status,
+            {
+                "daily": "stale_cache",
+                "latest_date": "2026-06-29",
+                "source": "tencent",
+                "bars": 2,
+                "stale": True,
+            },
+        )
+
+    def test_batch_fetch_daily_klines_filters_stale_in_official_mode(self):
+        stale = _kline(
+            ["2026-06-29"] * 60,
+            [10.0] * 60,
+        )
+
+        with patch.object(data_fetcher, "fetch_daily_kline", return_value=stale):
+            stocks = data_fetcher.batch_fetch_daily_klines(
+                [{"code": "600000", "name": "测试股"}],
+                required_date="2026-06-30",
+                allow_stale=False,
+            )
+
+        self.assertEqual(stocks, [])
+
+    def test_batch_fetch_daily_klines_keeps_stale_with_status_in_preview_mode(self):
+        stale = _kline(
+            ["2026-06-29"] * 60,
+            [10.0] * 60,
+        )
+
+        with patch.object(data_fetcher, "fetch_daily_kline", return_value=stale):
+            stocks = data_fetcher.batch_fetch_daily_klines(
+                [{"code": "600000", "name": "测试股"}],
+                required_date="2026-06-30",
+                allow_stale=True,
+            )
+
+        self.assertEqual(len(stocks), 1)
+        self.assertEqual(stocks[0]["data_status"]["daily"], "stale_cache")
+
+    def test_collect_daily_data_preserves_sector_tags_and_quality(self):
+        sectors = [
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000},
+            {"code": "BK0002", "name": "新能源", "change_pct": 1.4, "flow": 8_000_000},
+        ]
+        sector_stocks = {
+            "BK0001": [{"code": "600000", "name": "测试股", "change_pct": 2.1}],
+            "BK0002": [{"code": "600000", "name": "测试股", "change_pct": 1.4}],
+        }
+
+        def fake_batch_fetch(stocks, required_date=None, allow_stale=False, max_workers=10):
+            stock = stocks[0]
+            self.assertEqual(stock["code"], "600000")
+            self.assertEqual(stock["sector"], "AI")
+            self.assertEqual(stock["sector_tags"], ["AI", "新能源"])
+            return [
+                {
+                    "code": stock["code"],
+                    "name": stock["name"],
+                    "sector": stock["sector"],
+                    "sector_tags": stock["sector_tags"],
+                    "sector_rank": stock["sector_rank"],
+                    "sector_flow": stock["sector_flow"],
+                    "sector_strength_label": stock["sector_strength_label"],
+                    "change_pct": stock["change_pct"],
+                    "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+                    "data_status": {
+                        "daily": "verified",
+                        "latest_date": "2026-06-30",
+                        "source": "tencent",
+                        "bars": 2,
+                        "stale": False,
+                    },
+                }
+            ]
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=sectors), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=lambda code: sector_stocks.get(code, [])), \
+             patch.object(data_fetcher, "batch_fetch_daily_klines", side_effect=fake_batch_fetch), \
+             patch.object(data_fetcher, "fetch_shanghai_index", return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0])):
+            result = data_fetcher.collect_daily_data(required_date="2026-06-30")
+
+        self.assertEqual(len(result["stocks"]), 1)
+        self.assertEqual(result["stocks"][0]["sector"], "AI")
+        self.assertEqual(result["stocks"][0]["sector_tags"][0], "AI")
+        self.assertEqual(result["stocks"][0]["sector_rank"], 1)
+        self.assertEqual(result["stocks"][0]["sector_strength_label"], "资金流入TOP1")
+        self.assertIn("data_quality", result)
+        self.assertEqual(result["data_quality"]["stock_pool_source"], "sector_components")
+        self.assertEqual(result["data_quality"]["sector_source"], "eastmoney")
+        self.assertTrue(result["data_quality"]["is_official"])
+
+    def test_collect_daily_data_static_sector_fallback_sets_fallback_used(self):
+        stock_calls = [{"code": "600000", "name": "测试股"}]
+
+        def fake_sector_stocks(code):
+            if code == "BK0480":
+                return stock_calls
+            return []
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[]), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=fake_sector_stocks), \
+             patch.object(data_fetcher, "batch_fetch_daily_klines", return_value=[
+                 {
+                     "code": "600000",
+                     "name": "测试股",
+                     "sector": "人工智能",
+                     "sector_tags": ["人工智能"],
+                     "sector_rank": 1,
+                     "sector_flow": 0,
+                     "sector_strength_label": "资金流入TOP1",
+                     "klines": _kline(["2026-06-29", "2026-06-30"], [10, 11]),
+                     "data_status": {
+                         "daily": "verified",
+                         "latest_date": "2026-06-30",
+                         "source": "tencent",
+                         "bars": 2,
+                         "stale": False,
+                     },
+                 }
+             ]), \
+             patch.object(data_fetcher, "fetch_shanghai_index", return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0])):
+            result = data_fetcher.collect_daily_data(required_date="2026-06-30")
+
+        dq = result["data_quality"]
+        self.assertTrue(dq["fallback_used"])
+        self.assertTrue(dq["warnings"])
+        self.assertEqual(dq["sector_source"], "fallback_static")
+        self.assertFalse(dq["is_official"])
+
+    def test_collect_daily_data_stale_rows_are_official_false(self):
+        sectors = [{"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}]
+        stale_kline = _kline(["2026-06-29", "2026-06-29"] * 30, [10.0] * 60)
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=sectors), \
+             patch.object(data_fetcher, "fetch_sector_stocks", return_value=[{"code": "600000", "name": "测试股"}]), \
+             patch.object(data_fetcher, "fetch_daily_kline", return_value=stale_kline), \
+             patch.object(data_fetcher, "fetch_shanghai_index", return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0])):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                allow_missing_index=True,
+            )
+
+        dq = result["data_quality"]
+        self.assertTrue(dq["stale_stock_count"] > 0)
+        self.assertFalse(dq["is_official"])
+
     def test_market_indices_raise_when_no_source_has_valid_today_data(self):
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
              patch.object(data_fetcher, "_fetch_daily_kline_tencent_plain_remote", return_value=None), \
@@ -253,6 +433,244 @@ class TestReportContractGuard(unittest.TestCase):
                     "main": [],
                     "baseline": [],
                 }
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
+
+    def test_validate_report_contract_rejects_official_stale_data_quality(self):
+        report = {
+            "picks_fusion": [
+                {
+                    "code": "600001",
+                    "change_pct": 1.2,
+                    "current_price": 10.2,
+                    "data_status": {"daily": "verified"},
+                },
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [
+                        {
+                            "code": "600001",
+                            "ref": {"pool": "picks_fusion", "code": "600001"},
+                            "data_status": {"daily": "verified"},
+                        },
+                    ],
+                    "main": [
+                        {
+                            "code": "600001",
+                            "ref": {"pool": "picks_fusion", "code": "600001"},
+                            "data_status": {"daily": "verified"},
+                        },
+                    ],
+                    "baseline": [],
+                }
+            },
+            "data_quality": {
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 1,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("stale_stock_count" in err for err in errors))
+
+    def test_validate_report_contract_rejects_official_stale_candidate_status(self):
+        report = {
+            "picks_fusion": [
+                {
+                    "code": "600002",
+                    "change_pct": 2.1,
+                    "current_price": 11.4,
+                    "data_status": {"daily": "stale_cache"},
+                }
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [
+                        {
+                            "code": "600002",
+                            "ref": {"pool": "picks_fusion", "code": "600002"},
+                            "data_status": {"daily": "verified"},
+                        },
+                    ],
+                    "main": [
+                        {
+                            "code": "600002",
+                            "ref": {"pool": "picks_fusion", "code": "600002"},
+                            "data_status": {"daily": "verified"},
+                        },
+                    ],
+                    "baseline": [],
+                }
+            },
+            "data_quality": {
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("stale daily cache" in err for err in errors))
+
+    def test_validate_report_contract_rejects_official_stale_non_main_view_row(self):
+        report = {
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [],
+                    "baseline": [],
+                    "confirming": [
+                        {
+                            "code": "600005",
+                            "change_pct": 1.0,
+                            "current_price": 9.9,
+                            "data_status": {"daily": "stale_cache"},
+                        }
+                    ],
+                }
+            },
+            "data_quality": {
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("confirming row has stale daily cache" in err for err in errors))
+
+    def test_validate_report_contract_rejects_official_stale_raw_pool_candidate(self):
+        report = {
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {
+                "candidates": [
+                    {
+                        "code": "600006",
+                        "change_pct": 1.0,
+                        "current_price": 10.0,
+                        "data_status": {"daily": "stale_cache"},
+                    }
+                ]
+            },
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [],
+                    "baseline": [],
+                    "acceleration": [],
+                }
+            },
+            "data_quality": {
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("next_day_boom candidate has stale daily cache" in err for err in errors))
+
+    def test_validate_report_contract_rejects_official_malformed_data_status(self):
+        report = {
+            "picks_fusion": [
+                {
+                    "code": "600007",
+                    "change_pct": 1.0,
+                    "current_price": 10.0,
+                    "data_status": "bad-shape",
+                }
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [
+                        {
+                            "code": "600007",
+                            "change_pct": 1.0,
+                            "current_price": 10.0,
+                            "ref": {"pool": "picks_fusion", "code": "600007"},
+                            "data_status": "bad-shape",
+                        }
+                    ],
+                    "baseline": [],
+                }
+            },
+            "data_quality": {
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("main row missing valid data_status" in err for err in errors))
+        self.assertTrue(any("picks_fusion candidate missing valid data_status" in err for err in errors))
+
+    def test_validate_report_contract_allows_preview_stale_status_when_not_official(self):
+        report = {
+            "picks_fusion": [
+                {
+                    "code": "600003",
+                    "change_pct": 1.6,
+                    "current_price": 13.3,
+                    "data_status": {"daily": "stale_cache"},
+                }
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [
+                        {"code": "600003", "ref": {"pool": "picks_fusion", "code": "600003"}},
+                    ],
+                    "main": [
+                        {"code": "600003", "ref": {"pool": "picks_fusion", "code": "600003"}},
+                    ],
+                    "baseline": [],
+                }
+            },
+            "data_quality": {
+                "is_official": False,
+                "market_status": "unverified",
+                "fallback_used": True,
+                "stale_stock_count": 0,
+                "missing_daily_count": 3,
             },
         }
 
