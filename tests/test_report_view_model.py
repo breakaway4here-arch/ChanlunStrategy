@@ -233,6 +233,45 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(confirming_item["action"], "等回踩")
         self.assertNotEqual(confirming_item["action"], "可上车")
 
+    def test_workspace_main_derives_change_pct_from_closes_when_pick_lacks_change_field(self):
+        pick = _fusion_pick(code="600100", name="主推闭坑票")
+        pick.pop("change_pct", None)
+        pick["best_buy_point"].pop("change_pct", None)
+        pick["closes"] = [10.0, 10.5, 10.29]
+        pick["best_buy_point"]["current_price"] = 10.29
+
+        report_data = _report_data(
+            {
+                "picks_fusion": [pick],
+            }
+        )
+        workspace = build_workspace(report_data)
+
+        main_item = workspace["views"]["main"][0]
+        highlight_item = workspace["views"]["highlights"][0]
+
+        self.assertEqual(main_item["change_pct"], -2.0)
+        self.assertEqual(highlight_item["change_pct"], -2.0)
+        self.assertEqual(main_item["current_price"], 10.29)
+
+    def test_workspace_baseline_uses_pick_metric_derivation(self):
+        pick = _baseline_pick(code="600101", name="基准回补票")
+        pick.pop("change_pct", None)
+        pick["best_buy_point"].pop("change_pct", None)
+        pick["closes"] = [20.0, 21.0, 21.42]
+        pick["best_buy_point"]["current_price"] = 21.42
+
+        report_data = _report_data(
+            {
+                "picks_pure": [pick],
+            }
+        )
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["baseline"][0]
+
+        self.assertEqual(item["change_pct"], 2.0)
+        self.assertEqual(item["current_price"], 21.42)
+
 
 if __name__ == "__main__":
     unittest.main()

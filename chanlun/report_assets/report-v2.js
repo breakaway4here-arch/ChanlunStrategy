@@ -108,21 +108,87 @@
     return m ? m[0] : normalizeString(dateStr);
   }
 
-  function getCandidateChangePct(item) {
-    var rec = item || {};
-    var direct = safeNumber(rec.change_pct, null);
+  function getCandidateChangePctFromRecord(rec) {
+    var record = rec || {};
+    var direct = safeNumber(record.change_pct, null);
     if (direct !== null) return direct;
 
-    var bp = rec.best_buy_point || {};
+    var bp = record.best_buy_point || {};
     var bpChange = safeNumber(bp.change_pct, null);
     if (bpChange !== null) return bpChange;
 
-    var closes = asArray(rec.closes);
+    var closes = asArray(record.closes);
     if (closes.length < 2) return null;
     var prevClose = safeNumber(closes[closes.length - 2], null);
     var latestClose = safeNumber(closes[closes.length - 1], null);
     if (prevClose === null || latestClose === null || prevClose === 0) return null;
     return ((latestClose - prevClose) / prevClose) * 100;
+  }
+
+  function getCandidateChangePct(item) {
+    var rec = item || {};
+    var direct = getCandidateChangePctFromRecord(rec);
+    if (direct !== null) return direct;
+
+    var raw = findRawCandidate(rec.ref || {});
+    if (!raw || raw === rec) {
+      return null;
+    }
+    return getCandidateChangePctFromRecord(raw);
+  }
+
+  function getCandidateCurrentPriceFromRecord(rec) {
+    var record = rec || {};
+    var direct = safeNumber(record.current_price, null);
+    if (direct !== null) return direct;
+
+    var close = safeNumber(record.close, null);
+    if (close !== null) return close;
+
+    var bp = record.best_buy_point || {};
+    var bpPrice = safeNumber(bp.current_price, null);
+    if (bpPrice !== null) return bpPrice;
+
+    var closes = asArray(record.closes);
+    if (closes.length === 0) return null;
+    return safeNumber(closes[closes.length - 1], null);
+  }
+
+  function getCandidateCurrentPrice(item) {
+    var rec = item || {};
+    var direct = getCandidateCurrentPriceFromRecord(rec);
+    if (direct !== null) return direct;
+
+    var raw = findRawCandidate(rec.ref || {});
+    if (!raw || raw === rec) {
+      return null;
+    }
+    return getCandidateCurrentPriceFromRecord(raw);
+  }
+
+  function getCandidateReferencePriceFromRecord(rec) {
+    var record = rec || {};
+    var direct = safeNumber(record.reference_price, null);
+    if (direct !== null) return direct;
+
+    var bp = record.best_buy_point || {};
+    direct = safeNumber(bp.reference_price, null);
+    if (direct !== null) return direct;
+    direct = safeNumber(bp.source_price, null);
+    if (direct !== null) return direct;
+    return safeNumber(bp.price, null);
+  }
+
+  function getCandidateReferencePrice(item) {
+    var rec = item || {};
+    var direct = getCandidateReferencePriceFromRecord(rec);
+    if (direct !== null) return direct;
+
+    var raw = findRawCandidate(rec.ref || {});
+    if (!raw || raw === rec) {
+      return null;
+    }
+    return getCandidateReferencePriceFromRecord(raw);
   }
 
   function toCodeKey(value) {
@@ -945,21 +1011,8 @@
   }
 
   function buildPriceSection(item, raw) {
-    var currentPrice = safeNumber(item.current_price, null);
-    if (currentPrice === null && raw && raw.current_price !== undefined) {
-      currentPrice = safeNumber(raw.current_price, null);
-    }
-    if (currentPrice === null && raw && raw.close !== undefined) {
-      currentPrice = safeNumber(raw.close, null);
-    }
-
-    var refPrice = safeNumber(item.reference_price, null);
-    if (refPrice === null && raw && raw.reference_price !== undefined) {
-      refPrice = safeNumber(raw.reference_price, null);
-    }
-    if (refPrice === null && raw && raw.current_price !== undefined && currentPrice !== null) {
-      refPrice = safeNumber(raw.current_price, null);
-    }
+    var currentPrice = getCandidateCurrentPrice(item);
+    var refPrice = getCandidateReferencePrice(item);
 
     var dist = safeNumber(item.distance_from_reference_pct, null);
     if (dist === null && refPrice !== null && currentPrice !== null && refPrice !== 0) {
@@ -1186,13 +1239,16 @@
       }
     }
 
-    var refPrice = safeNumber(workspaceItem.reference_price, null);
-    if (refPrice === null && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
-      refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
+    var curPrice = getCandidateCurrentPriceFromRecord(workspaceItem);
+    if (curPrice === null && raw && raw !== workspaceItem) {
+      curPrice = getCandidateCurrentPriceFromRecord(raw);
     }
-    var curPrice = safeNumber(workspaceItem.current_price, null);
-    if (curPrice === null) {
-      curPrice = safeNumber(raw.current_price, safeNumber(raw.close, null));
+    var refPrice = getCandidateReferencePriceFromRecord(workspaceItem);
+    if (refPrice === null && raw && raw !== workspaceItem) {
+      refPrice = getCandidateReferencePriceFromRecord(raw);
+    }
+    if (refPrice === null && raw && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
+      refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
     }
     if (refPrice !== null) {
       markLines.push({

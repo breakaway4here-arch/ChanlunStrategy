@@ -59,7 +59,14 @@ run_status=$?
 
 if [ $run_status -eq 0 ]; then
     if is_today_output_ready; then
-        git add docs/index.html docs/data.json docs/data/ docs/20*/
+        git add \
+            "docs/index.html" \
+            docs/data.json \
+            "docs/data/index.json" \
+            "docs/data/${TODAY}.json" \
+            "docs/${TODAY}/index.html" \
+            "docs/assets/report-v2.css" \
+            "docs/assets/report-v2.js"
         if ! git diff --cached --quiet; then
             git commit -m "chore: 自动更新 ${TODAY} 日报数据"
             if ! push_with_proxy_fallback; then

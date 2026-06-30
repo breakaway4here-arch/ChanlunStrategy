@@ -846,6 +846,25 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_candidate_rows_use_change_pct_fallback_helper(self):
         self.assertIn("function getCandidateChangePct", self.asset_js)
         self.assertIn("var change = getCandidateChangePct(item);", self.asset_js)
+        self.assertIn("function getCandidateChangePctFromRecord", self.asset_js)
+        self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
+        self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
+
+    def test_candidate_price_section_uses_raw_best_buy_point_and_closes_fallback(self):
+        self.assertIn("function getCandidateCurrentPriceFromRecord", self.asset_js)
+        self.assertIn("var bp = record.best_buy_point || {};", self.asset_js)
+        self.assertIn("return safeNumber(closes[closes.length - 1], null);", self.asset_js)
+        self.assertIn("function getCandidateCurrentPrice(item)", self.asset_js)
+        self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
+        self.assertIn("return getCandidateCurrentPriceFromRecord(raw);", self.asset_js)
+
+    def test_candidate_reference_price_uses_raw_reference_chain(self):
+        self.assertIn("function getCandidateReferencePriceFromRecord", self.asset_js)
+        self.assertIn("safeNumber(bp.reference_price, null)", self.asset_js)
+        self.assertIn("safeNumber(bp.source_price, null)", self.asset_js)
+        self.assertIn("safeNumber(bp.price, null)", self.asset_js)
+        self.assertIn("function getCandidateReferencePrice(item)", self.asset_js)
+        self.assertIn("return getCandidateReferencePriceFromRecord(raw);", self.asset_js)
 
 
 class TestLayoutRefresh(unittest.TestCase):

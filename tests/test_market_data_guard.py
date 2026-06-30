@@ -6,6 +6,7 @@ import numpy as np
 
 import run
 from chanlun import data_fetcher
+from scripts.validate_today_report import validate_report_contract
 
 
 def _kline(dates, closes):
@@ -150,6 +151,112 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
         self.assertIn("python3 scripts/validate_today_report.py", script)
         self.assertNotIn("今日产物已存在，跳过补跑", script)
+
+    def test_daily_run_git_add_scope_is_today_and_assets_only(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        self.assertNotIn("docs/20*/", script)
+        self.assertIn('"docs/${TODAY}/index.html"', script)
+        self.assertIn('"docs/data/${TODAY}.json"', script)
+        self.assertNotIn("git add docs/index.html docs/data.json docs/data/ docs/20*/", script)
+
+
+class TestReportContractGuard(unittest.TestCase):
+
+    def test_validate_report_contract_allows_raw_change_fallback(self):
+        report = {
+            "picks_fusion": [
+                {
+                    "code": "600001",
+                    "closes": [10.0, 10.5, 10.29],
+                    "best_buy_point": {"current_price": 10.29},
+                }
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [
+                        {"code": "600001", "ref": {"pool": "picks_fusion", "code": "600001"}},
+                    ],
+                    "main": [
+                        {"code": "600001", "ref": {"pool": "picks_fusion", "code": "600001"}},
+                    ],
+                    "baseline": [],
+                }
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
+
+    def test_validate_report_contract_reports_missing_change_when_not_resolvable(self):
+        report = {
+            "picks_fusion": [
+                {"code": "600002", "closes": [10.0]},
+            ],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [
+                        {"code": "600002", "ref": {"pool": "picks_fusion", "code": "600002"}},
+                    ],
+                    "main": [
+                        {"code": "600002", "ref": {"pool": "picks_fusion", "code": "600002"}},
+                    ],
+                    "baseline": [],
+                }
+            },
+        }
+
+        self.assertTrue(validate_report_contract(report))
+        errors = validate_report_contract(report)
+        self.assertTrue(any("missing displayable change_pct" in err and "600002" in err for err in errors))
+
+    def test_validate_report_contract_requires_main_with_nonempty_source_pool(self):
+        report = {
+            "picks_fusion": [
+                {"code": "600003", "change_pct": 2.0},
+            ],
+            "picks_pure": [{"code": "600004", "change_pct": 1.0}],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [],
+                    "baseline": [],
+                }
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertIn("main view missing while picks_fusion is non-empty", errors)
+        self.assertIn("baseline view missing while picks_pure is non-empty", errors)
+
+    def test_validate_report_contract_handles_malformed_source_pools(self):
+        report = {
+            "picks_fusion": None,
+            "picks_pure": {"bad": "shape"},
+            "next_day_boom": {"candidates": None},
+            "luojie_pool": {"candidates": None},
+            "startup_watchlist": None,
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [],
+                    "baseline": [],
+                }
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
 
 
 if __name__ == "__main__":

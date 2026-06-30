@@ -128,6 +128,114 @@ def _to_dict(value: Any) -> dict[str, Any]:
         return dict(value)
     return {}
 
+
+def _to_float_list(value: Any) -> list[float]:
+    if isinstance(value, (list, tuple)):
+        source = value
+    elif hasattr(value, "tolist"):
+        try:
+            source = list(value.tolist())  # type: ignore[attr-defined]
+        except (TypeError, ValueError):
+            return []
+    else:
+        return []
+
+    result: list[float] = []
+    for item in source:
+        num = _safe_float(item)
+        if num is not None:
+            result.append(num)
+    return result
+
+
+def _resolve_change_pct(item: Mapping[str, Any], best_buy_point: Mapping[str, Any] | None = None) -> float | None:
+    row = _to_dict(item)
+    direct = _safe_float(row.get("change_pct"))
+    if direct is not None:
+        return direct
+
+    bp = _to_dict(best_buy_point or row.get("best_buy_point"))
+    bp_change = _safe_float(bp.get("change_pct"))
+    if bp_change is not None:
+        return bp_change
+
+    closes = _to_float_list(row.get("closes", []))
+    if len(closes) < 2:
+        return None
+    prev_close = closes[-2]
+    latest_close = closes[-1]
+    if prev_close is None or latest_close is None or prev_close == 0:
+        return None
+    return round((latest_close - prev_close) / prev_close * 100, 2)
+
+
+def _resolve_current_price(item: Mapping[str, Any]) -> float | None:
+    row = _to_dict(item)
+    current_price = _safe_float(row.get("current_price"))
+    if current_price is not None:
+        return current_price
+
+    bp = _to_dict(row.get("best_buy_point"))
+    bp_price = _safe_float(bp.get("current_price"))
+    if bp_price is not None:
+        return bp_price
+
+    close_price = _safe_float(row.get("close"))
+    if close_price is not None:
+        return close_price
+
+    closes = _to_float_list(row.get("closes", []))
+    if closes:
+        return closes[-1]
+    return None
+
+
+def _resolve_reference_price(item: Mapping[str, Any], source: str | None = None) -> float | None:
+    row = _to_dict(item)
+    reference_price = _safe_float(row.get("reference_price"))
+    if reference_price is not None:
+        return reference_price
+
+    bp = _to_dict(row.get("best_buy_point"))
+    bp_reference = _safe_float(bp.get("reference_price"))
+    if bp_reference is not None:
+        return bp_reference
+
+    source_price = _safe_float(bp.get("source_price"))
+    if source_price is not None:
+        return source_price
+
+    bp_price = _safe_float(bp.get("price"))
+    if bp_price is not None:
+        return bp_price
+
+    if source == "luojie":
+        life_line = _safe_float(row.get("life_line"))
+        if life_line is not None:
+            return life_line
+        reduce_line = _safe_float(row.get("reduce_line"))
+        if reduce_line is not None:
+            return reduce_line
+    return None
+
+
+def _resolve_distance_pct(item: Mapping[str, Any], source: str | None = None) -> float | None:
+    row = _to_dict(item)
+    distance = _safe_float(row.get("distance_from_reference_pct"))
+    if distance is None:
+        distance = _safe_float(row.get("distance_life_pct"))
+    if distance is None and source == "main":
+        bp = _to_dict(row.get("best_buy_point"))
+        distance = _safe_float(bp.get("distance_from_reference_pct"))
+    if distance is not None:
+        return distance
+
+    current_price = _resolve_current_price(row)
+    reference_price = _resolve_reference_price(row, source=source)
+    if current_price is None or reference_price in (None, 0):
+        return None
+    return round((current_price - reference_price) / reference_price * 100, 2)
+
 def _sorted_sources(sources: Iterable[str]) -> list[str]:
     return sorted(set(sources), key=lambda s: SOURCE_RANK.get(s, 99))
 
@@ -154,13 +262,10 @@ def _candidate_source_name(item: Mapping[str, Any], fallback: str = "") -> str:
 def _extract_main_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
     buy_point = _to_dict(item.get("best_buy_point"))
     return {
-        "change_pct": _safe_float(
-            item.get("change_pct"),
-            default=_safe_float(buy_point.get("change_pct")),
-        ),
-        "current_price": _safe_float(item.get("current_price"), default=_safe_float(buy_point.get("current_price"))),
-        "reference_price": _safe_float(item.get("reference_price"), default=_safe_float(buy_point.get("source_price"), default=_safe_float(buy_point.get("price")))),
-        "distance": _safe_float(item.get("distance_from_reference_pct"), default=_safe_float(buy_point.get("distance_from_reference_pct"))),
+        "change_pct": _resolve_change_pct(item, buy_point),
+        "current_price": _resolve_current_price(item),
+        "reference_price": _resolve_reference_price(item),
+        "distance": _resolve_distance_pct(item, source="main"),
         "primary_reason": _safe_str(_to_dict(item).get("resonance", {}).get("reason"))
         or _safe_str(buy_point.get("reason"))
         or _safe_str(item.get("fusion_admission", {}).get("reason"))
@@ -180,20 +285,20 @@ def _extract_accel_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
 
 def _extract_luojie_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
     return {
-        "change_pct": _safe_float(item.get("change_pct")),
-        "current_price": _safe_float(item.get("current_price"), default=_safe_float(item.get("close"))),
-        "reference_price": _safe_float(item.get("life_line")) or _safe_float(item.get("reduce_line")),
-        "distance": _safe_float(item.get("distance_life_pct")) or _safe_float(item.get("distance_from_reference_pct")),
+        "change_pct": _resolve_change_pct(item),
+        "current_price": _resolve_current_price(item),
+        "reference_price": _resolve_reference_price(item, source="luojie"),
+        "distance": _resolve_distance_pct(item, source="luojie"),
         "primary_reason": _safe_str(item.get("reason")),
     }
 
 
 def _extract_confirming_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
     return {
-        "change_pct": _safe_float(item.get("change_pct")),
-        "current_price": _safe_float(item.get("current_price"), default=_safe_float(item.get("close"))),
-        "reference_price": _safe_float(item.get("reference_price")),
-        "distance": _safe_float(item.get("distance_from_reference_pct"), default=_safe_float(item.get("distance_pct"))),
+        "change_pct": _resolve_change_pct(item),
+        "current_price": _resolve_current_price(item),
+        "reference_price": _resolve_reference_price(item),
+        "distance": _resolve_distance_pct(item),
         "primary_reason": _safe_str(item.get("watch_reason")) or _safe_str(item.get("startup_reason")) or _safe_str(item.get("reason")),
     }
 
@@ -214,7 +319,7 @@ def _extract_score(item: Mapping[str, Any], source: str) -> float:
     if source == "confirming":
         # startup watchlist does not have a stable score key in older payloads;
         # use change as a weak proxy for sorting.
-        return 50.0 + max(0.0, _safe_float(item.get("change_pct"), default=0.0) or 0.0)
+        return 50.0 + max(0.0, _resolve_change_pct(item) or 0.0)
     if source == "baseline":
         return _safe_float(item.get("score"), default=0.0) or 0.0
     return 0.0
@@ -229,10 +334,10 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
         if distance is None and source == "main":
             distance = _safe_float(_to_dict(item.get("best_buy_point")).get("distance_from_reference_pct"))
 
-    if change_pct is None and source == "main":
-        change_pct = _safe_float(_to_dict(item.get("best_buy_point")).get("change_pct")) or 0.0
-    else:
-        change_pct = change_pct or 0.0
+    change_pct = _resolve_change_pct(item) or 0.0
+
+    if distance is None:
+        distance = _resolve_distance_pct(item, source=source)
 
     if distance is not None and abs(distance) > 6.0:
         reasons.append("距参考价偏高")
@@ -341,10 +446,10 @@ def _primary_metric_bundle(
     if source == "confirming":
         return _extract_confirming_metrics(raw)
     return {
-        "change_pct": _safe_float(raw.get("change_pct")),
-        "current_price": _safe_float(raw.get("current_price")),
-        "reference_price": _safe_float(raw.get("reference_price")),
-        "distance": _safe_float(raw.get("distance_from_reference_pct")),
+        "change_pct": _resolve_change_pct(raw),
+        "current_price": _resolve_current_price(raw),
+        "reference_price": _resolve_reference_price(raw, source=source),
+        "distance": _resolve_distance_pct(raw, source=source),
         "primary_reason": _safe_str(raw.get("reason")),
     }
 
