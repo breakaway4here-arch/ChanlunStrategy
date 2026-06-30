@@ -6,6 +6,7 @@ from chanlun.backtest_execution import (
     evaluate_forward_returns,
     execute_signal,
 )
+from scripts.backtest_recommendation_quality import iter_signal_records_from_report
 
 
 def _build_kline():
@@ -80,8 +81,13 @@ class BacktestExecutionTests(unittest.TestCase):
         self.assertEqual(res["n_forward_days"], 3)
         self.assertAlmostEqual(res["t1_close_pct"], 38.4615384615, places=6)
         self.assertAlmostEqual(res["t3_close_pct"], 53.8461538462, places=6)
+        self.assertAlmostEqual(res["t1_return"], res["t1_close_pct"])
+        self.assertAlmostEqual(res["t3_return"], res["t3_close_pct"])
+        self.assertAlmostEqual(res["t5_return"], 53.8461538462, places=6)
+        self.assertAlmostEqual(res["max_drawdown"], 15.3846153846, places=6)
         self.assertAlmostEqual(res["max_up_3d"], 61.5384615385, places=6)
         self.assertAlmostEqual(res["max_dd_3d"], 15.3846153846, places=6)
+        self.assertFalse(res["hit_stop"])
 
     def test_delay1_open_mode(self):
         res = evaluate_forward_returns(_build_kline(), "2026-01-03", "delay1_open", horizon=5)
@@ -90,10 +96,14 @@ class BacktestExecutionTests(unittest.TestCase):
         self.assertEqual(res["entry_date"], "2026-01-04")
         self.assertEqual(res["ref_date"], "2026-01-04")
         self.assertEqual(res["n_forward_days"], 3)
+        self.assertAlmostEqual(res["t1_return"], -10.0, places=6)
         self.assertAlmostEqual(res["t1_close_pct"], -10.0, places=6)
         self.assertAlmostEqual(res["t3_close_pct"], 0.0, places=6)
+        self.assertAlmostEqual(res["t5_return"], 0.0, places=6)
         self.assertAlmostEqual(res["max_up_3d"], 5.0, places=6)
         self.assertAlmostEqual(res["max_dd_3d"], -25.0, places=6)
+        self.assertAlmostEqual(res["max_drawdown"], -25.0, places=6)
+        self.assertTrue(res["hit_stop"])
 
     def test_delay1_close_mode(self):
         res = evaluate_forward_returns(_build_kline(), "2026-01-03", "delay1_close", horizon=5)
@@ -104,8 +114,69 @@ class BacktestExecutionTests(unittest.TestCase):
         self.assertEqual(res["n_forward_days"], 2)
         self.assertAlmostEqual(res["t1_close_pct"], -11.1111111111, places=6)
         self.assertAlmostEqual(res["t3_close_pct"], 11.1111111111, places=6)
+        self.assertAlmostEqual(res["t5_return"], 11.1111111111, places=6)
         self.assertAlmostEqual(res["max_up_3d"], 16.6666666667, places=6)
         self.assertAlmostEqual(res["max_dd_3d"], -16.6666666667, places=6)
+        self.assertAlmostEqual(res["max_drawdown"], -16.6666666667, places=6)
+        self.assertTrue(res["hit_stop"])
+
+    def test_t5_return_fallback_uses_last_available_when_less_than_five_days(self):
+        short_kline = {
+            "dates": ["2026-01-01", "2026-01-02", "2026-01-03", "2026-01-04"],
+            "opens": [10.0, 10.0, 10.0, 10.0],
+            "highs": [11.0, 12.0, 13.0, 14.0],
+            "lows": [9.0, 9.5, 10.0, 10.0],
+            "closes": [10.0, 12.0, 14.0, 16.0],
+        }
+        res = evaluate_forward_returns(short_kline, "2026-01-02", "immediate_close", horizon=5)
+        self.assertIsNotNone(res)
+        self.assertEqual(res["n_forward_days"], 2)
+        self.assertAlmostEqual(res["t1_return"], 16.6666666667, places=6)
+        self.assertAlmostEqual(res["t3_return"], 33.3333333333, places=6)
+        self.assertAlmostEqual(res["t5_return"], 33.3333333333, places=6)
+
+    def test_signal_records_prefer_workspace_opportunity_score(self):
+        report = {
+            "date": "2026-06-30",
+            "picks_fusion": [{
+                "code": "600001",
+                "score": 12,
+                "best_buy_point": {"current_price": 9.9},
+            }],
+            "workspace": {
+                "views": {
+                    "main": [{
+                        "code": "600001",
+                        "opportunity_score": 87,
+                        "reference_price": 10.5,
+                    }],
+                    "luojie": [{
+                        "code": "600002",
+                        "opportunity_score": 71,
+                        "current_price": 18.8,
+                    }],
+                }
+            },
+        }
+
+        rows = iter_signal_records_from_report(report)
+
+        self.assertEqual(rows, [
+            {
+                "code": "600001",
+                "date": "2026-06-30",
+                "source_view": "main",
+                "opportunity_score": 87.0,
+                "ref_price": 10.5,
+            },
+            {
+                "code": "600002",
+                "date": "2026-06-30",
+                "source_view": "luojie",
+                "opportunity_score": 71.0,
+                "ref_price": 18.8,
+            },
+        ])
 
     def test_delay_mode_need_next_day(self):
         kline = _build_kline()

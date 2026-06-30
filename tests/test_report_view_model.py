@@ -169,6 +169,81 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("source:main", item["rank_trace"])
         self.assertIn("source:acceleration", item["rank_trace"])
 
+    def test_main_opportunity_score_prioritizes_signal_over_reference_distance(self):
+        near_reference_weak = _fusion_pick(
+            code="600030",
+            name="近参考弱信号",
+            score=18,
+            distance=0.2,
+            change_pct=3.0,
+        )
+        far_reference_strong = _fusion_pick(
+            code="600031",
+            name="远参考强信号",
+            score=96,
+            distance=11.5,
+            change_pct=1.0,
+        )
+        report_data = _report_data(
+            {
+                "picks_fusion": [near_reference_weak, far_reference_strong],
+            }
+        )
+        workspace = build_workspace(report_data)
+
+        self.assertEqual([item["code"] for item in workspace["views"]["main"]], ["600031", "600030"])
+        self.assertEqual([item["code"] for item in workspace["views"]["highlights"]], ["600031", "600030"])
+
+    def test_rank_trace_explains_opportunity_components_and_penalties(self):
+        pick = _fusion_pick(
+            code="600040",
+            name="机会分解释",
+            score=88,
+            distance=8.5,
+            change_pct=9.2,
+        )
+        report_data = _report_data(
+            {
+                "picks_fusion": [pick],
+                "data_quality": {"market_status": "unverified", "fallback_used": True},
+            }
+        )
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+        trace = item["rank_trace"]
+
+        self.assertIn("signal_score", trace)
+        self.assertIn("entry_score", trace)
+        self.assertIn("momentum_score", trace)
+        self.assertIn("market_score", trace)
+        self.assertIn("risk_penalty", trace)
+        self.assertIn("data_penalty", trace)
+        self.assertIn("opportunity_score", trace)
+        self.assertEqual(trace["opportunity_score"], item["opportunity_score"])
+        self.assertGreaterEqual(trace["risk_penalty"], 0)
+        self.assertGreaterEqual(trace["data_penalty"], 0)
+
+    def test_highlights_ranking_is_deterministic_with_equal_score(self):
+        high1 = _fusion_pick(
+            code="600060",
+            name="排序测一号",
+            score=80,
+            distance=1.4,
+            change_pct=1.0,
+        )
+        high2 = _fusion_pick(
+            code="600059",
+            name="排序测二号",
+            score=80,
+            distance=1.4,
+            change_pct=1.0,
+        )
+        report_data = _report_data({"picks_fusion": [high1, high2]})
+        workspace = build_workspace(report_data)
+        highlights = workspace["views"]["highlights"]
+
+        self.assertEqual([item["code"] for item in highlights], ["600059", "600060"])
+
     def test_workspace_item_has_info_tags(self):
         report_data = _report_data({"picks_fusion": [_fusion_pick()]})
 

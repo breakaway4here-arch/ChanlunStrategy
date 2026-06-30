@@ -47,6 +47,11 @@ SOURCE_RANK = {
     "baseline": 4,
 }
 
+_DATA_PENALTY_STALE = 6
+_DATA_PENALTY_MISSING = 10
+_DATA_PENALTY_FALLBACK = 4
+_DATA_PENALTY_UNVERIFIED = 3
+
 BASE_WEIGHTS = {
     "main": 100,
     "acceleration": 78,
@@ -471,6 +476,74 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
     return unique_flags
 
 
+def _score_entry(distance_pct: float | None) -> float:
+    """Distance-to-entry score; close entry gets bonus, far entry only small help."""
+    if distance_pct is None:
+        return 4.0
+    abs_distance = abs(distance_pct)
+    if abs_distance <= 1.0:
+        return 16.0
+    if abs_distance <= 2.0:
+        return 14.0
+    if abs_distance <= 3.0:
+        return 11.0
+    if abs_distance <= 5.0:
+        return 8.0
+    if abs_distance <= 8.0:
+        return 4.0
+    if abs_distance <= 12.0:
+        return 2.0
+    return 0.0
+
+
+def _score_momentum(change_pct: float | None) -> float:
+    """Positive momentum contributes linearly, capped to avoid dominating opportunity."""
+    if change_pct is None:
+        return 5.0
+    if change_pct <= 0:
+        return 0.0
+    return min(20.0, change_pct * 1.5)
+
+
+def _score_market(base_source: str, source_count: int) -> float:
+    base = BASE_WEIGHTS.get(base_source, 50)
+    multi_source_bonus = max(0, source_count - 1) * 3.0
+    return min(60.0, base - 40.0 + multi_source_bonus)
+
+
+def _score_data_penalty(
+    data_quality: Mapping[str, Any] | None,
+    by_source: dict[str, Mapping[str, Any]],
+    sources: Iterable[str],
+) -> float:
+    penalty = 0.0
+    dq = _to_dict(data_quality)
+    market_status = _safe_str(dq.get("market_status"))
+    if market_status == "unverified":
+        penalty += _DATA_PENALTY_UNVERIFIED
+
+    fallback_used = bool(dq.get("fallback_used"))
+    if fallback_used:
+        penalty += _DATA_PENALTY_FALLBACK
+
+    observed_status = False
+    for source in sources:
+        row = _to_dict(by_source.get(source, {}))
+        data_status = _to_dict(row.get("data_status"))
+        if data_status:
+            observed_status = True
+        daily_status = _safe_str(data_status.get("daily"))
+        if daily_status == "stale_cache":
+            penalty += _DATA_PENALTY_STALE
+        elif daily_status == "missing":
+            penalty += _DATA_PENALTY_MISSING
+
+    if not observed_status and not fallback_used and market_status != "verified":
+        penalty += _DATA_PENALTY_UNVERIFIED
+
+    return penalty
+
+
 def _resonance_label(sources: list[str]) -> str:
     source_set = set(sources)
     if len(source_set) >= 3:
@@ -579,7 +652,9 @@ def _build_item(
     if not primary_reason:
         primary_reason = _safe_str(primary_raw_metrics.get("primary_reason"))
 
-    watch_score, rank_trace = _compute_watch_score(preferred_raw, ordered_sources, by_source)
+    opportunity_score, rank_trace = _compute_watch_score(
+        preferred_raw, ordered_sources, by_source, data_quality=data_quality
+    )
 
     action, action_reason = _action_and_reason(ordered_sources, all_risk_flags, "main" in ordered_sources)
 
@@ -593,7 +668,8 @@ def _build_item(
         "source_labels": [_safe_str(SOURCE_LABELS[s]) for s in ordered_sources if s in SOURCE_LABELS],
         "resonance_label": _resonance_label(ordered_sources),
         "view_rank": 0,
-        "watch_score": watch_score,
+        "watch_score": opportunity_score,
+        "opportunity_score": opportunity_score,
         "action": action,
         "action_reason": action_reason,
         "change_pct": metrics.get("change_pct"),
@@ -612,54 +688,65 @@ def _compute_watch_score(
     primary_raw: Mapping[str, Any],
     sources: Iterable[str],
     by_source: dict[str, Mapping[str, Any]],
-) -> tuple[int, Dict[str, int]]:
+    data_quality: Mapping[str, Any] | None = None,
+) -> tuple[int, Dict[str, Any]]:
     ordered_sources = _sorted_sources(sources)
     base_source = ordered_sources[0]
-    base_weight = BASE_WEIGHTS.get(base_source, 50)
-    pool_score_bonus = 0
-    multi_source_bonus = max(0, len(ordered_sources) - 1) * 12
+    source_count = len(ordered_sources)
+    primary_metrics = _primary_metric_bundle(primary_raw, base_source)
+    distance = _safe_float(primary_metrics.get("distance"))
+    change_pct = _safe_float(primary_metrics.get("change_pct"))
+    signal_score = min(100.0, max(0.0, _extract_score(primary_raw, base_source)))
+    entry_score = _score_entry(distance)
+    momentum_score = _score_momentum(change_pct)
+    market_score = _score_market(base_source, source_count)
 
-    risk_penalty = 0
+    risk_penalty = 0.0
     risk_flags = []
     for src in ordered_sources:
         raw = by_source[src]
         risk_flags.extend(_extract_risk_flags(raw, src))
     unique_risks = set(risk_flags)
     if "距参考价偏高" in unique_risks:
-        risk_penalty -= 12
+        risk_penalty += 12
     if "涨幅过热" in unique_risks:
-        risk_penalty -= 10
+        risk_penalty += 10
     if "信号接近过期" in unique_risks:
-        risk_penalty -= 8
+        risk_penalty += 8
     if "30min确认弱" in unique_risks:
-        risk_penalty -= 6
+        risk_penalty += 6
     if "确认信号未完成" in unique_risks:
-        risk_penalty -= 8
+        risk_penalty += 8
 
-    # pool score bonus uses source-local score and keeps candidates with known score keys
-    # above those without it while avoiding score inflation.
-    for src in ordered_sources:
-        bonus = _extract_score(by_source[src], src)
-        # keep as an integer but avoid over-dominating the source weight.
-        pool_score_bonus = max(pool_score_bonus, int(min(100.0, bonus)) // 4)
+    data_penalty = _score_data_penalty(data_quality, by_source, ordered_sources)
 
-    raw_score = _extract_score(primary_raw, base_source)
-    if raw_score > pool_score_bonus:
-        # a tiny tie-breaker toward high raw score, avoiding distortion.
-        pool_score_bonus = int(min(100.0, raw_score)) // 4
+    opportunity_score = (
+        signal_score
+        + entry_score
+        + momentum_score
+        + market_score
+        - risk_penalty
+        - data_penalty
+    )
 
-    watch_score = base_weight + pool_score_bonus + multi_source_bonus + risk_penalty
+    watch_score = int(round(opportunity_score))
     trace = {
         "base_source": base_source,
-        "source_weight": base_weight,
-        "multi_source_bonus": multi_source_bonus,
-        "pool_score_bonus": pool_score_bonus,
+        "source_count": source_count,
+        "market_score": market_score,
+        "signal_score": signal_score,
+        "entry_score": entry_score,
+        "momentum_score": momentum_score,
         "risk_penalty": risk_penalty,
+        "data_penalty": data_penalty,
+        "opportunity_score": watch_score,
         "selected_reason": _build_selected_reason(base_source, ordered_sources),
     }
     # keep stable trace flags for debug visibility
     for src in ordered_sources:
         trace[f"source:{src}"] = trace.get(f"source:{src}", 0) + 1
+    trace["distance_from_reference_pct"] = distance
+    trace["change_pct"] = change_pct
     return watch_score, trace
 
 
@@ -748,7 +835,7 @@ def _build_view_items(
         )
         row["view_rank"] = 0
         rows.append(row)
-    rows.sort(key=lambda row: (row["watch_score"], row["code"]), reverse=True)
+    rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
     for rank, row in enumerate(rows, start=1):
         row["view_rank"] = rank
     return rows
@@ -776,7 +863,7 @@ def _build_highlights(
         _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
         for bucket in merged.values()
     ]
-    rows.sort(key=lambda row: (row["watch_score"], row["code"]), reverse=True)
+    rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
     top_rows = rows[:10]
     for rank, row in enumerate(top_rows, start=1):
         row["view_rank"] = rank
@@ -806,7 +893,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     # Re-rank highlights and each view after dedupe/sorting.
     for name in VIEW_ORDER:
         rows = view_items[name]
-        rows.sort(key=lambda row: (row["watch_score"], row.get("distance_from_reference_pct") or 0), reverse=True)
+        rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
         for rank, row in enumerate(rows, start=1):
             row["view_rank"] = rank
 

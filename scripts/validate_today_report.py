@@ -25,6 +25,92 @@ def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
         return default
 
 
+def _as_str_list(value: Any) -> list[str]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    out: list[str] = []
+    for item in value:
+        if item is None:
+            continue
+        text = str(item).strip()
+        if text:
+            out.append(text)
+    return out
+
+
+def validate_manifest_contract(manifest: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+
+    if not isinstance(manifest, Mapping):
+        return ["manifest must be a mapping"]
+
+    for key in ("dates", "trading_dates", "latest", "latest_trading_date", "date_meta"):
+        if key not in manifest:
+            errors.append(f"manifest missing required key: {key}")
+
+    if errors:
+        return errors
+
+    dates_raw = manifest.get("dates")
+    trading_dates_raw = manifest.get("trading_dates")
+    latest = str(manifest.get("latest", "")).strip()
+    latest_trading_date = str(manifest.get("latest_trading_date", "")).strip()
+    date_meta = manifest.get("date_meta")
+
+    if not isinstance(dates_raw, (list, tuple)):
+        errors.append("manifest dates must be an array")
+    if not isinstance(trading_dates_raw, (list, tuple)):
+        errors.append("manifest trading_dates must be an array")
+    if not isinstance(date_meta, Mapping):
+        errors.append("manifest date_meta must be a mapping")
+
+    if errors:
+        return errors
+
+    dates = _as_str_list(dates_raw)
+    trading_dates = _as_str_list(trading_dates_raw)
+    dates = sorted(set(dates))
+    trading_dates = sorted(set(trading_dates))
+
+    if latest and latest not in dates:
+        errors.append(f"manifest.latest not in manifest.dates: {latest}")
+
+    valid_trading_dates = set()
+    for date_value in trading_dates:
+        if date_value not in dates:
+            errors.append(f"trading_dates entry not in dates: {date_value}")
+            continue
+        meta = date_meta.get(date_value, {})
+        if not isinstance(meta, Mapping):
+            errors.append(f"date_meta[{date_value}] must be an object")
+            continue
+        if meta.get("is_trading_day") is False:
+            errors.append(f"trading_dates contains non-trading day: {date_value}")
+        else:
+            valid_trading_dates.add(date_value)
+
+    trading_dates = sorted(valid_trading_dates)
+
+    if trading_dates:
+        expected_latest_trading_date = trading_dates[-1]
+        if latest_trading_date != expected_latest_trading_date:
+            errors.append(
+                f"manifest.latest_trading_date mismatch: expected {expected_latest_trading_date}, got {latest_trading_date}"
+            )
+    elif latest_trading_date:
+        errors.append("manifest.latest_trading_date should be empty when no trading_dates")
+
+    if latest_trading_date and latest_trading_date not in trading_dates:
+        errors.append(f"manifest.latest_trading_date not in manifest.trading_dates: {latest_trading_date}")
+
+    for d in dates:
+        meta = date_meta.get(d)
+        if not isinstance(meta, Mapping):
+            errors.append(f"date_meta missing or invalid for date: {d}")
+
+    return errors
+
+
 def _to_float_list(value: Any) -> list[float]:
     if isinstance(value, (list, tuple)):
         raw = value
@@ -298,16 +384,25 @@ def main(argv=None):
         return 1
 
     report = json.loads(path.read_text(encoding="utf-8"))
+    manifest_path = ROOT / "docs" / "data" / "index.json"
+    if not manifest_path.exists():
+        print("missing report manifest: docs/data/index.json", file=sys.stderr)
+        return 1
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     contract_errors = validate_report_contract(report)
-    live = fetch_market_indices(report_date=report_date)
-    saved = report.get("market") or {}
-    errors = []
+    manifest_contract_errors = validate_manifest_contract(manifest)
+    contract_errors.extend(manifest_contract_errors)
 
     if contract_errors:
         print("report contract mismatch:", file=sys.stderr)
         for err in contract_errors:
             print(f"  {err}", file=sys.stderr)
         return 1
+
+    live = fetch_market_indices(report_date=report_date)
+    saved = report.get("market") or {}
+    errors = []
 
     for name, live_row in live.items():
         saved_row = saved.get(name) or {}

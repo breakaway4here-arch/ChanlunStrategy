@@ -15,6 +15,7 @@ from chanlun.report_generator import (
     _safe_list, NpEncoder, generate_report, build_recent_reviews, write_data_manifest,
     update_data_json,
 )
+from scripts.validate_today_report import validate_manifest_contract
 from config import (
     ENABLE_WEAK_ACCESS_CONTROL, FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
     PUBLIC_DATES,
@@ -689,6 +690,60 @@ class TestDataManifestAndQuality(unittest.TestCase):
         self.assertEqual(manifest["latest_trading_date"], "2026-06-29")
         self.assertEqual(manifest["date_meta"]["2026-06-30"]["is_trading_day"], False)
 
+    def test_manifest_refuses_non_trading_date_from_existing_date_meta(self):
+        with tempfile.TemporaryDirectory(prefix="test_manifest_") as tmpdir:
+            data_dir = os.path.join(tmpdir, "data")
+            os.makedirs(data_dir, exist_ok=True)
+            old_manifest = {
+                "dates": ["2026-06-29", "2026-06-30", "2026-06-29"],
+                "trading_dates": ["2026-06-29", "2026-06-30", "2026-05-01"],
+                "latest": "2026-06-29",
+                "latest_trading_date": "2026-06-30",
+                "date_meta": {
+                    "2026-06-29": {"is_trading_day": True, "is_official": True},
+                    "2026-06-30": {"is_trading_day": False, "is_official": True},
+                },
+            }
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as f:
+                json.dump(old_manifest, f, ensure_ascii=False, indent=2)
+
+            write_data_manifest("2026-06-30", data_dir, is_trading_day=False, is_official=False)
+
+            with open(os.path.join(data_dir, "index.json"), "r", encoding="utf-8") as f:
+                manifest = json.load(f)
+
+        self.assertEqual(manifest["trading_dates"], ["2026-06-29"])
+        self.assertEqual(manifest["latest_trading_date"], "2026-06-29")
+        self.assertEqual(manifest["latest"], "2026-06-30")
+
+    def test_validate_manifest_contract(self):
+        manifest_ok = {
+            "dates": ["2026-06-29", "2026-06-30"],
+            "trading_dates": ["2026-06-29", "2026-06-30"],
+            "latest": "2026-06-30",
+            "latest_trading_date": "2026-06-30",
+            "date_meta": {
+                "2026-06-29": {"is_trading_day": True, "is_official": True},
+                "2026-06-30": {"is_trading_day": True, "is_official": False},
+            },
+        }
+        manifest_bad = {
+            "dates": ["2026-06-29", "2026-06-30"],
+            "trading_dates": ["2026-06-29", "2026-06-30"],
+            "latest": "2026-06-30",
+            "latest_trading_date": "2026-06-30",
+            "date_meta": {
+                "2026-06-29": {"is_trading_day": True, "is_official": True},
+                "2026-06-30": {"is_trading_day": False, "is_official": False},
+            },
+        }
+
+        self.assertEqual(validate_manifest_contract(manifest_ok), [])
+
+        errors = validate_manifest_contract(manifest_bad)
+        # latest_trading_date points to a non-trading day
+        self.assertTrue(any("non-trading day" in err for err in errors))
+
     def test_data_quality_written_to_daily_json_and_data_json(self):
         with tempfile.TemporaryDirectory(prefix="test_dq_") as tmpdir:
             report_data = _make_minimal_report_data()
@@ -1127,14 +1182,16 @@ class TestNextDayBoomRendering(unittest.TestCase):
                 "sector_flow": 8888,
                 "sector_strength_label": "资金流入TOP2",
                 "data_status": {"daily": "verified"},
+                "dates": ["2026-05-25", "2026-05-26"],
+                "closes": [10.1, 11.21],
                 "source_pool": "fusion",
                 "source_type": "强势启动候选",
                 "boom_score": 52,
                 "boom_reason": "融合强势启动；量比甜区1.3-1.6",
-                "change_pct": 5.6,
                 "volume_ratio": 1.45,
                 "market_change_pct": 1.23,
                 "startup_reason": "低位放量启动",
+                "reference_price": 10.0,
             }],
         }
         generate_report(report_data, output_dir=cls.tmpdir)
@@ -1164,6 +1221,24 @@ class TestNextDayBoomRendering(unittest.TestCase):
         self.assertEqual(candidate["sector_strength_label"], "资金流入TOP2")
         self.assertEqual(candidate["data_status"]["daily"], "verified")
 
+    def test_next_day_boom_candidate_has_chart_contract(self):
+        candidate = self.day_data["next_day_boom"]["candidates"][0]
+        self.assertIn("dates", candidate)
+        self.assertIn("closes", candidate)
+        self.assertIn("current_price", candidate)
+        self.assertIn("chart_annotations", candidate)
+        self.assertIsInstance(candidate["dates"], list)
+        self.assertIsInstance(candidate["closes"], list)
+        self.assertEqual(candidate["change_pct"], 10.99)
+        self.assertEqual(candidate["current_price"], 11.21)
+        ann = candidate["chart_annotations"]
+        self.assertIn("markLines", ann)
+        self.assertIn("markPoints", ann)
+        self.assertIn("labels", ann)
+        line_names = {line.get("name") for line in ann["markLines"]}
+        self.assertIn("current", line_names)
+        self.assertIn("source", line_names)
+
 
 class TestLuojiePoolRendering(unittest.TestCase):
 
@@ -1185,6 +1260,8 @@ class TestLuojiePoolRendering(unittest.TestCase):
                 "sector_flow": 6666,
                 "sector_strength_label": "资金流入TOP5",
                 "data_status": {"daily": "verified"},
+                "dates": ["2026-05-25", "2026-05-26"],
+                "closes": [18.0, 18.88],
                 "theme_labels": ["六网/新一代通信网", "赛道层/光模块"],
                 "tier": "主升候选",
                 "close": 18.88,
@@ -1225,6 +1302,24 @@ class TestLuojiePoolRendering(unittest.TestCase):
         self.assertEqual(candidate["sector_flow"], 6666)
         self.assertEqual(candidate["sector_strength_label"], "资金流入TOP5")
         self.assertEqual(candidate["data_status"]["daily"], "verified")
+
+    def test_luojie_pool_candidate_has_chart_contract(self):
+        candidate = self.day_data["luojie_pool"]["candidates"][0]
+        self.assertIn("dates", candidate)
+        self.assertIn("closes", candidate)
+        self.assertIn("current_price", candidate)
+        self.assertIn("chart_annotations", candidate)
+        self.assertIsInstance(candidate["dates"], list)
+        self.assertIsInstance(candidate["closes"], list)
+        self.assertEqual(candidate["change_pct"], 4.89)
+        self.assertEqual(candidate["current_price"], 18.88)
+        ann = candidate["chart_annotations"]
+        self.assertIn("markLines", ann)
+        self.assertIn("markPoints", ann)
+        self.assertIn("labels", ann)
+        line_names = {line.get("name") for line in ann["markLines"]}
+        self.assertIn("current", line_names)
+        self.assertIn("source", line_names)
 
 
 if __name__ == "__main__":

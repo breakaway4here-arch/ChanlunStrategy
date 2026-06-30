@@ -137,17 +137,29 @@ def evaluate_forward_returns(kline, snap_date, entry_mode, horizon=5):
         return (v - ref) / ref * 100.0
 
     horizon3 = min(3, len(forward_closes))
+    horizon5 = min(5, len(forward_closes))
     t1_close_pct = _pct(forward_closes[0]) if len(forward_closes) >= 1 else None
     t3_close_idx = horizon3 - 1
     t3_close_pct = _pct(forward_closes[t3_close_idx]) if horizon3 >= 1 else None
+    t5_close_idx = horizon5 - 1
+    t5_close_pct = _pct(forward_closes[t5_close_idx]) if horizon5 >= 1 else None
     max_up_3d = max(_pct(x) for x in forward_highs[:horizon3]) if horizon3 else None
     max_dd_3d = min(_pct(x) for x in forward_lows[:horizon3]) if horizon3 else None
+    max_drawdown = min(_pct(x) for x in forward_lows) if forward_lows else None
+    stop_level = ref * 0.95
+    hit_stop = any(low <= stop_level for low in forward_lows)
 
     return {
         "t1_close_pct": t1_close_pct,
         "t3_close_pct": t3_close_pct,
+        "t5_close_pct": t5_close_pct,
         "max_up_3d": max_up_3d,
         "max_dd_3d": max_dd_3d,
+        "max_drawdown": max_drawdown,
+        "t1_return": t1_close_pct,
+        "t3_return": t3_close_pct,
+        "t5_return": t5_close_pct,
+        "hit_stop": hit_stop,
         "n_forward_days": len(forward_closes),
         "entry_mode": context["entry_mode"],
         "entry_date": context["entry_date"],

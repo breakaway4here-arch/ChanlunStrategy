@@ -529,11 +529,66 @@ def _serialize_startup_watchlist(watchlist):
     return result
 
 
+def _build_candidate_series_payload(candidate):
+    """Build chart/annotation payload for acceleration and luojie candidates."""
+    dates = _safe_list(candidate.get("dates", []))
+    closes = _safe_list(candidate.get("closes", []))
+    pair_len = min(len(dates), len(closes))
+
+    if pair_len <= 0:
+        return {
+            "dates": dates,
+            "closes": closes,
+            "chart_annotations": {"markLines": [], "markPoints": [], "labels": []},
+        }
+
+    aligned_dates = dates[-pair_len:]
+    aligned_closes = closes[-pair_len:]
+    slice_start = max(0, pair_len - CHART_MAX_BARS)
+    chart_dates = aligned_dates[slice_start:]
+    chart_closes = aligned_closes[slice_start:]
+
+    ref_price = candidate.get("reference_price")
+    if ref_price is None:
+        ref_price = candidate.get("close")
+    if ref_price is None:
+        ref_price = candidate.get("life_line")
+
+    chart_item = dict(candidate)
+    if ref_price is not None:
+        chart_item["close"] = ref_price
+
+    chart_annotations = build_startup_watch_chart_annotations(
+        chart_item,
+        slice_start,
+        chart_dates,
+        chart_closes,
+    )
+    return {
+        "dates": dates,
+        "closes": closes,
+        "chart_annotations": chart_annotations,
+    }
+
+
 def _serialize_next_day_boom(data):
     """Serialize next-day boom selector output."""
     data = data or {}
     candidates = []
     for c in data.get("candidates", []) or []:
+        timeseries = _build_candidate_series_payload(c)
+        closes = timeseries["closes"]
+        change_pct = c.get("change_pct")
+        if change_pct is None:
+            change_pct = _compute_pick_change_pct(c)  # fallback from closes
+            if change_pct is None:
+                change_pct = 0
+        current_price = c.get("current_price")
+        if current_price is None:
+            current_price = closes[-1] if closes else c.get("close")
+        if current_price is None:
+            current_price = 0
+
         candidates.append({
             "rank": c.get("rank"),
             "code": c.get("code", ""),
@@ -548,7 +603,8 @@ def _serialize_next_day_boom(data):
             "source_type": c.get("source_type", ""),
             "boom_score": c.get("boom_score", 0),
             "boom_reason": c.get("boom_reason", ""),
-            "change_pct": c.get("change_pct", 0),
+            "change_pct": change_pct,
+            "current_price": current_price,
             "volume_ratio": c.get("volume_ratio", 0),
             "market_change_pct": c.get("market_change_pct", data.get("market_change_pct", 0)),
             "ma_bullish": c.get("ma_bullish", False),
@@ -556,6 +612,9 @@ def _serialize_next_day_boom(data):
             "confirmed_by": c.get("confirmed_by", ""),
             "confirmations": c.get("confirmations", []),
             "reference_price": c.get("reference_price"),
+            "dates": timeseries["dates"],
+            "closes": closes,
+            "chart_annotations": timeseries["chart_annotations"],
         })
     return {
         "mode": data.get("mode", "disabled"),
@@ -573,6 +632,19 @@ def _serialize_luojie_pool(data):
     data = data or {}
     candidates = []
     for c in data.get("candidates", []) or []:
+        timeseries = _build_candidate_series_payload(c)
+        closes = timeseries["closes"]
+        change_pct = c.get("change_pct")
+        if change_pct is None:
+            change_pct = _compute_pick_change_pct(c)  # fallback from closes
+            if change_pct is None:
+                change_pct = 0
+        current_price = c.get("current_price")
+        if current_price is None:
+            current_price = closes[-1] if closes else c.get("close")
+        if current_price is None:
+            current_price = 0
+
         candidates.append({
             "rank": c.get("rank"),
             "code": c.get("code", ""),
@@ -598,7 +670,12 @@ def _serialize_luojie_pool(data):
             "pivot_status": c.get("pivot_status", ""),
             "risk_line": c.get("risk_line", 0),
             "reduce_line": c.get("reduce_line", 0),
+            "change_pct": change_pct,
+            "current_price": current_price,
             "reason": c.get("reason", ""),
+            "dates": timeseries["dates"],
+            "closes": closes,
+            "chart_annotations": timeseries["chart_annotations"],
         })
     return {
         "mode": data.get("mode", "disabled"),
@@ -1063,6 +1140,17 @@ def write_daily_data_json(daily_data, data_dir):
 
 def write_data_manifest(date_str, data_dir, is_trading_day=True, is_official=True):
     """维护 docs/data/index.json — 日期列表 + 交易日列表 + 最新日期"""
+
+    def _to_date_list(value):
+        if not isinstance(value, (list, tuple)):
+            return []
+        out = []
+        for item in value:
+            text = str(item).strip()
+            if text:
+                out.append(text)
+        return out
+
     manifest_path = os.path.join(data_dir, "index.json")
     existing = {
         "dates": [],
@@ -1078,11 +1166,25 @@ def write_data_manifest(date_str, data_dir, is_trading_day=True, is_official=Tru
             except json.JSONDecodeError:
                 pass
 
-    dates = sorted(set(_safe_list(existing.get("dates", [])) + [date_str]))
-    trading_dates = existing.get("trading_dates")
-    if trading_dates is None:
+    dates = sorted(set(_to_date_list(existing.get("dates", [])) + [date_str]))
+    trading_dates = _to_date_list(existing.get("trading_dates"))
+    date_meta = existing.get("date_meta", {})
+    if not isinstance(date_meta, dict):
+        date_meta = {}
+
+    if not trading_dates:
         trading_dates = list(dates)
-    trading_dates = sorted(set(_safe_list(trading_dates)))
+
+    def _is_trading_meta_day(date_value):
+        meta = date_meta.get(date_value)
+        if not isinstance(meta, Mapping):
+            return True
+        return meta.get("is_trading_day", True) is not False
+
+    trading_dates = sorted(set(
+        d for d in trading_dates
+        if d in dates and _is_trading_meta_day(d)
+    ))
 
     if is_trading_day:
         trading_dates = sorted(set(trading_dates + [date_str]))
@@ -1093,14 +1195,9 @@ def write_data_manifest(date_str, data_dir, is_trading_day=True, is_official=Tru
     existing["trading_dates"] = trading_dates
     existing["latest"] = date_str
     existing["latest_trading_date"] = (
-        date_str if is_trading_day else (
-            sorted(trading_dates)[-1] if trading_dates else ""
-        )
+        date_str if is_trading_day else (sorted(trading_dates)[-1] if trading_dates else "")
     )
 
-    date_meta = existing.get("date_meta", {})
-    if not isinstance(date_meta, dict):
-        date_meta = {}
     date_meta[date_str] = {
         "is_trading_day": bool(is_trading_day),
         "is_official": bool(is_official),

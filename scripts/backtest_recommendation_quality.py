@@ -27,6 +27,7 @@ from chanlun.signal_quality_classifier import build_signal_context  # noqa: E402
 
 
 DATA_DIR = os.path.join(ROOT, "docs", "data")
+SIGNAL_DIR = os.path.join(DATA_DIR, "signals")
 SNAPSHOT_DAYS = sorted(
     f for f in os.listdir(DATA_DIR)
     if f.endswith(".json") and f[0].isdigit() and "_" not in f
@@ -43,6 +44,112 @@ def iter_snapshot_picks():
         for ver in ("picks_pure", "picks_fusion"):
             for pick in (data.get(ver) or []):
                 yield snap_date, ver, pick
+
+
+def _to_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_list(values):
+    if values is None:
+        return []
+    return list(values)
+
+
+def build_signal_snapshot_record(pick, snap_date, source_view):
+    """Build a minimal, schema-only signal snapshot row from one pick."""
+    if not isinstance(pick, dict):
+        return None
+    code = pick.get("code")
+    if not code:
+        return None
+
+    bbp = pick.get("best_buy_point") if isinstance(pick.get("best_buy_point"), dict) else {}
+    ref_price = pick.get("ref_price")
+    if ref_price is None:
+        ref_price = pick.get("reference_price")
+    if ref_price is None:
+        ref_price = pick.get("current_price")
+    if ref_price is None:
+        ref_price = bbp.get("reference_price")
+    if ref_price is None:
+        ref_price = bbp.get("current_price")
+
+    opportunity_score = pick.get("opportunity_score")
+    if opportunity_score is None:
+        opportunity_score = pick.get("watch_score")
+    if opportunity_score is None:
+        opportunity_score = pick.get("score")
+
+    return {
+        "code": str(code),
+        "date": str(snap_date),
+        "source_view": str(source_view),
+        "opportunity_score": _to_float(opportunity_score),
+        "ref_price": _to_float(ref_price),
+    }
+
+
+def iter_signal_records_from_report(data, source_view=None):
+    """Yield normalized signal snapshot rows from one report payload.
+
+    Prefer workspace view rows because they contain opportunity_score and the
+    user-facing source_view. Fall back to raw pools for older snapshots.
+    """
+    snap_date = data.get("date")
+    if snap_date is None:
+        return []
+
+    workspace_views = data.get("workspace", {}).get("views", {}) if isinstance(data.get("workspace"), dict) else {}
+    if isinstance(workspace_views, dict) and workspace_views:
+        view_names = [source_view] if source_view else ["main", "acceleration", "luojie", "confirming", "baseline"]
+        rows = []
+        for view_name in view_names:
+            for pick in (workspace_views.get(view_name) or []):
+                row = build_signal_snapshot_record(pick, snap_date, view_name)
+                if row is not None:
+                    rows.append(row)
+        return rows
+
+    raw_source_map = {
+        "picks_fusion": "main",
+        "picks_pure": "baseline",
+    }
+    source_keys = [source_view] if source_view else list(raw_source_map)
+    rows = []
+    for source_key in source_keys:
+        output_view = raw_source_map.get(source_key, source_key)
+        for pick in (data.get(source_key) or []):
+            row = build_signal_snapshot_record(pick, snap_date, output_view)
+            if row is not None:
+                rows.append(row)
+    return rows
+
+
+def _pick_local_kline(pick):
+    if not isinstance(pick, dict):
+        return None
+    dates = pick.get("dates")
+    opens = pick.get("opens")
+    highs = pick.get("highs")
+    lows = pick.get("lows")
+    closes = pick.get("closes")
+    if not (dates and opens and highs and lows and closes):
+        return None
+
+    try:
+        return {
+            "dates": [str(d).split(" ")[0] for d in _as_list(dates)],
+            "opens": [float(x) for x in _as_list(opens)],
+            "highs": [float(x) for x in _as_list(highs)],
+            "lows": [float(x) for x in _as_list(lows)],
+            "closes": [float(x) for x in _as_list(closes)],
+        }
+    except (TypeError, ValueError):
+        return None
 
 
 def daily_kline_after(code, snap_date, horizon=5):
@@ -63,8 +170,14 @@ def daily_kline_after(code, snap_date, horizon=5):
 
 
 def evaluate(pick, snap_date):
-    """Compute returns relative to recommendation-day close (legacy behavior)."""
-    kline = daily_kline_after(pick["code"], snap_date, horizon=5)
+    """Compute returns for one pick.
+
+    1) 优先使用快照内嵌的K线（无网）；
+    2) 回退到 `fetch_daily_kline`（兼容历史场景）。
+    """
+    kline = _pick_local_kline(pick)
+    if kline is None:
+        kline = daily_kline_after(pick.get("code"), snap_date, horizon=5)
     if not kline:
         return None
 
@@ -74,6 +187,40 @@ def evaluate(pick, snap_date):
         entry_mode="immediate_close",
         horizon=5,
     )
+
+
+def build_signal_snapshot_payload(data, source_view):
+    """Build minimal payload for one report payload."""
+    return {
+        "date": data.get("date"),
+        "signal_records": iter_signal_records_from_report(data, source_view),
+    }
+
+
+def write_signal_snapshot_files(output_dir=SIGNAL_DIR):
+    """Write `docs/data/signals/YYYY-MM-DD.json` for every daily report.
+
+    Returns:
+        list[str]: written output paths.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    written_paths = []
+
+    for fname in SNAPSHOT_DAYS:
+        path = os.path.join(DATA_DIR, fname)
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+        snap_date = data.get("date")
+        if not snap_date:
+            continue
+
+        payloads = iter_signal_records_from_report(data)
+        output_path = os.path.join(output_dir, f"{snap_date}.json")
+        with open(output_path, "w", encoding="utf-8") as fh:
+            json.dump({"date": snap_date, "signals": payloads}, fh, ensure_ascii=False, indent=2)
+        written_paths.append(output_path)
+
+    return written_paths
 
 
 def bucket_key(pick):
@@ -221,6 +368,8 @@ def main():
               f"-> A_max_dd_mean={a_only_summary['max_dd_3d_mean'] if a_only_summary else None}")
         if baseline:
             print(f"  coverage_gap={baseline_n - a_n}")
+
+    write_signal_snapshot_files()
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ import json
 import time
 import argparse
 from datetime import datetime
+import math
 
 import numpy as np
 import random
@@ -72,6 +73,217 @@ MARKET_INDICES = {
     "中证500": "000905",
 }
 PREVIEW_OUTPUT_DIR = "docs-preview"
+
+
+def _safe_number(value, default=None):
+    """Convert arbitrary input to finite float when possible."""
+    if value is None:
+        return default
+    try:
+        if isinstance(value, bool):
+            return default
+        number = float(value)
+    except (TypeError, ValueError):
+        return default
+    if not math.isfinite(number):
+        return default
+    return number
+
+
+def _as_list(value):
+    """Return list-like inputs as list; otherwise return empty list."""
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    if isinstance(value, tuple):
+        return list(value)
+    if hasattr(value, "tolist"):
+        try:
+            return list(value.tolist())
+        except (TypeError, ValueError):
+            return []
+    return []
+
+
+def _clamp(value, low, high):
+    if value is None:
+        return low
+    return max(low, min(high, value))
+
+
+def _market_temperature_label(score):
+    if score >= 90:
+        return "过热"
+    if score >= 75:
+        return "热"
+    if score >= 60:
+        return "偏强"
+    if score >= 45:
+        return "平衡"
+    if score >= 30:
+        return "偏冷"
+    return "冰点"
+
+
+def build_market_temperature(
+    market_indices=None,
+    sector_flow=None,
+    sector_outflow=None,
+    limit_up_pool=None,
+    sell_signals=None,
+    diagnostics=None,
+    data_quality=None,
+    sh_volumes=None,
+    prev_limit_up_count=None,
+    limit_down_count=None,
+    hot_risk_flags=None,
+    advance_count=None,
+    decline_count=None,
+    flat_count=None,
+    prev_turnover=None,
+    turnover=None,
+    turnover_ma5=None,
+):
+    """Build back-end market temperature with frontend-compatible structure."""
+    if isinstance(market_indices, dict):
+        market_items = list(market_indices.values())
+    else:
+        market_items = _as_list(market_indices)
+
+    valid_items = [
+        item for item in market_items
+        if isinstance(item, dict) and _safe_number(item.get("change_pct"), None) is not None
+    ]
+
+    # Breadth inputs
+    advance_count = _safe_number(advance_count, None)
+    decline_count = _safe_number(decline_count, None)
+    flat_count = _safe_number(flat_count, None)
+
+    # Limits
+    limit_up_count = len(_as_list(limit_up_pool))
+    prev_limit_up_count = _safe_number(prev_limit_up_count, None)
+    limit_down_count = _safe_number(limit_down_count, 0)
+
+    # Volume inputs
+    volume_series = [n for n in _as_list(sh_volumes) if _safe_number(n, None) is not None]
+    if turnover is None and len(volume_series) >= 1:
+        turnover = _safe_number(volume_series[-1], None)
+    if prev_turnover is None and len(volume_series) >= 2:
+        prev_turnover = _safe_number(volume_series[-2], None)
+    if turnover_ma5 is None and len(volume_series) >= 5:
+        turnover_ma5 = sum(_safe_number(v, 0) for v in volume_series[-5:]) / 5
+
+    turnover = _safe_number(turnover, None)
+    prev_turnover = _safe_number(prev_turnover, None)
+    turnover_ma5 = _safe_number(turnover_ma5, None)
+
+    # Risk flags
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    data_quality = data_quality if isinstance(data_quality, dict) else {}
+    hot_risk_flags = _as_list(hot_risk_flags)
+
+    sector_in = _as_list(sector_flow)
+    sector_out = _as_list(sector_outflow)
+    sell_signals = _as_list(sell_signals)
+
+    avg_index_change = 0
+    if valid_items:
+        avg_index_change = sum(_safe_number(item.get("change_pct"), 0) for item in valid_items) / len(valid_items)
+    index_score = _clamp(50 + avg_index_change * 18, 0, 100) if valid_items else 50
+
+    breadth_score = 50
+    if advance_count is not None and decline_count is not None:
+        denom = advance_count + decline_count + (flat_count if flat_count is not None else 0)
+        if denom > 0:
+            breadth_score = _clamp((advance_count / denom) * 100, 0, 100)
+    elif valid_items:
+        up_count = len([item for item in valid_items if _safe_number(item.get("change_pct"), 0) > 0])
+        breadth_score = _clamp((up_count / len(valid_items)) * 100, 0, 100)
+
+    limit_score = _clamp(50 + limit_up_count * 2, 0, 90)
+    if prev_limit_up_count is not None:
+        limit_score = _clamp(
+            limit_score + _clamp((limit_up_count - prev_limit_up_count) * 0.8, -10, 10),
+            0,
+            90,
+        )
+
+    volume_score = 55
+    if turnover is not None and turnover_ma5 not in (None, 0):
+        volume_ratio = turnover / turnover_ma5
+        volume_score = _clamp(50 + (volume_ratio - 1) * 80, 20, 90)
+    elif turnover is not None and prev_turnover not in (None, 0):
+        volume_ratio = turnover / prev_turnover
+        volume_score = _clamp(50 + (volume_ratio - 1) * 80, 20, 90)
+
+    sector_score = 50
+    if not sector_in and not sector_out:
+        sector_score = 50
+    else:
+        by_value = None
+        in_count = 0
+        out_count = 0
+        net_sector_flow = 0
+        for item in sector_in:
+            if not isinstance(item, dict):
+                continue
+            item_flow = _safe_number(item.get("flow"), _safe_number(item.get("net_flow"), _safe_number(item.get("amount"), None)))
+            if item_flow is not None:
+                by_value = 0
+                if item_flow > 0:
+                    in_count += 1
+                net_sector_flow += item_flow
+
+        for item in sector_out:
+            if not isinstance(item, dict):
+                continue
+            item_flow = _safe_number(item.get("flow"), _safe_number(item.get("net_flow"), _safe_number(item.get("amount"), None)))
+            if item_flow is not None:
+                by_value = 0
+                if item_flow < 0:
+                    out_count += 1
+                net_sector_flow += item_flow
+
+        if by_value is not None:
+            if by_value == 0:
+                sector_score = _clamp(50 + in_count * 4 - out_count * 3, 20, 85)
+            else:
+                sector_score = _clamp(50 + net_sector_flow / 10, 20, 85)
+
+    risk_penalty = 0
+    risk_penalty += min(15, len(sell_signals) * 1.5)
+    for item in hot_risk_flags:
+        if isinstance(item, str) and "涨幅过热" in item:
+            risk_penalty += 1
+    risk_penalty += limit_down_count * 1.2 if limit_down_count else 0
+    risk_penalty += 10 if data_quality.get("is_official") is False else 0
+    risk_penalty += 10 if diagnostics.get("error") else 0
+    risk_penalty = min(30, risk_penalty)
+
+    raw_score = (
+        breadth_score * 0.30
+        + index_score * 0.20
+        + limit_score * 0.20
+        + volume_score * 0.15
+        + sector_score * 0.10
+        - risk_penalty * 0.05
+    )
+    score = round(_clamp(raw_score, 0, 100))
+
+    return {
+        "score": int(score),
+        "label": _market_temperature_label(int(score)),
+        "components": {
+            "breadth_score": round(breadth_score),
+            "index_score": round(index_score),
+            "limit_score": round(limit_score),
+            "volume_score": round(volume_score),
+            "sector_score": round(sector_score),
+            "risk_penalty": round(risk_penalty),
+        },
+    }
 
 
 def fetch_market_indices(report_date=None, index_codes=None):
@@ -864,6 +1076,17 @@ def main(debug=False, preview=False):
             "note": preview_note,
         },
     }
+    sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+    market_temperature = build_market_temperature(
+        market_indices=market_indices,
+        sector_flow=sectors,
+        sector_outflow=sector_outflow,
+        limit_up_pool=limit_up_pool_data,
+        sell_signals=sell_signals,
+        diagnostics=diagnostics,
+        data_quality=data_quality,
+        sh_volumes=sh_volumes,
+    )
     report_data = {
         "date": today,
         "market": market_indices,
@@ -872,8 +1095,9 @@ def main(debug=False, preview=False):
         "picks_fusion": fusion_scored,
         "sector_flow": sectors,
         # 新增模块
-        "sector_outflow": fetch_sector_outflow(SECTOR_OUTFLOW_COUNT),
+        "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
+        "market_temperature": market_temperature,
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
