@@ -169,7 +169,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("source:main", item["rank_trace"])
         self.assertIn("source:acceleration", item["rank_trace"])
 
-    def test_main_opportunity_score_prioritizes_signal_over_reference_distance(self):
+    def test_main_opportunity_score_balances_signal_with_entry_quality(self):
         near_reference_weak = _fusion_pick(
             code="600030",
             name="近参考弱信号",
@@ -182,7 +182,7 @@ class TestReportViewModel(unittest.TestCase):
             name="远参考强信号",
             score=96,
             distance=11.5,
-            change_pct=1.0,
+            change_pct=-1.0,
         )
         report_data = _report_data(
             {
@@ -191,8 +191,8 @@ class TestReportViewModel(unittest.TestCase):
         )
         workspace = build_workspace(report_data)
 
-        self.assertEqual([item["code"] for item in workspace["views"]["main"]], ["600031", "600030"])
-        self.assertEqual([item["code"] for item in workspace["views"]["highlights"]], ["600031", "600030"])
+        self.assertEqual([item["code"] for item in workspace["views"]["main"]], ["600030", "600031"])
+        self.assertEqual([item["code"] for item in workspace["views"]["highlights"]], ["600030", "600031"])
 
     def test_rank_trace_explains_opportunity_components_and_penalties(self):
         pick = _fusion_pick(
@@ -220,8 +220,27 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("data_penalty", trace)
         self.assertIn("opportunity_score", trace)
         self.assertEqual(trace["opportunity_score"], item["opportunity_score"])
+        self.assertLessEqual(trace["signal_score"], 25)
+        self.assertLessEqual(trace["market_score"], 15)
+        self.assertLessEqual(trace["data_penalty"], 20)
         self.assertGreaterEqual(trace["risk_penalty"], 0)
         self.assertGreaterEqual(trace["data_penalty"], 0)
+
+    def test_confirming_score_no_longer_uses_change_pct_as_signal_proxy(self):
+        report_data = _report_data(
+            {
+                "startup_watchlist": [
+                    _confirming_pick(code="600041", name="高涨幅等确认", change_pct=18.0, distance=1.0),
+                ],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        trace = workspace["views"]["confirming"][0]["rank_trace"]
+
+        self.assertEqual(trace["signal_score"], 10)
+        self.assertLess(trace["signal_score"], 50 + 18.0)
+        self.assertLessEqual(trace["signal_score"], 10)
 
     def test_highlights_ranking_is_deterministic_with_equal_score(self):
         high1 = _fusion_pick(
@@ -366,6 +385,8 @@ class TestReportViewModel(unittest.TestCase):
             for item in workspace["views"][view_name]:
                 self.assertFalse(LARGE_FIELDS.intersection(item), view_name)
                 self.assertIn("watch_score", item, view_name)
+                self.assertIn("opportunity_score", item, view_name)
+                self.assertEqual(item["watch_score"], item["opportunity_score"], view_name)
                 self.assertIn("action_reason", item)
                 self.assertIn("primary_reason", item)
                 self.assertIn("risk_flags", item)

@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Mapping
 
+from chanlun.scoring_engine import compute_opportunity_score
+
 ViewOrder = List[str]
 
 
@@ -45,19 +47,6 @@ SOURCE_RANK = {
     "luojie": 2,
     "confirming": 3,
     "baseline": 4,
-}
-
-_DATA_PENALTY_STALE = 6
-_DATA_PENALTY_MISSING = 10
-_DATA_PENALTY_FALLBACK = 4
-_DATA_PENALTY_UNVERIFIED = 3
-
-BASE_WEIGHTS = {
-    "main": 100,
-    "acceleration": 78,
-    "luojie": 68,
-    "confirming": 60,
-    "baseline": 58,
 }
 
 EXCLUDED_FIELDS = {
@@ -405,22 +394,6 @@ def _safe_str(value: Any) -> str:
     return str(value)
 
 
-def _extract_score(item: Mapping[str, Any], source: str) -> float:
-    if source == "main":
-        return _safe_float(item.get("score"), default=0.0) or 0.0
-    if source == "acceleration":
-        return _safe_float(item.get("boom_score"), default=0.0) or 0.0
-    if source == "luojie":
-        return _safe_float(item.get("score"), default=0.0) or 0.0
-    if source == "confirming":
-        # startup watchlist does not have a stable score key in older payloads;
-        # use change as a weak proxy for sorting.
-        return 50.0 + max(0.0, _resolve_change_pct(item) or 0.0)
-    if source == "baseline":
-        return _safe_float(item.get("score"), default=0.0) or 0.0
-    return 0.0
-
-
 def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
     reasons: list[str] = []
     change_pct = _safe_float(item.get("change_pct"))
@@ -474,74 +447,6 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
             seen.add(reason)
             unique_flags.append(reason)
     return unique_flags
-
-
-def _score_entry(distance_pct: float | None) -> float:
-    """Distance-to-entry score; close entry gets bonus, far entry only small help."""
-    if distance_pct is None:
-        return 4.0
-    abs_distance = abs(distance_pct)
-    if abs_distance <= 1.0:
-        return 16.0
-    if abs_distance <= 2.0:
-        return 14.0
-    if abs_distance <= 3.0:
-        return 11.0
-    if abs_distance <= 5.0:
-        return 8.0
-    if abs_distance <= 8.0:
-        return 4.0
-    if abs_distance <= 12.0:
-        return 2.0
-    return 0.0
-
-
-def _score_momentum(change_pct: float | None) -> float:
-    """Positive momentum contributes linearly, capped to avoid dominating opportunity."""
-    if change_pct is None:
-        return 5.0
-    if change_pct <= 0:
-        return 0.0
-    return min(20.0, change_pct * 1.5)
-
-
-def _score_market(base_source: str, source_count: int) -> float:
-    base = BASE_WEIGHTS.get(base_source, 50)
-    multi_source_bonus = max(0, source_count - 1) * 3.0
-    return min(60.0, base - 40.0 + multi_source_bonus)
-
-
-def _score_data_penalty(
-    data_quality: Mapping[str, Any] | None,
-    by_source: dict[str, Mapping[str, Any]],
-    sources: Iterable[str],
-) -> float:
-    penalty = 0.0
-    dq = _to_dict(data_quality)
-    market_status = _safe_str(dq.get("market_status"))
-    if market_status == "unverified":
-        penalty += _DATA_PENALTY_UNVERIFIED
-
-    fallback_used = bool(dq.get("fallback_used"))
-    if fallback_used:
-        penalty += _DATA_PENALTY_FALLBACK
-
-    observed_status = False
-    for source in sources:
-        row = _to_dict(by_source.get(source, {}))
-        data_status = _to_dict(row.get("data_status"))
-        if data_status:
-            observed_status = True
-        daily_status = _safe_str(data_status.get("daily"))
-        if daily_status == "stale_cache":
-            penalty += _DATA_PENALTY_STALE
-        elif daily_status == "missing":
-            penalty += _DATA_PENALTY_MISSING
-
-    if not observed_status and not fallback_used and market_status != "verified":
-        penalty += _DATA_PENALTY_UNVERIFIED
-
-    return penalty
 
 
 def _resonance_label(sources: list[str]) -> str:
@@ -653,7 +558,11 @@ def _build_item(
         primary_reason = _safe_str(primary_raw_metrics.get("primary_reason"))
 
     opportunity_score, rank_trace = _compute_watch_score(
-        preferred_raw, ordered_sources, by_source, data_quality=data_quality
+        preferred_raw,
+        ordered_sources,
+        by_source,
+        data_quality=data_quality,
+        risk_flags=all_risk_flags,
     )
 
     action, action_reason = _action_and_reason(ordered_sources, all_risk_flags, "main" in ordered_sources)
@@ -689,64 +598,24 @@ def _compute_watch_score(
     sources: Iterable[str],
     by_source: dict[str, Mapping[str, Any]],
     data_quality: Mapping[str, Any] | None = None,
+    risk_flags: Iterable[str] | None = None,
 ) -> tuple[int, Dict[str, Any]]:
     ordered_sources = _sorted_sources(sources)
     base_source = ordered_sources[0]
-    source_count = len(ordered_sources)
     primary_metrics = _primary_metric_bundle(primary_raw, base_source)
-    distance = _safe_float(primary_metrics.get("distance"))
-    change_pct = _safe_float(primary_metrics.get("change_pct"))
-    signal_score = min(100.0, max(0.0, _extract_score(primary_raw, base_source)))
-    entry_score = _score_entry(distance)
-    momentum_score = _score_momentum(change_pct)
-    market_score = _score_market(base_source, source_count)
-
-    risk_penalty = 0.0
-    risk_flags = []
-    for src in ordered_sources:
-        raw = by_source[src]
-        risk_flags.extend(_extract_risk_flags(raw, src))
-    unique_risks = set(risk_flags)
-    if "距参考价偏高" in unique_risks:
-        risk_penalty += 12
-    if "涨幅过热" in unique_risks:
-        risk_penalty += 10
-    if "信号接近过期" in unique_risks:
-        risk_penalty += 8
-    if "30min确认弱" in unique_risks:
-        risk_penalty += 6
-    if "确认信号未完成" in unique_risks:
-        risk_penalty += 8
-
-    data_penalty = _score_data_penalty(data_quality, by_source, ordered_sources)
-
-    opportunity_score = (
-        signal_score
-        + entry_score
-        + momentum_score
-        + market_score
-        - risk_penalty
-        - data_penalty
+    watch_score, trace = compute_opportunity_score(
+        primary_raw,
+        base_source,
+        {
+            "sources": ordered_sources,
+            "by_source": by_source,
+            "data_quality": data_quality,
+            "metrics": primary_metrics,
+            "risk_flags": list(risk_flags or []),
+            "source_count": len(ordered_sources),
+        },
     )
-
-    watch_score = int(round(opportunity_score))
-    trace = {
-        "base_source": base_source,
-        "source_count": source_count,
-        "market_score": market_score,
-        "signal_score": signal_score,
-        "entry_score": entry_score,
-        "momentum_score": momentum_score,
-        "risk_penalty": risk_penalty,
-        "data_penalty": data_penalty,
-        "opportunity_score": watch_score,
-        "selected_reason": _build_selected_reason(base_source, ordered_sources),
-    }
-    # keep stable trace flags for debug visibility
-    for src in ordered_sources:
-        trace[f"source:{src}"] = trace.get(f"source:{src}", 0) + 1
-    trace["distance_from_reference_pct"] = distance
-    trace["change_pct"] = change_pct
+    trace["selected_reason"] = _build_selected_reason(base_source, ordered_sources)
     return watch_score, trace
 
 

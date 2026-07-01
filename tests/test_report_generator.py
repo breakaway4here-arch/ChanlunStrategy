@@ -1082,6 +1082,16 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
 
+    def test_candidate_list_uses_view_rank_without_raw_score_fallback_sort(self):
+        self.assertEqual(self.asset_js.count("sort(function"), 1)
+        self.assertIn("validChanges.slice().sort(function (a, b) {", self.asset_js)
+        self.assertIn("return b.change_pct - a.change_pct;", self.asset_js)
+        self.assertNotIn("return b.raw_score", self.asset_js)
+        self.assertNotIn("return b.boom_score", self.asset_js)
+        self.assertNotIn("return b.watch_score", self.asset_js)
+        self.assertNotIn("return b.opportunity_score", self.asset_js)
+        self.assertIn("var rankValue = safeNumber(item.view_rank, i + 1);", self.asset_js)
+
     def test_candidate_price_section_uses_raw_best_buy_point_and_closes_fallback(self):
         self.assertIn("function getCandidateCurrentPriceFromRecord", self.asset_js)
         self.assertIn("var bp = record.best_buy_point || {};", self.asset_js)
@@ -1097,6 +1107,22 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("safeNumber(bp.price, null)", self.asset_js)
         self.assertIn("function getCandidateReferencePrice(item)", self.asset_js)
         self.assertIn("return getCandidateReferencePriceFromRecord(raw);", self.asset_js)
+
+    def test_details_prefers_opportunity_score_before_watch_score(self):
+        start = self.asset_js.find("function buildDetailsSection(item, raw) {")
+        end = self.asset_js.find("function buildChartPlaceholder()", start)
+        self.assertGreater(start, -1)
+        self.assertGreater(end, start)
+        fn = self.asset_js[start:end]
+        self.assertIn("var opportunityScore = safeNumber(item.opportunity_score, null);", fn)
+        self.assertIn("var watchScore = safeNumber(item.watch_score, null);", fn)
+        self.assertIn("if (opportunityScore !== null) {", fn)
+        self.assertIn("} else if (watchScore !== null) {", fn)
+        self.assertLess(
+            fn.find("opportunityScore !== null"),
+            fn.find("else if (watchScore !== null)"),
+            "opportunity_score 应优先展示，watch_score 仅兜底",
+        )
 
 
 class TestLayoutRefresh(unittest.TestCase):
