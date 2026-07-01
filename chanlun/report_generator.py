@@ -644,6 +644,11 @@ def _serialize_luojie_pool(data):
             current_price = closes[-1] if closes else c.get("close")
         if current_price is None:
             current_price = 0
+        distance_life_pct = c.get("distance_life_pct")
+        if distance_life_pct is None:
+            life_line = c.get("life_line")
+            if life_line:
+                distance_life_pct = round((current_price - life_line) / life_line * 100, 2)
 
         candidates.append({
             "rank": c.get("rank"),
@@ -662,7 +667,7 @@ def _serialize_luojie_pool(data):
             "life_line": c.get("life_line", 0),
             "ma13": c.get("ma13", 0),
             "ma77": c.get("ma77", 0),
-            "distance_life_pct": c.get("distance_life_pct", 0),
+            "distance_life_pct": distance_life_pct,
             "distance_ma77_pct": c.get("distance_ma77_pct", 0),
             "macd_status": c.get("macd_status", ""),
             "macd_above_zero": c.get("macd_above_zero", False),
@@ -801,6 +806,57 @@ def _safe_list(arr):
         else:
             result.append(str(x))
     return result
+
+
+def _score_sort_value(item):
+    value = item.get("opportunity_score")
+    if isinstance(value, (int, float, np.floating, np.integer)):
+        return float(value)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return -1.0
+
+
+def _copy_workspace_score_fields(raw_item, workspace_item):
+    for key in ("opportunity_score", "watch_score", "view_rank", "rank_trace"):
+        if key in workspace_item:
+            raw_item[key] = workspace_item[key]
+    if "rank" in raw_item and workspace_item.get("view_rank") is not None:
+        raw_item["rank"] = workspace_item["view_rank"]
+
+
+def _backfill_workspace_scores_for_items(items, workspace_items):
+    by_code = {
+        str(item.get("code", "")): item
+        for item in workspace_items or []
+        if item.get("code")
+    }
+    for raw_item in items or []:
+        workspace_item = by_code.get(str(raw_item.get("code", "")))
+        if workspace_item:
+            _copy_workspace_score_fields(raw_item, workspace_item)
+    items.sort(key=lambda item: (-_score_sort_value(item), str(item.get("code", ""))))
+    for index, raw_item in enumerate(items, start=1):
+        if "rank" in raw_item:
+            raw_item["rank"] = index
+
+
+def _backfill_workspace_scores(daily_data):
+    workspace = daily_data.get("workspace") or {}
+    views = workspace.get("views") or {}
+
+    _backfill_workspace_scores_for_items(daily_data.get("picks_fusion", []), views.get("main", []))
+    _backfill_workspace_scores_for_items(daily_data.get("picks_pure", []), views.get("baseline", []))
+    _backfill_workspace_scores_for_items(daily_data.get("startup_watchlist", []), views.get("confirming", []))
+
+    next_day_boom = daily_data.get("next_day_boom") or {}
+    if isinstance(next_day_boom, dict):
+        _backfill_workspace_scores_for_items(next_day_boom.get("candidates", []), views.get("acceleration", []))
+
+    luojie_pool = daily_data.get("luojie_pool") or {}
+    if isinstance(luojie_pool, dict):
+        _backfill_workspace_scores_for_items(luojie_pool.get("candidates", []), views.get("luojie", []))
 
 
 def _escape_inline_json(data):
@@ -1068,6 +1124,7 @@ def _generate_report_v2(report_data, output_dir=None):
         ),
     }
     daily_data["workspace"] = build_workspace(daily_data)
+    _backfill_workspace_scores(daily_data)
 
     bootstrap = {
         "pageDate": date_str,
@@ -1250,6 +1307,9 @@ def update_data_json(report_data, output_dir=None):
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
     }
+    day_entry["workspace"] = build_workspace(day_entry)
+    _backfill_workspace_scores(day_entry)
+    day_entry.pop("workspace", None)
     existing["reports"][date_str] = day_entry
 
     # 更新日期列表

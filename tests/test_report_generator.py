@@ -352,6 +352,100 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("workspace", self.day_data)
         self.assertEqual(self.day_data["workspace"].get("default_view"), "highlights")
 
+    def test_raw_pools_are_backfilled_and_sorted_by_workspace_opportunity_score(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_score_backfill_")
+        near_main = make_pick()
+        near_main["code"] = "600100"
+        near_main["score"] = 18
+        near_main["best_buy_point"]["distance_from_reference_pct"] = 0.2
+        near_main["best_buy_point"]["change_pct"] = 3.0
+        far_main = make_pick()
+        far_main["code"] = "600101"
+        far_main["score"] = 96
+        far_main["best_buy_point"]["distance_from_reference_pct"] = 11.5
+        far_main["best_buy_point"]["change_pct"] = -1.0
+        report_data = _make_minimal_report_data()
+        report_data["picks_fusion"] = [far_main, near_main]
+        report_data["next_day_boom"] = {
+            "mode": "enabled",
+            "candidates": [
+                {
+                    "rank": 1,
+                    "code": "600201",
+                    "name": "高分偏远加速",
+                    "boom_score": 95,
+                    "reference_price": 10.0,
+                    "current_price": 11.2,
+                    "change_pct": -1.0,
+                    "data_status": {"daily": "verified"},
+                },
+                {
+                    "rank": 2,
+                    "code": "600200",
+                    "name": "低分近位加速",
+                    "boom_score": 20,
+                    "reference_price": 10.0,
+                    "current_price": 10.02,
+                    "change_pct": 3.0,
+                    "data_status": {"daily": "verified"},
+                },
+            ],
+        }
+        report_data["luojie_pool"] = {
+            "mode": "enabled",
+            "candidates": [
+                {
+                    "rank": 1,
+                    "code": "600301",
+                    "name": "高分偏远罗姐",
+                    "score": 90,
+                    "close": 11.5,
+                    "life_line": 10.0,
+                    "change_pct": -1.0,
+                    "data_status": {"daily": "verified"},
+                },
+                {
+                    "rank": 2,
+                    "code": "600300",
+                    "name": "低分近位罗姐",
+                    "score": 20,
+                    "close": 10.02,
+                    "life_line": 10.0,
+                    "change_pct": 3.0,
+                    "data_status": {"daily": "verified"},
+                },
+            ],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+        update_data_json(report_data, output_dir=tmpdir)
+        with open(os.path.join(tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as f:
+            day_data = json.load(f)
+        with open(os.path.join(tmpdir, "data.json"), "r", encoding="utf-8") as f:
+            aggregate_data = json.load(f)["reports"]["2026-05-26"]
+
+        for payload in (day_data, aggregate_data):
+            self.assertEqual([p["code"] for p in payload["picks_fusion"]], ["600100", "600101"])
+            self.assertEqual(
+                [c["code"] for c in payload["next_day_boom"]["candidates"]],
+                ["600200", "600201"],
+            )
+            self.assertEqual(
+                [c["code"] for c in payload["luojie_pool"]["candidates"]],
+                ["600300", "600301"],
+            )
+            for pool_items in (
+                payload["picks_fusion"],
+                payload["next_day_boom"]["candidates"],
+                payload["luojie_pool"]["candidates"],
+            ):
+                self.assertGreaterEqual(pool_items[0]["opportunity_score"], pool_items[1]["opportunity_score"])
+                for item in pool_items:
+                    self.assertIn("opportunity_score", item)
+                    self.assertIn("watch_score", item)
+                    self.assertIn("view_rank", item)
+                    self.assertIn("rank_trace", item)
+
 
 class TestStartupWatchlistSerialization(unittest.TestCase):
 
