@@ -8,3 +8,6 @@ config.json
 docs/*.md
 daily_run.log
 .cache/
+.codegraph/
+.playwright-mcp/
+docs-preview/
