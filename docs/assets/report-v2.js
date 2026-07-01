@@ -1093,7 +1093,13 @@
     if (item.code) details.push('代码：' + item.code);
     if (item.sector) details.push('板块：' + item.sector);
     if (item.distance_from_reference_pct !== undefined) details.push('距参考价：' + formatPct(item.distance_from_reference_pct, true));
-    if (item.watch_score !== undefined) details.push('权重：' + formatNumber(item.watch_score, 0));
+    var opportunityScore = safeNumber(item.opportunity_score, null);
+    var watchScore = safeNumber(item.watch_score, null);
+    if (opportunityScore !== null) {
+      details.push('权重：' + formatNumber(opportunityScore, 0));
+    } else if (watchScore !== null) {
+      details.push('权重：' + formatNumber(watchScore, 0));
+    }
     if (raw && raw.daily_startup_grade) details.push('启动评级：' + raw.daily_startup_grade);
     if (raw && raw.source_type) details.push('来源类型：' + raw.source_type);
     if (raw && raw.signal_age_days !== undefined && raw.signal_age_days !== null) details.push('信号年龄：' + raw.signal_age_days + ' 个交易日');
