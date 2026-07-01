@@ -446,6 +446,20 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(confirming_item["action"], "等回踩")
         self.assertNotEqual(confirming_item["action"], "可上车")
 
+    def test_confirming_observe_action_is_not_duplicated_as_risk_tag(self):
+        report_data = _report_data(
+            {
+                "startup_watchlist": [_confirming_pick(code="600032", change_pct=9.0, distance=1.2)],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        confirming_item = workspace["views"]["confirming"][0]
+
+        self.assertEqual(confirming_item["action"], "仅观察")
+        self.assertNotIn("仅观察", confirming_item["risk_flags"])
+        self.assertIn("涨幅过热", confirming_item["risk_flags"])
+
     def test_workspace_main_derives_change_pct_from_closes_when_pick_lacks_change_field(self):
         pick = _fusion_pick(code="600100", name="主推闭坑票")
         pick.pop("change_pct", None)

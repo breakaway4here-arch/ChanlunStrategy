@@ -1237,6 +1237,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
 
     def test_candidate_rows_do_not_fabricate_risk_tags(self):
         self.assertNotIn("riskFlags = ['无新增'];", self.asset_js)
+        self.assertIn("normalizeString(flag) !== '仅观察';", self.asset_js)
 
     def test_candidate_rows_use_change_pct_fallback_helper(self):
         self.assertIn("function getCandidateChangePct", self.asset_js)
@@ -1244,6 +1245,17 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("function getCandidateChangePctFromRecord", self.asset_js)
         self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
+
+    def test_candidate_rows_surface_decision_badge(self):
+        self.assertIn("function renderDecisionBadge", self.asset_js)
+        self.assertIn("tagHtml += renderDecisionBadge(decision);", self.asset_js)
+        self.assertIn("decision-badge-score", self.asset_js)
+
+    def test_detail_has_decision_engine_section(self):
+        self.assertIn("function buildDecisionEngineSection", self.asset_js)
+        self.assertIn("<h3 class=\"detail-section-title\">04 决策</h3>", self.asset_js)
+        self.assertIn("decision-score-grid", self.asset_js)
+        self.assertIn("+ buildDecisionEngineSection(item, raw)", self.asset_js)
 
     def test_candidate_list_uses_view_rank_without_raw_score_fallback_sort(self):
         self.assertEqual(self.asset_js.count("sort(function"), 1)

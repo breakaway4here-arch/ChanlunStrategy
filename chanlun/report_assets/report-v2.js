@@ -221,6 +221,42 @@
     return 'tag tag-risk';
   }
 
+  function getDecisionTone(decision) {
+    var label = normalizeString(decision && decision.decision ? decision.decision : '');
+    var code = normalizeString(decision && decision.decision_code ? decision.decision_code : '');
+    if (label.indexOf('推荐') !== -1 || code === 'recommend') return 'is-recommend';
+    if (label.indexOf('不推荐') !== -1 || code === 'reject') return 'is-reject';
+    return 'is-observe';
+  }
+
+  function resolveDecisionEngine(item, raw) {
+    if (raw && raw.decision_engine_v1) return raw.decision_engine_v1;
+    if (item && item.decision_engine_v1) return item.decision_engine_v1;
+    return null;
+  }
+
+  function getDecisionScore(decision) {
+    var score = safeNumber(decision && decision.total_score, null);
+    if (score === null) score = safeNumber(decision && decision.score, null);
+    if (score === null) score = safeNumber(decision && decision.final_score, null);
+    if (score === null) score = safeNumber(decision && decision.opportunity_score, null);
+    return score;
+  }
+
+  function renderDecisionBadge(decision) {
+    if (!decision) return '';
+    if (isString(decision)) {
+      return '<span class="decision-badge is-observe">' + escapeHtml(normalizeString(decision)) + '</span>';
+    }
+    var label = normalizeString(decision.decision || decision.label || '观察');
+    var score = getDecisionScore(decision);
+    return ''
+      + '<span class="decision-badge ' + escapeHtml(getDecisionTone(decision)) + '">'
+      + '  <span class="decision-badge-label">' + escapeHtml(label) + '</span>'
+      + (score === null ? '' : '<span class="decision-badge-score">决策 ' + escapeHtml(formatNumber(score, 0)) + '</span>')
+      + '</span>';
+  }
+
   function getSourceClass(label) {
     var text = normalizeString(label);
     if (text === '主推') return 'tag tag-main';
@@ -918,9 +954,14 @@
 
       var resonance = normalizeString(item.resonance_label || '');
       var action = normalizeString(item.action || '待判定');
-      var riskFlags = asArray(item.risk_flags);
+      var riskFlags = asArray(item.risk_flags).filter(function (flag) {
+        return normalizeString(flag) !== '仅观察';
+      });
+      var raw = findRawCandidate(item.ref || {});
+      var decision = resolveDecisionEngine(item, raw);
 
       var tagHtml = '';
+      tagHtml += renderDecisionBadge(decision);
       for (var s = 0; s < sourceLabels.length; s += 1) {
         if (sourceLabels[s]) {
           tagHtml += makeChip(sourceLabels[s], getSourceClass(sourceLabels[s]));
@@ -1057,7 +1098,7 @@
 
     return ''
       + '<div class="detail-section">'
-      + '  <h3 class="detail-section-title">04 理由</h3>'
+      + '  <h3 class="detail-section-title">05 理由</h3>'
       + '  <div class="detail-section-body">'
       + '    <ul>'
       + lines.map(function (line) { return '<li>' + escapeHtml(line) + '</li>'; }).join('')
@@ -1067,7 +1108,9 @@
   }
 
   function buildRiskSection(item, raw) {
-    var risks = asArray(item.risk_flags);
+    var risks = asArray(item.risk_flags).filter(function (flag) {
+      return normalizeString(flag) !== '仅观察';
+    });
     if (risks.length === 0 && raw && Array.isArray(raw.growth_risk_flags)) {
       risks = asArray(raw.growth_risk_flags);
     }
@@ -1079,11 +1122,52 @@
     }
     return ''
       + '<div class="detail-section">'
-      + '  <h3 class="detail-section-title">05 风险</h3>'
+      + '  <h3 class="detail-section-title">06 风险</h3>'
       + '  <div class="detail-section-body">'
       + '    <ul>'
       + risks.map(function (line) { return '<li class="risk-chip">' + escapeHtml(line) + '</li>'; }).join('')
       + '    </ul>'
+      + '  </div>'
+      + '</div>';
+  }
+
+  function buildDecisionEngineSection(item, raw) {
+    var decision = resolveDecisionEngine(item, raw);
+    if (!decision) return '';
+    if (isString(decision)) {
+      return ''
+        + '<div class="detail-section decision-engine-section">'
+        + '  <h3 class="detail-section-title">04 决策</h3>'
+        + '  <div class="decision-engine-card">'
+        + '    <div class="decision-engine-head">' + renderDecisionBadge(decision) + '</div>'
+        + '    <div class="decision-engine-note">' + escapeHtml(normalizeString(decision)) + '</div>'
+        + '  </div>'
+        + '</div>';
+    }
+
+    var structure = safeNumber(decision.structure && decision.structure.score, null);
+    var position = safeNumber(decision.position && decision.position.score, null);
+    var sentiment = safeNumber(decision.sentiment && decision.sentiment.score, null);
+    var reasons = [];
+    ['structure', 'position', 'sentiment'].forEach(function (key) {
+      if (decision[key] && Array.isArray(decision[key].reasons)) {
+        decision[key].reasons.slice(0, 2).forEach(function (reason) {
+          if (reason && reasons.indexOf(reason) === -1) reasons.push(reason);
+        });
+      }
+    });
+
+    return ''
+      + '<div class="detail-section decision-engine-section">'
+      + '  <h3 class="detail-section-title">04 决策</h3>'
+      + '  <div class="decision-engine-card">'
+      + '    <div class="decision-engine-head">' + renderDecisionBadge(decision) + '</div>'
+      + '    <div class="decision-score-grid">'
+      + '      <div><span>结构</span><strong>' + escapeHtml(structure === null ? '--' : formatNumber(structure, 0)) + '</strong></div>'
+      + '      <div><span>位置</span><strong>' + escapeHtml(position === null ? '--' : formatNumber(position, 0)) + '</strong></div>'
+      + '      <div><span>情绪</span><strong>' + escapeHtml(sentiment === null ? '--' : formatNumber(sentiment, 0)) + '</strong></div>'
+      + '    </div>'
+      + (reasons.length ? '<div class="decision-engine-reasons">' + reasons.slice(0, 4).map(function (reason) { return '<span>' + escapeHtml(reason) + '</span>'; }).join('') + '</div>' : '')
       + '  </div>'
       + '</div>';
   }
@@ -1121,7 +1205,7 @@
 
     return ''
       + '<div class="detail-section">'
-      + '  <h3 class="detail-section-title">06 细节</h3>'
+      + '  <h3 class="detail-section-title">07 细节</h3>'
       + '  <div class="detail-section-body">'
       + '    <ul>'
       + details.map(function (line) { return '<li>' + escapeHtml(line) + '</li>'; }).join('')
@@ -1209,6 +1293,7 @@
       + buildConclusionSection(item, raw)
       + buildPriceSection(item, raw)
       + buildChartPlaceholder()
+      + buildDecisionEngineSection(item, raw)
       + buildReasonSection(item, raw)
       + buildRiskSection(item, raw)
       + buildDetailsSection(item, raw)

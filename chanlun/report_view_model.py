@@ -431,8 +431,6 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
             reasons.append("下跌压力")
 
     if source == "confirming":
-        if item.get("avoid_chase"):
-            reasons.append("仅观察")
         age = _safe_int(item.get("startup_age_days"), default=0)
         if age is not None and age >= 8:
             reasons.append("信号接近过期")

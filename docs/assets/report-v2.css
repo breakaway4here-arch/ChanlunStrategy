@@ -557,6 +557,43 @@ body {
   min-width: 0;
 }
 
+.decision-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 800;
+  white-space: nowrap;
+  border: 1px solid rgba(37, 99, 235, 0.24);
+}
+
+.decision-badge.is-recommend {
+  color: #047857;
+  background: var(--down-green-soft);
+  border-color: rgba(4, 120, 87, 0.24);
+}
+
+.decision-badge.is-observe {
+  color: #2563EB;
+  background: #EFF6FF;
+}
+
+.decision-badge.is-reject {
+  color: #DC2626;
+  background: #FEF2F2;
+  border-color: rgba(220, 38, 38, 0.24);
+}
+
+.decision-badge-score {
+  color: inherit;
+  opacity: 0.78;
+  font-weight: 750;
+}
+
 .candidate-star {
   font-size: 16px;
   color: var(--text-muted);
@@ -690,6 +727,70 @@ body {
   color: var(--risk-orange);
   background: var(--risk-orange-soft);
   border-color: rgba(245, 158, 11, 0.32);
+}
+
+.decision-engine-card {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 8px;
+  background: #F8FAFC;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+}
+
+.decision-engine-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.decision-score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.decision-score-grid > div {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.decision-score-grid span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.decision-score-grid strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-main);
+  font-size: 16px;
+}
+
+.decision-engine-reasons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.decision-engine-reasons span,
+.decision-engine-note {
+  color: var(--text-sub);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.decision-engine-reasons span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #FFFFFF;
+  border: 1px solid rgba(226, 232, 240, 0.9);
 }
 
 .candidate-change {

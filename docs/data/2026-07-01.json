@@ -32917,8 +32917,7 @@
         "alpha_multiplier": 1.0112,
         "base_opportunity_score": 44,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 49,
         "distance_from_reference_pct": 0.0,
@@ -33470,8 +33469,7 @@
         "alpha_multiplier": 1.01,
         "base_opportunity_score": 41,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 46,
         "distance_from_reference_pct": 0.0,
@@ -34024,8 +34022,7 @@
         "alpha_multiplier": 1.0103,
         "base_opportunity_score": 40,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 45,
         "distance_from_reference_pct": 0.0,
@@ -34578,8 +34575,7 @@
         "alpha_multiplier": 1.0103,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -35131,8 +35127,7 @@
         "alpha_multiplier": 1.0094,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -35684,8 +35679,7 @@
         "alpha_multiplier": 1.0124,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -36240,8 +36234,7 @@
         "alpha_multiplier": 1.0097,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -36795,8 +36788,7 @@
         "alpha_multiplier": 1.0115,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -37348,8 +37340,7 @@
         "alpha_multiplier": 1.0103,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -37901,8 +37892,7 @@
         "alpha_multiplier": 1.0112,
         "base_opportunity_score": 39,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 44,
         "distance_from_reference_pct": 0.0,
@@ -38459,8 +38449,7 @@
         "alpha_multiplier": 1.0126,
         "base_opportunity_score": 38,
         "risk_flags": [
-          "涨幅过热",
-          "仅观察"
+          "涨幅过热"
         ],
         "opportunity_score": 43,
         "distance_from_reference_pct": 0.0,
@@ -39007,9 +38996,7 @@
         "alpha_bonus": 3.6631,
         "alpha_multiplier": 1.0098,
         "base_opportunity_score": 34,
-        "risk_flags": [
-          "仅观察"
-        ],
+        "risk_flags": [],
         "opportunity_score": 38,
         "distance_from_reference_pct": 0.0,
         "change_pct": -0.57,
@@ -47732,10 +47719,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -47759,8 +47742,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -47807,8 +47789,7 @@
             "alpha_multiplier": 1.0112,
             "base_opportunity_score": 44,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 49,
             "distance_from_reference_pct": 0.0,
@@ -47873,10 +47854,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -47900,8 +47877,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -47948,8 +47924,7 @@
             "alpha_multiplier": 1.01,
             "base_opportunity_score": 41,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 46,
             "distance_from_reference_pct": 0.0,
@@ -48018,10 +47993,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48045,8 +48016,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48093,8 +48063,7 @@
             "alpha_multiplier": 1.0103,
             "base_opportunity_score": 40,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 45,
             "distance_from_reference_pct": 0.0,
@@ -48163,10 +48132,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48190,8 +48155,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48238,8 +48202,7 @@
             "alpha_multiplier": 1.0103,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -48304,10 +48267,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48331,8 +48290,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48379,8 +48337,7 @@
             "alpha_multiplier": 1.0094,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -48445,10 +48402,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48472,8 +48425,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48520,8 +48472,7 @@
             "alpha_multiplier": 1.0124,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -48586,10 +48537,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48613,8 +48560,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48663,8 +48609,7 @@
             "alpha_multiplier": 1.0097,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -48737,10 +48682,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48764,8 +48705,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48812,8 +48752,7 @@
             "alpha_multiplier": 1.0115,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -48878,10 +48817,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -48905,8 +48840,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -48953,8 +48887,7 @@
             "alpha_multiplier": 1.0103,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -49019,10 +48952,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -49046,8 +48975,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -49094,8 +49022,7 @@
             "alpha_multiplier": 1.0112,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -49168,10 +49095,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -49195,8 +49118,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -49245,8 +49167,7 @@
             "alpha_multiplier": 1.0126,
             "base_opportunity_score": 38,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 43,
             "distance_from_reference_pct": 0.0,
@@ -49315,10 +49236,6 @@
             {
               "type": "signal",
               "label": "强势启动观察"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -49341,9 +49258,7 @@
           "current_price": 26.16,
           "distance_from_reference_pct": 0.0,
           "primary_reason": "日线启动但30min未确认，等待回踩确认",
-          "risk_flags": [
-            "仅观察"
-          ],
+          "risk_flags": [],
           "rank_trace": {
             "base_source": "confirming",
             "source_count": 1,
@@ -49384,9 +49299,7 @@
             "alpha_bonus": 3.6631,
             "alpha_multiplier": 1.0098,
             "base_opportunity_score": 34,
-            "risk_flags": [
-              "仅观察"
-            ],
+            "risk_flags": [],
             "opportunity_score": 38,
             "distance_from_reference_pct": 0.0,
             "change_pct": -0.57,
@@ -56965,10 +56878,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -56992,8 +56901,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -57040,8 +56948,7 @@
             "alpha_multiplier": 1.0112,
             "base_opportunity_score": 44,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 49,
             "distance_from_reference_pct": 0.0,
@@ -57400,10 +57307,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -57427,8 +57330,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -57475,8 +57377,7 @@
             "alpha_multiplier": 1.01,
             "base_opportunity_score": 41,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 46,
             "distance_from_reference_pct": 0.0,
@@ -57541,10 +57442,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -57568,8 +57465,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -57616,8 +57512,7 @@
             "alpha_multiplier": 1.0094,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
@@ -57682,10 +57577,6 @@
             {
               "type": "risk",
               "label": "涨幅过热"
-            },
-            {
-              "type": "risk",
-              "label": "仅观察"
             }
           ],
           "data_badges": [
@@ -57709,8 +57600,7 @@
           "distance_from_reference_pct": 0.0,
           "primary_reason": "涨停当日不追，等待次日回踩确认",
           "risk_flags": [
-            "涨幅过热",
-            "仅观察"
+            "涨幅过热"
           ],
           "rank_trace": {
             "base_source": "confirming",
@@ -57757,8 +57647,7 @@
             "alpha_multiplier": 1.0124,
             "base_opportunity_score": 39,
             "risk_flags": [
-              "涨幅过热",
-              "仅观察"
+              "涨幅过热"
             ],
             "opportunity_score": 44,
             "distance_from_reference_pct": 0.0,
