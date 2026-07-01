@@ -87,10 +87,19 @@ def compute_opportunity_score(
     alpha_bonus, alpha_multiplier = 0.0, 1.0
     if alpha_enabled:
         alpha_features = _resolve_alpha_features(ctx, item, metrics, source)
-        alpha_bonus = _score_alpha_bonus(alpha_features, by_source, source, item, metrics)
+        alpha_bonus, pool_quality_bonus, pool_quality_score, pool_quality_tags = _score_alpha_bonus(
+            alpha_features,
+            by_source,
+            source,
+            item,
+            metrics,
+        )
         alpha_multiplier = _resolve_alpha_multiplier(alpha_features, alpha_bonus)
     else:
         alpha_features = {}
+        pool_quality_bonus = 0.0
+        pool_quality_score = 0.0
+        pool_quality_tags: list[str] = []
     opportunity_score = max(0, int(round(base_opportunity_score * alpha_multiplier + alpha_bonus)))
 
     trace = {
@@ -104,6 +113,9 @@ def compute_opportunity_score(
         "data_penalty": data_penalty,
         "alpha_features": alpha_features,
         "alpha_bonus": round(alpha_bonus, 4),
+        "pool_quality_bonus": round(pool_quality_bonus, 4),
+        "pool_quality_score": round(pool_quality_score, 4),
+        "pool_quality_tags": pool_quality_tags,
         "alpha_multiplier": round(alpha_multiplier, 4),
         "base_opportunity_score": base_opportunity_score,
         "risk_flags": risk_flags,
@@ -291,6 +303,7 @@ def _resolve_alpha_features(
     features["sector_strength_factor"] = sector_strength
     features["momentum_persistence"] = momentum_persistence
     features["breakout_quality"] = breakout_quality
+    features["pool_quality"] = _to_dict(alpha_ctx.get("pool_quality"))
     features["ma_bullish"] = ma_bullish
     features["confirmed_by"] = confirmed_by
     features["confirmations"] = confirmations
@@ -304,7 +317,7 @@ def _score_alpha_bonus(
     source: str,
     item: Mapping[str, Any],
     metrics: Mapping[str, Any],
-) -> float:
+) -> tuple[float, float, float, list[str]]:
     bonus = 0.0
     bonus += _score_market_regime_bonus(_to_dict(alpha_features.get("market_regime_factor")))
     bonus += _score_sector_strength_bonus(_to_dict(alpha_features.get("sector_strength_factor")))
@@ -314,9 +327,38 @@ def _score_alpha_bonus(
         source,
     )
     bonus += _score_breakout_quality_bonus(_to_dict(alpha_features.get("breakout_quality")), by_source, source, item, metrics)
+    pool_quality_bonus, pool_quality_score, pool_quality_tags = _score_pool_quality_bonus(_to_dict(alpha_features.get("pool_quality")))
+    bonus += pool_quality_bonus
 
     bonus = _clamp(bonus, 0.0, ALPHA_BONUS_LIMIT)
-    return round(bonus, 4)
+    return round(bonus, 4), pool_quality_bonus, pool_quality_score, pool_quality_tags
+
+
+def _score_pool_quality_bonus(pool_quality: Mapping[str, Any]) -> tuple[float, float, list[str]]:
+    def _to_unit(value: float | None) -> float:
+        if value is None:
+            return 0.0
+        normalized = value if abs(value) <= 1.2 else value / 100.0
+        return _clamp(normalized, 0.0, 1.0)
+
+    liquidity_raw = _safe_float(pool_quality.get("liquidity_score"))
+    growth_board_raw = _safe_float(pool_quality.get("growth_board_score"))
+    sector_quality_raw = _safe_float(pool_quality.get("sector_quality_score"))
+
+    liquidity_score = _to_unit(liquidity_raw) * 1.2
+    growth_board_score = _to_unit(growth_board_raw) * 1.0
+    sector_quality_score = _to_unit(sector_quality_raw) * 0.8
+    pool_quality_bonus = _clamp(liquidity_score + growth_board_score + sector_quality_score, 0.0, 3.0)
+
+    pool_quality_score = _safe_float(pool_quality.get("pool_quality_score"))
+    if pool_quality_score is None:
+        normalized_sum = _to_unit(liquidity_raw) + _to_unit(growth_board_raw) + _to_unit(sector_quality_raw)
+        pool_quality_score = _clamp((normalized_sum / 3.0) * 100.0, 0.0, 100.0)
+    else:
+        pool_quality_score = _clamp(pool_quality_score, 0.0, 100.0)
+
+    pool_quality_tags = _to_list_of_str(pool_quality.get("pool_quality_tags"))
+    return pool_quality_bonus, round(pool_quality_score, 4), pool_quality_tags
 
 
 def _resolve_alpha_multiplier(alpha_features: Mapping[str, Any], bonus: float) -> float:

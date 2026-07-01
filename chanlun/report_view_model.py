@@ -117,6 +117,10 @@ def _safe_int(value: Any, *, default: int | None = None) -> int | None:
     return i
 
 
+def _clamp(value: float | int, low: float, high: float) -> float:
+    return max(low, min(float(high), float(value)))
+
+
 def _to_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
@@ -230,6 +234,7 @@ def _resolve_distance_pct(item: Mapping[str, Any], source: str | None = None) ->
         return None
     return round((current_price - reference_price) / reference_price * 100, 2)
 
+
 def _sorted_sources(sources: Iterable[str]) -> list[str]:
     return sorted(set(sources), key=lambda s: SOURCE_RANK.get(s, 99))
 
@@ -294,6 +299,100 @@ def _extract_confirming_metrics(item: Mapping[str, Any]) -> dict[str, float | No
         "reference_price": _resolve_reference_price(item),
         "distance": _resolve_distance_pct(item),
         "primary_reason": _safe_str(item.get("watch_reason")) or _safe_str(item.get("startup_reason")) or _safe_str(item.get("reason")),
+    }
+
+
+def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = None) -> dict[str, Any]:
+    row = _to_dict(item)
+
+    code = _safe_str(row.get("code"))
+    volumes = _to_float_list(row.get("volumes"))
+    recent = volumes[-20:] if volumes else []
+    volume20 = round(sum(recent) / len(recent), 4) if recent else 0.0
+
+    volume_ratio20 = _safe_float(row.get("volume_ratio"), default=0.0)
+    if volume_ratio20 is None:
+        volume_ratio20 = 0.0
+    if volume_ratio20 <= 0 and len(recent) >= 2:
+        prev20 = recent[:-1]
+        prev_avg = sum(prev20) / len(prev20) if prev20 else 0.0
+        if prev_avg > 0:
+            volume_ratio20 = round(recent[-1] / prev_avg, 4)
+
+    liquidity_score = 0.0
+    if volume_ratio20 > 0 and volume20 > 0:
+        # 0.2x and below treated as weak liquidity; 2.2x and above treated as high.
+        liquidity_score = round(_clamp((volume_ratio20 - 0.2) / 2.0 * 100.0, 0.0, 100.0), 4)
+    elif volume20 > 0:
+        # Fall back to absolute throughput if ratio is missing.
+        liquidity_score = round(_clamp(volume20 / 2_000_000.0 * 100.0, 0.0, 100.0), 4)
+
+    growth_board_score = 0.0
+    growth_board_label = ""
+    if code.startswith(("300", "301")):
+        growth_board_score = 90.0
+        growth_board_label = "创业板弹性"
+    elif code.startswith(("688", "689")):
+        growth_board_score = 75.0
+        growth_board_label = "科创弹性"
+    elif code.startswith("002"):
+        growth_board_score = 55.0
+        growth_board_label = "中小成长"
+
+    sector_rank = _safe_float(row.get("sector_rank"))
+    sector_flow = _safe_float(row.get("sector_flow"))
+    change_pct = _safe_float(row.get("change_pct"))
+
+    sector_rank_score = 0.0
+    if sector_rank is not None:
+        if sector_rank <= 1:
+            sector_rank_score = 100.0
+        elif sector_rank <= 3:
+            sector_rank_score = 90.0
+        elif sector_rank <= 6:
+            sector_rank_score = 70.0
+        elif sector_rank <= 10:
+            sector_rank_score = 50.0
+        elif sector_rank <= 20:
+            sector_rank_score = 30.0
+
+    # 资金流是绝对值口径，使用轻度归一化。
+    sector_flow_score = 0.0
+    if sector_flow is not None and sector_flow > 0:
+        sector_flow_score = round(_clamp((sector_flow / 3_000_000_000.0) * 100.0, 0.0, 100.0), 4)
+
+    sector_momentum_score = 0.0
+    if change_pct is not None and change_pct > 0:
+        sector_momentum_score = round(_clamp(change_pct * 12.0, 0.0, 100.0), 4)
+
+    sector_quality_score = round(
+        (sector_rank_score * 0.45 + sector_flow_score * 0.35 + sector_momentum_score * 0.20),
+        4,
+    )
+
+    pool_quality_score = round(
+        (liquidity_score * 0.45 + growth_board_score * 0.25 + sector_quality_score * 0.30),
+        4,
+    )
+
+    pool_quality_tags: list[str] = []
+    if liquidity_score >= 70:
+        pool_quality_tags.append("流动性充足")
+    if growth_board_label:
+        pool_quality_tags.append(growth_board_label)
+    if sector_quality_score >= 70:
+        pool_quality_tags.append("板块质量上行")
+
+    # Keep source param for compatibility with potential caller expectations.
+    return {
+        "volume20": volume20,
+        "volume_ratio20": volume_ratio20,
+        "liquidity_score": liquidity_score,
+        "growth_board_score": growth_board_score,
+        "growth_board_label": growth_board_label,
+        "sector_quality_score": sector_quality_score,
+        "pool_quality_score": pool_quality_score,
+        "pool_quality_tags": pool_quality_tags,
     }
 
 
@@ -552,6 +651,7 @@ def _build_item(
     preferred_raw = by_source[preferred]
 
     primary_raw_metrics = _primary_metric_bundle(preferred_raw, preferred)
+    pool_quality = _build_pool_quality_features(preferred_raw, preferred)
     if not primary_reason:
         primary_reason = _safe_str(primary_raw_metrics.get("primary_reason"))
 
@@ -561,6 +661,7 @@ def _build_item(
         by_source,
         data_quality=data_quality,
         risk_flags=all_risk_flags,
+        pool_quality=pool_quality,
     )
 
     action, action_reason = _action_and_reason(ordered_sources, all_risk_flags, "main" in ordered_sources)
@@ -579,6 +680,7 @@ def _build_item(
         "opportunity_score": opportunity_score,
         "action": action,
         "action_reason": action_reason,
+        "pool_quality": pool_quality,
         "change_pct": metrics.get("change_pct"),
         "reference_price": metrics.get("reference_price"),
         "current_price": metrics.get("current_price"),
@@ -598,10 +700,13 @@ def _compute_watch_score(
     by_source: dict[str, Mapping[str, Any]],
     data_quality: Mapping[str, Any] | None = None,
     risk_flags: Iterable[str] | None = None,
+    pool_quality: Mapping[str, Any] | None = None,
 ) -> tuple[int, Dict[str, Any]]:
     ordered_sources = _sorted_sources(sources)
     base_source = ordered_sources[0]
     primary_metrics = _primary_metric_bundle(primary_raw, base_source)
+    pool_quality_dict = _to_dict(pool_quality)
+
     watch_score, trace = compute_opportunity_score(
         primary_raw,
         base_source,
@@ -612,6 +717,7 @@ def _compute_watch_score(
             "metrics": primary_metrics,
             "risk_flags": list(risk_flags or []),
             "source_count": len(ordered_sources),
+            "alpha_features": {"pool_quality": pool_quality_dict},
         },
     )
     trace["selected_reason"] = _build_selected_reason(base_source, ordered_sources)

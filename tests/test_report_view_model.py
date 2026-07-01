@@ -322,6 +322,67 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("半导体", sector_labels)
         self.assertIn("AI", sector_labels)
 
+    def test_pool_quality_growth_board_labels(self):
+        report_data = _report_data(
+            {
+                "picks_fusion": [
+                    _fusion_pick(code="300001", name="创业票", score=30),
+                    _fusion_pick(code="688001", name="科创票", score=40),
+                    _fusion_pick(code="002001", name="二级票", score=50),
+                    _fusion_pick(code="600001", name="大盘票", score=20),
+                ]
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        main_items = {item["code"]: item["pool_quality"] for item in workspace["views"]["main"]}
+
+        self.assertIn("创业板弹性", main_items["300001"]["pool_quality_tags"])
+        self.assertIn("科创弹性", main_items["688001"]["pool_quality_tags"])
+        self.assertIn("中小成长", main_items["002001"]["pool_quality_tags"])
+        self.assertEqual(main_items["600001"]["growth_board_score"], 0.0)
+        self.assertEqual(main_items["600001"]["growth_board_label"], "")
+
+    def test_pool_quality_does_not_penalize_large_codes(self):
+        report_data = _report_data(
+            {
+                "picks_fusion": [
+                    _fusion_pick(code="600000", name="主板票", score=25),
+                    _fusion_pick(code="000001", name="指数级码", score=26),
+                ]
+            }
+        )
+
+        workspace = build_workspace(report_data)
+        main_items = {item["code"]: item["pool_quality"] for item in workspace["views"]["main"]}
+
+        self.assertEqual(main_items["600000"]["growth_board_score"], 0.0)
+        self.assertEqual(main_items["600000"]["growth_board_label"], "")
+        self.assertEqual(main_items["000001"]["growth_board_score"], 0.0)
+        self.assertEqual(main_items["000001"]["growth_board_label"], "")
+
+    def test_pool_quality_handles_missing_volume_gracefully(self):
+        pick = _fusion_pick(code="600033", name="缺数据票", score=33)
+        pick.pop("volumes", None)
+
+        report_data = _report_data({"picks_fusion": [pick]})
+        workspace = build_workspace(report_data)
+        pool_quality = workspace["views"]["main"][0]["pool_quality"]
+
+        self.assertEqual(pool_quality["volume20"], 0.0)
+        self.assertEqual(pool_quality["volume_ratio20"], 0.0)
+        self.assertEqual(pool_quality["liquidity_score"], 0.0)
+
+    def test_workspace_item_exposes_pool_quality(self):
+        report_data = _report_data({"picks_fusion": [_fusion_pick(code="600034", name="池质量可视", score=44)]})
+        workspace = build_workspace(report_data)
+        item = workspace["views"]["main"][0]
+
+        self.assertIn("pool_quality", item)
+        self.assertIn("volume20", item["pool_quality"])
+        self.assertIn("pool_quality_score", item["pool_quality"])
+        self.assertIsInstance(item["pool_quality"]["pool_quality_tags"], list)
+
     def test_workspace_data_badges_reflect_stale_status(self):
         pick = _fusion_pick(code="600006", name="延时票")
         pick["data_status"] = {"daily": "stale_cache"}

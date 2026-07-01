@@ -27,18 +27,19 @@ if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
 from chanlun.backtest_execution import evaluate_forward_returns  # noqa: E402
+from chanlun.report_view_model import _build_pool_quality_features  # noqa: E402
 from chanlun.scoring_engine import compute_opportunity_score  # noqa: E402
 
 
 SOURCE_RANK = {
-    "main": 0,
-    "acceleration": 1,
-    "luojie": 2,
-    "confirming": 3,
+    "highlights": 0,
+    "main": 1,
+    "acceleration": 2,
+    "luojie": 3,
     "baseline": 4,
 }
 
-DEFAULT_SOURCES = ("main", "acceleration", "luojie", "confirming")
+DEFAULT_SOURCES = ("highlights", "main", "acceleration", "luojie")
 ALL_SOURCES = DEFAULT_SOURCES + ("baseline",)
 
 
@@ -126,7 +127,34 @@ def _normalize_source_items(items: Iterable[Mapping[str, Any]]) -> dict[str, Map
     return by_code
 
 
+def _workspace_source(item: Mapping[str, Any], fallback: str) -> str:
+    rank_trace = _to_dict(item.get("rank_trace"))
+    source = _safe_str(rank_trace.get("base_source")) or _safe_str(item.get("base_source")) or fallback
+    if source == "highlights":
+        return "main"
+    return source
+
+
+def _normalize_workspace_views(workspace_views: Mapping[str, Any]) -> dict[str, dict[str, Mapping[str, Any]]]:
+    by_source: dict[str, dict[str, Mapping[str, Any]]] = {source: {} for source in ALL_SOURCES}
+    for view, rows in workspace_views.items():
+        for item in _safe_list(rows):
+            row = _to_dict(item)
+            code = _candidate_code(row)
+            if not code:
+                continue
+            source = _workspace_source(row, str(view))
+            bucket = by_source.setdefault(source, {})
+            bucket.setdefault(code, row)
+    return by_source
+
+
 def _source_items(report: Mapping[str, Any]) -> dict[str, dict[str, Mapping[str, Any]]]:
+    workspace = _to_dict(report.get("workspace"))
+    workspace_views = _to_dict(workspace.get("views"))
+    if workspace_views:
+        return _normalize_workspace_views(workspace_views)
+
     next_day_boom = _to_dict(report.get("next_day_boom"))
     luojie_pool = _to_dict(report.get("luojie_pool"))
     boom_candidates = _safe_list(next_day_boom.get("candidates"))
@@ -134,10 +162,10 @@ def _source_items(report: Mapping[str, Any]) -> dict[str, dict[str, Mapping[str,
         boom_candidates = []
 
     return {
+        "highlights": {},
         "main": _normalize_source_items(_safe_list(report.get("picks_fusion"))),
         "acceleration": _normalize_source_items(boom_candidates),
         "luojie": _normalize_source_items(_safe_list(luojie_pool.get("candidates"))),
-        "confirming": _normalize_source_items(_safe_list(report.get("startup_watchlist"))),
         "baseline": _normalize_source_items(_safe_list(report.get("picks_pure"))),
     }
 
@@ -213,6 +241,14 @@ def _score_candidate(
     data_quality: Any,
     alpha_enabled: bool,
 ) -> tuple[int, dict[str, Any]]:
+    pool_quality = _to_dict(primary_raw.get("pool_quality"))
+    if not pool_quality:
+        rank_trace = _to_dict(primary_raw.get("rank_trace"))
+        alpha_features = _to_dict(rank_trace.get("alpha_features"))
+        pool_quality = _to_dict(alpha_features.get("pool_quality"))
+    if not pool_quality:
+        pool_quality = _build_pool_quality_features(primary_raw, primary_source)
+
     return compute_opportunity_score(
         primary_raw,
         primary_source,
@@ -222,6 +258,7 @@ def _score_candidate(
             "data_quality": data_quality,
             "source_count": len(sources),
             "alpha_enabled": alpha_enabled,
+            "alpha_features": {"pool_quality": pool_quality},
         },
     )
 
@@ -321,6 +358,7 @@ def _summarize(candidates: Iterable[Candidate], field: str) -> dict[str, Any]:
         "n_evaluable": len(values),
         "mean": round(mean(values), 2) if values else None,
         "median": round(median(values), 2) if values else None,
+        "worst_return": round(min(values), 2) if values else None,
         "win_rate": round(wins / len(values) * 100, 1) if values else None,
         "loss_5pct_rate": round(loss5 / len(values) * 100, 1) if values else None,
         "max_drawdown": round(min(drawdowns), 2) if drawdowns else None,
@@ -343,11 +381,44 @@ def _format_pct(value: float | None) -> str:
 
 def _print_summary(title: str, summary: Mapping[str, Any]) -> None:
     print(f"{title}:")
+    n_selected = summary.get("n_selected", 0)
+    n_evaluable = summary.get("n_evaluable", 0)
+    mean = summary.get("mean", "None")
+    median = summary.get("median", "None")
+    win_rate = summary.get("win_rate", "None")
+    loss_5pct_rate = summary.get("loss_5pct_rate", "None")
+    worst = summary.get("worst_return", "None")
+    max_drawdown = summary.get("max_drawdown", "None")
+    max_dd_mean = summary.get("max_dd_mean", "None")
     print(
-        "  selected={n_selected} evaluable={n_evaluable} mean={mean}% "
-        "median={median}% win={win_rate}% loss<=-5%={loss_5pct_rate}% "
-        "max_drawdown={max_drawdown}% max_dd_mean={max_dd_mean}%".format(**summary)
+        f"  selected={n_selected} evaluable={n_evaluable} mean={mean}% "
+        f"median={median}% worst={worst}% win={win_rate}% loss<=-5%={loss_5pct_rate}% "
+        f"max_drawdown={max_drawdown}% max_dd_mean={max_dd_mean}%"
     )
+
+
+def _print_t1_summary(title: str, summary: Mapping[str, Any]) -> None:
+    skipped = int(summary.get("n_selected", 0) - summary.get("n_evaluable", 0))
+    n_evaluable = summary.get("n_evaluable", 0)
+    mean = summary.get("mean", "None")
+    median = summary.get("median", "None")
+    worst = summary.get("worst_return", "None")
+    win_rate = summary.get("win_rate", "None")
+    print(f"{title} (T+1):")
+    print(
+        f"  evaluated={n_evaluable} skipped_no_next_day={skipped} "
+        f"mean_t1={mean}% median_t1={median}% worst_t1={worst}% win_rate_t1={win_rate}%"
+    )
+
+
+def _print_switched_in_examples(switched_in: list[Candidate], metric: str, details: int) -> None:
+    print("Top switched-in winners:")
+    switched_in_with_score = [c for c in switched_in if _metric(c, metric) is not None]
+    for candidate in sorted(switched_in_with_score, key=lambda c: _metric(c, metric) or -999, reverse=True)[:details]:
+        print(f"  {_sample_label(candidate, metric)}")
+    print("Top switched-in losers:")
+    for candidate in sorted(switched_in_with_score, key=lambda c: _metric(c, metric) or 999)[:details]:
+        print(f"  {_sample_label(candidate, metric)}")
 
 
 def _top_rows(rows: Iterable[Candidate], score_field: str, top_k: int) -> list[Candidate]:
@@ -368,6 +439,7 @@ def _alpha_factor_hits(features: Mapping[str, Any]) -> dict[str, bool]:
     market_regime = _to_dict(alpha_features.get("market_regime_factor"))
     sector_strength = _to_dict(alpha_features.get("sector_strength_factor"))
     breakout_quality = _to_dict(alpha_features.get("breakout_quality"))
+    pool_quality = _to_dict(alpha_features.get("pool_quality"))
     momentum = _safe_float(alpha_features.get("momentum_persistence"))
 
     market_regime_values = [_safe_float(v) for v in market_regime.values()]
@@ -390,6 +462,14 @@ def _alpha_factor_hits(features: Mapping[str, Any]) -> dict[str, bool]:
         "sector_strength": any(v is not None and v > 0 for v in sector_strength_values),
         "momentum_persistence": momentum is not None and momentum > 0,
         "breakout_quality": breakout_hit,
+        "pool_quality": any(
+            score is not None and score > 0
+            for score in (
+                _safe_float(pool_quality.get("liquidity_score")),
+                _safe_float(pool_quality.get("growth_board_score")),
+                _safe_float(pool_quality.get("sector_quality_score")),
+            )
+        ),
     }
 
 
@@ -398,7 +478,19 @@ def _collect_alpha_hits(
 ) -> tuple[int, float | None, float | None, dict[str, int], dict[str, list[Candidate]]]:
     rows = list(candidates)
     if not rows:
-        return 0, None, None, {"market_regime": 0, "sector_strength": 0, "momentum_persistence": 0, "breakout_quality": 0}, defaultdict(list)
+        return (
+            0,
+            None,
+            None,
+            {
+                "market_regime": 0,
+                "sector_strength": 0,
+                "momentum_persistence": 0,
+                "breakout_quality": 0,
+                "pool_quality": 0,
+            },
+            defaultdict(list),
+        )
 
     bonuses = [c.alpha_bonus for c in rows]
     total = len(rows)
@@ -408,6 +500,7 @@ def _collect_alpha_hits(
         "sector_strength": 0,
         "momentum_persistence": 0,
         "breakout_quality": 0,
+        "pool_quality": 0,
     }
     factor_samples: dict[str, list[Candidate]] = defaultdict(list)
 
@@ -483,6 +576,7 @@ def run(args: argparse.Namespace) -> int:
     total_candidates = 0
     skipped_no_return = 0
     skipped_days = 0
+    rank_changes: list[tuple[int, int, int]] = []
 
     for day, report in reports:
         candidates, skipped = _build_candidates(
@@ -516,6 +610,8 @@ def run(args: argparse.Namespace) -> int:
             overlap = len(before_codes & after_codes)
             day_diffs.append((day, before_mean, after_mean, after_mean - before_mean, overlap))
 
+        rank_changes.append((len(before_codes & after_codes), len(after_codes - before_codes), len(before_codes - after_codes)))
+
     print("===== SCORING ALPHA IMPACT BACKTEST =====")
     print(f"data_dir={args.data_dir}")
     print(f"sources={','.join(allowed_sources)} top_k={args.top_k} metric={args.metric}")
@@ -524,6 +620,38 @@ def run(args: argparse.Namespace) -> int:
     print(f"candidate_universe={total_candidates} skipped_no_forward_return={skipped_no_return}")
     print()
 
+    t1_before_summary = _summarize(all_before, "t1_close_pct")
+    t1_after_summary = _summarize(all_after, "t1_close_pct")
+    _print_t1_summary("Before alpha", t1_before_summary)
+    _print_t1_summary("After alpha", t1_after_summary)
+    if t1_before_summary.get("mean") is not None and t1_after_summary.get("mean") is not None:
+        delta = float(t1_after_summary["mean"]) - float(t1_before_summary["mean"])
+        print(f"Mean delta: {delta:+.2f} pct points")
+    if t1_before_summary.get("win_rate") is not None and t1_after_summary.get("win_rate") is not None:
+        delta = float(t1_after_summary["win_rate"]) - float(t1_before_summary["win_rate"])
+        print(f"Win-rate delta: {delta:+.1f} pct points")
+    print()
+
+    switched_in_summary = _summarize(switched_in, "t1_close_pct")
+    switched_out_summary = _summarize(switched_out, "t1_close_pct")
+    _print_t1_summary("Switched in by alpha", switched_in_summary)
+    _print_t1_summary("Switched out by alpha", switched_out_summary)
+    if switched_in_summary.get("mean") is not None and switched_out_summary.get("mean") is not None:
+        delta = float(switched_in_summary["mean"]) - float(switched_out_summary["mean"])
+        print(f"Switch contribution delta: {delta:+.2f} pct points")
+    print()
+
+    if rank_changes:
+        total_overlap = sum(item[0] for item in rank_changes)
+        total_switched_in = sum(item[1] for item in rank_changes)
+        total_switched_out = sum(item[2] for item in rank_changes)
+        print(
+            f"Ranking changes: days={len(rank_changes)} avg_overlap={total_overlap / len(rank_changes):.2f}/"
+            f"{args.top_k} total_switched_in={total_switched_in} total_switched_out={total_switched_out}"
+        )
+        print()
+
+    print("Metric summary:")
     before_summary = _summarize(all_before, args.metric)
     after_summary = _summarize(all_after, args.metric)
     _print_summary("Before alpha", before_summary)
@@ -534,15 +662,6 @@ def run(args: argparse.Namespace) -> int:
     if before_summary.get("win_rate") is not None and after_summary.get("win_rate") is not None:
         delta = float(after_summary["win_rate"]) - float(before_summary["win_rate"])
         print(f"Win-rate delta: {delta:+.1f} pct points")
-    print()
-
-    switched_in_summary = _summarize(switched_in, args.metric)
-    switched_out_summary = _summarize(switched_out, args.metric)
-    _print_summary("Switched in by alpha", switched_in_summary)
-    _print_summary("Switched out by alpha", switched_out_summary)
-    if switched_in_summary.get("mean") is not None and switched_out_summary.get("mean") is not None:
-        delta = float(switched_in_summary["mean"]) - float(switched_out_summary["mean"])
-        print(f"Switch contribution delta: {delta:+.2f} pct points")
     print()
 
     _format_alpha_stats("Before alpha", all_before, args.metric)
@@ -566,15 +685,9 @@ def run(args: argparse.Namespace) -> int:
             print(f"  {day}: before={before_mean:.2f}% after={after_mean:.2f}% delta={delta:+.2f}% overlap={overlap}")
         print()
 
-    print("Top switched-in winners:")
-    switched_in_winners = [c for c in switched_in if _metric(c, args.metric) is not None]
-    for candidate in sorted(switched_in_winners, key=lambda c: _metric(c, args.metric) or -999, reverse=True)[: args.details]:
-        print(f"  {_sample_label(candidate, args.metric)}")
-    print("Top switched-in losers:")
-    for candidate in sorted(switched_in_winners, key=lambda c: _metric(c, args.metric) or 999)[: args.details]:
-        print(f"  {_sample_label(candidate, args.metric)}")
-
-    _format_alpha_rank_examples(all_after, args.metric, args.details)
+    _print_switched_in_examples(switched_in, "t1_close_pct", args.details)
+    if all_after:
+        _format_alpha_rank_examples(all_after, "t1_close_pct", args.details)
 
     return 0
 

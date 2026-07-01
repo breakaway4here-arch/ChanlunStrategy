@@ -249,7 +249,110 @@ class TestScoringEngine(unittest.TestCase):
         score, trace = compute_opportunity_score(item, "main", context)
         self.assertEqual(score, trace["base_opportunity_score"])
         self.assertEqual(trace["alpha_bonus"], 0)
+        self.assertEqual(trace["pool_quality_bonus"], 0)
+        self.assertEqual(trace["pool_quality_score"], 0)
+        self.assertEqual(trace["pool_quality_tags"], [])
         self.assertEqual(trace["alpha_multiplier"], 1.0)
+
+    def test_alpha_without_pool_quality_is_unchanged(self):
+        item = {"score": 50, "change_pct": 4.0, "best_buy_point": {"distance_from_reference_pct": 1.2}}
+        base_context = {
+            "alpha_enabled": True,
+            "source_count": 1,
+            "market": {"index_trend_score": 45, "breadth_score": 55},
+            "data_quality": {"market_status": "verified"},
+        }
+
+        _, trace_without_pool_quality = compute_opportunity_score(item, "main", base_context)
+        _, trace_with_pool_quality = compute_opportunity_score(
+            item,
+            "main",
+            {
+                **base_context,
+                "alpha_features": {"pool_quality": None},
+            },
+        )
+
+        self.assertEqual(trace_without_pool_quality["alpha_bonus"], trace_with_pool_quality["alpha_bonus"])
+        self.assertEqual(trace_with_pool_quality["pool_quality_bonus"], 0)
+        self.assertEqual(trace_with_pool_quality["pool_quality_score"], 0)
+        self.assertEqual(trace_with_pool_quality["pool_quality_tags"], [])
+
+    def test_alpha_pool_quality_small_positive_bonus(self):
+        item = {"score": 45}
+        _, trace = compute_opportunity_score(
+            item,
+            "main",
+            {
+                "alpha_enabled": True,
+                "source_count": 1,
+                "alpha_features": {
+                    "pool_quality": {
+                        "liquidity_score": 60,
+                        "growth_board_score": 80,
+                        "sector_quality_score": 50,
+                        "pool_quality_score": 70,
+                        "pool_quality_tags": ["liquidity", "growth", "sector"],
+                    },
+                },
+                "data_quality": {"market_status": "verified"},
+            },
+        )
+
+        self.assertAlmostEqual(trace["pool_quality_bonus"], 0.6 * 1.2 + 0.8 * 1.0 + 0.5 * 0.8, places=6)
+        self.assertEqual(trace["pool_quality_bonus"], trace["alpha_bonus"])
+        self.assertEqual(trace["pool_quality_score"], 70)
+        self.assertEqual(trace["pool_quality_tags"], ["liquidity", "growth", "sector"])
+        self.assertGreater(trace["alpha_bonus"], 0)
+
+    def test_alpha_pool_quality_extreme_values_are_clamped(self):
+        _, trace = compute_opportunity_score(
+            {
+                "score": 30,
+                "best_buy_point": {"distance_from_reference_pct": 1.0},
+            },
+            "main",
+            {
+                "alpha_enabled": True,
+                "source_count": 1,
+                "alpha_features": {
+                    "pool_quality": {
+                        "liquidity_score": 9999,
+                        "growth_board_score": 9999,
+                        "sector_quality_score": 9999,
+                        "pool_quality_score": 9999,
+                    },
+                },
+            },
+        )
+
+        self.assertEqual(trace["pool_quality_bonus"], 3.0)
+        self.assertEqual(trace["pool_quality_score"], 100)
+
+    def test_alpha_pool_quality_bonus_is_subject_to_global_limit(self):
+        _, trace = compute_opportunity_score(
+            {
+                "score": 30,
+                "best_buy_point": {"distance_from_reference_pct": 1.2},
+            },
+            "main",
+            {
+                "alpha_enabled": True,
+                "source_count": 1,
+                "market": {"index_trend_score": 120, "breadth_score": 100, "market_regime_factor": 120},
+                "alpha_features": {
+                    "pool_quality": {
+                        "liquidity_score": 100,
+                        "growth_board_score": 100,
+                        "sector_quality_score": 100,
+                    },
+                },
+                "data_quality": {"market_status": "verified"},
+            },
+        )
+
+        self.assertEqual(trace["alpha_bonus"], ALPHA_BONUS_LIMIT)
+        self.assertEqual(trace["pool_quality_bonus"], 3.0)
 
     def test_context_risk_flags_are_respected(self):
         _, trace = compute_opportunity_score(
