@@ -54,6 +54,7 @@ class Candidate:
     score_delta: int
     alpha_bonus: float
     alpha_multiplier: float
+    alpha_features: Mapping[str, Any]
     returns: dict[str, Any] | None
 
 
@@ -80,6 +81,13 @@ def _to_dict(value: Any) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {}
+
+
+def _safe_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
 
 
 def _load_daily_reports(data_dir: str) -> list[tuple[str, dict[str, Any]]]:
@@ -275,6 +283,7 @@ def _build_candidates(
                 score_delta=after_score - before_score,
                 alpha_bonus=float(after_trace.get("alpha_bonus") or 0.0),
                 alpha_multiplier=float(after_trace.get("alpha_multiplier") or 1.0),
+                alpha_features=_to_dict(after_trace.get("alpha_features")),
                 returns=returns,
             )
         )
@@ -291,10 +300,18 @@ def _metric(candidate: Candidate, field: str) -> float | None:
 def _summarize(candidates: Iterable[Candidate], field: str) -> dict[str, Any]:
     rows = list(candidates)
     values: list[float] = []
+    drawdowns: list[float] = []
+    dd3_values: list[float] = []
     for candidate in rows:
         value = _metric(candidate, field)
         if value is not None:
             values.append(value)
+        max_drawdown = _metric(candidate, "max_drawdown")
+        if max_drawdown is not None:
+            drawdowns.append(max_drawdown)
+        max_dd_3d = _metric(candidate, "max_dd_3d")
+        if max_dd_3d is not None:
+            dd3_values.append(max_dd_3d)
     if not rows:
         return {"n_selected": 0, "n_evaluable": 0}
     wins = sum(1 for v in values if v > 0)
@@ -306,6 +323,8 @@ def _summarize(candidates: Iterable[Candidate], field: str) -> dict[str, Any]:
         "median": round(median(values), 2) if values else None,
         "win_rate": round(wins / len(values) * 100, 1) if values else None,
         "loss_5pct_rate": round(loss5 / len(values) * 100, 1) if values else None,
+        "max_drawdown": round(min(drawdowns), 2) if drawdowns else None,
+        "max_dd_mean": round(mean(dd3_values), 2) if dd3_values else None,
     }
 
 
@@ -326,7 +345,8 @@ def _print_summary(title: str, summary: Mapping[str, Any]) -> None:
     print(f"{title}:")
     print(
         "  selected={n_selected} evaluable={n_evaluable} mean={mean}% "
-        "median={median}% win={win_rate}% loss<=-5%={loss_5pct_rate}%".format(**summary)
+        "median={median}% win={win_rate}% loss<=-5%={loss_5pct_rate}% "
+        "max_drawdown={max_drawdown}% max_dd_mean={max_dd_mean}%".format(**summary)
     )
 
 
@@ -341,6 +361,110 @@ def _sample_label(candidate: Candidate, field: str) -> str:
         f"after={candidate.after_score} alpha=+{candidate.alpha_bonus:.2f}/x{candidate.alpha_multiplier:.3f} "
         f"{field}={_format_pct(_metric(candidate, field))}"
     )
+
+
+def _alpha_factor_hits(features: Mapping[str, Any]) -> dict[str, bool]:
+    alpha_features = _to_dict(features)
+    market_regime = _to_dict(alpha_features.get("market_regime_factor"))
+    sector_strength = _to_dict(alpha_features.get("sector_strength_factor"))
+    breakout_quality = _to_dict(alpha_features.get("breakout_quality"))
+    momentum = _safe_float(alpha_features.get("momentum_persistence"))
+
+    market_regime_values = [_safe_float(v) for v in market_regime.values()]
+    sector_strength_values = [_safe_float(v) for v in sector_strength.values()]
+
+    volume_ratio = _safe_float(breakout_quality.get("volume_ratio"))
+    confirmed_by = _safe_str(breakout_quality.get("confirmed_by"))
+    distance = _safe_float(breakout_quality.get("distance"))
+
+    breakout_hit = False
+    if volume_ratio is not None and volume_ratio >= 1.0:
+        breakout_hit = True
+    if confirmed_by and ("30" in confirmed_by or "确认" in confirmed_by) and "等待确认" not in confirmed_by:
+        breakout_hit = True
+    if distance is not None and abs(distance) <= 5.0:
+        breakout_hit = True
+
+    return {
+        "market_regime": any(v is not None and v > 0 for v in market_regime_values),
+        "sector_strength": any(v is not None and v > 0 for v in sector_strength_values),
+        "momentum_persistence": momentum is not None and momentum > 0,
+        "breakout_quality": breakout_hit,
+    }
+
+
+def _collect_alpha_hits(
+    candidates: Iterable[Candidate],
+) -> tuple[int, float | None, float | None, dict[str, int], dict[str, list[Candidate]]]:
+    rows = list(candidates)
+    if not rows:
+        return 0, None, None, {"market_regime": 0, "sector_strength": 0, "momentum_persistence": 0, "breakout_quality": 0}, defaultdict(list)
+
+    bonuses = [c.alpha_bonus for c in rows]
+    total = len(rows)
+    hit_count = sum(1 for c in rows if c.alpha_bonus > 0)
+    factor_hits: dict[str, int] = {
+        "market_regime": 0,
+        "sector_strength": 0,
+        "momentum_persistence": 0,
+        "breakout_quality": 0,
+    }
+    factor_samples: dict[str, list[Candidate]] = defaultdict(list)
+
+    for candidate in rows:
+        for factor, hit in _alpha_factor_hits(candidate.alpha_features).items():
+            if hit:
+                factor_hits[factor] += 1
+                factor_samples[factor].append(candidate)
+
+    return (
+        hit_count,
+        round(mean(bonuses), 4) if bonuses else None,
+        round(median(bonuses), 4) if bonuses else None,
+        factor_hits,
+        factor_samples,
+    )
+
+
+def _format_alpha_stats(title: str, candidates: Iterable[Candidate], metric: str) -> None:
+    rows = list(candidates)
+    if not rows:
+        print(f"{title} alpha diagnostics: no candidates")
+        print()
+        return
+
+    hit_count, avg_bonus, median_bonus, factor_hits, factor_samples = _collect_alpha_hits(rows)
+    total = len(rows)
+    hit_rate = round(hit_count / total * 100, 1) if total else 0.0
+    print(f"{title} alpha diagnostics:")
+    print(
+        f"  n_candidates={total} alpha_hit={hit_count} hit_rate={hit_rate}% "
+        f"avg_alpha_bonus={avg_bonus if avg_bonus is not None else 'None'} "
+        f"median_alpha_bonus={median_bonus if median_bonus is not None else 'None'}"
+    )
+    for factor, count in sorted(factor_hits.items()):
+        rate = round(count / total * 100, 1) if total else 0.0
+        print(f"  factor={factor} hit={count} hit_rate={rate}%")
+        hits = factor_samples.get(factor, [])
+        if hits:
+            top_samples = sorted(hits, key=lambda c: c.alpha_bonus, reverse=True)[:3]
+            for sample in top_samples:
+                print(f"    sample: {_sample_label(sample, metric)}")
+    print()
+
+
+def _format_alpha_rank_examples(candidates: Iterable[Candidate], metric: str, top_k: int) -> None:
+    rows = [c for c in candidates if c.alpha_bonus != 0]
+    if not rows:
+        print("Top alpha bonus samples: none")
+        return
+    print("Top alpha bonus samples:")
+    print("  Top winners:")
+    for candidate in sorted(rows, key=lambda c: c.alpha_bonus, reverse=True)[:top_k]:
+        print(f"  {_sample_label(candidate, metric)}")
+    print("  Lowest bonus:")
+    for candidate in sorted(rows, key=lambda c: c.alpha_bonus)[:top_k]:
+        print(f"  {_sample_label(candidate, metric)}")
 
 
 def run(args: argparse.Namespace) -> int:
@@ -421,6 +545,12 @@ def run(args: argparse.Namespace) -> int:
         print(f"Switch contribution delta: {delta:+.2f} pct points")
     print()
 
+    _format_alpha_stats("Before alpha", all_before, args.metric)
+    _format_alpha_stats("After alpha", all_after, args.metric)
+    _format_alpha_stats("Switched in by alpha", switched_in, args.metric)
+    _format_alpha_stats("Switched out by alpha", switched_out, args.metric)
+    print()
+
     if day_diffs:
         avg_overlap = mean(row[4] for row in day_diffs)
         improved = sum(1 for row in day_diffs if row[3] > 0)
@@ -443,6 +573,8 @@ def run(args: argparse.Namespace) -> int:
     print("Top switched-in losers:")
     for candidate in sorted(switched_in_winners, key=lambda c: _metric(c, args.metric) or 999)[: args.details]:
         print(f"  {_sample_label(candidate, args.metric)}")
+
+    _format_alpha_rank_examples(all_after, args.metric, args.details)
 
     return 0
 

@@ -90,12 +90,17 @@ def _count_fusion_startups(picks_fusion):
 def _build_candidate_from_fusion(pick, bp, market_change_pct):
     change_pct = _num(bp.get("change_pct"))
     volume_ratio = _num(bp.get("volume_ratio"))
+    confirmations = _to_list_of_str(bp.get("confirmations"))
+    confirmed_by = _safe_str(bp.get("confirmed_by"), default="")
+    ma_bullish = _safe_bool(pick.get("ma_bullish"), default=False)
     score, reasons = _score_startup(
         source_pool="fusion",
         change_pct=change_pct,
         volume_ratio=volume_ratio,
-        ma_bullish=bool(pick.get("ma_bullish")),
+        ma_bullish=ma_bullish,
         startup_signals=bp.get("startup_signals") or [],
+        confirmations=confirmations,
+        confirmed_by=confirmed_by,
     )
     return {
         "code": pick.get("code", ""),
@@ -109,10 +114,10 @@ def _build_candidate_from_fusion(pick, bp, market_change_pct):
         "change_pct": change_pct,
         "volume_ratio": volume_ratio,
         "market_change_pct": market_change_pct,
-        "ma_bullish": bool(pick.get("ma_bullish")),
+        "ma_bullish": ma_bullish,
         "startup_reason": bp.get("startup_reason") or bp.get("reason", ""),
-        "confirmed_by": bp.get("confirmed_by", ""),
-        "confirmations": bp.get("confirmations", []),
+        "confirmed_by": confirmed_by,
+        "confirmations": confirmations,
         "reference_price": bp.get("price"),
     }
 
@@ -120,12 +125,17 @@ def _build_candidate_from_fusion(pick, bp, market_change_pct):
 def _build_candidate_from_watch(item, market_change_pct):
     change_pct = _num(item.get("change_pct"))
     volume_ratio = _num(item.get("volume_ratio"))
+    confirmations = _to_list_of_str(item.get("confirmations"))
+    confirmed_by = _safe_str(item.get("confirmed_by"), default="")
+    ma_bullish = _safe_bool(item.get("ma_bullish"), default=False)
     score, reasons = _score_startup(
         source_pool="watch",
         change_pct=change_pct,
         volume_ratio=volume_ratio,
-        ma_bullish=False,
+        ma_bullish=ma_bullish,
         startup_signals=item.get("startup_signals") or [],
+        confirmations=confirmations,
+        confirmed_by=confirmed_by,
     )
     return {
         "code": item.get("code", ""),
@@ -139,15 +149,23 @@ def _build_candidate_from_watch(item, market_change_pct):
         "change_pct": change_pct,
         "volume_ratio": volume_ratio,
         "market_change_pct": market_change_pct,
-        "ma_bullish": False,
+        "ma_bullish": ma_bullish,
         "startup_reason": item.get("startup_reason", ""),
-        "confirmed_by": item.get("confirmed_by", ""),
-        "confirmations": item.get("confirmations", []),
+        "confirmed_by": confirmed_by,
+        "confirmations": confirmations,
         "reference_price": item.get("close"),
     }
 
 
-def _score_startup(source_pool, change_pct, volume_ratio, ma_bullish, startup_signals):
+def _score_startup(
+    source_pool,
+    change_pct,
+    volume_ratio,
+    ma_bullish,
+    startup_signals,
+    confirmations,
+    confirmed_by,
+):
     score = 0
     reasons = []
 
@@ -197,6 +215,9 @@ def _score_startup(source_pool, change_pct, volume_ratio, ma_bullish, startup_si
     if "break_20d_high" in startup_signals:
         score += 2
         reasons.append("突破20日平台")
+    if _is_two_yang_confirmation(confirmations, confirmed_by):
+        score += 2
+        reasons.append("30min两阳确认")
 
     return score, reasons
 
@@ -222,3 +243,45 @@ def _num(value):
         return float(value)
     except (TypeError, ValueError):
         return 0.0
+
+
+def _safe_bool(value, default=False):
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "y", "是"}
+    return bool(value) if value is not None else default
+
+
+def _safe_str(value, default=""):
+    if value is None:
+        return default
+    return str(value)
+
+
+def _normalize_confirmation_text(value):
+    text = str(value).replace(" ", "")
+    return text.replace("分钟", "min").replace("分", "")
+
+
+def _to_list_of_str(value):
+    if value is None:
+        return []
+    if isinstance(value, (tuple, set)):
+        value = list(value)
+    if not isinstance(value, list):
+        return [_safe_str(value)]
+    return [_safe_str(item) for item in value if item is not None]
+
+
+def _is_two_yang_confirmation(confirmations, confirmed_by):
+    candidates = []
+    if confirmed_by:
+        candidates.append(_normalize_confirmation_text(confirmed_by))
+    for item in _to_list_of_str(confirmations):
+        if item:
+            candidates.append(_normalize_confirmation_text(item))
+    return any(
+        ("30min" in item and ("两阳夹一阴确认" in item or "两阳夹两阴确认" in item))
+        for item in candidates
+    )

@@ -370,8 +370,31 @@ def _check_30min_confirmations(min30_result, seed):
         return confirms
 
     closes_30 = min30_result.closes
+    opens_30 = min30_result.opens if hasattr(min30_result, "opens") else None
     if closes_30 is None or len(closes_30) < 5:
         return confirms
+
+    # 两阳夹一阴 / 两阳夹两阴（30分钟级别）只看最新窗口，避免历史形态造成陈旧确认。
+    try:
+        closes_30_arr = np.asarray(closes_30, dtype=float)
+        opens_30_arr = np.asarray(opens_30, dtype=float) if opens_30 is not None else None
+        if opens_30_arr is not None and len(opens_30_arr) == len(closes_30_arr):
+            if len(closes_30_arr) >= 3:
+                prev2 = closes_30_arr[-3] > opens_30_arr[-3]
+                mid = closes_30_arr[-2] < opens_30_arr[-2]
+                curr = closes_30_arr[-1] > opens_30_arr[-1]
+                if prev2 and mid and curr:
+                    confirms.append("30min两阳夹一阴确认")
+
+            if len(closes_30_arr) >= 4:
+                p1 = closes_30_arr[-4] > opens_30_arr[-4]
+                mid1 = closes_30_arr[-3] < opens_30_arr[-3]
+                mid2 = closes_30_arr[-2] < opens_30_arr[-2]
+                curr = closes_30_arr[-1] > opens_30_arr[-1]
+                if p1 and mid1 and mid2 and curr:
+                    confirms.append("30min两阳夹两阴确认")
+    except Exception:
+        pass
 
     # EMA5/EMA10 maintenance on 30min
     from .chan_engine import ema

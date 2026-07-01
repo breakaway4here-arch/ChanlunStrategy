@@ -148,17 +148,6 @@ def _to_dict(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _to_list_of_str(value: Any) -> list[str]:
-    if not isinstance(value, (list, tuple, set)):
-        return []
-    result: list[str] = []
-    for item in value:
-        if item is None:
-            continue
-        result.append(str(item))
-    return result
-
-
 def _safe_float(value: Any, default: float | None = None) -> float | None:
     if value is None:
         return default
@@ -239,6 +228,17 @@ def _resolve_alpha_features(
 ) -> dict[str, Any]:
     market_ctx = _to_dict(context.get("market"))
     alpha_ctx = _to_dict(context.get("alpha_features"))
+    bp = _to_dict(item.get("best_buy_point"))
+    confirmations = _merge_unique_str_lists(
+        _to_list_of_str(item.get("confirmations")),
+        _to_list_of_str(bp.get("confirmations")),
+    )
+    startup_signals = _merge_unique_str_lists(
+        _to_list_of_str(item.get("startup_signals")),
+        _to_list_of_str(bp.get("startup_signals")),
+    )
+    confirmed_by = _safe_str(item.get("confirmed_by")) or _safe_str(bp.get("confirmed_by"))
+    ma_bullish = _to_bool(item.get("ma_bullish"))
 
     features = {
         "market_regime_factor": {},
@@ -280,7 +280,10 @@ def _resolve_alpha_features(
     # 4) Breakout quality from price structure.
     breakout_quality = {
         "volume_ratio": _safe_float(item.get("volume_ratio")),
-        "confirmed_by": _safe_str(item.get("confirmed_by")) or _safe_str(_to_dict(item.get("best_buy_point")).get("confirmed_by")),
+        "confirmed_by": confirmed_by,
+        "ma_bullish": ma_bullish,
+        "confirmations": confirmations,
+        "startup_signals": startup_signals,
         "distance": _safe_float(metrics.get("distance")),
     }
 
@@ -288,6 +291,10 @@ def _resolve_alpha_features(
     features["sector_strength_factor"] = sector_strength
     features["momentum_persistence"] = momentum_persistence
     features["breakout_quality"] = breakout_quality
+    features["ma_bullish"] = ma_bullish
+    features["confirmed_by"] = confirmed_by
+    features["confirmations"] = confirmations
+    features["startup_signals"] = startup_signals
     return features
 
 
@@ -343,6 +350,10 @@ def _has_alpha_inputs(context: Mapping[str, Any], item: Mapping[str, Any]) -> bo
         return True
     if _safe_float(item.get("momentum_persistence")) is not None:
         return True
+    if _to_list_of_str(item.get("confirmations")):
+        return True
+    if _to_list_of_str(item.get("startup_signals")):
+        return True
     if _safe_float(item.get("volume_ratio")) is not None and _safe_float(item.get("volume_ratio")) > 0:
         return True
 
@@ -350,6 +361,17 @@ def _has_alpha_inputs(context: Mapping[str, Any], item: Mapping[str, Any]) -> bo
     if sector_rank is not None and sector_rank > 0:
         return True
     if _safe_str(item.get("confirmed_by")).strip():
+        return True
+    if _to_bool(item.get("ma_bullish"), default=False):
+        return True
+    bp = _to_dict(item.get("best_buy_point"))
+    if _to_list_of_str(bp.get("confirmations")):
+        return True
+    if _to_list_of_str(bp.get("startup_signals")):
+        return True
+    if _safe_str(bp.get("confirmed_by")).strip():
+        return True
+    if _to_bool(bp.get("ma_bullish"), default=False):
         return True
 
     return False
@@ -430,9 +452,15 @@ def _score_breakout_quality_bonus(
     _ = by_source
     _ = source
     volume_ratio = _safe_float(features.get("volume_ratio")) or _safe_float(item.get("volume_ratio"))
-    confirmed_by = _safe_str(features.get("confirmed_by")) or _safe_str(item.get("confirmed_by"))
-    if confirmed_by is None and isinstance(item.get("best_buy_point"), Mapping):
-        confirmed_by = _safe_str(_to_dict(item.get("best_buy_point")).get("confirmed_by"))
+    confirmed_by = (
+        _safe_str(features.get("confirmed_by"))
+        or _safe_str(item.get("confirmed_by"))
+        or _safe_str(_to_dict(item.get("best_buy_point")).get("confirmed_by"))
+    )
+    ma_bullish = _to_bool(features.get("ma_bullish"))
+    confirmations = _to_list_of_str(features.get("confirmations"))
+    startup_signals = _to_list_of_str(features.get("startup_signals"))
+    startup_signal_score = _score_startup_signal_quality(startup_signals)
     distance = _safe_float(features.get("distance"))
     if distance is None:
         distance = _safe_float(metrics.get("distance"))
@@ -443,8 +471,15 @@ def _score_breakout_quality_bonus(
             score += _clamp((volume_ratio - 1.0) * 0.9, 0.0, 1.5)
 
     if confirmed_by:
-        if "等待确认" not in confirmed_by and ("30" in confirmed_by or "确认" in confirmed_by):
+        if _is_two_yang_confirmation_string(confirmed_by):
+            score += 1.2
+        elif "等待确认" not in confirmed_by and ("30" in confirmed_by or "确认" in confirmed_by):
             score += 1.0
+    if ma_bullish:
+        score += 0.25
+    if confirmations and _is_two_yang_confirmation_string(",".join(confirmations)):
+        score += 0.2
+    score += startup_signal_score
 
     if distance is not None:
         abs_distance = abs(distance)
@@ -454,6 +489,22 @@ def _score_breakout_quality_bonus(
             score += 0.5
 
     return _clamp(score, 0.0, 2.8)
+
+
+def _score_startup_signal_quality(startup_signals: list[str]) -> float:
+    if not startup_signals:
+        return 0.0
+
+    score = 0.0
+    if any("实体阳线" in s for s in startup_signals):
+        score += 0.3
+    if any("close_above_ma5" in s or "ma5" in s for s in startup_signals):
+        score += 0.2
+    if any("close_above_ma10" in s or "ma10" in s for s in startup_signals):
+        score += 0.2
+    if any("break_20d_high" in s or "20d" in s or "20日" in s for s in startup_signals):
+        score += 0.1
+    return _clamp(score, 0.0, 0.8)
 
 
 def _calc_momentum_persistence_from_closes(closes: list[float]) -> float:
@@ -518,6 +569,54 @@ def _to_list(value: Any) -> list[float]:
         if num is not None:
             result.append(num)
     return result
+
+
+def _normalize_confirmation_text(text: Any) -> str:
+    return _safe_str(text).replace(" ", "").replace("分钟", "min")
+
+
+def _is_two_yang_confirmation_string(text: Any) -> bool:
+    norm = _normalize_confirmation_text(text)
+    return "两阳夹一阴确认" in norm or "两阳夹两阴确认" in norm
+
+
+def _to_list_of_str(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, (tuple, set)):
+        value = list(value)
+    if isinstance(value, str):
+        return [_safe_str(value)]
+    if not isinstance(value, list):
+        return []
+    result: list[str] = []
+    for item in value:
+        if item is None:
+            continue
+        result.append(_safe_str(item))
+    return result
+
+
+def _merge_unique_str_lists(*lists: list[str]) -> list[str]:
+    result: list[str] = []
+    seen: set[str] = set()
+    for items in lists:
+        for item in items:
+            if item in seen:
+                continue
+            seen.add(item)
+            result.append(item)
+    return result
+
+
+def _to_bool(value: Any, default: bool = False) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on", "y", "是"}
+    if value is None:
+        return default
+    return bool(value)
 
 
 def _collect_risk_flags(

@@ -1,6 +1,10 @@
 import unittest
 
-from chanlun.scoring_engine import compute_opportunity_score
+from chanlun.scoring_engine import (
+    ALPHA_BONUS_LIMIT,
+    ALPHA_MULTIPLIER_MAX,
+    compute_opportunity_score,
+)
 
 
 class TestScoringEngine(unittest.TestCase):
@@ -154,6 +158,98 @@ class TestScoringEngine(unittest.TestCase):
         )
 
         self.assertLessEqual(trace["data_penalty"], 20)
+
+    def test_alpha_breakout_two_yang_confirmation_adds_bonus(self):
+        item = {
+            "score": 50,
+            "change_pct": 4.0,
+            "volume_ratio": 1.3,
+            "ma_bullish": True,
+            "confirmed_by": "30min两阳夹一阴确认",
+            "confirmations": ["30min两阳夹一阴确认", "30min EMA5维持"],
+            "startup_signals": ["实体阳线≥3%", "close_above_ma5"],
+            "best_buy_point": {
+                "distance_from_reference_pct": 1.5,
+                "confirmed_by": "30min两阳夹一阴确认",
+                "confirmations": ["30min两阳夹一阴确认"],
+                "startup_signals": ["实体阳线≥3%", "close_above_ma5"],
+            },
+        }
+        context = {
+            "alpha_enabled": True,
+            "source_count": 1,
+            "data_quality": {"market_status": "verified"},
+            "by_source": {"main": {"volume_ratio": 1.3}},
+            "market": {"index_trend_score": 45, "breadth_score": 40},
+            "metrics": {"distance": 1.5},
+            "best_buy_point": {"distance_from_reference_pct": 1.5},
+        }
+
+        _, trace = compute_opportunity_score(item, "main", context)
+        self.assertGreater(trace["alpha_bonus"], 0)
+        self.assertLessEqual(trace["alpha_bonus"], ALPHA_BONUS_LIMIT)
+        self.assertEqual(trace["alpha_features"]["breakout_quality"]["ma_bullish"], True)
+        self.assertIn("30min两阳夹一阴确认", trace["alpha_features"]["breakout_quality"]["confirmed_by"])
+
+    def test_alpha_bonus_is_capped(self):
+        item = {
+            "score": 50,
+            "change_pct": 6.0,
+            "volume_ratio": 8.0,
+            "ma_bullish": True,
+            "confirmed_by": "30min两阳夹两阴确认",
+            "confirmations": ["30min两阳夹两阴确认", "其他确认"],
+            "startup_signals": ["实体阳线≥3%", "close_above_ma5", "close_above_ma10", "break_20d_high"],
+            "sector_rank": 1,
+            "sector_flow": 3200,
+            "best_buy_point": {
+                "distance_from_reference_pct": 1.0,
+                "confirmed_by": "30min两阳夹两阴确认",
+                "confirmations": ["30min两阳夹两阴确认"],
+                "startup_signals": ["实体阳线≥3%", "close_above_ma5", "close_above_ma10", "break_20d_high"],
+            },
+        }
+        context = {
+            "alpha_enabled": True,
+            "source_count": 3,
+            "sources": ["main", "acceleration", "luojie"],
+            "market": {"index_trend_score": 120, "breadth_score": 100, "market_regime_factor": 99},
+            "data_quality": {"market_status": "verified"},
+            "metrics": {"distance": 0.8},
+            "by_source": {
+                "main": {"data_status": {"daily": "verified"}, "volume_ratio": 8.0},
+            },
+        }
+
+        score, trace = compute_opportunity_score(item, "main", context)
+        self.assertEqual(trace["alpha_bonus"], ALPHA_BONUS_LIMIT)
+        self.assertEqual(score, trace["opportunity_score"])
+        self.assertLessEqual(trace["alpha_multiplier"], ALPHA_MULTIPLIER_MAX)
+
+    def test_alpha_disabled_preserves_baseline_scoring(self):
+        item = {
+            "score": 55,
+            "change_pct": 3.0,
+            "best_buy_point": {"distance_from_reference_pct": 1.5},
+            "ma_bullish": True,
+            "volume_ratio": 2.2,
+            "confirmed_by": "30min两阳夹一阴确认",
+            "confirmations": ["30min两阳夹一阴确认"],
+            "startup_signals": ["实体阳线≥3%"],
+        }
+        context = {
+            "alpha_enabled": False,
+            "source_count": 3,
+            "sources": ["main", "acceleration", "luojie"],
+            "market": {"index_trend_score": 120, "breadth_score": 100},
+            "data_quality": {"market_status": "verified"},
+            "metrics": {"distance": 1.0},
+        }
+
+        score, trace = compute_opportunity_score(item, "main", context)
+        self.assertEqual(score, trace["base_opportunity_score"])
+        self.assertEqual(trace["alpha_bonus"], 0)
+        self.assertEqual(trace["alpha_multiplier"], 1.0)
 
     def test_context_risk_flags_are_respected(self):
         _, trace = compute_opportunity_score(

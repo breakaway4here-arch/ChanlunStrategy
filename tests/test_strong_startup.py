@@ -8,6 +8,7 @@ from chanlun.strong_startup import (
     _check_low_position,
     _check_volume_breakout,
     _check_price_breakout,
+    _check_30min_confirmations,
 )
 
 
@@ -196,14 +197,16 @@ class TestBuildStrongStartupPool(unittest.TestCase):
             config.ENABLE_STRONG_STARTUP_CANDIDATES = old_val
 
 
-def _make_30min_result(code, closes_30, buy_points=None):
+def _make_30min_result(code, closes_30, opens_30=None, buy_points=None):
     """Build a mock 30min chan result."""
     class Mock30Result:
         pass
     r = Mock30Result()
     r.code = code
     r.closes = np.array(closes_30, dtype=float)
-    r.opens = np.array(closes_30, dtype=float) * 0.99
+    r.opens = np.array(
+        opens_30 if opens_30 is not None else np.array(closes_30, dtype=float) * 0.99
+    )
     r.highs = np.array(closes_30, dtype=float) * 1.01
     r.lows = np.array(closes_30, dtype=float) * 0.99
     r.volumes = np.ones(len(closes_30)) * 100000
@@ -281,6 +284,39 @@ class TestUpgrade30min(unittest.TestCase):
         min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
         candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertIn("confirmations", candidates[0])
+
+
+class Test30minPatterns(unittest.TestCase):
+
+    def test_two_yang_one_yin_confirmation(self):
+        closes = np.array([10, 10.2, 11, 10.6, 11.4], dtype=float)
+        opens = np.array([9.8, 10.0, 10.5, 10.9, 11.0], dtype=float)
+        result = _make_30min_result("000001", closes, opens_30=opens)
+        confirms = _check_30min_confirmations(result, {})
+        self.assertIn("30min两阳夹一阴确认", confirms)
+
+    def test_two_yang_two_yin_confirmation(self):
+        closes = np.array([10, 11, 10.5, 10.2, 11.4], dtype=float)
+        opens = np.array([9.8, 10.5, 10.8, 10.6, 10.9], dtype=float)
+        result = _make_30min_result("000001", closes, opens_30=opens)
+        confirms = _check_30min_confirmations(result, {})
+        self.assertIn("30min两阳夹两阴确认", confirms)
+
+    def test_historical_shape_does_not_create_stale_confirmation(self):
+        closes = np.array([10, 9.5, 10.5, 10.8, 11.0, 11.2], dtype=float)
+        opens = np.array([9.5, 10.0, 10.0, 10.4, 10.7, 10.9], dtype=float)
+        result = _make_30min_result("000001", closes, opens_30=opens)
+        confirms = _check_30min_confirmations(result, {})
+        self.assertNotIn("30min两阳夹一阴确认", confirms)
+        self.assertNotIn("30min两阳夹两阴确认", confirms)
+
+    def test_non_shape_does_not_match_yang_patterns(self):
+        closes = np.array([100, 101, 102, 103, 104, 105], dtype=float)
+        opens = np.array([99.5, 100.5, 101.5, 102.5, 103.5, 104.5], dtype=float)
+        result = _make_30min_result("000001", closes, opens_30=opens)
+        confirms = _check_30min_confirmations(result, {})
+        self.assertNotIn("30min两阳夹一阴确认", confirms)
+        self.assertNotIn("30min两阳夹两阴确认", confirms)
 
 
 class TestStartupAgeFields(unittest.TestCase):

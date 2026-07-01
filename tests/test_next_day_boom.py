@@ -102,6 +102,41 @@ class TestNextDayBoomCandidates(unittest.TestCase):
         self.assertEqual([c["code"] for c in result["candidates"]], ["600001", "600002"])
         self.assertIn("量比甜区", result["candidates"][0]["boom_reason"])
 
+    def test_two_yang_confirmation_adds_boom_score_and_preserves_fields(self):
+        result = build_next_day_boom_candidates(
+            picks_fusion=[
+                {
+                    **_fusion_pick("600001", "含两阳确认", volume_ratio=1.45),
+                    "best_buy_point": {
+                        **_fusion_pick("600001", "含两阳确认", volume_ratio=1.45)["best_buy_point"],
+                        "confirmations": ["30min两阳夹两阴确认"],
+                        "confirmed_by": "30min两阳夹两阴确认",
+                    },
+                },
+                {
+                    **_fusion_pick("600002", "无确认", volume_ratio=1.45),
+                    "best_buy_point": {
+                        **_fusion_pick("600002", "无确认", volume_ratio=1.45)["best_buy_point"],
+                        "confirmations": ["30min EMA5维持"],
+                        "confirmed_by": "30min确认",
+                    },
+                },
+            ],
+            startup_watchlist=[],
+            market={"上证指数": {"change_pct": 1.5}},
+            top_n=2,
+        )
+
+        self.assertEqual(result["candidates"][0]["code"], "600001")
+        self.assertIn("30min两阳确认", result["candidates"][0]["boom_reason"])
+        self.assertEqual(
+            result["candidates"][0]["confirmations"],
+            ["30min两阳夹两阴确认"],
+        )
+        self.assertEqual(result["candidates"][0]["confirmed_by"], "30min两阳夹两阴确认")
+        self.assertTrue(result["candidates"][0]["ma_bullish"])
+        self.assertGreater(result["candidates"][0]["boom_score"], result["candidates"][1]["boom_score"])
+
 
 if __name__ == "__main__":
     unittest.main()
