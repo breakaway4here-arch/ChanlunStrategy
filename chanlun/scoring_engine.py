@@ -33,6 +33,9 @@ MAX_MOMENTUM_SCORE = 20.0
 MAX_MARKET_SCORE = 15.0
 MAX_RISK_PENALTY = 30.0
 MAX_DATA_PENALTY = 20.0
+ALPHA_MULTIPLIER_MIN = 1.00
+ALPHA_MULTIPLIER_MAX = 1.04
+ALPHA_BONUS_LIMIT = 5.0
 
 
 def compute_opportunity_score(
@@ -55,6 +58,8 @@ def compute_opportunity_score(
     distance = _safe_float(metrics.get("distance"))
     if distance is None:
         distance = _resolve_distance_pct(item, source)
+    if distance is not None and "distance" not in metrics:
+        metrics["distance"] = distance
 
     change_pct = _safe_float(metrics.get("change_pct"))
     if change_pct is None:
@@ -73,7 +78,20 @@ def compute_opportunity_score(
     data_penalty = _score_data_penalty(ctx.get("data_quality"), by_source, sources)
 
     raw_score = signal_score + entry_score + momentum_score + market_score - risk_penalty - data_penalty
-    opportunity_score = max(0, int(round(raw_score)))
+    base_opportunity_score = max(0, int(round(raw_score)))
+
+    if "alpha_enabled" in ctx:
+        alpha_enabled = bool(ctx.get("alpha_enabled"))
+    else:
+        alpha_enabled = ("alpha_features" in ctx) or _has_alpha_inputs(ctx, item)
+    alpha_bonus, alpha_multiplier = 0.0, 1.0
+    if alpha_enabled:
+        alpha_features = _resolve_alpha_features(ctx, item, metrics, source)
+        alpha_bonus = _score_alpha_bonus(alpha_features, by_source, source, item, metrics)
+        alpha_multiplier = _resolve_alpha_multiplier(alpha_features, alpha_bonus)
+    else:
+        alpha_features = {}
+    opportunity_score = max(0, int(round(base_opportunity_score * alpha_multiplier + alpha_bonus)))
 
     trace = {
         "base_source": source,
@@ -84,6 +102,10 @@ def compute_opportunity_score(
         "market_score": market_score,
         "risk_penalty": risk_penalty,
         "data_penalty": data_penalty,
+        "alpha_features": alpha_features,
+        "alpha_bonus": round(alpha_bonus, 4),
+        "alpha_multiplier": round(alpha_multiplier, 4),
+        "base_opportunity_score": base_opportunity_score,
         "risk_flags": risk_flags,
         "opportunity_score": opportunity_score,
         "distance_from_reference_pct": distance,
@@ -161,6 +183,12 @@ def _safe_int(value: Any, default: int | None = None) -> int | None:
         return default
 
 
+def _safe_str(value: Any, default: str = "") -> str:
+    if value is None:
+        return default
+    return str(value)
+
+
 def _score_signal(item: Mapping[str, Any], source: str) -> float:
     cap = SIGNAL_CAPS.get(source, 0.0)
     if source == "confirming":
@@ -201,6 +229,295 @@ def _score_market(source: str, source_count: int) -> float:
     base = MARKET_BASE.get(source, 5.0)
     multi_source_bonus = max(0, source_count - 1) * 2.0
     return min(MAX_MARKET_SCORE, base + multi_source_bonus)
+
+
+def _resolve_alpha_features(
+    context: Mapping[str, Any],
+    item: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+    source: str,
+) -> dict[str, Any]:
+    market_ctx = _to_dict(context.get("market"))
+    alpha_ctx = _to_dict(context.get("alpha_features"))
+
+    features = {
+        "market_regime_factor": {},
+        "sector_strength_factor": {},
+        "momentum_persistence": None,
+        "breakout_quality": {},
+        "alpha_multiplier": _safe_float(alpha_ctx.get("alpha_multiplier")),
+    }
+
+    # 1) Market regime: from market context first, then alpha features.
+    market_regime = {}
+    for source_dict in (market_ctx, alpha_ctx):
+        index_trend_score = _safe_float(source_dict.get("index_trend_score"))
+        breadth_score = _safe_float(source_dict.get("breadth_score"))
+        regime_factor = _safe_float(source_dict.get("market_regime_factor"))
+        if index_trend_score is not None:
+            market_regime["index_trend_score"] = index_trend_score
+        if breadth_score is not None:
+            market_regime["breadth_score"] = breadth_score
+        if regime_factor is not None:
+            market_regime["market_regime_factor"] = regime_factor
+
+    # 2) Sector strength: item first, then alpha features.
+    sector_strength = {
+        "sector_flow": _safe_float(item.get("sector_flow")),
+        "sector_rank": _safe_float(item.get("sector_rank")),
+        "sector_strength_factor": _safe_float(item.get("sector_strength_factor")),
+    }
+    for key in ("sector_flow", "sector_rank", "sector_strength_factor"):
+        val = _safe_float(alpha_ctx.get(key))
+        if val is not None:
+            sector_strength[key] = val
+
+    # 3) Momentum persistence from explicit signal first, fallback to closes slope.
+    momentum_persistence = _safe_float(alpha_ctx.get("momentum_persistence"))
+    if momentum_persistence is None:
+        momentum_persistence = _safe_float(item.get("momentum_persistence"))
+
+    # 4) Breakout quality from price structure.
+    breakout_quality = {
+        "volume_ratio": _safe_float(item.get("volume_ratio")),
+        "confirmed_by": _safe_str(item.get("confirmed_by")) or _safe_str(_to_dict(item.get("best_buy_point")).get("confirmed_by")),
+        "distance": _safe_float(metrics.get("distance")),
+    }
+
+    features["market_regime_factor"] = market_regime
+    features["sector_strength_factor"] = sector_strength
+    features["momentum_persistence"] = momentum_persistence
+    features["breakout_quality"] = breakout_quality
+    return features
+
+
+def _score_alpha_bonus(
+    alpha_features: Mapping[str, Any],
+    by_source: Mapping[str, Mapping[str, Any]],
+    source: str,
+    item: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+) -> float:
+    bonus = 0.0
+    bonus += _score_market_regime_bonus(_to_dict(alpha_features.get("market_regime_factor")))
+    bonus += _score_sector_strength_bonus(_to_dict(alpha_features.get("sector_strength_factor")))
+    bonus += _score_momentum_persistence_bonus(
+        alpha_features.get("momentum_persistence"),
+        item,
+        source,
+    )
+    bonus += _score_breakout_quality_bonus(_to_dict(alpha_features.get("breakout_quality")), by_source, source, item, metrics)
+
+    bonus = _clamp(bonus, 0.0, ALPHA_BONUS_LIMIT)
+    return round(bonus, 4)
+
+
+def _resolve_alpha_multiplier(alpha_features: Mapping[str, Any], bonus: float) -> float:
+    explicit = _safe_float(alpha_features.get("alpha_multiplier"))
+    if explicit is not None:
+        return _clamp(explicit, ALPHA_MULTIPLIER_MIN, ALPHA_MULTIPLIER_MAX)
+
+    market_bonus = _score_market_regime_bonus(_to_dict(alpha_features.get("market_regime_factor")))
+    sector_bonus = _score_sector_strength_bonus(_to_dict(alpha_features.get("sector_strength_factor")))
+    momentum_source = alpha_features.get("momentum_persistence")
+    if _safe_float(momentum_source) is not None:
+        momentum_bonus = _score_momentum_persistence_bonus(momentum_source, {}, "")
+    else:
+        momentum_bonus = 0.0
+
+    weighted = (market_bonus + sector_bonus + momentum_bonus) / 300.0
+    return _clamp(1.0 + weighted + (bonus / 800.0), ALPHA_MULTIPLIER_MIN, ALPHA_MULTIPLIER_MAX)
+
+
+def _clamp(value: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, value))
+
+
+def _has_alpha_inputs(context: Mapping[str, Any], item: Mapping[str, Any]) -> bool:
+    market = _to_dict(context.get("market"))
+    if any(_safe_float(market.get(key)) is not None for key in ("index_trend_score", "breadth_score", "market_regime_factor")):
+        return True
+    if _safe_float(item.get("sector_flow")) is not None:
+        return True
+    if _safe_float(item.get("sector_strength_factor")) is not None:
+        return True
+    if _safe_float(item.get("momentum_persistence")) is not None:
+        return True
+    if _safe_float(item.get("volume_ratio")) is not None and _safe_float(item.get("volume_ratio")) > 0:
+        return True
+
+    sector_rank = _safe_float(item.get("sector_rank"))
+    if sector_rank is not None and sector_rank > 0:
+        return True
+    if _safe_str(item.get("confirmed_by")).strip():
+        return True
+
+    return False
+
+
+def _score_market_regime_bonus(features: Mapping[str, Any]) -> float:
+    index_score = _safe_float(features.get("index_trend_score"))
+    breadth_score = _safe_float(features.get("breadth_score"))
+    regime_factor = _safe_float(features.get("market_regime_factor"))
+
+    regime_parts: list[float] = []
+    if index_score is not None:
+        regime_parts.append(_norm_percent_score(index_score))
+    if breadth_score is not None:
+        regime_parts.append(_norm_percent_score(breadth_score))
+
+    score = 0.0
+    if regime_parts:
+        score += sum(regime_parts) / len(regime_parts) * 2.0
+    if regime_factor is not None:
+        score += _norm_percent_score(regime_factor) * 1.5
+    return _clamp(score, 0.0, 3.0)
+
+
+def _score_sector_strength_bonus(features: Mapping[str, Any]) -> float:
+    sector_flow = _safe_float(features.get("sector_flow"))
+    sector_rank = _safe_float(features.get("sector_rank"))
+    sector_strength_factor = _safe_float(features.get("sector_strength_factor"))
+
+    flow_signal = 0.0
+    if sector_flow is not None:
+        flow_signal = _clamp(sector_flow / 2000.0, 0.0, 1.0)
+
+    rank_signal = 0.0
+    if sector_rank is not None and sector_rank > 0:
+        rank_signal = _clamp((10.0 - min(10.0, sector_rank)) / 10.0, 0.0, 1.0)
+
+    direct_signal = 0.0
+    if sector_strength_factor is not None:
+        direct_signal = _clamp(
+            sector_strength_factor if abs(sector_strength_factor) <= 1.2 else sector_strength_factor / 100.0,
+            0.0,
+            1.0,
+        )
+
+    score = flow_signal * 0.45 + rank_signal * 0.35 + direct_signal * 0.2
+    score *= 2.5
+    return _clamp(score, 0.0, 2.5)
+
+
+def _score_momentum_persistence_bonus(
+    momentum_persistence: Any,
+    item: Mapping[str, Any],
+    source: str,
+) -> float:
+    closes = []
+    if isinstance(item, Mapping):
+        closes = _to_list(item.get("closes"))
+
+    persistence = _safe_float(momentum_persistence)
+    if persistence is None and closes:
+        persistence = _calc_momentum_persistence_from_closes(closes)
+    if persistence is None:
+        return 0.0
+
+    if abs(persistence) > 1:
+        persistence = persistence / 100.0
+    return _clamp(persistence * 3.0, 0.0, 2.5)
+
+
+def _score_breakout_quality_bonus(
+    features: Mapping[str, Any],
+    by_source: Mapping[str, Mapping[str, Any]],
+    source: str,
+    item: Mapping[str, Any],
+    metrics: Mapping[str, Any],
+) -> float:
+    _ = by_source
+    _ = source
+    volume_ratio = _safe_float(features.get("volume_ratio")) or _safe_float(item.get("volume_ratio"))
+    confirmed_by = _safe_str(features.get("confirmed_by")) or _safe_str(item.get("confirmed_by"))
+    if confirmed_by is None and isinstance(item.get("best_buy_point"), Mapping):
+        confirmed_by = _safe_str(_to_dict(item.get("best_buy_point")).get("confirmed_by"))
+    distance = _safe_float(features.get("distance"))
+    if distance is None:
+        distance = _safe_float(metrics.get("distance"))
+
+    score = 0.0
+    if volume_ratio is not None:
+        if volume_ratio >= 1.0:
+            score += _clamp((volume_ratio - 1.0) * 0.9, 0.0, 1.5)
+
+    if confirmed_by:
+        if "等待确认" not in confirmed_by and ("30" in confirmed_by or "确认" in confirmed_by):
+            score += 1.0
+
+    if distance is not None:
+        abs_distance = abs(distance)
+        if abs_distance <= 2.0:
+            score += 1.0
+        elif abs_distance <= 5.0:
+            score += 0.5
+
+    return _clamp(score, 0.0, 2.8)
+
+
+def _calc_momentum_persistence_from_closes(closes: list[float]) -> float:
+    if len(closes) < 4:
+        return 0.0
+
+    numeric = [_safe_float(x) for x in closes]
+    numeric = [x for x in numeric if x not in (None, 0)]
+    if len(numeric) < 4:
+        return 0.0
+
+    windows = (3, 5, 10)
+    weighted: list[float] = []
+    for w in windows:
+        if len(numeric) < w + 1:
+            continue
+        end = numeric[-1]
+        start = numeric[-(w + 1)]
+        if start in (None, 0):
+            continue
+        pct = (end - start) / start * 100.0
+        changes = 0
+        total = 0
+        for i in range(-w + 1, 0):
+            if numeric[i - 1] is None or numeric[i] is None:
+                continue
+            total += 1
+            if numeric[i] >= numeric[i - 1]:
+                changes += 1
+        if total == 0:
+            continue
+        ratio = changes / float(total)
+        score = _clamp((pct / 20.0) * 0.65 + (ratio * 2.0 - 1.0) * 0.35, -1.0, 1.0)
+        weighted.append(score)
+
+    if not weighted:
+        return 0.0
+    weights = (0.4, 0.35, 0.25)
+    if len(weighted) == 1:
+        return weighted[0]
+    if len(weighted) == 2:
+        return weighted[0] * weights[0] + weighted[1] * (1.0 - weights[0])
+    if len(weighted) == 3:
+        return weighted[0] * weights[0] + weighted[1] * weights[1] + weighted[2] * weights[2]
+    return sum(weighted) / len(weighted)
+
+
+def _norm_percent_score(value: float) -> float:
+    if 0.0 <= value <= 1.2:
+        return _clamp(value, 0.0, 1.0)
+    if 0.0 <= value <= 100.0:
+        return _clamp(value / 100.0, 0.0, 1.0)
+    return _clamp(value, 0.0, 1.0)
+
+
+def _to_list(value: Any) -> list[float]:
+    if not isinstance(value, (list, tuple)):
+        return []
+    result: list[float] = []
+    for item in value:
+        num = _safe_float(item)
+        if num is not None:
+            result.append(num)
+    return result
 
 
 def _collect_risk_flags(
