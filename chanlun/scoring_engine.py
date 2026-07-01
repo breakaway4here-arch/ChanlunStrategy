@@ -87,7 +87,14 @@ def compute_opportunity_score(
     alpha_bonus, alpha_multiplier = 0.0, 1.0
     if alpha_enabled:
         alpha_features = _resolve_alpha_features(ctx, item, metrics, source)
-        alpha_bonus, pool_quality_bonus, pool_quality_score, pool_quality_tags = _score_alpha_bonus(
+        (
+            alpha_bonus,
+            pool_quality_bonus,
+            pool_quality_score,
+            pool_quality_tier,
+            pool_quality_tags,
+            pool_quality_components,
+        ) = _score_alpha_bonus(
             alpha_features,
             by_source,
             source,
@@ -100,6 +107,8 @@ def compute_opportunity_score(
         pool_quality_bonus = 0.0
         pool_quality_score = 0.0
         pool_quality_tags: list[str] = []
+        pool_quality_tier = "none"
+        pool_quality_components: list[dict[str, Any]] = []
     opportunity_score = max(0, int(round(base_opportunity_score * alpha_multiplier + alpha_bonus)))
 
     trace = {
@@ -116,6 +125,8 @@ def compute_opportunity_score(
         "pool_quality_bonus": round(pool_quality_bonus, 4),
         "pool_quality_score": round(pool_quality_score, 4),
         "pool_quality_tags": pool_quality_tags,
+        "pool_quality_tier": pool_quality_tier,
+        "pool_quality_components": pool_quality_components,
         "alpha_multiplier": round(alpha_multiplier, 4),
         "base_opportunity_score": base_opportunity_score,
         "risk_flags": risk_flags,
@@ -317,7 +328,7 @@ def _score_alpha_bonus(
     source: str,
     item: Mapping[str, Any],
     metrics: Mapping[str, Any],
-) -> tuple[float, float, float, list[str]]:
+) -> tuple[float, float, float, str, list[str], list[dict[str, Any]]]:
     bonus = 0.0
     bonus += _score_market_regime_bonus(_to_dict(alpha_features.get("market_regime_factor")))
     bonus += _score_sector_strength_bonus(_to_dict(alpha_features.get("sector_strength_factor")))
@@ -327,38 +338,96 @@ def _score_alpha_bonus(
         source,
     )
     bonus += _score_breakout_quality_bonus(_to_dict(alpha_features.get("breakout_quality")), by_source, source, item, metrics)
-    pool_quality_bonus, pool_quality_score, pool_quality_tags = _score_pool_quality_bonus(_to_dict(alpha_features.get("pool_quality")))
+    (
+        pool_quality_bonus,
+        pool_quality_score,
+        pool_quality_tier,
+        pool_quality_tags,
+        pool_quality_components,
+    ) = _score_pool_quality_bonus(_to_dict(alpha_features.get("pool_quality")))
     bonus += pool_quality_bonus
 
     bonus = _clamp(bonus, 0.0, ALPHA_BONUS_LIMIT)
-    return round(bonus, 4), pool_quality_bonus, pool_quality_score, pool_quality_tags
+    return (
+        round(bonus, 4),
+        pool_quality_bonus,
+        pool_quality_score,
+        pool_quality_tier,
+        pool_quality_tags,
+        pool_quality_components,
+    )
 
 
-def _score_pool_quality_bonus(pool_quality: Mapping[str, Any]) -> tuple[float, float, list[str]]:
+def _score_pool_quality_bonus(pool_quality: Mapping[str, Any]) -> tuple[float, float, str, list[str], list[dict[str, Any]]]:
     def _to_unit(value: float | None) -> float:
         if value is None:
             return 0.0
         normalized = value if abs(value) <= 1.2 else value / 100.0
         return _clamp(normalized, 0.0, 1.0)
 
-    liquidity_raw = _safe_float(pool_quality.get("liquidity_score"))
-    growth_board_raw = _safe_float(pool_quality.get("growth_board_score"))
-    sector_quality_raw = _safe_float(pool_quality.get("sector_quality_score"))
+    def _to_percent(value: float | None) -> float:
+        return _to_unit(value) * 100.0
 
-    liquidity_score = _to_unit(liquidity_raw) * 1.2
-    growth_board_score = _to_unit(growth_board_raw) * 1.0
-    sector_quality_score = _to_unit(sector_quality_raw) * 0.8
-    pool_quality_bonus = _clamp(liquidity_score + growth_board_score + sector_quality_score, 0.0, 3.0)
+    liquidity_pct = _to_percent(_safe_float(pool_quality.get("liquidity_score")))
+    growth_pct = _to_percent(_safe_float(pool_quality.get("growth_board_score")))
+    sector_pct = _to_percent(_safe_float(pool_quality.get("sector_quality_score")))
+
+    def _passes(value: float, threshold: float) -> bool:
+        return value >= threshold
+
+    elite_tier = _passes(liquidity_pct, 70.0) and _passes(growth_pct, 55.0) and _passes(sector_pct, 70.0)
+    strong_tier = _passes(liquidity_pct, 55.0) and _passes(growth_pct, 55.0) and _passes(sector_pct, 55.0)
+
+    tier = "none"
+    pool_quality_bonus = 0.0
+    if elite_tier:
+        tier = "elite"
+        avg_pct = (liquidity_pct + growth_pct + sector_pct) / 3.0
+        pool_quality_bonus = _clamp(avg_pct / 100.0 * 3.0, 0.0, 3.0)
+    elif strong_tier:
+        tier = "strong"
+        avg_pct = (liquidity_pct + growth_pct + sector_pct) / 3.0
+        pool_quality_bonus = _clamp(avg_pct / 100.0 * 1.8, 0.0, 1.8)
+    else:
+        pass_count = sum(
+            1
+            for value in (liquidity_pct, growth_pct, sector_pct)
+            if _passes(value, 55.0)
+        )
+        if pass_count >= 2:
+            tier = "partial"
+            top_two = sorted([liquidity_pct, growth_pct, sector_pct], reverse=True)[:2]
+            avg_top_two = (top_two[0] + top_two[1]) / 2.0
+            pool_quality_bonus = _clamp(avg_top_two / 100.0 * 0.7, 0.0, 0.7)
 
     pool_quality_score = _safe_float(pool_quality.get("pool_quality_score"))
     if pool_quality_score is None:
-        normalized_sum = _to_unit(liquidity_raw) + _to_unit(growth_board_raw) + _to_unit(sector_quality_raw)
-        pool_quality_score = _clamp((normalized_sum / 3.0) * 100.0, 0.0, 100.0)
+        pool_quality_score = _clamp((liquidity_pct + growth_pct + sector_pct) / 3.0, 0.0, 100.0)
     else:
         pool_quality_score = _clamp(pool_quality_score, 0.0, 100.0)
 
     pool_quality_tags = _to_list_of_str(pool_quality.get("pool_quality_tags"))
-    return pool_quality_bonus, round(pool_quality_score, 4), pool_quality_tags
+    pool_quality_components = [
+        {
+            "name": "liquidity",
+            "score": round(liquidity_pct, 4),
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0,
+        },
+        {
+            "name": "growth",
+            "score": round(growth_pct, 4),
+            "threshold_elite": 55.0,
+            "threshold_strong": 55.0,
+        },
+        {
+            "name": "sector",
+            "score": round(sector_pct, 4),
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0,
+        },
+    ]
+    return pool_quality_bonus, round(pool_quality_score, 4), tier, pool_quality_tags, pool_quality_components
 
 
 def _resolve_alpha_multiplier(alpha_features: Mapping[str, Any], bonus: float) -> float:

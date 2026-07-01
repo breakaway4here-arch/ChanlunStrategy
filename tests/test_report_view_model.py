@@ -1,6 +1,6 @@
 import unittest
 
-from chanlun.report_view_model import EXCLUDED_FIELDS, build_workspace
+from chanlun.report_view_model import EXCLUDED_FIELDS, build_workspace, _build_pool_quality_features
 
 
 LARGE_FIELDS = EXCLUDED_FIELDS
@@ -127,15 +127,41 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["default_view"], "highlights")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "acceleration", "luojie", "confirming", "baseline"],
+            ["highlights", "main", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
         self.assertEqual(workspace["counts"]["baseline"], 1)
         self.assertEqual(workspace["counts"]["highlights"], 4)
+        self.assertEqual(workspace["counts"]["growth_quality"], 4)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
+        self.assertEqual(workspace["view_meta"]["growth_quality"]["label"], "成长质量 Top10")
         self.assertIn("source_counts", workspace["diagnostics"])
         self.assertEqual(workspace["diagnostics"]["highlights"]["baseline_included"], False)
+        self.assertIn("growth_quality_overlap", workspace["diagnostics"])
+        self.assertIn("overlap_codes", workspace["diagnostics"]["growth_quality_overlap"])
+        self.assertIn("highlights_codes", workspace["diagnostics"]["growth_quality_overlap"])
+        self.assertIn("growth_quality_codes", workspace["diagnostics"]["growth_quality_overlap"])
+
+    def test_growth_quality_view_exists_but_default_still_highlights(self):
+        report_data = _report_data(
+            {
+                "picks_fusion": [_fusion_pick(code="600030", score=40), _fusion_pick(code="600031", score=85)],
+                "next_day_boom": {"mode": "enabled", "candidates": [_acceleration_pick(code="600032")]},
+                "luojie_pool": {"candidates": [_luojie_pick(code="600033")]},
+                "startup_watchlist": [_confirming_pick(code="600034")],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+
+        self.assertEqual(workspace["default_view"], "highlights")
+        self.assertTrue(len(workspace["views"]["growth_quality"]) > 0)
+        self.assertEqual(
+            len([item["code"] for item in workspace["views"]["growth_quality"]]),
+            len(set(item["code"] for item in workspace["views"]["growth_quality"])),
+        )
+        self.assertNotEqual(workspace["views"]["growth_quality"], [])
 
     def test_baseline_never_enters_highlights(self):
         report_data = _report_data(
@@ -149,6 +175,93 @@ class TestReportViewModel(unittest.TestCase):
 
         self.assertEqual([item["code"] for item in workspace["views"]["baseline"]], ["600099"])
         self.assertEqual(workspace["views"]["highlights"], [])
+
+    def test_growth_quality_order_does_not_change_highlights_ranking(self):
+        near_reference_weak = _fusion_pick(
+            code="600030",
+            name="近参考弱信号",
+            score=18,
+            distance=0.2,
+            change_pct=3.0,
+        )
+        far_reference_strong = _fusion_pick(
+            code="600031",
+            name="远参考强信号",
+            score=96,
+            distance=11.5,
+            change_pct=-1.0,
+        )
+        report_data = _report_data(
+            {
+                "picks_fusion": [near_reference_weak, far_reference_strong],
+            }
+        )
+        workspace = build_workspace(report_data)
+        self.assertEqual([item["code"] for item in workspace["views"]["highlights"]], ["600030", "600031"])
+
+    def test_growth_quality_tier_sorted_growth_liquidity_sector_first(self):
+        elite = _fusion_pick(
+            code="300001",
+            name="成长优先",
+            score=90,
+            distance=1.1,
+            change_pct=1.2,
+            sector="成长板块",
+        )
+        elite["money20"] = 250_000_000
+        elite["market_cap"] = 120
+        elite["ret20"] = 20
+        elite["sector_rank"] = 1
+        elite["sector_flow"] = 3_500_000_000
+
+        normal = _fusion_pick(
+            code="600002",
+            name="普通候选",
+            score=98,
+            distance=1.1,
+            change_pct=1.2,
+            sector="普通板块",
+        )
+        normal["money20"] = 100_000
+        normal["sector_rank"] = 80
+        normal["sector_flow"] = 500_000
+
+        report_data = _report_data({"picks_fusion": [normal, elite]})
+        workspace = build_workspace(report_data)
+
+        self.assertEqual(
+            [item["code"] for item in workspace["views"]["growth_quality"]],
+            ["300001", "600002"],
+        )
+
+    def test_baseline_not_in_growth_quality(self):
+        report_data = _report_data(
+            {
+                "picks_fusion": [_fusion_pick(code="600030", score=80)],
+                "picks_pure": [_baseline_pick(code="600099", name="基准票")],
+            }
+        )
+
+        workspace = build_workspace(report_data)
+
+        self.assertEqual([item["code"] for item in workspace["views"]["baseline"]], ["600099"])
+        self.assertNotIn("600099", [item["code"] for item in workspace["views"]["growth_quality"]])
+
+    def test_money20_takes_priority_over_volume_proxy_for_liquidity_score(self):
+        pick = _fusion_pick(code="600080", name="成交额优先票", score=50)
+        pick["money20"] = 150_000_000
+        pick["volume_ratio"] = 0.4
+        pick["volumes"] = [1_000_000, 1_000_000]
+
+        pool_quality = _build_pool_quality_features(pick)
+        self.assertGreaterEqual(pool_quality["liquidity_score"], 70.0)
+        self.assertEqual(pool_quality["money20"], 150_000_000.0)
+
+        pick["money20"] = 4_000_000
+        self.assertEqual(_build_pool_quality_features(pick)["liquidity_score"], 0.0)
+        pick.pop("money20")
+        pick["volume_ratio20"] = 0.4
+        self.assertLess(_build_pool_quality_features(pick)["liquidity_score"], 30.0)
 
     def test_highlights_dedupe_and_resonance_label(self):
         report_data = _report_data(

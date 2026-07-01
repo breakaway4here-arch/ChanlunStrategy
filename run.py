@@ -436,6 +436,118 @@ def _attach_gf_dma_health(picks):
     return picks
 
 
+def _serialize_amount_list(amounts):
+    if amounts is None:
+        return None
+    serial = []
+    for item in _as_list(amounts):
+        try:
+            if isinstance(item, str):
+                item = item.replace(",", "")
+            value = float(item)
+        except (TypeError, ValueError):
+            serial.append(None)
+            continue
+        if not math.isfinite(value):
+            serial.append(None)
+        else:
+            serial.append(float(value))
+    if not serial:
+        return None
+    return serial
+
+
+def _money20_from_amounts(values):
+    if not values:
+        return None
+    tail = _serialize_amount_list(values)
+    if not tail:
+        return None
+    tail = tail[-20:]
+    valid = [v for v in tail if v is not None]
+    if not valid:
+        return None
+    return round(sum(valid) / len(valid), 2)
+
+
+def _money20_from_volume_price_proxy(closes, volumes):
+    if not closes or not volumes:
+        return None
+    close_arr = _as_list(closes)
+    vol_arr = _as_list(volumes)
+    if not close_arr or not vol_arr:
+        return None
+    n = min(len(close_arr), len(vol_arr))
+    if n <= 0:
+        return None
+    close_tail = close_arr[-20:][-n:]
+    vol_tail = vol_arr[-20:][-n:]
+    values = []
+    for c, v in zip(close_tail, vol_tail):
+        try:
+            if isinstance(c, str):
+                c = c.replace(",", "")
+            if isinstance(v, str):
+                v = v.replace(",", "")
+            cv = float(c) * float(v) * 100
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(cv):
+            values.append(cv)
+    if not values:
+        return None
+    return round(sum(values) / len(values), 2)
+
+
+def _attach_liquidity(row):
+    if not isinstance(row, dict):
+        return row
+
+    amounts = row.get("amounts")
+    if amounts is None:
+        kline = row.get("klines")
+        if isinstance(kline, dict):
+            amounts = kline.get("amounts")
+
+    serialized_amounts = _serialize_amount_list(amounts)
+    money20 = _money20_from_amounts(serialized_amounts)
+    source = "missing"
+
+    if money20 is None:
+        closes = row.get("closes")
+        if closes is None:
+            kline = row.get("klines")
+            if isinstance(kline, dict):
+                closes = kline.get("closes")
+        volumes = row.get("volumes")
+        if volumes is None:
+            kline = row.get("klines")
+            if isinstance(kline, dict):
+                volumes = kline.get("volumes")
+
+        money20_proxy = _money20_from_volume_price_proxy(closes, volumes)
+        if money20_proxy is not None:
+            money20 = money20_proxy
+            source = "volume_price_proxy"
+
+    if money20 is not None and source == "missing":
+        source = "amounts"
+
+    row["money20"] = money20
+    row["amounts"] = serialized_amounts
+    row["market_cap"] = _safe_number(row.get("market_cap"), None)
+    circulating_market_cap = _safe_number(row.get("circulating_market_cap"), None)
+    float_market_cap = _safe_number(row.get("float_market_cap"), None)
+    if circulating_market_cap is None:
+        circulating_market_cap = float_market_cap
+    if float_market_cap is None:
+        float_market_cap = circulating_market_cap
+    row["circulating_market_cap"] = circulating_market_cap
+    row["float_market_cap"] = float_market_cap
+    row["liquidity_source"] = source
+    return row
+
+
 # ============================================================
 # 主流程
 # ============================================================
@@ -568,6 +680,11 @@ def main(debug=False, preview=False):
             "sector_flow": stock.get("sector_flow"),
             "sector_strength_label": stock.get("sector_strength_label", ""),
             "data_status": stock.get("data_status") if isinstance(stock.get("data_status"), dict) else {},
+            "market_cap": stock.get("market_cap"),
+            "circulating_market_cap": stock.get("circulating_market_cap"),
+            "float_market_cap": stock.get("float_market_cap"),
+            "amount": stock.get("amount"),
+            "amounts": stock.get("amounts"),
         }
     print(f"  板块映射: {len(sector_stocks)} 只")
 
@@ -658,6 +775,18 @@ def main(debug=False, preview=False):
         if "sector_flow" not in merged or merged.get("sector_flow") is None:
             merged["sector_flow"] = sector_meta.get("sector_flow")
 
+        if "market_cap" not in merged or merged.get("market_cap") is None:
+            merged["market_cap"] = sector_meta.get("market_cap")
+
+        if "circulating_market_cap" not in merged or merged.get("circulating_market_cap") is None:
+            merged["circulating_market_cap"] = sector_meta.get("circulating_market_cap")
+
+        if "float_market_cap" not in merged or merged.get("float_market_cap") is None:
+            merged["float_market_cap"] = sector_meta.get("float_market_cap")
+
+        if "amount" not in merged or merged.get("amount") is None:
+            merged["amount"] = sector_meta.get("amount")
+
         if not merged.get("sector_strength_label"):
             merged["sector_strength_label"] = sector_meta.get("sector_strength_label", "")
 
@@ -669,7 +798,9 @@ def main(debug=False, preview=False):
     startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
         chan_results, sector_stocks)
     startup_seeds = [_attach_sector_metadata(s) for s in startup_seeds]
+    startup_seeds = [_attach_liquidity(s) for s in startup_seeds]
     startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
+    startup_watchlist = [_attach_liquidity(w) for w in startup_watchlist]
 
     print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
           f"启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
@@ -707,6 +838,10 @@ def main(debug=False, preview=False):
     print(f"  罗姐池: 主题={luojie_pool.get('diagnostics', {}).get('theme_candidates', 0)} "
           f"15min={luojie_pool.get('diagnostics', {}).get('with_15min', 0)} "
           f"入池={len(luojie_pool.get('candidates', []))}")
+    luojie_pool["candidates"] = [
+        _attach_liquidity(_attach_sector_metadata(c))
+        for c in luojie_pool.get("candidates", [])
+    ]
 
     # ================================================================
     # Phase 5: 30min fetch + analysis + candidate upgrade
@@ -744,7 +879,7 @@ def main(debug=False, preview=False):
             # All startup seeds → watch (no 30min data to confirm)
             if startup_seeds:
                 for s in startup_seeds:
-                    startup_watchlist.append(_attach_sector_metadata({
+                    startup_watchlist.append(_attach_liquidity(_attach_sector_metadata({
                         "code": s["code"], "name": s["name"],
                         "type": "强势启动观察", "tier": "watch",
                         "source_type": "日线强势启动",
@@ -756,7 +891,7 @@ def main(debug=False, preview=False):
                         "avoid_chase": True,
                         "watch_reason": "缺少30分钟数据，等待次日确认",
                         "next_day_conditions": ["回踩不破突破位", "30min出现二买/三买确认"],
-                    }))
+                    })))
             startup_upgrade_diag = {"startup_candidate": 0,
                                      "watch_due_to_no_30min_confirm": len(startup_seeds)}
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
@@ -806,7 +941,8 @@ def main(debug=False, preview=False):
                 print(f"  candidate={startup_upgrade_diag['startup_candidate']}, "
                       f"watch_no_confirm={startup_upgrade_diag['watch_due_to_no_30min_confirm']}, "
                       f"dropped_no_30min_data={startup_upgrade_diag.get('dropped_no_30min_confirm', 0)}")
-                startup_additional_watchlist = [_attach_sector_metadata(item) for item in startup_additional_watchlist]
+                startup_additional_watchlist = [_attach_liquidity(_attach_sector_metadata(item))
+                                            for item in startup_additional_watchlist]
                 startup_watchlist = startup_watchlist + startup_additional_watchlist
                 # Normalize startup candidates to match regular pick structure
                 if startup_candidates:
@@ -874,6 +1010,7 @@ def main(debug=False, preview=False):
                         pick = _attach_sector_metadata(pick)
                         # Annotate startup quality labels on best_buy_point
                         pick["best_buy_point"] = annotate_startup_quality(pick["best_buy_point"])
+                        pick = _attach_liquidity(pick)
                         normalized.append(pick)
                     pure_confirmed = pure_confirmed + normalized
                     print(f"  合并启动候选 {len(startup_candidates)} 只到纯净版主推荐")
@@ -961,6 +1098,7 @@ def main(debug=False, preview=False):
     pure_confirmed, recency_pure_diag = filter_recent_picks(pure_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
     fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
+    startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
     print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
           f"(过期{recency_pure_diag['dropped_expired']}), "
           f"fusion {recency_fusion_diag['input']}→{recency_fusion_diag['kept']} "
@@ -973,6 +1111,8 @@ def main(debug=False, preview=False):
     fusion_scored = apply_scores(fusion_confirmed, version="fusion", sector_rank_map=sectors)
     pure_scored = [_attach_sector_metadata(p) for p in pure_scored]
     fusion_scored = [_attach_sector_metadata(p) for p in fusion_scored]
+    pure_scored = [_attach_liquidity(p) for p in pure_scored]
+    fusion_scored = [_attach_liquidity(p) for p in fusion_scored]
     pure_scored = _attach_gf_dma_health(pure_scored)
     fusion_scored = _attach_gf_dma_health(fusion_scored)
 
@@ -1013,6 +1153,24 @@ def main(debug=False, preview=False):
     print(f"  次日大涨模式: {next_day_boom.get('mode')} "
           f"候选={len(next_day_boom.get('candidates', []))} "
           f"原因={next_day_boom.get('reason', '')}")
+    next_day_source_map = {}
+    for item in list(fusion_scored) + list(startup_watchlist):
+        if isinstance(item, dict) and item.get("code"):
+            next_day_source_map[item["code"]] = item
+    next_day_candidates = []
+    for candidate in next_day_boom.get("candidates", []):
+        merged = dict(candidate)
+        source = next_day_source_map.get(candidate.get("code"), {})
+        if isinstance(source, dict):
+            source_for_merge = {
+                k: source.get(k)
+                for k in ("market_cap", "circulating_market_cap", "float_market_cap", "amounts", "amount", "closes", "volumes")
+            }
+            merged.update(source_for_merge)
+        merged = _attach_sector_metadata(merged)
+        merged = _attach_liquidity(merged)
+        next_day_candidates.append(merged)
+    next_day_boom["candidates"] = next_day_candidates
 
     # 上证缠论结构
     print("  分析上证缠论结构 ...")

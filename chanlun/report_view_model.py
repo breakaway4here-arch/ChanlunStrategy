@@ -22,6 +22,7 @@ VIEW_ORDER: ViewOrder = [
     "acceleration",
     "luojie",
     "confirming",
+    "growth_quality",
     "baseline",
 ]
 
@@ -85,11 +86,27 @@ VIEW_META = {
         "label": "等确认",
         "description": "日线已有启动线索，但等待确认。",
     },
+    "growth_quality": {
+        "label": "成长质量 Top10",
+        "short_label": "成长质量",
+        "description": "按成长质量层级筛选的跨池高质量观察榜。",
+    },
     "baseline": {
         "label": "基准",
         "description": "纯净缠论结构参考池，不参与Top10。",
     },
 }
+
+
+def _to_tier_score(tier: Any) -> int:
+    normalized = _safe_str(tier)
+    if normalized == "elite":
+        return 0
+    if normalized == "strong":
+        return 1
+    if normalized == "partial":
+        return 2
+    return 3
 
 
 def _safe_float(value: Any, *, default: float | None = None) -> float | None:
@@ -119,6 +136,28 @@ def _safe_int(value: Any, *, default: int | None = None) -> int | None:
 
 def _clamp(value: float | int, low: float, high: float) -> float:
     return max(low, min(float(high), float(value)))
+
+
+def _normalize_market_cap_yi(value: Any) -> float | None:
+    number = _safe_float(value)
+    if number is None:
+        return None
+    if abs(number) > 10000:
+        return round(number / 100_000_000.0, 4)
+    return number
+
+
+def _resolve_ret20(row: Mapping[str, Any]) -> float | None:
+    explicit = _safe_float(row.get("ret20"))
+    if explicit is not None:
+        return explicit
+    closes = _to_float_list(row.get("closes"))
+    if len(closes) < 21:
+        return None
+    base = closes[-21]
+    if base == 0:
+        return None
+    return round((closes[-1] - base) / base * 100.0, 4)
 
 
 def _to_dict(value: Any) -> dict[str, Any]:
@@ -319,25 +358,104 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         if prev_avg > 0:
             volume_ratio20 = round(recent[-1] / prev_avg, 4)
 
+    money20 = _safe_float(row.get("money20"))
+    liquidity_source = _safe_str(row.get("liquidity_source"))
     liquidity_score = 0.0
-    if volume_ratio20 > 0 and volume20 > 0:
-        # 0.2x and below treated as weak liquidity; 2.2x and above treated as high.
-        liquidity_score = round(_clamp((volume_ratio20 - 0.2) / 2.0 * 100.0, 0.0, 100.0), 4)
+    liquidity_label = "低流动性"
+    if money20 is not None and money20 > 0:
+        if money20 < 30_000_000:
+            liquidity_score = 0.0
+            liquidity_label = "低流动性"
+        elif money20 < 50_000_000:
+            liquidity_score = round(_clamp((money20 - 30_000_000) / 20_000_000 * 20.0, 0.0, 20.0), 4)
+            liquidity_label = "勉强可交易"
+        elif money20 < 100_000_000:
+            liquidity_score = round(45.0 + _clamp((money20 - 50_000_000) / 50_000_000 * 24.0, 0.0, 24.0), 4)
+            liquidity_label = "流动性合格"
+        elif money20 < 200_000_000:
+            liquidity_score = round(70.0 + _clamp((money20 - 100_000_000) / 100_000_000 * 20.0, 0.0, 20.0), 4)
+            liquidity_label = "流动性良好"
+        else:
+            liquidity_score = 100.0
+            liquidity_label = "高流动性"
+        if not liquidity_source:
+            liquidity_source = "amounts"
+    elif volume_ratio20 > 0 and volume20 > 0:
+        # Without real turnover, volume only proves activity and must not become high liquidity.
+        liquidity_score = round(_clamp((volume_ratio20 - 0.2) / 2.0 * 25.0, 0.0, 25.0), 4)
+        liquidity_label = "量能活跃"
+        liquidity_source = liquidity_source or "volume_proxy"
     elif volume20 > 0:
-        # Fall back to absolute throughput if ratio is missing.
-        liquidity_score = round(_clamp(volume20 / 2_000_000.0 * 100.0, 0.0, 100.0), 4)
+        liquidity_score = round(_clamp(volume20 / 2_000_000.0 * 20.0, 0.0, 20.0), 4)
+        liquidity_label = "量能活跃"
+        liquidity_source = liquidity_source or "volume_proxy"
 
-    growth_board_score = 0.0
+    code_style_score = 0.0
     growth_board_label = ""
     if code.startswith(("300", "301")):
-        growth_board_score = 90.0
+        code_style_score = 100.0
         growth_board_label = "创业板弹性"
     elif code.startswith(("688", "689")):
-        growth_board_score = 75.0
+        code_style_score = 90.0
         growth_board_label = "科创弹性"
     elif code.startswith("002"):
-        growth_board_score = 55.0
+        code_style_score = 75.0
         growth_board_label = "中小成长"
+
+    market_cap = _normalize_market_cap_yi(row.get("market_cap"))
+    circulating_market_cap = _normalize_market_cap_yi(row.get("circulating_market_cap"))
+    if circulating_market_cap is None:
+        circulating_market_cap = _normalize_market_cap_yi(row.get("float_market_cap"))
+
+    market_cap_for_score = circulating_market_cap if circulating_market_cap is not None else market_cap
+    market_cap_source = "circulating_market_cap" if circulating_market_cap is not None else ("market_cap" if market_cap is not None else "")
+    market_cap_score = 0.0
+    market_cap_label = ""
+    if market_cap_for_score is not None:
+        if market_cap_source == "circulating_market_cap":
+            if 20 <= market_cap_for_score <= 200:
+                market_cap_score = 100.0
+                market_cap_label = "强弹性流通市值"
+            elif 200 < market_cap_for_score <= 500:
+                market_cap_score = 70.0
+                market_cap_label = "中等流通弹性"
+            elif 500 < market_cap_for_score <= 800:
+                market_cap_score = 35.0
+                market_cap_label = "轻微流通弹性"
+            else:
+                market_cap_label = "流通市值弹性不足"
+        else:
+            if 30 <= market_cap_for_score <= 300:
+                market_cap_score = 100.0
+                market_cap_label = "强成长市值"
+            elif 300 < market_cap_for_score <= 800:
+                market_cap_score = 70.0
+                market_cap_label = "中等成长市值"
+            elif 800 < market_cap_for_score <= 1200:
+                market_cap_score = 35.0
+                market_cap_label = "轻微成长市值"
+            else:
+                market_cap_label = "市值弹性不足"
+
+    ret20 = _resolve_ret20(row)
+    ret20_score = 0.0
+    if ret20 is None:
+        ret20_score = 40.0
+    elif 3.0 <= ret20 <= 45.0:
+        ret20_score = 100.0
+    elif 0.0 < ret20 < 3.0:
+        ret20_score = 45.0
+    elif 45.0 < ret20 <= 60.0:
+        ret20_score = 25.0
+
+    growth_board_score = round(
+        code_style_score * 0.35 + market_cap_score * 0.45 + ret20_score * 0.20,
+        4,
+    )
+    if code_style_score <= 0:
+        growth_board_score = 0.0
+    if market_cap_for_score is None:
+        growth_board_score = min(growth_board_score, 45.0)
 
     sector_rank = _safe_float(row.get("sector_rank"))
     sector_flow = _safe_float(row.get("sector_flow"))
@@ -370,16 +488,66 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         4,
     )
 
-    pool_quality_score = round(
-        (liquidity_score * 0.45 + growth_board_score * 0.25 + sector_quality_score * 0.30),
-        4,
-    )
+    pool_quality_score = round((liquidity_score * 0.40 + growth_board_score * 0.35 + sector_quality_score * 0.25), 4)
+
+    def _to_tier(score_value: float) -> str:
+        if score_value >= 70.0 and growth_board_score >= 55.0 and sector_quality_score >= 70.0:
+            return "elite"
+        if score_value >= 55.0 and growth_board_score >= 55.0 and sector_quality_score >= 55.0:
+            return "strong"
+        pass_count = 0
+        if score_value >= 55.0:
+            pass_count += 1
+        if growth_board_score >= 55.0:
+            pass_count += 1
+        if sector_quality_score >= 55.0:
+            pass_count += 1
+        if pass_count >= 2:
+            return "partial"
+        return "none"
+
+    pool_quality_tier = _to_tier(liquidity_score)
+    pool_quality_components = [
+        {
+            "name": "liquidity",
+            "score": round(_clamp(liquidity_score, 0.0, 100.0), 4),
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0,
+        },
+        {
+            "name": "growth",
+            "score": round(_clamp(growth_board_score, 0.0, 100.0), 4),
+            "threshold_elite": 55.0,
+            "threshold_strong": 55.0,
+        },
+        {
+            "name": "market_cap",
+            "score": round(_clamp(market_cap_score, 0.0, 100.0), 4),
+            "source": market_cap_source,
+        },
+        {
+            "name": "ret20",
+            "score": round(_clamp(ret20_score, 0.0, 100.0), 4),
+        },
+        {
+            "name": "sector",
+            "score": round(_clamp(sector_quality_score, 0.0, 100.0), 4),
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0,
+        },
+    ]
 
     pool_quality_tags: list[str] = []
-    if liquidity_score >= 70:
-        pool_quality_tags.append("流动性充足")
+    if liquidity_score >= 90:
+        pool_quality_tags.append("高流动性")
+    elif liquidity_score >= 70:
+        pool_quality_tags.append("流动性良好")
+    elif liquidity_score >= 45:
+        pool_quality_tags.append("流动性合格")
     if growth_board_label:
         pool_quality_tags.append(growth_board_label)
+    if market_cap_label and market_cap_score > 0:
+        pool_quality_tags.append(market_cap_label)
     if sector_quality_score >= 70:
         pool_quality_tags.append("板块质量上行")
 
@@ -387,12 +555,26 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     return {
         "volume20": volume20,
         "volume_ratio20": volume_ratio20,
+        "liquidity_label": liquidity_label,
         "liquidity_score": liquidity_score,
+        "code_style_score": code_style_score,
         "growth_board_score": growth_board_score,
         "growth_board_label": growth_board_label,
+        "market_cap_score": market_cap_score,
+        "market_cap_label": market_cap_label,
+        "market_cap_source": market_cap_source,
+        "ret20": ret20,
+        "ret20_score": ret20_score,
         "sector_quality_score": sector_quality_score,
+        "pool_quality_tier": pool_quality_tier,
+        "pool_quality_components": pool_quality_components,
         "pool_quality_score": pool_quality_score,
         "pool_quality_tags": pool_quality_tags,
+        "market_cap": market_cap,
+        "circulating_market_cap": circulating_market_cap,
+        "float_market_cap": circulating_market_cap,
+        "liquidity_source": liquidity_source,
+        "money20": money20,
     }
 
 
@@ -844,6 +1026,44 @@ def _build_highlights(
     return top_rows
 
 
+def _build_growth_quality(
+    views: dict[str, dict[str, Mapping[str, Any]]],
+    data_quality: Mapping[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Mapping[str, Any]]] = {}
+    source_map = {
+        "main": views["main"],
+        "acceleration": views["acceleration"],
+        "luojie": views["luojie"],
+        "confirming": views["confirming"],
+    }
+    for source, source_items in source_map.items():
+        for code, raw in source_items.items():
+            bucket = merged.setdefault(code, {"by_source": {}})
+            if source not in bucket["by_source"]:
+                bucket["by_source"][source] = raw
+
+    rows = [
+        _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
+        for bucket in merged.values()
+    ]
+
+    def _growth_quality_sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, str]:
+        item_pool_quality = _to_dict(item.get("pool_quality"))
+        return (
+            _to_tier_score(_safe_str(item_pool_quality.get("pool_quality_tier"))),
+            -_safe_float(item_pool_quality.get("pool_quality_score"), default=0.0),
+            -_safe_float(item.get("opportunity_score"), default=0.0),
+            _safe_str(item.get("code")),
+        )
+
+    rows.sort(key=_growth_quality_sort_key)
+    top_rows = rows[:10]
+    for rank, row in enumerate(top_rows, start=1):
+        row["view_rank"] = rank
+    return top_rows
+
+
 def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Build a compact v2 workspace from serialized report payload.
 
@@ -863,11 +1083,15 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
 
     highlights = _build_highlights(views, data_quality=data_quality)
     view_items["highlights"] = highlights
+    growth_quality = _build_growth_quality(views, data_quality=data_quality)
+    view_items["growth_quality"] = growth_quality
 
-    # Re-rank highlights and each view after dedupe/sorting.
+    # Re-rank opportunity-score views after dedupe/sorting. growth_quality keeps
+    # its tier/quality-first order by design.
     for name in VIEW_ORDER:
         rows = view_items[name]
-        rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
+        if name != "growth_quality":
+            rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
         for rank, row in enumerate(rows, start=1):
             row["view_rank"] = rank
 
@@ -895,6 +1119,14 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
             "selected_count": counts["highlights"],
             "selection_policy": "soft_reserve_quality_first",
             "baseline_included": False,
+        },
+        "growth_quality_overlap": {
+            "highlights_codes": [item["code"] for item in view_items["highlights"]],
+            "growth_quality_codes": [item["code"] for item in view_items["growth_quality"]],
+            "overlap_codes": sorted(
+                set(item["code"] for item in view_items["highlights"])
+                & set(item["code"] for item in view_items["growth_quality"])
+            ),
         },
     }
 

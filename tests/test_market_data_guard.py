@@ -96,6 +96,82 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(len(stocks), 1)
         self.assertEqual(stocks[0]["data_status"]["daily"], "stale_cache")
 
+    def test_batch_fetch_daily_klines_passes_market_cap_metadata(self):
+        stable = _kline(
+            ["2026-06-30"] * 60,
+            [10.0] * 60,
+        )
+
+        stock = {
+            "code": "600000",
+            "name": "测试股",
+            "sector": "测试板块",
+            "sector_tags": ["测试板块"],
+            "market_cap": 12345.67,
+            "float_market_cap": 9876.54,
+            "amount": 555,
+            "amounts": [1000, 2000, 3000],
+        }
+
+        with patch.object(data_fetcher, "fetch_daily_kline", return_value=stable):
+            stocks = data_fetcher.batch_fetch_daily_klines(
+                [stock],
+                required_date="2026-06-30",
+                allow_stale=True,
+            )
+
+        self.assertEqual(len(stocks), 1)
+        self.assertEqual(stocks[0]["market_cap"], 12345.67)
+        self.assertEqual(stocks[0]["float_market_cap"], 9876.54)
+        self.assertEqual(stocks[0]["amount"], 555)
+        self.assertEqual(stocks[0]["amounts"], [1000, 2000, 3000])
+
+    def test_fetch_sector_stocks_normalizes_market_caps_to_yi(self):
+        payload = {
+            "data": {
+                "diff": [
+                    {
+                        "f12": "300001",
+                        "f14": "测试成长",
+                        "f3": 2.0,
+                        "f2": 20.0,
+                        "f20": 30_000_000_000,
+                        "f21": 12_000_000_000,
+                    }
+                ]
+            }
+        }
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", return_value=payload):
+            stocks = data_fetcher.fetch_sector_stocks("BK0001")
+
+        self.assertEqual(stocks[0]["market_cap"], 300.0)
+        self.assertEqual(stocks[0]["circulating_market_cap"], 120.0)
+        self.assertEqual(stocks[0]["float_market_cap"], 120.0)
+
+    def test_eastmoney_kline_parser_keeps_amounts(self):
+        api_payload = {
+            "data": {
+                "klines": [
+                    "2026-06-27,10.00,10.20,10.40,9.90,1000,500000,10000,10020,10030,10040,10050",
+                    "2026-06-28,10.20,10.30,10.60,10.00,1200,600000,13000,12020,12030,12040,12050",
+                ]
+            }
+        }
+
+        class FakeResp:
+            def json(self):
+                return api_payload
+
+        with patch.object(data_fetcher.SESSION, "get", return_value=FakeResp()):
+            kline = data_fetcher._fetch_daily_kline_eastmoney_remote("600000", count=2)
+
+        self.assertIn("amounts", kline)
+        self.assertIsInstance(kline["amounts"], np.ndarray)
+        self.assertEqual(len(kline["amounts"]), 2)
+        self.assertEqual(float(kline["amounts"][0]), 500000.0)
+        self.assertEqual(float(kline["amounts"][1]), 600000.0)
+
     def test_collect_daily_data_preserves_sector_tags_and_quality(self):
         sectors = [
             {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000},

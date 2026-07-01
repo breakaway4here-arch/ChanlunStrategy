@@ -10,6 +10,7 @@
 
 import json
 import os
+import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
@@ -240,7 +241,7 @@ def fetch_sector_stocks(sector_code):
             "pn": str(page), "pz": "200", "po": "0", "np": "1",
             "fltt": "2", "invt": "2", "fid": "f3",
             "fs": f"b:{sector_code}",
-            "fields": "f12,f14,f3,f2",
+            "fields": "f12,f14,f3,f2,f20,f21",
         }
         try:
             data = _fetch_eastmoney_json(params)
@@ -251,11 +252,16 @@ def fetch_sector_stocks(sector_code):
             if not items:
                 break
             for it in items:
+                market_cap = _market_cap_to_yi(it.get("f20"))
+                circulating_market_cap = _market_cap_to_yi(it.get("f21"))
                 all_stocks.append({
                     "code": it.get("f12", ""),
                     "name": it.get("f14", "-"),
                     "change_pct": it.get("f3", 0),
                     "close": it.get("f2", 0),
+                    "market_cap": market_cap,
+                    "circulating_market_cap": circulating_market_cap,
+                    "float_market_cap": circulating_market_cap,
                 })
             if len(items) < 200:
                 break
@@ -303,6 +309,49 @@ def _parse_tencent_kline(raw_lines):
         "closes": np.array(closes),
         "volumes": np.array(volumes),
     }
+
+
+def _safe_float(value):
+    if value is None:
+        return None
+    try:
+        value = float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(value):
+        return None
+    return value
+
+
+def _market_cap_to_yi(value):
+    number = _safe_float(value)
+    if number is None:
+        return None
+    if abs(number) > 10000:
+        return round(number / 100_000_000.0, 4)
+    return number
+
+
+def _extract_eastmoney_amount(parts):
+    # fields2 order starts at f51. EastMoney 通常把 f57 放在 index=6。
+    if len(parts) <= 6:
+        return None
+    return _safe_float(parts[6])
+
+
+def _ensure_amounts_array(values):
+    if values is None:
+        return None
+    arr = []
+    for v in values:
+        f = _safe_float(v)
+        if f is None:
+            arr.append(float("nan"))
+        else:
+            arr.append(f)
+    if not arr:
+        return None
+    return np.array(arr, dtype=float)
 
 
 def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
@@ -363,15 +412,21 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
         if not klines:
             return None
         raw_lines = []
+        amounts = []
         for line in klines:
             parts = str(line).split(",")
             if len(parts) < 6:
                 continue
             # 统一为腾讯解析格式: 日期, 开盘, 收盘, 最高, 最低, 成交量
             raw_lines.append([parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]])
+            amounts.append(_extract_eastmoney_amount(parts))
         if not raw_lines:
             return None
-        return _parse_tencent_kline(raw_lines)
+        kline = _parse_tencent_kline(raw_lines)
+        amount_array = _ensure_amounts_array(amounts)
+        if amount_array is not None:
+            kline["amounts"] = amount_array
+        return kline
     except Exception as e:
         print(f"[ERROR] 东方财富日线失败 {code}: {e}")
         return None
@@ -855,6 +910,11 @@ def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_s
                 f"latest={status['latest_date']} required={required_date}"
             )
             return None
+
+        amounts = stock.get("amounts")
+        if amounts is None and isinstance(klines, dict):
+            amounts = klines.get("amounts")
+
         return {
             "code": code,
             "name": stock.get("name", ""),
@@ -864,6 +924,11 @@ def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_s
             "sector_flow": stock.get("sector_flow"),
             "sector_strength_label": stock.get("sector_strength_label", ""),
             "change_pct": stock.get("change_pct", 0),
+            "market_cap": stock.get("market_cap"),
+            "circulating_market_cap": stock.get("circulating_market_cap"),
+            "float_market_cap": stock.get("float_market_cap"),
+            "amount": stock.get("amount"),
+            "amounts": amounts,
             "klines": klines,
             "data_status": status,
         }
@@ -999,6 +1064,11 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
                     "sector_rank": sector_rank,
                     "sector_flow": sector.get("flow"),
                     "sector_strength_label": sector_strength_label,
+                    "market_cap": st.get("market_cap"),
+                    "circulating_market_cap": st.get("circulating_market_cap"),
+                    "float_market_cap": st.get("float_market_cap"),
+                    "amount": st.get("amount"),
+                    "amounts": st.get("amounts"),
                 }
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
