@@ -381,6 +381,7 @@ def _serialize_picks(picks):
             "data_status": p.get("data_status", {}),
             "gf_dma_health": p.get("gf_dma_health", {}),
             "score": p.get("score", 0),
+            "decision_engine_v1": p.get("decision_engine_v1"),
             "sector": p.get("sector", ""),
             "resonance": p.get("resonance", {}),
             "ma_bullish": p.get("ma_bullish", False),
@@ -507,6 +508,7 @@ def _serialize_startup_watchlist(watchlist):
             "startup_age_days": w.get("startup_age_days"),
             "change_pct": w.get("change_pct", 0),
             "volume_ratio": w.get("volume_ratio", 0),
+            "decision_engine_v1": w.get("decision_engine_v1"),
             "close": ref_price,
             "current_price": curr_price,
             "distance_from_reference_pct": dist_pct,
@@ -603,6 +605,7 @@ def _serialize_next_day_boom(data):
             "source_type": c.get("source_type", ""),
             "boom_score": c.get("boom_score", 0),
             "boom_reason": c.get("boom_reason", ""),
+            "decision_engine_v1": c.get("decision_engine_v1"),
             "change_pct": change_pct,
             "current_price": current_price,
             "volume_ratio": c.get("volume_ratio", 0),
@@ -663,6 +666,7 @@ def _serialize_luojie_pool(data):
             "theme_labels": c.get("theme_labels", []),
             "tier": c.get("tier", ""),
             "score": c.get("score", 0),
+            "decision_engine_v1": c.get("decision_engine_v1"),
             "close": c.get("close", 0),
             "life_line": c.get("life_line", 0),
             "ma13": c.get("ma13", 0),
@@ -707,6 +711,7 @@ def _serialize_picks_light(picks):
             "pivots": p.get("pivots", {}),
             "trend_type": p.get("trend_type", ""),
             "score": p.get("score", 0),
+            "decision_engine_v1": p.get("decision_engine_v1"),
             "sector": p.get("sector", ""),
             "resonance": p.get("resonance", {}),
             "ma_bullish": p.get("ma_bullish", False),
@@ -822,6 +827,8 @@ def _copy_workspace_score_fields(raw_item, workspace_item):
     for key in ("opportunity_score", "watch_score", "view_rank", "rank_trace"):
         if key in workspace_item:
             raw_item[key] = workspace_item[key]
+    if "decision_engine_v1" in workspace_item:
+        raw_item["decision_engine_v1"] = workspace_item["decision_engine_v1"]
     if "rank" in raw_item and workspace_item.get("view_rank") is not None:
         raw_item["rank"] = workspace_item["view_rank"]
 

@@ -15,8 +15,9 @@ def _fusion_pick(
     reason="底背驰候选强市通过",
     sector="测试板块",
     sector_tags=None,
+    decision_engine_v1=None,
 ):
-    return {
+    pick = {
         "code": code,
         "name": name,
         "sector": sector,
@@ -44,6 +45,9 @@ def _fusion_pick(
         "blocked_buy_points": [{"type": "拦截"}],
         "sector_tags": list(sector_tags or []),
     }
+    if decision_engine_v1 is not None:
+        pick["decision_engine_v1"] = decision_engine_v1
+    return pick
 
 
 def _baseline_pick(code="600099", name="基准票"):
@@ -273,6 +277,36 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn(("sector", "测试板块"), tags)
         self.assertIn(("source", "主推"), tags)
         self.assertIn(("signal", "底背驰候选"), tags)
+
+    def test_workspace_item_preserves_decision_engine_payload_without_affecting_sort(self):
+        decision = {
+            "version": "1",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 42,
+            "structure": {"score": 5, "reasons": ["震荡结构"]},
+            "position": {"score": 35, "reasons": ["低位启动区"]},
+            "sentiment": {"score": 2, "reasons": ["情绪信息不足"]},
+        }
+        with_decision = _fusion_pick(
+            code="600050",
+            name="决策票",
+            score=10,
+            distance=0.5,
+            decision_engine_v1=decision,
+        )
+        higher_rank = _fusion_pick(
+            code="600049",
+            name="高机会分",
+            score=95,
+            distance=0.5,
+        )
+
+        workspace = build_workspace({"picks_fusion": [with_decision, higher_rank]})
+        main_rows = workspace["views"]["main"]
+
+        self.assertEqual([item["code"] for item in main_rows], ["600049", "600050"])
+        self.assertEqual(main_rows[1]["decision_engine_v1"], decision)
 
     def test_workspace_info_tags_include_extra_sector_tags(self):
         pick = _fusion_pick(code="600005", name="半导体票", sector="电子")

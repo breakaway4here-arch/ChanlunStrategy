@@ -15,6 +15,8 @@
   python3 run.py --debug      # 调试模式（少量股票）
 """
 
+from __future__ import annotations
+
 import os
 import sys
 import json
@@ -22,6 +24,7 @@ import time
 import argparse
 from datetime import datetime
 import math
+from typing import Callable
 
 import numpy as np
 import random
@@ -73,6 +76,40 @@ MARKET_INDICES = {
     "中证500": "000905",
 }
 PREVIEW_OUTPUT_DIR = "docs-preview"
+
+
+def _get_decision_engine():
+    """Delay import for optional decision engine plugin compatibility."""
+    try:
+        from chanlun.decision_engine import evaluate_stock
+    except ImportError:
+        return None
+    return evaluate_stock
+
+
+def _evaluate_with_context(evaluator: Callable, item: dict, market_context: dict | None):
+    if not callable(evaluator) or not isinstance(item, dict):
+        return None
+    try:
+        return evaluator(item, market_context=market_context)
+    except TypeError:
+        try:
+            return evaluator(item, market_context)
+        except TypeError:
+            return evaluator(item)
+    except Exception:
+        return None
+
+
+def _inject_decision_engine(items, evaluator: Callable | None, market_context: dict | None = None):
+    if not evaluator:
+        return
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        decision = _evaluate_with_context(evaluator, item, market_context)
+        if decision is not None:
+            item["decision_engine_v1"] = decision
 
 
 def _safe_number(value, default=None):
@@ -988,6 +1025,22 @@ def main(debug=False, preview=False):
     raw_events = fetch_cls_news(CLS_NEWS_COUNT)
     ranked_events = rank_market_impact_events(raw_events, sector_flow=sectors, limit_up_pool=limit_up_pool_data, top_n=EVENT_TOP_N)
     events = normalize_events(enrich_events(ranked_events))
+
+    # 决策引擎评分（可选字段）
+    decision_engine = _get_decision_engine()
+    if decision_engine:
+        market_context = {
+            "market_indices": market_indices,
+            "sectors": sectors,
+            "date": today,
+            "data_quality": data_quality,
+            "market_data_status": market_data_status,
+        }
+        _inject_decision_engine(pure_scored, decision_engine, market_context)
+        _inject_decision_engine(fusion_scored, decision_engine, market_context)
+        _inject_decision_engine(startup_watchlist, decision_engine, market_context)
+        _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
+        _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
     # 构建报告数据
     daily_scan_diag = {

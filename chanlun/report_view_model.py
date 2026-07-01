@@ -588,6 +588,7 @@ def _build_item(
         "primary_reason": primary_reason,
         "risk_flags": all_risk_flags,
         "rank_trace": rank_trace,
+        "decision_engine_v1": preferred_raw.get("decision_engine_v1"),
         "ref": {"pool": SOURCE_POOLS.get(preferred, ""), "code": code},
     }
     return item

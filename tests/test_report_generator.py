@@ -13,7 +13,7 @@ from chanlun.report_generator import (
     _serialize_next_day_boom, _serialize_luojie_pool,
     build_chart_window, build_chart_annotations, build_startup_watch_chart_annotations,
     _safe_list, NpEncoder, generate_report, build_recent_reviews, write_data_manifest,
-    update_data_json,
+    update_data_json, _backfill_workspace_scores, _serialize_picks_light,
 )
 from scripts.validate_today_report import validate_manifest_contract
 from config import (
@@ -81,6 +81,71 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 
 class TestReportGenerator(unittest.TestCase):
+
+    def test_serialize_picks_carries_decision_engine_payload(self):
+        pick = make_pick()
+        pick["decision_engine_v1"] = {
+            "summary": "决策命中率优先",
+            "score": 88.2,
+            "reason": "风险平衡且趋势一致",
+        }
+        serialized = _serialize_picks([pick])
+
+        self.assertEqual(serialized[0]["decision_engine_v1"], pick["decision_engine_v1"])
+
+    def test_serialize_picks_light_carries_decision_engine_payload(self):
+        pick = make_pick()
+        pick["decision_engine_v1"] = {
+            "version": "1",
+            "decision": "推荐",
+            "total_score": 72,
+        }
+
+        serialized = _serialize_picks_light([pick])
+
+        self.assertEqual(serialized[0]["decision_engine_v1"], pick["decision_engine_v1"])
+
+    def test_backfill_workspace_scores_syncs_decision_engine_payload(self):
+        daily_data = {
+            "picks_fusion": [{"code": "600001"}, {"code": "600002"}],
+            "picks_pure": [{"code": "600101"}],
+            "startup_watchlist": [{"code": "600201"}],
+            "next_day_boom": {"candidates": [{"code": "600301"}]},
+            "luojie_pool": {"candidates": [{"code": "600401"}]},
+            "workspace": {
+                "views": {
+                    "main": [
+                        {"code": "600002", "decision_engine_v1": {"summary": "main-2"}, "opportunity_score": 90, "rank_trace": {}},
+                        {"code": "600001", "decision_engine_v1": {"summary": "main-1"}, "opportunity_score": 80, "rank_trace": {}},
+                    ],
+                    "baseline": [
+                        {"code": "600101", "decision_engine_v1": {"summary": "baseline"}, "opportunity_score": 70, "rank_trace": {}},
+                    ],
+                    "confirming": [
+                        {"code": "600201", "decision_engine_v1": {"summary": "confirming"}, "opportunity_score": 60, "rank_trace": {}},
+                    ],
+                    "acceleration": [
+                        {"code": "600301", "decision_engine_v1": {"summary": "acceleration"}, "opportunity_score": 50, "rank_trace": {}},
+                    ],
+                    "luojie": [
+                        {"code": "600401", "decision_engine_v1": {"summary": "luojie"}, "opportunity_score": 40, "rank_trace": {}},
+                    ],
+                }
+            },
+        }
+
+        _backfill_workspace_scores(daily_data)
+
+        fusion_by_code = {
+            item["code"]: item["decision_engine_v1"]
+            for item in daily_data["picks_fusion"]
+        }
+        self.assertEqual(fusion_by_code["600001"], {"summary": "main-1"})
+        self.assertEqual(fusion_by_code["600002"], {"summary": "main-2"})
+        self.assertEqual(daily_data["picks_pure"][0]["decision_engine_v1"], {"summary": "baseline"})
+        self.assertEqual(daily_data["startup_watchlist"][0]["decision_engine_v1"], {"summary": "confirming"})
+        self.assertEqual(daily_data["next_day_boom"]["candidates"][0]["decision_engine_v1"], {"summary": "acceleration"})
+        self.assertEqual(daily_data["luojie_pool"]["candidates"][0]["decision_engine_v1"], {"summary": "luojie"})
 
     def test_serialize_picks_omits_30min_chart_arrays(self):
         """30min K线数组已从报告JSON删除，只保留确认摘要字段。"""
@@ -318,6 +383,10 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("var(--mobile-drawer-bottom-offset, 16px)", self.asset_css)
         self.assertIn("min-width: 76px;", self.asset_css)
         self.assertIn("height: 42px;", self.asset_css)
+
+    def test_v2_asset_contains_decision_engine_summary_block(self):
+        self.assertIn("getDecisionEngineSummary", self.asset_js)
+        self.assertIn("决策评分摘要", self.asset_js)
 
     def test_no_old_access_key_var(self):
         """HTML does not contain the old var ACCESS_KEY = 'plaintext' pattern."""

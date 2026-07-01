@@ -1093,6 +1093,10 @@
     if (item.code) details.push('代码：' + item.code);
     if (item.sector) details.push('板块：' + item.sector);
     if (item.distance_from_reference_pct !== undefined) details.push('距参考价：' + formatPct(item.distance_from_reference_pct, true));
+    var decisionSummary = getDecisionEngineSummary(item, raw);
+    if (decisionSummary) {
+      details.push('决策评分摘要：' + decisionSummary);
+    }
     var opportunityScore = safeNumber(item.opportunity_score, null);
     var watchScore = safeNumber(item.watch_score, null);
     if (opportunityScore !== null) {
@@ -1124,6 +1128,59 @@
       + '    </ul>'
       + '  </div>'
       + '</div>';
+  }
+
+  function getDecisionEngineSummary(item, raw) {
+    var decision = null;
+    if (raw && raw.decision_engine_v1) {
+      decision = raw.decision_engine_v1;
+    } else if (item && item.decision_engine_v1) {
+      decision = item.decision_engine_v1;
+    }
+    if (!decision) {
+      return '';
+    }
+    if (isString(decision)) {
+      return normalizeString(decision);
+    }
+    if (isString(decision.summary)) {
+      return normalizeString(decision.summary);
+    }
+
+    var score = safeNumber(decision.total_score, null);
+    if (score === null) {
+      score = safeNumber(decision.score, null);
+    }
+    if (score === null) {
+      score = safeNumber(decision.final_score, null);
+    }
+    if (score === null) {
+      score = safeNumber(decision.opportunity_score, null);
+    }
+
+    var parts = [];
+    if (score !== null) {
+      parts.push('评分 ' + formatNumber(score, 1));
+    }
+    if (isString(decision.decision)) {
+      parts.push(normalizeString(decision.decision));
+    }
+    if (decision.structure && safeNumber(decision.structure.score, null) !== null) {
+      parts.push('结构 ' + formatNumber(safeNumber(decision.structure.score, 0), 0));
+    }
+    if (decision.position && safeNumber(decision.position.score, null) !== null) {
+      parts.push('位置 ' + formatNumber(safeNumber(decision.position.score, 0), 0));
+    }
+    if (decision.sentiment && safeNumber(decision.sentiment.score, null) !== null) {
+      parts.push('情绪 ' + formatNumber(safeNumber(decision.sentiment.score, 0), 0));
+    }
+    if (isString(decision.label)) {
+      parts.push(normalizeString(decision.label));
+    }
+    if (isString(decision.reason)) {
+      parts.push('结论：' + normalizeString(decision.reason));
+    }
+    return parts.join('；');
   }
 
   function buildChartPlaceholder() {
