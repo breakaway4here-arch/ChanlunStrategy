@@ -471,8 +471,6 @@ def _money20_from_amounts(values):
 
 
 def _money20_from_volume_price_proxy(closes, volumes):
-    if not closes or not volumes:
-        return None
     close_arr = _as_list(closes)
     vol_arr = _as_list(volumes)
     if not close_arr or not vol_arr:
