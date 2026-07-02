@@ -19,6 +19,8 @@
     baseline: '基准：纯净缠论结构参考池，用于看原始结构信号和主推来源参考。',
   };
   var CHART_EMPTY_TEXT = '暂无图表数据，但保留推荐原因和来源。请检查原始池子数据或 K 线数据。';
+  var TOP10_POLL_INTERVAL_MS = 2200;
+  var TOP10_MAX_POLL_ATTEMPTS = 52;
 
   var state = {
     data: null,
@@ -29,6 +31,16 @@
     chartInstance: null,
     chartMount: null,
     rawPoolCandidates: null,
+    top10: {
+      jobId: '',
+      status: '',
+      items: [],
+      message: '',
+      polling: false,
+      timer: null,
+      pollCount: 0,
+      busy: false,
+    },
   };
 
   var nodes = {
@@ -45,6 +57,10 @@
     drawerBackdrop: null,
     drawerPanel: null,
     drawerContent: null,
+    top10Shell: null,
+    top10RunButton: null,
+    top10Status: null,
+    top10Result: null,
     app: null,
   };
 
@@ -286,6 +302,287 @@
     return window.CHANLUN_BOOTSTRAP || {};
   }
 
+  function getTop10ApiBase() {
+    return normalizeString(getBootstrap().top10ApiBase);
+  }
+
+  function getTop10ApiStatusTone(status) {
+    if (status === 'done') return 'is-positive';
+    if (status === 'failed' || status === 'error') return 'is-danger';
+    if (status === 'running' || status === 'queued') return 'is-warning';
+    if (status === 'disabled') return 'is-neutral';
+    return 'is-neutral';
+  }
+
+  function getTop10StatusLabel(status) {
+    if (status === 'queued') return '排队中';
+    if (status === 'running') return '执行中';
+    if (status === 'done') return '完成';
+    if (status === 'failed' || status === 'error') return '失败';
+    if (status === 'disabled') return '未配置';
+    return '待触发';
+  }
+
+  function formatTop10Date(value) {
+    if (!value) return '--';
+    var text = normalizeString(value);
+    if (/^\d{4}-\d{2}-\d{2}/.test(text)) return text;
+    return formatDateLabel(text);
+  }
+
+  function resetTop10State() {
+    state.top10 = state.top10 || {};
+    state.top10.jobId = '';
+    state.top10.status = '';
+    state.top10.items = [];
+    state.top10.message = '';
+    state.top10.polling = false;
+    state.top10.busy = false;
+    state.top10.pollCount = 0;
+    if (state.top10.timer) {
+      clearTimeout(state.top10.timer);
+    }
+    state.top10.timer = null;
+    if (nodes.top10Result) {
+      nodes.top10Result.innerHTML = '';
+    }
+  }
+
+  function stopTop10Polling() {
+    if (state.top10 && state.top10.timer) {
+      clearTimeout(state.top10.timer);
+    }
+    if (state.top10) {
+      state.top10.polling = false;
+      state.top10.timer = null;
+    }
+  }
+
+  function renderTop10Status(status, message) {
+    if (!nodes.top10Status) return;
+    var statusText = getTop10StatusLabel(status);
+    var tone = getTop10ApiStatusTone(status);
+    var line = formatTop10Date(formatDateLabel(new Date().toISOString()));
+    var text = normalizeString(message || '');
+    if (!text) {
+      text = statusText;
+      if (statusText === '完成' || statusText === '失败') {
+        line = '';
+      }
+    }
+    nodes.top10Status.className = 'top10-status ' + tone;
+    nodes.top10Status.innerHTML = ''
+      + '<span>' + escapeHtml(text) + '</span>'
+      + (line ? ' <span class="top10-status-updated">· ' + escapeHtml(line) + '</span>' : '');
+
+    state.top10.status = status;
+    state.top10.message = text;
+    if (status === 'disabled' || status === 'failed' || status === 'error') {
+      nodes.top10RunButton.disabled = false;
+      state.top10.busy = false;
+    }
+  }
+
+  function renderTop10Result(payload, status) {
+    if (!nodes.top10Result) return;
+    var items = asArray(payload && (payload.items || payload.top10 || payload.result || payload.data || payload.payload));
+    var generatedAt = payload && payload.generated_at ? normalizeString(payload.generated_at) : '';
+    var statusText = normalizeString(status || 'done');
+    if (statusText === 'done' && items.length === 0) {
+      nodes.top10Result.innerHTML = '<div class="top10-empty">未返回 Top10 数据</div>';
+      return;
+    }
+
+    if (statusText !== 'done') {
+      if (statusText === 'running') {
+        nodes.top10Result.innerHTML = '<div class="top10-placeholder">快照正在执行，请稍候...</div>';
+      } else if (statusText === 'queued') {
+        nodes.top10Result.innerHTML = '<div class="top10-placeholder">已提交队列，等待执行...</div>';
+      } else {
+        nodes.top10Result.innerHTML = '';
+      }
+      return;
+    }
+
+    if (items.length === 0) {
+      nodes.top10Result.innerHTML = '<div class="top10-empty">暂无临时 Top10</div>';
+      return;
+    }
+
+    nodes.top10Result.innerHTML = ''
+      + '<div class="top10-table-wrap">'
+      + '  <div class="top10-list">'
+      + '    <div class="top10-list-head">'
+      + '      <span class="top10-cell rank">Rank</span>'
+      + '      <span class="top10-cell code">Code</span>'
+      + '      <span class="top10-cell name">Name</span>'
+      + '      <span class="top10-cell score">Score</span>'
+      + '      <span class="top10-cell action">Action</span>'
+      + '      <span class="top10-cell reason">Reason</span>'
+      + '      <span class="top10-cell generated">Generated</span>'
+      + '    </div>'
+      + asArray(items).map(function (item, index) {
+        var rec = item || {};
+        var rank = safeNumber(rec.rank, index + 1);
+        if (rank === null || rank === undefined) {
+          rank = index + 1;
+        }
+        var code = normalizeString(rec.code || rec.symbol || '');
+        var name = normalizeString(rec.name || '');
+        var score = safeNumber(rec.score, safeNumber(rec.opportunity_score, safeNumber(rec.total_score, safeNumber(rec.final_score, 0))));
+        var action = normalizeString(rec.action || rec.recommendation || '');
+        var reason = normalizeString(rec.reason || rec.notes || rec.note || '');
+        var itemGeneratedAt = normalizeString(rec.generated_at || generatedAt);
+        return ''
+          + '<div class="top10-row">'
+          + '  <span class="top10-cell rank">' + escapeHtml(String(rank)) + '</span>'
+          + '  <span class="top10-cell code">' + escapeHtml(code) + '</span>'
+          + '  <span class="top10-cell name">' + escapeHtml(name) + '</span>'
+          + '  <span class="top10-cell score">' + (score === null || score === undefined ? '--' : escapeHtml(formatNumber(score, 2))) + '</span>'
+          + '  <span class="top10-cell action">' + escapeHtml(action || '--') + '</span>'
+          + '  <span class="top10-cell reason" title="' + escapeHtml(reason || '--') + '">' + escapeHtml(reason || '--') + '</span>'
+          + '  <span class="top10-cell generated">' + escapeHtml(formatTop10Date(itemGeneratedAt)) + '</span>'
+          + '</div>';
+      }).join('')
+      + '  </div>'
+      + '</div>';
+
+    state.top10.items = items;
+  }
+
+  function renderTop10Control() {
+    var apiBase = getTop10ApiBase();
+    if (!nodes.top10RunButton || !nodes.top10Shell) return;
+    nodes.top10RunButton.disabled = !apiBase || state.top10.busy || state.top10.polling;
+    if (!apiBase) {
+      stopTop10Polling();
+      renderTop10Status('disabled', 'Top10 接口未配置');
+      nodes.top10RunButton.textContent = '暂不可用';
+      nodes.top10Shell.classList.add('is-disabled');
+      return;
+    }
+    nodes.top10Shell.classList.remove('is-disabled');
+    nodes.top10RunButton.textContent = state.top10.polling ? '刷新中' : '生成 Top10';
+    if (!state.top10.polling && !state.top10.busy && state.top10.status !== 'done') {
+      renderTop10Status('idle', '未运行');
+    }
+  }
+
+  function pollTop10Status(jobId) {
+    if (!jobId || !state.top10.polling) {
+      return;
+    }
+    if (!getTop10ApiBase()) {
+      renderTop10Status('disabled', 'Top10 接口未配置');
+      stopTop10Polling();
+      renderTop10Control();
+      return;
+    }
+    if (!window.fetch) {
+      renderTop10Status('failed', '当前环境不支持 fetch');
+      stopTop10Polling();
+      renderTop10Control();
+      return;
+    }
+    if (state.top10.pollCount >= TOP10_MAX_POLL_ATTEMPTS) {
+      renderTop10Status('failed', '轮询超时，建议稍后重试');
+      stopTop10Polling();
+      renderTop10Control();
+      return;
+    }
+
+    state.top10.pollCount += 1;
+    var url = getTop10ApiBase() + '/api/top10/status?job_id=' + encodeURIComponent(jobId);
+    window.fetch(url).then(function (resp) {
+      if (!resp || !resp.ok) {
+        throw new Error('查询 Top10 状态失败：' + resp.status);
+      }
+      return resp.json();
+    }).then(function (payload) {
+      var status = normalizeString(payload && payload.status).toLowerCase();
+      var text = normalizeString(payload && (payload.message || payload.note || payload.status_text || ''));
+      renderTop10Status(status, text || getTop10StatusLabel(status));
+      renderTop10Result(payload, status);
+      if (status === 'done' || status === 'failed' || status === 'error') {
+        stopTop10Polling();
+        renderTop10Control();
+        return;
+      }
+      renderTop10Status(status || 'running');
+      state.top10.timer = window.setTimeout(function () {
+        pollTop10Status(jobId);
+      }, TOP10_POLL_INTERVAL_MS);
+    }).catch(function () {
+      renderTop10Status('failed', '查询 Top10 状态失败');
+      stopTop10Polling();
+      renderTop10Control();
+    });
+  }
+
+  function startTop10Polling(jobId) {
+    state.top10.polling = true;
+    state.top10.jobId = jobId;
+    state.top10.pollCount = 0;
+    renderTop10Status('running', '开始轮询');
+    pollTop10Status(jobId);
+  }
+
+  function handleTop10Run() {
+    if (!nodes.top10RunButton) return;
+    if (state.top10.busy || state.top10.polling) return;
+    if (!getTop10ApiBase()) {
+      renderTop10Status('disabled', 'Top10 接口未配置');
+      return;
+    }
+    if (!window.fetch) {
+      renderTop10Status('failed', '当前环境不支持 fetch');
+      return;
+    }
+    var password = '';
+    try {
+      password = normalizeString(window.prompt('请输入触发口令：')).trim();
+    } catch (err) {
+      password = '';
+    }
+    if (!password) {
+      return;
+    }
+
+    state.top10.busy = true;
+    nodes.top10RunButton.disabled = true;
+    nodes.top10Shell.classList.add('is-loading');
+    renderTop10Status('running', '提交中...');
+    nodes.top10Result.innerHTML = '<div class="top10-placeholder">正在提交 Top10 任务...</div>';
+
+    window.fetch(getTop10ApiBase() + '/api/top10/run', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ password: password }),
+    }).then(function (resp) {
+      if (!resp || !resp.ok) {
+        throw new Error('触发 Top10 失败：' + (resp && resp.status ? resp.status : '网络异常'));
+      }
+      return resp.json();
+    }).then(function (payload) {
+      var jobId = normalizeString(payload && payload.job_id);
+      if (!jobId) {
+        throw new Error('Top10 回应缺少 job_id');
+      }
+      stopTop10Polling();
+      startTop10Polling(jobId);
+    }).catch(function (err) {
+      renderTop10Status('failed', err && err.message ? err.message : '提交失败');
+      nodes.top10Shell.classList.remove('is-loading');
+      renderTop10Control();
+    }).finally(function () {
+      state.top10.busy = false;
+      nodes.top10Shell.classList.remove('is-loading');
+      renderTop10Control();
+    });
+  }
+
   function detectDataUrl(dateStr) {
     var path = window.location.pathname || '';
     var prefix = /\/\d{4}-\d{2}-\d{2}$/.test(path.replace(/\/+$/, '')) ? '../' : '';
@@ -476,6 +773,14 @@
       + '      <div class="report-subtitle"></div>'
       + '    </div>'
       + '    <div class="header-metrics"></div>'
+      + '    <section class="top10-widget" id="top10Widget">'
+      + '      <div class="top10-widget-head">'
+      + '        <span class="top10-widget-title">临时 Top10 快照</span>'
+      + '        <button type="button" class="top10-run-btn" id="top10RunButton">生成 Top10</button>'
+      + '      </div>'
+      + '      <div class="top10-status" id="top10Status">Top10 接口未配置</div>'
+      + '      <div class="top10-result" id="top10Result"></div>'
+      + '    </section>'
       + '  </header>'
       + '  <section class="workspace">'
       + '    <nav class="workspace-tabs" id="workspaceTabs"></nav>'
@@ -522,6 +827,10 @@
     nodes.drawerBackdrop = app.querySelector('#mobileDrawerBackdrop');
     nodes.drawerPanel = app.querySelector('#mobileDrawerPanel');
     nodes.drawerContent = app.querySelector('#mobileDrawerContent');
+    nodes.top10Shell = app.querySelector('#top10Widget');
+    nodes.top10RunButton = app.querySelector('#top10RunButton');
+    nodes.top10Status = app.querySelector('#top10Status');
+    nodes.top10Result = app.querySelector('#top10Result');
     nodes.globalError = app.querySelector('#globalError');
   }
 
@@ -1960,6 +2269,11 @@
     state.isMobile = isMobileViewport();
     buildAppShell();
     state.rawPoolCandidates = null;
+    resetTop10State();
+    renderTop10Control();
+    if (nodes.top10RunButton) {
+      nodes.top10RunButton.addEventListener('click', handleTop10Run);
+    }
 
     resolveGranted().then(function (granted) {
       state.granted = granted;
@@ -1977,6 +2291,7 @@
       renderCandidateDetail(first);
       state.activeItem = first;
       renderAuxiliaryCenter();
+      renderTop10Control();
       if (state.isMobile && first) {
         nodes.detailPanel.innerHTML = '<div class="detail-empty">选择后查看详情</div>';
       }

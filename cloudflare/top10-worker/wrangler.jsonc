@@ -1,0 +1,19 @@
+{
+  "name": "top10-worker",
+  "main": "src/index.js",
+  "compatibility_date": "2026-07-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "kv_namespaces": [
+    {
+      "binding": "TOP10_KV",
+      "id": "9ac3f37ffcb34dfab4569f68da3fab55"
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://breakaway4here-arch.github.io",
+    "GITHUB_OWNER": "breakaway4here-arch",
+    "GITHUB_REPO": "ChanlunStrategy",
+    "GITHUB_WORKFLOW_ID": "top10-on-demand.yml",
+    "GITHUB_REF": "main"
+  }
+}

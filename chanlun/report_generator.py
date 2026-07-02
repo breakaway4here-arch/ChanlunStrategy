@@ -1136,6 +1136,7 @@ def _generate_report_v2(report_data, output_dir=None):
     bootstrap = {
         "pageDate": date_str,
         "inlineReportData": daily_data,
+        "top10ApiBase": os.environ.get("CHANLUN_TOP10_API_BASE", "").strip().rstrip("/"),
         "accessControlEnabled": bool(ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY),
         "accessKeyHash": access_key_hash,
         "accessKeySalt": FULL_ACCESS_KEY_SALT if ENABLE_WEAK_ACCESS_CONTROL else "",

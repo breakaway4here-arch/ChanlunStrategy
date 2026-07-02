@@ -1,0 +1,146 @@
+name: Top10 On-Demand Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      job_id:
+        description: "Top10 snapshot job id"
+        required: true
+        type: string
+
+jobs:
+  top10-on-demand:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install runtime dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install numpy requests
+
+      - name: Generate Top10 snapshot
+        id: generate_top10
+        shell: bash
+        run: |
+          set +e
+
+          job_id="${{ github.event.inputs.job_id }}"
+          OUTPUT_PATH="$RUNNER_TEMP/top10.json"
+          ERROR_PATH="$RUNNER_TEMP/top10.error"
+          PREVIEW_LOG_PATH="$RUNNER_TEMP/top10.preview.log"
+
+          python3 run.py --preview > "$PREVIEW_LOG_PATH" 2> "$ERROR_PATH"
+          PREVIEW_EXIT_CODE=$?
+
+          if [ "$PREVIEW_EXIT_CODE" -eq 0 ]; then
+            python3 scripts/generate_top10_snapshot.py \
+              --job-id "$job_id" \
+              --data-dir docs-preview/data \
+              --output "$OUTPUT_PATH" \
+              2>> "$ERROR_PATH"
+            EXIT_CODE=$?
+          else
+            EXIT_CODE=$PREVIEW_EXIT_CODE
+          fi
+
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+          echo "output_path=$OUTPUT_PATH" >> "$GITHUB_OUTPUT"
+          echo "error_path=$ERROR_PATH" >> "$GITHUB_OUTPUT"
+          echo "preview_log_path=$PREVIEW_LOG_PATH" >> "$GITHUB_OUTPUT"
+
+          if [ "$EXIT_CODE" -ne 0 ]; then
+            SUMMARY="$(sed -n '1,5p' "$ERROR_PATH" | tr '\n' ' ' | tr -d '\r')"
+            echo "error_summary=$SUMMARY" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build callback payload
+        id: build_payload
+        shell: bash
+        env:
+          JOB_ID: ${{ github.event.inputs.job_id }}
+          GENERATE_EXIT_CODE: ${{ steps.generate_top10.outputs.exit_code }}
+          OUTPUT_PATH: ${{ steps.generate_top10.outputs.output_path }}
+          ERROR_PATH: ${{ steps.generate_top10.outputs.error_path }}
+          ERROR_SUMMARY: ${{ steps.generate_top10.outputs.error_summary }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          output_path = Path(os.environ["OUTPUT_PATH"])
+          error_path = Path(os.environ["ERROR_PATH"])
+          exit_code = int(os.environ.get("GENERATE_EXIT_CODE", "1") or 0)
+
+          payload = {}
+          if output_path.exists():
+              try:
+                  raw = output_path.read_text(encoding="utf-8")
+                  payload = json.loads(raw) if raw else {}
+                  if not isinstance(payload, dict):
+                      payload = {}
+              except json.JSONDecodeError:
+                  payload = {}
+
+          if not isinstance(payload, dict):
+              payload = {}
+
+          payload.setdefault("job_id", os.environ["JOB_ID"])
+          payload.setdefault("generated_at", datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"))
+          payload.setdefault("source", "github_actions")
+          payload.setdefault("items", [])
+          payload.setdefault("diagnostics", {})
+
+          diagnostics = payload.get("diagnostics")
+          if not isinstance(diagnostics, dict):
+              diagnostics = {}
+          payload["diagnostics"] = diagnostics
+
+          if exit_code != 0:
+              payload["status"] = "failed"
+              if not diagnostics.get("error"):
+                  fallback_error = os.environ.get("ERROR_SUMMARY", "")
+                  if not fallback_error and error_path.exists():
+                      fallback_error = error_path.read_text(encoding="utf-8").strip().splitlines()[:5]
+                      fallback_error = " | ".join(fallback_error)
+                  diagnostics["error"] = fallback_error or "Top10 snapshot generation failed."
+          else:
+              payload.setdefault("status", "done")
+
+          payload.setdefault("snapshot_date", None)
+
+          payload_path = Path(os.environ["RUNNER_TEMP"]) / "top10-callback.json"
+          payload_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as gh_output:
+              gh_output.write(f"payload_path={payload_path.as_posix()}\\n")
+          PY
+
+      - name: Callback snapshot status
+        if: always()
+        env:
+          TOP10_CALLBACK_URL: ${{ secrets.TOP10_CALLBACK_URL }}
+          TOP10_CALLBACK_TOKEN: ${{ secrets.TOP10_CALLBACK_TOKEN }}
+          CALLBACK_PAYLOAD_PATH: ${{ steps.build_payload.outputs.payload_path }}
+        run: |
+          if [ -z "$TOP10_CALLBACK_URL" ] || [ -z "$TOP10_CALLBACK_TOKEN" ]; then
+            echo "Missing TOP10_CALLBACK_URL or TOP10_CALLBACK_TOKEN"
+            exit 1
+          fi
+
+          if [ ! -f "$CALLBACK_PAYLOAD_PATH" ]; then
+            echo "Callback payload file not found: $CALLBACK_PAYLOAD_PATH"
+            exit 1
+          fi
+
+          curl -fsS -X POST "$TOP10_CALLBACK_URL" \
+            -H "Authorization: Bearer $TOP10_CALLBACK_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary "@$CALLBACK_PAYLOAD_PATH"

@@ -307,6 +307,24 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("window.CHANLUN_BOOTSTRAP", self.html)
         self.assertIn('"pageDate"', self.html)
         self.assertIn('"inlineReportData"', self.html)
+        self.assertIn('"top10ApiBase"', self.html)
+
+    def test_frontend_top10_control_helpers_present(self):
+        for helper in [
+            'function getTop10ApiBase',
+            'function renderTop10Control',
+            'function handleTop10Run',
+            'function startTop10Polling',
+            'function pollTop10Status',
+        ]:
+            self.assertIn(helper, self.asset_js)
+        self.assertIn('getBootstrap().top10ApiBase', self.asset_js)
+        self.assertIn('/api/top10/run', self.asset_js)
+        self.assertIn('/api/top10/status?job_id=', self.asset_js)
+
+    def test_frontend_not_expose_hardcoded_password(self):
+        self.assertNotIn('"1122"', self.html)
+        self.assertNotIn('1122', self.asset_js)
 
     def test_no_plaintext_access_key_in_html(self):
         """HTML must NOT contain the plaintext ACCESS_KEY."""
@@ -330,6 +348,8 @@ class TestAccessControl(unittest.TestCase):
         self.assertEqual(self.bootstrap.get("pageDate"), "2026-05-26")
         self.assertIn("inlineReportData", self.bootstrap)
         self.assertIn("market", self.bootstrap["inlineReportData"])
+        self.assertIn("top10ApiBase", self.bootstrap)
+        self.assertEqual(self.bootstrap.get("top10ApiBase"), "")
 
     def test_no_public_dates_in_html(self):
         """HTML no longer embeds the public-date allowlist."""

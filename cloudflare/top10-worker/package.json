@@ -1,0 +1,13 @@
+{
+  "name": "top10-worker",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Cloudflare Worker for triggering Top10 snapshot jobs via GitHub Actions",
+  "type": "module",
+  "scripts": {
+    "test": "node test/top10-worker.test.js"
+  },
+  "devDependencies": {
+    "wrangler": "^4.106.0"
+  }
+}

@@ -259,6 +259,177 @@ body {
   margin-right: 10px;
 }
 
+.top10-widget {
+  margin-top: 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
+  box-shadow: var(--shadow-card);
+}
+
+.top10-widget.is-disabled {
+  opacity: 0.75;
+}
+
+.top10-widget.is-loading .top10-run-btn {
+  cursor: wait;
+}
+
+.top10-widget-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.top10-widget-title {
+  color: var(--text-main);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.top10-run-btn {
+  border: 1px solid rgba(73, 101, 246, 0.3);
+  border-radius: 999px;
+  min-height: 30px;
+  padding: 4px 12px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.top10-run-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.top10-status {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 28px;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--text-sub);
+  background: var(--card-soft);
+  border: 1px solid var(--border-soft);
+}
+
+.top10-status.is-positive {
+  color: var(--down-green);
+  background: var(--down-green-soft);
+  border-color: rgba(5, 150, 105, 0.22);
+}
+
+.top10-status.is-danger {
+  color: var(--risk-orange);
+  background: var(--risk-orange-soft);
+  border-color: rgba(180, 83, 9, 0.25);
+}
+
+.top10-status.is-warning {
+  color: var(--up-red);
+  background: var(--up-red-soft);
+  border-color: rgba(239, 35, 60, 0.22);
+}
+
+.top10-status.is-neutral {
+  color: var(--text-sub);
+}
+
+.top10-status-updated {
+  color: var(--text-muted);
+}
+
+.top10-result {
+  margin-top: 8px;
+}
+
+.top10-placeholder,
+.top10-empty {
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-soft);
+  background: var(--card-soft);
+  color: var(--text-muted);
+  padding: 10px 12px;
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  text-align: center;
+}
+
+.top10-table-wrap {
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--card-soft);
+  overflow: auto;
+}
+
+.top10-list,
+.top10-list-head {
+  display: grid;
+  grid-template-columns: 56px 90px minmax(120px, 1fr) 88px 88px minmax(160px, 2fr) 130px;
+  gap: 6px;
+  padding: 8px;
+}
+
+.top10-list-head {
+  position: sticky;
+  top: 0;
+  background: rgba(249, 250, 255, 0.92);
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.top10-row {
+  display: grid;
+  grid-template-columns: 56px 90px minmax(120px, 1fr) 88px 88px minmax(160px, 2fr) 130px;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-main);
+}
+
+.top10-row:last-child {
+  border-bottom: 0;
+}
+
+.top10-cell {
+  font-size: 12px;
+  line-height: 1.35;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+}
+
+.top10-list-head .top10-cell,
+.top10-cell.reason,
+.top10-cell.name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top10-cell.rank,
+.top10-cell.code,
+.top10-cell.score,
+.top10-cell.generated {
+  color: var(--text-sub);
+}
+
+.top10-cell.action {
+  color: var(--text-main);
+  font-weight: 750;
+}
+
 .summary-icon.is-market { color: var(--up-red); background: var(--up-red-soft); }
 .summary-icon.is-action { color: var(--purple); background: var(--purple-soft); }
 .summary-icon.is-breadth { color: var(--down-green); background: var(--down-green-soft); }
@@ -1760,5 +1931,38 @@ body {
   .mobile-drawer-toolbar {
     margin-right: -12px;
     margin-left: -12px;
+  }
+
+  .top10-widget {
+    padding: 9px 10px;
+  }
+
+  .top10-widget-head {
+    gap: 6px;
+    align-items: flex-start;
+  }
+
+  .top10-widget-title {
+    font-size: 12px;
+  }
+
+  .top10-run-btn {
+    min-height: 28px;
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+
+  .top10-list,
+  .top10-list-head {
+    grid-template-columns: 42px 78px minmax(100px, 1fr) 62px 76px 1fr;
+    font-size: 11px;
+  }
+
+  .top10-row {
+    grid-template-columns: 42px 78px minmax(100px, 1fr) 62px 76px 1fr;
+  }
+
+  .top10-cell.generated {
+    display: none;
   }
 }
