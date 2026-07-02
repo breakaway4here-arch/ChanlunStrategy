@@ -189,6 +189,7 @@ async function testCallbackSuccess() {
       body: JSON.stringify({
         job_id: "job-1",
         status: "done",
+        snapshot_date: "2026-07-02",
         result: { items: [{ code: "000001", score: 99 }] },
       }),
     }),
@@ -206,8 +207,69 @@ async function testCallbackSuccess() {
   assert.ok(latestRaw && latestRaw.includes(`"status":"done"`));
   assert.ok(latestRaw.includes('"job_id":"job-1"'));
 
+  const datedLatestRaw = await kv.get("top10:latest:2026-07-02");
+  assert.ok(datedLatestRaw && datedLatestRaw.includes(`"status":"done"`));
+  assert.ok(datedLatestRaw.includes('"snapshot_date":"2026-07-02"'));
+
   const jobRaw = await kv.get("top10:job:job-1");
   assert.ok(jobRaw && jobRaw.includes(`"status":"done"`));
+}
+
+async function testLatestByDate() {
+  const kv = new MemoryKV();
+  const env = createBaseEnv();
+  env.TOP10_KV = kv;
+  await kv.put(
+    "top10:latest:2026-07-02",
+    JSON.stringify({ job_id: "job-dated", status: "done", snapshot_date: "2026-07-02", items: [{ code: "000001" }] }),
+  );
+
+  const response = await handleRequest(
+    createRequest("/api/top10/latest?date=2026-07-02", { method: "GET" }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const data = await parseJsonFromResponse(response);
+  assert.equal(data.job_id, "job-dated");
+  assert.equal(data.status, "done");
+  assert.equal(data.snapshot_date, "2026-07-02");
+}
+
+async function testLatestMissing() {
+  const kv = new MemoryKV();
+  const env = createBaseEnv();
+  env.TOP10_KV = kv;
+
+  const response = await handleRequest(
+    createRequest("/api/top10/latest?date=2026-07-03", { method: "GET" }),
+    env,
+  );
+
+  assert.equal(response.status, 404);
+  const data = await parseJsonFromResponse(response);
+  assert.equal(data.error, "latest snapshot not found");
+  assert.equal(data.snapshot_date, "2026-07-03");
+}
+
+async function testLatestByDateFallsBackToGenericLatest() {
+  const kv = new MemoryKV();
+  const env = createBaseEnv();
+  env.TOP10_KV = kv;
+  await kv.put(
+    "top10:latest",
+    JSON.stringify({ job_id: "job-generic", status: "done", snapshot_date: "2026-07-02", items: [{ code: "000002" }] }),
+  );
+
+  const response = await handleRequest(
+    createRequest("/api/top10/latest?date=2026-07-02", { method: "GET" }),
+    env,
+  );
+
+  assert.equal(response.status, 200);
+  const data = await parseJsonFromResponse(response);
+  assert.equal(data.job_id, "job-generic");
+  assert.equal(data.snapshot_date, "2026-07-02");
 }
 
 async function main() {
@@ -216,6 +278,9 @@ async function main() {
   await testLockConflict();
   await testCallbackTokenFailure();
   await testCallbackSuccess();
+  await testLatestByDate();
+  await testLatestMissing();
+  await testLatestByDateFallsBackToGenericLatest();
 
   console.log("top10-worker.test.js: all tests passed");
 }

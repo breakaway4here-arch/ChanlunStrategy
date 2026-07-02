@@ -306,6 +306,12 @@
     return normalizeString(getBootstrap().top10ApiBase);
   }
 
+  function getTop10PageDate() {
+    var pageDate = normalizeString(getBootstrap().pageDate || state.date || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(pageDate)) return pageDate;
+    return formatDateLabel(new Date().toISOString());
+  }
+
   function getTop10ApiStatusTone(status) {
     if (status === 'done') return 'is-positive';
     if (status === 'failed' || status === 'error') return 'is-danger';
@@ -338,6 +344,7 @@
     state.top10.message = '';
     state.top10.polling = false;
     state.top10.busy = false;
+    state.top10.loadingLatest = false;
     state.top10.pollCount = 0;
     if (state.top10.timer) {
       clearTimeout(state.top10.timer);
@@ -466,6 +473,41 @@
     if (!state.top10.polling && !state.top10.busy && state.top10.status !== 'done') {
       renderTop10Status('idle', '未运行');
     }
+  }
+
+  function loadLatestTop10Snapshot() {
+    if (!nodes.top10Result || !getTop10ApiBase() || !window.fetch) {
+      return;
+    }
+    if (state.top10.busy || state.top10.polling || state.top10.loadingLatest) {
+      return;
+    }
+
+    state.top10.loadingLatest = true;
+    renderTop10Status('running', '加载当天最新快照...');
+    var url = getTop10ApiBase() + '/api/top10/latest?date=' + encodeURIComponent(getTop10PageDate());
+    window.fetch(url).then(function (resp) {
+      if (resp && resp.status === 404) {
+        return null;
+      }
+      if (!resp || !resp.ok) {
+        throw new Error('加载最新 Top10 失败：' + (resp && resp.status ? resp.status : '网络异常'));
+      }
+      return resp.json();
+    }).then(function (payload) {
+      if (!payload) {
+        renderTop10Status('idle', '未运行');
+        return;
+      }
+      var status = normalizeString(payload.status || 'done').toLowerCase();
+      renderTop10Status(status, status === 'done' ? '当天最新快照' : getTop10StatusLabel(status));
+      renderTop10Result(payload, status);
+    }).catch(function () {
+      renderTop10Status('failed', '加载最新 Top10 失败');
+    }).finally(function () {
+      state.top10.loadingLatest = false;
+      renderTop10Control();
+    });
   }
 
   function pollTop10Status(jobId) {
@@ -2271,6 +2313,7 @@
     state.rawPoolCandidates = null;
     resetTop10State();
     renderTop10Control();
+    loadLatestTop10Snapshot();
     if (nodes.top10RunButton) {
       nodes.top10RunButton.addEventListener('click', handleTop10Run);
     }

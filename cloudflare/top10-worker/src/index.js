@@ -90,6 +90,11 @@ function sanitizeToken(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function sanitizeDate(value) {
+  const text = sanitizeToken(value);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
 function getTimeoutMs(state, env) {
   const configured = Number(
     state?.timeout_seconds ?? env?.TOP10_JOB_TIMEOUT_SECONDS ?? DEFAULT_JOB_TIMEOUT_SECONDS,
@@ -277,6 +282,31 @@ async function handleStatus(request, env, requestOrigin) {
   return jsonResponse(200, state, requestOrigin, env);
 }
 
+async function handleLatest(request, env, requestOrigin) {
+  const url = new URL(request.url);
+  const snapshotDate = sanitizeDate(url.searchParams.get("date"));
+  const key = snapshotDate ? `top10:latest:${snapshotDate}` : "top10:latest";
+  let stateRaw = await env.TOP10_KV.get(key);
+  if (!stateRaw && snapshotDate) {
+    const fallbackRaw = await env.TOP10_KV.get("top10:latest");
+    const fallbackState = parseJson(fallbackRaw, null);
+    if (fallbackState && sanitizeDate(fallbackState.snapshot_date) === snapshotDate) {
+      stateRaw = JSON.stringify(fallbackState);
+    }
+  }
+
+  if (!stateRaw) {
+    return jsonResponse(404, { error: "latest snapshot not found", snapshot_date: snapshotDate || null }, requestOrigin, env);
+  }
+
+  const state = parseJson(stateRaw, null);
+  if (!state || typeof state !== "object") {
+    return jsonResponse(500, { error: "invalid latest snapshot" }, requestOrigin, env);
+  }
+
+  return jsonResponse(200, state, requestOrigin, env);
+}
+
 async function handleCallback(request, env, requestOrigin) {
   const callbackToken = sanitizeToken(env.CALLBACK_TOKEN);
   const authHeader = sanitizeToken(request.headers.get("authorization"));
@@ -319,10 +349,16 @@ async function handleCallback(request, env, requestOrigin) {
     }
   }
 
-  await Promise.all([
+  const writes = [
     env.TOP10_KV.put(`top10:job:${jobId}`, JSON.stringify(state)),
     env.TOP10_KV.put("top10:latest", JSON.stringify(state)),
-  ]);
+  ];
+  const snapshotDate = sanitizeDate(state.snapshot_date);
+  if (snapshotDate) {
+    writes.push(env.TOP10_KV.put(`top10:latest:${snapshotDate}`, JSON.stringify(state)));
+  }
+
+  await Promise.all(writes);
   await safeDeleteLockIfOwnsJob(env, jobId);
 
   return jsonResponse(200, { status: "ok", job_id: jobId }, requestOrigin, env);
@@ -349,6 +385,9 @@ export async function handleRequest(request, env, ctx) {
   }
   if (url.pathname === "/api/top10/status" && request.method === "GET") {
     return handleStatus(request, env, requestOrigin);
+  }
+  if (url.pathname === "/api/top10/latest" && request.method === "GET") {
+    return handleLatest(request, env, requestOrigin);
   }
   if (url.pathname === "/api/top10/callback" && request.method === "POST") {
     return handleCallback(request, env, requestOrigin);

@@ -371,10 +371,14 @@ body {
   overflow: auto;
 }
 
-.top10-list,
-.top10-list-head {
+.top10-list {
+  min-width: 980px;
+}
+
+.top10-list-head,
+.top10-row {
   display: grid;
-  grid-template-columns: 56px 90px minmax(120px, 1fr) 88px 88px minmax(160px, 2fr) 130px;
+  grid-template-columns: 56px 90px minmax(120px, 1fr) 72px 92px minmax(240px, 2fr) 150px;
   gap: 6px;
   padding: 8px;
 }
@@ -390,9 +394,6 @@ body {
 }
 
 .top10-row {
-  display: grid;
-  grid-template-columns: 56px 90px minmax(120px, 1fr) 88px 88px minmax(160px, 2fr) 130px;
-  gap: 6px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--text-main);
 }
@@ -411,11 +412,15 @@ body {
 }
 
 .top10-list-head .top10-cell,
-.top10-cell.reason,
 .top10-cell.name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.top10-cell.reason {
+  overflow: hidden;
+  white-space: normal;
 }
 
 .top10-cell.rank,
@@ -1952,14 +1957,17 @@ body {
     font-size: 11px;
   }
 
-  .top10-list,
   .top10-list-head {
-    grid-template-columns: 42px 78px minmax(100px, 1fr) 62px 76px 1fr;
+    grid-template-columns: 42px 74px 96px 58px 76px minmax(180px, 1fr);
     font-size: 11px;
   }
 
+  .top10-list {
+    min-width: 680px;
+  }
+
   .top10-row {
-    grid-template-columns: 42px 78px minmax(100px, 1fr) 62px 76px 1fr;
+    grid-template-columns: 42px 74px 96px 58px 76px minmax(180px, 1fr);
   }
 
   .top10-cell.generated {

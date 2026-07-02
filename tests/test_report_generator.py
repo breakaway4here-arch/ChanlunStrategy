@@ -313,6 +313,7 @@ class TestAccessControl(unittest.TestCase):
         for helper in [
             'function getTop10ApiBase',
             'function renderTop10Control',
+            'function loadLatestTop10Snapshot',
             'function handleTop10Run',
             'function startTop10Polling',
             'function pollTop10Status',
@@ -321,6 +322,7 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn('getBootstrap().top10ApiBase', self.asset_js)
         self.assertIn('/api/top10/run', self.asset_js)
         self.assertIn('/api/top10/status?job_id=', self.asset_js)
+        self.assertIn('/api/top10/latest?date=', self.asset_js)
 
     def test_frontend_not_expose_hardcoded_password(self):
         self.assertNotIn('"1122"', self.html)
