@@ -56,7 +56,7 @@ jobs:
           echo "preview_log_path=$PREVIEW_LOG_PATH" >> "$GITHUB_OUTPUT"
 
           if [ "$EXIT_CODE" -ne 0 ]; then
-            SUMMARY="$(sed -n '1,5p' "$ERROR_PATH" | tr '\n' ' ' | tr -d '\r')"
+            SUMMARY="$(sed -n '1,25p' "$ERROR_PATH" | tr '\n' ' ' | tr -d '\r')"
             echo "error_summary=$SUMMARY" >> "$GITHUB_OUTPUT"
           fi
 
@@ -120,7 +120,7 @@ jobs:
           payload_path = Path(os.environ["RUNNER_TEMP"]) / "top10-callback.json"
           payload_path.write_text(json.dumps(payload, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as gh_output:
-              gh_output.write(f"payload_path={payload_path.as_posix()}\\n")
+              gh_output.write(f"payload_path={payload_path.as_posix()}\n")
           PY
 
       - name: Callback snapshot status
