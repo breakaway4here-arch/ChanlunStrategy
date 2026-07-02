@@ -49,6 +49,7 @@ CHART_MAX_BARS = 50  # 图表展示默认K线根数（动态窗口会扩展）
 CHART_MIN_BARS = 50
 CHART_MAX_EXTENDED = 120
 REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js")
+DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
 
 
 def build_chart_window(pick):
@@ -1136,7 +1137,7 @@ def _generate_report_v2(report_data, output_dir=None):
     bootstrap = {
         "pageDate": date_str,
         "inlineReportData": daily_data,
-        "top10ApiBase": os.environ.get("CHANLUN_TOP10_API_BASE", "").strip().rstrip("/"),
+        "top10ApiBase": os.environ.get("CHANLUN_TOP10_API_BASE", DEFAULT_TOP10_API_BASE).strip().rstrip("/"),
         "accessControlEnabled": bool(ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY),
         "accessKeyHash": access_key_hash,
         "accessKeySalt": FULL_ACCESS_KEY_SALT if ENABLE_WEAK_ACCESS_CONTROL else "",

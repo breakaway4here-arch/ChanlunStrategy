@@ -349,7 +349,7 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("inlineReportData", self.bootstrap)
         self.assertIn("market", self.bootstrap["inlineReportData"])
         self.assertIn("top10ApiBase", self.bootstrap)
-        self.assertEqual(self.bootstrap.get("top10ApiBase"), "")
+        self.assertEqual(self.bootstrap.get("top10ApiBase"), "https://top10-worker.breakaway4here.workers.dev")
 
     def test_no_public_dates_in_html(self):
         """HTML no longer embeds the public-date allowlist."""
