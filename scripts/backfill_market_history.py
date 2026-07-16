@@ -224,6 +224,7 @@ def run_shard(
     source_batch = "{}:{}".format(run_id, shard_id)
     failures = []
     insufficient = []
+    unavailable = []
     success_count = 0
     changed_rows = 0
     codes_to_process = list(normalized)
@@ -274,10 +275,33 @@ def run_shard(
                 )
 
         for code in codes_to_process:
+            stock_meta = dict(metadata_by_code.get(code) or {})
             try:
                 payload = fetcher(code, expected_count)
                 if not payload:
-                    raise RuntimeError("remote_unavailable")
+                    instrument_id = store.upsert_instrument(
+                        "stock",
+                        _exchange_for_code(code),
+                        code,
+                        name=str(stock_meta.get("name") or ""),
+                    )
+                    if stock_meta:
+                        if "listed_days" not in stock_meta:
+                            stock_meta["listed_days"] = _listed_days(
+                                stock_meta.get("listed_date"), metadata_date
+                            )
+                        store.upsert_stock_meta(
+                            instrument_id, metadata_date, stock_meta
+                        )
+                    item = {
+                        "code": code,
+                        "bars": 0,
+                        "required": expected_count,
+                        "reason": "remote_unavailable",
+                    }
+                    insufficient.append(item)
+                    unavailable.append(dict(item))
+                    continue
                 bars = kline_payload_to_bars(
                     payload,
                     interval=interval,
@@ -288,7 +312,6 @@ def run_shard(
                 )
                 if not bars:
                     raise RuntimeError("empty_history")
-                stock_meta = dict(metadata_by_code.get(code) or {})
                 instrument_id = store.upsert_instrument(
                     "stock",
                     _exchange_for_code(code),
@@ -330,6 +353,19 @@ def run_shard(
                     }
                 )
 
+        unavailable_limit = max(
+            1,
+            min(2, int(math.ceil(len(normalized) * 0.01))),
+        )
+        if len(unavailable) > unavailable_limit:
+            failures.extend(
+                {
+                    "code": item["code"],
+                    "reason": "RuntimeError",
+                    "message": "remote_unavailable",
+                }
+                for item in unavailable
+            )
         status = "failed" if failures else "complete"
         table = MarketHistoryStore._table(interval)
         total_rows = int(
@@ -346,8 +382,11 @@ def run_shard(
             "success_count": success_count,
             "insufficient_count": len(insufficient),
             "failure_count": len(failures),
+            "unavailable_count": len(unavailable),
+            "unavailable_limit": unavailable_limit,
             "changed_rows": changed_rows,
             "insufficient": insufficient,
+            "unavailable": unavailable,
             "failures": failures,
             "code_checksum": checksum,
         }

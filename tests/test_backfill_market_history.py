@@ -185,7 +185,9 @@ class BackfillMarketHistoryTests(unittest.TestCase):
             calls.append(code)
             if code == "600001" and attempts[code] == 0:
                 attempts[code] += 1
-                return None
+                payload = _kline(code, count)
+                payload["opens"][0] = 0
+                return payload
             return _kline(code, count)
 
         first = run_shard(
@@ -210,6 +212,51 @@ class BackfillMarketHistoryTests(unittest.TestCase):
             self.assertEqual(rows, 6)
             manifest = store.list_shard_manifests("run-retry")[0]
             self.assertEqual(manifest["status"], "complete")
+
+    def test_sparse_remote_unavailable_is_audited_without_blocking_shard(self):
+        staging = self.root / "sparse-unavailable.sqlite"
+
+        def fetcher(code, count):
+            if code == "600001":
+                return None
+            return _kline(code, count)
+
+        result = run_shard(
+            "run-sparse",
+            0,
+            1,
+            "day",
+            ["600000", "600001"],
+            staging,
+            fetcher=fetcher,
+            count=3,
+            stock_metadata={
+                "600001": {
+                    "name": "待上市样本",
+                    "listed_date": "20260720",
+                    "is_st": False,
+                    "delisting_risk": False,
+                }
+            },
+            meta_as_of="2026-07-16",
+        )
+
+        self.assertEqual("complete", result["status"])
+        self.assertEqual(0, result["failure_count"])
+        self.assertEqual(1, result["unavailable_count"])
+        self.assertEqual(
+            "remote_unavailable",
+            result["insufficient"][0]["reason"],
+        )
+        with MarketHistoryStore(staging, readonly=True) as store:
+            instrument = store.resolve_instrument(
+                "stock", "SH", "600001"
+            )
+            self.assertIsNotNone(instrument)
+            meta = store.query_stock_meta(
+                instrument["instrument_id"], as_of="2026-07-16"
+            )
+            self.assertEqual("待上市样本", meta["name"])
 
     def test_invalid_ohlc_fails_shard_without_marking_complete(self):
         staging = self.root / "invalid.sqlite"
