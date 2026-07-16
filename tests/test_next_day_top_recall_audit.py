@@ -102,6 +102,18 @@ class NextDayTopRecallAuditTest(unittest.TestCase):
             ["000001"],
             pair["targets"]["top20"]["independent_increment"]["overlay_codes"],
         )
+        top30_failures = pair["targets"]["top30"]["failure_breakdown"]
+        self.assertEqual(5, top30_failures["by_category"]["日线通道未匹配"])
+        self.assertEqual(
+            ["000025", "000026", "000027", "000028", "000029"],
+            top30_failures["category_codes"]["日线通道未匹配"],
+        )
+        self.assertEqual(
+            5,
+            result["aggregate"]["top30"]["failure_breakdown"][
+                "by_category"
+            ]["日线通道未匹配"],
+        )
 
     def test_requires_an_official_signal_run(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -105,6 +105,30 @@ def _rate(hit: int, total: int) -> float:
     return round(float(hit) / total, 6) if total else 0.0
 
 
+def _failure_category(event: Mapping[str, Any]) -> str:
+    gate = str(event.get("first_failure_gate") or "")
+    reason = str(event.get("first_failure_reason") or "")
+    if not event:
+        return "漏斗记录缺失"
+    if gate == "eligible":
+        if reason in {"missing_meta", "insufficient_bars", "stale_latest_bar"}:
+            return "基础数据不完整"
+        if reason in {"st_or_delisting", "listed_days", "low_liquidity"}:
+            return "基础资格未通过"
+        return "基础资格未通过"
+    if gate == "retrieval":
+        return "召回名额未覆盖"
+    if gate == "daily_channel":
+        return "日线通道未匹配"
+    if gate == "minute30":
+        return "30分钟确认未通过"
+    if gate == "fusion":
+        return "融合门槛未通过"
+    if gate == "display":
+        return "展示或决策未通过"
+    return "未归类"
+
+
 def _target_metrics(
     target_rows: Sequence[Mapping[str, Any]],
     events_by_code: Mapping[str, Mapping[str, Any]],
@@ -125,11 +149,29 @@ def _target_metrics(
         }
 
     terminal = {"main": 0, "observe": 0, "reject": 0, "missing": 0}
+    failures_by_gate = {}
+    failures_by_reason = {}
+    failures_by_category = {}
+    category_codes = {}
     for code in codes:
-        state = str(events_by_code.get(code, {}).get("final_state") or "missing")
+        event = events_by_code.get(code, {})
+        state = str(event.get("final_state") or "missing")
         if state not in terminal:
             state = "missing"
         terminal[state] += 1
+        if state == "main":
+            continue
+        gate = str(event.get("first_failure_gate") or "missing")
+        reason = str(
+            event.get("first_failure_reason") or "funnel_record_missing"
+        )
+        category = _failure_category(event)
+        failures_by_gate[gate] = failures_by_gate.get(gate, 0) + 1
+        failures_by_reason[reason] = failures_by_reason.get(reason, 0) + 1
+        failures_by_category[category] = (
+            failures_by_category.get(category, 0) + 1
+        )
+        category_codes.setdefault(category, []).append(code)
 
     trend_codes = []
     overlay_codes = []
@@ -154,6 +196,12 @@ def _target_metrics(
         "codes": codes,
         "stages": stages,
         "terminal": terminal,
+        "failure_breakdown": {
+            "by_gate": failures_by_gate,
+            "by_reason": failures_by_reason,
+            "by_category": failures_by_category,
+            "category_codes": category_codes,
+        },
         "independent_increment": {
             "trend_hit": len(trend_codes),
             "trend_recall": _rate(len(trend_codes), len(codes)),
@@ -176,6 +224,16 @@ def _aggregate(pairs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             )
             for stage in FUNNEL_STAGES
         }
+        failure_breakdown = {}
+        for dimension in ("by_gate", "by_reason", "by_category"):
+            counts = {}
+            for pair in pairs:
+                values = pair["targets"][target_name][
+                    "failure_breakdown"
+                ][dimension]
+                for key, value in values.items():
+                    counts[key] = counts.get(key, 0) + int(value)
+            failure_breakdown[dimension] = counts
         result[target_name] = {
             "count": total,
             "stages": {
@@ -186,6 +244,7 @@ def _aggregate(pairs: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
                 }
                 for stage, hit in stage_hits.items()
             },
+            "failure_breakdown": failure_breakdown,
             "independent_increment": {
                 "trend_hit": sum(
                     int(
@@ -300,6 +359,20 @@ def render_markdown(result: Mapping[str, Any]) -> str:
                     increment["overlay_hit"],
                 )
             )
+            categories = target["failure_breakdown"]["by_category"]
+            if categories:
+                increments.append(
+                    "- {} 未进主池原因：{}。".format(
+                        label,
+                        "；".join(
+                            "{} {}".format(category, count)
+                            for category, count in sorted(
+                                categories.items(),
+                                key=lambda item: (-item[1], item[0]),
+                            )
+                        ),
+                    )
+                )
         lines.extend([""] + increments + [""])
     return "\n".join(lines).rstrip() + "\n"
 
