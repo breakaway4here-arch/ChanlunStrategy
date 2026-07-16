@@ -7,9 +7,8 @@ in-memory calculations based on provided stock and market context data.
 from __future__ import annotations
 
 import math
+from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
-
-import config
 
 DecisionResult = Dict[str, Any]
 
@@ -234,13 +233,31 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
 
 
 def _extract_distance(stock: Mapping[str, Any]) -> Any:
-    dist = stock.get("distance_from_reference_pct")
-    if dist is not None:
-        return dist
-    if not config.ENABLE_DISTANCE_DECISION:
+    if stock.get("position_data_status") != "verified":
         return None
-    best_buy_point = _to_dict(stock.get("best_buy_point"))
-    return best_buy_point.get("distance_from_reference_pct")
+
+    dist = _safe_float(stock.get("position_distance_pct"), default=None)
+    reference_price = _safe_float(stock.get("position_reference_price"), default=None)
+    reference_type = stock.get("position_reference_type")
+    evidence_date = stock.get("position_evidence_date")
+    if dist is None or reference_price is None or reference_price <= 0:
+        return None
+    if not isinstance(reference_type, str) or not reference_type.strip():
+        return None
+    if not _is_iso_date(evidence_date):
+        return None
+    return dist
+
+
+def _is_iso_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    try:
+        parsed = date.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.isoformat() == normalized
 
 
 def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:

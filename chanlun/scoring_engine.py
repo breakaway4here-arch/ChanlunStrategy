@@ -6,6 +6,8 @@ This module owns the report ranking score only. Strategy-native scores such as
 
 from __future__ import annotations
 
+import math
+from datetime import date
 from typing import Any, Iterable, Mapping
 
 
@@ -55,11 +57,11 @@ def compute_opportunity_score(
     else:
         source_count = max(source_count, len(sources))
 
-    distance = _safe_float(metrics.get("distance"))
-    if distance is None:
-        distance = _resolve_distance_pct(item, source)
-    if distance is not None and "distance" not in metrics:
+    distance = _resolve_distance_pct(item, source)
+    if distance is not None:
         metrics["distance"] = distance
+    else:
+        metrics.pop("distance", None)
 
     change_pct = _safe_float(metrics.get("change_pct"))
     if change_pct is None:
@@ -841,19 +843,30 @@ def _resolve_change_pct(item: Mapping[str, Any]) -> float | None:
 
 
 def _resolve_distance_pct(item: Mapping[str, Any], source: str) -> float | None:
-    direct = _safe_float(item.get("distance_from_reference_pct"))
-    if direct is not None:
-        return direct
-    life_distance = _safe_float(item.get("distance_life_pct"))
-    if life_distance is not None:
-        return life_distance
-    bp = _to_dict(item.get("best_buy_point"))
-    bp_distance = _safe_float(bp.get("distance_from_reference_pct"))
-    if bp_distance is not None:
-        return bp_distance
-    if source == "luojie":
-        close = _safe_float(item.get("close"))
-        life_line = _safe_float(item.get("life_line"))
-        if close is not None and life_line not in (None, 0):
-            return round((close - life_line) / life_line * 100, 2)
-    return None
+    del source
+    if item.get("position_data_status") != "verified":
+        return None
+    distance = _safe_float(item.get("position_distance_pct"))
+    reference_price = _safe_float(item.get("position_reference_price"))
+    reference_type = item.get("position_reference_type")
+    evidence_date = item.get("position_evidence_date")
+    if distance is None or not math.isfinite(distance):
+        return None
+    if reference_price is None or not math.isfinite(reference_price) or reference_price <= 0:
+        return None
+    if not isinstance(reference_type, str) or not reference_type.strip():
+        return None
+    if not _is_iso_date(evidence_date):
+        return None
+    return distance
+
+
+def _is_iso_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    try:
+        parsed = date.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.isoformat() == normalized
