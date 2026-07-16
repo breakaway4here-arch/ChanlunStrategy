@@ -55,6 +55,42 @@ class MarketHistoryStoreTests(unittest.TestCase):
             )
             self.assertIn("ts, instrument_id", index_sql)
 
+    def test_initialization_adds_missing_gate_event_columns_to_legacy_db(self):
+        legacy_path = Path(self.tmp.name) / "legacy.sqlite"
+        connection = sqlite3.connect(str(legacy_path))
+        try:
+            connection.execute(
+                """
+                CREATE TABLE gate_events (
+                    run_id TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    report_date TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    final_state TEXT NOT NULL,
+                    event_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, code)
+                )
+                """
+            )
+            connection.commit()
+        finally:
+            connection.close()
+
+        legacy = MarketHistoryStore(legacy_path)
+        try:
+            columns = {
+                row["name"]
+                for row in legacy.connection.execute(
+                    "PRAGMA table_info(gate_events)"
+                )
+            }
+        finally:
+            legacy.close()
+
+        self.assertIn("distance_from_reference_pct", columns)
+        self.assertIn("minute30_strength", columns)
+
     def test_instrument_identity_includes_asset_type_exchange_and_code(self):
         stock = self.store.upsert_instrument("stock", "SZ", "000001", name="平安银行")
         index = self.store.upsert_instrument("index", "SH", "000001", name="上证指数")

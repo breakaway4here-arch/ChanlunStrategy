@@ -219,6 +219,30 @@ class MarketHistoryStore:
                     updated_at TEXT NOT NULL
                 );
             """)
+            self._ensure_table_columns(
+                "gate_events",
+                {
+                    "source_channel": "TEXT NOT NULL DEFAULT ''",
+                    "retrieval_pool": "TEXT NOT NULL DEFAULT ''",
+                    "retrieval_score": "REAL",
+                    "first_failure_gate": "TEXT NOT NULL DEFAULT ''",
+                    "first_failure_reason": "TEXT NOT NULL DEFAULT ''",
+                    "actual_value": "REAL",
+                    "threshold_value": "REAL",
+                    "volume_ratio": "REAL",
+                    "amount_ratio": "REAL",
+                    "distance_3pct": "REAL",
+                    "distance_12pct": "REAL",
+                    "distance_from_reference_pct": "REAL",
+                    "ma5": "REAL",
+                    "ma10": "REAL",
+                    "ma20": "REAL",
+                    "ma_gap_pct": "REAL",
+                    "ma_direction": "TEXT NOT NULL DEFAULT ''",
+                    "minute30_confirmations": "REAL",
+                    "minute30_strength": "REAL",
+                },
+            )
             for table in BAR_TABLES.values():
                 self.connection.execute(
                     "CREATE TABLE IF NOT EXISTS {} ({})".format(table, bar_schema)
@@ -282,6 +306,26 @@ class MarketHistoryStore:
                             message=message,
                         )
                     )
+
+    def _ensure_table_columns(
+        self,
+        table_name: str,
+        columns: Mapping[str, str],
+    ) -> None:
+        existing = {
+            str(row["name"])
+            for row in self.connection.execute(
+                "PRAGMA table_info({})".format(table_name)
+            ).fetchall()
+        }
+        for name, declaration in columns.items():
+            if name in existing:
+                continue
+            self.connection.execute(
+                "ALTER TABLE {} ADD COLUMN {} {}".format(
+                    table_name, name, declaration
+                )
+            )
 
     @staticmethod
     def _table(interval: str) -> str:
