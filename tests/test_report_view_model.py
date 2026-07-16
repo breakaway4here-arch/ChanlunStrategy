@@ -127,11 +127,12 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["default_view"], "highlights")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
+            ["highlights", "main", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
         self.assertEqual(workspace["counts"]["baseline"], 1)
+        self.assertEqual(workspace["counts"]["observation_top5"], 1)
         self.assertEqual(workspace["counts"]["highlights"], 4)
         self.assertEqual(workspace["counts"]["growth_quality"], 4)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
@@ -142,6 +143,43 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("overlap_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("highlights_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("growth_quality_codes", workspace["diagnostics"]["growth_quality_overlap"])
+
+    def test_observation_top5_enforces_sector_and_failure_reason_caps(self):
+        rows = []
+        for index in range(8):
+            item = _confirming_pick(code="60{:04d}".format(index))
+            item.update({
+                "sector": "行业A" if index < 4 else "行业{}".format(index),
+                "reason_code": (
+                    "waiting_30m_confirm"
+                    if index in (0, 1, 2)
+                    else "ma_near_miss_{}".format(index)
+                ),
+                "failure_gate": "30min_confirm",
+                "actual_value": index,
+                "upgrade_conditions": ["30min确认"],
+                "cancel_conditions": ["跌破参考位"],
+            })
+            rows.append(item)
+
+        workspace = build_workspace({"observation_watchlist": rows})
+        selected = workspace["views"]["observation_top5"]
+
+        self.assertEqual(len(selected), 5)
+        self.assertLessEqual(
+            sum(row["sector"] == "行业A" for row in selected), 2
+        )
+        self.assertLessEqual(
+            sum(
+                row["reason_code"] == "waiting_30m_confirm"
+                for row in selected
+            ),
+            2,
+        )
+        self.assertEqual(workspace["counts"]["main"], 0)
+        self.assertTrue(
+            all(row["view"] == "observation" for row in selected)
+        )
 
     def test_growth_quality_view_exists_but_default_still_highlights(self):
         report_data = _report_data(
@@ -420,6 +458,64 @@ class TestReportViewModel(unittest.TestCase):
 
         self.assertEqual([item["code"] for item in main_rows], ["600049", "600050"])
         self.assertEqual(main_rows[1]["decision_engine_v1"], decision)
+
+    def test_workspace_reject_decision_caps_main_action_at_observe(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "reject",
+                "decision": "不推荐（高位风险）",
+            }
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("reject", item["action_reason"])
+        self.assertIn("决策上限", item["action_reason"])
+
+    def test_workspace_observe_decision_caps_missing_position_main_action(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "observe",
+                "reason_code": "missing_position",
+                "decision": "观察（位置数据不足）",
+            }
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("observe", item["action_reason"])
+        self.assertIn("决策上限", item["action_reason"])
+
+    def test_workspace_recommend_or_missing_decision_keeps_healthy_main_action(self):
+        rows = [
+            _fusion_pick(
+                code="600050",
+                decision_engine_v1={
+                    "decision_code": "recommend",
+                    "decision": "推荐",
+                },
+            ),
+            _fusion_pick(code="600051"),
+        ]
+
+        items = {
+            item["code"]: item
+            for item in build_workspace({"picks_fusion": rows})["views"]["main"]
+        }
+
+        self.assertEqual(items["600050"]["action"], "可上车")
+        self.assertEqual(items["600051"]["action"], "可上车")
+
+    def test_workspace_does_not_infer_cap_from_chinese_decision_without_code(self):
+        pick = _fusion_pick(
+            decision_engine_v1={"decision": "不推荐（高位风险）"}
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "可上车")
 
     def test_workspace_info_tags_include_extra_sector_tags(self):
         pick = _fusion_pick(code="600005", name="半导体票", sector="电子")

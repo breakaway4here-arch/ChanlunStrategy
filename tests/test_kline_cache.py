@@ -120,8 +120,9 @@ class KlineCacheTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
                 write_cached_records("day", "600519", records, "test", keep_trading_days=120)
-                with patch.object(data_fetcher, "_fetch_daily_kline_remote", fake_remote):
-                    kline = data_fetcher.fetch_daily_kline("600519", count=100)
+                with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
+                    with patch.object(data_fetcher, "_fetch_daily_kline_remote", fake_remote):
+                        kline = data_fetcher.fetch_daily_kline("600519", count=100)
         self.assertEqual(calls, [5])
         self.assertEqual(len(kline["dates"]), 100)
 
@@ -146,8 +147,9 @@ class KlineCacheTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
                 write_cached_records("30min", "600519", records, "test", keep_trading_days=10)
-                with patch.object(data_fetcher, "_fetch_30min_kline_remote", fake_remote):
-                    kline = data_fetcher.fetch_30min_kline("600519", count=80)
+                with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
+                    with patch.object(data_fetcher, "_fetch_30min_kline_remote", fake_remote):
+                        kline = data_fetcher.fetch_30min_kline("600519", count=80)
         self.assertEqual(calls, [16])
         self.assertEqual(len(kline["dates"]), 80)
 
@@ -172,8 +174,9 @@ class KlineCacheTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
                 write_cached_records("15min", "600519", records, "test", keep_trading_days=10)
-                with patch.object(data_fetcher, "_fetch_15min_kline_remote", fake_remote):
-                    kline = data_fetcher.fetch_15min_kline("600519", count=220)
+                with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
+                    with patch.object(data_fetcher, "_fetch_15min_kline_remote", fake_remote):
+                        kline = data_fetcher.fetch_15min_kline("600519", count=220)
         self.assertEqual(calls, [32])
         self.assertEqual(len(kline["dates"]), 220)
 

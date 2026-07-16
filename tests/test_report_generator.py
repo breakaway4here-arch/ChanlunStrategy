@@ -678,6 +678,27 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         self.assertEqual(sw["sector_strength_label"], "资金流入TOP4")
         self.assertEqual(sw["data_status"]["daily"], "verified")
 
+    def test_preserves_observation_contract_and_trend_reference(self):
+        item = self._make_watch_item()
+        item.update({
+            "source_channel": "trend_continuation",
+            "view": "observation",
+            "reason_code": "waiting_30m_confirm",
+            "failure_gate": "30min_confirm",
+            "actual_value": {"volume_ratio": 1.3},
+            "upgrade_conditions": ["突破位不破"],
+            "cancel_conditions": ["跌破突破位"],
+            "reference_type": "platform_high_20d",
+            "reference_price": 14.5,
+        })
+
+        serialized = _serialize_startup_watchlist([item])[0]
+
+        self.assertEqual(serialized["source_channel"], "trend_continuation")
+        self.assertEqual(serialized["reference_price"], 14.5)
+        self.assertEqual(serialized["failure_gate"], "30min_confirm")
+        self.assertEqual(serialized["cancel_conditions"], ["跌破突破位"])
+
 
 class TestBuildStartupWatchChartAnnotations(unittest.TestCase):
 
@@ -1165,6 +1186,12 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
 
     def test_auxiliary_center_title(self):
         self.assertIn('辅助决策中心', self.asset_js)
+
+    def test_observation_top5_tab_and_failure_details_are_rendered(self):
+        self.assertIn("observation_top5: '观察 Top5'", self.asset_js)
+        self.assertIn("失败门：", self.asset_js)
+        self.assertIn("升级条件：", self.asset_js)
+        self.assertIn("取消条件：", self.asset_js)
 
     def test_market_overview_helper_presence(self):
         for helper in [

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -12,6 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from run import fetch_market_indices  # noqa: E402
 from typing import Any, Optional
+
+TZ_CN = timezone(timedelta(hours=8))
 
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -149,11 +152,6 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _is_stale_data_row(row: Any) -> bool:
-    data_status = _as_mapping(_as_mapping(row).get("data_status"))
-    return data_status.get("daily") == "stale_cache"
-
-
 def _data_status_daily(row: Any) -> str:
     return str(_as_mapping(_as_mapping(row).get("data_status")).get("daily") or "")
 
@@ -173,11 +171,24 @@ def _iter_workspace_rows(report: Mapping[str, Any]):
                 yield str(view), row
 
 
+_EXECUTABLE_WORKSPACE_ACTIONS = {"可上车", "等回踩", "慎追"}
+
+
+def _decision_action_conflict(row: Mapping[str, Any]) -> Optional[str]:
+    decision = _as_mapping(row.get("decision_engine_v1"))
+    decision_code = str(decision.get("decision_code") or "").strip().lower()
+    action = str(row.get("action") or "").strip()
+    if decision_code in {"reject", "observe"} and action in _EXECUTABLE_WORKSPACE_ACTIONS:
+        return decision_code
+    return None
+
+
 def _iter_raw_candidates(report: Mapping[str, Any]):
     for pool_name in (
         "picks_fusion",
         "picks_pure",
         "startup_watchlist",
+        "observation_watchlist",
         "next_day_boom",
         "luojie_pool",
     ):
@@ -258,6 +269,8 @@ def _resolve_raw_candidate(
             "luojie": "luojie_pool",
             "luojie_pool": "luojie_pool",
             "confirming": "startup_watchlist",
+            "observation_top5": "observation_watchlist",
+            "observation_watchlist": "observation_watchlist",
             "baseline": "picks_pure",
             "picks_fusion": "picks_fusion",
             "picks_pure": "picks_pure",
@@ -304,7 +317,18 @@ def _resolve_change_pct_for_view(
     return _resolve_change_pct(raw)
 
 
-def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def validate_report_contract(
+    report: Mapping[str, Any], require_official: bool = False
+) -> list[str]:
     errors: list[str] = []
     workspace = _as_mapping(report.get("workspace"))
     views = _as_mapping(workspace.get("views"))
@@ -318,12 +342,43 @@ def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
     else:
         data_quality = _as_mapping(dq_value)
 
-    is_official = bool(data_quality.get("is_official"))
+    is_official = data_quality.get("is_official") is True
+    workspace_rows = list(_iter_workspace_rows(report))
+    if require_official and not is_official:
+        errors.append("publish requires data_quality.is_official == True")
     if is_official:
+        report_date = str(report.get("date") or "").strip()
+        quality_report_date = str(data_quality.get("report_date") or "").strip()
+        generated_at = _parse_iso_datetime(data_quality.get("generated_at"))
+        as_of = _parse_iso_datetime(data_quality.get("as_of"))
+        if generated_at is None:
+            errors.append("official report requires valid data_quality.generated_at")
+        elif generated_at.utcoffset() is None:
+            errors.append("official report data_quality.generated_at must include timezone")
+        if as_of is None:
+            errors.append("official report requires valid data_quality.as_of")
+            as_of_cn = None
+        elif as_of.utcoffset() is None:
+            errors.append("official report data_quality.as_of must include timezone")
+            as_of_cn = None
+        else:
+            as_of_cn = as_of.astimezone(TZ_CN)
+        if data_quality.get("bar_state") != "closed":
+            errors.append("official report requires data_quality.bar_state == 'closed'")
+        if data_quality.get("sources_trusted") is not True:
+            errors.append("official report requires data_quality.sources_trusted == True")
+        if not report_date or quality_report_date != report_date:
+            errors.append("official report requires report date consistency")
+        if as_of_cn is not None and quality_report_date and as_of_cn.date().isoformat() != quality_report_date:
+            errors.append("official report requires data_quality.as_of date == report_date")
+        if as_of_cn is not None and (as_of_cn.hour, as_of_cn.minute) < (15, 0):
+            errors.append("official report data_quality.as_of must be at or after 15:00 Asia/Shanghai")
         if data_quality.get("market_status") != "verified":
             errors.append("official report requires data_quality.market_status == 'verified'")
         if data_quality.get("fallback_used") is not False:
             errors.append("official report requires data_quality.fallback_used == False")
+        if data_quality.get("stock_pool_incomplete") is not False:
+            errors.append("official report requires data_quality.stock_pool_incomplete == False")
         if _coerce_int(data_quality.get("stale_stock_count"), default=-1) != 0:
             errors.append("official report requires data_quality.stale_stock_count == 0")
         if _coerce_int(data_quality.get("missing_daily_count"), default=-1) != 0:
@@ -351,24 +406,75 @@ def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
                     current = _resolve_current_price(raw)
                 if current is None:
                     errors.append(f"{view} row missing displayable current_price: code={row.get('code')}")
-            if is_official and _is_stale_data_row(row):
-                errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
-            raw = _resolve_raw_candidate(report, _as_mapping(row.get("ref")))
-            if is_official and _is_stale_data_row(raw):
-                errors.append(f"{view} raw candidate has stale daily cache in official report: code={row.get('code')}")
+    for view, row in workspace_rows:
+        decision_code = _decision_action_conflict(row)
+        if decision_code:
+            errors.append(
+                f"{view} row decision/action conflict: code={row.get('code')} "
+                f"decision_code={decision_code} action={row.get('action')}"
+            )
 
     if is_official:
-        for view, row in _iter_workspace_rows(report):
+        for view, row in workspace_rows:
+            daily_status = _data_status_daily(row)
             if not _has_valid_row_data_status(row):
                 errors.append(f"{view} row missing valid data_status in official report: code={row.get('code')}")
-            if _is_stale_data_row(row):
+            elif daily_status == "stale_cache":
                 errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
+            elif daily_status != "verified":
+                errors.append(
+                    f"{view} row has non-verified daily status in official report: "
+                    f"code={row.get('code')} status={daily_status}"
+                )
         for pool_name, row in _iter_raw_candidates(report):
+            daily_status = _data_status_daily(row)
             if not _has_valid_row_data_status(row):
                 errors.append(f"{pool_name} candidate missing valid data_status in official report: code={row.get('code')}")
-            if _is_stale_data_row(row):
+            elif daily_status == "stale_cache":
                 errors.append(f"{pool_name} candidate has stale daily cache in official report: code={row.get('code')}")
+            elif daily_status != "verified":
+                errors.append(
+                    f"{pool_name} candidate has non-verified daily status in official report: "
+                    f"code={row.get('code')} status={daily_status}"
+                )
 
+    return errors
+
+
+def validate_runtime_cutover(report: Mapping[str, Any]) -> list[str]:
+    """Validate operational cutover metadata before an official push."""
+    errors: list[str] = []
+    data_quality = _as_mapping(report.get("data_quality"))
+    runtime = _as_mapping(data_quality.get("runtime_policy"))
+    diagnostics = _as_mapping(report.get("diagnostics"))
+    funnel = _as_mapping(diagnostics.get("candidate_funnel"))
+    shadow = _as_mapping(diagnostics.get("recall_shadow"))
+    market_mode = str(
+        runtime.get("market_history_cutover_mode") or ""
+    )
+    strategy_mode = str(runtime.get("recall_strategy_mode") or "")
+    if market_mode != "sqlite":
+        errors.append(
+            "publish requires market_history_cutover_mode == sqlite"
+        )
+    if strategy_mode not in {"legacy", "shadow", "active"}:
+        errors.append("publish requires a valid recall_strategy_mode")
+    if runtime.get("decision_semantics") != "v2_missing_position_is_observe":
+        errors.append("publish requires decision semantics v2")
+    if funnel.get("persist_status") != "saved":
+        errors.append("publish requires saved candidate funnel")
+    if strategy_mode == "shadow":
+        if shadow.get("mode") != "shadow":
+            errors.append("shadow publish requires recall comparison")
+        if shadow.get("new_strategy_controls_publish") is not False:
+            errors.append("shadow mode cannot let new strategy control publish")
+    if strategy_mode == "active":
+        if shadow.get("mode") != "active":
+            errors.append("active publish requires recall diagnostics")
+        if shadow.get("new_strategy_controls_publish") is not True:
+            errors.append(
+                "active mode requires new strategy to control publish"
+            )
     return errors
 
 
@@ -390,7 +496,8 @@ def main(argv=None):
         return 1
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    contract_errors = validate_report_contract(report)
+    contract_errors = validate_report_contract(report, require_official=True)
+    contract_errors.extend(validate_runtime_cutover(report))
     manifest_contract_errors = validate_manifest_contract(manifest)
     contract_errors.extend(manifest_contract_errors)
 

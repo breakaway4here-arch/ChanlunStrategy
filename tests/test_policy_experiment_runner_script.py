@@ -486,6 +486,45 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             self.assertIn("Selected Candidate", text)
             self.assertIn("fusion_strict", text)
 
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_can_attach_recall_walkforward_summary(self, run_mock):
+        run_mock.return_value = _fake_payload()
+        recall_payload = {
+            "sample_count": 424,
+            "network_requests": 0,
+            "acceptance_gates": {
+                "accepted": True,
+                "attention_p95": 5,
+                "tail_risk_delta_pp": 1.2,
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            recall_json = Path(tmpdir) / "recall.json"
+            recall_json.write_text(
+                json.dumps(recall_payload), encoding="utf-8"
+            )
+            output_json = Path(tmpdir) / "policy.json"
+            output_md = Path(tmpdir) / "policy.md"
+            rc = main([
+                "--policies",
+                "delay1_v1",
+                "--recall-walkforward-json",
+                str(recall_json),
+                "--output-json",
+                str(output_json),
+                "--output-md",
+                str(output_md),
+            ])
+
+            self.assertEqual(0, rc)
+            payload = json.loads(output_json.read_text(encoding="utf-8"))
+            self.assertEqual(
+                424, payload["recall_walkforward"]["sample_count"]
+            )
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("## Recall Walk-forward", text)
+            self.assertIn("network_requests: 0", text)
+
 
 if __name__ == "__main__":
     unittest.main()

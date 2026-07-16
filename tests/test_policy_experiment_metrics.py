@@ -2,9 +2,11 @@ import unittest
 from unittest.mock import patch
 
 from chanlun.policy_experiment_metrics import (
+    bootstrap_mean_confidence_interval,
     list_policy_experiments,
     bottom_quality_guard_reasons,
     bottom_trend_guard_reasons,
+    evaluate_recall_acceptance_gates,
     should_filter_for_policy,
     run_policy_experiment_metrics,
 )
@@ -1346,6 +1348,38 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
         self.assertEqual(result["coverage"]["policy_evaluated"], 1)
         self.assertEqual(result["baseline_summary"]["n"], 1)
         self.assertEqual(result["policy_summary"]["n"], 1)
+
+    def test_bootstrap_mean_confidence_interval_is_deterministic(self):
+        first = bootstrap_mean_confidence_interval(
+            [1.0, 2.0, 3.0, 4.0],
+            iterations=300,
+            seed=9,
+        )
+        second = bootstrap_mean_confidence_interval(
+            [1.0, 2.0, 3.0, 4.0],
+            iterations=300,
+            seed=9,
+        )
+        self.assertEqual(first, second)
+        self.assertLess(first["lower"], first["mean"])
+        self.assertGreater(first["upper"], first["mean"])
+
+    def test_recall_acceptance_gates_cover_attention_tail_and_stability(self):
+        result = evaluate_recall_acceptance_gates(
+            baseline_returns=[1.0, 2.0, -1.0, 3.0],
+            candidate_returns=[1.5, 2.5, -0.5, 3.5],
+            baseline_drawdowns=[-1.0, -2.0, -6.0, -1.0],
+            candidate_drawdowns=[-1.0, -2.0, -5.0, -1.0],
+            observation_counts=[2, 3, 4, 5, 3],
+            selected_thresholds=[1.3, 1.4, 1.4, 1.3, 1.4],
+            ordered_thresholds=[1.2, 1.3, 1.4, 1.5],
+            bootstrap_iterations=300,
+            seed=5,
+        )
+        self.assertEqual(5, result["threshold_stability"]["stable_folds"])
+        self.assertLessEqual(result["attention_p95"], 5)
+        self.assertLessEqual(result["tail_risk_delta_pp"], 2)
+        self.assertTrue(result["accepted"])
 
 
 if __name__ == "__main__":
