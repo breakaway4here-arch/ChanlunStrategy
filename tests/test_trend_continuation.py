@@ -87,6 +87,22 @@ class TrendContinuationTests(unittest.TestCase):
         self.assertEqual(watchlist[0]["view"], "observation")
         self.assertEqual(diagnostics["watch_near_miss"], 1)
 
+    def test_volume_ratio_1_05_weak_structure_stays_out(self):
+        weak = _result(
+            code="600006",
+            last_close=11.1,
+            previous_close=11.0,
+            today_volume=1_050_000,
+        )
+
+        seeds, watchlist, diagnostics = build_trend_continuation_pool(
+            [weak]
+        )
+
+        self.assertEqual(seeds, [])
+        self.assertEqual(watchlist, [])
+        self.assertEqual(diagnostics["dropped_structure"], 1)
+
     def test_limit_up_and_overextended_go_to_watch_only(self):
         limit_up = _result(
             code="600003",

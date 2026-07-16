@@ -210,7 +210,9 @@ def build_trend_continuation_pool(
             continue
 
         if volume_ratio < float(config.TREND_CONTINUATION_CONDITIONAL_VOLUME_RATIO):
-            if volume_ratio >= float(config.TREND_CONTINUATION_WATCH_VOLUME_RATIO):
+            if volume_ratio >= float(
+                config.TREND_CONTINUATION_STRONG_STRUCTURE_WATCH_VOLUME_RATIO
+            ):
                 watchlist.append(_watch(
                     seed,
                     "volume_near_miss",
