@@ -77,6 +77,18 @@ def _exchange_for_code(code: str) -> str:
     return "SH" if data_fetcher._is_sh(code) else "SZ"
 
 
+def _listed_days(listed_date: Any, as_of: str) -> Optional[int]:
+    text = str(listed_date or "").strip().replace("-", "")
+    if len(text) != 8 or not text.isdigit():
+        return None
+    try:
+        listed = datetime.strptime(text, "%Y%m%d").date()
+        target = datetime.strptime(str(as_of)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    return max(0, (target - listed).days)
+
+
 def _safe_sequence(value: Any) -> List[Any]:
     if value is None:
         return []
@@ -196,6 +208,8 @@ def run_shard(
     count: Optional[int] = None,
     adjustment: str = "qfq",
     now: Optional[datetime] = None,
+    stock_metadata: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    meta_as_of: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Run or resume one deterministic shard in its own staging database."""
     if interval not in DEFAULT_COUNTS:
@@ -210,6 +224,10 @@ def run_shard(
     insufficient = []
     success_count = 0
     changed_rows = 0
+    metadata_by_code = dict(stock_metadata or {})
+    metadata_date = meta_as_of or (now or datetime.now(_CN_TZ)).astimezone(
+        _CN_TZ
+    ).date().isoformat()
 
     with MarketHistoryStore(staging_path) as store:
         previous = _existing_manifest(store, run_id, shard_id)
@@ -246,9 +264,21 @@ def run_shard(
                 )
                 if not bars:
                     raise RuntimeError("empty_history")
+                stock_meta = dict(metadata_by_code.get(code) or {})
                 instrument_id = store.upsert_instrument(
-                    "stock", _exchange_for_code(code), code
+                    "stock",
+                    _exchange_for_code(code),
+                    code,
+                    name=str(stock_meta.get("name") or ""),
                 )
+                if stock_meta:
+                    if "listed_days" not in stock_meta:
+                        stock_meta["listed_days"] = _listed_days(
+                            stock_meta.get("listed_date"), metadata_date
+                        )
+                    store.upsert_stock_meta(
+                        instrument_id, metadata_date, stock_meta
+                    )
                 changed_rows += store.upsert_bars(
                     interval,
                     instrument_id,
@@ -423,6 +453,8 @@ def run_backfill(
     shard_count: int = DEFAULT_SHARD_COUNT,
     workers: int = DEFAULT_SHARD_COUNT,
     count: Optional[int] = None,
+    stock_metadata: Optional[Mapping[str, Mapping[str, Any]]] = None,
+    meta_as_of: Optional[str] = None,
 ) -> Dict[str, Any]:
     shards = stable_code_shards(codes, shard_count)
     root = Path(staging_dir)
@@ -440,8 +472,10 @@ def run_backfill(
                 interval,
                 shards[index],
                 paths[index],
-                fetcher,
-                count,
+                fetcher=fetcher,
+                count=count,
+                stock_metadata=stock_metadata,
+                meta_as_of=meta_as_of,
             ): index
             for index in range(shard_count)
         }
@@ -504,6 +538,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     codes = _read_codes(args.codes_file, args.codes)
+    stock_metadata = {}
     if not codes:
         if args.interval == "15m":
             parser.error("15m backfill requires --codes or --codes-file")
@@ -515,6 +550,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 "full A-share universe incomplete: {}".format(diagnostics)
             )
         codes = [row["code"] for row in stocks]
+        stock_metadata = {row["code"]: row for row in stocks}
     if args.shard_id is not None:
         if args.shard_id < 0 or args.shard_id >= args.shards:
             parser.error("--shard-id must be in [0, shards)")
@@ -529,6 +565,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             paths[args.shard_id],
             fetcher=_remote_fetcher(args.interval),
             count=args.count,
+            stock_metadata=stock_metadata,
         )
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0 if result["status"] == "complete" else 2
@@ -541,6 +578,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         shard_count=args.shards,
         workers=args.workers,
         count=args.count,
+        stock_metadata=stock_metadata,
     )
     print(
         json.dumps(

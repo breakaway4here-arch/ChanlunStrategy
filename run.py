@@ -39,6 +39,11 @@ from config import (
     ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS,
     ENABLE_FUSION_ADMISSION_POLICY,
     SIGNAL_MAX_AGE_TRADING_DAYS,
+    ENABLE_FULL_A_UNIVERSE, MARKET_HISTORY_DB_PATH,
+    MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
+    FULL_A_LOW_QUOTA, FULL_A_TREND_QUOTA, FULL_A_NEUTRAL_QUOTA,
+    FULL_A_BASE_LIMIT, FULL_A_OVERLAY_LIMIT, FULL_A_FINAL_LIMIT,
+    FULL_A_MIN_ELIGIBLE_COUNT,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
@@ -63,6 +68,14 @@ from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.research_frameworks import calc_gf_dma_health
+from chanlun.market_history_store import MarketHistoryStore
+from chanlun.universe_builder import (
+    UniverseConfig,
+    attach_sector_context,
+    build_candidate_universe,
+    build_sector_groups,
+    load_eligible_candidates,
+)
 
 
 # ============================================================
@@ -148,6 +161,83 @@ def _clamp(value, low, high):
     if value is None:
         return low
     return max(low, min(high, value))
+
+
+def _apply_full_a_universe(
+    stocks_with_kline,
+    sectors,
+    data_quality,
+    report_date,
+):
+    """Replace the sector-only pool when the canonical DB is sufficiently complete."""
+    diagnostics = {
+        "enabled": bool(ENABLE_FULL_A_UNIVERSE),
+        "status": "disabled",
+        "existing_pool_count": len(stocks_with_kline or []),
+        "db_path": MARKET_HISTORY_DB_PATH,
+    }
+    data_quality["universe_builder"] = diagnostics
+    if not ENABLE_FULL_A_UNIVERSE:
+        return stocks_with_kline
+    if not os.path.exists(MARKET_HISTORY_DB_PATH):
+        diagnostics.update(status="fallback", reason="market_history_db_missing")
+        return stocks_with_kline
+
+    try:
+        with MarketHistoryStore(MARKET_HISTORY_DB_PATH, readonly=True) as store:
+            candidates, load_diagnostics = load_eligible_candidates(
+                store,
+                as_of=report_date,
+                required_date=report_date,
+                min_listed_days=MIN_LISTED_DAYS,
+                min_daily_amount=MIN_DAILY_AMOUNT,
+                return_diagnostics=True,
+            )
+        diagnostics["eligibility"] = load_diagnostics
+        if len(candidates) < int(FULL_A_MIN_ELIGIBLE_COUNT):
+            diagnostics.update(
+                status="fallback",
+                reason="eligible_count_below_activation_floor",
+                activation_floor=int(FULL_A_MIN_ELIGIBLE_COUNT),
+            )
+            return stocks_with_kline
+
+        config = UniverseConfig(
+            low_quota=FULL_A_LOW_QUOTA,
+            trend_quota=FULL_A_TREND_QUOTA,
+            neutral_quota=FULL_A_NEUTRAL_QUOTA,
+            base_limit=FULL_A_BASE_LIMIT,
+            overlay_limit=FULL_A_OVERLAY_LIMIT,
+            final_limit=FULL_A_FINAL_LIMIT,
+        )
+        sector_groups = build_sector_groups(sectors, stocks_with_kline)
+        result = build_candidate_universe(
+            candidates,
+            sector_groups,
+            config=config,
+        )
+        selected = attach_sector_context(result["final"], stocks_with_kline)
+        if len(selected) < int(FULL_A_BASE_LIMIT):
+            diagnostics.update(
+                status="fallback",
+                reason="final_pool_below_base_limit",
+            )
+            return stocks_with_kline
+
+        diagnostics.update(result["diagnostics"])
+        diagnostics.update(
+            status="activated",
+            sector_group_count=len(sector_groups),
+        )
+        data_quality["stock_pool_source"] = "full_a_db+sector_overlay"
+        return selected
+    except Exception as exc:
+        diagnostics.update(
+            status="fallback",
+            reason="universe_builder_error",
+            error="{}: {}".format(type(exc).__name__, exc),
+        )
+        return stocks_with_kline
 
 
 def _market_temperature_label(score):
@@ -625,6 +715,13 @@ def main(debug=False, preview=False, generated_at=None):
     sh_kline = daily_data["sh_index"]
     index_error = daily_data.get("index_error", "")
     stocks_with_kline = daily_data["stocks"]
+    if not debug:
+        stocks_with_kline = _apply_full_a_universe(
+            stocks_with_kline,
+            sectors,
+            data_quality,
+            today,
+        )
     sh_closes = sh_kline["closes"] if sh_kline else None
     sh_volumes = sh_kline["volumes"] if sh_kline else None
 

@@ -81,6 +81,15 @@ class BackfillMarketHistoryTests(unittest.TestCase):
             staging_path=staging,
             fetcher=fetcher,
             count=500,
+            stock_metadata={
+                "600000": {
+                    "name": "浦发银行",
+                    "listed_date": "19991110",
+                    "is_st": False,
+                    "delisting_risk": False,
+                }
+            },
+            meta_as_of="2026-07-01",
         )
 
         self.assertEqual(result["status"], "complete")
@@ -96,6 +105,11 @@ class BackfillMarketHistoryTests(unittest.TestCase):
                 "insufficient_history",
             )
             instrument = store.resolve_instrument("stock", "SH", "600000")
+            meta = store.query_stock_meta(
+                instrument["instrument_id"], as_of="2026-07-01"
+            )
+            self.assertEqual(instrument["name"], "浦发银行")
+            self.assertGreater(meta["listed_days"], 60)
             self.assertEqual(
                 len(store.query_bars("30m", instrument["instrument_id"])), 500
             )
@@ -219,8 +233,8 @@ class BackfillMarketHistoryTests(unittest.TestCase):
                 "data": {
                     "total": 3,
                     "diff": [
-                        {"f12": "600001", "f14": "B"},
-                        {"f12": "000001", "f14": "A"},
+                        {"f12": "600001", "f14": "*ST B", "f26": "20000101"},
+                        {"f12": "000001", "f14": "A", "f26": "19910403"},
                     ],
                 }
             },
@@ -229,7 +243,7 @@ class BackfillMarketHistoryTests(unittest.TestCase):
                     "total": 3,
                     "diff": [
                         {"f12": "600001", "f14": "B duplicate"},
-                        {"f12": "300001", "f14": "C"},
+                        {"f12": "300001", "f14": "C退", "f26": "20100101"},
                     ],
                 }
             },
@@ -243,6 +257,10 @@ class BackfillMarketHistoryTests(unittest.TestCase):
         self.assertTrue(diagnostics["complete"])
         self.assertEqual(diagnostics["unique"], 3)
         self.assertEqual(diagnostics["pages"], 2)
+        by_code = {row["code"]: row for row in stocks}
+        self.assertTrue(by_code["600001"]["is_st"])
+        self.assertTrue(by_code["300001"]["delisting_risk"])
+        self.assertEqual(by_code["000001"]["listed_date"], "19910403")
 
     def test_eastmoney_minute_fetch_requests_full_500_and_parses_amount(self):
         lines = [

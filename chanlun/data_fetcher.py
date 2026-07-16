@@ -264,7 +264,7 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             "invt": "2",
             "fid": "f12",
             "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
-            "fields": "f12,f14",
+            "fields": "f12,f14,f26",
         }
         try:
             payload = _fetch_eastmoney_json(params)
@@ -292,15 +292,17 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             code = str(raw.get("f12") or "").strip()
             if len(code) != 6 or not code.isdigit():
                 continue
-            stocks_by_code.setdefault(
-                code,
-                {
-                    "code": code,
-                    "name": str(raw.get("f14") or "").strip(),
-                    "exchange": "SH" if _is_sh(code) else "SZ",
-                    "asset_type": "stock",
-                },
-            )
+            name = str(raw.get("f14") or "").strip()
+            listed_date = str(raw.get("f26") or "").strip()
+            stocks_by_code.setdefault(code, {
+                "code": code,
+                "name": name,
+                "exchange": "SH" if _is_sh(code) else "SZ",
+                "asset_type": "stock",
+                "listed_date": listed_date,
+                "is_st": "ST" in name.upper(),
+                "delisting_risk": "退" in name,
+            })
         diagnostics["unique"] = len(stocks_by_code)
         requested = diagnostics["requested"]
         if requested == 0:

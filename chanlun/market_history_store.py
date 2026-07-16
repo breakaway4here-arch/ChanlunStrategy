@@ -350,6 +350,45 @@ class MarketHistoryStore:
         payload["as_of"] = row["as_of"]
         return payload
 
+    def query_stock_meta_many(
+        self,
+        instrument_ids: Sequence[int],
+        as_of: Optional[str] = None,
+    ) -> Dict[int, Dict[str, Any]]:
+        ids = list(dict.fromkeys(int(value) for value in instrument_ids))
+        result = {}
+        for offset in range(0, len(ids), 900):
+            chunk = ids[offset:offset + 900]
+            if not chunk:
+                continue
+            params = list(chunk)
+            where = "instrument_id IN ({})".format(
+                ",".join("?" for _ in chunk)
+            )
+            if as_of is not None:
+                where += " AND as_of<=?"
+                params.append(str(as_of))
+            rows = self.connection.execute(
+                """
+                SELECT instrument_id, as_of, metadata_json
+                FROM (
+                    SELECT instrument_id, as_of, metadata_json,
+                           ROW_NUMBER() OVER (
+                               PARTITION BY instrument_id ORDER BY as_of DESC
+                           ) AS row_number
+                    FROM stock_meta_asof
+                    WHERE {where}
+                ) ranked
+                WHERE row_number=1
+                """.format(where=where),
+                params,
+            ).fetchall()
+            for row in rows:
+                payload = json.loads(row["metadata_json"])
+                payload["as_of"] = row["as_of"]
+                result[int(row["instrument_id"])] = payload
+        return result
+
     def upsert_trade_calendar(self, exchange: str, trade_date: str, is_open: bool) -> None:
         self._require_writable()
         with self._write_scope():
