@@ -105,6 +105,27 @@ class BackfillMarketHistoryTests(unittest.TestCase):
         )
         self.assertEqual([0.25], sleeps)
 
+    def test_retry_fetch_rejects_invalid_payload_before_next_provider(self):
+        calls = []
+
+        def invalid(code, count):
+            calls.append("invalid")
+            return {"dates": ["2026-07-15"], "opens": [0]}
+
+        def valid(code, count):
+            calls.append("valid")
+            return {"dates": ["2026-07-15"], "opens": [10]}
+
+        result = _retry_fetch(
+            "600000",
+            1000,
+            [invalid, valid],
+            validator=lambda payload: payload["opens"][0] > 0,
+        )
+
+        self.assertEqual({"dates": ["2026-07-15"], "opens": [10]}, result)
+        self.assertEqual(["invalid", "valid"], calls)
+
     def test_run_shard_writes_manifest_and_classifies_short_history(self):
         staging = self.root / "shard.sqlite"
 

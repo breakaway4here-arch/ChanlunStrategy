@@ -445,7 +445,7 @@ def _remote_fetcher(interval: str):
             data_fetcher._fetch_daily_kline_sina_daily_remote,
         )
         return lambda code, count: _retry_fetch(
-            code, count, sources
+            code, count, sources, validator=_valid_kline_payload
         )
     if interval == "30m":
         return lambda code, count: _retry_fetch(
@@ -458,6 +458,7 @@ def _remote_fetcher(interval: str):
                     )
                 ),
             ),
+            validator=_valid_kline_payload,
         )
     if interval == "15m":
         return lambda code, count: _retry_fetch(
@@ -470,8 +471,53 @@ def _remote_fetcher(interval: str):
                     )
                 ),
             ),
+            validator=_valid_kline_payload,
         )
     raise ValueError("unsupported interval: {}".format(interval))
+
+
+def _valid_kline_payload(payload: Mapping[str, Any]) -> bool:
+    try:
+        dates = _safe_sequence(payload.get("dates"))
+        opens = _safe_sequence(payload.get("opens"))
+        highs = _safe_sequence(payload.get("highs"))
+        lows = _safe_sequence(payload.get("lows"))
+        closes = _safe_sequence(payload.get("closes"))
+        volumes = _safe_sequence(payload.get("volumes"))
+    except Exception:
+        return False
+    if not dates:
+        return False
+    if any(
+        len(values) != len(dates)
+        for values in (opens, highs, lows, closes, volumes)
+    ):
+        return False
+    for open_value, high_value, low_value, close_value in zip(
+        opens, highs, lows, closes
+    ):
+        try:
+            open_price = float(open_value)
+            high_price = float(high_value)
+            low_price = float(low_value)
+            close_price = float(close_value)
+        except (TypeError, ValueError):
+            return False
+        if not all(
+            math.isfinite(value) and value > 0
+            for value in (
+                open_price,
+                high_price,
+                low_price,
+                close_price,
+            )
+        ):
+            return False
+        if high_price < max(open_price, low_price, close_price):
+            return False
+        if low_price > min(open_price, high_price, close_price):
+            return False
+    return True
 
 
 def _retry_fetch(
@@ -481,6 +527,7 @@ def _retry_fetch(
     attempts: int = 3,
     base_delay: float = 0.5,
     sleep_fn: Callable[[float], None] = time.sleep,
+    validator: Optional[Callable[[Mapping[str, Any]], bool]] = None,
 ) -> Optional[Mapping[str, Any]]:
     """Try providers sequentially, then retry the provider chain with backoff."""
     total_attempts = max(1, int(attempts))
@@ -490,7 +537,9 @@ def _retry_fetch(
                 payload = fetcher(code, count)
             except Exception:
                 payload = None
-            if payload:
+            if payload and (
+                validator is None or bool(validator(payload))
+            ):
                 return payload
         if attempt + 1 < total_attempts:
             sleep_fn(float(base_delay) * (2 ** attempt))
