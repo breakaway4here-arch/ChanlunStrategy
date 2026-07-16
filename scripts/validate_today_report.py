@@ -366,6 +366,8 @@ def validate_report_contract(
             errors.append("official report requires data_quality.market_status == 'verified'")
         if data_quality.get("fallback_used") is not False:
             errors.append("official report requires data_quality.fallback_used == False")
+        if data_quality.get("stock_pool_incomplete") is not False:
+            errors.append("official report requires data_quality.stock_pool_incomplete == False")
         if _coerce_int(data_quality.get("stale_stock_count"), default=-1) != 0:
             errors.append("official report requires data_quality.stale_stock_count == 0")
         if _coerce_int(data_quality.get("missing_daily_count"), default=-1) != 0:

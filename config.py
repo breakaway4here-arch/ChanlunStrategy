@@ -131,6 +131,7 @@ MIN15_KLINE_INCREMENTAL_FETCH_COUNT = 32
 MIN_LISTED_DAYS = 60               # 上市最少天数
 MIN_DAILY_AMOUNT = 50_000_000      # 近5日日均最低成交额（元），排除僵尸股
 TOP_SECTOR_COUNT = 20              # 取资金流入TOP N板块
+SECTOR_COMPONENT_PAGE_SIZE = 100   # 东方财富板块成分股单页大小
 
 # ============================================================
 # 涨停/跌停判断阈值

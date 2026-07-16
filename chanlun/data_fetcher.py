@@ -20,6 +20,7 @@ import requests
 
 from config import (
     DAY_LOOKBACK, MIN30_LOOKBACK_DAYS, TOP_SECTOR_COUNT,
+    SECTOR_COMPONENT_PAGE_SIZE,
     KLINE_CACHE_FORCE_REFRESH,
     DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
     MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
@@ -269,47 +270,98 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
 # ============================================================
 # 板块成分股 — 东方财富
 # ============================================================
-def fetch_sector_stocks(sector_code):
+def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     """
     获取板块内成分股列表。
     返回: [{"code": "600519", "name": "贵州茅台", "change_pct": 1.5}, ...]
     """
-    all_stocks = []
+    stocks_by_code = {}
+    diagnostics = {
+        "sector_code": sector_code,
+        "page_size": SECTOR_COMPONENT_PAGE_SIZE,
+        "requested": None,
+        "fetched": 0,
+        "unique": 0,
+        "pages": 0,
+        "complete": False,
+        "error": "",
+    }
     page = 1
     while True:
         params = {
-            "pn": str(page), "pz": "200", "po": "0", "np": "1",
-            "fltt": "2", "invt": "2", "fid": "f3",
+            "pn": str(page), "pz": str(SECTOR_COMPONENT_PAGE_SIZE), "po": "0", "np": "1",
+            "fltt": "2", "invt": "2", "fid": "f12",
             "fs": f"b:{sector_code}",
             "fields": "f12,f14,f3,f2,f20,f21",
         }
         try:
             data = _fetch_eastmoney_json(params)
-            stock_data = data.get("data")
-            if not stock_data:
+            stock_data = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(stock_data, dict):
+                diagnostics["error"] = "missing_data"
                 break
-            items = stock_data.get("diff", [])
-            if not items:
-                break
+            diagnostics["pages"] += 1
+
+            if diagnostics["requested"] is None:
+                raw_total = stock_data.get("total")
+                try:
+                    total = int(raw_total)
+                except (TypeError, ValueError):
+                    total = None
+                if total is not None and total >= 0:
+                    diagnostics["requested"] = total
+
+            items = stock_data.get("diff") or []
+            if not isinstance(items, list):
+                items = []
+            diagnostics["fetched"] += len(items)
+            unique_before = len(stocks_by_code)
             for it in items:
+                if not isinstance(it, dict):
+                    continue
+                code = str(it.get("f12") or "").strip()
+                if not code or code in stocks_by_code:
+                    continue
                 market_cap = _market_cap_to_yi(it.get("f20"))
                 circulating_market_cap = _market_cap_to_yi(it.get("f21"))
-                all_stocks.append({
-                    "code": it.get("f12", ""),
+                stocks_by_code[code] = {
+                    "code": code,
                     "name": it.get("f14", "-"),
                     "change_pct": it.get("f3", 0),
                     "close": it.get("f2", 0),
                     "market_cap": market_cap,
                     "circulating_market_cap": circulating_market_cap,
                     "float_market_cap": circulating_market_cap,
-                })
-            if len(items) < 200:
+                }
+
+            diagnostics["unique"] = len(stocks_by_code)
+            total = diagnostics["requested"]
+            if total is None:
+                diagnostics["error"] = "missing_total"
+                break
+            if len(stocks_by_code) >= total:
+                diagnostics["complete"] = True
+                break
+            if not items:
+                diagnostics["error"] = "empty_page_before_total"
+                break
+            if len(stocks_by_code) == unique_before:
+                diagnostics["error"] = "no_new_codes"
+                break
+            if len(items) < SECTOR_COMPONENT_PAGE_SIZE:
+                diagnostics["error"] = "short_page_before_total"
                 break
             page += 1
         except Exception as e:
             print(f"[ERROR] 获取板块 {sector_code} 成分股失败: {e}")
+            diagnostics["error"] = f"request_failed:{type(e).__name__}:{e}"
             break
-    return all_stocks
+
+    stocks = [stocks_by_code[code] for code in sorted(stocks_by_code)]
+    diagnostics["unique"] = len(stocks)
+    if return_diagnostics:
+        return stocks, diagnostics
+    return stocks
 
 
 # ============================================================
@@ -1079,10 +1131,17 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
     print("[2/4] 获取板块成分股 ...")
     stock_map = {}
     consecutive_failures = 0
+    sector_component_diagnostics = []
+    stock_pool_incomplete = False
     sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
     stock_pool_source = "sector_components"
     for sector_rank, sector in enumerate(sectors, start=1):
-        stocks = fetch_sector_stocks(sector["code"])
+        stocks, component_diagnostics = fetch_sector_stocks(
+            sector["code"], return_diagnostics=True
+        )
+        sector_component_diagnostics.append(component_diagnostics)
+        if not component_diagnostics.get("complete"):
+            stock_pool_incomplete = True
         if not stocks:
             consecutive_failures += 1
             # 连续 5 个板块全部失败 → 代理大概率已挂，直接放弃剩余请求
@@ -1232,6 +1291,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
             and time_metadata["bar_state"] == "closed"
             and stale_stock_count == 0
             and missing_daily_count == 0
+            and not stock_pool_incomplete
         ),
         "sources_trusted": sources_trusted,
         "market_status": "verified" if sh_kline else "unverified",
@@ -1240,6 +1300,8 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         "stale_stock_count": stale_stock_count,
         "missing_daily_count": missing_daily_count,
         "missing_30min_count": 0,
+        "stock_pool_incomplete": stock_pool_incomplete,
+        "sector_component_diagnostics": sector_component_diagnostics,
         "fallback_used": fallback_used,
         "warnings": warnings,
     }
