@@ -3,6 +3,17 @@
 """
 
 import os
+from pathlib import Path
+
+
+def _resolve_shared_market_history_db_path(project_root, override=None):
+    """Resolve one repository-level DB shared by all local worktrees."""
+    if override:
+        return str(Path(override).expanduser().resolve())
+    root = Path(project_root).resolve()
+    if root.parent.name == ".worktrees":
+        root = root.parent.parent
+    return str(root / ".cache" / "chanlun" / "market_history.sqlite")
 
 # ============================================================
 # 运行时间
@@ -134,7 +145,10 @@ KLINE_CACHE_DIR = ".cache/chanlun"
 KLINE_CACHE_VERBOSE = False
 KLINE_CACHE_FORCE_REFRESH = False
 KLINE_CACHE_TRADING_DAYS = 10
-MARKET_HISTORY_DB_PATH = ".cache/chanlun/market_history.sqlite"
+MARKET_HISTORY_DB_PATH = _resolve_shared_market_history_db_path(
+    Path(__file__).resolve().parent,
+    override=os.environ.get("CHANLUN_MARKET_HISTORY_DB_PATH"),
+)
 KLINE_REPOSITORY_ENABLED = True
 KLINE_REPOSITORY_MODE = "ongoing"
 MARKET_HISTORY_CUTOVER_MODE = os.environ.get(
