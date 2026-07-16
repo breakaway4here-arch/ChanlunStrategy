@@ -1,11 +1,16 @@
+import os
+import subprocess
+import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
 import run
 from chanlun import data_fetcher
+from chanlun.kline_cache import write_cached_records
 from scripts.validate_today_report import validate_report_contract
 
 
@@ -21,7 +26,136 @@ def _kline(dates, closes):
     }
 
 
+def _official_empty_report():
+    return {
+        "date": "2026-06-30",
+        "picks_fusion": [],
+        "picks_pure": [],
+        "next_day_boom": {"candidates": []},
+        "luojie_pool": {"candidates": []},
+        "startup_watchlist": [],
+        "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+        "data_quality": {
+            "report_date": "2026-06-30",
+            "generated_at": "2026-06-30T15:05:00+08:00",
+            "as_of": "2026-06-30T15:05:00+08:00",
+            "bar_state": "closed",
+            "sources_trusted": True,
+            "is_trading_day": True,
+            "is_official": True,
+            "market_status": "verified",
+            "fallback_used": False,
+            "stale_stock_count": 0,
+            "missing_daily_count": 0,
+        },
+    }
+
+
 class TestMarketDataGuard(unittest.TestCase):
+
+    def test_closed_run_with_same_day_cache_fetches_full_remote_window(self):
+        end = date(2026, 6, 30)
+        dates = [(end - timedelta(days=99 - i)).isoformat() for i in range(100)]
+        cached_records = [
+            {"date": d, "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100}
+            for d in dates
+        ]
+        remote_calls = []
+
+        def remote(_code, count=100):
+            remote_calls.append(count)
+            return _kline(dates[-count:], [20.0] * count)
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
+        ):
+            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            with patch.object(data_fetcher, "_fetch_daily_kline_remote", side_effect=remote):
+                rows = data_fetcher.batch_fetch_daily_klines(
+                    [{"code": "600000", "name": "测试股"}],
+                    required_date="2026-06-30",
+                    force_refresh=True,
+                )
+
+        self.assertEqual(remote_calls, [100])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["data_status"]["source"], "tencent")
+        self.assertEqual(float(rows[0]["klines"]["closes"][-1]), 20.0)
+
+    def test_closed_run_remote_failure_marks_cache_untrusted_and_not_official(self):
+        end = date(2026, 6, 30)
+        dates = [(end - timedelta(days=99 - i)).isoformat() for i in range(100)]
+        cached_records = [
+            {"date": d, "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100}
+            for d in dates
+        ]
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
+        ):
+            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+                {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+            ]), patch.object(
+                data_fetcher,
+                "fetch_sector_stocks",
+                return_value=[{"code": "600000", "name": "测试股"}],
+            ), patch.object(
+                data_fetcher, "_fetch_daily_kline_remote", return_value=None
+            ), patch.object(
+                data_fetcher,
+                "fetch_shanghai_index",
+                return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+            ):
+                result = data_fetcher.collect_daily_data(
+                    required_date="2026-06-30",
+                    generated_at=closed,
+                )
+
+        self.assertEqual(result["stocks"][0]["data_status"]["source"], "kline_cache")
+        self.assertFalse(result["data_quality"]["sources_trusted"])
+        self.assertFalse(result["data_quality"]["is_official"])
+
+    def test_closed_producer_rejects_untrusted_source_and_date_mismatch(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        base_row = {
+            "code": "600000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        for field, value in (("source", "unknown"), ("latest_date", "2026-06-29")):
+            with self.subTest(field=field):
+                row = dict(base_row)
+                row["data_status"] = dict(base_row["data_status"])
+                row["data_status"][field] = value
+                with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+                    {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+                ]), patch.object(
+                    data_fetcher,
+                    "fetch_sector_stocks",
+                    return_value=[{"code": "600000", "name": "测试股"}],
+                ), patch.object(
+                    data_fetcher, "batch_fetch_daily_klines", return_value=[row]
+                ), patch.object(
+                    data_fetcher,
+                    "fetch_shanghai_index",
+                    return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+                ):
+                    result = data_fetcher.collect_daily_data(
+                        required_date="2026-06-30",
+                        generated_at=closed,
+                    )
+
+                self.assertFalse(result["data_quality"]["is_official"])
 
     def test_collect_daily_data_intraday_has_close_metadata_but_is_not_official(self):
         as_of = datetime(2026, 6, 30, 14, 35, tzinfo=timezone(timedelta(hours=8)))
@@ -491,6 +625,78 @@ class TestMarketDataGuard(unittest.TestCase):
 
 class TestDailyRunScriptGuard(unittest.TestCase):
 
+    def test_validator_failure_stops_script_before_any_git_command(self):
+        source_script = Path("daily_run.sh").read_text(encoding="utf-8")
+        fixed_timestamp = datetime(
+            2026, 6, 30, 12, 0, tzinfo=timezone(timedelta(hours=8))
+        ).timestamp()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "daily_run.sh").write_text(source_script, encoding="utf-8")
+            (root / ".zshrc").write_text("", encoding="utf-8")
+            (root / "docs" / "data").mkdir(parents=True)
+            (root / "docs" / "data" / "2026-06-30.json").write_text("{}", encoding="utf-8")
+            (root / "docs" / "index.html").write_text("ok", encoding="utf-8")
+            os.utime(root / "docs" / "data" / "2026-06-30.json", (fixed_timestamp, fixed_timestamp))
+            os.utime(root / "docs" / "index.html", (fixed_timestamp, fixed_timestamp))
+
+            (root / "scripts").mkdir()
+            (root / "scripts" / "validate_today_report.py").write_text(
+                "import os\n"
+                "with open(os.environ['VALIDATOR_LOG'], 'a', encoding='utf-8') as f:\n"
+                "    f.write('called\\n')\n"
+                "raise SystemExit(9)\n",
+                encoding="utf-8",
+            )
+            (root / "run.py").write_text("def main(*args, **kwargs):\n    return None\n", encoding="utf-8")
+            (root / "chanlun").mkdir()
+            (root / "chanlun" / "__init__.py").write_text("", encoding="utf-8")
+            session_module = "class _Session:\n    trust_env = True\nSESSION = _Session()\n"
+            (root / "chanlun" / "data_fetcher.py").write_text(session_module, encoding="utf-8")
+            (root / "chanlun" / "market_news.py").write_text(session_module, encoding="utf-8")
+
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            git_log = root / "git.log"
+            validator_log = root / "validator.log"
+            fake_git = fake_bin / "git"
+            fake_git.write_text(
+                '#!/bin/zsh\nprint -r -- "$@" >> "$GIT_LOG"\nexit 0\n',
+                encoding="utf-8",
+            )
+            fake_git.chmod(0o755)
+            fake_date = fake_bin / "date"
+            fake_date.write_text(
+                '#!/bin/zsh\nif [[ "$1" == "+%Y-%m-%d" ]]; then print "2026-06-30"; '
+                'else print "2026-06-30 15:05:00"; fi\n',
+                encoding="utf-8",
+            )
+            fake_date.chmod(0o755)
+
+            env = dict(os.environ)
+            env.update({
+                "HOME": str(root),
+                "PATH": f"{fake_bin}{os.pathsep}{env.get('PATH', '')}",
+                "GIT_LOG": str(git_log),
+                "VALIDATOR_LOG": str(validator_log),
+            })
+            completed = subprocess.run(
+                ["/bin/zsh", str(root / "daily_run.sh")],
+                cwd=str(root),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            git_calls = git_log.read_text(encoding="utf-8") if git_log.exists() else ""
+            validator_calls = validator_log.read_text(encoding="utf-8").splitlines()
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(validator_calls, ["called", "called"])
+        self.assertEqual(git_calls, "", completed.stdout + completed.stderr)
+
     def test_daily_run_does_not_skip_existing_output_after_recheck_time(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:
             script = f.read()
@@ -519,6 +725,18 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
 
 class TestReportContractGuard(unittest.TestCase):
+
+    def test_validate_report_contract_rejects_untrusted_source_and_as_of_mismatch(self):
+        for field, value, expected in (
+            ("sources_trusted", False, "sources_trusted == True"),
+            ("report_date", "2026-06-29", "report date consistency"),
+            ("as_of", "2026-06-29T15:05:00+08:00", "as_of date == report_date"),
+        ):
+            with self.subTest(field=field):
+                report = _official_empty_report()
+                report["data_quality"][field] = value
+                errors = validate_report_contract(report)
+                self.assertTrue(any(expected in err for err in errors), errors)
 
     def test_validate_report_contract_rejects_official_without_closed_metadata(self):
         report = {
