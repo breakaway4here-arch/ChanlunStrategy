@@ -97,7 +97,86 @@ class MarketHistoryStoreTests(unittest.TestCase):
         triggers = self.store.connection.execute(
             "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name LIKE 'bars_%'"
         ).fetchall()
-        self.assertEqual(triggers, [])
+        self.assertEqual(len(triggers), 6)
+
+    def test_database_triggers_reject_direct_insert_and_update_adjustment_bypass(self):
+        first = self.store.upsert_instrument("stock", "SH", "600000")
+        second = self.store.upsert_instrument("stock", "SH", "600001")
+        self.store.upsert_bars(
+            "day", first, [_bar("2026-07-01", adjustment="qfq")]
+        )
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "canonical adjustment"):
+            with self.store.connection:
+                self.store.connection.execute(
+                    """
+                    INSERT INTO bars_day(
+                        instrument_id, ts, open, high, low, close, volume, amount,
+                        adjustment, is_final, source_batch, ingest_run_id, updated_at
+                    ) VALUES (?, '2026-07-01', 10, 11, 9, 10, 1, 1,
+                              'raw', 1, '', NULL, 'now')
+                    """,
+                    (second,),
+                )
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "canonical adjustment"):
+            with self.store.connection:
+                self.store.connection.execute(
+                    "UPDATE bars_day SET adjustment='raw' WHERE instrument_id=?",
+                    (first,),
+                )
+
+        self.assertEqual(
+            self.store.query_bars("day", first)[0]["adjustment"], "qfq"
+        )
+        self.assertEqual(self.store.query_bars("day", second), [])
+
+    def test_database_trigger_fails_closed_without_canonical_setting(self):
+        instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
+        self.assertIsNone(self.store.get_canonical_adjustment("day"))
+
+        with self.assertRaisesRegex(sqlite3.IntegrityError, "canonical adjustment"):
+            with self.store.connection:
+                self.store.connection.execute(
+                    """
+                    INSERT INTO bars_day(
+                        instrument_id, ts, open, high, low, close, volume, amount,
+                        adjustment, is_final, source_batch, ingest_run_id, updated_at
+                    ) VALUES (?, '2026-07-01', 10, 11, 9, 10, 1, 1,
+                              'qfq', 1, '', NULL, 'now')
+                    """,
+                    (instrument_id,),
+                )
+
+        self.assertEqual(self.store.query_bars("day", instrument_id), [])
+
+    def test_trigger_guard_uses_settings_primary_key_without_fact_table_scan(self):
+        for table in ("bars_day", "bars_30m", "bars_15m"):
+            trigger_rows = self.store.connection.execute(
+                """
+                SELECT sql FROM sqlite_master
+                WHERE type='trigger' AND tbl_name=? ORDER BY name
+                """,
+                (table,),
+            ).fetchall()
+            self.assertEqual(len(trigger_rows), 2)
+            for row in trigger_rows:
+                body = row["sql"].upper().split("BEGIN", 1)[1]
+                self.assertIn("FROM BAR_TABLE_SETTINGS", body)
+                self.assertNotIn("FROM {}".format(table.upper()), body)
+
+        plan = self.store.connection.execute(
+            """
+            EXPLAIN QUERY PLAN
+            SELECT 1 FROM bar_table_settings
+            WHERE table_name='bars_day' AND adjustment='qfq'
+            """
+        ).fetchall()
+        details = " ".join(str(row[3]).upper() for row in plan)
+        self.assertIn("SEARCH", details)
+        self.assertIn("BAR_TABLE_SETTINGS", details)
+        self.assertIn("TABLE_NAME=?", details)
+        self.assertNotIn("SCAN BAR_TABLE_SETTINGS", details)
 
     def test_normal_adjustment_check_uses_settings_pk_without_scanning_bar_table(self):
         instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
@@ -132,6 +211,9 @@ class MarketHistoryStoreTests(unittest.TestCase):
         self.assertEqual(self.store.get_canonical_adjustment("day"), "qfq")
 
         with self.store.connection:
+            self.store.connection.execute(
+                "DROP TRIGGER trg_bars_day_adjustment_insert"
+            )
             self.store.connection.execute(
                 """
                 INSERT INTO bars_day(

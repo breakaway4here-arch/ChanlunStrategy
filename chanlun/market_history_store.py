@@ -199,6 +199,30 @@ class MarketHistoryStore:
                             """,
                             (table, adjustment, _utc_now()),
                         )
+                message = "canonical adjustment missing or mismatch for {}".format(
+                    table
+                )
+                for operation in ("INSERT", "UPDATE"):
+                    self.connection.execute(
+                        """
+                        CREATE TRIGGER trg_{table}_adjustment_{suffix}
+                        BEFORE {operation} ON {table}
+                        FOR EACH ROW
+                        BEGIN
+                            SELECT RAISE(ABORT, '{message}')
+                            WHERE NOT EXISTS (
+                                SELECT 1 FROM bar_table_settings
+                                WHERE table_name='{table}'
+                                  AND adjustment=NEW.adjustment
+                            );
+                        END
+                        """.format(
+                            table=table,
+                            suffix=operation.lower(),
+                            operation=operation,
+                            message=message,
+                        )
+                    )
 
     @staticmethod
     def _table(interval: str) -> str:
