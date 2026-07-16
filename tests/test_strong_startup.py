@@ -181,6 +181,10 @@ class TestBuildStrongStartupPool(unittest.TestCase):
         self.assertIn("watch_reason", w)
         self.assertIn("next_day_conditions", w)
         self.assertTrue(len(w["next_day_conditions"]) >= 2)
+        self.assertEqual(w["source_channel"], "low_position")
+        self.assertEqual(w["view"], "observation")
+        self.assertIn("failure_gate", w)
+        self.assertIn("cancel_conditions", w)
 
     def test_disabled_config_returns_empty(self):
         """When ENABLE_STRONG_STARTUP_CANDIDATES=False, returns empty."""

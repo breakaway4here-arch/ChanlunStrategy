@@ -25,6 +25,8 @@ import argparse
 from datetime import datetime
 import math
 from typing import Callable
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import random
@@ -39,13 +41,23 @@ from config import (
     ENABLE_SIGNAL_DISTRIBUTION_DIAGNOSTICS,
     ENABLE_FUSION_ADMISSION_POLICY,
     SIGNAL_MAX_AGE_TRADING_DAYS,
+    ENABLE_FULL_A_UNIVERSE, MARKET_HISTORY_DB_PATH,
+    MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
+    FULL_A_LOW_QUOTA, FULL_A_TREND_QUOTA, FULL_A_NEUTRAL_QUOTA,
+    FULL_A_BASE_LIMIT, FULL_A_OVERLAY_LIMIT, FULL_A_FINAL_LIMIT,
+    FULL_A_NO_OVERLAY_LOW_QUOTA, FULL_A_NO_OVERLAY_TREND_QUOTA,
+    FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
+    FULL_A_MIN_ELIGIBLE_COUNT,
+    MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
     fetch_daily_kline, fetch_kline, fetch_verified_index_kline,
     MarketDataUnavailable,
+    build_market_time_metadata,
     _build_code_to_name,
-    fetch_sector_outflow, fetch_limit_up_pool,
+    fetch_sector_outflow, fetch_limit_up_pool, fetch_limit_pool_counts,
+    fetch_sector_stocks, deduplicate_sector_hierarchy,
 )
 from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
@@ -58,10 +70,28 @@ from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
+from chanlun.trend_continuation import (
+    build_trend_continuation_pool,
+    normalize_trend_candidate,
+    upgrade_trend_continuation_with_30min,
+)
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.research_frameworks import calc_gf_dma_health
+from chanlun.market_history_store import MarketHistoryStore
+from chanlun.market_sentiment import (
+    build_daily_inputs_from_windows,
+    build_sentiment_history,
+)
+from chanlun.candidate_funnel import CandidateFunnel
+from chanlun.universe_builder import (
+    UniverseConfig,
+    attach_sector_context,
+    build_candidate_universe,
+    build_sector_groups,
+    load_eligible_candidates,
+)
 
 
 # ============================================================
@@ -147,6 +177,455 @@ def _clamp(value, low, high):
     if value is None:
         return low
     return max(low, min(high, value))
+
+
+def _attach_signal_dimensions(row, default_channel="low_position"):
+    if not isinstance(row, dict):
+        return {}
+    result = dict(row)
+    bp = result.get("best_buy_point")
+    bp = bp if isinstance(bp, dict) else {}
+    result.setdefault("source_channel", default_channel)
+    result.setdefault("tier", bp.get("tier") or "candidate")
+    result.setdefault("category", bp.get("category") or "A")
+    result.setdefault("quality_tier", bp.get("quality_tier") or "")
+    result.setdefault("view", "main")
+    return result
+
+
+def _attach_position_evidence(row, report_date):
+    """Attach an explicit channel/buy-point reference before decision scoring."""
+    if not isinstance(row, dict):
+        return row
+
+    row["position_distance_pct"] = None
+    row["position_reference_price"] = None
+    row["position_reference_type"] = "none"
+    row["position_data_status"] = "missing"
+    row["position_evidence_date"] = str(report_date or "")
+
+    data_status = row.get("data_status")
+    data_status = data_status if isinstance(data_status, dict) else {}
+    if (
+        data_status.get("daily") != "verified"
+        or str(data_status.get("latest_date") or "") != str(report_date or "")
+    ):
+        return row
+
+    closes = _as_list(row.get("closes"))
+    current = _safe_number(
+        closes[-1] if closes else row.get("close"),
+        None,
+    )
+    if current is None or current <= 0:
+        row["position_data_status"] = "invalid"
+        return row
+
+    source_channel = str(row.get("source_channel") or "").strip()
+    reference_price = None
+    reference_type = ""
+    if source_channel == "trend_continuation":
+        raw_reference_type = str(row.get("reference_type") or "").strip()
+        reference_price = _safe_number(row.get("reference_price"), None)
+        if raw_reference_type:
+            reference_type = "channel_reference:{}".format(
+                raw_reference_type
+            )
+
+    best_buy_point = row.get("best_buy_point")
+    best_buy_point = (
+        best_buy_point if isinstance(best_buy_point, dict) else {}
+    )
+    if reference_price is None and source_channel == "low_position":
+        source_type = str(
+            best_buy_point.get("source_type")
+            or row.get("source_type")
+            or ""
+        ).strip()
+        reference_price = _safe_number(
+            best_buy_point.get("reference_price"),
+            None,
+        )
+        if reference_price is None:
+            reference_price = _safe_number(
+                best_buy_point.get("price"),
+                None,
+            )
+        if source_type:
+            reference_type = "low_position_channel:{}".format(source_type)
+
+    if reference_price is None:
+        buy_point_type = str(best_buy_point.get("type") or "").strip()
+        source_type = str(
+            best_buy_point.get("source_type") or ""
+        ).strip()
+        reference_price = _safe_number(
+            best_buy_point.get("reference_price"),
+            None,
+        )
+        if reference_price is None:
+            reference_price = _safe_number(
+                best_buy_point.get("price"),
+                None,
+            )
+        if buy_point_type and source_type:
+            reference_type = "buy_point:{}:{}".format(
+                source_type,
+                buy_point_type,
+            )
+
+    if (
+        reference_price is None
+        or reference_price <= 0
+        or not reference_type
+    ):
+        row["position_data_status"] = "invalid"
+        return row
+
+    distance_pct = (current / reference_price - 1.0) * 100.0
+    row["position_distance_pct"] = round(distance_pct, 4)
+    row["position_reference_price"] = round(reference_price, 4)
+    row["position_reference_type"] = reference_type
+    row["position_data_status"] = "verified"
+    return row
+
+
+def _load_limit_count_evidence(
+    store,
+    trade_dates,
+    *,
+    fetcher=fetch_limit_pool_counts,
+    max_workers=20,
+):
+    """Read cached limit counts first and remotely fill only missing dates."""
+    dates = list(dict.fromkeys(str(value) for value in trade_dates if value))
+    cached = store.query_market_sentiment_evidence(dates)
+    missing = [
+        trade_date
+        for trade_date in dates
+        if not isinstance(cached.get(trade_date), dict)
+        or cached[trade_date].get("data_status") != "verified"
+    ]
+    fetched = {}
+    if missing:
+        workers = max(1, min(int(max_workers), len(missing)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(fetcher, trade_date.replace("-", "")): trade_date
+                for trade_date in missing
+            }
+            for future in as_completed(futures):
+                trade_date = futures[future]
+                try:
+                    evidence = future.result()
+                except Exception as exc:
+                    evidence = {
+                        "limit_up_count": None,
+                        "limit_down_count": None,
+                        "evidence_date": trade_date,
+                        "data_status": "missing",
+                        "source": "eastmoney_limit_pools",
+                        "error": "{}: {}".format(type(exc).__name__, exc),
+                    }
+                if not isinstance(evidence, dict):
+                    continue
+                fetched[trade_date] = evidence
+                if (
+                    evidence.get("data_status") == "verified"
+                    and evidence.get("evidence_date") == trade_date
+                ):
+                    store.upsert_market_sentiment_evidence(
+                        trade_date,
+                        evidence,
+                    )
+    result = dict(cached)
+    result.update(fetched)
+    return result
+
+
+def _build_market_sentiment_history(
+    report_date,
+    market_indices=None,
+    *,
+    db_path=MARKET_HISTORY_DB_PATH,
+    minimum_instruments=1000,
+    fetcher=fetch_limit_pool_counts,
+    max_workers=20,
+):
+    """Recalculate recent sentiment from one shared database window."""
+    if not os.path.exists(db_path):
+        return {
+            "version": "v2",
+            "date": report_date,
+            "score": None,
+            "label": "数据不足",
+            "coverage": 0.0,
+            "insufficient": True,
+            "missing_components": [
+                "breadth",
+                "limit_ecology",
+                "index",
+                "turnover",
+                "trend",
+            ],
+        }, []
+
+    with MarketHistoryStore(db_path) as store:
+        stock_window = store.query_daily_market_window(
+            as_of=report_date,
+            trading_days=45,
+            asset_type="stock",
+            minimum_instruments=minimum_instruments,
+        )
+        dates = stock_window.get("dates") or []
+        limit_counts = _load_limit_count_evidence(
+            store,
+            dates,
+            fetcher=fetcher,
+            max_workers=max_workers,
+        )
+
+    daily_inputs = build_daily_inputs_from_windows(
+        stock_window,
+        {"dates": [], "rows": []},
+        limit_counts,
+    )
+    if daily_inputs and market_indices:
+        daily_inputs[-1]["index_bars"] = [
+            item
+            for item in (
+                market_indices.values()
+                if isinstance(market_indices, dict)
+                else market_indices
+            )
+            if isinstance(item, dict)
+        ]
+    history = build_sentiment_history(daily_inputs, window=20)
+    if history:
+        return history[-1], history
+    return {
+        "version": "v2",
+        "date": report_date,
+        "score": None,
+        "label": "数据不足",
+        "coverage": 0.0,
+        "insufficient": True,
+        "missing_components": [
+            "breadth",
+            "limit_ecology",
+            "index",
+            "turnover",
+            "trend",
+        ],
+    }, []
+
+
+def _complete_sector_component_evidence(
+    sectors,
+    existing_evidence=None,
+    *,
+    fetcher=fetch_sector_stocks,
+    max_workers=20,
+):
+    """Reuse collected components and remotely fill only missing sectors."""
+    evidence = {
+        str(code): dict(value)
+        for code, value in (
+            existing_evidence.items()
+            if isinstance(existing_evidence, dict)
+            else []
+        )
+        if isinstance(value, dict)
+    }
+    missing_codes = list(dict.fromkeys(
+        str(row.get("code") or "").strip()
+        for row in (sectors or [])
+        if isinstance(row, dict)
+        and str(row.get("code") or "").strip()
+        and str(row.get("code") or "").strip() not in evidence
+    ))
+    if not missing_codes:
+        return evidence
+
+    workers = max(1, min(int(max_workers), len(missing_codes)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(fetcher, code, return_diagnostics=True): code
+            for code in missing_codes
+        }
+        for future in as_completed(futures):
+            code = futures[future]
+            try:
+                stocks, diagnostics = future.result()
+            except Exception as exc:
+                stocks = []
+                diagnostics = {
+                    "sector_code": code,
+                    "requested": None,
+                    "complete": False,
+                    "error": "{}: {}".format(type(exc).__name__, exc),
+                }
+            evidence[code] = {
+                "component_codes": [
+                    str(stock.get("code") or "")
+                    for stock in (stocks or [])
+                    if isinstance(stock, dict)
+                    and str(stock.get("code") or "")
+                ],
+                "diagnostics": (
+                    dict(diagnostics)
+                    if isinstance(diagnostics, dict)
+                    else {
+                        "sector_code": code,
+                        "complete": False,
+                        "error": "invalid_diagnostics",
+                    }
+                ),
+            }
+    return evidence
+
+
+def _apply_full_a_universe(
+    stocks_with_kline,
+    sectors,
+    data_quality,
+    report_date,
+    candidate_funnel=None,
+):
+    """Replace the sector-only pool when the canonical DB is sufficiently complete."""
+    diagnostics = {
+        "enabled": bool(ENABLE_FULL_A_UNIVERSE),
+        "status": "disabled",
+        "existing_pool_count": len(stocks_with_kline or []),
+        "db_path": MARKET_HISTORY_DB_PATH,
+    }
+    data_quality["universe_builder"] = diagnostics
+    if not ENABLE_FULL_A_UNIVERSE:
+        return stocks_with_kline
+    if not os.path.exists(MARKET_HISTORY_DB_PATH):
+        diagnostics.update(status="fallback", reason="market_history_db_missing")
+        return stocks_with_kline
+
+    try:
+        eligibility_audit = []
+        with MarketHistoryStore(MARKET_HISTORY_DB_PATH, readonly=True) as store:
+            candidates, load_diagnostics = load_eligible_candidates(
+                store,
+                as_of=report_date,
+                required_date=report_date,
+                min_listed_days=MIN_LISTED_DAYS,
+                min_daily_amount=MIN_DAILY_AMOUNT,
+                return_diagnostics=True,
+                audit_records=eligibility_audit,
+            )
+        diagnostics["eligibility"] = load_diagnostics
+        if candidate_funnel is not None:
+            candidate_funnel.set_stage_count(
+                "full_a", load_diagnostics.get("instrument_count", 0)
+            )
+            candidate_funnel.set_stage_count(
+                "eligible", load_diagnostics.get("eligible_count", 0)
+            )
+            candidate_funnel.register_many(eligibility_audit)
+            for audit in eligibility_audit:
+                if audit.get("eligibility_passed"):
+                    candidate_funnel.pass_stage(audit["code"], "eligible")
+                else:
+                    candidate_funnel.fail_stage(
+                        audit["code"],
+                        "eligible",
+                        audit.get("eligibility_failure_reason")
+                        or "eligibility_not_passed",
+                    )
+        if len(candidates) < int(FULL_A_MIN_ELIGIBLE_COUNT):
+            diagnostics.update(
+                status="fallback",
+                reason="eligible_count_below_activation_floor",
+                activation_floor=int(FULL_A_MIN_ELIGIBLE_COUNT),
+            )
+            return stocks_with_kline
+
+        sector_groups = build_sector_groups(sectors, stocks_with_kline)
+        config, retrieval_mode = _universe_config_for_sector_groups(
+            sector_groups
+        )
+        result = build_candidate_universe(
+            candidates,
+            sector_groups,
+            config=config,
+        )
+        selected = attach_sector_context(result["final"], stocks_with_kline)
+        if len(selected) < int(config.base_limit):
+            diagnostics.update(
+                status="fallback",
+                reason="final_pool_below_base_limit",
+            )
+            return stocks_with_kline
+
+        if candidate_funnel is not None:
+            candidate_funnel.set_stage_count(
+                "retrieval", result["diagnostics"].get("final_count", 0)
+            )
+            candidate_funnel.mark_membership(
+                "retrieval",
+                selected,
+                failure_reason="retrieval_quota_not_selected",
+                eligible_codes=candidates,
+            )
+        diagnostics.update(result["diagnostics"])
+        diagnostics.update(
+            status="activated",
+            sector_group_count=len(sector_groups),
+            retrieval_mode=retrieval_mode,
+        )
+        data_quality["stock_pool_source"] = (
+            "full_a_db+sector_overlay"
+            if retrieval_mode == "base_plus_overlay"
+            else "full_a_db+expanded_base"
+        )
+        if RECALL_STRATEGY_MODE == "shadow":
+            selected_codes = {
+                str(item.get("code") or "") for item in selected
+            }
+            legacy_extra = [
+                item
+                for item in stocks_with_kline
+                if str(item.get("code") or "") not in selected_codes
+            ]
+            diagnostics["shadow_legacy_extra_count"] = len(legacy_extra)
+            selected = selected + legacy_extra
+        return selected
+    except Exception as exc:
+        diagnostics.update(
+            status="fallback",
+            reason="universe_builder_error",
+            error="{}: {}".format(type(exc).__name__, exc),
+        )
+        return stocks_with_kline
+
+
+def _universe_config_for_sector_groups(sector_groups):
+    """Use the full 1200 capacity even when the sector overlay is unavailable."""
+    overlay_available = any(
+        group.get("codes") for group in (sector_groups or [])
+    )
+    if overlay_available:
+        return UniverseConfig(
+            low_quota=FULL_A_LOW_QUOTA,
+            trend_quota=FULL_A_TREND_QUOTA,
+            neutral_quota=FULL_A_NEUTRAL_QUOTA,
+            base_limit=FULL_A_BASE_LIMIT,
+            overlay_limit=FULL_A_OVERLAY_LIMIT,
+            final_limit=FULL_A_FINAL_LIMIT,
+        ), "base_plus_overlay"
+    return UniverseConfig(
+        low_quota=FULL_A_NO_OVERLAY_LOW_QUOTA,
+        trend_quota=FULL_A_NO_OVERLAY_TREND_QUOTA,
+        neutral_quota=FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
+        base_limit=FULL_A_FINAL_LIMIT,
+        overlay_limit=0,
+        final_limit=FULL_A_FINAL_LIMIT,
+    ), "base_expanded_no_overlay"
 
 
 def _market_temperature_label(score):
@@ -546,11 +1025,108 @@ def _attach_liquidity(row):
     return row
 
 
+def _apply_recall_publish_mode(
+    pure_scored,
+    fusion_scored,
+    legacy_codes,
+    mode=None,
+):
+    """Apply active, shadow, or legacy boundaries to published recommendations."""
+    selected_mode = str(mode or RECALL_STRATEGY_MODE).strip().lower()
+    if selected_mode not in {"legacy", "shadow", "active"}:
+        raise ValueError("unsupported recall strategy mode: {}".format(
+            selected_mode
+        ))
+    potential_pure = list(pure_scored or [])
+    potential_fusion = list(fusion_scored or [])
+    if selected_mode == "active":
+        published_pure = potential_pure
+        published_fusion = potential_fusion
+    else:
+        allowed = {str(code) for code in legacy_codes or []}
+
+        def legacy_item(item):
+            return (
+                str(item.get("code") or "") in allowed
+                and str(item.get("source_channel") or "low_position")
+                != "trend"
+            )
+
+        published_pure = [
+            item for item in potential_pure if legacy_item(item)
+        ]
+        published_fusion = [
+            item for item in potential_fusion if legacy_item(item)
+        ]
+    published_codes = {
+        str(item.get("code") or "")
+        for item in published_pure + published_fusion
+    }
+    potential_codes = {
+        str(item.get("code") or "")
+        for item in potential_pure + potential_fusion
+    }
+    diagnostics = {
+        "mode": selected_mode,
+        "new_strategy_controls_publish": selected_mode == "active",
+        "potential_pure_count": len(potential_pure),
+        "potential_fusion_count": len(potential_fusion),
+        "published_pure_count": len(published_pure),
+        "published_fusion_count": len(published_fusion),
+        "suppressed_codes": sorted(potential_codes - published_codes),
+    }
+    return published_pure, published_fusion, diagnostics
+
+
+def _refresh_active_universe_quality(
+    data_quality,
+    selected_stocks,
+    report_date,
+):
+    """Evaluate official status against the pool that active mode publishes."""
+    stale_count = 0
+    missing_count = 0
+    selected = list(selected_stocks or [])
+    for stock in selected:
+        status = stock.get("data_status") or {}
+        if (
+            status.get("daily") != "verified"
+            or not status.get("latest_date")
+        ):
+            missing_count += 1
+        elif str(status.get("latest_date")) != str(report_date):
+            stale_count += 1
+    data_quality["stale_stock_count"] = stale_count
+    data_quality["missing_daily_count"] = missing_count
+    data_quality["official_pool_scope"] = "active_retrieval_pool"
+    data_quality["is_official"] = bool(
+        selected
+        and data_quality.get("bar_state") == "closed"
+        and data_quality.get("market_status") == "verified"
+        and data_quality.get("sources_trusted")
+        and not data_quality.get("fallback_used")
+        and not data_quality.get("stock_pool_incomplete")
+        and stale_count == 0
+        and missing_count == 0
+    )
+
+
 # ============================================================
 # 主流程
 # ============================================================
-def main(debug=False, preview=False):
-    today = datetime.now().strftime("%Y-%m-%d")
+def main(debug=False, preview=False, generated_at=None):
+    generated_at = generated_at or datetime.now().astimezone()
+    time_metadata = build_market_time_metadata(generated_at=generated_at)
+    today = time_metadata["generated_at"].split("T", 1)[0]
+    funnel_run_id = "{}-{}".format(
+        today.replace("-", ""),
+        uuid.uuid4().hex[:12],
+    )
+    candidate_funnel = CandidateFunnel(
+        funnel_run_id,
+        today,
+        as_of=today,
+    )
     print(f"缠论选股系统启动 — {today} 14:35")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
@@ -591,8 +1167,10 @@ def main(debug=False, preview=False):
                 stocks_with_kline.append({"code": code, "name": name, "klines": kline})
         data_quality = {
             "report_date": today,
+            **time_metadata,
             "is_trading_day": bool(sh_kline),
             "is_official": False,
+            "sources_trusted": False,
             "market_status": "verified" if sh_kline else "unverified",
             "stock_pool_source": "manual_debug",
             "sector_source": "eastmoney" if sectors else "empty",
@@ -606,12 +1184,14 @@ def main(debug=False, preview=False):
             "sectors": sectors,
             "sh_index": sh_kline,
             "stocks": stocks_with_kline,
+            "sector_component_evidence": {},
             "data_quality": data_quality,
         }
     else:
         daily_data = collect_daily_data(
             required_date=today,
             allow_missing_index=preview,
+            generated_at=generated_at,
         )
 
     data_quality = daily_data.get("data_quality", {})
@@ -619,6 +1199,47 @@ def main(debug=False, preview=False):
     sh_kline = daily_data["sh_index"]
     index_error = daily_data.get("index_error", "")
     stocks_with_kline = daily_data["stocks"]
+    legacy_stocks_with_kline = list(stocks_with_kline)
+    legacy_codes = {
+        str(stock.get("code") or "") for stock in legacy_stocks_with_kline
+    }
+    data_quality["runtime_policy"] = {
+        "market_history_cutover_mode": MARKET_HISTORY_CUTOVER_MODE,
+        "recall_strategy_mode": RECALL_STRATEGY_MODE,
+        "decision_semantics": "v2_missing_position_is_observe",
+    }
+    if not debug and RECALL_STRATEGY_MODE != "legacy":
+        stocks_with_kline = _apply_full_a_universe(
+            stocks_with_kline,
+            sectors,
+            data_quality,
+            today,
+            candidate_funnel=candidate_funnel,
+        )
+        if (
+            RECALL_STRATEGY_MODE == "active"
+            and data_quality.get("universe_builder", {}).get("status")
+            == "activated"
+        ):
+            _refresh_active_universe_quality(
+                data_quality,
+                stocks_with_kline,
+                today,
+            )
+    active_codes = [stock.get("code") for stock in stocks_with_kline]
+    new_active_stocks = [
+        stock
+        for stock in stocks_with_kline
+        if str(stock.get("code") or "") not in candidate_funnel.codes
+    ]
+    candidate_funnel.register_many(new_active_stocks)
+    new_active_codes = [stock.get("code") for stock in new_active_stocks]
+    candidate_funnel.mark_membership(
+        "eligible", new_active_codes, eligible_codes=new_active_codes
+    )
+    candidate_funnel.mark_membership(
+        "retrieval", new_active_codes, eligible_codes=new_active_codes
+    )
     sh_closes = sh_kline["closes"] if sh_kline else None
     sh_volumes = sh_kline["volumes"] if sh_kline else None
 
@@ -799,6 +1420,28 @@ def main(debug=False, preview=False):
     startup_seeds = [_attach_liquidity(s) for s in startup_seeds]
     startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
     startup_watchlist = [_attach_liquidity(w) for w in startup_watchlist]
+    trend_seeds, trend_watchlist, trend_diag = build_trend_continuation_pool(
+        chan_results, sector_stocks
+    )
+    trend_seeds = [_attach_liquidity(_attach_sector_metadata(s)) for s in trend_seeds]
+    trend_watchlist = [
+        _attach_liquidity(_attach_sector_metadata(w)) for w in trend_watchlist
+    ]
+    daily_channel_items = (
+        list(pure_pool)
+        + ([] if ENABLE_FUSION_ADMISSION_POLICY else list(fusion_pool))
+        + list(startup_seeds)
+        + list(startup_watchlist)
+        + list(trend_seeds)
+        + list(trend_watchlist)
+    )
+    candidate_funnel.register_many(daily_channel_items)
+    candidate_funnel.mark_membership(
+        "daily_channel",
+        daily_channel_items,
+        failure_reason="daily_channel_not_matched",
+        eligible_codes=active_codes,
+    )
 
     print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
           f"启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
@@ -807,6 +1450,11 @@ def main(debug=False, preview=False):
           f"高位={startup_diag.get('dropped_high_position', 0)}, "
           f"无量={startup_diag.get('dropped_no_volume', 0)}, "
           f"无突破={startup_diag.get('dropped_no_breakout', 0)}")
+    print(
+        f"  趋势延续: 种子={trend_diag.get('trend_seed', 0)}, "
+        f"近失观察={trend_diag.get('watch_near_miss', 0)}, "
+        f"风险观察={trend_diag.get('watch_risk', 0)}"
+    )
 
     # ================================================================
     # Phase 4.6: 罗姐池（国家队硬方向 + 15min生命线）
@@ -851,6 +1499,10 @@ def main(debug=False, preview=False):
     startup_candidates = []
     startup_upgrade_diag = {}
     startup_additional_watchlist = []
+    trend_candidates = []
+    trend_upgrade_diag = {}
+    trend_additional_watchlist = []
+    all_target_codes = set()
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
@@ -863,11 +1515,13 @@ def main(debug=False, preview=False):
 
         # Add startup seed codes (only non-limit-up, which need 30min confirmation)
         startup_seed_codes = {s["code"] for s in startup_seeds}
-        all_target_codes |= startup_seed_codes
+        trend_seed_codes = {s["code"] for s in trend_seeds}
+        all_target_codes |= startup_seed_codes | trend_seed_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
 
         print(f"  结构池并集: {len(all_target_codes)} 只 "
-              f"(含启动种子: {len(startup_seed_codes)}), 拉取30分钟数据 ...")
+              f"(含低位启动: {len(startup_seed_codes)}, "
+              f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
         min30_data_list = collect_30min_data(all_targets)
 
         if not min30_data_list:
@@ -892,6 +1546,15 @@ def main(debug=False, preview=False):
                     })))
             startup_upgrade_diag = {"startup_candidate": 0,
                                      "watch_due_to_no_30min_confirm": len(startup_seeds)}
+            (
+                trend_candidates,
+                trend_additional_watchlist,
+                trend_upgrade_diag,
+            ) = upgrade_trend_continuation_with_30min(trend_seeds, [])
+            trend_watchlist.extend(
+                _attach_liquidity(_attach_sector_metadata(item))
+                for item in trend_additional_watchlist
+            )
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
             if ENABLE_FUSION_ADMISSION_POLICY:
@@ -1015,6 +1678,40 @@ def main(debug=False, preview=False):
             else:
                 startup_upgrade_diag = {}
 
+            if trend_seeds:
+                print("[趋势延续30min升级]")
+                (
+                    trend_candidates,
+                    trend_additional_watchlist,
+                    trend_upgrade_diag,
+                ) = upgrade_trend_continuation_with_30min(
+                    trend_seeds, chan_results_30min
+                )
+                trend_watchlist.extend(
+                    _attach_liquidity(_attach_sector_metadata(item))
+                    for item in trend_additional_watchlist
+                )
+                existing_codes = {
+                    str(item.get("code") or "") for item in pure_confirmed
+                }
+                normalized_trend = []
+                for candidate in trend_candidates:
+                    if str(candidate.get("code") or "") in existing_codes:
+                        continue
+                    pick = normalize_trend_candidate(candidate)
+                    pick["macd_hist"] = calc_macd(
+                        candidate.get("closes", [])
+                    )[2]
+                    normalized_trend.append(
+                        _attach_liquidity(_attach_sector_metadata(pick))
+                    )
+                pure_confirmed.extend(normalized_trend)
+                print(
+                    f"  trend_candidate={trend_upgrade_diag['trend_candidate']}, "
+                    f"watch={len(trend_additional_watchlist)}, "
+                    f"合并主池={len(normalized_trend)}"
+                )
+
             if ENABLE_FUSION_ADMISSION_POLICY:
                 # Fusion: apply admission policy on top of pure confirmed picks
                 print("[融合版admission]")
@@ -1085,6 +1782,17 @@ def main(debug=False, preview=False):
             upgrade_diag_fusion = {}
             fusion_admission_diag = {}
 
+    if not ENABLE_30MIN_CANDIDATE_UPGRADE and trend_seeds:
+        (
+            trend_candidates,
+            trend_additional_watchlist,
+            trend_upgrade_diag,
+        ) = upgrade_trend_continuation_with_30min(trend_seeds, [])
+        trend_watchlist.extend(
+            _attach_liquidity(_attach_sector_metadata(item))
+            for item in trend_additional_watchlist
+        )
+
     # ================================================================
     # Phase 6: Score + generate report
     # ================================================================
@@ -1097,6 +1805,26 @@ def main(debug=False, preview=False):
     fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
+    trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
+        trend_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    trend_watchlist = [
+        _attach_liquidity(_attach_sector_metadata(item))
+        for item in trend_watchlist
+    ]
+    observation_watchlist = startup_watchlist + trend_watchlist
+    minute30_pass_items = (
+        list(pure_confirmed)
+        + list(fusion_confirmed)
+        + list(observation_watchlist)
+    )
+    candidate_funnel.register_many(minute30_pass_items)
+    candidate_funnel.mark_membership(
+        "minute30",
+        minute30_pass_items,
+        failure_reason="minute30_not_confirmed",
+        eligible_codes=all_target_codes,
+    )
     print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
           f"(过期{recency_pure_diag['dropped_expired']}), "
           f"fusion {recency_fusion_diag['input']}→{recency_fusion_diag['kept']} "
@@ -1113,6 +1841,27 @@ def main(debug=False, preview=False):
     fusion_scored = [_attach_liquidity(p) for p in fusion_scored]
     pure_scored = _attach_gf_dma_health(pure_scored)
     fusion_scored = _attach_gf_dma_health(fusion_scored)
+    pure_scored = [_attach_signal_dimensions(p) for p in pure_scored]
+    fusion_scored = [_attach_signal_dimensions(p) for p in fusion_scored]
+    experimental_pure_scored = list(pure_scored)
+    experimental_fusion_scored = list(fusion_scored)
+    pure_scored, fusion_scored, recall_shadow_diag = (
+        _apply_recall_publish_mode(
+            pure_scored,
+            fusion_scored,
+            legacy_codes,
+        )
+    )
+    if RECALL_STRATEGY_MODE != "active":
+        print(
+            "  召回影子模式: potential pure={} fusion={}, "
+            "published pure={} fusion={}".format(
+                recall_shadow_diag["potential_pure_count"],
+                recall_shadow_diag["potential_fusion_count"],
+                recall_shadow_diag["published_pure_count"],
+                recall_shadow_diag["published_fusion_count"],
+            )
+        )
 
     print(f"  纯净版最终推荐: {len(pure_scored)} 只")
     if pure_scored:
@@ -1145,7 +1894,14 @@ def main(debug=False, preview=False):
     # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
     next_day_boom = build_next_day_boom_candidates(
         picks_fusion=fusion_scored,
-        startup_watchlist=startup_watchlist,
+        startup_watchlist=[
+            item
+            for item in startup_watchlist
+            if (
+                RECALL_STRATEGY_MODE == "active"
+                or str(item.get("code") or "") in legacy_codes
+            )
+        ],
         market=market_indices,
     )
     print(f"  次日大涨模式: {next_day_boom.get('mode')} "
@@ -1192,11 +1948,118 @@ def main(debug=False, preview=False):
             "data_quality": data_quality,
             "market_data_status": market_data_status,
         }
+        for decision_items in (
+            pure_scored,
+            fusion_scored,
+            observation_watchlist,
+            next_day_boom.get("candidates", []),
+            luojie_pool.get("candidates", []),
+        ):
+            for decision_item in decision_items or []:
+                _attach_position_evidence(decision_item, today)
         _inject_decision_engine(pure_scored, decision_engine, market_context)
         _inject_decision_engine(fusion_scored, decision_engine, market_context)
-        _inject_decision_engine(startup_watchlist, decision_engine, market_context)
+        _inject_decision_engine(observation_watchlist, decision_engine, market_context)
         _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
+
+    candidate_funnel.register_many(
+        list(experimental_pure_scored)
+        + list(experimental_fusion_scored)
+        + list(observation_watchlist)
+    )
+    candidate_funnel.mark_membership(
+        "fusion",
+        experimental_fusion_scored,
+        eligible_codes=[
+            item.get("code") for item in experimental_fusion_scored
+        ],
+    )
+    for watch in observation_watchlist:
+        if not isinstance(watch, dict) or not watch.get("code"):
+            continue
+        failure_gate = str(watch.get("failure_gate") or "").strip()
+        if failure_gate not in {
+            "eligible",
+            "retrieval",
+            "daily_channel",
+            "minute30",
+            "fusion",
+            "display",
+        }:
+            failure_gate = "daily_channel"
+        candidate_funnel.fail_stage(
+            watch["code"],
+            failure_gate,
+            watch.get("reason_code")
+            or watch.get("watch_reason")
+            or "observation_only",
+            actual_value=watch.get("actual_value"),
+            threshold=watch.get("threshold"),
+            features={
+                key: watch.get(key)
+                for key in (
+                    "volume_ratio",
+                    "amount_ratio",
+                    "distance_3pct",
+                    "distance_12pct",
+                    "ma5",
+                    "ma10",
+                    "ma20",
+                    "ma_gap_pct",
+                    "ma_direction",
+                    "confirmations",
+                    "confirmation_strength",
+                    "reference_type",
+                    "reference_price",
+                    "distance_from_reference_pct",
+                    "upgrade_conditions",
+                    "cancel_conditions",
+                )
+                if watch.get(key) is not None
+            },
+        )
+    decision_by_code = {}
+    for item in (
+        list(experimental_pure_scored)
+        + list(experimental_fusion_scored)
+        + list(observation_watchlist)
+    ):
+        if isinstance(item, dict) and item.get("code"):
+            decision_by_code[str(item["code"])] = (
+                item.get("decision_engine_v1") or {}
+            )
+    candidate_funnel.finalize(
+        main_codes=(
+            list(experimental_pure_scored)
+            + list(experimental_fusion_scored)
+        ),
+        observation_codes=observation_watchlist,
+        decision_by_code=decision_by_code,
+    )
+    funnel_persist_status = "saved"
+    try:
+        with MarketHistoryStore(MARKET_HISTORY_DB_PATH) as store:
+            store.save_candidate_funnel(
+                candidate_funnel.run_record(
+                    metadata={
+                        "debug": bool(debug),
+                        "preview": bool(preview),
+                        "generated_at": time_metadata["generated_at"],
+                        "is_official": bool(
+                            data_quality.get("is_official")
+                        ),
+                    }
+                ),
+                candidate_funnel.events,
+            )
+    except Exception as exc:
+        funnel_persist_status = "failed"
+        data_quality.setdefault("warnings", []).append(
+            "candidate funnel persistence failed: {}: {}".format(
+                type(exc).__name__, exc
+            )
+        )
 
     # 构建报告数据
     daily_scan_diag = {
@@ -1260,6 +2123,18 @@ def main(debug=False, preview=False):
             "startup_candidates": len(startup_candidates),
             "startup_watchlist": len(startup_watchlist),
         },
+        "trend_continuation": {
+            "daily_scan": trend_diag,
+            "upgrade": trend_upgrade_diag,
+            "trend_candidates": len(trend_candidates),
+            "trend_watchlist": len(trend_watchlist),
+        },
+        "candidate_funnel": {
+            **candidate_funnel.summary(),
+            "persist_status": funnel_persist_status,
+            "db_path": MARKET_HISTORY_DB_PATH,
+        },
+        "recall_shadow": recall_shadow_diag,
         "luojie_pool": luojie_pool.get("diagnostics", {}),
         "signal_recency": {
             "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
@@ -1272,10 +2147,16 @@ def main(debug=False, preview=False):
             "watch_input": recency_watch_diag["input"],
             "watch_kept": recency_watch_diag["kept"],
             "watch_dropped_expired": recency_watch_diag["dropped_expired"],
+            "trend_watch_input": recency_trend_watch_diag["input"],
+            "trend_watch_kept": recency_trend_watch_diag["kept"],
+            "trend_watch_dropped_expired": recency_trend_watch_diag[
+                "dropped_expired"
+            ],
             "dropped_details": (
                 recency_pure_diag.get("dropped_details", []) +
                 recency_fusion_diag.get("dropped_details", []) +
-                recency_watch_diag.get("dropped_details", [])
+                recency_watch_diag.get("dropped_details", []) +
+                recency_trend_watch_diag.get("dropped_details", [])
             ),
         },
         "preview": {
@@ -1286,16 +2167,47 @@ def main(debug=False, preview=False):
         },
     }
     sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
-    market_temperature = build_market_temperature(
-        market_indices=market_indices,
-        sector_flow=sectors,
-        sector_outflow=sector_outflow,
-        limit_up_pool=limit_up_pool_data,
-        sell_signals=sell_signals,
-        diagnostics=diagnostics,
-        data_quality=data_quality,
-        sh_volumes=sh_volumes,
+    sector_component_evidence = _complete_sector_component_evidence(
+        list(sectors or []) + list(sector_outflow or []),
+        daily_data.get("sector_component_evidence"),
+        max_workers=20,
     )
+    sectors = deduplicate_sector_hierarchy(
+        sectors,
+        sector_component_evidence,
+        top_n=len(sectors or []),
+    )
+    sector_outflow = deduplicate_sector_hierarchy(
+        sector_outflow,
+        sector_component_evidence,
+        top_n=SECTOR_OUTFLOW_COUNT,
+    )
+    data_quality["sector_hierarchy_dedup"] = {
+        "evidence_sector_count": len(sector_component_evidence),
+        "inflow_count": len(sectors),
+        "outflow_count": len(sector_outflow),
+        "max_workers": 20,
+    }
+    market_sentiment, market_sentiment_history = (
+        _build_market_sentiment_history(
+            today,
+            market_indices=market_indices,
+        )
+    )
+    sentiment_components = market_sentiment.get("components", {})
+    market_temperature = {
+        "score": market_sentiment.get("score"),
+        "label": market_sentiment.get("label", "数据不足"),
+        "coverage": market_sentiment.get("coverage", 0.0),
+        "insufficient": market_sentiment.get("insufficient", True),
+        "components": {
+            "breadth_score": sentiment_components.get("breadth"),
+            "index_score": sentiment_components.get("index"),
+            "limit_score": sentiment_components.get("limit_ecology"),
+            "volume_score": sentiment_components.get("turnover"),
+            "trend_score": sentiment_components.get("trend"),
+        },
+    }
     report_data = {
         "date": today,
         "market": market_indices,
@@ -1307,12 +2219,15 @@ def main(debug=False, preview=False):
         "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
         "market_temperature": market_temperature,
+        "market_sentiment": market_sentiment,
+        "market_sentiment_history": market_sentiment_history,
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
         "data_quality": data_quality,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
+        "observation_watchlist": observation_watchlist,
         "next_day_boom": next_day_boom,
         "luojie_pool": luojie_pool,
     }

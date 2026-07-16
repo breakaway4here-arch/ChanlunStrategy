@@ -44,9 +44,13 @@ def _fusion_pick(
         "reference_buy_points": [{"type": "参考"}],
         "blocked_buy_points": [{"type": "拦截"}],
         "sector_tags": list(sector_tags or []),
+        "money20": 150_000_000,
+        "market_cap": 120,
     }
-    if decision_engine_v1 is not None:
-        pick["decision_engine_v1"] = decision_engine_v1
+    pick["decision_engine_v1"] = decision_engine_v1 or {
+        "decision_code": "recommend",
+        "decision": "推荐",
+    }
     return pick
 
 
@@ -66,6 +70,8 @@ def _acceleration_pick(code="600002", name="加速票", boom_score=78, change_pc
         "change_pct": change_pct,
         "reference_price": 20.0,
         "current_price": 20.6,
+        "money20": 180_000_000,
+        "market_cap": 180,
     }
 
 
@@ -79,6 +85,8 @@ def _luojie_pick(code="600003", name="罗姐票", score=74):
         "life_line": 31.1,
         "reason": "15min生命线不破；DIF/DEA双线0轴上",
         "tier": "主升候选",
+        "money20": 160_000_000,
+        "market_cap": 160,
     }
 
 
@@ -93,6 +101,8 @@ def _confirming_pick(code="600004", name="等确认票", change_pct=4.2, distanc
         "close": 12.0,
         "current_price": 12.37,
         "distance_from_reference_pct": distance,
+        "money20": 120_000_000,
+        "market_cap": 100,
     }
 
 
@@ -124,14 +134,15 @@ class TestReportViewModel(unittest.TestCase):
 
         workspace = build_workspace(report_data)
 
-        self.assertEqual(workspace["default_view"], "highlights")
+        self.assertEqual(workspace["default_view"], "main")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
+            ["highlights", "main", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
         self.assertEqual(workspace["counts"]["baseline"], 1)
+        self.assertEqual(workspace["counts"]["observation_top5"], 1)
         self.assertEqual(workspace["counts"]["highlights"], 4)
         self.assertEqual(workspace["counts"]["growth_quality"], 4)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
@@ -143,7 +154,44 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("highlights_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("growth_quality_codes", workspace["diagnostics"]["growth_quality_overlap"])
 
-    def test_growth_quality_view_exists_but_default_still_highlights(self):
+    def test_observation_top5_enforces_sector_and_failure_reason_caps(self):
+        rows = []
+        for index in range(8):
+            item = _confirming_pick(code="60{:04d}".format(index))
+            item.update({
+                "sector": "行业A" if index < 4 else "行业{}".format(index),
+                "reason_code": (
+                    "waiting_30m_confirm"
+                    if index in (0, 1, 2)
+                    else "ma_near_miss_{}".format(index)
+                ),
+                "failure_gate": "30min_confirm",
+                "actual_value": index,
+                "upgrade_conditions": ["30min确认"],
+                "cancel_conditions": ["跌破参考位"],
+            })
+            rows.append(item)
+
+        workspace = build_workspace({"observation_watchlist": rows})
+        selected = workspace["views"]["observation_top5"]
+
+        self.assertEqual(len(selected), 5)
+        self.assertLessEqual(
+            sum(row["sector"] == "行业A" for row in selected), 2
+        )
+        self.assertLessEqual(
+            sum(
+                row["reason_code"] == "waiting_30m_confirm"
+                for row in selected
+            ),
+            2,
+        )
+        self.assertEqual(workspace["counts"]["main"], 0)
+        self.assertTrue(
+            all(row["view"] == "observation" for row in selected)
+        )
+
+    def test_growth_quality_view_exists_but_default_is_main(self):
         report_data = _report_data(
             {
                 "picks_fusion": [_fusion_pick(code="600030", score=40), _fusion_pick(code="600031", score=85)],
@@ -155,7 +203,7 @@ class TestReportViewModel(unittest.TestCase):
 
         workspace = build_workspace(report_data)
 
-        self.assertEqual(workspace["default_view"], "highlights")
+        self.assertEqual(workspace["default_view"], "main")
         self.assertTrue(len(workspace["views"]["growth_quality"]) > 0)
         self.assertEqual(
             len([item["code"] for item in workspace["views"]["growth_quality"]]),
@@ -191,6 +239,20 @@ class TestReportViewModel(unittest.TestCase):
             distance=11.5,
             change_pct=-1.0,
         )
+        near_reference_weak.update({
+            "position_distance_pct": 0.2,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
+        far_reference_strong.update({
+            "position_distance_pct": 11.5,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
         report_data = _report_data(
             {
                 "picks_fusion": [near_reference_weak, far_reference_strong],
@@ -301,6 +363,20 @@ class TestReportViewModel(unittest.TestCase):
             distance=11.5,
             change_pct=-1.0,
         )
+        near_reference_weak.update({
+            "position_distance_pct": 0.2,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
+        far_reference_strong.update({
+            "position_distance_pct": 11.5,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
         report_data = _report_data(
             {
                 "picks_fusion": [near_reference_weak, far_reference_strong],
@@ -391,7 +467,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn(("source", "主推"), tags)
         self.assertIn(("signal", "底背驰候选"), tags)
 
-    def test_workspace_item_preserves_decision_engine_payload_without_affecting_sort(self):
+    def test_workspace_item_preserves_observe_decision_payload_in_highlights(self):
         decision = {
             "version": "1",
             "decision": "观察",
@@ -417,9 +493,126 @@ class TestReportViewModel(unittest.TestCase):
 
         workspace = build_workspace({"picks_fusion": [with_decision, higher_rank]})
         main_rows = workspace["views"]["main"]
+        highlight_rows = workspace["views"]["highlights"]
 
-        self.assertEqual([item["code"] for item in main_rows], ["600049", "600050"])
-        self.assertEqual(main_rows[1]["decision_engine_v1"], decision)
+        self.assertEqual([item["code"] for item in main_rows], ["600049"])
+        self.assertEqual([item["code"] for item in highlight_rows], ["600049", "600050"])
+        self.assertEqual(highlight_rows[1]["decision_engine_v1"], decision)
+
+    def test_workspace_reject_decision_is_excluded_from_main_and_highlights(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "reject",
+                "decision": "不推荐（高位风险）",
+            }
+        )
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+        self.assertEqual(workspace["views"]["main"], [])
+        self.assertEqual(workspace["views"]["highlights"], [])
+
+    def test_workspace_observe_decision_is_excluded_from_main_but_kept_in_highlights(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "observe",
+                "reason_code": "missing_position",
+                "decision": "观察（位置数据不足）",
+            }
+        )
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+        self.assertEqual(workspace["views"]["main"], [])
+        item = workspace["views"]["highlights"][0]
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("observe", item["action_reason"])
+        self.assertIn("决策上限", item["action_reason"])
+
+    def test_workspace_main_keeps_recommend_and_excludes_missing_decision(self):
+        missing_decision = _fusion_pick(code="600051")
+        missing_decision.pop("decision_engine_v1")
+        rows = [
+            _fusion_pick(
+                code="600050",
+                decision_engine_v1={
+                    "decision_code": "recommend",
+                    "decision": "推荐",
+                },
+            ),
+            missing_decision,
+        ]
+
+        items = {
+            item["code"]: item
+            for item in build_workspace({"picks_fusion": rows})["views"]["main"]
+        }
+
+        self.assertEqual(list(items), ["600050"])
+        self.assertEqual(items["600050"]["action"], "可上车")
+
+    def test_workspace_does_not_treat_chinese_decision_without_code_as_recommend(self):
+        pick = _fusion_pick(
+            decision_engine_v1={"decision": "不推荐（高位风险）"}
+        )
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+        self.assertEqual(workspace["views"]["main"], [])
+
+    def test_main_view_contains_all_recommendations_without_top_limit(self):
+        rows = [
+            _fusion_pick(code="60{:04d}".format(index))
+            for index in range(12)
+        ]
+        rows.append(
+            _fusion_pick(
+                code="600099",
+                decision_engine_v1={
+                    "decision_code": "observe",
+                    "decision": "暂不判断（位置信息不足）",
+                },
+            )
+        )
+
+        workspace = build_workspace({"picks_fusion": rows})
+
+        self.assertEqual(len(workspace["views"]["main"]), 12)
+        self.assertTrue(
+            all(
+                row["decision_engine_v1"]["decision_code"] == "recommend"
+                for row in workspace["views"]["main"]
+            )
+        )
+
+    def test_highlights_prioritizes_recommend_before_observe(self):
+        recommend = _fusion_pick(code="600201", score=20)
+        observe = _fusion_pick(
+            code="600202",
+            score=99,
+            decision_engine_v1={
+                "decision_code": "observe",
+                "decision": "观察",
+            },
+        )
+
+        rows = build_workspace({"picks_fusion": [observe, recommend]})["views"]["highlights"]
+
+        self.assertEqual([row["code"] for row in rows], ["600201", "600202"])
+
+    def test_growth_quality_excludes_rows_without_minimum_evidence(self):
+        complete = _fusion_pick(code="600301")
+        missing = _fusion_pick(code="600302")
+        missing.pop("money20")
+        missing.pop("market_cap")
+
+        workspace = build_workspace({"picks_fusion": [missing, complete]})
+
+        self.assertEqual(
+            [row["code"] for row in workspace["views"]["growth_quality"]],
+            ["600301"],
+        )
+        self.assertEqual(
+            workspace["diagnostics"]["growth_quality"]["excluded_insufficient_evidence"],
+            1,
+        )
 
     def test_workspace_info_tags_include_extra_sector_tags(self):
         pick = _fusion_pick(code="600005", name="半导体票", sector="电子")
@@ -477,6 +670,7 @@ class TestReportViewModel(unittest.TestCase):
     def test_pool_quality_handles_missing_volume_gracefully(self):
         pick = _fusion_pick(code="600033", name="缺数据票", score=33)
         pick.pop("volumes", None)
+        pick.pop("money20", None)
 
         report_data = _report_data({"picks_fusion": [pick]})
         workspace = build_workspace(report_data)

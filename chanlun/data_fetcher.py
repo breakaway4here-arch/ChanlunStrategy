@@ -3,7 +3,7 @@
 - 板块资金流向: 东方财富 push2.eastmoney.com
 - 板块成分股:   东方财富 push2.eastmoney.com
 - 日线K线:      腾讯 web.ifzq.gtimg.cn
-- 30分钟K线:    新浪 money.finance.sina.com.cn
+- 30/15分钟K线: 东方财富优先，新浪短窗口兜底
 
 数据流: 板块资金TOP20 → 成分股列表 → 日线K线 → 30分钟K线
 """
@@ -13,13 +13,14 @@ import os
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
 
 from config import (
     DAY_LOOKBACK, MIN30_LOOKBACK_DAYS, TOP_SECTOR_COUNT,
+    SECTOR_COMPONENT_PAGE_SIZE, SECTOR_COMPONENT_MAX_PAGES,
     KLINE_CACHE_FORCE_REFRESH,
     DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
     MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
@@ -28,6 +29,10 @@ from config import (
     MIN30_KLINE_INCREMENTAL_FETCH_COUNT,
     MIN15_KLINE_INCREMENTAL_FETCH_COUNT,
     MIN15_LOOKBACK_BARS,
+    MARKET_HISTORY_DB_PATH,
+    KLINE_REPOSITORY_ENABLED,
+    KLINE_REPOSITORY_MODE,
+    KLINE_REPOSITORY_SHADOW_JSON,
 )
 from .kline_cache import (
     cached_kline_if_sufficient,
@@ -38,6 +43,7 @@ from .kline_cache import (
     records_to_kline_dict,
     CACHE_STATS,
 )
+from .kline_repository import KLineRepository
 
 # ------------------------------------------------------------
 # 路径
@@ -68,6 +74,12 @@ _EASTMONEY_TIMEOUT = 15
 _INDEX_SOURCE_MAX_DIFF_PCT = 0.3
 _INDEX_PREV_CLOSE_MAX_DIFF_RATIO = 0.0002
 _INDEX_PREV_CLOSE_MAX_DIFF_ABS = 0.05
+_TZ_CN = timezone(timedelta(hours=8))
+_MARKET_CLOSE_HOUR = 15
+_TRUSTED_STOCK_KLINE_SOURCES = {
+    "tencent", "eastmoney", "sina", "market_history_db",
+}
+_KLINE_REPOSITORY = None
 
 
 class MarketDataUnavailable(RuntimeError):
@@ -76,6 +88,43 @@ class MarketDataUnavailable(RuntimeError):
 
 class MarketDataConflict(MarketDataUnavailable):
     """Raised when multiple live market sources disagree beyond tolerance."""
+
+
+def _normalize_generated_at(value=None):
+    generated_at = value or datetime.now(_TZ_CN)
+    if generated_at.tzinfo is None:
+        return generated_at.replace(tzinfo=_TZ_CN)
+    return generated_at.astimezone(_TZ_CN)
+
+
+def build_market_time_metadata(required_date=None, generated_at=None):
+    """Return deterministic report timing metadata without assuming today's date."""
+    generated = _normalize_generated_at(generated_at)
+    as_of = generated
+    report_date = str(required_date or generated.date().isoformat())
+    try:
+        report_day = datetime.strptime(report_date, "%Y-%m-%d").date()
+    except ValueError:
+        report_day = generated.date()
+
+    if generated.date() > report_day:
+        as_of = datetime(
+            report_day.year,
+            report_day.month,
+            report_day.day,
+            _MARKET_CLOSE_HOUR,
+            tzinfo=_TZ_CN,
+        )
+
+    is_closed = (
+        as_of.date() == report_day
+        and (as_of.hour, as_of.minute) >= (_MARKET_CLOSE_HOUR, 0)
+    )
+    return {
+        "generated_at": generated.isoformat(timespec="seconds"),
+        "as_of": as_of.isoformat(timespec="seconds"),
+        "bar_state": "closed" if is_closed else "intraday",
+    }
 
 
 def _collect_proxy_config():
@@ -193,16 +242,259 @@ def get_code_to_name():
     return _CODE_TO_NAME
 
 
+def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
+    """Fetch the full active A-share code universe with stable code ordering."""
+    stocks_by_code = {}
+    diagnostics = {
+        "page_size": int(page_size),
+        "requested": None,
+        "fetched": 0,
+        "unique": 0,
+        "pages": 0,
+        "complete": False,
+        "error": "",
+    }
+    for page in range(1, int(max_pages) + 1):
+        params = {
+            "pn": str(page),
+            "pz": str(page_size),
+            "po": "0",
+            "np": "1",
+            "fltt": "2",
+            "invt": "2",
+            "fid": "f12",
+            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fields": "f12,f14,f26",
+        }
+        try:
+            payload = _fetch_eastmoney_json(params)
+        except Exception as exc:
+            diagnostics["error"] = "page_{}_failed:{}".format(page, exc)
+            break
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            diagnostics["error"] = "page_{}_missing_data".format(page)
+            break
+        diagnostics["pages"] += 1
+        if diagnostics["requested"] is None:
+            try:
+                diagnostics["requested"] = int(data.get("total"))
+            except (TypeError, ValueError):
+                diagnostics["requested"] = None
+        items = data.get("diff") or []
+        if not isinstance(items, list):
+            items = []
+        diagnostics["fetched"] += len(items)
+        unique_before = len(stocks_by_code)
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            code = str(raw.get("f12") or "").strip()
+            if len(code) != 6 or not code.isdigit():
+                continue
+            name = str(raw.get("f14") or "").strip()
+            listed_date = str(raw.get("f26") or "").strip()
+            stocks_by_code.setdefault(code, {
+                "code": code,
+                "name": name,
+                "exchange": "SH" if _is_sh(code) else "SZ",
+                "asset_type": "stock",
+                "listed_date": listed_date,
+                "is_st": "ST" in name.upper(),
+                "delisting_risk": "退" in name,
+            })
+        diagnostics["unique"] = len(stocks_by_code)
+        requested = diagnostics["requested"]
+        if requested == 0:
+            diagnostics["complete"] = True
+            break
+        if requested is not None and diagnostics["unique"] >= requested:
+            diagnostics["complete"] = True
+            break
+        if not items:
+            diagnostics["error"] = "empty_page_before_total"
+            break
+        if len(stocks_by_code) == unique_before:
+            diagnostics["error"] = "page_without_new_codes"
+            break
+        if len(items) < int(page_size) and requested is None:
+            diagnostics["complete"] = True
+            break
+    else:
+        diagnostics["error"] = "max_pages_exceeded"
+
+    result = [stocks_by_code[code] for code in sorted(stocks_by_code)]
+    if return_diagnostics:
+        return result, diagnostics
+    return result
+
+
 # ============================================================
 # 板块资金流向 — 东方财富
 # ============================================================
-def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
+def _sector_component_evidence(evidence):
+    evidence = evidence if isinstance(evidence, dict) else {}
+    raw_codes = evidence.get("component_codes") or []
+    codes = {
+        str(code).strip()
+        for code in raw_codes
+        if str(code).strip()
+    }
+    diagnostics = evidence.get("diagnostics")
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    requested = diagnostics.get("requested")
+    try:
+        requested = int(requested)
+    except (TypeError, ValueError):
+        requested = None
+
+    if requested is not None and requested > 0:
+        coverage = min(1.0, len(codes) / float(requested))
+    elif diagnostics.get("complete") and codes:
+        coverage = 1.0
+    else:
+        coverage = 0.0
+
+    sufficient = bool(
+        diagnostics.get("complete")
+        and len(codes) >= 2
+        and coverage >= 0.8
+    )
+    return codes, round(coverage, 4), sufficient
+
+
+def _sector_component_sets_overlap(left, right):
+    if not left or not right:
+        return False
+    smaller, larger = (left, right) if len(left) <= len(right) else (right, left)
+    if smaller.issubset(larger):
+        return True
+
+    intersection = len(left & right)
+    containment = intersection / float(len(smaller))
+    union = len(left | right)
+    jaccard = intersection / float(union) if union else 0.0
+    return containment >= 0.8 and jaccard >= 0.65
+
+
+def deduplicate_sector_hierarchy(
+    sectors,
+    component_evidence,
+    *,
+    top_n=None,
+):
+    """
+    使用完整成分股证据识别父子行业或高度重合行业。
+
+    只对双方证据完整且覆盖率不低于 80% 的板块建立重合关系；
+    证据不足的板块原样保留并显式标记，避免声称已经完成层级去重。
+    每条重合链只保留绝对资金流更强的代表，不对父子层级资金求和。
+    """
+    rows = [dict(row) for row in (sectors or []) if isinstance(row, dict)]
+    evidence_by_code = (
+        component_evidence if isinstance(component_evidence, dict) else {}
+    )
+    evidence_state = {}
+    for index, row in enumerate(rows):
+        code = str(row.get("code") or "").strip()
+        codes, coverage, sufficient = _sector_component_evidence(
+            evidence_by_code.get(code)
+        )
+        evidence_state[index] = {
+            "codes": codes,
+            "coverage": coverage,
+            "sufficient": sufficient,
+        }
+        row["component_coverage"] = coverage
+
+    has_insufficient_evidence = any(
+        not state["sufficient"] for state in evidence_state.values()
+    )
+    for index, row in enumerate(rows):
+        if not evidence_state[index]["sufficient"]:
+            row["hierarchy_dedup_status"] = "insufficient_evidence"
+        elif has_insufficient_evidence:
+            row["hierarchy_dedup_status"] = "partial_check_only"
+        else:
+            row["hierarchy_dedup_status"] = "checked_unique"
+
+    parents = list(range(len(rows)))
+
+    def find(index):
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def union(left, right):
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parents[right_root] = left_root
+
+    for left in range(len(rows)):
+        left_state = evidence_state[left]
+        if not left_state["sufficient"]:
+            continue
+        for right in range(left + 1, len(rows)):
+            right_state = evidence_state[right]
+            if not right_state["sufficient"]:
+                continue
+            if _sector_component_sets_overlap(
+                left_state["codes"], right_state["codes"]
+            ):
+                union(left, right)
+
+    groups = {}
+    for index in range(len(rows)):
+        groups.setdefault(find(index), []).append(index)
+
+    kept_indices = set()
+    for indices in groups.values():
+        if len(indices) == 1:
+            kept_indices.add(indices[0])
+            continue
+        representative = max(
+            indices,
+            key=lambda index: (
+                abs(float(rows[index].get("flow") or 0)),
+                evidence_state[index]["coverage"],
+                -index,
+            ),
+        )
+        kept_indices.add(representative)
+        suppressed = [
+            rows[index].get("code")
+            for index in indices
+            if index != representative
+        ]
+        rows[representative]["hierarchy_dedup_status"] = (
+            "deduped_representative"
+        )
+        rows[representative]["hierarchy_dedup_suppressed_codes"] = suppressed
+
+    result = [
+        row for index, row in enumerate(rows)
+        if index in kept_indices
+    ]
+    if top_n is not None:
+        result = result[:max(0, int(top_n))]
+    return result
+
+
+def fetch_sector_flow(
+    top_n=TOP_SECTOR_COUNT,
+    *,
+    component_evidence=None,
+):
     """
     获取行业板块资金流向 TOP N。
     返回: [{"code": "BKxxxx", "name": "板块名", "change_pct": 1.5, "flow": 123456789, "flow_str": "1.23亿"}, ...]
     """
     params = {
-        "pn": "1", "pz": str(top_n), "po": "1", "np": "1",
+        "pn": "1",
+        "pz": str(top_n * 3 if component_evidence is not None else top_n),
+        "po": "1", "np": "1",
         "fltt": "2", "invt": "2",
         "fid": "f62",
         "fs": "m:90+t:2",
@@ -220,6 +512,12 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
                 "flow": it.get("f62", 0),
                 "flow_str": _format_amount(it.get("f62", 0)),
             })
+        if component_evidence is not None:
+            return deduplicate_sector_hierarchy(
+                result,
+                component_evidence,
+                top_n=top_n,
+            )
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流向失败: {e}")
@@ -229,47 +527,104 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
 # ============================================================
 # 板块成分股 — 东方财富
 # ============================================================
-def fetch_sector_stocks(sector_code):
+def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     """
     获取板块内成分股列表。
     返回: [{"code": "600519", "name": "贵州茅台", "change_pct": 1.5}, ...]
     """
-    all_stocks = []
+    stocks_by_code = {}
+    diagnostics = {
+        "sector_code": sector_code,
+        "page_size": SECTOR_COMPONENT_PAGE_SIZE,
+        "requested": None,
+        "fetched": 0,
+        "unique": 0,
+        "pages": 0,
+        "complete": False,
+        "error": "",
+    }
     page = 1
     while True:
+        if page > SECTOR_COMPONENT_MAX_PAGES:
+            diagnostics["error"] = "max_pages_exceeded"
+            break
         params = {
-            "pn": str(page), "pz": "200", "po": "0", "np": "1",
-            "fltt": "2", "invt": "2", "fid": "f3",
+            "pn": str(page), "pz": str(SECTOR_COMPONENT_PAGE_SIZE), "po": "0", "np": "1",
+            "fltt": "2", "invt": "2", "fid": "f12",
             "fs": f"b:{sector_code}",
             "fields": "f12,f14,f3,f2,f20,f21",
         }
         try:
             data = _fetch_eastmoney_json(params)
-            stock_data = data.get("data")
-            if not stock_data:
+            stock_data = data.get("data") if isinstance(data, dict) else None
+            if not isinstance(stock_data, dict):
+                diagnostics["error"] = "missing_data"
                 break
-            items = stock_data.get("diff", [])
-            if not items:
-                break
+            diagnostics["pages"] += 1
+
+            if diagnostics["requested"] is None:
+                raw_total = stock_data.get("total")
+                try:
+                    total = int(raw_total)
+                except (TypeError, ValueError):
+                    total = None
+                if total is not None and total >= 0:
+                    diagnostics["requested"] = total
+
+            items = stock_data.get("diff") or []
+            if not isinstance(items, list):
+                items = []
+            diagnostics["fetched"] += len(items)
+            unique_before = len(stocks_by_code)
             for it in items:
+                if not isinstance(it, dict):
+                    continue
+                code = str(it.get("f12") or "").strip()
+                if not code or code in stocks_by_code:
+                    continue
                 market_cap = _market_cap_to_yi(it.get("f20"))
                 circulating_market_cap = _market_cap_to_yi(it.get("f21"))
-                all_stocks.append({
-                    "code": it.get("f12", ""),
+                stocks_by_code[code] = {
+                    "code": code,
                     "name": it.get("f14", "-"),
                     "change_pct": it.get("f3", 0),
                     "close": it.get("f2", 0),
                     "market_cap": market_cap,
                     "circulating_market_cap": circulating_market_cap,
                     "float_market_cap": circulating_market_cap,
-                })
-            if len(items) < 200:
+                }
+
+            diagnostics["unique"] = len(stocks_by_code)
+            total = diagnostics["requested"]
+            if total is None:
+                diagnostics["error"] = "missing_total"
+                break
+            if total > SECTOR_COMPONENT_PAGE_SIZE * SECTOR_COMPONENT_MAX_PAGES:
+                diagnostics["error"] = "total_exceeds_limit"
+                break
+            if len(stocks_by_code) >= total:
+                diagnostics["complete"] = True
+                break
+            if not items:
+                diagnostics["error"] = "empty_page_before_total"
+                break
+            if len(stocks_by_code) == unique_before:
+                diagnostics["error"] = "no_new_codes"
+                break
+            if len(items) < SECTOR_COMPONENT_PAGE_SIZE:
+                diagnostics["error"] = "short_page_before_total"
                 break
             page += 1
         except Exception as e:
             print(f"[ERROR] 获取板块 {sector_code} 成分股失败: {e}")
+            diagnostics["error"] = f"request_failed:{type(e).__name__}"
             break
-    return all_stocks
+
+    stocks = [stocks_by_code[code] for code in sorted(stocks_by_code)]
+    diagnostics["unique"] = len(stocks)
+    if return_diagnostics:
+        return stocks, diagnostics
+    return stocks
 
 
 # ============================================================
@@ -529,6 +884,18 @@ def build_kline_status(kline, required_date=None, source="unknown"):
             "stale": True,
         }
 
+    repository_status = kline.get("_data_status")
+    if isinstance(repository_status, dict):
+        status = dict(repository_status)
+        latest_date = _kline_latest_date(kline)
+        status["latest_date"] = latest_date
+        status["bars"] = len(kline.get("closes", []))
+        status["source"] = kline.get("source", status.get("source", source))
+        if required_date and latest_date != required_date:
+            status["daily"] = "stale_cache"
+            status["stale"] = True
+        return status
+
     latest_date = _kline_latest_date(kline)
     bars = len(kline.get("closes", []))
     if required_date and latest_date != required_date:
@@ -565,13 +932,6 @@ def _close_matches(expected, actual):
     actual = float(actual)
     tolerance = max(_INDEX_PREV_CLOSE_MAX_DIFF_ABS, abs(expected) * _INDEX_PREV_CLOSE_MAX_DIFF_RATIO)
     return abs(expected - actual) <= tolerance
-
-
-def _cached_index_kline(code, count):
-    records = sorted(read_cached_records("day", code), key=lambda r: r["date"])
-    if len(records) < max(2, min(20, count)):
-        return None
-    return records_to_kline_dict(records[-count:])
 
 
 def _splice_realtime_index_bar(history, quote, count, source, required_date=None):
@@ -649,7 +1009,6 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
         quote = _fetch_daily_kline_sina_quote_remote(code, count=2)
         splice_sources = [
             ("sina_daily+sina_quote", fetched.get("sina_daily")),
-            ("cache+sina_quote", _cached_index_kline(code, count)),
         ]
         for source, history in splice_sources:
             kline = _splice_realtime_index_bar(
@@ -679,7 +1038,7 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
     return result
 
 
-def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
+def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=False):
     """Fetch daily kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("day", code)
@@ -705,6 +1064,7 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
         CACHE_STATS["day_write"] += 1
         cached = cached_kline_if_sufficient("day", code, count)
         if cached is not None:
+            cached["source"] = "tencent"
             CACHE_STATS["day_hit"] += 1
             return cached
         CACHE_STATS["day_miss"] += 1
@@ -712,6 +1072,7 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
 
     cached = cached_kline_if_sufficient("day", code, count)
     if cached is not None:
+        cached["source"] = "kline_cache"
         CACHE_STATS["day_hit"] += 1
         print(f"  [CACHE FALLBACK] day {code} remote failed, using cache")
         return cached
@@ -763,22 +1124,81 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
         return None
 
 
+def _fetch_eastmoney_minute_kline_remote(code, scale, count):
+    """Fetch adjusted intraday bars without Sina's 240-record cap."""
+    params = {
+        "secid": _em_secid(code),
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": str(scale),
+        "fqt": "1",
+        "end": "20500101",
+        "lmt": str(count),
+    }
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    try:
+        response = SESSION.get(url, params=params, timeout=15)
+        payload = response.json()
+        lines = payload.get("data", {}).get("klines", [])
+        if not lines:
+            return None
+        dates, opens, highs, lows, closes, volumes, amounts = (
+            [], [], [], [], [], [], []
+        )
+        for line in lines:
+            parts = str(line).split(",")
+            if len(parts) < 6:
+                continue
+            dates.append(parts[0])
+            opens.append(float(parts[1]))
+            closes.append(float(parts[2]))
+            highs.append(float(parts[3]))
+            lows.append(float(parts[4]))
+            volumes.append(float(parts[5]))
+            amounts.append(_extract_eastmoney_amount(parts))
+        if not dates:
+            return None
+        result = {
+            "dates": dates,
+            "opens": np.array(opens, dtype=float),
+            "highs": np.array(highs, dtype=float),
+            "lows": np.array(lows, dtype=float),
+            "closes": np.array(closes, dtype=float),
+            "volumes": np.array(volumes, dtype=float),
+            "source": "eastmoney",
+        }
+        amount_array = _ensure_amounts_array(amounts)
+        if amount_array is not None:
+            result["amounts"] = amount_array
+        return result
+    except Exception as exc:
+        print("[ERROR] 东方财富{}分钟K线失败 {}: {}".format(scale, code, exc))
+        return None
+
+
 def _fetch_30min_kline_remote(code, count=80):
     """
-    获取30分钟K线。新浪 API。
+    获取30分钟K线。东方财富支持长窗口，新浪用于短窗口兜底。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
     """
-    return _fetch_sina_minute_kline_remote(code, scale=30, count=count)
+    return (
+        _fetch_eastmoney_minute_kline_remote(code, scale=30, count=count)
+        or _fetch_sina_minute_kline_remote(code, scale=30, count=count)
+    )
 
 
 def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
     """
     获取15分钟K线。罗姐池需要至少177根来计算生命线。
     """
-    return _fetch_sina_minute_kline_remote(code, scale=15, count=count)
+    return (
+        _fetch_eastmoney_minute_kline_remote(code, scale=15, count=count)
+        or _fetch_sina_minute_kline_remote(code, scale=15, count=count)
+    )
 
 
-def fetch_30min_kline(code, count=80, force_refresh=False):
+def _fetch_30min_kline_legacy_cache(code, count=80, force_refresh=False):
     """Fetch 30min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("30min", code)
@@ -817,7 +1237,9 @@ def fetch_30min_kline(code, count=80, force_refresh=False):
     return None
 
 
-def fetch_15min_kline(code, count=MIN15_LOOKBACK_BARS, force_refresh=False):
+def _fetch_15min_kline_legacy_cache(
+    code, count=MIN15_LOOKBACK_BARS, force_refresh=False
+):
     """Fetch 15min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("15min", code)
@@ -856,6 +1278,188 @@ def fetch_15min_kline(code, count=MIN15_LOOKBACK_BARS, force_refresh=False):
     return None
 
 
+def _with_source(kline, source):
+    if not kline:
+        return None
+    result = dict(kline)
+    result["source"] = result.get("source") or source
+    return result
+
+
+def _fetch_daily_for_repository(code, count):
+    sources = (
+        ("tencent", _fetch_daily_kline_remote),
+        ("eastmoney", _fetch_daily_kline_eastmoney_remote),
+        ("sina", _fetch_daily_kline_sina_daily_remote),
+    )
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        futures = {
+            pool.submit(fetcher, code, count=count): source
+            for source, fetcher in sources
+        }
+        for future in as_completed(futures):
+            source = futures[future]
+            try:
+                kline = future.result()
+            except Exception:
+                kline = None
+            if kline:
+                return _with_source(kline, source)
+    return None
+
+
+def _fetch_30min_for_repository(code, count):
+    return _fetch_minute_for_repository(code, 30, count)
+
+
+def _fetch_15min_for_repository(code, count):
+    return _fetch_minute_for_repository(code, 15, count)
+
+
+def _fetch_minute_for_repository(code, scale, count):
+    sources = [(
+        "eastmoney",
+        lambda: _fetch_eastmoney_minute_kline_remote(code, scale, count),
+    )]
+    if count <= 240:
+        sources.append((
+            "sina",
+            lambda: _fetch_sina_minute_kline_remote(code, scale, count),
+        ))
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        futures = {pool.submit(fetcher): source for source, fetcher in sources}
+        for future in as_completed(futures):
+            source = futures[future]
+            try:
+                kline = future.result()
+            except Exception:
+                kline = None
+            if kline:
+                return _with_source(kline, source)
+    return None
+
+
+def _legacy_shadow_reader(interval, code, count):
+    return cached_kline_if_sufficient(interval, code, count)
+
+
+def reset_kline_repository():
+    """Reset the process-local repository after config/path changes in tests."""
+    global _KLINE_REPOSITORY
+    _KLINE_REPOSITORY = None
+
+
+def _get_kline_repository():
+    global _KLINE_REPOSITORY
+    if _KLINE_REPOSITORY is None:
+        _KLINE_REPOSITORY = KLineRepository(
+            MARKET_HISTORY_DB_PATH,
+            mode=KLINE_REPOSITORY_MODE,
+            remote_fetchers={
+                "day": _fetch_daily_for_repository,
+                "30m": _fetch_30min_for_repository,
+                "15m": _fetch_15min_for_repository,
+            },
+            shadow_reader=(
+                _legacy_shadow_reader if KLINE_REPOSITORY_SHADOW_JSON else None
+            ),
+            max_workers=8,
+        )
+    return _KLINE_REPOSITORY
+
+
+def _fetch_from_repository(
+    interval,
+    code,
+    count,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    result = _get_kline_repository().get(
+        interval,
+        code,
+        count=count,
+        required_date=required_date,
+        as_of=as_of,
+        force_refresh=force_refresh,
+    )
+    return result.kline
+
+
+def fetch_daily_kline(
+    code,
+    count=DAY_LOOKBACK,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_daily_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "day",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def fetch_30min_kline(
+    code, count=80, force_refresh=False, required_date=None, as_of=None
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_30min_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "30m",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def fetch_15min_kline(
+    code,
+    count=MIN15_LOOKBACK_BARS,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_15min_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "15m",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+_PUBLIC_FETCH_DAILY_IMPL = fetch_daily_kline
+_PUBLIC_FETCH_30MIN_IMPL = fetch_30min_kline
+_PUBLIC_FETCH_15MIN_IMPL = fetch_15min_kline
+
+
 # ============================================================
 # K 线通用入口（用于 market indices 等场景）
 # ============================================================
@@ -877,18 +1481,39 @@ def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
 # ============================================================
 # 批量获取
 # ============================================================
-def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_stale=False):
+def batch_fetch_daily_klines(
+    stocks, max_workers=10, required_date=None, allow_stale=False, force_refresh=False
+):
     """
     并发批量获取日线。
     stocks: [{"code": "600519", "name": "茅台", "sector": "...", ...}, ...]
     返回: [{"code": ..., "name": ..., "sector": ..., "sector_tags": [...], "klines": {...}, "data_status": {...}}, ...]
     """
     results = []
+    repository_results = None
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_daily_kline is _PUBLIC_FETCH_DAILY_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "day",
+            [stock["code"] for stock in stocks],
+            count=DAY_LOOKBACK,
+            required_date=required_date,
+            force_refresh=effective_force,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        kline_source = stock.get("source", "unknown")
-        klines = fetch_daily_kline(code)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_daily_kline(code, force_refresh=effective_force)
+        )
+        kline_source = (klines or {}).get("source") or stock.get("source") or "tencent"
         status = build_kline_status(
             klines, required_date=required_date, source=kline_source,
         )
@@ -947,10 +1572,25 @@ def batch_fetch_30min_klines(stocks, max_workers=8):
     并发批量获取30分钟K线。
     """
     results = []
+    repository_results = None
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_30min_kline is _PUBLIC_FETCH_30MIN_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "30m",
+            [stock["code"] for stock in stocks],
+            count=80,
+            force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = fetch_30min_kline(code)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_30min_kline(code)
+        )
         if klines and len(klines.get("closes", [])) >= 40:
             return {"code": code, "name": stock.get("name", ""), "klines": klines}
         return None
@@ -969,10 +1609,25 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
     并发批量获取15分钟K线。
     """
     results = []
+    repository_results = None
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_15min_kline is _PUBLIC_FETCH_15MIN_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "15m",
+            [stock["code"] for stock in stocks],
+            count=MIN15_LOOKBACK_BARS,
+            force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = fetch_15min_kline(code)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_15min_kline(code)
+        )
         if klines and len(klines.get("closes", [])) >= 180:
             return {"code": code, "name": stock.get("name", ""), "klines": klines}
         return None
@@ -989,7 +1644,7 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
 # ============================================================
 # Phase 1 主流程
 # ============================================================
-def collect_daily_data(required_date=None, allow_missing_index=False):
+def collect_daily_data(required_date=None, allow_missing_index=False, generated_at=None):
     """
     完整数据采集流程:
     1. 获取 TOP20 资金流入板块
@@ -998,6 +1653,10 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     4. 获取上证指数日线
     """
     print("=" * 60)
+    time_metadata = build_market_time_metadata(
+        required_date=required_date,
+        generated_at=generated_at,
+    )
     print("Phase 1: 数据采集")
     print("=" * 60)
 
@@ -1031,15 +1690,48 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     print("[2/4] 获取板块成分股 ...")
     stock_map = {}
     consecutive_failures = 0
+    sector_component_diagnostics = []
+    sector_component_evidence = {}
+    stock_pool_incomplete = False
     sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
     stock_pool_source = "sector_components"
     for sector_rank, sector in enumerate(sectors, start=1):
-        stocks = fetch_sector_stocks(sector["code"])
-        if not stocks:
+        stocks, component_diagnostics = fetch_sector_stocks(
+            sector["code"], return_diagnostics=True
+        )
+        sector_component_diagnostics.append(component_diagnostics)
+        sector_component_evidence[str(sector.get("code") or "")] = {
+            "component_codes": [
+                str(stock.get("code") or "")
+                for stock in stocks
+                if str(stock.get("code") or "")
+            ],
+            "diagnostics": dict(component_diagnostics),
+        }
+        if not component_diagnostics.get("complete"):
+            stock_pool_incomplete = True
+        if not stocks and not component_diagnostics.get("complete"):
             consecutive_failures += 1
             # 连续 5 个板块全部失败 → 代理大概率已挂，直接放弃剩余请求
             if consecutive_failures >= 5:
                 print(f"  连续 {consecutive_failures} 个板块API失败，跳过剩余板块")
+                remaining_sectors = sectors[sector_rank:]
+                for skipped_sector in remaining_sectors:
+                    sector_component_diagnostics.append({
+                        "sector_code": skipped_sector["code"],
+                        "page_size": SECTOR_COMPONENT_PAGE_SIZE,
+                        "requested": None,
+                        "fetched": 0,
+                        "unique": 0,
+                        "pages": 0,
+                        "complete": False,
+                        "error": "not_requested_after_consecutive_failures",
+                    })
+                if remaining_sectors:
+                    warnings.append(
+                        f"板块成分连续{consecutive_failures}次抓取失败，"
+                        f"未请求剩余{len(remaining_sectors)}个板块"
+                    )
                 break
         else:
             consecutive_failures = 0
@@ -1073,42 +1765,61 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
     if not stock_map:
-        from pathlib import Path
-        from config import KLINE_CACHE_DIR
-        cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
-        if cache_dir.exists():
-            cached = list(cache_dir.glob("*.json"))
-            code_to_name = get_code_to_name()
-            for f in cached:
-                code = f.stem
-                # 跳过非标准6位代码（如指数）
-                if not code or len(code) != 6 or not code.isdigit():
-                    continue
-                # 跳过北交所/新三板（92/87/83/43开头）
-                if code[:2] in ("92", "87", "83", "43"):
-                    continue
-                name = code_to_name.get(code, code)
+        if KLINE_REPOSITORY_ENABLED:
+            for instrument in _get_kline_repository().list_instruments():
+                code = str(instrument.get("code") or "")
                 stock_map[code] = {
                     "code": code,
-                    "name": name,
+                    "name": instrument.get("name") or code,
                     "change_pct": 0,
                     "sector": "",
                     "sector_tags": [],
                     "sector_rank": None,
                     "sector_flow": None,
                     "sector_strength_label": "",
-                    "source": "kline_cache",
+                    "source": "market_history_db",
                 }
             if stock_map:
-                print(f"  [FALLBACK] 板块API全部不可用，从 K线缓存恢复 {len(stock_map)} 只股票")
-                stock_pool_source = "kline_cache"
+                print(
+                    f"  [FALLBACK] 板块API全部不可用，从行情数据库恢复 "
+                    f"{len(stock_map)} 只股票"
+                )
+                stock_pool_source = "market_history_db"
                 sector_source = "fallback_static"
                 fallback_used = True
-                warnings.append("板块成分抓取失败，从 K线缓存恢复股票池")
-                warnings.append("板块API全部不可用，使用 K线缓存兜底")
+                warnings.append("板块成分抓取失败，从行情数据库恢复股票池")
             else:
-                print(f"  [FALLBACK] K线缓存中无可用股票")
-                warnings.append("K线缓存为空，无法回退")
+                print("  [FALLBACK] 行情数据库中无可用股票")
+                warnings.append("行情数据库为空，无法回退")
+        else:
+            from pathlib import Path
+            from config import KLINE_CACHE_DIR
+            cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
+            if cache_dir.exists():
+                cached = list(cache_dir.glob("*.json"))
+                code_to_name = get_code_to_name()
+                for f in cached:
+                    code = f.stem
+                    if not code or len(code) != 6 or not code.isdigit():
+                        continue
+                    if code[:2] in ("92", "87", "83", "43"):
+                        continue
+                    stock_map[code] = {
+                        "code": code,
+                        "name": code_to_name.get(code, code),
+                        "change_pct": 0,
+                        "sector": "",
+                        "sector_tags": [],
+                        "sector_rank": None,
+                        "sector_flow": None,
+                        "sector_strength_label": "",
+                        "source": "kline_cache",
+                    }
+                if stock_map:
+                    stock_pool_source = "kline_cache"
+                    sector_source = "fallback_static"
+                    fallback_used = True
+                    warnings.append("板块API全部不可用，使用 K线缓存兜底")
 
     all_stocks = list(stock_map.values())
     print(f"[3/4] 批量获取日线（{len(all_stocks)} 只）...")
@@ -1117,6 +1828,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         all_stocks,
         required_date=required_date,
         allow_stale=allow_missing_index,
+        force_refresh=time_metadata["bar_state"] == "closed",
     )
     elapsed = time.time() - t0
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
@@ -1145,23 +1857,55 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     if not sectors:
         sector_source = "empty"
 
+    report_date = required_date or ""
+    dates_match = bool(
+        report_date
+        and _latest_date(sh_kline) == report_date
+        and stocks_with_kline
+        and all(
+            (st.get("data_status") or {}).get("latest_date") == report_date
+            for st in stocks_with_kline
+        )
+    )
+    stock_sources_trusted = bool(
+        stocks_with_kline
+        and all(
+            (st.get("data_status") or {}).get("source") in _TRUSTED_STOCK_KLINE_SOURCES
+            for st in stocks_with_kline
+        )
+    )
+    sources_trusted = bool(
+        sh_kline
+        and sector_source == "eastmoney"
+        and stock_sources_trusted
+        and not fallback_used
+    )
+
     data_quality = {
-        "report_date": required_date or "",
+        "report_date": report_date,
+        **time_metadata,
         "is_trading_day": bool(sh_kline),
         "is_official": bool(
             sh_kline
             and stocks_with_kline
             and not allow_missing_index
             and not fallback_used
+            and dates_match
+            and sources_trusted
+            and time_metadata["bar_state"] == "closed"
             and stale_stock_count == 0
             and missing_daily_count == 0
+            and not stock_pool_incomplete
         ),
+        "sources_trusted": sources_trusted,
         "market_status": "verified" if sh_kline else "unverified",
         "stock_pool_source": stock_pool_source,
         "sector_source": sector_source,
         "stale_stock_count": stale_stock_count,
         "missing_daily_count": missing_daily_count,
         "missing_30min_count": 0,
+        "stock_pool_incomplete": stock_pool_incomplete,
+        "sector_component_diagnostics": sector_component_diagnostics,
         "fallback_used": fallback_used,
         "warnings": warnings,
     }
@@ -1171,6 +1915,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         "sectors": sectors,
         "sh_index": sh_kline,
         "stocks": stocks_with_kline,
+        "sector_component_evidence": sector_component_evidence,
         "index_error": index_error,
         "data_quality": data_quality,
     }
@@ -1205,7 +1950,7 @@ def collect_15min_data(target_stocks):
 # ============================================================
 # 资金流出 — 东方财富
 # ============================================================
-def fetch_sector_outflow(top_n=5):
+def fetch_sector_outflow(top_n=5, *, component_evidence=None):
     """
     获取行业板块资金流出 TOP N（净流出最大）。
     复用 fetch_sector_flow 相同 API，改为升序排列取负值最大。
@@ -1231,8 +1976,14 @@ def fetch_sector_outflow(top_n=5):
                     "flow": flow,
                     "flow_str": _format_amount(flow),
                 })
-                if len(result) >= top_n:
+                if component_evidence is None and len(result) >= top_n:
                     break
+        if component_evidence is not None:
+            return deduplicate_sector_hierarchy(
+                result,
+                component_evidence,
+                top_n=top_n,
+            )
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流出失败: {e}")
@@ -1242,6 +1993,79 @@ def fetch_sector_outflow(top_n=5):
 # ============================================================
 # 涨停板池 — 东方财富
 # ============================================================
+def fetch_limit_pool_counts(date_str=None):
+    """Fetch exact same-day limit-up/down totals from Eastmoney topic pools."""
+    if date_str is None:
+        date_str = datetime.now().strftime("%Y%m%d")
+    compact_date = str(date_str).replace("-", "")
+    try:
+        evidence_date = datetime.strptime(
+            compact_date, "%Y%m%d"
+        ).strftime("%Y-%m-%d")
+    except ValueError:
+        return {
+            "limit_up_count": None,
+            "limit_down_count": None,
+            "evidence_date": "",
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "error": "invalid_date",
+        }
+
+    common = {
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "dpt": "wz.ztzt",
+        "Pageindex": "0",
+        "pagesize": "1",
+        "date": compact_date,
+    }
+    endpoints = (
+        ("limit_up_count", "getTopicZTPool", "fbt:asc"),
+        ("limit_down_count", "getTopicDTPool", "fund:asc"),
+    )
+    result = {}
+    try:
+        for field, endpoint, sort in endpoints:
+            params = dict(common)
+            params["sort"] = sort
+            response = SESSION.get(
+                "https://push2ex.eastmoney.com/{}".format(endpoint),
+                params=params,
+                timeout=15,
+            )
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, dict):
+                raise ValueError("{} missing data".format(endpoint))
+            if str(data.get("qdate") or "") != compact_date:
+                raise ValueError("{} date mismatch".format(endpoint))
+            total = data.get("tc")
+            if isinstance(total, bool):
+                raise ValueError("{} invalid total".format(endpoint))
+            total = int(total)
+            if total < 0:
+                raise ValueError("{} negative total".format(endpoint))
+            result[field] = total
+    except Exception as exc:
+        return {
+            "limit_up_count": None,
+            "limit_down_count": None,
+            "evidence_date": evidence_date,
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "error": "{}: {}".format(type(exc).__name__, exc),
+        }
+
+    return {
+        "limit_up_count": result["limit_up_count"],
+        "limit_down_count": result["limit_down_count"],
+        "evidence_date": evidence_date,
+        "data_status": "verified",
+        "source": "eastmoney_limit_pools",
+        "error": "",
+    }
+
+
 def fetch_limit_up_pool(date_str=None):
     """
     获取当日涨停板池。东方财富 getTopicZTPool 接口。

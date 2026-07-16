@@ -221,6 +221,22 @@ class TestFusionAdmission(unittest.TestCase):
         self.assertEqual(diag["dropped_by_signal_gate"], 1)
         self.assertIn("不默认放行", diag["drop_details"][0]["reason"])
 
+    def test_trend_continuation_candidate_uses_independent_admission(self):
+        stock = self._make_stock("趋势延续候选", strength="中")
+        stock.update({
+            "source_channel": "trend_continuation",
+            "reference_type": "platform_high_20d",
+            "reference_price": 50.0,
+            "confirmations": ["30min突破位不破", "30min EMA5维持"],
+        })
+
+        picks, _ = apply_fusion_admission(
+            [stock], self._make_sh_closes(False)
+        )
+
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(picks[0]["source_channel"], "trend_continuation")
+
 
 if __name__ == "__main__":
     unittest.main()

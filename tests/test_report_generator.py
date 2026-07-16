@@ -282,6 +282,20 @@ def _make_minimal_report_data():
         "forecast": {},
         "sell_signals": [],
         "diagnostics": {},
+        "market_sentiment": {
+            "version": "v2",
+            "date": "2026-05-26",
+            "score": 58,
+            "label": "平衡",
+            "coverage": 1.0,
+        },
+        "market_sentiment_history": [
+            {
+                "date": "2026-05-26",
+                "score": 58,
+                "ma3": 55.0,
+            }
+        ],
     }
 
 
@@ -302,6 +316,13 @@ class TestAccessControl(unittest.TestCase):
             cls.asset_js = f.read()
         with open(os.path.join(cls.tmpdir, "assets", "report-v2.css"), "r", encoding="utf-8") as f:
             cls.asset_css = f.read()
+
+    def test_market_sentiment_v2_and_history_are_serialized(self):
+        self.assertEqual(self.day_data["market_sentiment"]["score"], 58)
+        self.assertEqual(
+            self.day_data["market_sentiment_history"][0]["ma3"],
+            55.0,
+        )
 
     def test_bootstrap_payload_present(self):
         self.assertIn("window.CHANLUN_BOOTSTRAP", self.html)
@@ -441,7 +462,7 @@ class TestAccessControl(unittest.TestCase):
 
     def test_workspace_bootstrap_in_json(self):
         self.assertIn("workspace", self.day_data)
-        self.assertEqual(self.day_data["workspace"].get("default_view"), "highlights")
+        self.assertEqual(self.day_data["workspace"].get("default_view"), "main")
 
     def test_raw_pools_are_backfilled_and_sorted_by_workspace_opportunity_score(self):
         tmpdir = tempfile.mkdtemp(prefix="test_score_backfill_")
@@ -450,11 +471,33 @@ class TestAccessControl(unittest.TestCase):
         near_main["score"] = 18
         near_main["best_buy_point"]["distance_from_reference_pct"] = 0.2
         near_main["best_buy_point"]["change_pct"] = 3.0
+        near_main["decision_engine_v1"] = {
+            "decision_code": "recommend",
+            "decision": "推荐",
+        }
+        near_main.update({
+            "position_distance_pct": 0.2,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-05-26",
+        })
         far_main = make_pick()
         far_main["code"] = "600101"
         far_main["score"] = 96
         far_main["best_buy_point"]["distance_from_reference_pct"] = 11.5
         far_main["best_buy_point"]["change_pct"] = -1.0
+        far_main["decision_engine_v1"] = {
+            "decision_code": "recommend",
+            "decision": "推荐",
+        }
+        far_main.update({
+            "position_distance_pct": 11.5,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-05-26",
+        })
         report_data = _make_minimal_report_data()
         report_data["picks_fusion"] = [far_main, near_main]
         report_data["next_day_boom"] = {
@@ -677,6 +720,27 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         self.assertEqual(sw["sector_flow"], 123456)
         self.assertEqual(sw["sector_strength_label"], "资金流入TOP4")
         self.assertEqual(sw["data_status"]["daily"], "verified")
+
+    def test_preserves_observation_contract_and_trend_reference(self):
+        item = self._make_watch_item()
+        item.update({
+            "source_channel": "trend_continuation",
+            "view": "observation",
+            "reason_code": "waiting_30m_confirm",
+            "failure_gate": "30min_confirm",
+            "actual_value": {"volume_ratio": 1.3},
+            "upgrade_conditions": ["突破位不破"],
+            "cancel_conditions": ["跌破突破位"],
+            "reference_type": "platform_high_20d",
+            "reference_price": 14.5,
+        })
+
+        serialized = _serialize_startup_watchlist([item])[0]
+
+        self.assertEqual(serialized["source_channel"], "trend_continuation")
+        self.assertEqual(serialized["reference_price"], 14.5)
+        self.assertEqual(serialized["failure_gate"], "30min_confirm")
+        self.assertEqual(serialized["cancel_conditions"], ["跌破突破位"])
 
 
 class TestBuildStartupWatchChartAnnotations(unittest.TestCase):
@@ -1166,6 +1230,12 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_auxiliary_center_title(self):
         self.assertIn('辅助决策中心', self.asset_js)
 
+    def test_observation_top5_tab_and_failure_details_are_rendered(self):
+        self.assertIn("observation_top5: '观察 Top5'", self.asset_js)
+        self.assertIn("失败门：", self.asset_js)
+        self.assertIn("升级条件：", self.asset_js)
+        self.assertIn("取消条件：", self.asset_js)
+
     def test_market_overview_helper_presence(self):
         for helper in [
             'function getMarketItems',
@@ -1201,7 +1271,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             self.assertIn(helper, self.asset_js)
 
     def test_auxiliary_center_modules(self):
-        module_names = ['市场温度', '板块资金', '涨停情绪', '事件驱动', '卖出提醒', '策略回看', '数据诊断']
+        module_names = ['市场情绪', '板块资金', '涨停情绪', '事件驱动', '卖出提醒', '策略回看', '数据诊断']
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
         self.assertEqual(self.asset_js.count("renderDecisionCard({"), 7)
@@ -1229,20 +1299,22 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn('var temperature = buildMarketTemperature(data || {});', self.asset_js)
         self.assertIn('class="market-temp-gauge is-', self.asset_js)
         self.assertIn('class="gauge-meter"', self.asset_js)
-        self.assertIn("renderMetricPair('市场温度', temperature.score + ' / 100'", self.asset_js)
+        self.assertIn("renderMetricPair('市场情绪', scoreText", self.asset_js)
         self.assertIn('badge: { text: temperature.label, tone: temperature.tone }', self.asset_js)
         self.assertIn('components.breadth_score', self.asset_js)
         self.assertIn('components.index_score', self.asset_js)
 
-    def test_market_temperature_fallback_semantics_in_js(self):
-        self.assertIn('var avgIndexChange = 0;', self.asset_js)
-        self.assertIn('var breadthScore = 50;', self.asset_js)
-        self.assertIn('var limitScore = clamp(50 + limitUpCount * 2, 0, 90);', self.asset_js)
-        self.assertIn('var volumeRatio = 1;', self.asset_js)
-        self.assertIn('var sectorScore;', self.asset_js)
-        self.assertIn('var rawScore =', self.asset_js)
-        self.assertIn('riskPenalty += limitDownCount ? Math.min(12, limitDownCount * 1.2) : 0;', self.asset_js)
-        self.assertIn('return {', self.asset_js)
+    def test_market_sentiment_uses_backend_v2_and_renders_twenty_day_chart(self):
+        self.assertIn('var sentiment = data.market_sentiment || {};', self.asset_js)
+        self.assertIn("label: '数据不足'", self.asset_js)
+        self.assertIn('market_sentiment_history', self.asset_js)
+        self.assertIn('sentimentChartInstance', self.asset_js)
+        self.assertIn("name: '每日情绪'", self.asset_js)
+        self.assertIn("name: '3日均线'", self.asset_js)
+        self.assertIn('markArea', self.asset_js)
+        self.assertIn('turning_signal', self.asset_js)
+        self.assertIn('limit_up_count', self.asset_js)
+        self.assertIn('limit_down_count', self.asset_js)
 
     def test_old_top_chips_removed(self):
         self.assertNotIn('metric-chip', self.asset_js)

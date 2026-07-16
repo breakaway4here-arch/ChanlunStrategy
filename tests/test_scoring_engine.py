@@ -8,6 +8,65 @@ from chanlun.scoring_engine import (
 
 
 class TestScoringEngine(unittest.TestCase):
+    def test_entry_score_only_consumes_verified_top_level_position_evidence(self):
+        _, verified_trace = compute_opportunity_score(
+            {
+                "score": 60,
+                "position_distance_pct": 1.0,
+                "position_reference_price": 10.0,
+                "position_reference_type": "daily_support",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "best_buy_point": {"distance_from_reference_pct": 0.0},
+            },
+            "main",
+            {"data_quality": {"market_status": "verified"}},
+        )
+        _, legacy_trace = compute_opportunity_score(
+            {
+                "score": 60,
+                "distance_from_reference_pct": 1.0,
+                "best_buy_point": {"distance_from_reference_pct": 0.0},
+            },
+            "main",
+            {
+                "metrics": {"distance": 1.0},
+                "data_quality": {"market_status": "verified"},
+            },
+        )
+
+        self.assertEqual(verified_trace["entry_score"], 16)
+        self.assertEqual(verified_trace["distance_from_reference_pct"], 1.0)
+        self.assertEqual(legacy_trace["entry_score"], 4)
+        self.assertIsNone(legacy_trace["distance_from_reference_pct"])
+
+    def test_invalid_position_evidence_keeps_neutral_entry_score(self):
+        valid = {
+            "score": 60,
+            "position_distance_pct": 1.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "daily_support",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        }
+        invalid_overrides = (
+            {"position_distance_pct": float("inf")},
+            {"position_reference_price": -1},
+            {"position_reference_type": None},
+            {"position_data_status": "stale_cache"},
+            {"position_evidence_date": "not-a-date"},
+        )
+
+        for override in invalid_overrides:
+            with self.subTest(override=override):
+                _, trace = compute_opportunity_score(
+                    {**valid, **override},
+                    "main",
+                    {"data_quality": {"market_status": "verified"}},
+                )
+                self.assertEqual(trace["entry_score"], 4)
+                self.assertIsNone(trace["distance_from_reference_pct"])
+
     def test_component_caps(self):
         score, trace = compute_opportunity_score(
             {
@@ -51,6 +110,13 @@ class TestScoringEngine(unittest.TestCase):
         for distance, expected in cases:
             item = dict(base)
             item["best_buy_point"] = {**base["best_buy_point"], "distance_from_reference_pct": distance}
+            item.update({
+                "position_distance_pct": distance,
+                "position_reference_price": 10.0,
+                "position_reference_type": "daily_support",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+            })
             _, trace = compute_opportunity_score(
                 item,
                 "main",

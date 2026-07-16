@@ -1,11 +1,16 @@
+import os
+import subprocess
+import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 
 import numpy as np
 
 import run
 from chanlun import data_fetcher
+from chanlun.kline_cache import write_cached_records
 from scripts.validate_today_report import validate_report_contract
 
 
@@ -21,7 +26,464 @@ def _kline(dates, closes):
     }
 
 
+def _official_empty_report():
+    return {
+        "date": "2026-06-30",
+        "picks_fusion": [],
+        "picks_pure": [],
+        "next_day_boom": {"candidates": []},
+        "luojie_pool": {"candidates": []},
+        "startup_watchlist": [],
+        "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+        "data_quality": {
+            "report_date": "2026-06-30",
+            "generated_at": "2026-06-30T15:05:00+08:00",
+            "as_of": "2026-06-30T15:05:00+08:00",
+            "bar_state": "closed",
+            "sources_trusted": True,
+            "is_trading_day": True,
+            "is_official": True,
+            "stock_pool_incomplete": False,
+            "market_status": "verified",
+            "fallback_used": False,
+            "stale_stock_count": 0,
+            "missing_daily_count": 0,
+        },
+    }
+
+
+def _sector_rows(start, count):
+    return [
+        {
+            "f12": f"{index:06d}",
+            "f14": f"股票{index}",
+            "f3": 1.0,
+            "f2": 10.0,
+            "f20": 10_000_000_000,
+            "f21": 5_000_000_000,
+        }
+        for index in range(start, start + count)
+    ]
+
+
+def _complete_sector_fetch(rows_by_code):
+    def fake(code, *, return_diagnostics=False):
+        rows = list(rows_by_code.get(code, []))
+        diag = {
+            "sector_code": code,
+            "page_size": 100,
+            "requested": len(rows),
+            "fetched": len(rows),
+            "unique": len({row.get("code") for row in rows if row.get("code")}),
+            "pages": 1,
+            "complete": True,
+            "error": "",
+        }
+        return (rows, diag) if return_diagnostics else rows
+
+    return fake
+
+
 class TestMarketDataGuard(unittest.TestCase):
+
+    def test_sector_pagination_fetches_100_plus_50_and_reports_complete(self):
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            page = int(params["pn"])
+            rows = _sector_rows(0, 100) if page == 1 else _sector_rows(100, 50)
+            return {"data": {"total": 150, "diff": list(reversed(rows))}}
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BK0150", return_diagnostics=True
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(all(call["pz"] == "100" for call in calls))
+        self.assertTrue(all(call["fid"] == "f12" for call in calls))
+        self.assertTrue(all(call["po"] == "0" for call in calls))
+        self.assertEqual(len(stocks), 150)
+        self.assertEqual([row["code"] for row in stocks], sorted(row["code"] for row in stocks))
+        self.assertEqual(diag["requested"], 150)
+        self.assertEqual(diag["fetched"], 150)
+        self.assertEqual(diag["unique"], 150)
+        self.assertEqual(diag["pages"], 2)
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["error"], "")
+
+    def test_sector_pagination_stops_at_total_without_third_page(self):
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            page = int(params["pn"])
+            if page > 2:
+                raise AssertionError("third page must not be requested")
+            return {"data": {"total": 200, "diff": _sector_rows((page - 1) * 100, 100)}}
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BK0200", return_diagnostics=True
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(stocks), 200)
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["pages"], 2)
+
+    def test_sector_pagination_rejects_total_above_bounded_capacity_on_first_page(self):
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_json",
+            return_value={"data": {"total": 6001, "diff": _sector_rows(0, 100)}},
+        ) as fetch:
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKOVERSIZED", return_diagnostics=True
+            )
+
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(len(stocks), 100)
+        self.assertEqual(diag["requested"], 6001)
+        self.assertEqual(diag["pages"], 1)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "total_exceeds_limit")
+
+    def test_sector_pagination_absolute_page_guard_stops_before_extra_request(self):
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            page = int(params["pn"])
+            rows = _sector_rows(0, 100) if page == 1 else _sector_rows(99, 100)
+            return {"data": {"total": 200, "diff": rows}}
+
+        with patch.object(
+            data_fetcher, "SECTOR_COMPONENT_MAX_PAGES", 2
+        ), patch.object(
+            data_fetcher, "_fetch_eastmoney_json", side_effect=fake
+        ):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKPAGEGUARD", return_diagnostics=True
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual([call["pn"] for call in calls], ["1", "2"])
+        self.assertEqual(len(stocks), 199)
+        self.assertEqual(diag["unique"], 199)
+        self.assertEqual(diag["pages"], 2)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "max_pages_exceeded")
+
+    def test_sector_pagination_accepts_zero_total_as_complete_empty_sector(self):
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_json",
+            return_value={"data": {"total": 0, "diff": []}},
+        ) as fetch:
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKEMPTY", return_diagnostics=True
+            )
+
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(stocks, [])
+        self.assertEqual(diag["requested"], 0)
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["error"], "")
+
+    def test_sector_pagination_stops_on_repeated_page_and_marks_incomplete(self):
+        repeated = _sector_rows(0, 100)
+
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_json",
+            return_value={"data": {"total": 150, "diff": repeated}},
+        ) as fetch:
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKREPEAT", return_diagnostics=True
+            )
+
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual(len(stocks), 100)
+        self.assertEqual(diag["fetched"], 200)
+        self.assertEqual(diag["unique"], 100)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "no_new_codes")
+
+    def test_sector_pagination_preserves_partial_rows_when_page_two_fails(self):
+        def fake(params):
+            if int(params["pn"]) == 2:
+                raise RuntimeError("page two unavailable")
+            return {"data": {"total": 150, "diff": _sector_rows(0, 100)}}
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKFAIL", return_diagnostics=True
+            )
+
+        self.assertEqual(len(stocks), 100)
+        self.assertEqual(diag["pages"], 1)
+        self.assertEqual(diag["unique"], 100)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "request_failed:RuntimeError")
+        self.assertNotIn("page two unavailable", diag["error"])
+
+    def test_sector_pagination_structures_missing_total_short_and_empty_failures(self):
+        cases = {
+            "missing_total": [
+                {"data": {"diff": _sector_rows(0, 50)}},
+            ],
+            "short_page_before_total": [
+                {"data": {"total": 150, "diff": _sector_rows(0, 50)}},
+            ],
+            "empty_page_before_total": [
+                {"data": {"total": 150, "diff": _sector_rows(0, 100)}},
+                {"data": {"total": 150, "diff": []}},
+            ],
+        }
+
+        for expected_error, responses in cases.items():
+            with self.subTest(expected_error=expected_error), patch.object(
+                data_fetcher,
+                "_fetch_eastmoney_json",
+                side_effect=responses,
+            ):
+                stocks, diag = data_fetcher.fetch_sector_stocks(
+                    f"BK-{expected_error}", return_diagnostics=True
+                )
+
+            self.assertTrue(stocks)
+            self.assertFalse(diag["complete"])
+            self.assertEqual(diag["error"], expected_error)
+            for key in (
+                "sector_code", "page_size", "requested", "fetched",
+                "unique", "pages", "complete", "error",
+            ):
+                self.assertIn(key, diag)
+
+    def test_run_main_uses_beijing_date_for_aware_generated_at(self):
+        captured = []
+
+        class StopAfterDateCapture(RuntimeError):
+            pass
+
+        def stop_collect(*args, **kwargs):
+            captured.append(kwargs.get("required_date"))
+            raise StopAfterDateCapture
+
+        generated_at = datetime(2026, 6, 30, 16, 30, tzinfo=timezone.utc)
+        with patch.object(run, "collect_daily_data", side_effect=stop_collect):
+            with self.assertRaises(StopAfterDateCapture):
+                run.main(debug=False, preview=False, generated_at=generated_at)
+
+        self.assertEqual(captured, ["2026-07-01"])
+
+    def test_closed_run_with_same_day_cache_fetches_full_remote_window(self):
+        end = date(2026, 6, 30)
+        dates = [(end - timedelta(days=99 - i)).isoformat() for i in range(100)]
+        cached_records = [
+            {"date": d, "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100}
+            for d in dates
+        ]
+        remote_calls = []
+
+        def remote(_code, count=100):
+            remote_calls.append(count)
+            return _kline(dates[-count:], [20.0] * count)
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
+        ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
+            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            with patch.object(data_fetcher, "_fetch_daily_kline_remote", side_effect=remote):
+                rows = data_fetcher.batch_fetch_daily_klines(
+                    [{"code": "600000", "name": "测试股"}],
+                    required_date="2026-06-30",
+                    force_refresh=True,
+                )
+
+        self.assertEqual(remote_calls, [100])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["data_status"]["source"], "tencent")
+        self.assertEqual(float(rows[0]["klines"]["closes"][-1]), 20.0)
+
+    def test_closed_run_remote_failure_marks_cache_untrusted_and_not_official(self):
+        end = date(2026, 6, 30)
+        dates = [(end - timedelta(days=99 - i)).isoformat() for i in range(100)]
+        cached_records = [
+            {"date": d, "open": 10, "high": 10, "low": 10, "close": 10, "volume": 100}
+            for d in dates
+        ]
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
+        ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
+            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+                {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+            ]), patch.object(
+                data_fetcher,
+                "fetch_sector_stocks",
+                side_effect=_complete_sector_fetch(
+                    {"BK0001": [{"code": "600000", "name": "测试股"}]}
+                ),
+            ), patch.object(
+                data_fetcher, "_fetch_daily_kline_remote", return_value=None
+            ), patch.object(
+                data_fetcher,
+                "fetch_shanghai_index",
+                return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+            ):
+                result = data_fetcher.collect_daily_data(
+                    required_date="2026-06-30",
+                    generated_at=closed,
+                )
+
+        self.assertEqual(result["stocks"][0]["data_status"]["source"], "kline_cache")
+        self.assertFalse(result["data_quality"]["sources_trusted"])
+        self.assertFalse(result["data_quality"]["is_official"])
+
+    def test_closed_producer_rejects_untrusted_source_and_date_mismatch(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        base_row = {
+            "code": "600000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        for field, value in (("source", "unknown"), ("latest_date", "2026-06-29")):
+            with self.subTest(field=field):
+                row = dict(base_row)
+                row["data_status"] = dict(base_row["data_status"])
+                row["data_status"][field] = value
+                with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+                    {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+                ]), patch.object(
+                    data_fetcher,
+                    "fetch_sector_stocks",
+                    side_effect=_complete_sector_fetch(
+                        {"BK0001": [{"code": "600000", "name": "测试股"}]}
+                    ),
+                ), patch.object(
+                    data_fetcher, "batch_fetch_daily_klines", return_value=[row]
+                ), patch.object(
+                    data_fetcher,
+                    "fetch_shanghai_index",
+                    return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+                ):
+                    result = data_fetcher.collect_daily_data(
+                        required_date="2026-06-30",
+                        generated_at=closed,
+                    )
+
+                self.assertFalse(result["data_quality"]["is_official"])
+
+    def test_collect_daily_data_intraday_has_close_metadata_but_is_not_official(self):
+        as_of = datetime(2026, 6, 30, 14, 35, tzinfo=timezone(timedelta(hours=8)))
+        stock_row = {
+            "code": "600000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+        ]), patch.object(
+            data_fetcher,
+            "fetch_sector_stocks",
+            side_effect=_complete_sector_fetch(
+                {"BK0001": [{"code": "600000", "name": "测试股"}]}
+            ),
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=as_of,
+            )
+
+        quality = result["data_quality"]
+        self.assertEqual(quality["bar_state"], "intraday")
+        self.assertEqual(quality["generated_at"], "2026-06-30T14:35:00+08:00")
+        self.assertEqual(quality["as_of"], "2026-06-30T14:35:00+08:00")
+        self.assertFalse(quality["is_official"])
+
+    def test_collect_daily_data_closed_run_forces_daily_refresh_and_can_be_official(self):
+        as_of = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        calls = []
+
+        def fake_batch(stocks, required_date=None, allow_stale=False, max_workers=10, force_refresh=False):
+            calls.append(force_refresh)
+            return [{
+                "code": "600000",
+                "name": "测试股",
+                "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+                "data_status": {
+                    "daily": "verified",
+                    "latest_date": "2026-06-30",
+                    "source": "tencent",
+                    "bars": 2,
+                    "stale": False,
+                },
+            }]
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+        ]), patch.object(
+            data_fetcher,
+            "fetch_sector_stocks",
+            side_effect=_complete_sector_fetch(
+                {"BK0001": [{"code": "600000", "name": "测试股"}]}
+            ),
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", side_effect=fake_batch
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=as_of,
+            )
+
+        self.assertEqual(calls, [True])
+        self.assertEqual(result["data_quality"]["bar_state"], "closed")
+        self.assertTrue(result["data_quality"]["sources_trusted"])
+        self.assertTrue(result["data_quality"]["is_official"])
+
+    def test_batch_fetch_daily_klines_propagates_close_refresh(self):
+        kline = _kline(["2026-06-30"] * 60, [10.0] * 60)
+        with patch.object(
+            data_fetcher, "KLINE_REPOSITORY_ENABLED", False
+        ), patch.object(data_fetcher, "fetch_daily_kline", return_value=kline) as fetch:
+            data_fetcher.batch_fetch_daily_klines(
+                [{"code": "600000", "name": "测试股"}],
+                required_date="2026-06-30",
+                force_refresh=True,
+            )
+
+        fetch.assert_called_once_with("600000", force_refresh=True)
 
     def test_build_kline_status_marks_verified_and_stale(self):
         verified = _kline(
@@ -129,6 +591,7 @@ class TestMarketDataGuard(unittest.TestCase):
     def test_fetch_sector_stocks_normalizes_market_caps_to_yi(self):
         payload = {
             "data": {
+                "total": 1,
                 "diff": [
                     {
                         "f12": "300001",
@@ -182,7 +645,9 @@ class TestMarketDataGuard(unittest.TestCase):
             "BK0002": [{"code": "600000", "name": "测试股", "change_pct": 1.4}],
         }
 
-        def fake_batch_fetch(stocks, required_date=None, allow_stale=False, max_workers=10):
+        def fake_batch_fetch(
+            stocks, required_date=None, allow_stale=False, max_workers=10, force_refresh=False
+        ):
             stock = stocks[0]
             self.assertEqual(stock["code"], "600000")
             self.assertEqual(stock["sector"], "AI")
@@ -209,7 +674,7 @@ class TestMarketDataGuard(unittest.TestCase):
             ]
 
         with patch.object(data_fetcher, "fetch_sector_flow", return_value=sectors), \
-             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=lambda code: sector_stocks.get(code, [])), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=_complete_sector_fetch(sector_stocks)), \
              patch.object(data_fetcher, "batch_fetch_daily_klines", side_effect=fake_batch_fetch), \
              patch.object(data_fetcher, "fetch_shanghai_index", return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0])):
             result = data_fetcher.collect_daily_data(required_date="2026-06-30")
@@ -224,13 +689,179 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(result["data_quality"]["sector_source"], "eastmoney")
         self.assertTrue(result["data_quality"]["is_official"])
 
+    def test_collect_daily_data_records_sector_diagnostics_and_fails_closed(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        sector_rows = [{"code": "600000", "name": "测试股"}]
+
+        def incomplete_sector_fetch(code, *, return_diagnostics=False):
+            diag = {
+                "sector_code": code,
+                "page_size": 100,
+                "requested": 150,
+                "fetched": 100,
+                "unique": 1,
+                "pages": 1,
+                "complete": False,
+                "error": "request_failed:RuntimeError",
+            }
+            return (sector_rows, diag) if return_diagnostics else sector_rows
+
+        stock_row = {
+            "code": "600000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+        ]), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=incomplete_sector_fetch
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=closed,
+            )
+
+        quality = result["data_quality"]
+        self.assertTrue(quality["stock_pool_incomplete"])
+        self.assertFalse(quality["is_official"])
+        self.assertEqual(len(quality["sector_component_diagnostics"]), 1)
+        self.assertEqual(
+            quality["sector_component_diagnostics"][0]["error"],
+            "request_failed:RuntimeError",
+        )
+
+    def test_collect_daily_data_marks_unrequested_sectors_after_five_incomplete_empty_failures(self):
+        sectors = [
+            {"code": f"BK{index:04d}", "name": f"板块{index}", "flow": 1}
+            for index in range(1, 8)
+        ]
+        calls = []
+
+        def incomplete_empty(code, *, return_diagnostics=False):
+            calls.append(code)
+            diag = {
+                "sector_code": code,
+                "page_size": 100,
+                "requested": 100,
+                "fetched": 0,
+                "unique": 0,
+                "pages": 1,
+                "complete": False,
+                "error": "empty_page_before_total",
+            }
+            return ([], diag) if return_diagnostics else []
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "config.KLINE_CACHE_DIR", tmp
+        ), patch.object(
+            data_fetcher, "fetch_sector_flow", return_value=sectors
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=incomplete_empty
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=datetime(
+                    2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8))
+                ),
+            )
+
+        quality = result["data_quality"]
+        diagnostics = quality["sector_component_diagnostics"]
+        self.assertEqual(calls, [sector["code"] for sector in sectors[:5]])
+        self.assertEqual(len(diagnostics), 7)
+        self.assertTrue(quality["stock_pool_incomplete"])
+        self.assertFalse(quality["is_official"])
+        self.assertEqual(
+            [diag["error"] for diag in diagnostics[5:]],
+            ["not_requested_after_consecutive_failures"] * 2,
+        )
+        self.assertTrue(all(not diag["complete"] for diag in diagnostics[5:]))
+        self.assertTrue(
+            any("未请求剩余2个板块" in warning for warning in quality["warnings"]),
+            quality["warnings"],
+        )
+
+    def test_collect_daily_data_does_not_count_complete_empty_sector_as_failure(self):
+        sectors = [
+            {"code": f"BK{index:04d}", "name": f"板块{index}", "flow": 1}
+            for index in range(1, 7)
+        ]
+        calls = []
+        final_stock = {"code": "600000", "name": "测试股"}
+
+        def complete_fetch(code, *, return_diagnostics=False):
+            calls.append(code)
+            rows = [final_stock] if code == sectors[-1]["code"] else []
+            diag = {
+                "sector_code": code,
+                "page_size": 100,
+                "requested": len(rows),
+                "fetched": len(rows),
+                "unique": len(rows),
+                "pages": 1,
+                "complete": True,
+                "error": "",
+            }
+            return (rows, diag) if return_diagnostics else rows
+
+        stock_row = {
+            **final_stock,
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+
+        with patch.object(
+            data_fetcher, "fetch_sector_flow", return_value=sectors
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=complete_fetch
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30", generated_at=closed
+            )
+
+        quality = result["data_quality"]
+        self.assertEqual(calls, [sector["code"] for sector in sectors])
+        self.assertEqual(len(quality["sector_component_diagnostics"]), 6)
+        self.assertFalse(quality["stock_pool_incomplete"])
+        self.assertTrue(quality["is_official"])
+
     def test_collect_daily_data_static_sector_fallback_sets_fallback_used(self):
         stock_calls = [{"code": "600000", "name": "测试股"}]
 
-        def fake_sector_stocks(code):
-            if code == "BK0480":
-                return stock_calls
-            return []
+        fake_sector_stocks = _complete_sector_fetch({"BK0480": stock_calls})
 
         with patch.object(data_fetcher, "fetch_sector_flow", return_value=[]), \
              patch.object(data_fetcher, "fetch_sector_stocks", side_effect=fake_sector_stocks), \
@@ -267,7 +898,9 @@ class TestMarketDataGuard(unittest.TestCase):
         stale_kline = _kline(["2026-06-29", "2026-06-29"] * 30, [10.0] * 60)
 
         with patch.object(data_fetcher, "fetch_sector_flow", return_value=sectors), \
-             patch.object(data_fetcher, "fetch_sector_stocks", return_value=[{"code": "600000", "name": "测试股"}]), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=_complete_sector_fetch(
+                 {"BK0001": [{"code": "600000", "name": "测试股"}]}
+             )), \
              patch.object(data_fetcher, "fetch_daily_kline", return_value=stale_kline), \
              patch.object(data_fetcher, "fetch_shanghai_index", return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0])):
             result = data_fetcher.collect_daily_data(
@@ -382,9 +1015,9 @@ class TestMarketDataGuard(unittest.TestCase):
         with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
             {"code": "BK0001", "name": "测试板块", "flow_str": "1亿"}
         ]), \
-             patch.object(data_fetcher, "fetch_sector_stocks", return_value=[
-                 {"code": "600000", "name": "测试股"}
-             ]), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=_complete_sector_fetch(
+                 {"BK0001": [{"code": "600000", "name": "测试股"}]}
+             )), \
              patch.object(data_fetcher, "batch_fetch_daily_klines", return_value=[
                  {"code": "600000", "name": "测试股", "klines": _kline(["2026-06-25", "2026-06-26"], [10, 11])}
              ]), \
@@ -400,6 +1033,78 @@ class TestMarketDataGuard(unittest.TestCase):
 
 
 class TestDailyRunScriptGuard(unittest.TestCase):
+
+    def test_validator_failure_stops_script_before_any_git_command(self):
+        source_script = Path("daily_run.sh").read_text(encoding="utf-8")
+        fixed_timestamp = datetime(
+            2026, 6, 30, 12, 0, tzinfo=timezone(timedelta(hours=8))
+        ).timestamp()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "daily_run.sh").write_text(source_script, encoding="utf-8")
+            (root / ".zshrc").write_text("", encoding="utf-8")
+            (root / "docs" / "data").mkdir(parents=True)
+            (root / "docs" / "data" / "2026-06-30.json").write_text("{}", encoding="utf-8")
+            (root / "docs" / "index.html").write_text("ok", encoding="utf-8")
+            os.utime(root / "docs" / "data" / "2026-06-30.json", (fixed_timestamp, fixed_timestamp))
+            os.utime(root / "docs" / "index.html", (fixed_timestamp, fixed_timestamp))
+
+            (root / "scripts").mkdir()
+            (root / "scripts" / "validate_today_report.py").write_text(
+                "import os\n"
+                "with open(os.environ['VALIDATOR_LOG'], 'a', encoding='utf-8') as f:\n"
+                "    f.write('called\\n')\n"
+                "raise SystemExit(9)\n",
+                encoding="utf-8",
+            )
+            (root / "run.py").write_text("def main(*args, **kwargs):\n    return None\n", encoding="utf-8")
+            (root / "chanlun").mkdir()
+            (root / "chanlun" / "__init__.py").write_text("", encoding="utf-8")
+            session_module = "class _Session:\n    trust_env = True\nSESSION = _Session()\n"
+            (root / "chanlun" / "data_fetcher.py").write_text(session_module, encoding="utf-8")
+            (root / "chanlun" / "market_news.py").write_text(session_module, encoding="utf-8")
+
+            fake_bin = root / "bin"
+            fake_bin.mkdir()
+            git_log = root / "git.log"
+            validator_log = root / "validator.log"
+            fake_git = fake_bin / "git"
+            fake_git.write_text(
+                '#!/bin/zsh\nprint -r -- "$@" >> "$GIT_LOG"\nexit 0\n',
+                encoding="utf-8",
+            )
+            fake_git.chmod(0o755)
+            fake_date = fake_bin / "date"
+            fake_date.write_text(
+                '#!/bin/zsh\nif [[ "$1" == "+%Y-%m-%d" ]]; then print "2026-06-30"; '
+                'else print "2026-06-30 15:05:00"; fi\n',
+                encoding="utf-8",
+            )
+            fake_date.chmod(0o755)
+
+            env = dict(os.environ)
+            env.update({
+                "HOME": str(root),
+                "PATH": f"{fake_bin}{os.pathsep}{env.get('PATH', '')}",
+                "GIT_LOG": str(git_log),
+                "VALIDATOR_LOG": str(validator_log),
+            })
+            completed = subprocess.run(
+                ["/bin/zsh", str(root / "daily_run.sh")],
+                cwd=str(root),
+                env=env,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+            )
+            git_calls = git_log.read_text(encoding="utf-8") if git_log.exists() else ""
+            validator_calls = validator_log.read_text(encoding="utf-8").splitlines()
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertEqual(validator_calls, ["called", "called"])
+        self.assertEqual(git_calls, "", completed.stdout + completed.stderr)
 
     def test_daily_run_does_not_skip_existing_output_after_recheck_time(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:
@@ -417,8 +1122,215 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         self.assertIn('"docs/data/${TODAY}.json"', script)
         self.assertNotIn("git add docs/index.html docs/data.json docs/data/ docs/20*/", script)
 
+    def test_daily_run_revalidates_immediately_before_staging(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        self.assertIn("set -e", script)
+        last_validator = script.rfind('/usr/bin/python3 scripts/validate_today_report.py "$TODAY"')
+        git_add = script.find("git add \\")
+        self.assertGreater(last_validator, 0)
+        self.assertGreater(git_add, last_validator)
+
 
 class TestReportContractGuard(unittest.TestCase):
+
+    def test_validate_report_contract_reports_workspace_stale_row_once(self):
+        report = _official_empty_report()
+        report["workspace"]["views"]["highlights"] = [{
+            "code": "600000",
+            "change_pct": 1.0,
+            "current_price": 10.0,
+            "data_status": {"daily": "stale_cache"},
+        }]
+
+        errors = validate_report_contract(report)
+
+        stale_errors = [
+            error for error in errors
+            if "highlights row has stale daily cache" in error
+        ]
+        self.assertEqual(stale_errors, [
+            "highlights row has stale daily cache in official report: code=600000"
+        ])
+
+    def test_validate_report_contract_rejects_decision_action_conflicts(self):
+        executable_actions = ("可上车", "等回踩", "慎追")
+        for decision_code in ("reject", "observe"):
+            for action in executable_actions:
+                with self.subTest(decision_code=decision_code, action=action):
+                    report = _official_empty_report()
+                    report["workspace"]["views"]["main"] = [{
+                        "code": "600000",
+                        "change_pct": 1.0,
+                        "current_price": 10.0,
+                        "action": action,
+                        "decision_engine_v1": {"decision_code": decision_code},
+                        "data_status": {"daily": "verified"},
+                    }]
+
+                    errors = validate_report_contract(report)
+
+                    self.assertTrue(
+                        any("decision/action conflict" in error for error in errors),
+                        errors,
+                    )
+
+    def test_validate_report_contract_allows_legal_or_legacy_decision_actions(self):
+        cases = (
+            ("recommend", "可上车"),
+            ("observe", "仅观察"),
+            ("reject", "仅观察"),
+            (None, "可上车"),
+        )
+        for decision_code, action in cases:
+            with self.subTest(decision_code=decision_code, action=action):
+                report = _official_empty_report()
+                row = {
+                    "code": "600000",
+                    "change_pct": 1.0,
+                    "current_price": 10.0,
+                    "action": action,
+                    "data_status": {"daily": "verified"},
+                }
+                if decision_code is not None:
+                    row["decision_engine_v1"] = {"decision_code": decision_code}
+                report["workspace"]["views"]["main"] = [row]
+
+                errors = validate_report_contract(report)
+
+                self.assertFalse(
+                    any("decision/action conflict" in error for error in errors),
+                    errors,
+                )
+
+    def test_validate_official_requires_timezone_aware_post_close_timestamps(self):
+        cases = (
+            ("as_of", "2026-06-30T14:35:00+08:00", "as_of must be at or after 15:00 Asia/Shanghai"),
+            ("as_of", "2026-06-30T15:05:00", "as_of must include timezone"),
+            ("generated_at", "2026-06-30T15:05:00", "generated_at must include timezone"),
+        )
+        for field, value, expected in cases:
+            with self.subTest(field=field, value=value):
+                report = _official_empty_report()
+                report["data_quality"][field] = value
+                errors = validate_report_contract(report)
+                self.assertTrue(any(expected in err for err in errors), errors)
+
+    def test_validate_official_normalizes_aware_as_of_to_beijing_time(self):
+        report = _official_empty_report()
+        report["data_quality"]["generated_at"] = "2026-06-30T07:05:00+00:00"
+        report["data_quality"]["as_of"] = "2026-06-30T07:05:00+00:00"
+
+        self.assertEqual(validate_report_contract(report), [])
+
+    def test_validate_report_contract_rejects_untrusted_source_and_as_of_mismatch(self):
+        for field, value, expected in (
+            ("sources_trusted", False, "sources_trusted == True"),
+            ("report_date", "2026-06-29", "report date consistency"),
+            ("as_of", "2026-06-29T15:05:00+08:00", "as_of date == report_date"),
+        ):
+            with self.subTest(field=field):
+                report = _official_empty_report()
+                report["data_quality"][field] = value
+                errors = validate_report_contract(report)
+                self.assertTrue(any(expected in err for err in errors), errors)
+
+    def test_validate_report_contract_rejects_official_incomplete_or_unknown_stock_pool(self):
+        for missing, value in ((False, True), (True, None)):
+            with self.subTest(missing=missing):
+                report = _official_empty_report()
+                if missing:
+                    report["data_quality"].pop("stock_pool_incomplete")
+                else:
+                    report["data_quality"]["stock_pool_incomplete"] = value
+
+                errors = validate_report_contract(report)
+
+                self.assertTrue(
+                    any("stock_pool_incomplete == False" in err for err in errors),
+                    errors,
+                )
+
+    def test_validate_report_contract_rejects_official_without_closed_metadata(self):
+        report = {
+            "date": "2026-06-30",
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+            "data_quality": {
+                "report_date": "2026-06-30",
+                "generated_at": "2026-06-30T14:35:00+08:00",
+                "as_of": "2026-06-30T14:35:00+08:00",
+                "bar_state": "intraday",
+                "sources_trusted": True,
+                "is_trading_day": True,
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("bar_state == 'closed'" in err for err in errors))
+
+        for missing_key, expected_error in (
+            ("generated_at", "valid data_quality.generated_at"),
+            ("as_of", "valid data_quality.as_of"),
+            ("bar_state", "bar_state == 'closed'"),
+        ):
+            with self.subTest(missing_key=missing_key):
+                missing = dict(report)
+                missing["data_quality"] = dict(report["data_quality"])
+                missing["data_quality"].pop(missing_key)
+                missing_errors = validate_report_contract(missing)
+                self.assertTrue(any(expected_error in err for err in missing_errors))
+
+    def test_validate_report_contract_requires_official_for_publish_but_keeps_preview_compatible(self):
+        report = {
+            "date": "2026-06-30",
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+            "data_quality": {
+                "report_date": "2026-06-30",
+                "generated_at": "2026-06-30T14:35:00+08:00",
+                "as_of": "2026-06-30T14:35:00+08:00",
+                "bar_state": "intraday",
+                "sources_trusted": True,
+                "is_trading_day": True,
+                "is_official": False,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
+        errors = validate_report_contract(report, require_official=True)
+        self.assertTrue(any("requires data_quality.is_official == True" in err for err in errors))
+
+    def test_validate_report_contract_requires_literal_true_for_official_publish(self):
+        for invalid_value in ("false", "true", 1):
+            with self.subTest(invalid_value=invalid_value):
+                report = _official_empty_report()
+                report["data_quality"]["is_official"] = invalid_value
+
+                errors = validate_report_contract(report, require_official=True)
+
+                self.assertTrue(
+                    any("requires data_quality.is_official == True" in err for err in errors),
+                    errors,
+                )
 
     def test_validate_report_contract_allows_raw_change_fallback(self):
         report = {

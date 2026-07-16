@@ -153,6 +153,10 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "sector": sector_name,
             "type": "强势启动候选",
             "tier": "candidate",
+            "category": "A",
+            "quality_tier": "",
+            "source_channel": "low_position",
+            "view": "main",
             "source_type": "日线强势启动",
             "startup_reason": startup_reason,
             "startup_signals": startup_signals,
@@ -239,6 +243,9 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
             seed["result_30min"] = min30_result
             seed["type"] = "强势启动候选"
             seed["tier"] = "candidate"
+            seed["category"] = "A"
+            seed["source_channel"] = "low_position"
+            seed["view"] = "main"
             seed["avoid_chase"] = False
 
             closes_30 = min30_result.closes
@@ -427,12 +434,22 @@ def _check_30min_confirmations(min30_result, seed):
 
 def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
     """Build a startup watchlist item."""
+    if "涨停" in str(watch_reason) or "涨停" in str(startup_reason):
+        reason_code = "overextended"
+        failure_gate = "chase_risk"
+    else:
+        reason_code = "waiting_30m_confirm"
+        failure_gate = "30min_confirm"
     return {
         "code": seed["code"],
         "name": seed["name"],
         "sector": seed.get("sector", ""),
         "type": "强势启动观察",
         "tier": "watch",
+        "category": "C",
+        "quality_tier": "",
+        "source_channel": "low_position",
+        "view": "observation",
         "source_type": "日线强势启动",
         "startup_reason": startup_reason,
         "startup_signals": seed.get("startup_signals", []),
@@ -444,7 +461,15 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "close": seed.get("close", 0),
         "avoid_chase": True,
         "watch_reason": watch_reason,
+        "reason_code": reason_code,
+        "failure_gate": failure_gate,
+        "actual_value": {
+            "change_pct": seed.get("change_pct", 0),
+            "volume_ratio": seed.get("volume_ratio", 0),
+        },
+        "upgrade_conditions": list(next_day_conditions),
         "next_day_conditions": next_day_conditions,
+        "cancel_conditions": ["跌破启动参考位", "放量长阴破坏结构"],
         "pivot_info": seed.get("pivot_info", {}),
         "buy_points": [],
         "closes": seed.get("closes", []),

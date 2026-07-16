@@ -2,6 +2,19 @@
 缠论选股系统 — 所有可调参数
 """
 
+import os
+from pathlib import Path
+
+
+def _resolve_shared_market_history_db_path(project_root, override=None):
+    """Resolve one repository-level DB shared by all local worktrees."""
+    if override:
+        return str(Path(override).expanduser().resolve())
+    root = Path(project_root).resolve()
+    if root.parent.name == ".worktrees":
+        root = root.parent.parent
+    return str(root / ".cache" / "chanlun" / "market_history.sqlite")
+
 # ============================================================
 # 运行时间
 # ============================================================
@@ -94,6 +107,20 @@ STRONG_STARTUP_LOW_POSITION_120D_RATIO = 0.82
 STRONG_STARTUP_PRE_START_LOW_RATIO = 1.12
 
 # ============================================================
+# 趋势延续候选（与低位强启动正交）
+# ============================================================
+ENABLE_TREND_CONTINUATION = True
+TREND_CONTINUATION_MIN_VOLUME_RATIO = 1.5
+TREND_CONTINUATION_CONDITIONAL_VOLUME_RATIO = 1.3
+TREND_CONTINUATION_WATCH_VOLUME_RATIO = 1.2
+TREND_CONTINUATION_STRONG_STRUCTURE_WATCH_VOLUME_RATIO = 1.0
+TREND_CONTINUATION_MAX_EXTENSION_PCT = 12.0
+TREND_CONTINUATION_MAX_GAP_PCT = 5.0
+OBSERVATION_TOP_N = 5
+OBSERVATION_MAX_PER_SECTOR = 2
+OBSERVATION_MAX_PER_REASON = 2
+
+# ============================================================
 # 信号时效
 # ============================================================
 SIGNAL_MAX_AGE_TRADING_DAYS = 10
@@ -106,6 +133,10 @@ PUBLIC_DATES = ["2026-05-26", "2026-05-27"]
 FULL_ACCESS_KEY = "02951e20-6de2-418c-8bab-463647220883"
 FULL_ACCESS_KEY_SALT = "chanlun-report-salt-v1"
 
+# 禁止用买点价格与最新收盘价推导未经校准的位置距离参与决策。
+# 显式提供的合法 distance_from_reference_pct 不受此开关影响。
+ENABLE_DISTANCE_DECISION = False
+
 # ============================================================
 # K线本地缓存
 # ============================================================
@@ -114,6 +145,40 @@ KLINE_CACHE_DIR = ".cache/chanlun"
 KLINE_CACHE_VERBOSE = False
 KLINE_CACHE_FORCE_REFRESH = False
 KLINE_CACHE_TRADING_DAYS = 10
+MARKET_HISTORY_DB_PATH = _resolve_shared_market_history_db_path(
+    Path(__file__).resolve().parent,
+    override=os.environ.get("CHANLUN_MARKET_HISTORY_DB_PATH"),
+)
+KLINE_REPOSITORY_ENABLED = True
+KLINE_REPOSITORY_MODE = "ongoing"
+MARKET_HISTORY_CUTOVER_MODE = os.environ.get(
+    "CHANLUN_MARKET_DATA_MODE", "sqlite"
+).strip().lower()
+if MARKET_HISTORY_CUTOVER_MODE not in {"shadow", "sqlite"}:
+    raise ValueError("CHANLUN_MARKET_DATA_MODE must be shadow or sqlite")
+# 迁移期只读旧 JSON 做数值诊断，不允许旧 JSON 回填或覆盖 SQLite。
+KLINE_REPOSITORY_SHADOW_JSON = MARKET_HISTORY_CUTOVER_MODE == "shadow"
+RECALL_STRATEGY_MODE = os.environ.get(
+    "CHANLUN_RECALL_STRATEGY_MODE", "active"
+).strip().lower()
+if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
+    raise ValueError(
+        "CHANLUN_RECALL_STRATEGY_MODE must be legacy, shadow or active"
+    )
+ENABLE_FULL_A_UNIVERSE = True
+FULL_A_LOW_QUOTA = 350
+FULL_A_TREND_QUOTA = 350
+FULL_A_NEUTRAL_QUOTA = 100
+FULL_A_BASE_LIMIT = 800
+FULL_A_OVERLAY_LIMIT = 400
+FULL_A_FINAL_LIMIT = 1200
+# 题材覆盖不可用时，将原本预留给 overlay 的容量回补给基础召回。
+# 三日样本的容量回放显示 1200 是收益拐点，继续扩到 1400/1600 边际收益较低。
+FULL_A_NO_OVERLAY_LOW_QUOTA = 525
+FULL_A_NO_OVERLAY_TREND_QUOTA = 525
+FULL_A_NO_OVERLAY_NEUTRAL_QUOTA = 150
+# 数据库尚未覆盖至少 800 只合格股票时保留原板块池，避免迁移期缩池。
+FULL_A_MIN_ELIGIBLE_COUNT = 800
 DAY_KLINE_CACHE_RETENTION_TRADING_DAYS = max(DAY_LOOKBACK, KLINE_CACHE_TRADING_DAYS)
 MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS = KLINE_CACHE_TRADING_DAYS
 MIN15_KLINE_CACHE_RETENTION_TRADING_DAYS = KLINE_CACHE_TRADING_DAYS
@@ -127,6 +192,8 @@ MIN15_KLINE_INCREMENTAL_FETCH_COUNT = 32
 MIN_LISTED_DAYS = 60               # 上市最少天数
 MIN_DAILY_AMOUNT = 50_000_000      # 近5日日均最低成交额（元），排除僵尸股
 TOP_SECTOR_COUNT = 20              # 取资金流入TOP N板块
+SECTOR_COMPONENT_PAGE_SIZE = 100   # 东方财富板块成分股单页大小
+SECTOR_COMPONENT_MAX_PAGES = 60    # 防御异常total，最多覆盖6000只股票
 
 # ============================================================
 # 涨停/跌停判断阈值

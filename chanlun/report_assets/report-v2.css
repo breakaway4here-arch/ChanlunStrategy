@@ -1245,6 +1245,12 @@ body {
   grid-column: span 2;
 }
 
+.market-sentiment-chart {
+  width: 100%;
+  height: 260px;
+  margin-top: 12px;
+}
+
 .aux-module {
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);

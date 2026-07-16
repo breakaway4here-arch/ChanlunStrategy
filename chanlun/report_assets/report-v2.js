@@ -1,10 +1,11 @@
 (function () {
   'use strict';
 
-  var DEFAULT_VIEW_ORDER = ['highlights', 'main', 'acceleration', 'luojie', 'confirming', 'baseline'];
+  var DEFAULT_VIEW_ORDER = ['main', 'highlights', 'observation_top5', 'acceleration', 'luojie', 'confirming', 'growth_quality', 'baseline'];
   var DEFAULT_VIEW_LABELS = {
     highlights: '看点 Top10',
     main: '主推',
+    observation_top5: '观察 Top5',
     acceleration: '加速',
     luojie: '罗姐池',
     confirming: '等确认',
@@ -13,6 +14,7 @@
   var DEFAULT_VIEW_DESCRIPTIONS = {
     highlights: '看点 Top10：跨池混合优先观察榜。用于快速扫今天最值得看的标的，不等于全部可立即买入；请结合身份标签、共振标签和操作状态判断。',
     main: '主推：融合推荐池，可执行优先。来自纯净缠论结构 + 30min 确认 + 市场状态 / MA 多头 / admission 门槛过滤。',
+    observation_top5: '观察 Top5：近失样本观察榜，不计入主推荐；显示失败门、升级条件和取消条件。',
     acceleration: '加速：强市场下的情绪加速榜。用于从强势启动类候选中二次排序，不是常规主推荐池。',
     luojie: '罗姐池：硬方向 + 15min 生命线观察，不等同于主推。',
     confirming: '等确认：日线已有启动线索，但等待 30min 或次日确认，观察为主，不直接追高。',
@@ -25,11 +27,12 @@
   var state = {
     data: null,
     workspace: null,
-    currentView: 'highlights',
+    currentView: 'main',
     activeItem: null,
     isMobile: false,
     chartInstance: null,
     chartMount: null,
+    sentimentChartInstance: null,
     rawPoolCandidates: null,
     top10: {
       jobId: '',
@@ -644,6 +647,7 @@
       picks_fusion: asArray(data.picks_fusion),
       picks_pure: asArray(data.picks_pure),
       startup_watchlist: asArray(data.startup_watchlist),
+      observation_watchlist: asArray(data.observation_watchlist),
       next_day_boom: asArray((nextDayBoom && nextDayBoom.candidates) || []),
       luojie_pool: asArray((luojiePool && luojiePool.candidates) || []),
     };
@@ -664,6 +668,9 @@
     }
     if (key === 'confirming') {
       return pools.startup_watchlist;
+    }
+    if (key === 'observation_top5' || key === 'observation_watchlist') {
+      return pools.observation_watchlist;
     }
     if (key === 'baseline') {
       return pools.picks_pure;
@@ -1020,6 +1027,45 @@
 
   function buildMarketTemperature(data) {
     data = data || {};
+    var sentiment = data.market_sentiment || {};
+    var sentimentScore = safeNumber(sentiment.score, null);
+    var sentimentComponents = sentiment.components || {};
+    if (!Number.isFinite(sentimentScore)) {
+      return {
+        score: null,
+        label: '数据不足',
+        tone: 'neutral',
+        insufficient: true,
+        coverage: safeNumber(sentiment.coverage, 0),
+        components: {
+          breadth_score: safeNumber(sentimentComponents.breadth, null),
+          index_score: safeNumber(sentimentComponents.index, null),
+          limit_score: safeNumber(sentimentComponents.limit_ecology, null),
+          volume_score: safeNumber(sentimentComponents.turnover, null),
+          trend_score: safeNumber(sentimentComponents.trend, null),
+        },
+        summary: '核心证据覆盖不足，不输出伪精确市场情绪分。',
+      };
+    }
+    sentimentScore = clamp(sentimentScore, 0, 100);
+    return {
+      score: sentimentScore,
+      label: normalizeString(sentiment.label || getMarketTemperatureLabel(sentimentScore)),
+      tone: getMarketTemperatureTone(sentimentScore),
+      insufficient: false,
+      coverage: safeNumber(sentiment.coverage, 0),
+      components: {
+        breadth_score: safeNumber(sentimentComponents.breadth, null),
+        index_score: safeNumber(sentimentComponents.index, null),
+        limit_score: safeNumber(sentimentComponents.limit_ecology, null),
+        volume_score: safeNumber(sentimentComponents.turnover, null),
+        trend_score: safeNumber(sentimentComponents.trend, null),
+      },
+      summary: normalizeString(sentiment.summary || getMarketTemperatureSummary(sentimentScore)),
+    };
+
+    /* Legacy formula retained only for source compatibility; formal rendering
+       always returns from the evidence-driven V2 branch above. */
     var market = data.market || {};
     var marketItems = getMarketItems(market);
     var items = asArray(marketItems);
@@ -1549,6 +1595,16 @@
     if (raw && raw.volume_ratio !== undefined && raw.volume_ratio !== null) {
       details.push('量能比：' + formatNumber(raw.volume_ratio, 2));
     }
+    if (item.failure_gate) details.push('失败门：' + item.failure_gate);
+    if (item.actual_value !== undefined && item.actual_value !== null) {
+      details.push('实际值：' + (typeof item.actual_value === 'object' ? JSON.stringify(item.actual_value) : item.actual_value));
+    }
+    if (Array.isArray(item.upgrade_conditions) && item.upgrade_conditions.length) {
+      details.push('升级条件：' + item.upgrade_conditions.join('；'));
+    }
+    if (Array.isArray(item.cancel_conditions) && item.cancel_conditions.length) {
+      details.push('取消条件：' + item.cancel_conditions.join('；'));
+    }
 
     if (details.length === 0) {
       details.push('暂无补充细节。');
@@ -1864,6 +1920,9 @@
       if (state.chartInstance) {
         state.chartInstance.resize();
       }
+      if (state.sentimentChartInstance) {
+        state.sentimentChartInstance.resize();
+      }
     }, 0);
   }
 
@@ -1900,28 +1959,119 @@
   function renderMarketTemperatureCard(data) {
     var temperature = buildMarketTemperature(data || {});
     var components = temperature.components || {};
-    var gaugeStyle = '--gauge-score: ' + escapeHtml(temperature.score) + ';';
+    var scoreText = temperature.score === null ? '--' : temperature.score + ' / 100';
+    var gaugeStyle = '--gauge-score: ' + escapeHtml(temperature.score === null ? 0 : temperature.score) + ';';
     var body = ''
       + '<div class="market-temp-gauge is-' + escapeHtml(temperature.tone) + '" style="' + gaugeStyle + '">'
       + '  <div class="gauge-meter" aria-hidden="true"></div>'
-      + '  <div class="gauge-value">' + escapeHtml(temperature.score + ' / 100') + '</div>'
+      + '  <div class="gauge-value">' + escapeHtml(scoreText) + '</div>'
       + '  <div class="gauge-summary">' + escapeHtml(temperature.summary) + '</div>'
       + '</div>'
       + '<div class="metric-pair-grid">'
-      + renderMetricPair('市场温度', temperature.score + ' / 100', 'is-' + escapeHtml(temperature.tone))
+      + renderMetricPair('市场情绪', scoreText, 'is-' + escapeHtml(temperature.tone))
       + renderMetricPair('广度得分', (components.breadth_score === null || components.breadth_score === undefined) ? '--' : components.breadth_score, '')
       + renderMetricPair('指数得分', (components.index_score === null || components.index_score === undefined) ? '--' : components.index_score, '')
-      + renderMetricPair('涨停得分', (components.limit_score === null || components.limit_score === undefined) ? '--' : components.limit_score, '')
+      + renderMetricPair('涨跌停生态', (components.limit_score === null || components.limit_score === undefined) ? '--' : components.limit_score, '')
       + renderMetricPair('量能得分', (components.volume_score === null || components.volume_score === undefined) ? '--' : components.volume_score, '')
-      + renderMetricPair('板块得分', (components.sector_score === null || components.sector_score === undefined) ? '--' : components.sector_score, '')
-      + renderMetricPair('风险扣分', (components.risk_penalty === null || components.risk_penalty === undefined) ? '--' : components.risk_penalty, components.risk_penalty > 0 ? 'is-weak' : '')
-      + '</div>';
+      + renderMetricPair('趋势结构', (components.trend_score === null || components.trend_score === undefined) ? '--' : components.trend_score, '')
+      + renderMetricPair('证据覆盖', Math.round((temperature.coverage || 0) * 100) + '%', '')
+      + '</div>'
+      + '<div id="marketSentimentChart" class="market-sentiment-chart" aria-label="最近20个交易日市场情绪折线图"></div>';
     return renderDecisionCard({
-      title: '市场温度',
-      subtitle: '指数、宽度、情绪的复合温度',
+      title: '市场情绪',
+      subtitle: '全A宽度、涨跌停生态、成交与趋势结构',
       badge: { text: temperature.label, tone: temperature.tone },
       className: 'market-temperature-card',
       bodyHtml: body,
+    });
+  }
+
+  function renderMarketSentimentChart() {
+    var mount = document.getElementById('marketSentimentChart');
+    if (!mount || !window.echarts) return;
+    if (state.sentimentChartInstance) {
+      state.sentimentChartInstance.dispose();
+      state.sentimentChartInstance = null;
+    }
+    var history = asArray((state.data || {}).market_sentiment_history).slice(-20);
+    if (!history.length) {
+      mount.innerHTML = '<div class="decision-empty">暂无可复算的历史情绪证据</div>';
+      return;
+    }
+    var dates = history.map(function (item) { return normalizeString(item.date || ''); });
+    var scores = history.map(function (item) { return safeNumber(item.score, null); });
+    var averages = history.map(function (item) { return safeNumber(item.ma3, null); });
+    var turnPoints = history.reduce(function (result, item, index) {
+      if (!item || !item.turning_signal || safeNumber(item.score, null) === null) return result;
+      result.push({
+        name: item.turning_signal === 'turning_stronger' ? '转强' : '转弱',
+        coord: [index, item.score],
+        value: item.score,
+      });
+      return result;
+    }, []);
+    state.sentimentChartInstance = window.echarts.init(mount);
+    state.sentimentChartInstance.setOption({
+      animation: false,
+      grid: { left: 40, right: 18, top: 32, bottom: 42 },
+      legend: { top: 0, data: ['每日情绪', '3日均线'] },
+      tooltip: {
+        trigger: 'axis',
+        formatter: function (params) {
+          var index = params && params.length ? params[0].dataIndex : 0;
+          var point = history[index] || {};
+          var ecology = ((point.evidence || {}).limit_ecology || {});
+          var ratio = safeNumber(ecology.limit_ratio, null);
+          return [
+            escapeHtml(point.date || '--'),
+            '情绪：' + escapeHtml(point.score === null || point.score === undefined ? '--' : point.score),
+            '涨停：' + escapeHtml(ecology.limit_up_count === undefined ? '--' : ecology.limit_up_count),
+            '跌停：' + escapeHtml(ecology.limit_down_count === undefined ? '--' : ecology.limit_down_count),
+            '涨跌停比：' + escapeHtml(ratio === null ? '--' : formatNumber(ratio, 2)),
+          ].join('<br>');
+        },
+      },
+      xAxis: {
+        type: 'category',
+        data: dates,
+        axisLabel: {
+          formatter: function (value) { return value.slice(5); },
+        },
+      },
+      yAxis: { type: 'value', min: 0, max: 100, interval: 20 },
+      series: [
+        {
+          name: '每日情绪',
+          type: 'line',
+          data: scores,
+          connectNulls: false,
+          symbolSize: 6,
+          lineStyle: { width: 2, color: '#2563EB' },
+          itemStyle: { color: '#2563EB' },
+          markArea: {
+            silent: true,
+            data: [
+              [{ yAxis: 0, itemStyle: { color: 'rgba(22,163,74,.06)' } }, { yAxis: 30 }],
+              [{ yAxis: 30, itemStyle: { color: 'rgba(6,182,212,.05)' } }, { yAxis: 45 }],
+              [{ yAxis: 45, itemStyle: { color: 'rgba(100,116,139,.04)' } }, { yAxis: 60 }],
+              [{ yAxis: 60, itemStyle: { color: 'rgba(245,158,11,.05)' } }, { yAxis: 75 }],
+              [{ yAxis: 75, itemStyle: { color: 'rgba(220,38,38,.05)' } }, { yAxis: 100 }],
+            ],
+          },
+          markPoint: {
+            symbolSize: 42,
+            data: turnPoints,
+          },
+        },
+        {
+          name: '3日均线',
+          type: 'line',
+          data: averages,
+          connectNulls: false,
+          showSymbol: false,
+          lineStyle: { width: 2, type: 'dashed', color: '#EA580C' },
+        },
+      ],
     });
   }
 
@@ -1940,6 +2090,14 @@
   function renderSectorFlowCard(data) {
     var sectorIn = asArray((data || {}).sector_flow).slice(0, 5);
     var sectorOut = asArray((data || {}).sector_outflow).slice(0, 5);
+    var allRows = sectorIn.concat(sectorOut);
+    var insufficient = allRows.some(function (item) {
+      return item && item.hierarchy_dedup_status === 'insufficient_evidence';
+    });
+    var partial = allRows.some(function (item) {
+      return item && item.hierarchy_dedup_status === 'partial_check_only';
+    });
+    var hierarchyText = insufficient || partial ? '层级证据部分不足' : '层级已去重';
     var inHtml = sectorIn.length ? sectorIn.map(function (item) { return renderFlowRow('流入', item); }).join('') : '<div class="decision-empty">暂无流入数据</div>';
     var outHtml = sectorOut.length ? sectorOut.map(function (item) { return renderFlowRow('流出', item); }).join('') : '<div class="decision-empty">暂无流出数据</div>';
     var body = ''
@@ -1949,8 +2107,8 @@
       + '</div>';
     return renderDecisionCard({
       title: '板块资金',
-      subtitle: '资金流入与流出方向',
-      badge: { text: sectorIn.length || sectorOut.length ? '资金方向' : '暂无', tone: sectorIn.length ? 'positive' : 'neutral' },
+      subtitle: '资金流入与流出方向 · ' + hierarchyText,
+      badge: { text: sectorIn.length || sectorOut.length ? hierarchyText : '暂无', tone: insufficient || partial ? 'warning' : (sectorIn.length ? 'positive' : 'neutral') },
       className: 'sector-flow-card',
       bodyHtml: body,
     });
@@ -2147,6 +2305,7 @@
       + renderSellSignalsCard(data)
       + renderRecentReviewsCard(data)
       + renderDiagnosticsCard(data);
+    setTimeout(renderMarketSentimentChart, 0);
   }
 
   function openMobileDetailDrawer(item) {
@@ -2166,6 +2325,9 @@
     setTimeout(function () {
       if (state.chartInstance) {
         state.chartInstance.resize();
+      }
+      if (state.sentimentChartInstance) {
+        state.sentimentChartInstance.resize();
       }
     }, 40);
   }
@@ -2293,7 +2455,7 @@
     var ws = data && data.workspace ? data.workspace : null;
     if (!ws) {
       state.workspace = {
-        default_view: 'highlights',
+        default_view: 'main',
         view_order: DEFAULT_VIEW_ORDER,
         view_meta: {},
         views: {},
@@ -2303,7 +2465,7 @@
 
     state.workspace = ws;
     state.currentView = ws.default_view || state.currentView;
-    if (!state.currentView) state.currentView = 'highlights';
+    if (!state.currentView) state.currentView = 'main';
   }
 
   function initReportV2() {
@@ -2325,7 +2487,7 @@
       state.data = data || {};
       window.REPORT_DATA = state.data;
       normalizeWorkspace(state.data);
-      state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'highlights';
+      state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
       renderHeader();
       renderWorkspaceTabs();
       renderViewDescription();
@@ -2357,6 +2519,9 @@
       if (state.chartInstance) {
         state.chartInstance.resize();
       }
+      if (state.sentimentChartInstance) {
+        state.sentimentChartInstance.resize();
+      }
     });
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', syncMobileDrawerViewport);
@@ -2375,6 +2540,7 @@
   window.findRawCandidate = findRawCandidate;
   window.renderChart = renderChart;
   window.renderAuxiliaryCenter = renderAuxiliaryCenter;
+  window.renderMarketSentimentChart = renderMarketSentimentChart;
   window.resolveGranted = resolveGranted;
 
   if (document.readyState === 'loading') {

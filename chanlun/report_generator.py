@@ -370,6 +370,12 @@ def _serialize_picks(picks):
             "code": p.get("code", ""),
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
+            "source_channel": p.get("source_channel", ""),
+            "tier": p.get("tier", ""),
+            "category": p.get("category", ""),
+            "quality_tier": p.get("quality_tier", ""),
+            "view": p.get("view", "main"),
+            "reference_type": p.get("reference_type", ""),
             "change_pct": change_pct,
             "best_buy_point": _adjust_bp_keep(bp_enhanced),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
@@ -383,6 +389,11 @@ def _serialize_picks(picks):
             "gf_dma_health": p.get("gf_dma_health", {}),
             "score": p.get("score", 0),
             "decision_engine_v1": p.get("decision_engine_v1"),
+            "position_distance_pct": p.get("position_distance_pct"),
+            "position_reference_price": p.get("position_reference_price"),
+            "position_reference_type": p.get("position_reference_type", ""),
+            "position_data_status": p.get("position_data_status", ""),
+            "position_evidence_date": p.get("position_evidence_date", ""),
             "sector": p.get("sector", ""),
             "resonance": p.get("resonance", {}),
             "ma_bullish": p.get("ma_bullish", False),
@@ -447,7 +458,7 @@ def _serialize_startup_watchlist(watchlist):
             curr_price = float(closes_arr[-1])
         else:
             curr_price = 0
-        ref_price = w.get("close", 0)
+        ref_price = w.get("reference_price") or w.get("close", 0)
         dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
 
         # 图表窗口切片（最近50根K线）
@@ -493,7 +504,13 @@ def _serialize_startup_watchlist(watchlist):
             "data_status": w.get("data_status", {}),
             "type": w.get("type", "强势启动观察"),
             "tier": w.get("tier", "watch"),
+            "category": w.get("category", "C"),
+            "quality_tier": w.get("quality_tier", ""),
+            "source_channel": w.get("source_channel", "low_position"),
+            "view": w.get("view", "observation"),
             "source_type": w.get("source_type", ""),
+            "reference_type": w.get("reference_type", ""),
+            "reference_price": ref_price,
             "startup_reason": w.get("startup_reason", ""),
             "startup_signals": w.get("startup_signals", []),
             "daily_startup_grade": w.get("daily_startup_grade", ""),
@@ -515,7 +532,12 @@ def _serialize_startup_watchlist(watchlist):
             "distance_from_reference_pct": dist_pct,
             "avoid_chase": w.get("avoid_chase", True),
             "watch_reason": w.get("watch_reason", ""),
+            "reason_code": w.get("reason_code", ""),
+            "failure_gate": w.get("failure_gate", ""),
+            "actual_value": w.get("actual_value"),
+            "upgrade_conditions": w.get("upgrade_conditions", []),
             "next_day_conditions": w.get("next_day_conditions", []),
+            "cancel_conditions": w.get("cancel_conditions", []),
             "is_recent": w.get("is_recent", True),
             "recency_reason": w.get("recency_reason", ""),
             # 图表数据
@@ -705,6 +727,12 @@ def _serialize_picks_light(picks):
             "code": p.get("code", ""),
             "name": p.get("name", ""),
             "signal_tier": p.get("signal_tier", ""),
+            "source_channel": p.get("source_channel", ""),
+            "tier": p.get("tier", ""),
+            "category": p.get("category", ""),
+            "quality_tier": p.get("quality_tier", ""),
+            "view": p.get("view", "main"),
+            "reference_type": p.get("reference_type", ""),
             "change_pct": _compute_pick_change_pct(p, bp),
             "best_buy_point": _serialize_bp(bp),
             "gf_dma_health": p.get("gf_dma_health", {}),
@@ -713,6 +741,11 @@ def _serialize_picks_light(picks):
             "trend_type": p.get("trend_type", ""),
             "score": p.get("score", 0),
             "decision_engine_v1": p.get("decision_engine_v1"),
+            "position_distance_pct": p.get("position_distance_pct"),
+            "position_reference_price": p.get("position_reference_price"),
+            "position_reference_type": p.get("position_reference_type", ""),
+            "position_data_status": p.get("position_data_status", ""),
+            "position_evidence_date": p.get("position_evidence_date", ""),
             "sector": p.get("sector", ""),
             "resonance": p.get("resonance", {}),
             "ma_bullish": p.get("ma_bullish", False),
@@ -857,6 +890,10 @@ def _backfill_workspace_scores(daily_data):
     _backfill_workspace_scores_for_items(daily_data.get("picks_fusion", []), views.get("main", []))
     _backfill_workspace_scores_for_items(daily_data.get("picks_pure", []), views.get("baseline", []))
     _backfill_workspace_scores_for_items(daily_data.get("startup_watchlist", []), views.get("confirming", []))
+    _backfill_workspace_scores_for_items(
+        daily_data.get("observation_watchlist", []),
+        views.get("observation_top5", []),
+    )
 
     next_day_boom = daily_data.get("next_day_boom") or {}
     if isinstance(next_day_boom, dict):
@@ -1116,12 +1153,20 @@ def _generate_report_v2(report_data, output_dir=None):
         "sector_flow": report_data.get("sector_flow", []),
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
+        "market_sentiment": report_data.get("market_sentiment", {}),
+        "market_sentiment_history": report_data.get(
+            "market_sentiment_history", []
+        ),
+        "market_temperature": report_data.get("market_temperature", {}),
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
+        "observation_watchlist": _serialize_startup_watchlist(
+            report_data.get("observation_watchlist", [])
+        ),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
         "recent_reviews": build_recent_reviews(
@@ -1308,6 +1353,11 @@ def update_data_json(report_data, output_dir=None):
         "sector_flow": report_data.get("sector_flow", []),
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
+        "market_sentiment": report_data.get("market_sentiment", {}),
+        "market_sentiment_history": report_data.get(
+            "market_sentiment_history", []
+        ),
+        "market_temperature": report_data.get("market_temperature", {}),
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),

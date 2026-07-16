@@ -6,6 +6,8 @@ in-memory calculations based on provided stock and market context data.
 
 from __future__ import annotations
 
+import math
+from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 DecisionResult = Dict[str, Any]
@@ -17,6 +19,7 @@ REJECT = "reject"
 
 REC = "推荐"
 WATCH = "观察"
+WATCH_MISSING_POSITION = "暂不判断（位置信息不足）"
 REJECT_HIGH = "不推荐（高位风险）"
 REJECT_NORMAL = "不推荐"
 
@@ -34,6 +37,7 @@ def evaluate_stock(
     """
     stock_dict = _to_dict(stock)
     context = _to_dict(market_context)
+    position_known = _safe_float(_extract_distance(stock_dict), default=None) is not None
 
     structure_score, structure_reasons = _calc_structure_score(stock_dict, context)
     position_score, position_reasons = _calc_position_score(stock_dict)
@@ -41,7 +45,10 @@ def evaluate_stock(
 
     total_score = structure_score + position_score + sentiment_score
 
-    if position_score < -10:
+    if not position_known:
+        decision = WATCH_MISSING_POSITION
+        decision_code = OBSERVE
+    elif position_score < -10:
         decision = REJECT_HIGH
         decision_code = REJECT
     elif total_score >= 60:
@@ -226,11 +233,31 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
 
 
 def _extract_distance(stock: Mapping[str, Any]) -> Any:
-    dist = stock.get("distance_from_reference_pct")
-    if dist is None:
-        best_buy_point = _to_dict(stock.get("best_buy_point"))
-        dist = best_buy_point.get("distance_from_reference_pct")
+    if stock.get("position_data_status") != "verified":
+        return None
+
+    dist = _safe_float(stock.get("position_distance_pct"), default=None)
+    reference_price = _safe_float(stock.get("position_reference_price"), default=None)
+    reference_type = stock.get("position_reference_type")
+    evidence_date = stock.get("position_evidence_date")
+    if dist is None or reference_price is None or reference_price <= 0:
+        return None
+    if not isinstance(reference_type, str) or not reference_type.strip():
+        return None
+    if not _is_iso_date(evidence_date):
+        return None
     return dist
+
+
+def _is_iso_date(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    normalized = value.strip()
+    try:
+        parsed = date.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.isoformat() == normalized
 
 
 def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:
@@ -327,9 +354,10 @@ def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
     if isinstance(value, bool):
         return default
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         return default
+    return number if math.isfinite(number) else default
 
 
 def _safe_int(value: Any, default: Optional[int] = None) -> Optional[int]:
