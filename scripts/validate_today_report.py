@@ -339,7 +339,7 @@ def validate_report_contract(
     else:
         data_quality = _as_mapping(dq_value)
 
-    is_official = bool(data_quality.get("is_official"))
+    is_official = data_quality.get("is_official") is True
     workspace_rows = list(_iter_workspace_rows(report))
     if require_official and not is_official:
         errors.append("publish requires data_quality.is_official == True")

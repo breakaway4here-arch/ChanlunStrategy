@@ -1317,6 +1317,19 @@ class TestReportContractGuard(unittest.TestCase):
         errors = validate_report_contract(report, require_official=True)
         self.assertTrue(any("requires data_quality.is_official == True" in err for err in errors))
 
+    def test_validate_report_contract_requires_literal_true_for_official_publish(self):
+        for invalid_value in ("false", "true", 1):
+            with self.subTest(invalid_value=invalid_value):
+                report = _official_empty_report()
+                report["data_quality"]["is_official"] = invalid_value
+
+                errors = validate_report_contract(report, require_official=True)
+
+                self.assertTrue(
+                    any("requires data_quality.is_official == True" in err for err in errors),
+                    errors,
+                )
+
     def test_validate_report_contract_allows_raw_change_fallback(self):
         report = {
             "picks_fusion": [

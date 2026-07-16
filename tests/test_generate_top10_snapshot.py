@@ -107,6 +107,28 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.assertEqual(payload["snapshot_date"], "2026-07-02")
         self.assertEqual(payload["items"][0]["code"], "A2")
 
+    def test_selected_snapshot_date_must_match_report_dates_for_file_and_fallback(self) -> None:
+        for source_kind in ("dated_file", "fallback_data_json"):
+            with self.subTest(source_kind=source_kind):
+                docs_dir = self.make_fixture() / "docs"
+                data_dir = docs_dir / "data"
+                self.write_json(
+                    data_dir / "index.json",
+                    self.official_manifest(["2026-07-01"]),
+                )
+                mismatched_report = self.official_report("2026-06-30", [])
+                report_path = (
+                    data_dir / "2026-07-01.json"
+                    if source_kind == "dated_file"
+                    else docs_dir / "data.json"
+                )
+                self.write_json(report_path, mismatched_report)
+
+                with self.assertRaisesRegex(
+                    ValueError, "selected snapshot_date.*report.date.*data_quality.report_date"
+                ):
+                    build_snapshot_payload("job-date-mismatch", data_dir)
+
     def test_top10_cap_and_rank(self) -> None:
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(

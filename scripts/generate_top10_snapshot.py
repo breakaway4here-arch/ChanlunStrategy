@@ -214,6 +214,15 @@ def build_snapshot_payload(
         snapshot_path = root_data_path if root_data_path.exists() else data_dir / "data.json"
     snapshot = _load_json(snapshot_path)
     diagnostics["snapshot_path"] = str(snapshot_path)
+    report_date = _safe_str(snapshot.get("date"))
+    quality_report_date = _safe_str(
+        _as_mapping(snapshot.get("data_quality")).get("report_date")
+    )
+    if report_date != snapshot_date or quality_report_date != snapshot_date:
+        raise ValueError(
+            "Top10 selected snapshot_date must match report.date and "
+            "data_quality.report_date"
+        )
     raw_rows, selected_source, fallback_used = _collect_candidates(snapshot, diagnostics)
     report_errors = validate_report_contract(snapshot, require_official=True)
     if report_errors:
