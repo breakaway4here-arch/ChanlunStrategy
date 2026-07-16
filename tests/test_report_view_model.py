@@ -127,11 +127,12 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["default_view"], "highlights")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
+            ["highlights", "main", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
         self.assertEqual(workspace["counts"]["baseline"], 1)
+        self.assertEqual(workspace["counts"]["observation_top5"], 1)
         self.assertEqual(workspace["counts"]["highlights"], 4)
         self.assertEqual(workspace["counts"]["growth_quality"], 4)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
@@ -142,6 +143,43 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("overlap_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("highlights_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("growth_quality_codes", workspace["diagnostics"]["growth_quality_overlap"])
+
+    def test_observation_top5_enforces_sector_and_failure_reason_caps(self):
+        rows = []
+        for index in range(8):
+            item = _confirming_pick(code="60{:04d}".format(index))
+            item.update({
+                "sector": "行业A" if index < 4 else "行业{}".format(index),
+                "reason_code": (
+                    "waiting_30m_confirm"
+                    if index in (0, 1, 2)
+                    else "ma_near_miss_{}".format(index)
+                ),
+                "failure_gate": "30min_confirm",
+                "actual_value": index,
+                "upgrade_conditions": ["30min确认"],
+                "cancel_conditions": ["跌破参考位"],
+            })
+            rows.append(item)
+
+        workspace = build_workspace({"observation_watchlist": rows})
+        selected = workspace["views"]["observation_top5"]
+
+        self.assertEqual(len(selected), 5)
+        self.assertLessEqual(
+            sum(row["sector"] == "行业A" for row in selected), 2
+        )
+        self.assertLessEqual(
+            sum(
+                row["reason_code"] == "waiting_30m_confirm"
+                for row in selected
+            ),
+            2,
+        )
+        self.assertEqual(workspace["counts"]["main"], 0)
+        self.assertTrue(
+            all(row["view"] == "observation" for row in selected)
+        )
 
     def test_growth_quality_view_exists_but_default_still_highlights(self):
         report_data = _report_data(

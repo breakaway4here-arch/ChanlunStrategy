@@ -188,6 +188,7 @@ def _iter_raw_candidates(report: Mapping[str, Any]):
         "picks_fusion",
         "picks_pure",
         "startup_watchlist",
+        "observation_watchlist",
         "next_day_boom",
         "luojie_pool",
     ):
@@ -268,6 +269,8 @@ def _resolve_raw_candidate(
             "luojie": "luojie_pool",
             "luojie_pool": "luojie_pool",
             "confirming": "startup_watchlist",
+            "observation_top5": "observation_watchlist",
+            "observation_watchlist": "observation_watchlist",
             "baseline": "picks_pure",
             "picks_fusion": "picks_fusion",
             "picks_pure": "picks_pure",

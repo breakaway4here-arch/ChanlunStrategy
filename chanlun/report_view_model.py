@@ -12,6 +12,11 @@ from __future__ import annotations
 from typing import Any, Dict, Iterable, List, Mapping
 
 from chanlun.scoring_engine import compute_opportunity_score
+from config import (
+    OBSERVATION_MAX_PER_REASON,
+    OBSERVATION_MAX_PER_SECTOR,
+    OBSERVATION_TOP_N,
+)
 
 ViewOrder = List[str]
 
@@ -19,6 +24,7 @@ ViewOrder = List[str]
 VIEW_ORDER: ViewOrder = [
     "highlights",
     "main",
+    "observation_top5",
     "acceleration",
     "luojie",
     "confirming",
@@ -73,6 +79,11 @@ VIEW_META = {
     "main": {
         "label": "主推",
         "description": "融合推荐池，可执行优先。",
+    },
+    "observation_top5": {
+        "label": "观察 Top5",
+        "short_label": "观察",
+        "description": "近失样本观察榜，不计入主推荐，不代表可立即买入。",
     },
     "acceleration": {
         "label": "加速",
@@ -920,6 +931,15 @@ def _build_item(
         "risk_flags": all_risk_flags,
         "rank_trace": rank_trace,
         "decision_engine_v1": decision_payload,
+        "source_channel": _safe_str(preferred_raw.get("source_channel")),
+        "tier": _safe_str(preferred_raw.get("tier"))
+        or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("tier")),
+        "category": _safe_str(preferred_raw.get("category"))
+        or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("category")),
+        "quality_tier": _safe_str(preferred_raw.get("quality_tier"))
+        or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("quality_tier")),
+        "view": _safe_str(preferred_raw.get("view"))
+        or ("main" if "main" in ordered_sources else "observation"),
         "ref": {"pool": SOURCE_POOLS.get(preferred, ""), "code": code},
     }
     return item
@@ -1113,6 +1133,61 @@ def _build_growth_quality(
     return top_rows
 
 
+def _build_observation_top5(
+    report_data: Mapping[str, Any],
+    data_quality: Mapping[str, Any] | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    raw_items = _get_list(report_data.get("observation_watchlist"))
+    if not raw_items:
+        raw_items = _get_list(report_data.get("startup_watchlist"))
+    normalized = _normalize_pool_items(raw_items, "confirming")
+    ranked = []
+    for code, raw in normalized.items():
+        row = _build_item(
+            ["confirming"],
+            {"confirming": raw},
+            data_quality=data_quality,
+        )
+        row.update({
+            "view": "observation",
+            "tier": _safe_str(raw.get("tier")) or "watch",
+            "source_channel": _safe_str(raw.get("source_channel")),
+            "reason_code": _safe_str(raw.get("reason_code")) or "waiting_30m_confirm",
+            "failure_gate": _safe_str(raw.get("failure_gate")) or "30min_confirm",
+            "actual_value": raw.get("actual_value"),
+            "upgrade_conditions": list(raw.get("upgrade_conditions") or raw.get("next_day_conditions") or []),
+            "cancel_conditions": list(raw.get("cancel_conditions") or []),
+            "ref": {"pool": "observation_watchlist", "code": code},
+        })
+        ranked.append(row)
+    ranked.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
+
+    selected = []
+    sector_counts: dict[str, int] = {}
+    reason_counts: dict[str, int] = {}
+    for row in ranked:
+        if len(selected) >= int(OBSERVATION_TOP_N):
+            break
+        sector = _safe_str(row.get("sector")) or "未分类"
+        reason = _safe_str(row.get("reason_code")) or "unknown"
+        if sector_counts.get(sector, 0) >= int(OBSERVATION_MAX_PER_SECTOR):
+            continue
+        if reason_counts.get(reason, 0) >= int(OBSERVATION_MAX_PER_REASON):
+            continue
+        selected.append(row)
+        sector_counts[sector] = sector_counts.get(sector, 0) + 1
+        reason_counts[reason] = reason_counts.get(reason, 0) + 1
+    for rank, row in enumerate(selected, start=1):
+        row["view_rank"] = rank
+    return selected, {
+        "input_count": len(ranked),
+        "selected_count": len(selected),
+        "max_total": int(OBSERVATION_TOP_N),
+        "max_per_sector": int(OBSERVATION_MAX_PER_SECTOR),
+        "max_per_reason": int(OBSERVATION_MAX_PER_REASON),
+    }
+
+
 def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Build a compact v2 workspace from serialized report payload.
 
@@ -1134,6 +1209,10 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     view_items["highlights"] = highlights
     growth_quality = _build_growth_quality(views, data_quality=data_quality)
     view_items["growth_quality"] = growth_quality
+    observation_top5, observation_diagnostics = _build_observation_top5(
+        data, data_quality=data_quality
+    )
+    view_items["observation_top5"] = observation_top5
 
     # Re-rank opportunity-score views after dedupe/sorting. growth_quality keeps
     # its tier/quality-first order by design.
@@ -1177,6 +1256,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
                 & set(item["code"] for item in view_items["growth_quality"])
             ),
         },
+        "observation_top5": observation_diagnostics,
     }
 
     return {

@@ -64,6 +64,11 @@ from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
+from chanlun.trend_continuation import (
+    build_trend_continuation_pool,
+    normalize_trend_candidate,
+    upgrade_trend_continuation_with_30min,
+)
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
@@ -161,6 +166,20 @@ def _clamp(value, low, high):
     if value is None:
         return low
     return max(low, min(high, value))
+
+
+def _attach_signal_dimensions(row, default_channel="low_position"):
+    if not isinstance(row, dict):
+        return {}
+    result = dict(row)
+    bp = result.get("best_buy_point")
+    bp = bp if isinstance(bp, dict) else {}
+    result.setdefault("source_channel", default_channel)
+    result.setdefault("tier", bp.get("tier") or "candidate")
+    result.setdefault("category", bp.get("category") or "A")
+    result.setdefault("quality_tier", bp.get("quality_tier") or "")
+    result.setdefault("view", "main")
+    return result
 
 
 def _apply_full_a_universe(
@@ -902,6 +921,13 @@ def main(debug=False, preview=False, generated_at=None):
     startup_seeds = [_attach_liquidity(s) for s in startup_seeds]
     startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
     startup_watchlist = [_attach_liquidity(w) for w in startup_watchlist]
+    trend_seeds, trend_watchlist, trend_diag = build_trend_continuation_pool(
+        chan_results, sector_stocks
+    )
+    trend_seeds = [_attach_liquidity(_attach_sector_metadata(s)) for s in trend_seeds]
+    trend_watchlist = [
+        _attach_liquidity(_attach_sector_metadata(w)) for w in trend_watchlist
+    ]
 
     print(f"  扫描: {startup_diag.get('scanned', 0)} 只, "
           f"启动种子: {startup_diag.get('daily_startup_seed', 0)}, "
@@ -910,6 +936,11 @@ def main(debug=False, preview=False, generated_at=None):
           f"高位={startup_diag.get('dropped_high_position', 0)}, "
           f"无量={startup_diag.get('dropped_no_volume', 0)}, "
           f"无突破={startup_diag.get('dropped_no_breakout', 0)}")
+    print(
+        f"  趋势延续: 种子={trend_diag.get('trend_seed', 0)}, "
+        f"近失观察={trend_diag.get('watch_near_miss', 0)}, "
+        f"风险观察={trend_diag.get('watch_risk', 0)}"
+    )
 
     # ================================================================
     # Phase 4.6: 罗姐池（国家队硬方向 + 15min生命线）
@@ -954,6 +985,9 @@ def main(debug=False, preview=False, generated_at=None):
     startup_candidates = []
     startup_upgrade_diag = {}
     startup_additional_watchlist = []
+    trend_candidates = []
+    trend_upgrade_diag = {}
+    trend_additional_watchlist = []
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
@@ -966,11 +1000,13 @@ def main(debug=False, preview=False, generated_at=None):
 
         # Add startup seed codes (only non-limit-up, which need 30min confirmation)
         startup_seed_codes = {s["code"] for s in startup_seeds}
-        all_target_codes |= startup_seed_codes
+        trend_seed_codes = {s["code"] for s in trend_seeds}
+        all_target_codes |= startup_seed_codes | trend_seed_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
 
         print(f"  结构池并集: {len(all_target_codes)} 只 "
-              f"(含启动种子: {len(startup_seed_codes)}), 拉取30分钟数据 ...")
+              f"(含低位启动: {len(startup_seed_codes)}, "
+              f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
         min30_data_list = collect_30min_data(all_targets)
 
         if not min30_data_list:
@@ -995,6 +1031,15 @@ def main(debug=False, preview=False, generated_at=None):
                     })))
             startup_upgrade_diag = {"startup_candidate": 0,
                                      "watch_due_to_no_30min_confirm": len(startup_seeds)}
+            (
+                trend_candidates,
+                trend_additional_watchlist,
+                trend_upgrade_diag,
+            ) = upgrade_trend_continuation_with_30min(trend_seeds, [])
+            trend_watchlist.extend(
+                _attach_liquidity(_attach_sector_metadata(item))
+                for item in trend_additional_watchlist
+            )
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
             if ENABLE_FUSION_ADMISSION_POLICY:
@@ -1118,6 +1163,40 @@ def main(debug=False, preview=False, generated_at=None):
             else:
                 startup_upgrade_diag = {}
 
+            if trend_seeds:
+                print("[趋势延续30min升级]")
+                (
+                    trend_candidates,
+                    trend_additional_watchlist,
+                    trend_upgrade_diag,
+                ) = upgrade_trend_continuation_with_30min(
+                    trend_seeds, chan_results_30min
+                )
+                trend_watchlist.extend(
+                    _attach_liquidity(_attach_sector_metadata(item))
+                    for item in trend_additional_watchlist
+                )
+                existing_codes = {
+                    str(item.get("code") or "") for item in pure_confirmed
+                }
+                normalized_trend = []
+                for candidate in trend_candidates:
+                    if str(candidate.get("code") or "") in existing_codes:
+                        continue
+                    pick = normalize_trend_candidate(candidate)
+                    pick["macd_hist"] = calc_macd(
+                        candidate.get("closes", [])
+                    )[2]
+                    normalized_trend.append(
+                        _attach_liquidity(_attach_sector_metadata(pick))
+                    )
+                pure_confirmed.extend(normalized_trend)
+                print(
+                    f"  trend_candidate={trend_upgrade_diag['trend_candidate']}, "
+                    f"watch={len(trend_additional_watchlist)}, "
+                    f"合并主池={len(normalized_trend)}"
+                )
+
             if ENABLE_FUSION_ADMISSION_POLICY:
                 # Fusion: apply admission policy on top of pure confirmed picks
                 print("[融合版admission]")
@@ -1188,6 +1267,17 @@ def main(debug=False, preview=False, generated_at=None):
             upgrade_diag_fusion = {}
             fusion_admission_diag = {}
 
+    if not ENABLE_30MIN_CANDIDATE_UPGRADE and trend_seeds:
+        (
+            trend_candidates,
+            trend_additional_watchlist,
+            trend_upgrade_diag,
+        ) = upgrade_trend_continuation_with_30min(trend_seeds, [])
+        trend_watchlist.extend(
+            _attach_liquidity(_attach_sector_metadata(item))
+            for item in trend_additional_watchlist
+        )
+
     # ================================================================
     # Phase 6: Score + generate report
     # ================================================================
@@ -1200,6 +1290,14 @@ def main(debug=False, preview=False, generated_at=None):
     fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
+    trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
+        trend_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    trend_watchlist = [
+        _attach_liquidity(_attach_sector_metadata(item))
+        for item in trend_watchlist
+    ]
+    observation_watchlist = startup_watchlist + trend_watchlist
     print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
           f"(过期{recency_pure_diag['dropped_expired']}), "
           f"fusion {recency_fusion_diag['input']}→{recency_fusion_diag['kept']} "
@@ -1216,6 +1314,8 @@ def main(debug=False, preview=False, generated_at=None):
     fusion_scored = [_attach_liquidity(p) for p in fusion_scored]
     pure_scored = _attach_gf_dma_health(pure_scored)
     fusion_scored = _attach_gf_dma_health(fusion_scored)
+    pure_scored = [_attach_signal_dimensions(p) for p in pure_scored]
+    fusion_scored = [_attach_signal_dimensions(p) for p in fusion_scored]
 
     print(f"  纯净版最终推荐: {len(pure_scored)} 只")
     if pure_scored:
@@ -1297,7 +1397,7 @@ def main(debug=False, preview=False, generated_at=None):
         }
         _inject_decision_engine(pure_scored, decision_engine, market_context)
         _inject_decision_engine(fusion_scored, decision_engine, market_context)
-        _inject_decision_engine(startup_watchlist, decision_engine, market_context)
+        _inject_decision_engine(observation_watchlist, decision_engine, market_context)
         _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
@@ -1363,6 +1463,12 @@ def main(debug=False, preview=False, generated_at=None):
             "startup_candidates": len(startup_candidates),
             "startup_watchlist": len(startup_watchlist),
         },
+        "trend_continuation": {
+            "daily_scan": trend_diag,
+            "upgrade": trend_upgrade_diag,
+            "trend_candidates": len(trend_candidates),
+            "trend_watchlist": len(trend_watchlist),
+        },
         "luojie_pool": luojie_pool.get("diagnostics", {}),
         "signal_recency": {
             "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
@@ -1375,10 +1481,16 @@ def main(debug=False, preview=False, generated_at=None):
             "watch_input": recency_watch_diag["input"],
             "watch_kept": recency_watch_diag["kept"],
             "watch_dropped_expired": recency_watch_diag["dropped_expired"],
+            "trend_watch_input": recency_trend_watch_diag["input"],
+            "trend_watch_kept": recency_trend_watch_diag["kept"],
+            "trend_watch_dropped_expired": recency_trend_watch_diag[
+                "dropped_expired"
+            ],
             "dropped_details": (
                 recency_pure_diag.get("dropped_details", []) +
                 recency_fusion_diag.get("dropped_details", []) +
-                recency_watch_diag.get("dropped_details", [])
+                recency_watch_diag.get("dropped_details", []) +
+                recency_trend_watch_diag.get("dropped_details", [])
             ),
         },
         "preview": {
@@ -1416,6 +1528,7 @@ def main(debug=False, preview=False, generated_at=None):
         "data_quality": data_quality,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
+        "observation_watchlist": observation_watchlist,
         "next_day_boom": next_day_boom,
         "luojie_pool": luojie_pool,
     }

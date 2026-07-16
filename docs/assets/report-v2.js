@@ -1,10 +1,11 @@
 (function () {
   'use strict';
 
-  var DEFAULT_VIEW_ORDER = ['highlights', 'main', 'acceleration', 'luojie', 'confirming', 'baseline'];
+  var DEFAULT_VIEW_ORDER = ['highlights', 'main', 'observation_top5', 'acceleration', 'luojie', 'confirming', 'growth_quality', 'baseline'];
   var DEFAULT_VIEW_LABELS = {
     highlights: '看点 Top10',
     main: '主推',
+    observation_top5: '观察 Top5',
     acceleration: '加速',
     luojie: '罗姐池',
     confirming: '等确认',
@@ -13,6 +14,7 @@
   var DEFAULT_VIEW_DESCRIPTIONS = {
     highlights: '看点 Top10：跨池混合优先观察榜。用于快速扫今天最值得看的标的，不等于全部可立即买入；请结合身份标签、共振标签和操作状态判断。',
     main: '主推：融合推荐池，可执行优先。来自纯净缠论结构 + 30min 确认 + 市场状态 / MA 多头 / admission 门槛过滤。',
+    observation_top5: '观察 Top5：近失样本观察榜，不计入主推荐；显示失败门、升级条件和取消条件。',
     acceleration: '加速：强市场下的情绪加速榜。用于从强势启动类候选中二次排序，不是常规主推荐池。',
     luojie: '罗姐池：硬方向 + 15min 生命线观察，不等同于主推。',
     confirming: '等确认：日线已有启动线索，但等待 30min 或次日确认，观察为主，不直接追高。',
@@ -644,6 +646,7 @@
       picks_fusion: asArray(data.picks_fusion),
       picks_pure: asArray(data.picks_pure),
       startup_watchlist: asArray(data.startup_watchlist),
+      observation_watchlist: asArray(data.observation_watchlist),
       next_day_boom: asArray((nextDayBoom && nextDayBoom.candidates) || []),
       luojie_pool: asArray((luojiePool && luojiePool.candidates) || []),
     };
@@ -664,6 +667,9 @@
     }
     if (key === 'confirming') {
       return pools.startup_watchlist;
+    }
+    if (key === 'observation_top5' || key === 'observation_watchlist') {
+      return pools.observation_watchlist;
     }
     if (key === 'baseline') {
       return pools.picks_pure;
@@ -1548,6 +1554,16 @@
     }
     if (raw && raw.volume_ratio !== undefined && raw.volume_ratio !== null) {
       details.push('量能比：' + formatNumber(raw.volume_ratio, 2));
+    }
+    if (item.failure_gate) details.push('失败门：' + item.failure_gate);
+    if (item.actual_value !== undefined && item.actual_value !== null) {
+      details.push('实际值：' + (typeof item.actual_value === 'object' ? JSON.stringify(item.actual_value) : item.actual_value));
+    }
+    if (Array.isArray(item.upgrade_conditions) && item.upgrade_conditions.length) {
+      details.push('升级条件：' + item.upgrade_conditions.join('；'));
+    }
+    if (Array.isArray(item.cancel_conditions) && item.cancel_conditions.length) {
+      details.push('取消条件：' + item.cancel_conditions.join('；'));
     }
 
     if (details.length === 0) {

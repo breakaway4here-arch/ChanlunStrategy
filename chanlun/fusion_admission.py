@@ -63,6 +63,8 @@ def apply_fusion_admission(picks, sh_closes, sector_stocks=None):
         ma_ok = is_ma_bullish(closes)
         strength = bp.get("strength", "")
         confirmed_by = bp.get("confirmed_by", "")
+        if bp_type == "趋势延续候选" and stock.get("confirmations"):
+            confirmed_by = "+".join(stock.get("confirmations") or [])
 
         stock["ma_bullish"] = ma_ok
         stock["market_regime"] = regime
@@ -183,6 +185,13 @@ def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
             if strength not in ("强", "中"):
                 return False, "强势启动候选弱市要求30min确认强/中"
             return True, "强势启动候选弱市通过"
+
+    if bp_type == "趋势延续候选":
+        if not ma_ok:
+            return False, "趋势延续候选要求MA多头(MA5>MA10>MA20)"
+        if not confirmed_by:
+            return False, "趋势延续候选要求30min趋势确认"
+        return True, "趋势延续候选独立通道通过"
 
     # Unknown type — do not admit
     return False, f"未知类型{bp_type}不默认放行"

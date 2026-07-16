@@ -94,6 +94,19 @@ STRONG_STARTUP_LOW_POSITION_120D_RATIO = 0.82
 STRONG_STARTUP_PRE_START_LOW_RATIO = 1.12
 
 # ============================================================
+# 趋势延续候选（与低位强启动正交）
+# ============================================================
+ENABLE_TREND_CONTINUATION = True
+TREND_CONTINUATION_MIN_VOLUME_RATIO = 1.5
+TREND_CONTINUATION_CONDITIONAL_VOLUME_RATIO = 1.3
+TREND_CONTINUATION_WATCH_VOLUME_RATIO = 1.2
+TREND_CONTINUATION_MAX_EXTENSION_PCT = 12.0
+TREND_CONTINUATION_MAX_GAP_PCT = 5.0
+OBSERVATION_TOP_N = 5
+OBSERVATION_MAX_PER_SECTOR = 2
+OBSERVATION_MAX_PER_REASON = 2
+
+# ============================================================
 # 信号时效
 # ============================================================
 SIGNAL_MAX_AGE_TRADING_DAYS = 10
