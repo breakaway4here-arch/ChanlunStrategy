@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import run as run_module
+from chanlun.candidate_funnel import CandidateFunnel
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.universe_builder import (
     UniverseConfig,
@@ -244,6 +245,7 @@ class UniverseBuilderTests(unittest.TestCase):
                 )
 
             with MarketHistoryStore(path, readonly=True) as store:
+                audit_records = []
                 candidates, diagnostics = load_eligible_candidates(
                     store,
                     as_of="2026-07-02",
@@ -251,11 +253,18 @@ class UniverseBuilderTests(unittest.TestCase):
                     min_listed_days=60,
                     min_daily_amount=50_000_000,
                     return_diagnostics=True,
+                    audit_records=audit_records,
                 )
 
         self.assertEqual(candidates, [])
         self.assertEqual(diagnostics["instrument_count"], 1)
         self.assertEqual(diagnostics["excluded"]["stale_latest_bar"], 1)
+        self.assertEqual(1, len(audit_records))
+        self.assertEqual("600000", audit_records[0]["code"])
+        self.assertFalse(audit_records[0]["eligibility_passed"])
+        self.assertEqual(
+            "stale_latest_bar", audit_records[0]["eligibility_failure_reason"]
+        )
 
     def test_run_activates_full_a_pool_only_after_coverage_floor(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -299,6 +308,7 @@ class UniverseBuilderTests(unittest.TestCase):
                 }
             ]
             quality = {}
+            funnel = CandidateFunnel("universe-run", "2026-07-01")
             with patch.multiple(
                 run_module,
                 MARKET_HISTORY_DB_PATH=str(path),
@@ -315,6 +325,7 @@ class UniverseBuilderTests(unittest.TestCase):
                     [{"code": "BK1", "name": "机器人"}],
                     quality,
                     "2026-07-01",
+                    candidate_funnel=funnel,
                 )
 
         self.assertGreaterEqual(len(selected), 4)
@@ -323,6 +334,18 @@ class UniverseBuilderTests(unittest.TestCase):
             quality["stock_pool_source"], "full_a_db+sector_overlay"
         )
         self.assertEqual(selected[0]["klines"]["source"], "market_history_db")
+        self.assertEqual(8, funnel.summary()["stage_counts"]["full_a"])
+        self.assertEqual(8, funnel.summary()["stage_counts"]["eligible"])
+        self.assertGreaterEqual(
+            funnel.summary()["stage_counts"]["retrieval"], 4
+        )
+        self.assertTrue(
+            any(
+                event["first_failure_reason"]
+                == "retrieval_quota_not_selected"
+                for event in funnel.events
+            )
+        )
 
     def test_run_keeps_existing_pool_when_database_is_missing(self):
         existing = [{"code": "600000", "name": "浦发银行"}]

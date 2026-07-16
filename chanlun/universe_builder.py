@@ -55,9 +55,16 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     prior_volume = _mean(volumes[-13:-3])
     contraction = _clamp(1.5 - recent_volume / prior_volume) if prior_volume else 0.0
     volume_ratio = recent_volume / prior_volume if prior_volume else 0.0
+    prior_amount = _mean(amounts[-6:-1])
+    amount_ratio = amounts[-1] / prior_amount if prior_amount else 0.0
     return5 = close / closes[-6] - 1.0 if len(closes) >= 6 and closes[-6] else 0.0
     return20 = close / closes[-21] - 1.0 if len(closes) >= 21 and closes[-21] else 0.0
     breakout_reference = max(highs[-21:-1]) if len(highs) >= 21 else max(highs[:-1])
+    distance_from_reference = (
+        (close / breakout_reference - 1.0) * 100.0
+        if breakout_reference
+        else 0.0
+    )
     breakout = _clamp((close / breakout_reference - 0.97) / 0.08) if breakout_reference else 0.0
     ma_structure = (
         1.0 if close >= ma5 >= ma10 >= ma20 else
@@ -95,9 +102,19 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
         "return_5d": return5,
         "return_20d": return20,
         "volume_ratio_3v10": volume_ratio,
+        "amount_ratio_1v5": amount_ratio,
+        "distance_from_reference_pct": distance_from_reference,
         "ma5": ma5,
         "ma10": ma10,
         "ma20": ma20,
+        "ma_gap_pct": (
+            (ma5 / ma10 - 1.0) * 100.0 if ma10 else 0.0
+        ),
+        "ma_direction": (
+            "up" if ma5 >= ma10 >= ma20 else
+            "down" if ma5 <= ma10 <= ma20 else
+            "mixed"
+        ),
     }
 
 
@@ -131,6 +148,7 @@ def load_eligible_candidates(
     lookback_bars: int = 120,
     required_date: Optional[str] = None,
     return_diagnostics: bool = False,
+    audit_records: Optional[List[Dict[str, Any]]] = None,
 ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
     """Load an as-of-safe eligible universe and compute retrieval-only features."""
     instruments = store.list_instruments(asset_type="stock")
@@ -153,33 +171,76 @@ def load_eligible_candidates(
         instrument_id = int(instrument["instrument_id"])
         meta = metadata.get(instrument_id)
         rows = rows_by_id.get(instrument_id, [])
+        audit = {
+            "code": instrument["code"],
+            "name": (
+                (meta or {}).get("name")
+                or instrument.get("name")
+                or instrument["code"]
+            ),
+            "exchange": instrument["exchange"],
+            "asset_type": instrument["asset_type"],
+            "stock_meta_asof": meta or {},
+            "eligibility_passed": False,
+            "eligibility_failure_reason": "",
+            "data_quality": {
+                "daily": "verified" if rows else "missing",
+                "bars": len(rows),
+                "latest_date": (
+                    str(rows[-1]["ts"]).split(" ", 1)[0] if rows else ""
+                ),
+                "is_final": (
+                    bool(rows[-1]["is_final"]) if rows else False
+                ),
+            },
+        }
+        if len(rows) >= int(minimum_bars):
+            try:
+                audit.update(_feature_scores(rows))
+            except (KeyError, TypeError, ValueError, ZeroDivisionError):
+                pass
+
+        def reject(reason: str) -> None:
+            audit["eligibility_failure_reason"] = reason
+            if audit_records is not None:
+                audit_records.append(dict(audit))
+
         if not meta:
             excluded["missing_meta"] += 1
+            reject("missing_meta")
             continue
         if meta.get("is_st") is True or meta.get("delisting_risk") is True:
             excluded["st_or_delisting"] += 1
+            reject("st_or_delisting")
             continue
         try:
             listed_days = int(meta.get("listed_days"))
         except (TypeError, ValueError):
             excluded["listed_days"] += 1
+            reject("listed_days")
             continue
         if listed_days < int(min_listed_days):
             excluded["listed_days"] += 1
+            reject("listed_days")
             continue
         if len(rows) < int(minimum_bars):
             excluded["insufficient_bars"] += 1
+            reject("insufficient_bars")
             continue
         if not all(bool(row["is_final"]) for row in rows):
             excluded["nonfinal_bars"] += 1
+            reject("nonfinal_bars")
             continue
         latest_date = str(rows[-1]["ts"]).split(" ", 1)[0]
         if required_date is not None and latest_date != str(required_date):
             excluded["stale_latest_bar"] += 1
+            reject("stale_latest_bar")
             continue
         average_amount = _mean([float(row["amount"]) for row in rows[-5:]])
         if average_amount < float(min_daily_amount):
             excluded["low_liquidity"] += 1
+            audit["average_amount_5d"] = average_amount
+            reject("low_liquidity")
             continue
         scores = _feature_scores(rows)
         kline = _rows_to_kline(rows)
@@ -203,6 +264,10 @@ def load_eligible_candidates(
         }
         candidate.update(scores)
         candidates.append(candidate)
+        audit.update(candidate)
+        audit["eligibility_passed"] = True
+        if audit_records is not None:
+            audit_records.append(audit)
     candidates = sorted(candidates, key=lambda row: row["code"])
     diagnostics = {
         "as_of": str(as_of),

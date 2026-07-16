@@ -32,6 +32,20 @@ def _json_dumps(value: Optional[Mapping[str, Any]]) -> str:
     return json.dumps(dict(value or {}), ensure_ascii=False, sort_keys=True)
 
 
+def _json_default(value: Any) -> Any:
+    if hasattr(value, "item"):
+        return value.item()
+    if hasattr(value, "tolist"):
+        return value.tolist()
+    if isinstance(value, set):
+        return sorted(value)
+    raise TypeError(
+        "Object of type {} is not JSON serializable".format(
+            type(value).__name__
+        )
+    )
+
+
 def _row_dict(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
     return dict(row) if row is not None else None
 
@@ -153,6 +167,51 @@ class MarketHistoryStore:
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY (run_id, shard_id)
                 );
+
+                CREATE TABLE IF NOT EXISTS funnel_runs (
+                    run_id TEXT PRIMARY KEY,
+                    report_date TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    summary_json TEXT NOT NULL DEFAULT '{}',
+                    metadata_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS gate_events (
+                    run_id TEXT NOT NULL,
+                    code TEXT NOT NULL,
+                    report_date TEXT NOT NULL,
+                    as_of TEXT NOT NULL,
+                    source_channel TEXT NOT NULL DEFAULT '',
+                    retrieval_pool TEXT NOT NULL DEFAULT '',
+                    retrieval_score REAL,
+                    first_failure_gate TEXT NOT NULL DEFAULT '',
+                    first_failure_reason TEXT NOT NULL DEFAULT '',
+                    actual_value REAL,
+                    threshold_value REAL,
+                    final_state TEXT NOT NULL,
+                    volume_ratio REAL,
+                    amount_ratio REAL,
+                    distance_3pct REAL,
+                    distance_12pct REAL,
+                    distance_from_reference_pct REAL,
+                    ma5 REAL,
+                    ma10 REAL,
+                    ma20 REAL,
+                    ma_gap_pct REAL,
+                    ma_direction TEXT NOT NULL DEFAULT '',
+                    minute30_confirmations REAL,
+                    minute30_strength REAL,
+                    event_json TEXT NOT NULL DEFAULT '{}',
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (run_id, code),
+                    FOREIGN KEY (run_id) REFERENCES funnel_runs(run_id)
+                        ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_gate_events_report_code
+                ON gate_events(report_date, code);
 
                 CREATE TABLE IF NOT EXISTS bar_table_settings (
                     table_name TEXT PRIMARY KEY,
@@ -756,6 +815,133 @@ class MarketHistoryStore:
             row["metadata"] = json.loads(row["metadata_json"])
             result.append(row)
         return result
+
+    def save_candidate_funnel(
+        self,
+        run: Mapping[str, Any],
+        events: Sequence[Mapping[str, Any]],
+    ) -> None:
+        """Atomically replace one run and its per-candidate gate events."""
+        self._require_writable()
+        run_id = str(run.get("run_id") or "").strip()
+        report_date = str(run.get("report_date") or "").strip()
+        as_of = str(run.get("as_of") or report_date).strip()
+        if not run_id or not report_date:
+            raise ValueError("funnel run_id and report_date are required")
+        if as_of > report_date:
+            raise ValueError("funnel as_of cannot be later than report_date")
+        now = _utc_now()
+        with self._write_scope():
+            self.connection.execute(
+                """
+                INSERT INTO funnel_runs(
+                    run_id, report_date, as_of, status, summary_json,
+                    metadata_json, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(run_id) DO UPDATE SET
+                    report_date=excluded.report_date,
+                    as_of=excluded.as_of,
+                    status=excluded.status,
+                    summary_json=excluded.summary_json,
+                    metadata_json=excluded.metadata_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    run_id,
+                    report_date,
+                    as_of,
+                    str(run.get("status") or "complete"),
+                    _json_dumps(run.get("summary")),
+                    _json_dumps(run.get("metadata")),
+                    now,
+                ),
+            )
+            self.connection.execute(
+                "DELETE FROM gate_events WHERE run_id=?",
+                (run_id,),
+            )
+            for raw in events:
+                event = dict(raw)
+                event_as_of = str(event.get("as_of") or as_of)
+                if event_as_of > report_date:
+                    raise ValueError(
+                        "gate event as_of cannot be later than report_date"
+                    )
+                code = str(event.get("code") or "").strip()
+                if not code:
+                    raise ValueError("gate event code is required")
+                self.connection.execute(
+                    """
+                    INSERT INTO gate_events(
+                        run_id, code, report_date, as_of, source_channel,
+                        retrieval_pool, retrieval_score, first_failure_gate,
+                        first_failure_reason, actual_value, threshold_value,
+                        final_state, volume_ratio, amount_ratio, distance_3pct,
+                        distance_12pct, distance_from_reference_pct,
+                        ma5, ma10, ma20, ma_gap_pct,
+                        ma_direction, minute30_confirmations, minute30_strength,
+                        event_json, updated_at
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        ?, ?, ?, ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        run_id,
+                        code,
+                        report_date,
+                        event_as_of,
+                        str(event.get("source_channel") or ""),
+                        str(event.get("retrieval_pool") or ""),
+                        event.get("retrieval_score"),
+                        str(event.get("first_failure_gate") or ""),
+                        str(event.get("first_failure_reason") or ""),
+                        event.get("actual_value"),
+                        event.get("threshold"),
+                        str(event.get("final_state") or "reject"),
+                        event.get("volume_ratio"),
+                        event.get("amount_ratio"),
+                        event.get("distance_3pct"),
+                        event.get("distance_12pct"),
+                        event.get("distance_from_reference_pct"),
+                        event.get("ma5"),
+                        event.get("ma10"),
+                        event.get("ma20"),
+                        event.get("ma_gap_pct"),
+                        str(event.get("ma_direction") or ""),
+                        event.get("minute30_confirmations"),
+                        event.get("minute30_strength"),
+                        json.dumps(
+                            event,
+                            ensure_ascii=False,
+                            sort_keys=True,
+                            default=_json_default,
+                        ),
+                        now,
+                    ),
+                )
+
+    def get_funnel_run(self, run_id: str) -> Optional[Dict[str, Any]]:
+        row = self.connection.execute(
+            "SELECT * FROM funnel_runs WHERE run_id=?",
+            (str(run_id),),
+        ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["summary"] = json.loads(result.pop("summary_json"))
+        result["metadata"] = json.loads(result.pop("metadata_json"))
+        return result
+
+    def list_gate_events(self, run_id: str) -> List[Dict[str, Any]]:
+        rows = self.connection.execute(
+            """
+            SELECT event_json FROM gate_events
+            WHERE run_id=? ORDER BY code
+            """,
+            (str(run_id),),
+        ).fetchall()
+        return [json.loads(row["event_json"]) for row in rows]
 
     def _merge_staging_source(
         self, source: "MarketHistoryStore", counts: Dict[str, int]
