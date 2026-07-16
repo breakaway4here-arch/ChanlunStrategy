@@ -1,4 +1,5 @@
 import unittest
+from unittest.mock import patch
 
 import config
 
@@ -134,6 +135,26 @@ class DecisionEngineTestCase(unittest.TestCase):
         self.assertEqual(result["decision_code"], "observe")
         self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
         self.assertNotEqual(result["decision_code"], "recommend")
+
+    def test_best_buy_point_distance_obeys_derived_distance_switch(self):
+        stock = {
+            "code": "DERIVED",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "best_buy_point": {"distance_from_reference_pct": 3.0},
+        }
+
+        with patch.object(config, "ENABLE_DISTANCE_DECISION", False):
+            disabled = evaluate_stock(stock)
+        with patch.object(config, "ENABLE_DISTANCE_DECISION", True):
+            enabled = evaluate_stock(stock)
+
+        self.assertEqual(disabled["decision_code"], "observe")
+        self.assertEqual(disabled["decision"], "暂不判断（位置信息不足）")
+        self.assertEqual(enabled["decision_code"], "recommend")
+        self.assertEqual(enabled["decision"], "推荐")
 
     def test_incomplete_fields_fallback_to_safe_decision(self):
         stock = {

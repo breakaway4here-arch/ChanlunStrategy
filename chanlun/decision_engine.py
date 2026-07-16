@@ -7,8 +7,9 @@ in-memory calculations based on provided stock and market context data.
 from __future__ import annotations
 
 import math
-
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+import config
 
 DecisionResult = Dict[str, Any]
 
@@ -234,10 +235,12 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
 
 def _extract_distance(stock: Mapping[str, Any]) -> Any:
     dist = stock.get("distance_from_reference_pct")
-    if dist is None:
-        best_buy_point = _to_dict(stock.get("best_buy_point"))
-        dist = best_buy_point.get("distance_from_reference_pct")
-    return dist
+    if dist is not None:
+        return dist
+    if not config.ENABLE_DISTANCE_DECISION:
+        return None
+    best_buy_point = _to_dict(stock.get("best_buy_point"))
+    return best_buy_point.get("distance_from_reference_pct")
 
 
 def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:
