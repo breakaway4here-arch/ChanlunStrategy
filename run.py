@@ -44,6 +44,7 @@ from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
     fetch_daily_kline, fetch_kline, fetch_verified_index_kline,
     MarketDataUnavailable,
+    build_market_time_metadata,
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool,
 )
@@ -549,8 +550,10 @@ def _attach_liquidity(row):
 # ============================================================
 # 主流程
 # ============================================================
-def main(debug=False, preview=False):
-    today = datetime.now().strftime("%Y-%m-%d")
+def main(debug=False, preview=False, generated_at=None):
+    generated_at = generated_at or datetime.now().astimezone()
+    today = generated_at.strftime("%Y-%m-%d")
+    time_metadata = build_market_time_metadata(today, generated_at=generated_at)
     print(f"缠论选股系统启动 — {today} 14:35")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
@@ -591,8 +594,10 @@ def main(debug=False, preview=False):
                 stocks_with_kline.append({"code": code, "name": name, "klines": kline})
         data_quality = {
             "report_date": today,
+            **time_metadata,
             "is_trading_day": bool(sh_kline),
             "is_official": False,
+            "sources_trusted": False,
             "market_status": "verified" if sh_kline else "unverified",
             "stock_pool_source": "manual_debug",
             "sector_source": "eastmoney" if sectors else "empty",
@@ -612,6 +617,7 @@ def main(debug=False, preview=False):
         daily_data = collect_daily_data(
             required_date=today,
             allow_missing_index=preview,
+            generated_at=generated_at,
         )
 
     data_quality = daily_data.get("data_quality", {})

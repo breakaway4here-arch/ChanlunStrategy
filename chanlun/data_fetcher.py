@@ -13,7 +13,7 @@ import os
 import math
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
@@ -68,6 +68,9 @@ _EASTMONEY_TIMEOUT = 15
 _INDEX_SOURCE_MAX_DIFF_PCT = 0.3
 _INDEX_PREV_CLOSE_MAX_DIFF_RATIO = 0.0002
 _INDEX_PREV_CLOSE_MAX_DIFF_ABS = 0.05
+_TZ_CN = timezone(timedelta(hours=8))
+_MARKET_CLOSE_HOUR = 15
+_TRUSTED_STOCK_KLINE_SOURCES = {"tencent", "eastmoney", "sina"}
 
 
 class MarketDataUnavailable(RuntimeError):
@@ -76,6 +79,43 @@ class MarketDataUnavailable(RuntimeError):
 
 class MarketDataConflict(MarketDataUnavailable):
     """Raised when multiple live market sources disagree beyond tolerance."""
+
+
+def _normalize_generated_at(value=None):
+    generated_at = value or datetime.now(_TZ_CN)
+    if generated_at.tzinfo is None:
+        return generated_at.replace(tzinfo=_TZ_CN)
+    return generated_at.astimezone(_TZ_CN)
+
+
+def build_market_time_metadata(required_date=None, generated_at=None):
+    """Return deterministic report timing metadata without assuming today's date."""
+    generated = _normalize_generated_at(generated_at)
+    as_of = generated
+    report_date = str(required_date or generated.date().isoformat())
+    try:
+        report_day = datetime.strptime(report_date, "%Y-%m-%d").date()
+    except ValueError:
+        report_day = generated.date()
+
+    if generated.date() > report_day:
+        as_of = datetime(
+            report_day.year,
+            report_day.month,
+            report_day.day,
+            _MARKET_CLOSE_HOUR,
+            tzinfo=_TZ_CN,
+        )
+
+    is_closed = (
+        as_of.date() == report_day
+        and (as_of.hour, as_of.minute) >= (_MARKET_CLOSE_HOUR, 0)
+    )
+    return {
+        "generated_at": generated.isoformat(timespec="seconds"),
+        "as_of": as_of.isoformat(timespec="seconds"),
+        "bar_state": "closed" if is_closed else "intraday",
+    }
 
 
 def _collect_proxy_config():
@@ -705,6 +745,7 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
         CACHE_STATS["day_write"] += 1
         cached = cached_kline_if_sufficient("day", code, count)
         if cached is not None:
+            cached["source"] = "tencent"
             CACHE_STATS["day_hit"] += 1
             return cached
         CACHE_STATS["day_miss"] += 1
@@ -712,6 +753,7 @@ def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
 
     cached = cached_kline_if_sufficient("day", code, count)
     if cached is not None:
+        cached["source"] = "kline_cache"
         CACHE_STATS["day_hit"] += 1
         print(f"  [CACHE FALLBACK] day {code} remote failed, using cache")
         return cached
@@ -877,7 +919,9 @@ def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
 # ============================================================
 # 批量获取
 # ============================================================
-def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_stale=False):
+def batch_fetch_daily_klines(
+    stocks, max_workers=10, required_date=None, allow_stale=False, force_refresh=False
+):
     """
     并发批量获取日线。
     stocks: [{"code": "600519", "name": "茅台", "sector": "...", ...}, ...]
@@ -887,8 +931,8 @@ def batch_fetch_daily_klines(stocks, max_workers=10, required_date=None, allow_s
 
     def _fetch_one(stock):
         code = stock["code"]
-        kline_source = stock.get("source", "unknown")
-        klines = fetch_daily_kline(code)
+        klines = fetch_daily_kline(code, force_refresh=force_refresh)
+        kline_source = (klines or {}).get("source") or stock.get("source") or "tencent"
         status = build_kline_status(
             klines, required_date=required_date, source=kline_source,
         )
@@ -989,7 +1033,7 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
 # ============================================================
 # Phase 1 主流程
 # ============================================================
-def collect_daily_data(required_date=None, allow_missing_index=False):
+def collect_daily_data(required_date=None, allow_missing_index=False, generated_at=None):
     """
     完整数据采集流程:
     1. 获取 TOP20 资金流入板块
@@ -998,6 +1042,10 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     4. 获取上证指数日线
     """
     print("=" * 60)
+    time_metadata = build_market_time_metadata(
+        required_date=required_date,
+        generated_at=generated_at,
+    )
     print("Phase 1: 数据采集")
     print("=" * 60)
 
@@ -1117,6 +1165,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
         all_stocks,
         required_date=required_date,
         allow_stale=allow_missing_index,
+        force_refresh=time_metadata["bar_state"] == "closed",
     )
     elapsed = time.time() - t0
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
@@ -1145,17 +1194,46 @@ def collect_daily_data(required_date=None, allow_missing_index=False):
     if not sectors:
         sector_source = "empty"
 
+    report_date = required_date or ""
+    dates_match = bool(
+        report_date
+        and _latest_date(sh_kline) == report_date
+        and stocks_with_kline
+        and all(
+            (st.get("data_status") or {}).get("latest_date") == report_date
+            for st in stocks_with_kline
+        )
+    )
+    stock_sources_trusted = bool(
+        stocks_with_kline
+        and all(
+            (st.get("data_status") or {}).get("source") in _TRUSTED_STOCK_KLINE_SOURCES
+            for st in stocks_with_kline
+        )
+    )
+    sources_trusted = bool(
+        sh_kline
+        and sector_source == "eastmoney"
+        and stock_sources_trusted
+        and not fallback_used
+    )
+
     data_quality = {
-        "report_date": required_date or "",
+        "report_date": report_date,
+        **time_metadata,
         "is_trading_day": bool(sh_kline),
         "is_official": bool(
             sh_kline
             and stocks_with_kline
             and not allow_missing_index
             and not fallback_used
+            and dates_match
+            and sources_trusted
+            and time_metadata["bar_state"] == "closed"
             and stale_stock_count == 0
             and missing_daily_count == 0
         ),
+        "sources_trusted": sources_trusted,
         "market_status": "verified" if sh_kline else "unverified",
         "stock_pool_source": stock_pool_source,
         "sector_source": sector_source,

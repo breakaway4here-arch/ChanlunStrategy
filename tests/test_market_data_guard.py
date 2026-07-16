@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import patch
 
 import numpy as np
@@ -22,6 +22,94 @@ def _kline(dates, closes):
 
 
 class TestMarketDataGuard(unittest.TestCase):
+
+    def test_collect_daily_data_intraday_has_close_metadata_but_is_not_official(self):
+        as_of = datetime(2026, 6, 30, 14, 35, tzinfo=timezone(timedelta(hours=8)))
+        stock_row = {
+            "code": "600000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+        ]), patch.object(
+            data_fetcher, "fetch_sector_stocks", return_value=[{"code": "600000", "name": "测试股"}]
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=as_of,
+            )
+
+        quality = result["data_quality"]
+        self.assertEqual(quality["bar_state"], "intraday")
+        self.assertEqual(quality["generated_at"], "2026-06-30T14:35:00+08:00")
+        self.assertEqual(quality["as_of"], "2026-06-30T14:35:00+08:00")
+        self.assertFalse(quality["is_official"])
+
+    def test_collect_daily_data_closed_run_forces_daily_refresh_and_can_be_official(self):
+        as_of = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        calls = []
+
+        def fake_batch(stocks, required_date=None, allow_stale=False, max_workers=10, force_refresh=False):
+            calls.append(force_refresh)
+            return [{
+                "code": "600000",
+                "name": "测试股",
+                "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+                "data_status": {
+                    "daily": "verified",
+                    "latest_date": "2026-06-30",
+                    "source": "tencent",
+                    "bars": 2,
+                    "stale": False,
+                },
+            }]
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
+        ]), patch.object(
+            data_fetcher, "fetch_sector_stocks", return_value=[{"code": "600000", "name": "测试股"}]
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", side_effect=fake_batch
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=as_of,
+            )
+
+        self.assertEqual(calls, [True])
+        self.assertEqual(result["data_quality"]["bar_state"], "closed")
+        self.assertTrue(result["data_quality"]["sources_trusted"])
+        self.assertTrue(result["data_quality"]["is_official"])
+
+    def test_batch_fetch_daily_klines_propagates_close_refresh(self):
+        kline = _kline(["2026-06-30"] * 60, [10.0] * 60)
+        with patch.object(data_fetcher, "fetch_daily_kline", return_value=kline) as fetch:
+            data_fetcher.batch_fetch_daily_klines(
+                [{"code": "600000", "name": "测试股"}],
+                required_date="2026-06-30",
+                force_refresh=True,
+            )
+
+        fetch.assert_called_once_with("600000", force_refresh=True)
 
     def test_build_kline_status_marks_verified_and_stale(self):
         verified = _kline(
@@ -182,7 +270,9 @@ class TestMarketDataGuard(unittest.TestCase):
             "BK0002": [{"code": "600000", "name": "测试股", "change_pct": 1.4}],
         }
 
-        def fake_batch_fetch(stocks, required_date=None, allow_stale=False, max_workers=10):
+        def fake_batch_fetch(
+            stocks, required_date=None, allow_stale=False, max_workers=10, force_refresh=False
+        ):
             stock = stocks[0]
             self.assertEqual(stock["code"], "600000")
             self.assertEqual(stock["sector"], "AI")
@@ -417,8 +507,85 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         self.assertIn('"docs/data/${TODAY}.json"', script)
         self.assertNotIn("git add docs/index.html docs/data.json docs/data/ docs/20*/", script)
 
+    def test_daily_run_revalidates_immediately_before_staging(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        self.assertIn("set -e", script)
+        last_validator = script.rfind('/usr/bin/python3 scripts/validate_today_report.py "$TODAY"')
+        git_add = script.find("git add \\")
+        self.assertGreater(last_validator, 0)
+        self.assertGreater(git_add, last_validator)
+
 
 class TestReportContractGuard(unittest.TestCase):
+
+    def test_validate_report_contract_rejects_official_without_closed_metadata(self):
+        report = {
+            "date": "2026-06-30",
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+            "data_quality": {
+                "report_date": "2026-06-30",
+                "generated_at": "2026-06-30T14:35:00+08:00",
+                "as_of": "2026-06-30T14:35:00+08:00",
+                "bar_state": "intraday",
+                "sources_trusted": True,
+                "is_trading_day": True,
+                "is_official": True,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        errors = validate_report_contract(report)
+        self.assertTrue(any("bar_state == 'closed'" in err for err in errors))
+
+        for missing_key, expected_error in (
+            ("generated_at", "valid data_quality.generated_at"),
+            ("as_of", "valid data_quality.as_of"),
+            ("bar_state", "bar_state == 'closed'"),
+        ):
+            with self.subTest(missing_key=missing_key):
+                missing = dict(report)
+                missing["data_quality"] = dict(report["data_quality"])
+                missing["data_quality"].pop(missing_key)
+                missing_errors = validate_report_contract(missing)
+                self.assertTrue(any(expected_error in err for err in missing_errors))
+
+    def test_validate_report_contract_requires_official_for_publish_but_keeps_preview_compatible(self):
+        report = {
+            "date": "2026-06-30",
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+            "data_quality": {
+                "report_date": "2026-06-30",
+                "generated_at": "2026-06-30T14:35:00+08:00",
+                "as_of": "2026-06-30T14:35:00+08:00",
+                "bar_state": "intraday",
+                "sources_trusted": True,
+                "is_trading_day": True,
+                "is_official": False,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
+        errors = validate_report_contract(report, require_official=True)
+        self.assertTrue(any("requires data_quality.is_official == True" in err for err in errors))
 
     def test_validate_report_contract_allows_raw_change_fallback(self):
         report = {

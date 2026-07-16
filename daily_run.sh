@@ -2,6 +2,8 @@
 # 缠论选股日报 — 自动运行并推送
 # 由 launchd 每个工作日 14:35 触发，15:05 做一次补偿触发
 
+set -e
+
 source ~/.zshrc 2>/dev/null || true
 SCRIPT_DIR="${0:A:h}"
 cd "$SCRIPT_DIR"
@@ -59,6 +61,7 @@ run_status=$?
 
 if [ $run_status -eq 0 ]; then
     if is_today_output_ready; then
+        /usr/bin/python3 scripts/validate_today_report.py "$TODAY"
         git add \
             "docs/index.html" \
             docs/data.json \

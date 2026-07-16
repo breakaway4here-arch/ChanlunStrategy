@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
+from datetime import datetime
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -304,7 +305,18 @@ def _resolve_change_pct_for_view(
     return _resolve_change_pct(raw)
 
 
-def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
+def _parse_iso_datetime(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+
+
+def validate_report_contract(
+    report: Mapping[str, Any], require_official: bool = False
+) -> list[str]:
     errors: list[str] = []
     workspace = _as_mapping(report.get("workspace"))
     views = _as_mapping(workspace.get("views"))
@@ -319,7 +331,25 @@ def validate_report_contract(report: Mapping[str, Any]) -> list[str]:
         data_quality = _as_mapping(dq_value)
 
     is_official = bool(data_quality.get("is_official"))
+    if require_official and not is_official:
+        errors.append("publish requires data_quality.is_official == True")
     if is_official:
+        report_date = str(report.get("date") or "").strip()
+        quality_report_date = str(data_quality.get("report_date") or "").strip()
+        generated_at = _parse_iso_datetime(data_quality.get("generated_at"))
+        as_of = _parse_iso_datetime(data_quality.get("as_of"))
+        if generated_at is None:
+            errors.append("official report requires valid data_quality.generated_at")
+        if as_of is None:
+            errors.append("official report requires valid data_quality.as_of")
+        if data_quality.get("bar_state") != "closed":
+            errors.append("official report requires data_quality.bar_state == 'closed'")
+        if data_quality.get("sources_trusted") is not True:
+            errors.append("official report requires data_quality.sources_trusted == True")
+        if not report_date or quality_report_date != report_date:
+            errors.append("official report requires report date consistency")
+        if as_of is not None and quality_report_date and as_of.date().isoformat() != quality_report_date:
+            errors.append("official report requires data_quality.as_of date == report_date")
         if data_quality.get("market_status") != "verified":
             errors.append("official report requires data_quality.market_status == 'verified'")
         if data_quality.get("fallback_used") is not False:
@@ -390,7 +420,7 @@ def main(argv=None):
         return 1
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    contract_errors = validate_report_contract(report)
+    contract_errors = validate_report_contract(report, require_official=True)
     manifest_contract_errors = validate_manifest_contract(manifest)
     contract_errors.extend(manifest_contract_errors)
 
