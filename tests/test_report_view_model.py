@@ -421,6 +421,64 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual([item["code"] for item in main_rows], ["600049", "600050"])
         self.assertEqual(main_rows[1]["decision_engine_v1"], decision)
 
+    def test_workspace_reject_decision_caps_main_action_at_observe(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "reject",
+                "decision": "不推荐（高位风险）",
+            }
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("reject", item["action_reason"])
+        self.assertIn("决策上限", item["action_reason"])
+
+    def test_workspace_observe_decision_caps_missing_position_main_action(self):
+        pick = _fusion_pick(
+            decision_engine_v1={
+                "decision_code": "observe",
+                "reason_code": "missing_position",
+                "decision": "观察（位置数据不足）",
+            }
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("observe", item["action_reason"])
+        self.assertIn("决策上限", item["action_reason"])
+
+    def test_workspace_recommend_or_missing_decision_keeps_healthy_main_action(self):
+        rows = [
+            _fusion_pick(
+                code="600050",
+                decision_engine_v1={
+                    "decision_code": "recommend",
+                    "decision": "推荐",
+                },
+            ),
+            _fusion_pick(code="600051"),
+        ]
+
+        items = {
+            item["code"]: item
+            for item in build_workspace({"picks_fusion": rows})["views"]["main"]
+        }
+
+        self.assertEqual(items["600050"]["action"], "可上车")
+        self.assertEqual(items["600051"]["action"], "可上车")
+
+    def test_workspace_does_not_infer_cap_from_chinese_decision_without_code(self):
+        pick = _fusion_pick(
+            decision_engine_v1={"decision": "不推荐（高位风险）"}
+        )
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["action"], "可上车")
+
     def test_workspace_info_tags_include_extra_sector_tags(self):
         pick = _fusion_pick(code="600005", name="半导体票", sector="电子")
         pick["sector_tags"] = ["电子", "半导体", "AI"]

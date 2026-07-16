@@ -176,6 +176,18 @@ def _iter_workspace_rows(report: Mapping[str, Any]):
                 yield str(view), row
 
 
+_EXECUTABLE_WORKSPACE_ACTIONS = {"可上车", "等回踩", "慎追"}
+
+
+def _decision_action_conflict(row: Mapping[str, Any]) -> Optional[str]:
+    decision = _as_mapping(row.get("decision_engine_v1"))
+    decision_code = str(decision.get("decision_code") or "").strip().lower()
+    action = str(row.get("action") or "").strip()
+    if decision_code in {"reject", "observe"} and action in _EXECUTABLE_WORKSPACE_ACTIONS:
+        return decision_code
+    return None
+
+
 def _iter_raw_candidates(report: Mapping[str, Any]):
     for pool_name in (
         "picks_fusion",
@@ -400,6 +412,14 @@ def validate_report_contract(
             raw = _resolve_raw_candidate(report, _as_mapping(row.get("ref")))
             if is_official and _is_stale_data_row(raw):
                 errors.append(f"{view} raw candidate has stale daily cache in official report: code={row.get('code')}")
+
+    for view, row in _iter_workspace_rows(report):
+        decision_code = _decision_action_conflict(row)
+        if decision_code:
+            errors.append(
+                f"{view} row decision/action conflict: code={row.get('code')} "
+                f"decision_code={decision_code} action={row.get('action')}"
+            )
 
     if is_official:
         for view, row in _iter_workspace_rows(report):

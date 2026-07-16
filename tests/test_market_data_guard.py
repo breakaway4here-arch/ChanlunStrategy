@@ -1133,6 +1133,56 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
 class TestReportContractGuard(unittest.TestCase):
 
+    def test_validate_report_contract_rejects_decision_action_conflicts(self):
+        executable_actions = ("可上车", "等回踩", "慎追")
+        for decision_code in ("reject", "observe"):
+            for action in executable_actions:
+                with self.subTest(decision_code=decision_code, action=action):
+                    report = _official_empty_report()
+                    report["workspace"]["views"]["main"] = [{
+                        "code": "600000",
+                        "change_pct": 1.0,
+                        "current_price": 10.0,
+                        "action": action,
+                        "decision_engine_v1": {"decision_code": decision_code},
+                        "data_status": {"daily": "verified"},
+                    }]
+
+                    errors = validate_report_contract(report)
+
+                    self.assertTrue(
+                        any("decision/action conflict" in error for error in errors),
+                        errors,
+                    )
+
+    def test_validate_report_contract_allows_legal_or_legacy_decision_actions(self):
+        cases = (
+            ("recommend", "可上车"),
+            ("observe", "仅观察"),
+            ("reject", "仅观察"),
+            (None, "可上车"),
+        )
+        for decision_code, action in cases:
+            with self.subTest(decision_code=decision_code, action=action):
+                report = _official_empty_report()
+                row = {
+                    "code": "600000",
+                    "change_pct": 1.0,
+                    "current_price": 10.0,
+                    "action": action,
+                    "data_status": {"daily": "verified"},
+                }
+                if decision_code is not None:
+                    row["decision_engine_v1"] = {"decision_code": decision_code}
+                report["workspace"]["views"]["main"] = [row]
+
+                errors = validate_report_contract(report)
+
+                self.assertFalse(
+                    any("decision/action conflict" in error for error in errors),
+                    errors,
+                )
+
     def test_validate_official_requires_timezone_aware_post_close_timestamps(self):
         cases = (
             ("as_of", "2026-06-30T14:35:00+08:00", "as_of must be at or after 15:00 Asia/Shanghai"),

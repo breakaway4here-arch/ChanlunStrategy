@@ -53,14 +53,6 @@ def _as_mapping(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _as_list(value: Any) -> list[Any]:
-    if isinstance(value, list):
-        return value
-    if isinstance(value, tuple):
-        return list(value)
-    return []
-
-
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -94,32 +86,6 @@ def _resolve_score(row: Mapping[str, Any]) -> float:
     return 0.0
 
 
-def _resolve_action(row: Mapping[str, Any]) -> str:
-    for value in (
-        row.get("action"),
-        _safe_str(_as_mapping(row.get("decision_engine_v1")).get("decision")),
-        row.get("type"),
-        _safe_str(_as_mapping(row.get("best_buy_point")).get("confirmed_by")),
-    ):
-        text = _safe_str(value)
-        if text:
-            return text
-    return ""
-
-
-def _resolve_reason(row: Mapping[str, Any]) -> str:
-    for value in (
-        row.get("action_reason"),
-        _safe_str(_as_mapping(row.get("best_buy_point")).get("reason")),
-        row.get("sublevel_confirm_reason"),
-        row.get("watch_reason"),
-    ):
-        text = _safe_str(value)
-        if text:
-            return text
-    return "Top10 candidate"
-
-
 def _resolve_change_pct(row: Mapping[str, Any]) -> Optional[float]:
     for value in (row.get("change_pct"), _as_mapping(row.get("best_buy_point")).get("change_pct")):
         parsed = _safe_float(value)
@@ -149,11 +115,13 @@ def _build_item(row: Mapping[str, Any], rank: int, source: str) -> dict[str, Any
 
     return {
         "rank": rank,
+        "view_rank": row.get("view_rank"),
         "code": code,
         "name": _safe_str(row.get("name")),
         "score": _resolve_score(row),
-        "action": _resolve_action(row),
-        "reason": _resolve_reason(row),
+        "action": _safe_str(row.get("action")),
+        "action_reason": _safe_str(row.get("action_reason")),
+        "reason": _safe_str(row.get("reason")),
         "source": source,
         "change_pct": _resolve_change_pct(row),
         "current_price": _resolve_current_price(row),
@@ -161,60 +129,56 @@ def _build_item(row: Mapping[str, Any], rank: int, source: str) -> dict[str, Any
 
 
 def _collect_candidates(report: Mapping[str, Any], diagnostics: dict[str, Any]) -> tuple[list[dict[str, Any]], str, bool]:
-    workspace = _as_mapping(report.get("workspace"))
-    views = _as_mapping(workspace.get("views"))
-    highlights = _as_list(views.get("highlights"))
-    if highlights:
-        rows: list[dict[str, Any]] = []
-        for row in highlights:
-            if isinstance(row, Mapping):
-                mapped = _as_mapping(row)
-                mapped["_top10_source"] = "highlights"
-                rows.append(mapped)
-        source_rows = [
-            (row, "highlights", _resolve_score(row)) for row in rows if _safe_str(row.get("code"))
-        ]
-        diagnostics["selected_source"] = "highlights"
-        diagnostics["fallback_used"] = False
-        diagnostics["raw_source_counts"] = {"highlights": len(source_rows)}
-        return [row for row, _, _ in sorted(source_rows, key=lambda item: item[2], reverse=True)], "highlights", False
+    workspace_value = report.get("workspace")
+    if not isinstance(workspace_value, Mapping):
+        raise ValueError("report missing workspace.views.highlights")
+    views_value = workspace_value.get("views")
+    if not isinstance(views_value, Mapping) or "highlights" not in views_value:
+        raise ValueError("report missing workspace.views.highlights")
+    highlights_value = views_value.get("highlights")
+    if not isinstance(highlights_value, (list, tuple)):
+        raise ValueError("report workspace.views.highlights must be an array")
 
-    source_map = [
-        ("picks_fusion", "picks_fusion"),
-        ("picks_pure", "picks_pure"),
-        ("startup_watchlist", "startup_watchlist"),
-    ]
-    source_rows: list[tuple[dict[str, Any], str, float]] = []
-    diagnostics["raw_source_counts"] = {}
-    for source, source_name in source_map:
-        rows = _as_list(report.get(source))
-        typed_rows = []
-        for row in rows:
-            mapped = _as_mapping(row)
-            if not _safe_str(mapped.get("code")):
-                continue
-            mapped["_top10_source"] = source_name
-            typed_rows.append(mapped)
-        diagnostics["raw_source_counts"][source] = len(typed_rows)
-        for row in typed_rows:
-            source_rows.append((row, source_name, _resolve_score(row)))
+    rows: list[dict[str, Any]] = []
+    for row in highlights_value:
+        if not isinstance(row, Mapping):
+            raise ValueError("report workspace.views.highlights contains a non-object row")
+        mapped = dict(row)
+        mapped["_top10_source"] = "highlights"
+        rows.append(mapped)
 
-    diagnostics["fallback_used"] = True
-    diagnostics["selected_source"] = "fallback"
-
-    sorted_rows = sorted(source_rows, key=lambda item: (item[2], item[0].get("view_rank", 0)), reverse=True)
-    return [row for row, _, _ in sorted_rows], "fallback", True
+    diagnostics["selected_source"] = "highlights"
+    diagnostics["fallback_used"] = False
+    diagnostics["raw_source_counts"] = {"highlights": len(rows)}
+    return rows, "highlights", False
 
 
-def _dedupe_by_code(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
-    seen: dict[str, dict[str, Any]] = {}
-    for row in rows:
-        code = _safe_str(row.get("code"))
-        if not code:
-            continue
-        if code not in seen or _resolve_score(row) > _resolve_score(seen[code]):
-            seen[code] = dict(row)
-    return list(seen.values())
+def _require_official_closed_snapshot(
+    report: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+    snapshot_date: str,
+) -> None:
+    data_quality = report.get("data_quality")
+    if not isinstance(data_quality, Mapping) or not (
+        data_quality.get("is_official") is True
+        and data_quality.get("bar_state") == "closed"
+        and data_quality.get("sources_trusted") is True
+        and data_quality.get("stock_pool_incomplete") is False
+    ):
+        raise ValueError("Top10 requires an official closed snapshot")
+
+    report_date = _safe_str(report.get("date"))
+    quality_date = _safe_str(data_quality.get("report_date"))
+    if report_date != snapshot_date or quality_date != snapshot_date:
+        raise ValueError("Top10 requires an official closed snapshot for the selected date")
+
+    if "date_meta" in manifest:
+        date_meta = manifest.get("date_meta")
+        meta = date_meta.get(snapshot_date) if isinstance(date_meta, Mapping) else None
+        if not isinstance(meta, Mapping) or not (
+            meta.get("is_trading_day") is True and meta.get("is_official") is True
+        ):
+            raise ValueError("Top10 manifest date_meta is not official for the selected date")
 
 
 def build_snapshot_payload(
@@ -237,14 +201,10 @@ def build_snapshot_payload(
         snapshot_path = root_data_path if root_data_path.exists() else data_dir / "data.json"
     snapshot = _load_json(snapshot_path)
     diagnostics["snapshot_path"] = str(snapshot_path)
+    _require_official_closed_snapshot(snapshot, manifest, snapshot_date)
 
     raw_rows, selected_source, fallback_used = _collect_candidates(snapshot, diagnostics)
-    rows = _dedupe_by_code(raw_rows)
-    ranked_rows = rows
-    if selected_source == "highlights":
-        ranked_rows = rows[:]
-    else:
-        ranked_rows = sorted(rows, key=lambda row: (_resolve_score(row), _safe_str(row.get("name")), _safe_str(row.get("code"))), reverse=True)
+    ranked_rows = raw_rows
 
     diagnostics["candidate_count"] = len(ranked_rows)
     diagnostics["selected_source"] = selected_source

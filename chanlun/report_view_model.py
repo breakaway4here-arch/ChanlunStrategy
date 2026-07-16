@@ -781,6 +781,30 @@ def _action_and_reason(
     return "仅观察", "暂不满足交易条件，仅观察。"
 
 
+_EXECUTABLE_ACTIONS = {"可上车", "等回踩", "慎追"}
+
+
+def _apply_decision_action_cap(
+    action: str,
+    action_reason: str,
+    decision_payload: Any,
+) -> tuple[str, str]:
+    """Cap source/risk-derived actions using only the structured decision code."""
+    decision = _to_dict(decision_payload)
+    decision_code = _safe_str(decision.get("decision_code")).lower()
+    if decision_code == "reject":
+        return (
+            "仅观察",
+            f"决策上限（reject）：最多仅观察。原动作依据：{action_reason}",
+        )
+    if decision_code == "observe" and action in _EXECUTABLE_ACTIONS:
+        return (
+            "仅观察",
+            f"决策上限（observe）：不得执行上车动作。原动作依据：{action_reason}",
+        )
+    return action, action_reason
+
+
 def _primary_metric_bundle(
     raw: Mapping[str, Any],
     source: str,
@@ -847,6 +871,12 @@ def _build_item(
     )
 
     action, action_reason = _action_and_reason(ordered_sources, all_risk_flags, "main" in ordered_sources)
+    decision_payload = preferred_raw.get("decision_engine_v1")
+    action, action_reason = _apply_decision_action_cap(
+        action,
+        action_reason,
+        decision_payload,
+    )
 
     item = {
         "code": code,
@@ -870,7 +900,7 @@ def _build_item(
         "primary_reason": primary_reason,
         "risk_flags": all_risk_flags,
         "rank_trace": rank_trace,
-        "decision_engine_v1": preferred_raw.get("decision_engine_v1"),
+        "decision_engine_v1": decision_payload,
         "ref": {"pool": SOURCE_POOLS.get(preferred, ""), "code": code},
     }
     return item
