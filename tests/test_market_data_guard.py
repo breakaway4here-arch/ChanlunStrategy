@@ -53,6 +53,23 @@ def _official_empty_report():
 
 class TestMarketDataGuard(unittest.TestCase):
 
+    def test_run_main_uses_beijing_date_for_aware_generated_at(self):
+        captured = []
+
+        class StopAfterDateCapture(RuntimeError):
+            pass
+
+        def stop_collect(*args, **kwargs):
+            captured.append(kwargs.get("required_date"))
+            raise StopAfterDateCapture
+
+        generated_at = datetime(2026, 6, 30, 16, 30, tzinfo=timezone.utc)
+        with patch.object(run, "collect_daily_data", side_effect=stop_collect):
+            with self.assertRaises(StopAfterDateCapture):
+                run.main(debug=False, preview=False, generated_at=generated_at)
+
+        self.assertEqual(captured, ["2026-07-01"])
+
     def test_closed_run_with_same_day_cache_fetches_full_remote_window(self):
         end = date(2026, 6, 30)
         dates = [(end - timedelta(days=99 - i)).isoformat() for i in range(100)]
@@ -725,6 +742,26 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
 
 class TestReportContractGuard(unittest.TestCase):
+
+    def test_validate_official_requires_timezone_aware_post_close_timestamps(self):
+        cases = (
+            ("as_of", "2026-06-30T14:35:00+08:00", "as_of must be at or after 15:00 Asia/Shanghai"),
+            ("as_of", "2026-06-30T15:05:00", "as_of must include timezone"),
+            ("generated_at", "2026-06-30T15:05:00", "generated_at must include timezone"),
+        )
+        for field, value, expected in cases:
+            with self.subTest(field=field, value=value):
+                report = _official_empty_report()
+                report["data_quality"][field] = value
+                errors = validate_report_contract(report)
+                self.assertTrue(any(expected in err for err in errors), errors)
+
+    def test_validate_official_normalizes_aware_as_of_to_beijing_time(self):
+        report = _official_empty_report()
+        report["data_quality"]["generated_at"] = "2026-06-30T07:05:00+00:00"
+        report["data_quality"]["as_of"] = "2026-06-30T07:05:00+00:00"
+
+        self.assertEqual(validate_report_contract(report), [])
 
     def test_validate_report_contract_rejects_untrusted_source_and_as_of_mismatch(self):
         for field, value, expected in (

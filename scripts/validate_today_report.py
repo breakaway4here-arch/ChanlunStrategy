@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from collections.abc import Mapping
 
@@ -13,6 +13,8 @@ sys.path.insert(0, str(ROOT))
 
 from run import fetch_market_indices  # noqa: E402
 from typing import Any, Optional
+
+TZ_CN = timezone(timedelta(hours=8))
 
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -340,16 +342,26 @@ def validate_report_contract(
         as_of = _parse_iso_datetime(data_quality.get("as_of"))
         if generated_at is None:
             errors.append("official report requires valid data_quality.generated_at")
+        elif generated_at.utcoffset() is None:
+            errors.append("official report data_quality.generated_at must include timezone")
         if as_of is None:
             errors.append("official report requires valid data_quality.as_of")
+            as_of_cn = None
+        elif as_of.utcoffset() is None:
+            errors.append("official report data_quality.as_of must include timezone")
+            as_of_cn = None
+        else:
+            as_of_cn = as_of.astimezone(TZ_CN)
         if data_quality.get("bar_state") != "closed":
             errors.append("official report requires data_quality.bar_state == 'closed'")
         if data_quality.get("sources_trusted") is not True:
             errors.append("official report requires data_quality.sources_trusted == True")
         if not report_date or quality_report_date != report_date:
             errors.append("official report requires report date consistency")
-        if as_of is not None and quality_report_date and as_of.date().isoformat() != quality_report_date:
+        if as_of_cn is not None and quality_report_date and as_of_cn.date().isoformat() != quality_report_date:
             errors.append("official report requires data_quality.as_of date == report_date")
+        if as_of_cn is not None and (as_of_cn.hour, as_of_cn.minute) < (15, 0):
+            errors.append("official report data_quality.as_of must be at or after 15:00 Asia/Shanghai")
         if data_quality.get("market_status") != "verified":
             errors.append("official report requires data_quality.market_status == 'verified'")
         if data_quality.get("fallback_used") is not False:

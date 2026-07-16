@@ -552,8 +552,8 @@ def _attach_liquidity(row):
 # ============================================================
 def main(debug=False, preview=False, generated_at=None):
     generated_at = generated_at or datetime.now().astimezone()
-    today = generated_at.strftime("%Y-%m-%d")
-    time_metadata = build_market_time_metadata(today, generated_at=generated_at)
+    time_metadata = build_market_time_metadata(generated_at=generated_at)
+    today = time_metadata["generated_at"].split("T", 1)[0]
     print(f"缠论选股系统启动 — {today} 14:35")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
