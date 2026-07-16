@@ -2,6 +2,8 @@
 缠论选股系统 — 所有可调参数
 """
 
+import os
+
 # ============================================================
 # 运行时间
 # ============================================================
@@ -134,8 +136,20 @@ KLINE_CACHE_TRADING_DAYS = 10
 MARKET_HISTORY_DB_PATH = ".cache/chanlun/market_history.sqlite"
 KLINE_REPOSITORY_ENABLED = True
 KLINE_REPOSITORY_MODE = "ongoing"
+MARKET_HISTORY_CUTOVER_MODE = os.environ.get(
+    "CHANLUN_MARKET_DATA_MODE", "sqlite"
+).strip().lower()
+if MARKET_HISTORY_CUTOVER_MODE not in {"shadow", "sqlite"}:
+    raise ValueError("CHANLUN_MARKET_DATA_MODE must be shadow or sqlite")
 # 迁移期只读旧 JSON 做数值诊断，不允许旧 JSON 回填或覆盖 SQLite。
-KLINE_REPOSITORY_SHADOW_JSON = False
+KLINE_REPOSITORY_SHADOW_JSON = MARKET_HISTORY_CUTOVER_MODE == "shadow"
+RECALL_STRATEGY_MODE = os.environ.get(
+    "CHANLUN_RECALL_STRATEGY_MODE", "shadow"
+).strip().lower()
+if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
+    raise ValueError(
+        "CHANLUN_RECALL_STRATEGY_MODE must be legacy, shadow or active"
+    )
 ENABLE_FULL_A_UNIVERSE = True
 FULL_A_LOW_QUOTA = 350
 FULL_A_TREND_QUOTA = 350

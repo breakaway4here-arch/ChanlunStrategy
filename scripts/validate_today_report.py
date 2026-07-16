@@ -441,6 +441,36 @@ def validate_report_contract(
     return errors
 
 
+def validate_runtime_cutover(report: Mapping[str, Any]) -> list[str]:
+    """Validate operational cutover metadata before an official push."""
+    errors: list[str] = []
+    data_quality = _as_mapping(report.get("data_quality"))
+    runtime = _as_mapping(data_quality.get("runtime_policy"))
+    diagnostics = _as_mapping(report.get("diagnostics"))
+    funnel = _as_mapping(diagnostics.get("candidate_funnel"))
+    shadow = _as_mapping(diagnostics.get("recall_shadow"))
+    market_mode = str(
+        runtime.get("market_history_cutover_mode") or ""
+    )
+    strategy_mode = str(runtime.get("recall_strategy_mode") or "")
+    if market_mode != "sqlite":
+        errors.append(
+            "publish requires market_history_cutover_mode == sqlite"
+        )
+    if strategy_mode not in {"legacy", "shadow", "active"}:
+        errors.append("publish requires a valid recall_strategy_mode")
+    if runtime.get("decision_semantics") != "v2_missing_position_is_observe":
+        errors.append("publish requires decision semantics v2")
+    if funnel.get("persist_status") != "saved":
+        errors.append("publish requires saved candidate funnel")
+    if strategy_mode == "shadow":
+        if shadow.get("mode") != "shadow":
+            errors.append("shadow publish requires recall comparison")
+        if shadow.get("new_strategy_controls_publish") is not False:
+            errors.append("shadow mode cannot let new strategy control publish")
+    return errors
+
+
 def main(argv=None):
     argv = argv or sys.argv[1:]
     if not argv:
@@ -460,6 +490,7 @@ def main(argv=None):
 
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     contract_errors = validate_report_contract(report, require_official=True)
+    contract_errors.extend(validate_runtime_cutover(report))
     manifest_contract_errors = validate_manifest_contract(manifest)
     contract_errors.extend(manifest_contract_errors)
 

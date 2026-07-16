@@ -45,6 +45,7 @@ from config import (
     FULL_A_LOW_QUOTA, FULL_A_TREND_QUOTA, FULL_A_NEUTRAL_QUOTA,
     FULL_A_BASE_LIMIT, FULL_A_OVERLAY_LIMIT, FULL_A_FINAL_LIMIT,
     FULL_A_MIN_ELIGIBLE_COUNT,
+    MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
@@ -282,6 +283,17 @@ def _apply_full_a_universe(
             sector_group_count=len(sector_groups),
         )
         data_quality["stock_pool_source"] = "full_a_db+sector_overlay"
+        if RECALL_STRATEGY_MODE == "shadow":
+            selected_codes = {
+                str(item.get("code") or "") for item in selected
+            }
+            legacy_extra = [
+                item
+                for item in stocks_with_kline
+                if str(item.get("code") or "") not in selected_codes
+            ]
+            diagnostics["shadow_legacy_extra_count"] = len(legacy_extra)
+            selected = selected + legacy_extra
         return selected
     except Exception as exc:
         diagnostics.update(
@@ -689,6 +701,59 @@ def _attach_liquidity(row):
     return row
 
 
+def _apply_recall_publish_mode(
+    pure_scored,
+    fusion_scored,
+    legacy_codes,
+    mode=None,
+):
+    """Keep new recall in shadow while publishing only the legacy main scope."""
+    selected_mode = str(mode or RECALL_STRATEGY_MODE).strip().lower()
+    if selected_mode not in {"legacy", "shadow", "active"}:
+        raise ValueError("unsupported recall strategy mode: {}".format(
+            selected_mode
+        ))
+    potential_pure = list(pure_scored or [])
+    potential_fusion = list(fusion_scored or [])
+    if selected_mode == "active":
+        published_pure = potential_pure
+        published_fusion = potential_fusion
+    else:
+        allowed = {str(code) for code in legacy_codes or []}
+
+        def legacy_item(item):
+            return (
+                str(item.get("code") or "") in allowed
+                and str(item.get("source_channel") or "low_position")
+                != "trend"
+            )
+
+        published_pure = [
+            item for item in potential_pure if legacy_item(item)
+        ]
+        published_fusion = [
+            item for item in potential_fusion if legacy_item(item)
+        ]
+    published_codes = {
+        str(item.get("code") or "")
+        for item in published_pure + published_fusion
+    }
+    potential_codes = {
+        str(item.get("code") or "")
+        for item in potential_pure + potential_fusion
+    }
+    diagnostics = {
+        "mode": selected_mode,
+        "new_strategy_controls_publish": selected_mode == "active",
+        "potential_pure_count": len(potential_pure),
+        "potential_fusion_count": len(potential_fusion),
+        "published_pure_count": len(published_pure),
+        "published_fusion_count": len(published_fusion),
+        "suppressed_codes": sorted(potential_codes - published_codes),
+    }
+    return published_pure, published_fusion, diagnostics
+
+
 # ============================================================
 # 主流程
 # ============================================================
@@ -776,7 +841,16 @@ def main(debug=False, preview=False, generated_at=None):
     sh_kline = daily_data["sh_index"]
     index_error = daily_data.get("index_error", "")
     stocks_with_kline = daily_data["stocks"]
-    if not debug:
+    legacy_stocks_with_kline = list(stocks_with_kline)
+    legacy_codes = {
+        str(stock.get("code") or "") for stock in legacy_stocks_with_kline
+    }
+    data_quality["runtime_policy"] = {
+        "market_history_cutover_mode": MARKET_HISTORY_CUTOVER_MODE,
+        "recall_strategy_mode": RECALL_STRATEGY_MODE,
+        "decision_semantics": "v2_missing_position_is_observe",
+    }
+    if not debug and RECALL_STRATEGY_MODE != "legacy":
         stocks_with_kline = _apply_full_a_universe(
             stocks_with_kline,
             sectors,
@@ -1401,6 +1475,25 @@ def main(debug=False, preview=False, generated_at=None):
     fusion_scored = _attach_gf_dma_health(fusion_scored)
     pure_scored = [_attach_signal_dimensions(p) for p in pure_scored]
     fusion_scored = [_attach_signal_dimensions(p) for p in fusion_scored]
+    experimental_pure_scored = list(pure_scored)
+    experimental_fusion_scored = list(fusion_scored)
+    pure_scored, fusion_scored, recall_shadow_diag = (
+        _apply_recall_publish_mode(
+            pure_scored,
+            fusion_scored,
+            legacy_codes,
+        )
+    )
+    if RECALL_STRATEGY_MODE != "active":
+        print(
+            "  召回影子模式: potential pure={} fusion={}, "
+            "published pure={} fusion={}".format(
+                recall_shadow_diag["potential_pure_count"],
+                recall_shadow_diag["potential_fusion_count"],
+                recall_shadow_diag["published_pure_count"],
+                recall_shadow_diag["published_fusion_count"],
+            )
+        )
 
     print(f"  纯净版最终推荐: {len(pure_scored)} 只")
     if pure_scored:
@@ -1433,7 +1526,14 @@ def main(debug=False, preview=False, generated_at=None):
     # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
     next_day_boom = build_next_day_boom_candidates(
         picks_fusion=fusion_scored,
-        startup_watchlist=startup_watchlist,
+        startup_watchlist=[
+            item
+            for item in startup_watchlist
+            if (
+                RECALL_STRATEGY_MODE == "active"
+                or str(item.get("code") or "") in legacy_codes
+            )
+        ],
         market=market_indices,
     )
     print(f"  次日大涨模式: {next_day_boom.get('mode')} "
@@ -1487,12 +1587,16 @@ def main(debug=False, preview=False, generated_at=None):
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
     candidate_funnel.register_many(
-        list(pure_scored) + list(fusion_scored) + list(observation_watchlist)
+        list(experimental_pure_scored)
+        + list(experimental_fusion_scored)
+        + list(observation_watchlist)
     )
     candidate_funnel.mark_membership(
         "fusion",
-        fusion_scored,
-        eligible_codes=[item.get("code") for item in fusion_scored],
+        experimental_fusion_scored,
+        eligible_codes=[
+            item.get("code") for item in experimental_fusion_scored
+        ],
     )
     for watch in observation_watchlist:
         if not isinstance(watch, dict) or not watch.get("code"):
@@ -1539,13 +1643,20 @@ def main(debug=False, preview=False, generated_at=None):
             },
         )
     decision_by_code = {}
-    for item in list(pure_scored) + list(fusion_scored) + list(observation_watchlist):
+    for item in (
+        list(experimental_pure_scored)
+        + list(experimental_fusion_scored)
+        + list(observation_watchlist)
+    ):
         if isinstance(item, dict) and item.get("code"):
             decision_by_code[str(item["code"])] = (
                 item.get("decision_engine_v1") or {}
             )
     candidate_funnel.finalize(
-        main_codes=list(pure_scored) + list(fusion_scored),
+        main_codes=(
+            list(experimental_pure_scored)
+            + list(experimental_fusion_scored)
+        ),
         observation_codes=observation_watchlist,
         decision_by_code=decision_by_code,
     )
@@ -1646,6 +1757,7 @@ def main(debug=False, preview=False, generated_at=None):
             "persist_status": funnel_persist_status,
             "db_path": MARKET_HISTORY_DB_PATH,
         },
+        "recall_shadow": recall_shadow_diag,
         "luojie_pool": luojie_pool.get("diagnostics", {}),
         "signal_recency": {
             "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,

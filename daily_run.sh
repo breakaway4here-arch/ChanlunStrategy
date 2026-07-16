@@ -8,6 +8,11 @@ source ~/.zshrc 2>/dev/null || true
 SCRIPT_DIR="${0:A:h}"
 cd "$SCRIPT_DIR"
 
+: ${CHANLUN_MARKET_DATA_MODE:=sqlite}
+: ${CHANLUN_RECALL_STRATEGY_MODE:=shadow}
+export CHANLUN_MARKET_DATA_MODE
+export CHANLUN_RECALL_STRATEGY_MODE
+
 TODAY=$(date '+%Y-%m-%d')
 TODAY_DATA_PATH="docs/data/${TODAY}.json"
 INDEX_PATH="docs/index.html"
