@@ -294,7 +294,7 @@ class TestMarketDataGuard(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp, patch(
             "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
-        ):
+        ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
             write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
             with patch.object(data_fetcher, "_fetch_daily_kline_remote", side_effect=remote):
                 rows = data_fetcher.batch_fetch_daily_klines(
@@ -319,7 +319,7 @@ class TestMarketDataGuard(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp, patch(
             "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
-        ):
+        ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
             write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
             with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
                 {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
@@ -474,7 +474,9 @@ class TestMarketDataGuard(unittest.TestCase):
 
     def test_batch_fetch_daily_klines_propagates_close_refresh(self):
         kline = _kline(["2026-06-30"] * 60, [10.0] * 60)
-        with patch.object(data_fetcher, "fetch_daily_kline", return_value=kline) as fetch:
+        with patch.object(
+            data_fetcher, "KLINE_REPOSITORY_ENABLED", False
+        ), patch.object(data_fetcher, "fetch_daily_kline", return_value=kline) as fetch:
             data_fetcher.batch_fetch_daily_klines(
                 [{"code": "600000", "name": "测试股"}],
                 required_date="2026-06-30",

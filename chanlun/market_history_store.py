@@ -269,6 +269,53 @@ class MarketHistoryStore:
         ).fetchone()
         return _row_dict(row)
 
+    def resolve_instruments(
+        self,
+        asset_type: str,
+        exchange_codes: Sequence[Sequence[str]],
+    ) -> Dict[Any, Dict[str, Any]]:
+        """Resolve logical identities in fixed-size SQL batches."""
+        identities = list(dict.fromkeys(
+            (str(exchange).strip(), str(code).strip())
+            for exchange, code in exchange_codes
+        ))
+        result = {}
+        for offset in range(0, len(identities), 400):
+            chunk = identities[offset:offset + 400]
+            if not chunk:
+                continue
+            predicates = " OR ".join("(exchange=? AND code=?)" for _ in chunk)
+            params = [str(asset_type).strip()]
+            for exchange, code in chunk:
+                params.extend((exchange, code))
+            rows = self.connection.execute(
+                """
+                SELECT instrument_id, asset_type, exchange, code, name, updated_at
+                FROM instruments
+                WHERE asset_type=? AND ({})
+                """.format(predicates),
+                params,
+            ).fetchall()
+            for row in rows:
+                payload = dict(row)
+                result[(payload["exchange"], payload["code"])] = payload
+        return result
+
+    def list_instruments(self, asset_type: Optional[str] = None) -> List[Dict[str, Any]]:
+        sql = (
+            "SELECT instrument_id, asset_type, exchange, code, name, updated_at "
+            "FROM instruments"
+        )
+        params = []
+        if asset_type is not None:
+            sql += " WHERE asset_type=?"
+            params.append(str(asset_type))
+        sql += " ORDER BY asset_type, exchange, code"
+        return [
+            dict(row)
+            for row in self.connection.execute(sql, params).fetchall()
+        ]
+
     def upsert_stock_meta(
         self, instrument_id: int, as_of: str, metadata: Mapping[str, Any]
     ) -> None:

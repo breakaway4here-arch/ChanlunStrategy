@@ -29,6 +29,10 @@ from config import (
     MIN30_KLINE_INCREMENTAL_FETCH_COUNT,
     MIN15_KLINE_INCREMENTAL_FETCH_COUNT,
     MIN15_LOOKBACK_BARS,
+    MARKET_HISTORY_DB_PATH,
+    KLINE_REPOSITORY_ENABLED,
+    KLINE_REPOSITORY_MODE,
+    KLINE_REPOSITORY_SHADOW_JSON,
 )
 from .kline_cache import (
     cached_kline_if_sufficient,
@@ -39,6 +43,7 @@ from .kline_cache import (
     records_to_kline_dict,
     CACHE_STATS,
 )
+from .kline_repository import KLineRepository
 
 # ------------------------------------------------------------
 # 路径
@@ -71,7 +76,10 @@ _INDEX_PREV_CLOSE_MAX_DIFF_RATIO = 0.0002
 _INDEX_PREV_CLOSE_MAX_DIFF_ABS = 0.05
 _TZ_CN = timezone(timedelta(hours=8))
 _MARKET_CLOSE_HOUR = 15
-_TRUSTED_STOCK_KLINE_SOURCES = {"tencent", "eastmoney", "sina"}
+_TRUSTED_STOCK_KLINE_SOURCES = {
+    "tencent", "eastmoney", "sina", "market_history_db",
+}
+_KLINE_REPOSITORY = None
 
 
 class MarketDataUnavailable(RuntimeError):
@@ -712,6 +720,18 @@ def build_kline_status(kline, required_date=None, source="unknown"):
             "stale": True,
         }
 
+    repository_status = kline.get("_data_status")
+    if isinstance(repository_status, dict):
+        status = dict(repository_status)
+        latest_date = _kline_latest_date(kline)
+        status["latest_date"] = latest_date
+        status["bars"] = len(kline.get("closes", []))
+        status["source"] = kline.get("source", status.get("source", source))
+        if required_date and latest_date != required_date:
+            status["daily"] = "stale_cache"
+            status["stale"] = True
+        return status
+
     latest_date = _kline_latest_date(kline)
     bars = len(kline.get("closes", []))
     if required_date and latest_date != required_date:
@@ -748,13 +768,6 @@ def _close_matches(expected, actual):
     actual = float(actual)
     tolerance = max(_INDEX_PREV_CLOSE_MAX_DIFF_ABS, abs(expected) * _INDEX_PREV_CLOSE_MAX_DIFF_RATIO)
     return abs(expected - actual) <= tolerance
-
-
-def _cached_index_kline(code, count):
-    records = sorted(read_cached_records("day", code), key=lambda r: r["date"])
-    if len(records) < max(2, min(20, count)):
-        return None
-    return records_to_kline_dict(records[-count:])
 
 
 def _splice_realtime_index_bar(history, quote, count, source, required_date=None):
@@ -832,7 +845,6 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
         quote = _fetch_daily_kline_sina_quote_remote(code, count=2)
         splice_sources = [
             ("sina_daily+sina_quote", fetched.get("sina_daily")),
-            ("cache+sina_quote", _cached_index_kline(code, count)),
         ]
         for source, history in splice_sources:
             kline = _splice_realtime_index_bar(
@@ -862,7 +874,7 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
     return result
 
 
-def fetch_daily_kline(code, count=DAY_LOOKBACK, force_refresh=False):
+def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=False):
     """Fetch daily kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("day", code)
@@ -1022,7 +1034,7 @@ def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
     )
 
 
-def fetch_30min_kline(code, count=80, force_refresh=False):
+def _fetch_30min_kline_legacy_cache(code, count=80, force_refresh=False):
     """Fetch 30min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("30min", code)
@@ -1061,7 +1073,9 @@ def fetch_30min_kline(code, count=80, force_refresh=False):
     return None
 
 
-def fetch_15min_kline(code, count=MIN15_LOOKBACK_BARS, force_refresh=False):
+def _fetch_15min_kline_legacy_cache(
+    code, count=MIN15_LOOKBACK_BARS, force_refresh=False
+):
     """Fetch 15min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     cached_records = read_cached_records("15min", code)
@@ -1100,6 +1114,188 @@ def fetch_15min_kline(code, count=MIN15_LOOKBACK_BARS, force_refresh=False):
     return None
 
 
+def _with_source(kline, source):
+    if not kline:
+        return None
+    result = dict(kline)
+    result["source"] = result.get("source") or source
+    return result
+
+
+def _fetch_daily_for_repository(code, count):
+    sources = (
+        ("tencent", _fetch_daily_kline_remote),
+        ("eastmoney", _fetch_daily_kline_eastmoney_remote),
+        ("sina", _fetch_daily_kline_sina_daily_remote),
+    )
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        futures = {
+            pool.submit(fetcher, code, count=count): source
+            for source, fetcher in sources
+        }
+        for future in as_completed(futures):
+            source = futures[future]
+            try:
+                kline = future.result()
+            except Exception:
+                kline = None
+            if kline:
+                return _with_source(kline, source)
+    return None
+
+
+def _fetch_30min_for_repository(code, count):
+    return _fetch_minute_for_repository(code, 30, count)
+
+
+def _fetch_15min_for_repository(code, count):
+    return _fetch_minute_for_repository(code, 15, count)
+
+
+def _fetch_minute_for_repository(code, scale, count):
+    sources = [(
+        "eastmoney",
+        lambda: _fetch_eastmoney_minute_kline_remote(code, scale, count),
+    )]
+    if count <= 240:
+        sources.append((
+            "sina",
+            lambda: _fetch_sina_minute_kline_remote(code, scale, count),
+        ))
+    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
+        futures = {pool.submit(fetcher): source for source, fetcher in sources}
+        for future in as_completed(futures):
+            source = futures[future]
+            try:
+                kline = future.result()
+            except Exception:
+                kline = None
+            if kline:
+                return _with_source(kline, source)
+    return None
+
+
+def _legacy_shadow_reader(interval, code, count):
+    return cached_kline_if_sufficient(interval, code, count)
+
+
+def reset_kline_repository():
+    """Reset the process-local repository after config/path changes in tests."""
+    global _KLINE_REPOSITORY
+    _KLINE_REPOSITORY = None
+
+
+def _get_kline_repository():
+    global _KLINE_REPOSITORY
+    if _KLINE_REPOSITORY is None:
+        _KLINE_REPOSITORY = KLineRepository(
+            MARKET_HISTORY_DB_PATH,
+            mode=KLINE_REPOSITORY_MODE,
+            remote_fetchers={
+                "day": _fetch_daily_for_repository,
+                "30m": _fetch_30min_for_repository,
+                "15m": _fetch_15min_for_repository,
+            },
+            shadow_reader=(
+                _legacy_shadow_reader if KLINE_REPOSITORY_SHADOW_JSON else None
+            ),
+            max_workers=8,
+        )
+    return _KLINE_REPOSITORY
+
+
+def _fetch_from_repository(
+    interval,
+    code,
+    count,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    result = _get_kline_repository().get(
+        interval,
+        code,
+        count=count,
+        required_date=required_date,
+        as_of=as_of,
+        force_refresh=force_refresh,
+    )
+    return result.kline
+
+
+def fetch_daily_kline(
+    code,
+    count=DAY_LOOKBACK,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_daily_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "day",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def fetch_30min_kline(
+    code, count=80, force_refresh=False, required_date=None, as_of=None
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_30min_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "30m",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def fetch_15min_kline(
+    code,
+    count=MIN15_LOOKBACK_BARS,
+    force_refresh=False,
+    required_date=None,
+    as_of=None,
+):
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if not KLINE_REPOSITORY_ENABLED:
+        return _fetch_15min_kline_legacy_cache(
+            code, count=count, force_refresh=effective_force
+        )
+    return _fetch_from_repository(
+        "15m",
+        code,
+        count,
+        force_refresh=effective_force,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+_PUBLIC_FETCH_DAILY_IMPL = fetch_daily_kline
+_PUBLIC_FETCH_30MIN_IMPL = fetch_30min_kline
+_PUBLIC_FETCH_15MIN_IMPL = fetch_15min_kline
+
+
 # ============================================================
 # K 线通用入口（用于 market indices 等场景）
 # ============================================================
@@ -1130,10 +1326,29 @@ def batch_fetch_daily_klines(
     返回: [{"code": ..., "name": ..., "sector": ..., "sector_tags": [...], "klines": {...}, "data_status": {...}}, ...]
     """
     results = []
+    repository_results = None
+    effective_force = (
+        force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
+    )
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_daily_kline is _PUBLIC_FETCH_DAILY_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "day",
+            [stock["code"] for stock in stocks],
+            count=DAY_LOOKBACK,
+            required_date=required_date,
+            force_refresh=effective_force,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = fetch_daily_kline(code, force_refresh=force_refresh)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_daily_kline(code, force_refresh=effective_force)
+        )
         kline_source = (klines or {}).get("source") or stock.get("source") or "tencent"
         status = build_kline_status(
             klines, required_date=required_date, source=kline_source,
@@ -1193,10 +1408,25 @@ def batch_fetch_30min_klines(stocks, max_workers=8):
     并发批量获取30分钟K线。
     """
     results = []
+    repository_results = None
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_30min_kline is _PUBLIC_FETCH_30MIN_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "30m",
+            [stock["code"] for stock in stocks],
+            count=80,
+            force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = fetch_30min_kline(code)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_30min_kline(code)
+        )
         if klines and len(klines.get("closes", [])) >= 40:
             return {"code": code, "name": stock.get("name", ""), "klines": klines}
         return None
@@ -1215,10 +1445,25 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
     并发批量获取15分钟K线。
     """
     results = []
+    repository_results = None
+    if (
+        KLINE_REPOSITORY_ENABLED
+        and fetch_15min_kline is _PUBLIC_FETCH_15MIN_IMPL
+    ):
+        repository_results = _get_kline_repository().get_many(
+            "15m",
+            [stock["code"] for stock in stocks],
+            count=MIN15_LOOKBACK_BARS,
+            force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
+        )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = fetch_15min_kline(code)
+        klines = (
+            repository_results[code].kline
+            if repository_results is not None
+            else fetch_15min_kline(code)
+        )
         if klines and len(klines.get("closes", [])) >= 180:
             return {"code": code, "name": stock.get("name", ""), "klines": klines}
         return None
@@ -1347,42 +1592,61 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
     if not stock_map:
-        from pathlib import Path
-        from config import KLINE_CACHE_DIR
-        cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
-        if cache_dir.exists():
-            cached = list(cache_dir.glob("*.json"))
-            code_to_name = get_code_to_name()
-            for f in cached:
-                code = f.stem
-                # 跳过非标准6位代码（如指数）
-                if not code or len(code) != 6 or not code.isdigit():
-                    continue
-                # 跳过北交所/新三板（92/87/83/43开头）
-                if code[:2] in ("92", "87", "83", "43"):
-                    continue
-                name = code_to_name.get(code, code)
+        if KLINE_REPOSITORY_ENABLED:
+            for instrument in _get_kline_repository().list_instruments():
+                code = str(instrument.get("code") or "")
                 stock_map[code] = {
                     "code": code,
-                    "name": name,
+                    "name": instrument.get("name") or code,
                     "change_pct": 0,
                     "sector": "",
                     "sector_tags": [],
                     "sector_rank": None,
                     "sector_flow": None,
                     "sector_strength_label": "",
-                    "source": "kline_cache",
+                    "source": "market_history_db",
                 }
             if stock_map:
-                print(f"  [FALLBACK] 板块API全部不可用，从 K线缓存恢复 {len(stock_map)} 只股票")
-                stock_pool_source = "kline_cache"
+                print(
+                    f"  [FALLBACK] 板块API全部不可用，从行情数据库恢复 "
+                    f"{len(stock_map)} 只股票"
+                )
+                stock_pool_source = "market_history_db"
                 sector_source = "fallback_static"
                 fallback_used = True
-                warnings.append("板块成分抓取失败，从 K线缓存恢复股票池")
-                warnings.append("板块API全部不可用，使用 K线缓存兜底")
+                warnings.append("板块成分抓取失败，从行情数据库恢复股票池")
             else:
-                print(f"  [FALLBACK] K线缓存中无可用股票")
-                warnings.append("K线缓存为空，无法回退")
+                print("  [FALLBACK] 行情数据库中无可用股票")
+                warnings.append("行情数据库为空，无法回退")
+        else:
+            from pathlib import Path
+            from config import KLINE_CACHE_DIR
+            cache_dir = Path(KLINE_CACHE_DIR) / "klines" / "day"
+            if cache_dir.exists():
+                cached = list(cache_dir.glob("*.json"))
+                code_to_name = get_code_to_name()
+                for f in cached:
+                    code = f.stem
+                    if not code or len(code) != 6 or not code.isdigit():
+                        continue
+                    if code[:2] in ("92", "87", "83", "43"):
+                        continue
+                    stock_map[code] = {
+                        "code": code,
+                        "name": code_to_name.get(code, code),
+                        "change_pct": 0,
+                        "sector": "",
+                        "sector_tags": [],
+                        "sector_rank": None,
+                        "sector_flow": None,
+                        "sector_strength_label": "",
+                        "source": "kline_cache",
+                    }
+                if stock_map:
+                    stock_pool_source = "kline_cache"
+                    sector_source = "fallback_static"
+                    fallback_used = True
+                    warnings.append("板块API全部不可用，使用 K线缓存兜底")
 
     all_stocks = list(stock_map.values())
     print(f"[3/4] 批量获取日线（{len(all_stocks)} 只）...")
