@@ -13,6 +13,7 @@ from scripts.backfill_market_history import (
     BackfillIncomplete,
     DEFAULT_WORKERS,
     _retry_fetch,
+    kline_payload_to_bars,
     merge_completed_run,
     run_shard,
     stable_code_shards,
@@ -66,6 +67,25 @@ class BackfillMarketHistoryTests(unittest.TestCase):
         self.assertEqual(sorted(flattened), normalized)
         self.assertEqual(len(flattened), len(set(flattened)))
         self.assertEqual(3, DEFAULT_WORKERS)
+
+    def test_missing_amount_uses_explicit_volume_close_proxy(self):
+        payload = _kline("600000", 1)
+        payload.pop("amounts")
+
+        bars = kline_payload_to_bars(
+            payload,
+            interval="day",
+            adjustment="qfq",
+            source_batch="fixture",
+            ingest_run_id="run-amount",
+            now=datetime(2026, 7, 16),
+        )
+
+        self.assertEqual(
+            bars[0]["volume"] * bars[0]["close"] * 100,
+            bars[0]["amount"],
+        )
+        self.assertTrue(bars[0]["amount_is_estimated"])
 
     def test_retry_fetch_uses_sequential_sources_and_exponential_backoff(self):
         calls = []

@@ -172,15 +172,25 @@ def kline_payload_to_bars(
         if ts in seen_timestamps:
             raise ValueError("duplicate kline timestamp: {}".format(ts))
         seen_timestamps.add(ts)
+        volume = float(required["volumes"][index])
+        close = float(required["closes"][index])
+        reported_amount = _optional_number(amounts, index)
+        amount_is_estimated = reported_amount <= 0
+        amount = (
+            volume * close * 100.0
+            if amount_is_estimated
+            else reported_amount
+        )
         bars.append(
             {
                 "ts": ts,
                 "open": required["opens"][index],
                 "high": required["highs"][index],
                 "low": required["lows"][index],
-                "close": required["closes"][index],
-                "volume": required["volumes"][index],
-                "amount": _optional_number(amounts, index),
+                "close": close,
+                "volume": volume,
+                "amount": amount,
+                "amount_is_estimated": amount_is_estimated,
                 "adjustment": adjustment,
                 "is_final": _is_final_bar(interval, ts, current),
                 "source_batch": source_batch,
@@ -227,6 +237,7 @@ def run_shard(
     unavailable = []
     success_count = 0
     changed_rows = 0
+    estimated_amount_rows = 0
     codes_to_process = list(normalized)
     metadata_by_code = dict(stock_metadata or {})
     metadata_date = meta_as_of or (now or datetime.now(_CN_TZ)).astimezone(
@@ -273,6 +284,9 @@ def run_shard(
                 changed_rows = int(
                     previous_metadata.get("changed_rows", 0)
                 )
+                estimated_amount_rows = int(
+                    previous_metadata.get("estimated_amount_rows", 0)
+                )
 
         for code in codes_to_process:
             stock_meta = dict(metadata_by_code.get(code) or {})
@@ -312,6 +326,9 @@ def run_shard(
                 )
                 if not bars:
                     raise RuntimeError("empty_history")
+                estimated_amount_rows += sum(
+                    1 for bar in bars if bar.get("amount_is_estimated")
+                )
                 instrument_id = store.upsert_instrument(
                     "stock",
                     _exchange_for_code(code),
@@ -385,6 +402,7 @@ def run_shard(
             "unavailable_count": len(unavailable),
             "unavailable_limit": unavailable_limit,
             "changed_rows": changed_rows,
+            "estimated_amount_rows": estimated_amount_rows,
             "insufficient": insufficient,
             "unavailable": unavailable,
             "failures": failures,
