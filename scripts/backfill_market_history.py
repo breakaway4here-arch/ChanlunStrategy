@@ -514,6 +514,11 @@ def _remote_fetcher(interval: str):
                         current, 30, size
                     )
                 ),
+                lambda current, size: (
+                    data_fetcher._fetch_sina_minute_kline_remote(
+                        current, scale=30, count=size
+                    )
+                ),
             ),
             validator=_valid_kline_payload,
         )
@@ -525,6 +530,11 @@ def _remote_fetcher(interval: str):
                 lambda current, size: (
                     data_fetcher._fetch_eastmoney_minute_kline_remote(
                         current, 15, size
+                    )
+                ),
+                lambda current, size: (
+                    data_fetcher._fetch_sina_minute_kline_remote(
+                        current, scale=15, count=size
                     )
                 ),
             ),

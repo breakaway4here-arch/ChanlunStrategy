@@ -12,6 +12,7 @@ from chanlun.market_history_store import MarketHistoryStore
 from scripts.backfill_market_history import (
     BackfillIncomplete,
     DEFAULT_WORKERS,
+    _remote_fetcher,
     _retry_fetch,
     kline_payload_to_bars,
     merge_completed_run,
@@ -145,6 +146,22 @@ class BackfillMarketHistoryTests(unittest.TestCase):
 
         self.assertEqual({"dates": ["2026-07-15"], "opens": [10]}, result)
         self.assertEqual(["invalid", "valid"], calls)
+
+    def test_30m_remote_fetcher_falls_back_to_sina(self):
+        valid = _kline("600000", 20, interval="30m")
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_minute_kline_remote",
+            return_value=None,
+        ), patch.object(
+            data_fetcher,
+            "_fetch_sina_minute_kline_remote",
+            return_value=valid,
+        ) as sina:
+            result = _remote_fetcher("30m")("600000", 500)
+
+        self.assertIs(result, valid)
+        sina.assert_called_with("600000", scale=30, count=500)
 
     def test_run_shard_writes_manifest_and_classifies_short_history(self):
         staging = self.root / "shard.sqlite"
