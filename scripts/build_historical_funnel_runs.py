@@ -414,6 +414,7 @@ def replay_historical_funnel(
     return {
         "run_id": run_id,
         "report_date": report_date,
+        "minute30_target_codes": sorted(target_codes),
         "summary": funnel.summary(),
         "metadata": metadata,
     }
@@ -433,9 +434,15 @@ def build_historical_funnels(
             )
             for signal_date in dates
         ]
+    codes = sorted({
+        code
+        for run in runs
+        for code in run.get("minute30_target_codes", [])
+    })
     return {
         "database_path": str(Path(database_path).expanduser().resolve()),
         "signal_dates": dates,
+        "codes": codes,
         "meta_proxies": proxies,
         "runs": runs,
     }

@@ -84,6 +84,7 @@ class HistoricalFunnelReplayTest(unittest.TestCase):
         self.assertTrue(run["metadata"]["historical_replay"])
         self.assertTrue(run["metadata"]["historical_meta_proxy"])
         self.assertEqual(signal_date, run["as_of"])
+        self.assertIn("minute30_target_codes", result)
         self.assertEqual(1, len(events))
         self.assertAlmostEqual(10.69, events[0]["close"], places=6)
         self.assertIn("retrieval", events[0]["passed_stages"])
