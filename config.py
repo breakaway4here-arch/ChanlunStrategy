@@ -145,7 +145,7 @@ if MARKET_HISTORY_CUTOVER_MODE not in {"shadow", "sqlite"}:
 # 迁移期只读旧 JSON 做数值诊断，不允许旧 JSON 回填或覆盖 SQLite。
 KLINE_REPOSITORY_SHADOW_JSON = MARKET_HISTORY_CUTOVER_MODE == "shadow"
 RECALL_STRATEGY_MODE = os.environ.get(
-    "CHANLUN_RECALL_STRATEGY_MODE", "shadow"
+    "CHANLUN_RECALL_STRATEGY_MODE", "active"
 ).strip().lower()
 if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
     raise ValueError(

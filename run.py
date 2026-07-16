@@ -733,7 +733,7 @@ def _apply_recall_publish_mode(
     legacy_codes,
     mode=None,
 ):
-    """Keep new recall in shadow while publishing only the legacy main scope."""
+    """Apply active, shadow, or legacy boundaries to published recommendations."""
     selected_mode = str(mode or RECALL_STRATEGY_MODE).strip().lower()
     if selected_mode not in {"legacy", "shadow", "active"}:
         raise ValueError("unsupported recall strategy mode: {}".format(
@@ -778,6 +778,39 @@ def _apply_recall_publish_mode(
         "suppressed_codes": sorted(potential_codes - published_codes),
     }
     return published_pure, published_fusion, diagnostics
+
+
+def _refresh_active_universe_quality(
+    data_quality,
+    selected_stocks,
+    report_date,
+):
+    """Evaluate official status against the pool that active mode publishes."""
+    stale_count = 0
+    missing_count = 0
+    selected = list(selected_stocks or [])
+    for stock in selected:
+        status = stock.get("data_status") or {}
+        if (
+            status.get("daily") != "verified"
+            or not status.get("latest_date")
+        ):
+            missing_count += 1
+        elif str(status.get("latest_date")) != str(report_date):
+            stale_count += 1
+    data_quality["stale_stock_count"] = stale_count
+    data_quality["missing_daily_count"] = missing_count
+    data_quality["official_pool_scope"] = "active_retrieval_pool"
+    data_quality["is_official"] = bool(
+        selected
+        and data_quality.get("bar_state") == "closed"
+        and data_quality.get("market_status") == "verified"
+        and data_quality.get("sources_trusted")
+        and not data_quality.get("fallback_used")
+        and not data_quality.get("stock_pool_incomplete")
+        and stale_count == 0
+        and missing_count == 0
+    )
 
 
 # ============================================================
@@ -884,6 +917,16 @@ def main(debug=False, preview=False, generated_at=None):
             today,
             candidate_funnel=candidate_funnel,
         )
+        if (
+            RECALL_STRATEGY_MODE == "active"
+            and data_quality.get("universe_builder", {}).get("status")
+            == "activated"
+        ):
+            _refresh_active_universe_quality(
+                data_quality,
+                stocks_with_kline,
+                today,
+            )
     active_codes = [stock.get("code") for stock in stocks_with_kline]
     new_active_stocks = [
         stock

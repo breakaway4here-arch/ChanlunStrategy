@@ -468,6 +468,13 @@ def validate_runtime_cutover(report: Mapping[str, Any]) -> list[str]:
             errors.append("shadow publish requires recall comparison")
         if shadow.get("new_strategy_controls_publish") is not False:
             errors.append("shadow mode cannot let new strategy control publish")
+    if strategy_mode == "active":
+        if shadow.get("mode") != "active":
+            errors.append("active publish requires recall diagnostics")
+        if shadow.get("new_strategy_controls_publish") is not True:
+            errors.append(
+                "active mode requires new strategy to control publish"
+            )
     return errors
 
 

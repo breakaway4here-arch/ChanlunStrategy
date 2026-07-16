@@ -46,6 +46,19 @@ def _json_default(value: Any) -> Any:
     )
 
 
+def _sqlite_real(value: Any) -> Optional[float]:
+    """Return a finite scalar for REAL columns; keep composites in event_json."""
+    if value is None or isinstance(value, (Mapping, list, tuple, set)):
+        return None
+    if hasattr(value, "item"):
+        value = value.item()
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if math.isfinite(number) else None
+
+
 def _row_dict(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
     return dict(row) if row is not None else None
 
@@ -937,24 +950,26 @@ class MarketHistoryStore:
                         event_as_of,
                         str(event.get("source_channel") or ""),
                         str(event.get("retrieval_pool") or ""),
-                        event.get("retrieval_score"),
+                        _sqlite_real(event.get("retrieval_score")),
                         str(event.get("first_failure_gate") or ""),
                         str(event.get("first_failure_reason") or ""),
-                        event.get("actual_value"),
-                        event.get("threshold"),
+                        _sqlite_real(event.get("actual_value")),
+                        _sqlite_real(event.get("threshold")),
                         str(event.get("final_state") or "reject"),
-                        event.get("volume_ratio"),
-                        event.get("amount_ratio"),
-                        event.get("distance_3pct"),
-                        event.get("distance_12pct"),
-                        event.get("distance_from_reference_pct"),
-                        event.get("ma5"),
-                        event.get("ma10"),
-                        event.get("ma20"),
-                        event.get("ma_gap_pct"),
+                        _sqlite_real(event.get("volume_ratio")),
+                        _sqlite_real(event.get("amount_ratio")),
+                        _sqlite_real(event.get("distance_3pct")),
+                        _sqlite_real(event.get("distance_12pct")),
+                        _sqlite_real(
+                            event.get("distance_from_reference_pct")
+                        ),
+                        _sqlite_real(event.get("ma5")),
+                        _sqlite_real(event.get("ma10")),
+                        _sqlite_real(event.get("ma20")),
+                        _sqlite_real(event.get("ma_gap_pct")),
                         str(event.get("ma_direction") or ""),
-                        event.get("minute30_confirmations"),
-                        event.get("minute30_strength"),
+                        _sqlite_real(event.get("minute30_confirmations")),
+                        _sqlite_real(event.get("minute30_strength")),
                         json.dumps(
                             event,
                             ensure_ascii=False,

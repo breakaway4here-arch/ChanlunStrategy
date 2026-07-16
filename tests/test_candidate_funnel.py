@@ -140,6 +140,36 @@ class CandidateFunnelTest(unittest.TestCase):
             saved_events[0]["data_quality"],
         )
 
+    def test_composite_actual_value_is_preserved_without_binding_to_real(self):
+        funnel = CandidateFunnel("run-composite", "2026-07-16")
+        funnel.register({"code": "300001"})
+        funnel.fail_stage(
+            "300001",
+            "minute30",
+            "waiting_30m_confirm",
+            actual_value=["EMA5维持"],
+        )
+        funnel.finalize(main_codes=[], observation_codes=["300001"])
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "market.sqlite"
+            with MarketHistoryStore(path) as store:
+                store.save_candidate_funnel(
+                    funnel.run_record(),
+                    funnel.events,
+                )
+                raw = store.connection.execute(
+                    """
+                    SELECT actual_value FROM gate_events
+                    WHERE run_id=? AND code=?
+                    """,
+                    ("run-composite", "300001"),
+                ).fetchone()
+                saved_events = store.list_gate_events("run-composite")
+
+        self.assertIsNone(raw["actual_value"])
+        self.assertEqual(["EMA5维持"], saved_events[0]["actual_value"])
+
     def test_report_date_is_the_as_of_boundary(self):
         with self.assertRaises(ValueError):
             CandidateFunnel("run-4", "2026-07-15", as_of="2026-07-16")
