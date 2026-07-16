@@ -1,5 +1,7 @@
 import unittest
 
+import config
+
 from chanlun.decision_engine import evaluate_stock
 
 
@@ -86,6 +88,53 @@ class DecisionEngineTestCase(unittest.TestCase):
         self.assertLess(result["position"]["score"], -10)
         self.assertLess(result["total_score"], 60)
 
+    def test_missing_distance_is_observe_with_position_information_insufficient(self):
+        result = evaluate_stock({
+            "code": "MISS",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "sector_strength_label": "强",
+            "volume_ratio": 1.8,
+            "market_phase": "主升",
+        })
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
+        self.assertIn("位置信息不足", result["position"]["reasons"])
+
+    def test_non_finite_distance_is_observe_with_position_information_insufficient(self):
+        for distance in (float("nan"), float("inf"), float("-inf")):
+            with self.subTest(distance=distance):
+                result = evaluate_stock({
+                    "code": "INVALID",
+                    "distance_from_reference_pct": distance,
+                    "trend_type": "上升趋势",
+                    "breakout_structure": True,
+                    "pullback_confirmed": True,
+                    "market_phase": "主升",
+                })
+
+                self.assertEqual(result["decision_code"], "observe")
+                self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
+
+    def test_price_and_closes_do_not_derive_distance_when_disabled(self):
+        self.assertFalse(config.ENABLE_DISTANCE_DECISION)
+
+        result = evaluate_stock({
+            "code": "NO-DERIVE",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "best_buy_point": {"price": 10.0},
+            "closes": [9.8, 10.2, 10.8],
+        })
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
+        self.assertNotEqual(result["decision_code"], "recommend")
+
     def test_incomplete_fields_fallback_to_safe_decision(self):
         stock = {
             "code": "DDD",
@@ -98,8 +147,8 @@ class DecisionEngineTestCase(unittest.TestCase):
         result = evaluate_stock(stock)
 
         self.assertEqual(result["version"], "1")
-        self.assertIn(result["decision"], {"观察", "不推荐", "不推荐（高位风险）"})
-        self.assertIn(result["decision_code"], {"observe", "reject"})
+        self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
+        self.assertEqual(result["decision_code"], "observe")
         self.assertIsInstance(result["total_score"], (int, float))
         self.assertIn("位置信息不足", result["position"]["reasons"])
         self.assertIn("结构信息不足", result["structure"]["reasons"])

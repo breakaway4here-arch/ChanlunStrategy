@@ -106,6 +106,10 @@ PUBLIC_DATES = ["2026-05-26", "2026-05-27"]
 FULL_ACCESS_KEY = "02951e20-6de2-418c-8bab-463647220883"
 FULL_ACCESS_KEY_SALT = "chanlun-report-salt-v1"
 
+# 禁止用买点价格与最新收盘价推导未经校准的位置距离参与决策。
+# 显式提供的合法 distance_from_reference_pct 不受此开关影响。
+ENABLE_DISTANCE_DECISION = False
+
 # ============================================================
 # K线本地缓存
 # ============================================================
