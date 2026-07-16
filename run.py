@@ -26,6 +26,7 @@ from datetime import datetime
 import math
 from typing import Callable
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import random
@@ -55,7 +56,8 @@ from chanlun.data_fetcher import (
     MarketDataUnavailable,
     build_market_time_metadata,
     _build_code_to_name,
-    fetch_sector_outflow, fetch_limit_up_pool,
+    fetch_sector_outflow, fetch_limit_up_pool, fetch_limit_pool_counts,
+    fetch_sector_stocks, deduplicate_sector_hierarchy,
 )
 from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
@@ -78,6 +80,10 @@ from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
+from chanlun.market_sentiment import (
+    build_daily_inputs_from_windows,
+    build_sentiment_history,
+)
 from chanlun.candidate_funnel import CandidateFunnel
 from chanlun.universe_builder import (
     UniverseConfig,
@@ -185,6 +191,298 @@ def _attach_signal_dimensions(row, default_channel="low_position"):
     result.setdefault("quality_tier", bp.get("quality_tier") or "")
     result.setdefault("view", "main")
     return result
+
+
+def _attach_position_evidence(row, report_date):
+    """Attach an explicit channel/buy-point reference before decision scoring."""
+    if not isinstance(row, dict):
+        return row
+
+    row["position_distance_pct"] = None
+    row["position_reference_price"] = None
+    row["position_reference_type"] = "none"
+    row["position_data_status"] = "missing"
+    row["position_evidence_date"] = str(report_date or "")
+
+    data_status = row.get("data_status")
+    data_status = data_status if isinstance(data_status, dict) else {}
+    if (
+        data_status.get("daily") != "verified"
+        or str(data_status.get("latest_date") or "") != str(report_date or "")
+    ):
+        return row
+
+    closes = _as_list(row.get("closes"))
+    current = _safe_number(
+        closes[-1] if closes else row.get("close"),
+        None,
+    )
+    if current is None or current <= 0:
+        row["position_data_status"] = "invalid"
+        return row
+
+    source_channel = str(row.get("source_channel") or "").strip()
+    reference_price = None
+    reference_type = ""
+    if source_channel == "trend_continuation":
+        raw_reference_type = str(row.get("reference_type") or "").strip()
+        reference_price = _safe_number(row.get("reference_price"), None)
+        if raw_reference_type:
+            reference_type = "channel_reference:{}".format(
+                raw_reference_type
+            )
+
+    best_buy_point = row.get("best_buy_point")
+    best_buy_point = (
+        best_buy_point if isinstance(best_buy_point, dict) else {}
+    )
+    if reference_price is None and source_channel == "low_position":
+        source_type = str(
+            best_buy_point.get("source_type")
+            or row.get("source_type")
+            or ""
+        ).strip()
+        reference_price = _safe_number(
+            best_buy_point.get("reference_price"),
+            None,
+        )
+        if reference_price is None:
+            reference_price = _safe_number(
+                best_buy_point.get("price"),
+                None,
+            )
+        if source_type:
+            reference_type = "low_position_channel:{}".format(source_type)
+
+    if reference_price is None:
+        buy_point_type = str(best_buy_point.get("type") or "").strip()
+        source_type = str(
+            best_buy_point.get("source_type") or ""
+        ).strip()
+        reference_price = _safe_number(
+            best_buy_point.get("reference_price"),
+            None,
+        )
+        if reference_price is None:
+            reference_price = _safe_number(
+                best_buy_point.get("price"),
+                None,
+            )
+        if buy_point_type and source_type:
+            reference_type = "buy_point:{}:{}".format(
+                source_type,
+                buy_point_type,
+            )
+
+    if (
+        reference_price is None
+        or reference_price <= 0
+        or not reference_type
+    ):
+        row["position_data_status"] = "invalid"
+        return row
+
+    distance_pct = (current / reference_price - 1.0) * 100.0
+    row["position_distance_pct"] = round(distance_pct, 4)
+    row["position_reference_price"] = round(reference_price, 4)
+    row["position_reference_type"] = reference_type
+    row["position_data_status"] = "verified"
+    return row
+
+
+def _load_limit_count_evidence(
+    store,
+    trade_dates,
+    *,
+    fetcher=fetch_limit_pool_counts,
+    max_workers=20,
+):
+    """Read cached limit counts first and remotely fill only missing dates."""
+    dates = list(dict.fromkeys(str(value) for value in trade_dates if value))
+    cached = store.query_market_sentiment_evidence(dates)
+    missing = [
+        trade_date
+        for trade_date in dates
+        if not isinstance(cached.get(trade_date), dict)
+        or cached[trade_date].get("data_status") != "verified"
+    ]
+    fetched = {}
+    if missing:
+        workers = max(1, min(int(max_workers), len(missing)))
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {
+                pool.submit(fetcher, trade_date.replace("-", "")): trade_date
+                for trade_date in missing
+            }
+            for future in as_completed(futures):
+                trade_date = futures[future]
+                try:
+                    evidence = future.result()
+                except Exception as exc:
+                    evidence = {
+                        "limit_up_count": None,
+                        "limit_down_count": None,
+                        "evidence_date": trade_date,
+                        "data_status": "missing",
+                        "source": "eastmoney_limit_pools",
+                        "error": "{}: {}".format(type(exc).__name__, exc),
+                    }
+                if not isinstance(evidence, dict):
+                    continue
+                fetched[trade_date] = evidence
+                if (
+                    evidence.get("data_status") == "verified"
+                    and evidence.get("evidence_date") == trade_date
+                ):
+                    store.upsert_market_sentiment_evidence(
+                        trade_date,
+                        evidence,
+                    )
+    result = dict(cached)
+    result.update(fetched)
+    return result
+
+
+def _build_market_sentiment_history(
+    report_date,
+    market_indices=None,
+    *,
+    db_path=MARKET_HISTORY_DB_PATH,
+    minimum_instruments=1000,
+    fetcher=fetch_limit_pool_counts,
+    max_workers=20,
+):
+    """Recalculate recent sentiment from one shared database window."""
+    if not os.path.exists(db_path):
+        return {
+            "version": "v2",
+            "date": report_date,
+            "score": None,
+            "label": "数据不足",
+            "coverage": 0.0,
+            "insufficient": True,
+            "missing_components": [
+                "breadth",
+                "limit_ecology",
+                "index",
+                "turnover",
+                "trend",
+            ],
+        }, []
+
+    with MarketHistoryStore(db_path) as store:
+        stock_window = store.query_daily_market_window(
+            as_of=report_date,
+            trading_days=45,
+            asset_type="stock",
+            minimum_instruments=minimum_instruments,
+        )
+        dates = stock_window.get("dates") or []
+        limit_counts = _load_limit_count_evidence(
+            store,
+            dates,
+            fetcher=fetcher,
+            max_workers=max_workers,
+        )
+
+    daily_inputs = build_daily_inputs_from_windows(
+        stock_window,
+        {"dates": [], "rows": []},
+        limit_counts,
+    )
+    if daily_inputs and market_indices:
+        daily_inputs[-1]["index_bars"] = [
+            item
+            for item in (
+                market_indices.values()
+                if isinstance(market_indices, dict)
+                else market_indices
+            )
+            if isinstance(item, dict)
+        ]
+    history = build_sentiment_history(daily_inputs, window=20)
+    if history:
+        return history[-1], history
+    return {
+        "version": "v2",
+        "date": report_date,
+        "score": None,
+        "label": "数据不足",
+        "coverage": 0.0,
+        "insufficient": True,
+        "missing_components": [
+            "breadth",
+            "limit_ecology",
+            "index",
+            "turnover",
+            "trend",
+        ],
+    }, []
+
+
+def _complete_sector_component_evidence(
+    sectors,
+    existing_evidence=None,
+    *,
+    fetcher=fetch_sector_stocks,
+    max_workers=20,
+):
+    """Reuse collected components and remotely fill only missing sectors."""
+    evidence = {
+        str(code): dict(value)
+        for code, value in (
+            existing_evidence.items()
+            if isinstance(existing_evidence, dict)
+            else []
+        )
+        if isinstance(value, dict)
+    }
+    missing_codes = list(dict.fromkeys(
+        str(row.get("code") or "").strip()
+        for row in (sectors or [])
+        if isinstance(row, dict)
+        and str(row.get("code") or "").strip()
+        and str(row.get("code") or "").strip() not in evidence
+    ))
+    if not missing_codes:
+        return evidence
+
+    workers = max(1, min(int(max_workers), len(missing_codes)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {
+            pool.submit(fetcher, code, return_diagnostics=True): code
+            for code in missing_codes
+        }
+        for future in as_completed(futures):
+            code = futures[future]
+            try:
+                stocks, diagnostics = future.result()
+            except Exception as exc:
+                stocks = []
+                diagnostics = {
+                    "sector_code": code,
+                    "requested": None,
+                    "complete": False,
+                    "error": "{}: {}".format(type(exc).__name__, exc),
+                }
+            evidence[code] = {
+                "component_codes": [
+                    str(stock.get("code") or "")
+                    for stock in (stocks or [])
+                    if isinstance(stock, dict)
+                    and str(stock.get("code") or "")
+                ],
+                "diagnostics": (
+                    dict(diagnostics)
+                    if isinstance(diagnostics, dict)
+                    else {
+                        "sector_code": code,
+                        "complete": False,
+                        "error": "invalid_diagnostics",
+                    }
+                ),
+            }
+    return evidence
 
 
 def _apply_full_a_universe(
@@ -886,6 +1184,7 @@ def main(debug=False, preview=False, generated_at=None):
             "sectors": sectors,
             "sh_index": sh_kline,
             "stocks": stocks_with_kline,
+            "sector_component_evidence": {},
             "data_quality": data_quality,
         }
     else:
@@ -1649,6 +1948,15 @@ def main(debug=False, preview=False, generated_at=None):
             "data_quality": data_quality,
             "market_data_status": market_data_status,
         }
+        for decision_items in (
+            pure_scored,
+            fusion_scored,
+            observation_watchlist,
+            next_day_boom.get("candidates", []),
+            luojie_pool.get("candidates", []),
+        ):
+            for decision_item in decision_items or []:
+                _attach_position_evidence(decision_item, today)
         _inject_decision_engine(pure_scored, decision_engine, market_context)
         _inject_decision_engine(fusion_scored, decision_engine, market_context)
         _inject_decision_engine(observation_watchlist, decision_engine, market_context)
@@ -1859,16 +2167,47 @@ def main(debug=False, preview=False, generated_at=None):
         },
     }
     sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
-    market_temperature = build_market_temperature(
-        market_indices=market_indices,
-        sector_flow=sectors,
-        sector_outflow=sector_outflow,
-        limit_up_pool=limit_up_pool_data,
-        sell_signals=sell_signals,
-        diagnostics=diagnostics,
-        data_quality=data_quality,
-        sh_volumes=sh_volumes,
+    sector_component_evidence = _complete_sector_component_evidence(
+        list(sectors or []) + list(sector_outflow or []),
+        daily_data.get("sector_component_evidence"),
+        max_workers=20,
     )
+    sectors = deduplicate_sector_hierarchy(
+        sectors,
+        sector_component_evidence,
+        top_n=len(sectors or []),
+    )
+    sector_outflow = deduplicate_sector_hierarchy(
+        sector_outflow,
+        sector_component_evidence,
+        top_n=SECTOR_OUTFLOW_COUNT,
+    )
+    data_quality["sector_hierarchy_dedup"] = {
+        "evidence_sector_count": len(sector_component_evidence),
+        "inflow_count": len(sectors),
+        "outflow_count": len(sector_outflow),
+        "max_workers": 20,
+    }
+    market_sentiment, market_sentiment_history = (
+        _build_market_sentiment_history(
+            today,
+            market_indices=market_indices,
+        )
+    )
+    sentiment_components = market_sentiment.get("components", {})
+    market_temperature = {
+        "score": market_sentiment.get("score"),
+        "label": market_sentiment.get("label", "数据不足"),
+        "coverage": market_sentiment.get("coverage", 0.0),
+        "insufficient": market_sentiment.get("insufficient", True),
+        "components": {
+            "breadth_score": sentiment_components.get("breadth"),
+            "index_score": sentiment_components.get("index"),
+            "limit_score": sentiment_components.get("limit_ecology"),
+            "volume_score": sentiment_components.get("turnover"),
+            "trend_score": sentiment_components.get("trend"),
+        },
+    }
     report_data = {
         "date": today,
         "market": market_indices,
@@ -1880,6 +2219,8 @@ def main(debug=False, preview=False, generated_at=None):
         "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
         "market_temperature": market_temperature,
+        "market_sentiment": market_sentiment,
+        "market_sentiment_history": market_sentiment_history,
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,

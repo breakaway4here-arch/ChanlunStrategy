@@ -239,6 +239,20 @@ class TestReportViewModel(unittest.TestCase):
             distance=11.5,
             change_pct=-1.0,
         )
+        near_reference_weak.update({
+            "position_distance_pct": 0.2,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
+        far_reference_strong.update({
+            "position_distance_pct": 11.5,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
         report_data = _report_data(
             {
                 "picks_fusion": [near_reference_weak, far_reference_strong],
@@ -349,6 +363,20 @@ class TestReportViewModel(unittest.TestCase):
             distance=11.5,
             change_pct=-1.0,
         )
+        near_reference_weak.update({
+            "position_distance_pct": 0.2,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
+        far_reference_strong.update({
+            "position_distance_pct": 11.5,
+            "position_reference_price": 10.0,
+            "position_reference_type": "range_low_60d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
         report_data = _report_data(
             {
                 "picks_fusion": [near_reference_weak, far_reference_strong],

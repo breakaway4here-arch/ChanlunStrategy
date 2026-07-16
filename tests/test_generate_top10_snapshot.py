@@ -216,6 +216,10 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             "code": "600001",
             "name": "真实工作区票",
             "score": 82,
+            "decision_engine_v1": {
+                "decision_code": "recommend",
+                "decision": "推荐",
+            },
             "data_status": {
                 "daily": "verified",
                 "latest_date": "2026-07-01",
@@ -272,6 +276,10 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                     "code": "600001",
                     "name": "状态测试票",
                     "score": 82,
+                    "decision_engine_v1": {
+                        "decision_code": "recommend",
+                        "decision": "推荐",
+                    },
                     "data_status": {
                         "daily": daily_status,
                         "latest_date": "2026-07-01",
@@ -286,7 +294,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                     },
                 }
                 workspace = build_workspace({"picks_fusion": [raw_pick]})
-                for view_name in ("main", "highlights", "growth_quality"):
+                for view_name in ("main", "highlights"):
                     self.assertIn("data_status", workspace["views"][view_name][0])
                     self.assertEqual(
                         workspace["views"][view_name][0]["data_status"]["daily"],

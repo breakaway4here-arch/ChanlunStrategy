@@ -1691,6 +1691,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
     stock_map = {}
     consecutive_failures = 0
     sector_component_diagnostics = []
+    sector_component_evidence = {}
     stock_pool_incomplete = False
     sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
     stock_pool_source = "sector_components"
@@ -1699,6 +1700,14 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
             sector["code"], return_diagnostics=True
         )
         sector_component_diagnostics.append(component_diagnostics)
+        sector_component_evidence[str(sector.get("code") or "")] = {
+            "component_codes": [
+                str(stock.get("code") or "")
+                for stock in stocks
+                if str(stock.get("code") or "")
+            ],
+            "diagnostics": dict(component_diagnostics),
+        }
         if not component_diagnostics.get("complete"):
             stock_pool_incomplete = True
         if not stocks and not component_diagnostics.get("complete"):
@@ -1906,6 +1915,7 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         "sectors": sectors,
         "sh_index": sh_kline,
         "stocks": stocks_with_kline,
+        "sector_component_evidence": sector_component_evidence,
         "index_error": index_error,
         "data_quality": data_quality,
     }
@@ -1983,6 +1993,79 @@ def fetch_sector_outflow(top_n=5, *, component_evidence=None):
 # ============================================================
 # 涨停板池 — 东方财富
 # ============================================================
+def fetch_limit_pool_counts(date_str=None):
+    """Fetch exact same-day limit-up/down totals from Eastmoney topic pools."""
+    if date_str is None:
+        date_str = datetime.now().strftime("%Y%m%d")
+    compact_date = str(date_str).replace("-", "")
+    try:
+        evidence_date = datetime.strptime(
+            compact_date, "%Y%m%d"
+        ).strftime("%Y-%m-%d")
+    except ValueError:
+        return {
+            "limit_up_count": None,
+            "limit_down_count": None,
+            "evidence_date": "",
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "error": "invalid_date",
+        }
+
+    common = {
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "dpt": "wz.ztzt",
+        "Pageindex": "0",
+        "pagesize": "1",
+        "date": compact_date,
+    }
+    endpoints = (
+        ("limit_up_count", "getTopicZTPool", "fbt:asc"),
+        ("limit_down_count", "getTopicDTPool", "fund:asc"),
+    )
+    result = {}
+    try:
+        for field, endpoint, sort in endpoints:
+            params = dict(common)
+            params["sort"] = sort
+            response = SESSION.get(
+                "https://push2ex.eastmoney.com/{}".format(endpoint),
+                params=params,
+                timeout=15,
+            )
+            payload = response.json()
+            data = payload.get("data") if isinstance(payload, dict) else None
+            if not isinstance(data, dict):
+                raise ValueError("{} missing data".format(endpoint))
+            if str(data.get("qdate") or "") != compact_date:
+                raise ValueError("{} date mismatch".format(endpoint))
+            total = data.get("tc")
+            if isinstance(total, bool):
+                raise ValueError("{} invalid total".format(endpoint))
+            total = int(total)
+            if total < 0:
+                raise ValueError("{} negative total".format(endpoint))
+            result[field] = total
+    except Exception as exc:
+        return {
+            "limit_up_count": None,
+            "limit_down_count": None,
+            "evidence_date": evidence_date,
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "error": "{}: {}".format(type(exc).__name__, exc),
+        }
+
+    return {
+        "limit_up_count": result["limit_up_count"],
+        "limit_down_count": result["limit_down_count"],
+        "evidence_date": evidence_date,
+        "data_status": "verified",
+        "source": "eastmoney_limit_pools",
+        "error": "",
+    }
+
+
 def fetch_limit_up_pool(date_str=None):
     """
     获取当日涨停板池。东方财富 getTopicZTPool 接口。

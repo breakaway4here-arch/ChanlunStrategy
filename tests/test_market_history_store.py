@@ -42,6 +42,7 @@ class MarketHistoryStoreTests(unittest.TestCase):
         required_business_tables = {
             "instruments", "stock_meta_asof", "trade_calendar", "bars_day",
             "bars_30m", "bars_15m", "ingest_runs", "shard_manifests",
+            "market_sentiment_evidence",
         }
         self.assertTrue(required_business_tables.issubset(tables))
         self.assertIn("bar_table_settings", tables)
@@ -54,6 +55,122 @@ class MarketHistoryStoreTests(unittest.TestCase):
                 )
             )
             self.assertIn("ts, instrument_id", index_sql)
+
+    def test_query_daily_market_window_returns_final_stock_cross_sections(self):
+        stock_a = self.store.upsert_instrument(
+            "stock", "SH", "600000", name="浦发银行"
+        )
+        stock_b = self.store.upsert_instrument(
+            "stock", "SZ", "000001", name="平安银行"
+        )
+        index_id = self.store.upsert_instrument(
+            "index", "SH", "000001", name="上证指数"
+        )
+        for instrument_id, base in ((stock_a, 10.0), (stock_b, 20.0)):
+            self.store.upsert_bars(
+                "day",
+                instrument_id,
+                [
+                    _bar("2026-07-01", base),
+                    _bar("2026-07-02", base + 1),
+                    _bar("2026-07-03", base + 2, is_final=False),
+                ],
+            )
+        self.store.upsert_bars(
+            "day",
+            index_id,
+            [_bar("2026-07-01", 3000), _bar("2026-07-02", 3010)],
+        )
+        self.store.upsert_stock_meta(
+            stock_a,
+            "2026-07-02",
+            {"name": "浦发银行", "is_st": False, "listed_date": "19991110"},
+        )
+        self.store.upsert_bars(
+            "day",
+            stock_a,
+            [_bar("2026-07-04", 13.0)],
+        )
+
+        window = self.store.query_daily_market_window(
+            as_of="2026-07-04",
+            trading_days=2,
+            asset_type="stock",
+            minimum_instruments=2,
+        )
+
+        self.assertEqual(window["dates"], ["2026-07-01", "2026-07-02"])
+        self.assertEqual(len(window["rows"]), 4)
+        self.assertEqual(
+            {row["code"] for row in window["rows"]},
+            {"600000", "000001"},
+        )
+        self.assertTrue(all(row["is_final"] == 1 for row in window["rows"]))
+        self.assertEqual(
+            next(
+                row for row in window["rows"]
+                if row["code"] == "600000" and row["ts"] == "2026-07-02"
+            )[
+                "stock_meta_asof"
+            ]["listed_date"],
+            "19991110",
+        )
+
+    def test_market_sentiment_evidence_cache_round_trip(self):
+        self.store.upsert_market_sentiment_evidence(
+            "2026-07-16",
+            {
+                "limit_up_count": 42,
+                "limit_down_count": 33,
+                "source": "eastmoney_limit_pools",
+            },
+        )
+
+        result = self.store.query_market_sentiment_evidence(
+            ["2026-07-15", "2026-07-16"]
+        )
+
+        self.assertNotIn("2026-07-15", result)
+        self.assertEqual(result["2026-07-16"]["limit_up_count"], 42)
+        self.assertEqual(result["2026-07-16"]["limit_down_count"], 33)
+
+    def test_daily_market_window_uses_metadata_as_of_each_bar_date(self):
+        stock_id = self.store.upsert_instrument(
+            "stock", "SH", "600000", name="测试股票"
+        )
+        self.store.upsert_bars(
+            "day",
+            stock_id,
+            [
+                _bar("2026-07-01", 10.0),
+                _bar("2026-07-02", 10.5),
+                _bar("2026-07-03", 10.0),
+            ],
+        )
+        self.store.upsert_stock_meta(
+            stock_id,
+            "2026-07-01",
+            {"name": "测试股票", "is_st": False, "listed_date": "20000101"},
+        )
+        self.store.upsert_stock_meta(
+            stock_id,
+            "2026-07-03",
+            {"name": "ST测试", "is_st": True, "listed_date": "20000101"},
+        )
+
+        window = self.store.query_daily_market_window(
+            as_of="2026-07-03",
+            trading_days=3,
+            asset_type="stock",
+        )
+        metadata_by_date = {
+            row["ts"]: row["stock_meta_asof"]
+            for row in window["rows"]
+        }
+
+        self.assertFalse(metadata_by_date["2026-07-01"]["is_st"])
+        self.assertFalse(metadata_by_date["2026-07-02"]["is_st"])
+        self.assertTrue(metadata_by_date["2026-07-03"]["is_st"])
 
     def test_initialization_adds_missing_gate_event_columns_to_legacy_db(self):
         legacy_path = Path(self.tmp.name) / "legacy.sqlite"

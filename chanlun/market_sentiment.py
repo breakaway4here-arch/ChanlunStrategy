@@ -215,6 +215,25 @@ def compute_limit_ecology(stock_bars, prior_history=None):
             "score": None,
         }
 
+    return _score_limit_ecology_counts(
+        limit_up_count,
+        limit_down_count,
+        valid_count,
+        excluded_count,
+        prior_history=prior_history,
+        source="derived_from_daily_bars",
+    )
+
+
+def _score_limit_ecology_counts(
+    limit_up_count,
+    limit_down_count,
+    valid_count,
+    excluded_count=0,
+    *,
+    prior_history=None,
+    source="",
+):
     limit_ratio = (limit_up_count + 1.0) / (limit_down_count + 1.0)
     log_limit_ratio = math.log(limit_ratio)
     prior_logs = _prior_limit_logs(prior_history)
@@ -222,9 +241,23 @@ def compute_limit_ecology(stock_bars, prior_history=None):
         ratio_score = historical_percentile(log_limit_ratio, prior_logs)
     else:
         ratio_score = _clamp(50 + math.tanh(log_limit_ratio) * 35)
-    participation = (limit_up_count - limit_down_count) / valid_count
-    participation_score = _clamp(50 + participation * 500)
-    score = ratio_score * 0.7 + participation_score * 0.3
+    limit_up_ratio = limit_up_count / valid_count
+    limit_down_ratio = limit_down_count / valid_count
+    limit_up_score = _clamp(limit_up_ratio / 0.02 * 100)
+    limit_down_score = _clamp(100 - limit_down_ratio / 0.02 * 100)
+    improvement_score = 50.0
+    if prior_logs:
+        comparison = prior_logs[-5:]
+        prior_average = sum(comparison) / len(comparison)
+        improvement_score = _clamp(
+            50 + math.tanh(log_limit_ratio - prior_average) * 40
+        )
+    score = (
+        ratio_score * 0.40
+        + limit_up_score * 0.25
+        + limit_down_score * 0.25
+        + improvement_score * 0.10
+    )
     return {
         "available": True,
         "valid_count": valid_count,
@@ -234,8 +267,64 @@ def compute_limit_ecology(stock_bars, prior_history=None):
         "limit_ratio": round(limit_ratio, 4),
         "log_limit_ratio": round(log_limit_ratio, 6),
         "ratio_score": round(ratio_score, 2),
+        "limit_up_ratio": round(limit_up_ratio, 6),
+        "limit_down_ratio": round(limit_down_ratio, 6),
+        "limit_up_score": round(limit_up_score, 2),
+        "limit_down_score": round(limit_down_score, 2),
+        "improvement_score": round(improvement_score, 2),
+        "source": source,
         "score": round(_clamp(score), 2),
     }
+
+
+def compute_limit_ecology_from_counts(
+    limit_counts,
+    valid_count,
+    prior_history=None,
+):
+    evidence = limit_counts if isinstance(limit_counts, dict) else {}
+    if evidence.get("data_status") != "verified":
+        return {
+            "available": False,
+            "valid_count": int(valid_count or 0),
+            "excluded_count": 0,
+            "limit_up_count": 0,
+            "limit_down_count": 0,
+            "limit_ratio": None,
+            "log_limit_ratio": None,
+            "score": None,
+            "source": evidence.get("source", ""),
+        }
+    up_count = _number(evidence.get("limit_up_count"))
+    down_count = _number(evidence.get("limit_down_count"))
+    market_count = _number(evidence.get("market_count"))
+    denominator = market_count if market_count is not None else _number(valid_count)
+    if (
+        up_count is None
+        or down_count is None
+        or denominator is None
+        or denominator <= 0
+        or up_count < 0
+        or down_count < 0
+    ):
+        return {
+            "available": False,
+            "valid_count": int(valid_count or 0),
+            "excluded_count": 0,
+            "limit_up_count": 0,
+            "limit_down_count": 0,
+            "limit_ratio": None,
+            "log_limit_ratio": None,
+            "score": None,
+            "source": evidence.get("source", ""),
+        }
+    return _score_limit_ecology_counts(
+        int(up_count),
+        int(down_count),
+        int(denominator),
+        prior_history=prior_history,
+        source=evidence.get("source", ""),
+    )
 
 
 def _compute_index(index_bars):
@@ -257,16 +346,32 @@ def _compute_index(index_bars):
     }
 
 
-def _compute_turnover(turnover, turnover_ma5):
+def _compute_turnover(turnover, turnover_ma5, turnover_ma20=None):
     current = _number(turnover)
-    baseline = _number(turnover_ma5)
-    if current is None or baseline is None or baseline <= 0:
-        return {"available": False, "ratio_to_ma5": None, "score": None}
-    ratio = current / baseline
+    baseline5 = _number(turnover_ma5)
+    baseline20 = _number(turnover_ma20)
+    ratios = []
+    ratio5 = None
+    ratio20 = None
+    if current is not None and baseline5 is not None and baseline5 > 0:
+        ratio5 = current / baseline5
+        ratios.append(ratio5)
+    if current is not None and baseline20 is not None and baseline20 > 0:
+        ratio20 = current / baseline20
+        ratios.append(ratio20)
+    if not ratios:
+        return {
+            "available": False,
+            "ratio_to_ma5": None,
+            "ratio_to_ma20": None,
+            "score": None,
+        }
+    ratio_scores = [_clamp(50 + (ratio - 1) * 100) for ratio in ratios]
     return {
         "available": True,
-        "ratio_to_ma5": round(ratio, 4),
-        "score": round(_clamp(50 + (ratio - 1) * 100), 2),
+        "ratio_to_ma5": round(ratio5, 4) if ratio5 is not None else None,
+        "ratio_to_ma20": round(ratio20, 4) if ratio20 is not None else None,
+        "score": round(sum(ratio_scores) / len(ratio_scores), 2),
     }
 
 
@@ -304,17 +409,36 @@ def build_market_sentiment(
     index_bars,
     turnover=None,
     turnover_ma5=None,
+    turnover_ma20=None,
     trend=None,
     prior_history=None,
+    limit_counts=None,
     minimum_coverage=0.8,
 ):
     """Build one day's five-component market sentiment result."""
 
+    breadth = compute_market_breadth(stock_bars)
+    if (
+        isinstance(limit_counts, dict)
+        and limit_counts.get("data_status") == "verified"
+        and str(limit_counts.get("evidence_date") or "") == str(date or "")
+    ):
+        limit_ecology = compute_limit_ecology_from_counts(
+            limit_counts,
+            breadth.get("valid_count"),
+            prior_history=prior_history,
+        )
+    else:
+        limit_ecology = compute_limit_ecology(stock_bars, prior_history)
     evidence = {
-        "breadth": compute_market_breadth(stock_bars),
-        "limit_ecology": compute_limit_ecology(stock_bars, prior_history),
+        "breadth": breadth,
+        "limit_ecology": limit_ecology,
         "index": _compute_index(index_bars),
-        "turnover": _compute_turnover(turnover, turnover_ma5),
+        "turnover": _compute_turnover(
+            turnover,
+            turnover_ma5,
+            turnover_ma20,
+        ),
         "trend": _compute_trend(trend),
     }
     components = {
@@ -374,6 +498,165 @@ def detect_turning_signal(points):
     return None
 
 
+def build_daily_inputs_from_windows(
+    stock_window,
+    index_window=None,
+    limit_counts_by_date=None,
+):
+    """Transform one DB window into sequential, no-future daily inputs."""
+    stock_window = stock_window if isinstance(stock_window, dict) else {}
+    index_window = index_window if isinstance(index_window, dict) else {}
+    dates = sorted(
+        str(value)
+        for value in (stock_window.get("dates") or [])
+        if str(value)
+    )
+    date_set = set(dates)
+
+    def _group_rows(rows):
+        grouped = {}
+        for row in rows or []:
+            if not isinstance(row, dict):
+                continue
+            code = str(row.get("code") or "")
+            trade_date = str(row.get("ts") or "")[:10]
+            if not code or trade_date not in date_set:
+                continue
+            grouped.setdefault(code, {})[trade_date] = row
+        return grouped
+
+    stock_by_code = _group_rows(stock_window.get("rows"))
+    index_by_code = _group_rows(index_window.get("rows"))
+
+    def _listing_trade_days(listed_date, trade_date):
+        normalized = str(listed_date or "").replace("-", "")[:8]
+        if len(normalized) != 8 or not normalized.isdigit():
+            return None
+        normalized_trade_date = str(trade_date).replace("-", "")[:8]
+        if normalized > normalized_trade_date:
+            return None
+        first_window_date = str(dates[0]).replace("-", "")[:8] if dates else ""
+        if normalized < first_window_date:
+            return 999
+        return sum(
+            1
+            for value in dates
+            if normalized <= str(value).replace("-", "")[:8]
+            <= normalized_trade_date
+        )
+
+    turnover_by_date = {}
+    for trade_date in dates:
+        turnover_by_date[trade_date] = sum(
+            _number(rows[trade_date].get("amount")) or 0.0
+            for rows in stock_by_code.values()
+            if trade_date in rows
+        )
+
+    daily = []
+    for date_index, trade_date in enumerate(dates):
+        stock_bars = []
+        trend_total = 0
+        trend_above = 0
+        for code in sorted(stock_by_code):
+            rows_by_date = stock_by_code[code]
+            current = rows_by_date.get(trade_date)
+            if current is None:
+                continue
+            available_dates = [
+                value
+                for value in dates[:date_index + 1]
+                if value in rows_by_date
+            ]
+            closes = [
+                _number(rows_by_date[value].get("close"))
+                for value in available_dates
+            ]
+            closes = [value for value in closes if value is not None]
+            if len(closes) >= 20:
+                ma20 = sum(closes[-20:]) / 20
+                trend_total += 1
+                trend_above += closes[-1] >= ma20
+            if len(available_dates) < 2:
+                continue
+            previous = rows_by_date[available_dates[-2]]
+            meta = current.get("stock_meta_asof")
+            meta = meta if isinstance(meta, dict) else {}
+            stock_bars.append({
+                "code": code,
+                "name": current.get("name") or meta.get("name") or "",
+                "prev_close": previous.get("close"),
+                "close": current.get("close"),
+                "is_st": meta.get("is_st"),
+                "listed_date": meta.get("listed_date"),
+                "listing_trade_days": _listing_trade_days(
+                    meta.get("listed_date"), trade_date
+                ),
+            })
+
+        prior_turnovers = [
+            turnover_by_date[value]
+            for value in dates[:date_index]
+        ]
+        turnover_ma5 = (
+            sum(prior_turnovers[-5:]) / 5
+            if len(prior_turnovers) >= 5
+            else None
+        )
+        turnover_ma20 = (
+            sum(prior_turnovers[-20:]) / 20
+            if len(prior_turnovers) >= 20
+            else None
+        )
+
+        index_bars = []
+        for code in sorted(index_by_code):
+            rows_by_date = index_by_code[code]
+            current = rows_by_date.get(trade_date)
+            if current is None:
+                continue
+            available_dates = [
+                value
+                for value in dates[:date_index + 1]
+                if value in rows_by_date
+            ]
+            if len(available_dates) < 2:
+                continue
+            previous = rows_by_date[available_dates[-2]]
+            previous_close = _number(previous.get("close"))
+            current_close = _number(current.get("close"))
+            if previous_close in (None, 0) or current_close is None:
+                continue
+            index_bars.append({
+                "code": code,
+                "change_pct": (
+                    current_close / previous_close - 1.0
+                ) * 100.0,
+            })
+
+        daily.append({
+            "date": trade_date,
+            "stock_bars": stock_bars,
+            "index_bars": index_bars,
+            "turnover": turnover_by_date[trade_date],
+            "turnover_ma5": turnover_ma5,
+            "turnover_ma20": turnover_ma20,
+            "trend": {
+                "above_ma20_ratio": (
+                    trend_above / float(trend_total)
+                    if trend_total
+                    else None
+                )
+            },
+            "limit_counts": (
+                (limit_counts_by_date or {}).get(trade_date)
+                if isinstance(limit_counts_by_date, dict)
+                else None
+            ),
+        })
+    return daily
+
+
 def build_sentiment_history(daily_inputs, window=20):
     """Sequentially score days, then return a chart-ready recent window.
 
@@ -389,8 +672,10 @@ def build_sentiment_history(daily_inputs, window=20):
             index_bars=day.get("index_bars") or [],
             turnover=day.get("turnover"),
             turnover_ma5=day.get("turnover_ma5"),
+            turnover_ma20=day.get("turnover_ma20"),
             trend=day.get("trend"),
             prior_history=results,
+            limit_counts=day.get("limit_counts"),
         )
         results.append(result)
 

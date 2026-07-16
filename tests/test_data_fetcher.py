@@ -156,5 +156,54 @@ class TestSectorHierarchyDedup(unittest.TestCase):
         )
 
 
+class _JsonResponse:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def json(self):
+        return self.payload
+
+
+class TestLimitPoolEvidence(unittest.TestCase):
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_pool_counts_requires_same_verified_date(self, mock_get):
+        mock_get.side_effect = [
+            _JsonResponse({
+                "data": {
+                    "tc": 42,
+                    "qdate": 20260716,
+                    "pool": [],
+                }
+            }),
+            _JsonResponse({
+                "data": {
+                    "tc": 33,
+                    "qdate": 20260716,
+                    "pool": [],
+                }
+            }),
+        ]
+
+        result = data_fetcher.fetch_limit_pool_counts("20260716")
+
+        self.assertEqual(result["limit_up_count"], 42)
+        self.assertEqual(result["limit_down_count"], 33)
+        self.assertEqual(result["evidence_date"], "2026-07-16")
+        self.assertEqual(result["data_status"], "verified")
+
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_pool_counts_fails_closed_on_date_mismatch(self, mock_get):
+        mock_get.side_effect = [
+            _JsonResponse({"data": {"tc": 42, "qdate": 20260715}}),
+            _JsonResponse({"data": {"tc": 33, "qdate": 20260716}}),
+        ]
+
+        result = data_fetcher.fetch_limit_pool_counts("20260716")
+
+        self.assertEqual(result["data_status"], "missing")
+        self.assertIsNone(result["limit_up_count"])
+        self.assertIsNone(result["limit_down_count"])
+
+
 if __name__ == "__main__":
     unittest.main()

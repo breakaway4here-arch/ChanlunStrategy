@@ -121,7 +121,8 @@ def _to_tier_score(tier: Any) -> int:
 
 
 def _decision_code_from_raw(item: Mapping[str, Any]) -> str:
-    return _safe_str(_to_dict(item).get("decision_engine_v1", {}).get("decision_code")).lower()
+    decision = _to_dict(_to_dict(item).get("decision_engine_v1"))
+    return _safe_str(decision.get("decision_code")).lower()
 
 
 def _decision_code_from_view_item(item: Mapping[str, Any]) -> str:

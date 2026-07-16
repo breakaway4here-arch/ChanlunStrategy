@@ -159,6 +159,12 @@ class MarketHistoryStore:
                     PRIMARY KEY (exchange, trade_date)
                 );
 
+                CREATE TABLE IF NOT EXISTS market_sentiment_evidence (
+                    trade_date TEXT PRIMARY KEY,
+                    evidence_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS ingest_runs (
                     run_id TEXT PRIMARY KEY,
                     mode TEXT NOT NULL,
@@ -505,6 +511,62 @@ class MarketHistoryStore:
                 result[int(row["instrument_id"])] = payload
         return result
 
+    def upsert_market_sentiment_evidence(
+        self,
+        trade_date: str,
+        evidence: Mapping[str, Any],
+    ) -> None:
+        self._require_writable()
+        normalized_date = str(trade_date or "").strip()
+        if not normalized_date:
+            raise ValueError("trade_date is required")
+        with self._write_scope():
+            self.connection.execute(
+                """
+                INSERT INTO market_sentiment_evidence(
+                    trade_date, evidence_json, updated_at
+                ) VALUES (?, ?, ?)
+                ON CONFLICT(trade_date) DO UPDATE SET
+                    evidence_json=excluded.evidence_json,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    normalized_date,
+                    _json_dumps(evidence),
+                    _utc_now(),
+                ),
+            )
+
+    def query_market_sentiment_evidence(
+        self,
+        trade_dates: Sequence[str],
+    ) -> Dict[str, Dict[str, Any]]:
+        dates = list(
+            dict.fromkeys(
+                str(value).strip()
+                for value in trade_dates
+                if str(value).strip()
+            )
+        )
+        if not dates:
+            return {}
+        result = {}
+        for offset in range(0, len(dates), 900):
+            chunk = dates[offset:offset + 900]
+            rows = self.connection.execute(
+                """
+                SELECT trade_date, evidence_json
+                FROM market_sentiment_evidence
+                WHERE trade_date IN ({})
+                """.format(",".join("?" for _ in chunk)),
+                chunk,
+            ).fetchall()
+            for row in rows:
+                result[str(row["trade_date"])] = json.loads(
+                    row["evidence_json"]
+                )
+        return result
+
     def upsert_trade_calendar(self, exchange: str, trade_date: str, is_open: bool) -> None:
         self._require_writable()
         with self._write_scope():
@@ -524,6 +586,76 @@ class MarketHistoryStore:
             (str(exchange), str(trade_date)),
         ).fetchone()
         return None if row is None else bool(row["is_open"])
+
+    def query_daily_market_window(
+        self,
+        as_of: str,
+        trading_days: int = 20,
+        asset_type: str = "stock",
+        minimum_instruments: int = 1,
+    ) -> Dict[str, Any]:
+        """Return final daily bars for the latest market-wide trading dates."""
+        limit = max(1, int(trading_days))
+        date_rows = self.connection.execute(
+            """
+            SELECT substr(b.ts, 1, 10) AS trade_date
+            FROM bars_day b
+            JOIN instruments i ON i.instrument_id=b.instrument_id
+            WHERE i.asset_type=? AND b.is_final=1
+              AND substr(b.ts, 1, 10)<=?
+            GROUP BY substr(b.ts, 1, 10)
+            HAVING COUNT(DISTINCT b.instrument_id)>=?
+            ORDER BY trade_date DESC
+            LIMIT ?
+            """,
+            (
+                str(asset_type),
+                str(as_of),
+                max(1, int(minimum_instruments)),
+                limit,
+            ),
+        ).fetchall()
+        dates = sorted(str(row["trade_date"]) for row in date_rows)
+        if not dates:
+            return {"dates": [], "rows": []}
+
+        placeholders = ",".join("?" for _ in dates)
+        params: List[Any] = [str(asset_type)]
+        params.extend(dates)
+        bar_rows = self.connection.execute(
+            """
+            SELECT i.instrument_id, i.code, i.name, i.exchange, i.asset_type,
+                   b.ts, b.open, b.high, b.low, b.close, b.volume, b.amount,
+                   b.adjustment, b.is_final, b.source_batch,
+                   m.as_of AS stock_meta_date,
+                   m.metadata_json AS stock_meta_json
+            FROM bars_day b
+            JOIN instruments i ON i.instrument_id=b.instrument_id
+            LEFT JOIN stock_meta_asof m
+              ON m.instrument_id=b.instrument_id
+             AND m.as_of=(
+                 SELECT MAX(m2.as_of)
+                 FROM stock_meta_asof m2
+                 WHERE m2.instrument_id=b.instrument_id
+                   AND m2.as_of<=substr(b.ts, 1, 10)
+             )
+            WHERE i.asset_type=? AND b.is_final=1
+              AND substr(b.ts, 1, 10) IN ({})
+            ORDER BY b.ts, i.code
+            """.format(placeholders),
+            params,
+        ).fetchall()
+        rows = []
+        for row in bar_rows:
+            item = dict(row)
+            metadata_json = item.pop("stock_meta_json", None)
+            metadata_date = item.pop("stock_meta_date", None)
+            metadata = json.loads(metadata_json) if metadata_json else {}
+            if metadata_date:
+                metadata["as_of"] = metadata_date
+            item["stock_meta_asof"] = metadata
+            rows.append(item)
+        return {"dates": dates, "rows": rows}
 
     @staticmethod
     def _finite_number(value: Any, field: str, positive: bool = False) -> float:

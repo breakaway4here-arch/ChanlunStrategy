@@ -1,6 +1,7 @@
 import unittest
 
 from chanlun.market_sentiment import (
+    build_daily_inputs_from_windows,
     build_market_sentiment,
     build_sentiment_history,
     classify_price_limit,
@@ -111,6 +112,44 @@ class PriceLimitClassificationTests(unittest.TestCase):
 
 
 class SentimentEvidenceTests(unittest.TestCase):
+    def test_daily_inputs_derive_listing_trade_days_without_misclassifying_old_stocks(self):
+        dates = [
+            "2026-07-01",
+            "2026-07-02",
+            "2026-07-03",
+            "2026-07-06",
+            "2026-07-07",
+            "2026-07-08",
+        ]
+        rows = []
+        for trade_date in dates:
+            for code, listed_date in (
+                ("600001", "20000101"),
+                ("301001", "20260703"),
+            ):
+                rows.append({
+                    "code": code,
+                    "name": code,
+                    "ts": trade_date,
+                    "close": 10.0,
+                    "amount": 100.0,
+                    "stock_meta_asof": {
+                        "listed_date": listed_date,
+                        "is_st": False,
+                    },
+                })
+
+        daily = build_daily_inputs_from_windows(
+            {"dates": dates, "rows": rows},
+        )
+        final_by_code = {
+            item["code"]: item
+            for item in daily[-1]["stock_bars"]
+        }
+
+        self.assertGreater(final_by_code["600001"]["listing_trade_days"], 5)
+        self.assertEqual(final_by_code["301001"]["listing_trade_days"], 4)
+
     def test_market_breadth_uses_all_valid_stocks_and_reports_distribution(self):
         result = compute_market_breadth([
             _bar("600001", close=10.5),
@@ -141,6 +180,60 @@ class SentimentEvidenceTests(unittest.TestCase):
         self.assertEqual(result["limit_down_count"], 1)
         self.assertEqual(result["limit_ratio"], 1.5)
         self.assertAlmostEqual(result["log_limit_ratio"], 0.405465, places=5)
+        expected = (
+            result["ratio_score"] * 0.40
+            + result["limit_up_score"] * 0.25
+            + result["limit_down_score"] * 0.25
+            + result["improvement_score"] * 0.10
+        )
+        self.assertEqual(result["score"], round(expected, 2))
+
+    def test_limit_ecology_improvement_uses_only_prior_days(self):
+        weak_prior = {
+            "evidence": {
+                "limit_ecology": {
+                    "log_limit_ratio": -1.0,
+                    "limit_up_count": 1,
+                    "limit_down_count": 8,
+                }
+            }
+        }
+        result = compute_limit_ecology(
+            [
+                _bar("600001", close=11.0),
+                _bar("600002", close=11.0),
+                _bar("600003", close=10.1),
+            ],
+            prior_history=[weak_prior],
+        )
+
+        self.assertGreater(result["improvement_score"], 50)
+
+    def test_verified_limit_pool_counts_override_bar_classification(self):
+        result = build_market_sentiment(
+            date="2026-07-16",
+            stock_bars=[
+                _bar("600001", close=10.1),
+                _bar("600002", close=9.9),
+            ],
+            index_bars=[{"change_pct": 0.5}],
+            turnover=100,
+            turnover_ma5=100,
+            turnover_ma20=100,
+            trend={"above_ma20_ratio": 0.5},
+            limit_counts={
+                "limit_up_count": 42,
+                "limit_down_count": 33,
+                "evidence_date": "2026-07-16",
+                "data_status": "verified",
+                "source": "eastmoney_limit_pools",
+            },
+        )
+
+        ecology = result["evidence"]["limit_ecology"]
+        self.assertEqual(ecology["limit_up_count"], 42)
+        self.assertEqual(ecology["limit_down_count"], 33)
+        self.assertEqual(ecology["source"], "eastmoney_limit_pools")
 
     def test_historical_percentile_uses_only_supplied_prior_values(self):
         self.assertEqual(historical_percentile(10, []), 50.0)
@@ -158,6 +251,7 @@ class SentimentEvidenceTests(unittest.TestCase):
             index_bars=[{"change_pct": 1.0}, {"change_pct": 0.5}],
             turnover=120.0,
             turnover_ma5=100.0,
+            turnover_ma20=80.0,
             trend={"above_ma20_ratio": 0.7},
         )
 
@@ -174,6 +268,10 @@ class SentimentEvidenceTests(unittest.TestCase):
         self.assertEqual(result["coverage"], 1.0)
         self.assertFalse(result["insufficient"])
         self.assertIn("limit_ratio", result["evidence"]["limit_ecology"])
+        self.assertEqual(
+            result["evidence"]["turnover"]["ratio_to_ma20"],
+            1.5,
+        )
         expected = sum(
             result["components"][name] * weight
             for name, weight in result["weights"].items()
@@ -212,6 +310,59 @@ class SentimentEvidenceTests(unittest.TestCase):
 
 
 class SentimentHistoryTests(unittest.TestCase):
+    def test_builds_daily_inputs_from_one_database_window_without_future_data(self):
+        dates = ["2026-06-%02d" % day for day in range(1, 26)]
+        rows = []
+        for index, trade_date in enumerate(dates):
+            rows.extend([
+                {
+                    "code": "600001",
+                    "name": "上涨股",
+                    "ts": trade_date,
+                    "close": 10 + index * 0.1,
+                    "amount": 100 + index,
+                    "stock_meta_asof": {},
+                },
+                {
+                    "code": "600002",
+                    "name": "下跌股",
+                    "ts": trade_date,
+                    "close": 20 - index * 0.1,
+                    "amount": 200 + index,
+                    "stock_meta_asof": {},
+                },
+            ])
+        limit_counts = {
+            trade_date: {
+                "limit_up_count": index,
+                "limit_down_count": 1,
+                "evidence_date": trade_date,
+                "data_status": "verified",
+                "source": "eastmoney_limit_pools",
+            }
+            for index, trade_date in enumerate(dates)
+        }
+
+        daily = build_daily_inputs_from_windows(
+            {"dates": dates, "rows": rows},
+            {"dates": [], "rows": []},
+            limit_counts,
+        )
+
+        self.assertEqual(len(daily), 25)
+        self.assertIsNone(daily[0]["turnover_ma5"])
+        self.assertEqual(
+            daily[5]["turnover_ma5"],
+            sum(day["turnover"] for day in daily[:5]) / 5,
+        )
+        self.assertIsNotNone(daily[-1]["turnover_ma20"])
+        self.assertEqual(daily[-1]["limit_counts"]["limit_up_count"], 24)
+        self.assertEqual(len(daily[-1]["stock_bars"]), 2)
+        self.assertEqual(
+            daily[-1]["stock_bars"][0]["prev_close"],
+            rows[-4]["close"],
+        )
+
     def test_history_keeps_latest_twenty_days_and_adds_ma3(self):
         days = [
             _day("2026-06-%02d" % day, up_count=day, down_count=25 - day)
