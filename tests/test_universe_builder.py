@@ -42,6 +42,52 @@ def _bar(ts, close, amount=100_000_000):
 
 
 class UniverseBuilderTests(unittest.TestCase):
+    def test_eligible_candidates_preserve_growth_quality_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "market.sqlite"
+            with MarketHistoryStore(path) as store:
+                instrument_id = store.upsert_instrument(
+                    "stock", "SH", "600000", name="浦发银行"
+                )
+                end = date(2026, 7, 1)
+                store.upsert_bars(
+                    "day",
+                    instrument_id,
+                    [
+                        _bar(
+                            (end - timedelta(days=69 - index)).isoformat(),
+                            10 + index * 0.01,
+                        )
+                        for index in range(70)
+                    ],
+                    adjustment="qfq",
+                )
+                store.upsert_stock_meta(
+                    instrument_id,
+                    "2026-07-01",
+                    {
+                        "name": "浦发银行",
+                        "is_st": False,
+                        "delisting_risk": False,
+                        "listed_days": 500,
+                        "market_cap": 2400.0,
+                        "circulating_market_cap": 1800.0,
+                        "float_market_cap": 1800.0,
+                    },
+                )
+
+            with MarketHistoryStore(path, readonly=True) as store:
+                rows = load_eligible_candidates(
+                    store,
+                    as_of="2026-07-01",
+                    min_listed_days=60,
+                    min_daily_amount=50_000_000,
+                )
+
+        self.assertEqual(rows[0]["market_cap"], 2400.0)
+        self.assertEqual(rows[0]["circulating_market_cap"], 1800.0)
+        self.assertEqual(rows[0]["float_market_cap"], 1800.0)
+
     def test_no_sector_overlay_expands_base_to_final_capacity(self):
         with patch.multiple(
             run_module,

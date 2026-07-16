@@ -259,6 +259,13 @@ def load_eligible_candidates(
             "exchange": instrument["exchange"],
             "asset_type": instrument["asset_type"],
             "stock_meta_asof": meta,
+            "market_cap": meta.get("market_cap"),
+            "circulating_market_cap": meta.get("circulating_market_cap"),
+            "float_market_cap": (
+                meta.get("float_market_cap")
+                if meta.get("float_market_cap") is not None
+                else meta.get("circulating_market_cap")
+            ),
             "klines": kline,
             "data_status": kline["_data_status"],
             "amount": average_amount,
