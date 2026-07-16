@@ -14,6 +14,9 @@ class CandidateFunnelTest(unittest.TestCase):
                 "code": "000001",
                 "source_channel": "trend",
                 "retrieval_pool": "base",
+                "low_position_retrieval_score": 72.5,
+                "trend_retrieval_score": 68.0,
+                "neutral_retrieval_score": 55.0,
                 "volume_ratio": 1.31,
                 "amount_ratio": 1.08,
                 "distance_3pct": 0.027,
@@ -51,6 +54,9 @@ class CandidateFunnelTest(unittest.TestCase):
         self.assertEqual(1.31, event["actual_value"])
         self.assertEqual(1.5, event["threshold"])
         self.assertEqual(1.31, event["volume_ratio"])
+        self.assertEqual(72.5, event["low_position_retrieval_score"])
+        self.assertEqual(68.0, event["trend_retrieval_score"])
+        self.assertEqual(55.0, event["neutral_retrieval_score"])
         self.assertEqual(1.08, event["amount_ratio"])
         self.assertEqual(0.027, event["distance_3pct"])
         self.assertEqual(0.084, event["distance_12pct"])

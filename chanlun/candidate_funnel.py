@@ -19,6 +19,9 @@ FUNNEL_STAGES = (
 TERMINAL_STATES = ("main", "observe", "reject")
 
 RAW_FEATURE_FIELDS = (
+    "low_position_retrieval_score",
+    "trend_retrieval_score",
+    "neutral_retrieval_score",
     "volume_ratio",
     "amount_ratio",
     "distance_3pct",
@@ -155,6 +158,18 @@ class CandidateFunnel:
             }
             for field in RAW_FEATURE_FIELDS:
                 event[field] = _first_value(candidate, field)
+            if event["retrieval_score"] is None:
+                retrieval_values = [
+                    event.get("low_position_retrieval_score"),
+                    event.get("trend_retrieval_score"),
+                ]
+                retrieval_values = [
+                    float(value)
+                    for value in retrieval_values
+                    if value is not None
+                ]
+                if retrieval_values:
+                    event["retrieval_score"] = max(retrieval_values)
             self._events[code] = event
         else:
             for field in (
