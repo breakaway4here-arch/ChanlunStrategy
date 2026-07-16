@@ -152,11 +152,6 @@ def _coerce_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _is_stale_data_row(row: Any) -> bool:
-    data_status = _as_mapping(_as_mapping(row).get("data_status"))
-    return data_status.get("daily") == "stale_cache"
-
-
 def _data_status_daily(row: Any) -> str:
     return str(_as_mapping(_as_mapping(row).get("data_status")).get("daily") or "")
 
@@ -345,6 +340,7 @@ def validate_report_contract(
         data_quality = _as_mapping(dq_value)
 
     is_official = bool(data_quality.get("is_official"))
+    workspace_rows = list(_iter_workspace_rows(report))
     if require_official and not is_official:
         errors.append("publish requires data_quality.is_official == True")
     if is_official:
@@ -407,13 +403,7 @@ def validate_report_contract(
                     current = _resolve_current_price(raw)
                 if current is None:
                     errors.append(f"{view} row missing displayable current_price: code={row.get('code')}")
-            if is_official and _is_stale_data_row(row):
-                errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
-            raw = _resolve_raw_candidate(report, _as_mapping(row.get("ref")))
-            if is_official and _is_stale_data_row(raw):
-                errors.append(f"{view} raw candidate has stale daily cache in official report: code={row.get('code')}")
-
-    for view, row in _iter_workspace_rows(report):
+    for view, row in workspace_rows:
         decision_code = _decision_action_conflict(row)
         if decision_code:
             errors.append(
@@ -422,16 +412,28 @@ def validate_report_contract(
             )
 
     if is_official:
-        for view, row in _iter_workspace_rows(report):
+        for view, row in workspace_rows:
+            daily_status = _data_status_daily(row)
             if not _has_valid_row_data_status(row):
                 errors.append(f"{view} row missing valid data_status in official report: code={row.get('code')}")
-            if _is_stale_data_row(row):
+            elif daily_status == "stale_cache":
                 errors.append(f"{view} row has stale daily cache in official report: code={row.get('code')}")
+            elif daily_status != "verified":
+                errors.append(
+                    f"{view} row has non-verified daily status in official report: "
+                    f"code={row.get('code')} status={daily_status}"
+                )
         for pool_name, row in _iter_raw_candidates(report):
+            daily_status = _data_status_daily(row)
             if not _has_valid_row_data_status(row):
                 errors.append(f"{pool_name} candidate missing valid data_status in official report: code={row.get('code')}")
-            if _is_stale_data_row(row):
+            elif daily_status == "stale_cache":
                 errors.append(f"{pool_name} candidate has stale daily cache in official report: code={row.get('code')}")
+            elif daily_status != "verified":
+                errors.append(
+                    f"{pool_name} candidate has non-verified daily status in official report: "
+                    f"code={row.get('code')} status={daily_status}"
+                )
 
     return errors
 

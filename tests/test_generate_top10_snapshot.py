@@ -21,28 +21,70 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
     def official_report(self, report_date: str, highlights: list[dict]) -> dict:
+        normalized_highlights = []
+        for source_row in highlights:
+            row = dict(source_row)
+            row.setdefault("change_pct", 0.0)
+            row.setdefault("current_price", 1.0)
+            row.setdefault("data_status", {"daily": "verified"})
+            normalized_highlights.append(row)
         return {
             "date": report_date,
+            "picks_fusion": [],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
             "data_quality": {
                 "report_date": report_date,
+                "generated_at": f"{report_date}T15:05:00+08:00",
+                "as_of": f"{report_date}T15:05:00+08:00",
                 "is_official": True,
                 "bar_state": "closed",
                 "sources_trusted": True,
+                "is_trading_day": True,
                 "stock_pool_incomplete": False,
+                "market_status": "verified",
+                "fallback_used": False,
+                "stale_stock_count": 0,
+                "missing_daily_count": 0,
             },
-            "workspace": {"views": {"highlights": highlights}},
+            "workspace": {
+                "views": {
+                    "highlights": normalized_highlights,
+                    "main": [],
+                    "baseline": [],
+                }
+            },
+        }
+
+    def official_manifest(
+        self,
+        dates: list[str],
+        *,
+        latest: str | None = None,
+        latest_trading_date: str | None = None,
+    ) -> dict:
+        return {
+            "dates": dates,
+            "trading_dates": dates,
+            "latest": latest or dates[-1],
+            "latest_trading_date": latest_trading_date or dates[-1],
+            "date_meta": {
+                value: {"is_trading_day": True, "is_official": True}
+                for value in dates
+            },
         }
 
     def test_uses_latest_trading_date(self) -> None:
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01", "2026-07-02"],
-                "trading_dates": ["2026-07-01", "2026-07-02"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-02",
-            },
+            self.official_manifest(
+                ["2026-07-01", "2026-07-02"],
+                latest="2026-07-01",
+                latest_trading_date="2026-07-02",
+            ),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
@@ -67,12 +109,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-01",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
@@ -102,12 +139,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
@@ -173,12 +205,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-01",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
@@ -199,12 +226,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                 data_dir = self.make_fixture() / "docs" / "data"
                 self.write_json(
                     data_dir / "index.json",
-                    {
-                        "dates": ["2026-07-01"],
-                        "trading_dates": ["2026-07-01"],
-                        "latest": "2026-07-01",
-                        "latest_trading_date": "2026-07-01",
-                    },
+                    self.official_manifest(["2026-07-01"]),
                 )
                 row = {"code": "600001"}
                 if invalid_rank is not None:
@@ -221,12 +243,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-01",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
@@ -248,12 +265,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-01",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         report = self.official_report("2026-07-01", [])
         report.pop("workspace")
@@ -272,18 +284,18 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         data_dir = docs_dir / "data"
         self.write_json(
             data_dir / "index.json",
-            {
-                "dates": ["2026-07-01"],
-                "trading_dates": ["2026-07-01"],
-                "latest": "2026-07-01",
-                "latest_trading_date": "2026-07-01",
-            },
+            self.official_manifest(["2026-07-01"]),
         )
         self.write_json(
             data_dir / "2026-07-01.json",
             {
                 **self.official_report("2026-07-01", []),
-                "picks_pure": [{"code": "600888", "name": "FallbackPool", "score": 99}],
+                "startup_watchlist": [{
+                    "code": "600888",
+                    "name": "FallbackPool",
+                    "score": 99,
+                    "data_status": {"daily": "verified"},
+                }],
             },
         )
 
@@ -314,7 +326,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                 report["data_quality"][field] = value
                 self.write_json(data_dir / "2026-07-01.json", report)
 
-                with self.assertRaisesRegex(ValueError, "official closed snapshot"):
+                with self.assertRaisesRegex(ValueError, "report contract invalid"):
                     build_snapshot_payload("job-nonofficial", data_dir)
 
         data_dir = self.make_fixture() / "docs" / "data"
@@ -331,8 +343,117 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.write_json(
             data_dir / "2026-07-01.json", self.official_report("2026-07-01", [])
         )
-        with self.assertRaisesRegex(ValueError, "manifest date_meta"):
+        with self.assertRaisesRegex(ValueError, "manifest contract invalid"):
             build_snapshot_payload("job-meta-not-official", data_dir)
+
+    def test_top10_reuses_full_report_publish_contract(self) -> None:
+        mutations = (
+            lambda report: report["data_quality"].pop("generated_at"),
+            lambda report: report["data_quality"].pop("as_of"),
+            lambda report: report["data_quality"].update({
+                "generated_at": "2026-07-01T14:35:00+08:00",
+                "as_of": "2026-07-01T14:35:00+08:00",
+            }),
+            lambda report: report["data_quality"].update({"market_status": "unverified"}),
+            lambda report: report["data_quality"].update({"fallback_used": True}),
+            lambda report: report["data_quality"].update({"stale_stock_count": 1}),
+            lambda report: report["data_quality"].update({"missing_daily_count": 1}),
+        )
+        for index, mutate in enumerate(mutations):
+            with self.subTest(case=index):
+                data_dir = self.make_fixture() / "docs" / "data"
+                self.write_json(
+                    data_dir / "index.json",
+                    self.official_manifest(["2026-07-01"]),
+                )
+                report = self.official_report("2026-07-01", [])
+                mutate(report)
+                self.write_json(data_dir / "2026-07-01.json", report)
+
+                with self.assertRaisesRegex(ValueError, "report contract invalid"):
+                    build_snapshot_payload("job-invalid-report-contract", data_dir)
+
+    def test_top10_rejects_stale_or_missing_workspace_and_raw_rows(self) -> None:
+        for location in ("workspace", "raw"):
+            for daily_status in ("stale_cache", "missing"):
+                with self.subTest(location=location, daily_status=daily_status):
+                    data_dir = self.make_fixture() / "docs" / "data"
+                    self.write_json(
+                        data_dir / "index.json",
+                        self.official_manifest(["2026-07-01"]),
+                    )
+                    if location == "workspace":
+                        report = self.official_report(
+                            "2026-07-01",
+                            [{"code": "600001", "view_rank": 1}],
+                        )
+                        report["workspace"]["views"]["highlights"][0]["data_status"] = {
+                            "daily": daily_status
+                        }
+                    else:
+                        report = self.official_report("2026-07-01", [])
+                        report["next_day_boom"] = {"candidates": [{
+                            "code": "600002",
+                            "change_pct": 1.0,
+                            "current_price": 10.0,
+                            "data_status": {"daily": daily_status},
+                        }]}
+                    self.write_json(data_dir / "2026-07-01.json", report)
+
+                    with self.assertRaisesRegex(ValueError, "report contract invalid"):
+                        build_snapshot_payload("job-invalid-row-status", data_dir)
+
+    def test_top10_reuses_manifest_contract_before_selecting_date(self) -> None:
+        def missing_date_meta(manifest):
+            manifest.pop("date_meta")
+
+        def selected_not_in_dates(manifest):
+            manifest["dates"] = []
+
+        def selected_not_in_trading_dates(manifest):
+            manifest["trading_dates"] = []
+            manifest["latest_trading_date"] = ""
+
+        def latest_trading_not_max(manifest):
+            manifest["dates"] = ["2026-06-30", "2026-07-01"]
+            manifest["trading_dates"] = ["2026-06-30", "2026-07-01"]
+            manifest["latest_trading_date"] = "2026-06-30"
+            manifest["date_meta"]["2026-06-30"] = {
+                "is_trading_day": True,
+                "is_official": True,
+            }
+
+        def selected_meta_not_official(manifest):
+            manifest["date_meta"]["2026-07-01"]["is_official"] = False
+
+        def selected_meta_not_trading(manifest):
+            manifest["date_meta"]["2026-07-01"]["is_trading_day"] = False
+
+        for mutate in (
+            missing_date_meta,
+            selected_not_in_dates,
+            selected_not_in_trading_dates,
+            latest_trading_not_max,
+            selected_meta_not_official,
+            selected_meta_not_trading,
+        ):
+            with self.subTest(case=mutate.__name__):
+                data_dir = self.make_fixture() / "docs" / "data"
+                manifest = self.official_manifest(["2026-07-01"])
+                mutate(manifest)
+                self.write_json(data_dir / "index.json", manifest)
+                self.write_json(
+                    data_dir / "2026-07-01.json",
+                    self.official_report("2026-07-01", []),
+                )
+                if "2026-06-30" in manifest.get("date_meta", {}):
+                    self.write_json(
+                        data_dir / "2026-06-30.json",
+                        self.official_report("2026-06-30", []),
+                    )
+
+                with self.assertRaisesRegex(ValueError, "manifest contract invalid"):
+                    build_snapshot_payload("job-invalid-manifest", data_dir)
 
 
 if __name__ == "__main__":

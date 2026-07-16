@@ -14,6 +14,13 @@ from typing import Any, Optional
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_DIR = ROOT_DIR / "docs" / "data"
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+
+from scripts.validate_today_report import (  # noqa: E402
+    validate_manifest_contract,
+    validate_report_contract,
+)
 
 
 def _as_str_list(value: Any) -> list[str]:
@@ -164,34 +171,6 @@ def _collect_candidates(report: Mapping[str, Any], diagnostics: dict[str, Any]) 
     return rows, "highlights", False
 
 
-def _require_official_closed_snapshot(
-    report: Mapping[str, Any],
-    manifest: Mapping[str, Any],
-    snapshot_date: str,
-) -> None:
-    data_quality = report.get("data_quality")
-    if not isinstance(data_quality, Mapping) or not (
-        data_quality.get("is_official") is True
-        and data_quality.get("bar_state") == "closed"
-        and data_quality.get("sources_trusted") is True
-        and data_quality.get("stock_pool_incomplete") is False
-    ):
-        raise ValueError("Top10 requires an official closed snapshot")
-
-    report_date = _safe_str(report.get("date"))
-    quality_date = _safe_str(data_quality.get("report_date"))
-    if report_date != snapshot_date or quality_date != snapshot_date:
-        raise ValueError("Top10 requires an official closed snapshot for the selected date")
-
-    if "date_meta" in manifest:
-        date_meta = manifest.get("date_meta")
-        meta = date_meta.get(snapshot_date) if isinstance(date_meta, Mapping) else None
-        if not isinstance(meta, Mapping) or not (
-            meta.get("is_trading_day") is True and meta.get("is_official") is True
-        ):
-            raise ValueError("Top10 manifest date_meta is not official for the selected date")
-
-
 def build_snapshot_payload(
     job_id: str,
     data_dir: Path = DEFAULT_DATA_DIR,
@@ -203,8 +182,31 @@ def build_snapshot_payload(
 
     manifest = _load_json(data_dir / "index.json")
     diagnostics["manifest_path"] = str(data_dir / "index.json")
+    manifest_errors = validate_manifest_contract(manifest)
+    if manifest_errors:
+        raise ValueError(
+            "Top10 manifest contract invalid: " + "; ".join(manifest_errors)
+        )
     snapshot_date = _choose_snapshot_date(manifest)
     diagnostics["snapshot_date"] = snapshot_date
+
+    if (
+        snapshot_date not in manifest["dates"]
+        or snapshot_date not in manifest["trading_dates"]
+    ):
+        raise ValueError(
+            "Top10 manifest contract invalid: selected date must belong to dates and trading_dates"
+        )
+
+    date_meta = manifest["date_meta"]
+    selected_meta = date_meta.get(snapshot_date)
+    if not isinstance(selected_meta, Mapping) or not (
+        selected_meta.get("is_trading_day") is True
+        and selected_meta.get("is_official") is True
+    ):
+        raise ValueError(
+            "Top10 manifest contract invalid: selected date_meta must be trading and official"
+        )
 
     snapshot_path = data_dir / f"{snapshot_date}.json"
     if not snapshot_path.exists():
@@ -212,9 +214,13 @@ def build_snapshot_payload(
         snapshot_path = root_data_path if root_data_path.exists() else data_dir / "data.json"
     snapshot = _load_json(snapshot_path)
     diagnostics["snapshot_path"] = str(snapshot_path)
-    _require_official_closed_snapshot(snapshot, manifest, snapshot_date)
-
     raw_rows, selected_source, fallback_used = _collect_candidates(snapshot, diagnostics)
+    report_errors = validate_report_contract(snapshot, require_official=True)
+    if report_errors:
+        raise ValueError(
+            "Top10 report contract invalid: " + "; ".join(report_errors)
+        )
+
     ranked_rows = raw_rows
 
     diagnostics["candidate_count"] = len(ranked_rows)

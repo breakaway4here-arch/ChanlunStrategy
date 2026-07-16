@@ -1133,6 +1133,25 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
 class TestReportContractGuard(unittest.TestCase):
 
+    def test_validate_report_contract_reports_workspace_stale_row_once(self):
+        report = _official_empty_report()
+        report["workspace"]["views"]["highlights"] = [{
+            "code": "600000",
+            "change_pct": 1.0,
+            "current_price": 10.0,
+            "data_status": {"daily": "stale_cache"},
+        }]
+
+        errors = validate_report_contract(report)
+
+        stale_errors = [
+            error for error in errors
+            if "highlights row has stale daily cache" in error
+        ]
+        self.assertEqual(stale_errors, [
+            "highlights row has stale daily cache in official report: code=600000"
+        ])
+
     def test_validate_report_contract_rejects_decision_action_conflicts(self):
         executable_actions = ("可上车", "等回踩", "慎追")
         for decision_code in ("reject", "observe"):
