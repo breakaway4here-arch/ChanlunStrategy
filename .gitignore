@@ -8,6 +8,7 @@ config.json
 docs/*.md
 daily_run.log
 .cache/
+market_history.sqlite*
 .codegraph/
 .playwright-mcp/
 docs-preview/
