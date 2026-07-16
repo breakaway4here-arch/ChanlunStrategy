@@ -826,6 +826,24 @@ def _primary_metric_bundle(
     }
 
 
+_COMPACT_DATA_STATUS_FIELDS = (
+    "daily",
+    "latest_date",
+    "source",
+    "bars",
+    "stale",
+)
+
+
+def _compact_data_status(raw: Mapping[str, Any]) -> dict[str, Any]:
+    data_status = _to_dict(raw.get("data_status"))
+    return {
+        field: data_status[field]
+        for field in _COMPACT_DATA_STATUS_FIELDS
+        if field in data_status
+    }
+
+
 def _build_item(
     sources: Iterable[str],
     by_source: dict[str, Mapping[str, Any]],
@@ -885,6 +903,7 @@ def _build_item(
         "sources": ordered_sources,
         "info_tags": _build_info_tags(preferred_raw, preferred, all_risk_flags),
         "data_badges": _build_data_badges(preferred_raw, data_quality),
+        "data_status": _compact_data_status(preferred_raw),
         "source_labels": [_safe_str(SOURCE_LABELS[s]) for s in ordered_sources if s in SOURCE_LABELS],
         "resonance_label": _resonance_label(ordered_sources),
         "view_rank": 0,

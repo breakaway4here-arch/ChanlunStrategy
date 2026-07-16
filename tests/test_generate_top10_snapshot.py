@@ -9,6 +9,7 @@ from pathlib import Path
 
 from chanlun.report_view_model import build_workspace
 from scripts.generate_top10_snapshot import build_snapshot_payload
+from scripts.validate_today_report import validate_report_contract
 
 
 class GenerateTop10SnapshotTests(unittest.TestCase):
@@ -21,13 +22,6 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
 
     def official_report(self, report_date: str, highlights: list[dict]) -> dict:
-        normalized_highlights = []
-        for source_row in highlights:
-            row = dict(source_row)
-            row.setdefault("change_pct", 0.0)
-            row.setdefault("current_price", 1.0)
-            row.setdefault("data_status", {"daily": "verified"})
-            normalized_highlights.append(row)
         return {
             "date": report_date,
             "picks_fusion": [],
@@ -51,7 +45,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             },
             "workspace": {
                 "views": {
-                    "highlights": normalized_highlights,
+                    "highlights": highlights,
                     "main": [],
                     "baseline": [],
                 }
@@ -90,14 +84,22 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             data_dir / "2026-07-01.json",
             self.official_report(
                 "2026-07-01",
-                [{"code": "A1", "name": "Old", "score": 1, "view_rank": 1}],
+                [{
+                    "code": "A1", "name": "Old", "score": 1, "view_rank": 1,
+                    "change_pct": 0.0, "current_price": 1.0,
+                    "data_status": {"daily": "verified"},
+                }],
             ),
         )
         self.write_json(
             data_dir / "2026-07-02.json",
             self.official_report(
                 "2026-07-02",
-                [{"code": "A2", "name": "New", "score": 2, "view_rank": 1}],
+                [{
+                    "code": "A2", "name": "New", "score": 2, "view_rank": 1,
+                    "change_pct": 0.0, "current_price": 1.0,
+                    "data_status": {"daily": "verified"},
+                }],
             ),
         )
 
@@ -121,6 +123,9 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                         "name": f"Stock{i}",
                         "score": i,
                         "view_rank": i + 1,
+                        "change_pct": 0.0,
+                        "current_price": 1.0,
+                        "data_status": {"daily": "verified"},
                     }
                     for i in range(15)
                 ],
@@ -156,6 +161,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                         "reason": "测试入选原因",
                         "change_pct": 3.14,
                         "current_price": 12.34,
+                        "data_status": {"daily": "verified"},
                     },
                 ],
             ),
@@ -184,23 +190,41 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.assertEqual(item["reason"], "测试入选原因")
 
     def test_top10_reason_uses_primary_reason_from_real_workspace(self) -> None:
-        workspace = build_workspace({
-            "picks_fusion": [{
-                "code": "600001",
-                "name": "真实工作区票",
-                "score": 82,
-                "best_buy_point": {
-                    "type": "底背驰候选",
-                    "reason": "真实工作区入选理由",
-                    "price": 10.0,
-                    "current_price": 10.1,
-                    "distance_from_reference_pct": 1.0,
-                    "change_pct": 1.0,
-                },
-            }],
-        })
+        raw_pick = {
+            "code": "600001",
+            "name": "真实工作区票",
+            "score": 82,
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-07-01",
+                "source": "tencent",
+                "bars": 100,
+                "stale": False,
+                "large_runtime_blob": [1, 2, 3],
+            },
+            "best_buy_point": {
+                "type": "底背驰候选",
+                "reason": "真实工作区入选理由",
+                "price": 10.0,
+                "current_price": 10.1,
+                "distance_from_reference_pct": 1.0,
+                "change_pct": 1.0,
+            },
+        }
+        workspace = build_workspace({"picks_fusion": [raw_pick]})
         highlights = workspace["views"]["highlights"]
         self.assertEqual(highlights[0]["primary_reason"], "真实工作区入选理由")
+        self.assertIn("data_status", highlights[0])
+        self.assertEqual(highlights[0]["data_status"]["daily"], "verified")
+        self.assertNotIn("large_runtime_blob", highlights[0]["data_status"])
+
+        report = self.official_report("2026-07-01", highlights)
+        report["workspace"] = workspace
+        report["picks_fusion"] = [raw_pick]
+        self.assertEqual(
+            validate_report_contract(report, require_official=True),
+            [],
+        )
 
         data_dir = self.make_fixture() / "docs" / "data"
         self.write_json(
@@ -209,7 +233,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         )
         self.write_json(
             data_dir / "2026-07-01.json",
-            self.official_report("2026-07-01", highlights),
+            report,
         )
 
         payload = build_snapshot_payload("job-real-workspace-reason", data_dir)
@@ -218,6 +242,54 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.assertEqual(
             payload["items"][0]["action_reason"], highlights[0]["action_reason"]
         )
+
+    def test_real_workspace_propagates_nonverified_status_and_publish_gate_rejects_it(self) -> None:
+        for daily_status in ("stale_cache", "missing", "preview"):
+            with self.subTest(daily_status=daily_status):
+                raw_pick = {
+                    "code": "600001",
+                    "name": "状态测试票",
+                    "score": 82,
+                    "data_status": {
+                        "daily": daily_status,
+                        "latest_date": "2026-07-01",
+                        "source": "kline_cache",
+                        "bars": 100,
+                        "stale": daily_status != "verified",
+                    },
+                    "best_buy_point": {
+                        "reason": "状态传播测试",
+                        "current_price": 10.1,
+                        "change_pct": 1.0,
+                    },
+                }
+                workspace = build_workspace({"picks_fusion": [raw_pick]})
+                for view_name in ("main", "highlights", "growth_quality"):
+                    self.assertIn("data_status", workspace["views"][view_name][0])
+                    self.assertEqual(
+                        workspace["views"][view_name][0]["data_status"]["daily"],
+                        daily_status,
+                    )
+
+                report = self.official_report(
+                    "2026-07-01", workspace["views"]["highlights"]
+                )
+                report["workspace"] = workspace
+                report["picks_fusion"] = [raw_pick]
+                errors = validate_report_contract(report, require_official=True)
+                self.assertTrue(
+                    any(daily_status in error or "stale daily cache" in error for error in errors),
+                    errors,
+                )
+
+                data_dir = self.make_fixture() / "docs" / "data"
+                self.write_json(
+                    data_dir / "index.json",
+                    self.official_manifest(["2026-07-01"]),
+                )
+                self.write_json(data_dir / "2026-07-01.json", report)
+                with self.assertRaisesRegex(ValueError, "report contract invalid"):
+                    build_snapshot_payload("job-nonverified-workspace", data_dir)
 
     def test_top10_fails_closed_on_missing_or_conflicting_view_rank(self) -> None:
         invalid_ranks = (None, 0, "1", True, 2)
@@ -229,6 +301,11 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                     self.official_manifest(["2026-07-01"]),
                 )
                 row = {"code": "600001"}
+                row.update({
+                    "change_pct": 0.0,
+                    "current_price": 1.0,
+                    "data_status": {"daily": "verified"},
+                })
                 if invalid_rank is not None:
                     row["view_rank"] = invalid_rank
                 self.write_json(
@@ -252,6 +329,9 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                 [{
                     "code": "300002",
                     "view_rank": 1,
+                    "change_pct": 0.0,
+                    "current_price": 1.0,
+                    "data_status": {"daily": "verified"},
                     "decision_engine_v1": {"decision": "不推荐（高位风险）"},
                 }],
             ),
