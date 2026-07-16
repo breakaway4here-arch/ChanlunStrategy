@@ -61,7 +61,7 @@ class NextDayTopRecallAuditTest(unittest.TestCase):
                     funnel.pass_stage(code, "daily_channel")
                 if index < 15:
                     funnel.pass_stage(code, "minute30")
-                if index < 10:
+                if index < 10 or index == 14:
                     funnel.pass_stage(code, "fusion")
             funnel.finalize(
                 main_codes=["{:06d}".format(i) for i in range(10)],
@@ -113,6 +113,12 @@ class NextDayTopRecallAuditTest(unittest.TestCase):
             result["aggregate"]["top30"]["failure_breakdown"][
                 "by_category"
             ]["日线通道未匹配"],
+        )
+        self.assertEqual(
+            5,
+            pair["targets"]["top20"]["failure_breakdown"][
+                "by_category"
+            ]["观察通道保留"],
         )
 
     def test_requires_an_official_signal_run(self):

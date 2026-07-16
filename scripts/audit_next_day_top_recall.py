@@ -5,8 +5,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Sequence, Tuple
+
+ROOT_DIR = Path(__file__).resolve().parents[1]
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from chanlun.candidate_funnel import FUNNEL_STAGES
 from chanlun.market_history_store import MarketHistoryStore
@@ -110,6 +115,8 @@ def _failure_category(event: Mapping[str, Any]) -> str:
     reason = str(event.get("first_failure_reason") or "")
     if not event:
         return "漏斗记录缺失"
+    if str(event.get("final_state") or "") == "observe" and not gate:
+        return "观察通道保留"
     if gate == "eligible":
         if reason in {"missing_meta", "insufficient_bars", "stale_latest_bar"}:
             return "基础数据不完整"
@@ -161,10 +168,14 @@ def _target_metrics(
         terminal[state] += 1
         if state == "main":
             continue
-        gate = str(event.get("first_failure_gate") or "missing")
-        reason = str(
-            event.get("first_failure_reason") or "funnel_record_missing"
-        )
+        gate = str(event.get("first_failure_gate") or "")
+        reason = str(event.get("first_failure_reason") or "")
+        if state == "observe" and not gate:
+            gate = "observation"
+            reason = "observation_only"
+        elif not gate:
+            gate = "missing"
+            reason = "funnel_record_missing"
         category = _failure_category(event)
         failures_by_gate[gate] = failures_by_gate.get(gate, 0) + 1
         failures_by_reason[reason] = failures_by_reason.get(reason, 0) + 1
