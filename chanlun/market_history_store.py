@@ -149,11 +149,7 @@ class MarketHistoryStore:
                     PRIMARY KEY (run_id, shard_id)
                 );
 
-                CREATE TABLE IF NOT EXISTS bar_table_settings (
-                    table_name TEXT PRIMARY KEY,
-                    adjustment TEXT NOT NULL,
-                    updated_at TEXT NOT NULL
-                );
+                DROP TABLE IF EXISTS bar_table_settings;
             """)
             for table in BAR_TABLES.values():
                 self.connection.execute(
@@ -163,6 +159,25 @@ class MarketHistoryStore:
                     "CREATE INDEX IF NOT EXISTS idx_{}_ts_instrument "
                     "ON {} (ts, instrument_id)".format(table, table)
                 )
+                self.connection.execute("""
+                    CREATE TRIGGER IF NOT EXISTS trg_{table}_adjustment_insert
+                    BEFORE INSERT ON {table}
+                    WHEN EXISTS (
+                        SELECT 1 FROM {table}
+                        WHERE adjustment <> NEW.adjustment
+                    )
+                    BEGIN
+                        SELECT RAISE(ABORT, '{table} adjustment mismatch');
+                    END
+                """.format(table=table))
+                self.connection.execute("""
+                    CREATE TRIGGER IF NOT EXISTS trg_{table}_adjustment_update
+                    BEFORE UPDATE OF adjustment ON {table}
+                    WHEN OLD.adjustment <> NEW.adjustment
+                    BEGIN
+                        SELECT RAISE(ABORT, '{table} adjustment mismatch');
+                    END
+                """.format(table=table))
 
     @staticmethod
     def _table(interval: str) -> str:
@@ -299,6 +314,16 @@ class MarketHistoryStore:
         adjustment = str(bar.get("adjustment") or default_adjustment or "").strip()
         if not adjustment:
             raise ValueError("bar adjustment is required")
+        if "is_final" not in bar:
+            is_final = 0
+        else:
+            raw_final = bar.get("is_final")
+            if isinstance(raw_final, bool):
+                is_final = int(raw_final)
+            elif type(raw_final) is int and raw_final in (0, 1):
+                is_final = raw_final
+            else:
+                raise ValueError("is_final must be bool or integer 0/1")
         return {
             "ts": ts,
             "open": values["open"],
@@ -308,17 +333,21 @@ class MarketHistoryStore:
             "volume": volume,
             "amount": amount,
             "adjustment": adjustment,
-            "is_final": int(bool(bar.get("is_final", False))),
+            "is_final": is_final,
             "source_batch": str(bar.get("source_batch") or ""),
             "ingest_run_id": bar.get("ingest_run_id"),
         }
 
     def get_canonical_adjustment(self, interval: str) -> Optional[str]:
         table = self._table(interval)
-        row = self.connection.execute(
-            "SELECT adjustment FROM bar_table_settings WHERE table_name=?", (table,)
-        ).fetchone()
-        return None if row is None else str(row["adjustment"])
+        rows = self.connection.execute(
+            "SELECT DISTINCT adjustment FROM {} LIMIT 2".format(table)
+        ).fetchall()
+        if not rows:
+            return None
+        if len(rows) > 1:
+            raise RuntimeError("{} contains mixed adjustments".format(table))
+        return str(rows[0]["adjustment"])
 
     def upsert_bars(
         self,
@@ -357,22 +386,24 @@ class MarketHistoryStore:
                 adjustment=excluded.adjustment, is_final=excluded.is_final,
                 source_batch=excluded.source_batch,
                 ingest_run_id=excluded.ingest_run_id, updated_at=excluded.updated_at
-            WHERE {table}.is_final = 0 OR excluded.is_final = 1
+            WHERE ({table}.is_final = 0 OR excluded.is_final = 1)
+              AND (
+                {table}.open IS NOT excluded.open OR
+                {table}.high IS NOT excluded.high OR
+                {table}.low IS NOT excluded.low OR
+                {table}.close IS NOT excluded.close OR
+                {table}.volume IS NOT excluded.volume OR
+                {table}.amount IS NOT excluded.amount OR
+                {table}.adjustment IS NOT excluded.adjustment OR
+                {table}.is_final IS NOT excluded.is_final OR
+                {table}.source_batch IS NOT excluded.source_batch OR
+                {table}.ingest_run_id IS NOT excluded.ingest_run_id
+              )
         """.format(table=table)
+        changed = 0
         with self._write_scope():
-            if canonical is None:
-                self.connection.execute(
-                    """
-                    INSERT INTO bar_table_settings(table_name, adjustment, updated_at)
-                    VALUES (?, ?, ?)
-                    ON CONFLICT(table_name) DO NOTHING
-                    """,
-                    (table, batch_adjustment, now),
-                )
-                canonical = self.get_canonical_adjustment(interval)
-                if canonical != batch_adjustment:
-                    raise ValueError("adjustment mismatch for {}".format(table))
             for bar in materialized:
+                before = self.connection.total_changes
                 self.connection.execute(
                     sql,
                     (
@@ -382,7 +413,8 @@ class MarketHistoryStore:
                         ingest_run_id or bar["ingest_run_id"], now,
                     ),
                 )
-        return len(materialized)
+                changed += self.connection.total_changes - before
+        return changed
 
     def query_bars(
         self,
@@ -422,12 +454,50 @@ class MarketHistoryStore:
         as_of: Optional[str] = None,
         limit: Optional[int] = None,
     ) -> Dict[int, List[Dict[str, Any]]]:
-        return {
-            int(instrument_id): self.query_bars(
-                interval, int(instrument_id), start=start, end=end, as_of=as_of, limit=limit
-            )
-            for instrument_id in instrument_ids
-        }
+        table = self._table(interval)
+        ids = list(dict.fromkeys(int(value) for value in instrument_ids))
+        result = {instrument_id: [] for instrument_id in ids}
+        if not ids or (limit is not None and int(limit) <= 0):
+            return result
+        upper = min(str(end), str(as_of)) if end is not None and as_of is not None else end or as_of
+
+        # Stay below conservative SQLite bind limits while keeping query count
+        # fixed by chunk size instead of growing one query per instrument.
+        for offset in range(0, len(ids), 900):
+            chunk = ids[offset:offset + 900]
+            clauses = ["instrument_id IN ({})".format(",".join("?" for _ in chunk))]
+            params = list(chunk)
+            if start is not None:
+                clauses.append("ts>=?")
+                params.append(str(start))
+            if upper is not None:
+                clauses.append("ts<=?")
+                params.append(str(upper))
+            where_sql = " AND ".join(clauses)
+            if limit is None:
+                sql = (
+                    "SELECT * FROM {table} WHERE {where_sql} "
+                    "ORDER BY instrument_id, ts"
+                ).format(table=table, where_sql=where_sql)
+            else:
+                sql = """
+                    SELECT * FROM (
+                        SELECT {table}.*,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY instrument_id ORDER BY ts DESC
+                               ) AS _row_number
+                        FROM {table}
+                        WHERE {where_sql}
+                    ) ranked
+                    WHERE _row_number <= ?
+                    ORDER BY instrument_id, ts
+                """.format(table=table, where_sql=where_sql)
+                params.append(int(limit))
+            for raw in self.connection.execute(sql, params).fetchall():
+                row = dict(raw)
+                row.pop("_row_number", None)
+                result[int(row["instrument_id"])].append(row)
+        return result
 
     def query_cross_section(
         self,
@@ -467,7 +537,12 @@ class MarketHistoryStore:
                 INSERT INTO ingest_runs(run_id, mode, status, started_at, metadata_json)
                 VALUES (?, ?, 'running', ?, ?)
                 ON CONFLICT(run_id) DO UPDATE SET
-                    mode=excluded.mode, metadata_json=excluded.metadata_json
+                    mode=excluded.mode,
+                    status='running',
+                    started_at=excluded.started_at,
+                    finished_at=NULL,
+                    rows_written=0,
+                    metadata_json=excluded.metadata_json
                 """,
                 (str(run_id), str(mode), started_at or _utc_now(), _json_dumps(metadata)),
             )
@@ -497,9 +572,12 @@ class MarketHistoryStore:
                 raise KeyError("unknown ingest run: {}".format(run_id))
 
     def get_ingest_run(self, run_id: str) -> Optional[Dict[str, Any]]:
-        return _row_dict(self.connection.execute(
+        row = _row_dict(self.connection.execute(
             "SELECT * FROM ingest_runs WHERE run_id=?", (str(run_id),)
         ).fetchone())
+        if row is not None:
+            row["metadata"] = json.loads(row["metadata_json"])
+        return row
 
     def upsert_shard_manifest(
         self,
@@ -534,7 +612,12 @@ class MarketHistoryStore:
         rows = self.connection.execute(
             "SELECT * FROM shard_manifests WHERE run_id=? ORDER BY shard_id", (str(run_id),)
         ).fetchall()
-        return [dict(row) for row in rows]
+        result = []
+        for raw in rows:
+            row = dict(raw)
+            row["metadata"] = json.loads(row["metadata_json"])
+            result.append(row)
+        return result
 
     def merge_staging_database(self, staging_path: Any) -> Dict[str, int]:
         """Idempotently merge a staging database using logical instrument identity."""
@@ -568,14 +651,13 @@ class MarketHistoryStore:
                     payload = dict(row)
                     payload.pop("instrument_id", None)
                     payload.pop("updated_at", None)
-                    self.upsert_bars(
+                    counts["bars"] += self.upsert_bars(
                         interval,
                         id_map[int(row["instrument_id"])],
                         [payload],
                         adjustment=row["adjustment"],
                         ingest_run_id=row["ingest_run_id"],
                     )
-                    counts["bars"] += 1
 
             for row in source.connection.execute("SELECT * FROM ingest_runs"):
                 self.start_ingest_run(
