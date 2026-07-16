@@ -120,6 +120,23 @@ def _to_tier_score(tier: Any) -> int:
     return 3
 
 
+def _decision_code_from_raw(item: Mapping[str, Any]) -> str:
+    return _safe_str(_to_dict(item).get("decision_engine_v1", {}).get("decision_code")).lower()
+
+
+def _decision_code_from_view_item(item: Mapping[str, Any]) -> str:
+    return _safe_str(_to_dict(item.get("decision_engine_v1")).get("decision_code")).lower()
+
+
+def _decision_priority(item: Mapping[str, Any]) -> int:
+    decision_code = _decision_code_from_view_item(item)
+    if decision_code == "recommend":
+        return 0
+    if decision_code == "observe":
+        return 1
+    return 2
+
+
 def _safe_float(value: Any, *, default: float | None = None) -> float | None:
     if value is None:
         return default
@@ -518,6 +535,13 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         return "none"
 
     pool_quality_tier = _to_tier(liquidity_score)
+    quality_evidence_eligible = (
+        market_cap_for_score is not None
+        and (
+            (money20 is not None and money20 > 0)
+            or volume20 > 0
+        )
+    )
     pool_quality_components = [
         {
             "name": "liquidity",
@@ -586,6 +610,10 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         "float_market_cap": circulating_market_cap,
         "liquidity_source": liquidity_source,
         "money20": money20,
+        "quality_evidence_eligible": quality_evidence_eligible,
+        "quality_evidence_status": (
+            "eligible" if quality_evidence_eligible else "insufficient"
+        ),
     }
 
 
@@ -1011,15 +1039,21 @@ def _collect_views(
 ) -> dict[str, dict[str, Mapping[str, Any]]]:
     views: dict[str, dict[str, Mapping[str, Any]]] = {
         "main": {},
+        "main_all": {},
         "acceleration": {},
         "luojie": {},
         "confirming": {},
         "baseline": {},
     }
 
-    views["main"] = _normalize_pool_items(
+    views["main_all"] = _normalize_pool_items(
         _get_list(report_data.get("picks_fusion")), "main"
     )
+    views["main"] = {
+        code: raw
+        for code, raw in views["main_all"].items()
+        if _decision_code_from_raw(raw) == "recommend"
+    }
 
     next_day_boom = _to_dict(report_data.get("next_day_boom"))
     boom_mode = _safe_str(next_day_boom.get("mode"))
@@ -1072,7 +1106,7 @@ def _build_highlights(
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Mapping[str, Any]]] = {}
     source_map = {
-        "main": views["main"],
+        "main": views.get("main_all", views["main"]),
         "acceleration": views["acceleration"],
         "luojie": views["luojie"],
         "confirming": views["confirming"],
@@ -1088,7 +1122,18 @@ def _build_highlights(
         _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
         for bucket in merged.values()
     ]
-    rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
+    rows = [
+        row
+        for row in rows
+        if _decision_code_from_view_item(row) != "reject"
+    ]
+    rows.sort(
+        key=lambda row: (
+            _decision_priority(row),
+            -row["opportunity_score"],
+            row["code"],
+        )
+    )
     top_rows = rows[:10]
     for rank, row in enumerate(top_rows, start=1):
         row["view_rank"] = rank
@@ -1101,7 +1146,7 @@ def _build_growth_quality(
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Mapping[str, Any]]] = {}
     source_map = {
-        "main": views["main"],
+        "main": views.get("main_all", views["main"]),
         "acceleration": views["acceleration"],
         "luojie": views["luojie"],
         "confirming": views["confirming"],
@@ -1115,6 +1160,12 @@ def _build_growth_quality(
     rows = [
         _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
         for bucket in merged.values()
+    ]
+    rows = [
+        row
+        for row in rows
+        if _decision_code_from_view_item(row) != "reject"
+        and bool(_to_dict(row.get("pool_quality")).get("quality_evidence_eligible"))
     ]
 
     def _growth_quality_sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, str]:
@@ -1203,10 +1254,19 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     view_items = {
         view: _build_view_items(view, source_data, data_quality=data_quality)
         for view, source_data in views.items()
+        if view in SOURCE_POOLS
     }
 
     highlights = _build_highlights(views, data_quality=data_quality)
     view_items["highlights"] = highlights
+    growth_quality_input_count = len(
+        set().union(
+            views.get("main_all", {}).keys(),
+            views["acceleration"].keys(),
+            views["luojie"].keys(),
+            views["confirming"].keys(),
+        )
+    )
     growth_quality = _build_growth_quality(views, data_quality=data_quality)
     view_items["growth_quality"] = growth_quality
     observation_top5, observation_diagnostics = _build_observation_top5(
@@ -1218,7 +1278,15 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     # its tier/quality-first order by design.
     for name in VIEW_ORDER:
         rows = view_items[name]
-        if name != "growth_quality":
+        if name == "highlights":
+            rows.sort(
+                key=lambda row: (
+                    _decision_priority(row),
+                    -row["opportunity_score"],
+                    row["code"],
+                )
+            )
+        elif name != "growth_quality":
             rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
         for rank, row in enumerate(rows, start=1):
             row["view_rank"] = rank
@@ -1256,11 +1324,18 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
                 & set(item["code"] for item in view_items["growth_quality"])
             ),
         },
+        "growth_quality": {
+            "input_count": growth_quality_input_count,
+            "eligible_count": counts["growth_quality"],
+            "excluded_insufficient_evidence": max(
+                0, growth_quality_input_count - counts["growth_quality"]
+            ),
+        },
         "observation_top5": observation_diagnostics,
     }
 
     return {
-        "default_view": "highlights",
+        "default_view": "main",
         "view_order": list(VIEW_ORDER),
         "view_meta": VIEW_META,
         "views": view_items,
