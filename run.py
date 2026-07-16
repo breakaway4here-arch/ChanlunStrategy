@@ -57,7 +57,8 @@ from chanlun.data_fetcher import (
     build_market_time_metadata,
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool, fetch_limit_pool_counts,
-    fetch_sector_stocks, deduplicate_sector_hierarchy,
+    fetch_sector_stocks, fetch_stock_market_caps,
+    deduplicate_sector_hierarchy,
 )
 from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
@@ -483,6 +484,100 @@ def _complete_sector_component_evidence(
                 ),
             }
     return evidence
+
+
+def _hydrate_market_cap_evidence(
+    stocks,
+    report_date,
+    *,
+    db_path=MARKET_HISTORY_DB_PATH,
+    fetcher=fetch_stock_market_caps,
+    max_workers=20,
+):
+    """Read market caps from the shared DB and remotely fill only misses."""
+    rows = [row for row in (stocks or []) if isinstance(row, dict)]
+    codes = list(dict.fromkeys(
+        str(row.get("code") or "").strip()
+        for row in rows
+        if str(row.get("code") or "").strip()
+    ))
+    evidence = {}
+    instruments_by_code = {}
+    if os.path.exists(db_path):
+        with MarketHistoryStore(db_path) as store:
+            for offset in range(0, len(codes), 900):
+                chunk = codes[offset:offset + 900]
+                if not chunk:
+                    continue
+                found = store.connection.execute(
+                    """
+                    SELECT instrument_id, code
+                    FROM instruments
+                    WHERE asset_type='stock' AND code IN ({})
+                    """.format(",".join("?" for _ in chunk)),
+                    chunk,
+                ).fetchall()
+                for instrument in found:
+                    instruments_by_code[str(instrument["code"])] = int(
+                        instrument["instrument_id"]
+                    )
+            metadata = store.query_stock_meta_many(
+                list(instruments_by_code.values()),
+                as_of=report_date,
+            )
+            for code, instrument_id in instruments_by_code.items():
+                meta = metadata.get(instrument_id) or {}
+                if (
+                    _safe_number(meta.get("market_cap"), None) is not None
+                    or _safe_number(
+                        meta.get("circulating_market_cap"), None
+                    ) is not None
+                ):
+                    evidence[code] = dict(meta)
+
+    missing = [code for code in codes if code not in evidence]
+    fetched = fetcher(missing, max_workers=max_workers) if missing else {}
+    if fetched and os.path.exists(db_path):
+        with MarketHistoryStore(db_path) as store:
+            for code, cap_evidence in fetched.items():
+                instrument_id = instruments_by_code.get(str(code))
+                if instrument_id is None:
+                    continue
+                merged = store.query_stock_meta(
+                    instrument_id, as_of=report_date
+                ) or {}
+                merged.pop("as_of", None)
+                merged.update(cap_evidence)
+                store.upsert_stock_meta(
+                    instrument_id,
+                    report_date,
+                    merged,
+                )
+    evidence.update(fetched)
+
+    hydrated = 0
+    for row in rows:
+        cap_evidence = evidence.get(str(row.get("code") or ""), {})
+        for field in (
+            "market_cap",
+            "circulating_market_cap",
+            "float_market_cap",
+        ):
+            if row.get(field) is None and cap_evidence.get(field) is not None:
+                row[field] = cap_evidence[field]
+        if (
+            row.get("market_cap") is not None
+            or row.get("circulating_market_cap") is not None
+        ):
+            hydrated += 1
+    return {
+        "requested": len(codes),
+        "db_hits": len(codes) - len(missing),
+        "remote_requested": len(missing),
+        "remote_hits": len(fetched),
+        "hydrated": hydrated,
+        "max_workers": max_workers,
+    }
 
 
 def _apply_full_a_universe(
@@ -1226,6 +1321,11 @@ def main(debug=False, preview=False, generated_at=None):
                 stocks_with_kline,
                 today,
             )
+    data_quality["market_cap_evidence"] = _hydrate_market_cap_evidence(
+        stocks_with_kline,
+        today,
+        max_workers=20,
+    )
     active_codes = [stock.get("code") for stock in stocks_with_kline]
     new_active_stocks = [
         stock

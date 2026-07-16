@@ -627,6 +627,65 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     return stocks
 
 
+def fetch_stock_market_caps(codes, max_workers=20):
+    """Fetch current total/circulating market caps in batched quote requests."""
+    normalized_codes = list(dict.fromkeys(
+        str(code or "").strip()
+        for code in (codes or [])
+        if str(code or "").strip()
+    ))
+    if not normalized_codes:
+        return {}
+
+    endpoint = "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
+    batches = [
+        normalized_codes[offset:offset + 100]
+        for offset in range(0, len(normalized_codes), 100)
+    ]
+
+    def _fetch_batch(batch):
+        response = SESSION.get(
+            endpoint,
+            params={
+                "secids": ",".join(_em_secid(code) for code in batch),
+                "fields": "f12,f14,f20,f21",
+                "fltt": "2",
+                "invt": "2",
+            },
+            timeout=_EASTMONEY_TIMEOUT,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        items = (payload.get("data") or {}).get("diff") or []
+        return {
+            str(item.get("f12") or ""): {
+                "market_cap": _market_cap_to_yi(item.get("f20")),
+                "circulating_market_cap": _market_cap_to_yi(
+                    item.get("f21")
+                ),
+                "float_market_cap": _market_cap_to_yi(item.get("f21")),
+                "market_cap_source": "eastmoney_quote",
+            }
+            for item in items
+            if isinstance(item, dict) and str(item.get("f12") or "")
+        }
+
+    result = {}
+    workers = max(1, min(int(max_workers), len(batches)))
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(_fetch_batch, batch) for batch in batches]
+        for future in as_completed(futures):
+            try:
+                result.update(future.result())
+            except Exception as exc:
+                print(
+                    "[WARN] 批量获取市值失败: {}: {}".format(
+                        type(exc).__name__, exc
+                    )
+                )
+    return result
+
+
 # ============================================================
 # K线缓存强制刷新开关
 # ============================================================

@@ -93,6 +93,24 @@ class TestReportGenerator(unittest.TestCase):
 
         self.assertEqual(serialized[0]["decision_engine_v1"], pick["decision_engine_v1"])
 
+    def test_serialize_picks_preserves_growth_quality_evidence(self):
+        pick = make_pick()
+        pick.update({
+            "market_cap": 120,
+            "circulating_market_cap": 85,
+            "float_market_cap": 85,
+            "money20": 150_000_000,
+        })
+
+        full = _serialize_picks([pick])[0]
+        light = _serialize_picks_light([pick])[0]
+
+        for serialized in (full, light):
+            self.assertEqual(serialized["market_cap"], 120)
+            self.assertEqual(serialized["circulating_market_cap"], 85)
+            self.assertEqual(serialized["float_market_cap"], 85)
+            self.assertEqual(serialized["money20"], 150_000_000)
+
     def test_serialize_picks_light_carries_decision_engine_payload(self):
         pick = make_pick()
         pick["decision_engine_v1"] = {
