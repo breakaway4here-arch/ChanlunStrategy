@@ -11,3 +11,4 @@ daily_run.log
 .codegraph/
 .playwright-mcp/
 docs-preview/
+.worktrees/
