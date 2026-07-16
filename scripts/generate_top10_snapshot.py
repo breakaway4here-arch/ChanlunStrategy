@@ -121,7 +121,7 @@ def _build_item(row: Mapping[str, Any], rank: int, source: str) -> dict[str, Any
         "score": _resolve_score(row),
         "action": _safe_str(row.get("action")),
         "action_reason": _safe_str(row.get("action_reason")),
-        "reason": _safe_str(row.get("reason")),
+        "reason": _safe_str(row.get("primary_reason")) or _safe_str(row.get("reason")),
         "source": source,
         "change_pct": _resolve_change_pct(row),
         "current_price": _resolve_current_price(row),
@@ -140,9 +140,20 @@ def _collect_candidates(report: Mapping[str, Any], diagnostics: dict[str, Any]) 
         raise ValueError("report workspace.views.highlights must be an array")
 
     rows: list[dict[str, Any]] = []
-    for row in highlights_value:
+    for expected_rank, row in enumerate(highlights_value, start=1):
         if not isinstance(row, Mapping):
             raise ValueError("report workspace.views.highlights contains a non-object row")
+        view_rank = row.get("view_rank")
+        if (
+            isinstance(view_rank, bool)
+            or not isinstance(view_rank, int)
+            or view_rank <= 0
+            or view_rank != expected_rank
+        ):
+            raise ValueError(
+                "report workspace.views.highlights view_rank must be a positive "
+                f"integer matching array position: expected {expected_rank}, got {view_rank!r}"
+            )
         mapped = dict(row)
         mapped["_top10_source"] = "highlights"
         rows.append(mapped)
@@ -211,9 +222,13 @@ def build_snapshot_payload(
     diagnostics["fallback_used"] = fallback_used
 
     items = []
-    for index, row in enumerate(ranked_rows[:10], start=1):
+    for row in ranked_rows[:10]:
         row_dict = _as_mapping(row)
-        items.append(_build_item(row_dict, index, _safe_str(row_dict.get("_top10_source", selected_source), selected_source)))
+        items.append(_build_item(
+            row_dict,
+            row_dict["view_rank"],
+            _safe_str(row_dict.get("_top10_source", selected_source), selected_source),
+        ))
 
     return {
         "job_id": job_id,

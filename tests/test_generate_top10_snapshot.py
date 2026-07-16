@@ -7,6 +7,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from chanlun.report_view_model import build_workspace
 from scripts.generate_top10_snapshot import build_snapshot_payload
 
 
@@ -46,13 +47,15 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.write_json(
             data_dir / "2026-07-01.json",
             self.official_report(
-                "2026-07-01", [{"code": "A1", "name": "Old", "score": 1}]
+                "2026-07-01",
+                [{"code": "A1", "name": "Old", "score": 1, "view_rank": 1}],
             ),
         )
         self.write_json(
             data_dir / "2026-07-02.json",
             self.official_report(
-                "2026-07-02", [{"code": "A2", "name": "New", "score": 2}]
+                "2026-07-02",
+                [{"code": "A2", "name": "New", "score": 2, "view_rank": 1}],
             ),
         )
 
@@ -115,7 +118,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                         "code": "300001",
                         "name": "示例股票",
                         "score": 88.8,
-                        "view_rank": 7,
+                        "view_rank": 1,
                         "action": "可上车",
                         "action_reason": "测试动作原因",
                         "reason": "测试入选原因",
@@ -143,9 +146,76 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
 
         self.assertEqual(item["code"], "300001")
         self.assertEqual(item["source"], "highlights")
-        self.assertEqual(item["view_rank"], 7)
+        self.assertEqual(item["rank"], 1)
+        self.assertEqual(item["view_rank"], 1)
         self.assertEqual(item["action_reason"], "测试动作原因")
         self.assertEqual(item["reason"], "测试入选原因")
+
+    def test_top10_reason_uses_primary_reason_from_real_workspace(self) -> None:
+        workspace = build_workspace({
+            "picks_fusion": [{
+                "code": "600001",
+                "name": "真实工作区票",
+                "score": 82,
+                "best_buy_point": {
+                    "type": "底背驰候选",
+                    "reason": "真实工作区入选理由",
+                    "price": 10.0,
+                    "current_price": 10.1,
+                    "distance_from_reference_pct": 1.0,
+                    "change_pct": 1.0,
+                },
+            }],
+        })
+        highlights = workspace["views"]["highlights"]
+        self.assertEqual(highlights[0]["primary_reason"], "真实工作区入选理由")
+
+        data_dir = self.make_fixture() / "docs" / "data"
+        self.write_json(
+            data_dir / "index.json",
+            {
+                "dates": ["2026-07-01"],
+                "trading_dates": ["2026-07-01"],
+                "latest": "2026-07-01",
+                "latest_trading_date": "2026-07-01",
+            },
+        )
+        self.write_json(
+            data_dir / "2026-07-01.json",
+            self.official_report("2026-07-01", highlights),
+        )
+
+        payload = build_snapshot_payload("job-real-workspace-reason", data_dir)
+
+        self.assertEqual(payload["items"][0]["reason"], "真实工作区入选理由")
+        self.assertEqual(
+            payload["items"][0]["action_reason"], highlights[0]["action_reason"]
+        )
+
+    def test_top10_fails_closed_on_missing_or_conflicting_view_rank(self) -> None:
+        invalid_ranks = (None, 0, "1", True, 2)
+        for invalid_rank in invalid_ranks:
+            with self.subTest(view_rank=invalid_rank):
+                data_dir = self.make_fixture() / "docs" / "data"
+                self.write_json(
+                    data_dir / "index.json",
+                    {
+                        "dates": ["2026-07-01"],
+                        "trading_dates": ["2026-07-01"],
+                        "latest": "2026-07-01",
+                        "latest_trading_date": "2026-07-01",
+                    },
+                )
+                row = {"code": "600001"}
+                if invalid_rank is not None:
+                    row["view_rank"] = invalid_rank
+                self.write_json(
+                    data_dir / "2026-07-01.json",
+                    self.official_report("2026-07-01", [row]),
+                )
+
+                with self.assertRaisesRegex(ValueError, "view_rank"):
+                    build_snapshot_payload("job-invalid-view-rank", data_dir)
 
     def test_top10_does_not_infer_action_from_chinese_decision_text(self) -> None:
         data_dir = self.make_fixture() / "docs" / "data"
