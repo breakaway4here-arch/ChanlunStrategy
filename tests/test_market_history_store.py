@@ -39,10 +39,12 @@ class MarketHistoryStoreTests(unittest.TestCase):
                 "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
             )
         }
-        self.assertEqual(tables, {
+        required_business_tables = {
             "instruments", "stock_meta_asof", "trade_calendar", "bars_day",
             "bars_30m", "bars_15m", "ingest_runs", "shard_manifests",
-        })
+        }
+        self.assertTrue(required_business_tables.issubset(tables))
+        self.assertIn("bar_table_settings", tables)
         for table in ("bars_day", "bars_30m", "bars_15m"):
             index_sql = " ".join(
                 row[0] or ""
@@ -92,25 +94,60 @@ class MarketHistoryStoreTests(unittest.TestCase):
         self.assertEqual(self.store.get_canonical_adjustment("day"), "qfq")
         self.assertEqual(self.store.get_canonical_adjustment("30m"), "raw")
 
-        second_writer = MarketHistoryStore(self.db_path)
-        try:
-            with self.assertRaisesRegex(sqlite3.IntegrityError, "adjustment"):
-                second_writer.connection.execute(
-                    """
-                    INSERT INTO bars_day(
-                        instrument_id, ts, open, high, low, close, volume, amount,
-                        adjustment, is_final, source_batch, ingest_run_id, updated_at
-                    ) VALUES (?, ?, 10, 11, 9, 10, 1, 1, 'raw', 1, '', NULL, 'now')
-                    """,
-                    (instrument_id, "2026-07-02"),
-                )
-            with self.assertRaisesRegex(sqlite3.IntegrityError, "adjustment"):
-                second_writer.connection.execute(
-                    "UPDATE bars_day SET adjustment='raw' WHERE instrument_id=?",
-                    (instrument_id,),
-                )
-        finally:
-            second_writer.close()
+        triggers = self.store.connection.execute(
+            "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name LIKE 'bars_%'"
+        ).fetchall()
+        self.assertEqual(triggers, [])
+
+    def test_normal_adjustment_check_uses_settings_pk_without_scanning_bar_table(self):
+        instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
+        self.store.upsert_bars("day", instrument_id, [_bar("2026-07-01")])
+        statements = []
+        def trace(statement):
+            statements.append(" ".join(statement.upper().split()))
+        self.store.connection.set_trace_callback(trace)
+        self.store.upsert_bars("day", instrument_id, [_bar("2026-07-02")])
+        self.store.connection.set_trace_callback(None)
+
+        fact_selects = [
+            statement for statement in statements
+            if statement.startswith("SELECT") and "FROM BARS_DAY" in statement
+        ]
+        self.assertEqual(fact_selects, [], statements)
+        setting_selects = [
+            statement for statement in statements
+            if statement.startswith("SELECT") and "BAR_TABLE_SETTINGS" in statement
+        ]
+        self.assertEqual(len(setting_selects), 1, statements)
+
+    def test_legacy_database_bootstraps_missing_setting_and_rejects_mixed_history(self):
+        instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
+        self.store.upsert_bars("day", instrument_id, [_bar("2026-07-01", adjustment="qfq")])
+        with self.store.connection:
+            self.store.connection.execute(
+                "DELETE FROM bar_table_settings WHERE table_name='bars_day'"
+            )
+        self.store.close()
+        self.store = MarketHistoryStore(self.db_path)
+        self.assertEqual(self.store.get_canonical_adjustment("day"), "qfq")
+
+        with self.store.connection:
+            self.store.connection.execute(
+                """
+                INSERT INTO bars_day(
+                    instrument_id, ts, open, high, low, close, volume, amount,
+                    adjustment, is_final, source_batch, ingest_run_id, updated_at
+                ) VALUES (?, '2026-07-02', 10, 11, 9, 10, 1, 1, 'raw', 1, '', NULL, 'now')
+                """,
+                (instrument_id,),
+            )
+            self.store.connection.execute(
+                "DELETE FROM bar_table_settings WHERE table_name='bars_day'"
+            )
+        self.store.close()
+        with self.assertRaisesRegex(RuntimeError, "mixed adjustments"):
+            MarketHistoryStore(self.db_path)
+        self.store = MarketHistoryStore(Path(self.tmp.name) / "replacement.sqlite")
 
     def test_rejects_invalid_ohlc_nonfinite_and_negative_volume_amount(self):
         instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
@@ -292,7 +329,7 @@ class MarketHistoryStoreTests(unittest.TestCase):
         self.store.merge_staging_database(lower_path)
         self.assertEqual(self.store.query_bars("day", iid)[0]["close"], 12.0)
 
-    def test_running_ingest_run_survives_staging_merge_as_running(self):
+    def test_staging_ingest_run_is_diagnostic_only_and_not_created_in_main(self):
         staging_path = Path(self.tmp.name) / "running.sqlite"
         staging = MarketHistoryStore(staging_path)
         try:
@@ -302,10 +339,65 @@ class MarketHistoryStoreTests(unittest.TestCase):
             )
         finally:
             staging.close()
-        self.store.merge_staging_database(staging_path)
-        run = self.store.get_ingest_run("run-live")
-        self.assertEqual(run["status"], "running")
-        self.assertEqual(run["metadata"], {"state": "live"})
+        counts = self.store.merge_staging_database(staging_path)
+        self.assertIsNone(self.store.get_ingest_run("run-live"))
+        self.assertEqual(counts["ingest_runs"], 0)
+        self.assertEqual(counts["skipped_ingest_runs"], 1)
+
+    def test_multi_staging_merge_is_one_transaction_and_rolls_back_earlier_shards(self):
+        first_path = Path(self.tmp.name) / "s1.sqlite"
+        second_path = Path(self.tmp.name) / "s2.sqlite"
+        first = MarketHistoryStore(first_path)
+        second = MarketHistoryStore(second_path)
+        try:
+            first_id = first.upsert_instrument("stock", "SH", "600001")
+            first.upsert_bars("day", first_id, [_bar("2026-07-01", adjustment="qfq")])
+            second_id = second.upsert_instrument("stock", "SH", "600002")
+            second.upsert_bars("day", second_id, [_bar("2026-07-01", adjustment="raw")])
+        finally:
+            first.close()
+            second.close()
+
+        with self.assertRaisesRegex(ValueError, "adjustment"):
+            self.store.merge_staging_databases([first_path, second_path])
+        self.assertIsNone(self.store.resolve_instrument("stock", "SH", "600001"))
+        self.assertIsNone(self.store.resolve_instrument("stock", "SH", "600002"))
+        self.assertIsNone(self.store.get_canonical_adjustment("day"))
+
+    def test_two_staging_runs_cannot_overwrite_main_terminal_ingest_run(self):
+        self.store.start_ingest_run("run-shared", "backfill", started_at="main-start")
+        self.store.finish_ingest_run(
+            "run-shared", "complete", finished_at="main-finish", rows_written=99,
+            metadata={"owner": "main"},
+        )
+        paths = []
+        for index, status in enumerate(("running", "failed")):
+            path = Path(self.tmp.name) / "run-{}.sqlite".format(index)
+            staging = MarketHistoryStore(path)
+            try:
+                staging.start_ingest_run(
+                    "run-shared", "backfill", started_at="staging-{}".format(index),
+                    metadata={"owner": "staging-{}".format(index)},
+                )
+                if status == "failed":
+                    staging.finish_ingest_run(
+                        "run-shared", "failed", finished_at="staging-fail", rows_written=7
+                    )
+                staging.upsert_shard_manifest(
+                    "run-shared", index, 2, status, row_count=index + 1
+                )
+            finally:
+                staging.close()
+            paths.append(path)
+
+        counts = self.store.merge_staging_databases(paths)
+        run = self.store.get_ingest_run("run-shared")
+        self.assertEqual(run["status"], "complete")
+        self.assertEqual(run["rows_written"], 99)
+        self.assertEqual(run["metadata"], {"owner": "main"})
+        self.assertEqual(counts["ingest_runs"], 0)
+        self.assertEqual(counts["skipped_ingest_runs"], 2)
+        self.assertEqual(len(self.store.list_shard_manifests("run-shared")), 2)
 
     def test_failed_ingest_run_restart_resets_completion_fields(self):
         self.store.start_ingest_run("run-failed", "backfill", started_at="t1")

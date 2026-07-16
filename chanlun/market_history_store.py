@@ -58,7 +58,12 @@ class MarketHistoryStore:
         self.connection.row_factory = sqlite3.Row
         self.connection.execute("PRAGMA foreign_keys = ON")
         if not self.readonly:
-            self._initialize_schema()
+            try:
+                self._initialize_schema()
+            except Exception:
+                self.connection.close()
+                self.connection = None
+                raise
 
     def __enter__(self):
         return self
@@ -149,7 +154,11 @@ class MarketHistoryStore:
                     PRIMARY KEY (run_id, shard_id)
                 );
 
-                DROP TABLE IF EXISTS bar_table_settings;
+                CREATE TABLE IF NOT EXISTS bar_table_settings (
+                    table_name TEXT PRIMARY KEY,
+                    adjustment TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
             """)
             for table in BAR_TABLES.values():
                 self.connection.execute(
@@ -159,25 +168,37 @@ class MarketHistoryStore:
                     "CREATE INDEX IF NOT EXISTS idx_{}_ts_instrument "
                     "ON {} (ts, instrument_id)".format(table, table)
                 )
-                self.connection.execute("""
-                    CREATE TRIGGER IF NOT EXISTS trg_{table}_adjustment_insert
-                    BEFORE INSERT ON {table}
-                    WHEN EXISTS (
-                        SELECT 1 FROM {table}
-                        WHERE adjustment <> NEW.adjustment
-                    )
-                    BEGIN
-                        SELECT RAISE(ABORT, '{table} adjustment mismatch');
-                    END
-                """.format(table=table))
-                self.connection.execute("""
-                    CREATE TRIGGER IF NOT EXISTS trg_{table}_adjustment_update
-                    BEFORE UPDATE OF adjustment ON {table}
-                    WHEN OLD.adjustment <> NEW.adjustment
-                    BEGIN
-                        SELECT RAISE(ABORT, '{table} adjustment mismatch');
-                    END
-                """.format(table=table))
+                self.connection.execute(
+                    "DROP TRIGGER IF EXISTS trg_{}_adjustment_insert".format(table)
+                )
+                self.connection.execute(
+                    "DROP TRIGGER IF EXISTS trg_{}_adjustment_update".format(table)
+                )
+                setting = self.connection.execute(
+                    "SELECT adjustment FROM bar_table_settings WHERE table_name=?",
+                    (table,),
+                ).fetchone()
+                if setting is None:
+                    first = self.connection.execute(
+                        "SELECT adjustment FROM {} LIMIT 1".format(table)
+                    ).fetchone()
+                    if first is not None:
+                        adjustment = str(first["adjustment"])
+                        mismatch = self.connection.execute(
+                            "SELECT 1 FROM {} WHERE adjustment<>? LIMIT 1".format(table),
+                            (adjustment,),
+                        ).fetchone()
+                        if mismatch is not None:
+                            raise RuntimeError(
+                                "{} contains mixed adjustments".format(table)
+                            )
+                        self.connection.execute(
+                            """
+                            INSERT INTO bar_table_settings(table_name, adjustment, updated_at)
+                            VALUES (?, ?, ?)
+                            """,
+                            (table, adjustment, _utc_now()),
+                        )
 
     @staticmethod
     def _table(interval: str) -> str:
@@ -340,14 +361,11 @@ class MarketHistoryStore:
 
     def get_canonical_adjustment(self, interval: str) -> Optional[str]:
         table = self._table(interval)
-        rows = self.connection.execute(
-            "SELECT DISTINCT adjustment FROM {} LIMIT 2".format(table)
-        ).fetchall()
-        if not rows:
-            return None
-        if len(rows) > 1:
-            raise RuntimeError("{} contains mixed adjustments".format(table))
-        return str(rows[0]["adjustment"])
+        row = self.connection.execute(
+            "SELECT adjustment FROM bar_table_settings WHERE table_name=?",
+            (table,),
+        ).fetchone()
+        return None if row is None else str(row["adjustment"])
 
     def upsert_bars(
         self,
@@ -366,14 +384,6 @@ class MarketHistoryStore:
         if len(adjustments) != 1:
             raise ValueError("a bar batch must use one canonical adjustment")
         batch_adjustment = next(iter(adjustments))
-        canonical = self.get_canonical_adjustment(interval)
-        if canonical is not None and canonical != batch_adjustment:
-            raise ValueError(
-                "adjustment mismatch for {}: expected {}, got {}".format(
-                    table, canonical, batch_adjustment
-                )
-            )
-
         now = _utc_now()
         sql = """
             INSERT INTO {table}(
@@ -402,9 +412,27 @@ class MarketHistoryStore:
         """.format(table=table)
         changed = 0
         with self._write_scope():
+            self.connection.execute(
+                """
+                INSERT INTO bar_table_settings(table_name, adjustment, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(table_name) DO NOTHING
+                """,
+                (table, batch_adjustment, now),
+            )
+            canonical_row = self.connection.execute(
+                "SELECT adjustment FROM bar_table_settings WHERE table_name=?",
+                (table,),
+            ).fetchone()
+            canonical = str(canonical_row["adjustment"])
+            if canonical != batch_adjustment:
+                raise ValueError(
+                    "adjustment mismatch for {}: expected {}, got {}".format(
+                        table, canonical, batch_adjustment
+                    )
+                )
             for bar in materialized:
-                before = self.connection.total_changes
-                self.connection.execute(
+                cursor = self.connection.execute(
                     sql,
                     (
                         instrument_id, bar["ts"], bar["open"], bar["high"],
@@ -413,7 +441,7 @@ class MarketHistoryStore:
                         ingest_run_id or bar["ingest_run_id"], now,
                     ),
                 )
-                changed += self.connection.total_changes - before
+                changed += max(cursor.rowcount, 0)
         return changed
 
     def query_bars(
@@ -619,66 +647,84 @@ class MarketHistoryStore:
             result.append(row)
         return result
 
-    def merge_staging_database(self, staging_path: Any) -> Dict[str, int]:
-        """Idempotently merge a staging database using logical instrument identity."""
+    def _merge_staging_source(
+        self, source: "MarketHistoryStore", counts: Dict[str, int]
+    ) -> None:
+        """Merge one open source inside the caller-owned write transaction."""
+        id_map = {}
+        instruments = source.connection.execute(
+            "SELECT * FROM instruments ORDER BY instrument_id"
+        ).fetchall()
+        for row in instruments:
+            target_id = self.upsert_instrument(
+                row["asset_type"], row["exchange"], row["code"], row["name"]
+            )
+            id_map[int(row["instrument_id"])] = target_id
+            counts["instruments"] += 1
+
+        for row in source.connection.execute("SELECT * FROM stock_meta_asof"):
+            self.upsert_stock_meta(
+                id_map[int(row["instrument_id"])],
+                row["as_of"],
+                json.loads(row["metadata_json"]),
+            )
+        for row in source.connection.execute("SELECT * FROM trade_calendar"):
+            self.upsert_trade_calendar(
+                row["exchange"], row["trade_date"], bool(row["is_open"])
+            )
+
+        for interval, table in BAR_TABLES.items():
+            for row in source.connection.execute(
+                "SELECT * FROM {} ORDER BY instrument_id, ts".format(table)
+            ):
+                payload = dict(row)
+                payload.pop("instrument_id", None)
+                payload.pop("updated_at", None)
+                counts["bars"] += self.upsert_bars(
+                    interval,
+                    id_map[int(row["instrument_id"])],
+                    [payload],
+                    adjustment=row["adjustment"],
+                    ingest_run_id=row["ingest_run_id"],
+                )
+
+        skipped = source.connection.execute(
+            "SELECT COUNT(*) AS count FROM ingest_runs"
+        ).fetchone()
+        counts["skipped_ingest_runs"] += int(skipped["count"])
+        for row in source.connection.execute("SELECT * FROM shard_manifests"):
+            self.upsert_shard_manifest(
+                row["run_id"], row["shard_id"], row["shard_count"], row["status"],
+                row["row_count"], row["checksum"], json.loads(row["metadata_json"]),
+            )
+            counts["manifests"] += 1
+
+    def merge_staging_databases(self, staging_paths: Sequence[Any]) -> Dict[str, int]:
+        """Atomically merge all staging databases under one main-store transaction."""
         self._require_writable()
-        source = MarketHistoryStore(staging_path, readonly=True, immutable=True)
-        counts = {"instruments": 0, "bars": 0, "ingest_runs": 0, "manifests": 0}
+        counts = {
+            "instruments": 0,
+            "bars": 0,
+            "ingest_runs": 0,
+            "skipped_ingest_runs": 0,
+            "manifests": 0,
+        }
         try:
             self.connection.execute("BEGIN IMMEDIATE")
-            id_map = {}
-            instruments = source.connection.execute(
-                "SELECT * FROM instruments ORDER BY instrument_id"
-            ).fetchall()
-            for row in instruments:
-                target_id = self.upsert_instrument(
-                    row["asset_type"], row["exchange"], row["code"], row["name"]
+            for staging_path in staging_paths:
+                source = MarketHistoryStore(
+                    staging_path, readonly=True, immutable=True
                 )
-                id_map[int(row["instrument_id"])] = target_id
-                counts["instruments"] += 1
-
-            for row in source.connection.execute("SELECT * FROM stock_meta_asof"):
-                self.upsert_stock_meta(
-                    id_map[int(row["instrument_id"])], row["as_of"], json.loads(row["metadata_json"])
-                )
-            for row in source.connection.execute("SELECT * FROM trade_calendar"):
-                self.upsert_trade_calendar(row["exchange"], row["trade_date"], bool(row["is_open"]))
-
-            for interval, table in BAR_TABLES.items():
-                for row in source.connection.execute(
-                    "SELECT * FROM {} ORDER BY instrument_id, ts".format(table)
-                ):
-                    payload = dict(row)
-                    payload.pop("instrument_id", None)
-                    payload.pop("updated_at", None)
-                    counts["bars"] += self.upsert_bars(
-                        interval,
-                        id_map[int(row["instrument_id"])],
-                        [payload],
-                        adjustment=row["adjustment"],
-                        ingest_run_id=row["ingest_run_id"],
-                    )
-
-            for row in source.connection.execute("SELECT * FROM ingest_runs"):
-                self.start_ingest_run(
-                    row["run_id"], row["mode"], row["started_at"], json.loads(row["metadata_json"])
-                )
-                if row["status"] != "running" or row["finished_at"]:
-                    self.finish_ingest_run(
-                        row["run_id"], row["status"], row["finished_at"], row["rows_written"],
-                        json.loads(row["metadata_json"]),
-                    )
-                counts["ingest_runs"] += 1
-            for row in source.connection.execute("SELECT * FROM shard_manifests"):
-                self.upsert_shard_manifest(
-                    row["run_id"], row["shard_id"], row["shard_count"], row["status"],
-                    row["row_count"], row["checksum"], json.loads(row["metadata_json"]),
-                )
-                counts["manifests"] += 1
+                try:
+                    self._merge_staging_source(source, counts)
+                finally:
+                    source.close()
             self.connection.commit()
         except Exception:
             self.connection.rollback()
             raise
-        finally:
-            source.close()
         return counts
+
+    def merge_staging_database(self, staging_path: Any) -> Dict[str, int]:
+        """Compatibility wrapper for atomically merging one staging database."""
+        return self.merge_staging_databases([staging_path])
