@@ -42,6 +42,41 @@ def _bar(ts, close, amount=100_000_000):
 
 
 class UniverseBuilderTests(unittest.TestCase):
+    def test_no_sector_overlay_expands_base_to_final_capacity(self):
+        with patch.multiple(
+            run_module,
+            FULL_A_LOW_QUOTA=2,
+            FULL_A_TREND_QUOTA=2,
+            FULL_A_NEUTRAL_QUOTA=0,
+            FULL_A_BASE_LIMIT=4,
+            FULL_A_OVERLAY_LIMIT=2,
+            FULL_A_FINAL_LIMIT=6,
+            FULL_A_NO_OVERLAY_LOW_QUOTA=3,
+            FULL_A_NO_OVERLAY_TREND_QUOTA=2,
+            FULL_A_NO_OVERLAY_NEUTRAL_QUOTA=1,
+        ):
+            config, mode = run_module._universe_config_for_sector_groups([])
+
+        self.assertEqual("base_expanded_no_overlay", mode)
+        self.assertEqual(3, config.low_quota)
+        self.assertEqual(2, config.trend_quota)
+        self.assertEqual(1, config.neutral_quota)
+        self.assertEqual(6, config.base_limit)
+        self.assertEqual(0, config.overlay_limit)
+        self.assertEqual(6, config.final_limit)
+
+    def test_empty_sector_membership_is_treated_as_no_overlay(self):
+        groups = [{
+            "sector_code": "BK1",
+            "sector_name": "机器人",
+            "codes": [],
+        }]
+        config, mode = run_module._universe_config_for_sector_groups(groups)
+
+        self.assertEqual("base_expanded_no_overlay", mode)
+        self.assertEqual(0, config.overlay_limit)
+        self.assertEqual(config.final_limit, config.base_limit)
+
     def test_low_trend_neutral_quotas_fill_base_without_duplicates(self):
         candidates = [_candidate(index) for index in range(20)]
         config = UniverseConfig(

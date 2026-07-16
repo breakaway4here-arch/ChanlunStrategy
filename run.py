@@ -44,6 +44,8 @@ from config import (
     MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
     FULL_A_LOW_QUOTA, FULL_A_TREND_QUOTA, FULL_A_NEUTRAL_QUOTA,
     FULL_A_BASE_LIMIT, FULL_A_OVERLAY_LIMIT, FULL_A_FINAL_LIMIT,
+    FULL_A_NO_OVERLAY_LOW_QUOTA, FULL_A_NO_OVERLAY_TREND_QUOTA,
+    FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
     FULL_A_MIN_ELIGIBLE_COUNT,
     MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
 )
@@ -245,22 +247,17 @@ def _apply_full_a_universe(
             )
             return stocks_with_kline
 
-        config = UniverseConfig(
-            low_quota=FULL_A_LOW_QUOTA,
-            trend_quota=FULL_A_TREND_QUOTA,
-            neutral_quota=FULL_A_NEUTRAL_QUOTA,
-            base_limit=FULL_A_BASE_LIMIT,
-            overlay_limit=FULL_A_OVERLAY_LIMIT,
-            final_limit=FULL_A_FINAL_LIMIT,
-        )
         sector_groups = build_sector_groups(sectors, stocks_with_kline)
+        config, retrieval_mode = _universe_config_for_sector_groups(
+            sector_groups
+        )
         result = build_candidate_universe(
             candidates,
             sector_groups,
             config=config,
         )
         selected = attach_sector_context(result["final"], stocks_with_kline)
-        if len(selected) < int(FULL_A_BASE_LIMIT):
+        if len(selected) < int(config.base_limit):
             diagnostics.update(
                 status="fallback",
                 reason="final_pool_below_base_limit",
@@ -281,8 +278,13 @@ def _apply_full_a_universe(
         diagnostics.update(
             status="activated",
             sector_group_count=len(sector_groups),
+            retrieval_mode=retrieval_mode,
         )
-        data_quality["stock_pool_source"] = "full_a_db+sector_overlay"
+        data_quality["stock_pool_source"] = (
+            "full_a_db+sector_overlay"
+            if retrieval_mode == "base_plus_overlay"
+            else "full_a_db+expanded_base"
+        )
         if RECALL_STRATEGY_MODE == "shadow":
             selected_codes = {
                 str(item.get("code") or "") for item in selected
@@ -302,6 +304,30 @@ def _apply_full_a_universe(
             error="{}: {}".format(type(exc).__name__, exc),
         )
         return stocks_with_kline
+
+
+def _universe_config_for_sector_groups(sector_groups):
+    """Use the full 1200 capacity even when the sector overlay is unavailable."""
+    overlay_available = any(
+        group.get("codes") for group in (sector_groups or [])
+    )
+    if overlay_available:
+        return UniverseConfig(
+            low_quota=FULL_A_LOW_QUOTA,
+            trend_quota=FULL_A_TREND_QUOTA,
+            neutral_quota=FULL_A_NEUTRAL_QUOTA,
+            base_limit=FULL_A_BASE_LIMIT,
+            overlay_limit=FULL_A_OVERLAY_LIMIT,
+            final_limit=FULL_A_FINAL_LIMIT,
+        ), "base_plus_overlay"
+    return UniverseConfig(
+        low_quota=FULL_A_NO_OVERLAY_LOW_QUOTA,
+        trend_quota=FULL_A_NO_OVERLAY_TREND_QUOTA,
+        neutral_quota=FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
+        base_limit=FULL_A_FINAL_LIMIT,
+        overlay_limit=0,
+        final_limit=FULL_A_FINAL_LIMIT,
+    ), "base_expanded_no_overlay"
 
 
 def _market_temperature_label(score):
