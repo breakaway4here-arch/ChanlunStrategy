@@ -150,6 +150,32 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertFalse(diag["complete"])
         self.assertEqual(diag["error"], "total_exceeds_limit")
 
+    def test_sector_pagination_absolute_page_guard_stops_before_extra_request(self):
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            page = int(params["pn"])
+            rows = _sector_rows(0, 100) if page == 1 else _sector_rows(99, 100)
+            return {"data": {"total": 200, "diff": rows}}
+
+        with patch.object(
+            data_fetcher, "SECTOR_COMPONENT_MAX_PAGES", 2
+        ), patch.object(
+            data_fetcher, "_fetch_eastmoney_json", side_effect=fake
+        ):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKPAGEGUARD", return_diagnostics=True
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual([call["pn"] for call in calls], ["1", "2"])
+        self.assertEqual(len(stocks), 199)
+        self.assertEqual(diag["unique"], 199)
+        self.assertEqual(diag["pages"], 2)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "max_pages_exceeded")
+
     def test_sector_pagination_accepts_zero_total_as_complete_empty_sector(self):
         with patch.object(
             data_fetcher,
