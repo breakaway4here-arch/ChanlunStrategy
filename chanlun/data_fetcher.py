@@ -3,7 +3,7 @@
 - 板块资金流向: 东方财富 push2.eastmoney.com
 - 板块成分股:   东方财富 push2.eastmoney.com
 - 日线K线:      腾讯 web.ifzq.gtimg.cn
-- 30分钟K线:    新浪 money.finance.sina.com.cn
+- 30/15分钟K线: 东方财富优先，新浪短窗口兜底
 
 数据流: 板块资金TOP20 → 成分股列表 → 日线K线 → 30分钟K线
 """
@@ -232,6 +232,91 @@ def get_code_to_name():
     if _CODE_TO_NAME is None:
         _CODE_TO_NAME = _build_code_to_name()
     return _CODE_TO_NAME
+
+
+def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
+    """Fetch the full active A-share code universe with stable code ordering."""
+    stocks_by_code = {}
+    diagnostics = {
+        "page_size": int(page_size),
+        "requested": None,
+        "fetched": 0,
+        "unique": 0,
+        "pages": 0,
+        "complete": False,
+        "error": "",
+    }
+    for page in range(1, int(max_pages) + 1):
+        params = {
+            "pn": str(page),
+            "pz": str(page_size),
+            "po": "0",
+            "np": "1",
+            "fltt": "2",
+            "invt": "2",
+            "fid": "f12",
+            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fields": "f12,f14",
+        }
+        try:
+            payload = _fetch_eastmoney_json(params)
+        except Exception as exc:
+            diagnostics["error"] = "page_{}_failed:{}".format(page, exc)
+            break
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            diagnostics["error"] = "page_{}_missing_data".format(page)
+            break
+        diagnostics["pages"] += 1
+        if diagnostics["requested"] is None:
+            try:
+                diagnostics["requested"] = int(data.get("total"))
+            except (TypeError, ValueError):
+                diagnostics["requested"] = None
+        items = data.get("diff") or []
+        if not isinstance(items, list):
+            items = []
+        diagnostics["fetched"] += len(items)
+        unique_before = len(stocks_by_code)
+        for raw in items:
+            if not isinstance(raw, dict):
+                continue
+            code = str(raw.get("f12") or "").strip()
+            if len(code) != 6 or not code.isdigit():
+                continue
+            stocks_by_code.setdefault(
+                code,
+                {
+                    "code": code,
+                    "name": str(raw.get("f14") or "").strip(),
+                    "exchange": "SH" if _is_sh(code) else "SZ",
+                    "asset_type": "stock",
+                },
+            )
+        diagnostics["unique"] = len(stocks_by_code)
+        requested = diagnostics["requested"]
+        if requested == 0:
+            diagnostics["complete"] = True
+            break
+        if requested is not None and diagnostics["unique"] >= requested:
+            diagnostics["complete"] = True
+            break
+        if not items:
+            diagnostics["error"] = "empty_page_before_total"
+            break
+        if len(stocks_by_code) == unique_before:
+            diagnostics["error"] = "page_without_new_codes"
+            break
+        if len(items) < int(page_size) and requested is None:
+            diagnostics["complete"] = True
+            break
+    else:
+        diagnostics["error"] = "max_pages_exceeded"
+
+    result = [stocks_by_code[code] for code in sorted(stocks_by_code)]
+    if return_diagnostics:
+        return result, diagnostics
+    return result
 
 
 # ============================================================
@@ -863,19 +948,78 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
         return None
 
 
+def _fetch_eastmoney_minute_kline_remote(code, scale, count):
+    """Fetch adjusted intraday bars without Sina's 240-record cap."""
+    params = {
+        "secid": _em_secid(code),
+        "ut": "7eea3edcaed734bea9cbfc24409ed989",
+        "fields1": "f1,f2,f3,f4,f5,f6",
+        "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
+        "klt": str(scale),
+        "fqt": "1",
+        "end": "20500101",
+        "lmt": str(count),
+    }
+    url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    try:
+        response = SESSION.get(url, params=params, timeout=15)
+        payload = response.json()
+        lines = payload.get("data", {}).get("klines", [])
+        if not lines:
+            return None
+        dates, opens, highs, lows, closes, volumes, amounts = (
+            [], [], [], [], [], [], []
+        )
+        for line in lines:
+            parts = str(line).split(",")
+            if len(parts) < 6:
+                continue
+            dates.append(parts[0])
+            opens.append(float(parts[1]))
+            closes.append(float(parts[2]))
+            highs.append(float(parts[3]))
+            lows.append(float(parts[4]))
+            volumes.append(float(parts[5]))
+            amounts.append(_extract_eastmoney_amount(parts))
+        if not dates:
+            return None
+        result = {
+            "dates": dates,
+            "opens": np.array(opens, dtype=float),
+            "highs": np.array(highs, dtype=float),
+            "lows": np.array(lows, dtype=float),
+            "closes": np.array(closes, dtype=float),
+            "volumes": np.array(volumes, dtype=float),
+            "source": "eastmoney",
+        }
+        amount_array = _ensure_amounts_array(amounts)
+        if amount_array is not None:
+            result["amounts"] = amount_array
+        return result
+    except Exception as exc:
+        print("[ERROR] 东方财富{}分钟K线失败 {}: {}".format(scale, code, exc))
+        return None
+
+
 def _fetch_30min_kline_remote(code, count=80):
     """
-    获取30分钟K线。新浪 API。
+    获取30分钟K线。东方财富支持长窗口，新浪用于短窗口兜底。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
     """
-    return _fetch_sina_minute_kline_remote(code, scale=30, count=count)
+    return (
+        _fetch_eastmoney_minute_kline_remote(code, scale=30, count=count)
+        or _fetch_sina_minute_kline_remote(code, scale=30, count=count)
+    )
 
 
 def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
     """
     获取15分钟K线。罗姐池需要至少177根来计算生命线。
     """
-    return _fetch_sina_minute_kline_remote(code, scale=15, count=count)
+    return (
+        _fetch_eastmoney_minute_kline_remote(code, scale=15, count=count)
+        or _fetch_sina_minute_kline_remote(code, scale=15, count=count)
+    )
 
 
 def fetch_30min_kline(code, count=80, force_refresh=False):
