@@ -1558,6 +1558,9 @@ def main(debug=False, preview=False, generated_at=None):
                         "debug": bool(debug),
                         "preview": bool(preview),
                         "generated_at": time_metadata["generated_at"],
+                        "is_official": bool(
+                            data_quality.get("is_official")
+                        ),
                     }
                 ),
                 candidate_funnel.events,
