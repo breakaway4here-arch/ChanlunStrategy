@@ -332,13 +332,169 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
 # ============================================================
 # 板块资金流向 — 东方财富
 # ============================================================
-def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
+def _sector_component_evidence(evidence):
+    evidence = evidence if isinstance(evidence, dict) else {}
+    raw_codes = evidence.get("component_codes") or []
+    codes = {
+        str(code).strip()
+        for code in raw_codes
+        if str(code).strip()
+    }
+    diagnostics = evidence.get("diagnostics")
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    requested = diagnostics.get("requested")
+    try:
+        requested = int(requested)
+    except (TypeError, ValueError):
+        requested = None
+
+    if requested is not None and requested > 0:
+        coverage = min(1.0, len(codes) / float(requested))
+    elif diagnostics.get("complete") and codes:
+        coverage = 1.0
+    else:
+        coverage = 0.0
+
+    sufficient = bool(
+        diagnostics.get("complete")
+        and len(codes) >= 2
+        and coverage >= 0.8
+    )
+    return codes, round(coverage, 4), sufficient
+
+
+def _sector_component_sets_overlap(left, right):
+    if not left or not right:
+        return False
+    smaller, larger = (left, right) if len(left) <= len(right) else (right, left)
+    if smaller.issubset(larger):
+        return True
+
+    intersection = len(left & right)
+    containment = intersection / float(len(smaller))
+    union = len(left | right)
+    jaccard = intersection / float(union) if union else 0.0
+    return containment >= 0.8 and jaccard >= 0.65
+
+
+def deduplicate_sector_hierarchy(
+    sectors,
+    component_evidence,
+    *,
+    top_n=None,
+):
+    """
+    使用完整成分股证据识别父子行业或高度重合行业。
+
+    只对双方证据完整且覆盖率不低于 80% 的板块建立重合关系；
+    证据不足的板块原样保留并显式标记，避免声称已经完成层级去重。
+    每条重合链只保留绝对资金流更强的代表，不对父子层级资金求和。
+    """
+    rows = [dict(row) for row in (sectors or []) if isinstance(row, dict)]
+    evidence_by_code = (
+        component_evidence if isinstance(component_evidence, dict) else {}
+    )
+    evidence_state = {}
+    for index, row in enumerate(rows):
+        code = str(row.get("code") or "").strip()
+        codes, coverage, sufficient = _sector_component_evidence(
+            evidence_by_code.get(code)
+        )
+        evidence_state[index] = {
+            "codes": codes,
+            "coverage": coverage,
+            "sufficient": sufficient,
+        }
+        row["component_coverage"] = coverage
+
+    has_insufficient_evidence = any(
+        not state["sufficient"] for state in evidence_state.values()
+    )
+    for index, row in enumerate(rows):
+        if not evidence_state[index]["sufficient"]:
+            row["hierarchy_dedup_status"] = "insufficient_evidence"
+        elif has_insufficient_evidence:
+            row["hierarchy_dedup_status"] = "partial_check_only"
+        else:
+            row["hierarchy_dedup_status"] = "checked_unique"
+
+    parents = list(range(len(rows)))
+
+    def find(index):
+        while parents[index] != index:
+            parents[index] = parents[parents[index]]
+            index = parents[index]
+        return index
+
+    def union(left, right):
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parents[right_root] = left_root
+
+    for left in range(len(rows)):
+        left_state = evidence_state[left]
+        if not left_state["sufficient"]:
+            continue
+        for right in range(left + 1, len(rows)):
+            right_state = evidence_state[right]
+            if not right_state["sufficient"]:
+                continue
+            if _sector_component_sets_overlap(
+                left_state["codes"], right_state["codes"]
+            ):
+                union(left, right)
+
+    groups = {}
+    for index in range(len(rows)):
+        groups.setdefault(find(index), []).append(index)
+
+    kept_indices = set()
+    for indices in groups.values():
+        if len(indices) == 1:
+            kept_indices.add(indices[0])
+            continue
+        representative = max(
+            indices,
+            key=lambda index: (
+                abs(float(rows[index].get("flow") or 0)),
+                evidence_state[index]["coverage"],
+                -index,
+            ),
+        )
+        kept_indices.add(representative)
+        suppressed = [
+            rows[index].get("code")
+            for index in indices
+            if index != representative
+        ]
+        rows[representative]["hierarchy_dedup_status"] = (
+            "deduped_representative"
+        )
+        rows[representative]["hierarchy_dedup_suppressed_codes"] = suppressed
+
+    result = [
+        row for index, row in enumerate(rows)
+        if index in kept_indices
+    ]
+    if top_n is not None:
+        result = result[:max(0, int(top_n))]
+    return result
+
+
+def fetch_sector_flow(
+    top_n=TOP_SECTOR_COUNT,
+    *,
+    component_evidence=None,
+):
     """
     获取行业板块资金流向 TOP N。
     返回: [{"code": "BKxxxx", "name": "板块名", "change_pct": 1.5, "flow": 123456789, "flow_str": "1.23亿"}, ...]
     """
     params = {
-        "pn": "1", "pz": str(top_n), "po": "1", "np": "1",
+        "pn": "1",
+        "pz": str(top_n * 3 if component_evidence is not None else top_n),
+        "po": "1", "np": "1",
         "fltt": "2", "invt": "2",
         "fid": "f62",
         "fs": "m:90+t:2",
@@ -356,6 +512,12 @@ def fetch_sector_flow(top_n=TOP_SECTOR_COUNT):
                 "flow": it.get("f62", 0),
                 "flow_str": _format_amount(it.get("f62", 0)),
             })
+        if component_evidence is not None:
+            return deduplicate_sector_hierarchy(
+                result,
+                component_evidence,
+                top_n=top_n,
+            )
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流向失败: {e}")
@@ -1778,7 +1940,7 @@ def collect_15min_data(target_stocks):
 # ============================================================
 # 资金流出 — 东方财富
 # ============================================================
-def fetch_sector_outflow(top_n=5):
+def fetch_sector_outflow(top_n=5, *, component_evidence=None):
     """
     获取行业板块资金流出 TOP N（净流出最大）。
     复用 fetch_sector_flow 相同 API，改为升序排列取负值最大。
@@ -1804,8 +1966,14 @@ def fetch_sector_outflow(top_n=5):
                     "flow": flow,
                     "flow_str": _format_amount(flow),
                 })
-                if len(result) >= top_n:
+                if component_evidence is None and len(result) >= top_n:
                     break
+        if component_evidence is not None:
+            return deduplicate_sector_hierarchy(
+                result,
+                component_evidence,
+                top_n=top_n,
+            )
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流出失败: {e}")
