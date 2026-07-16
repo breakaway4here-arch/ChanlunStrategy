@@ -133,6 +133,39 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertTrue(diag["complete"])
         self.assertEqual(diag["pages"], 2)
 
+    def test_sector_pagination_rejects_total_above_bounded_capacity_on_first_page(self):
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_json",
+            return_value={"data": {"total": 6001, "diff": _sector_rows(0, 100)}},
+        ) as fetch:
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKOVERSIZED", return_diagnostics=True
+            )
+
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(len(stocks), 100)
+        self.assertEqual(diag["requested"], 6001)
+        self.assertEqual(diag["pages"], 1)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "total_exceeds_limit")
+
+    def test_sector_pagination_accepts_zero_total_as_complete_empty_sector(self):
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_json",
+            return_value={"data": {"total": 0, "diff": []}},
+        ) as fetch:
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKEMPTY", return_diagnostics=True
+            )
+
+        self.assertEqual(fetch.call_count, 1)
+        self.assertEqual(stocks, [])
+        self.assertEqual(diag["requested"], 0)
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["error"], "")
+
     def test_sector_pagination_stops_on_repeated_page_and_marks_incomplete(self):
         repeated = _sector_rows(0, 100)
 
@@ -167,7 +200,8 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(diag["pages"], 1)
         self.assertEqual(diag["unique"], 100)
         self.assertFalse(diag["complete"])
-        self.assertTrue(diag["error"].startswith("request_failed:"), diag)
+        self.assertEqual(diag["error"], "request_failed:RuntimeError")
+        self.assertNotIn("page two unavailable", diag["error"])
 
     def test_sector_pagination_structures_missing_total_short_and_empty_failures(self):
         cases = {
@@ -640,7 +674,7 @@ class TestMarketDataGuard(unittest.TestCase):
                 "unique": 1,
                 "pages": 1,
                 "complete": False,
-                "error": "request_failed:RuntimeError:page two unavailable",
+                "error": "request_failed:RuntimeError",
             }
             return (sector_rows, diag) if return_diagnostics else sector_rows
 
@@ -679,8 +713,122 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(len(quality["sector_component_diagnostics"]), 1)
         self.assertEqual(
             quality["sector_component_diagnostics"][0]["error"],
-            "request_failed:RuntimeError:page two unavailable",
+            "request_failed:RuntimeError",
         )
+
+    def test_collect_daily_data_marks_unrequested_sectors_after_five_incomplete_empty_failures(self):
+        sectors = [
+            {"code": f"BK{index:04d}", "name": f"板块{index}", "flow": 1}
+            for index in range(1, 8)
+        ]
+        calls = []
+
+        def incomplete_empty(code, *, return_diagnostics=False):
+            calls.append(code)
+            diag = {
+                "sector_code": code,
+                "page_size": 100,
+                "requested": 100,
+                "fetched": 0,
+                "unique": 0,
+                "pages": 1,
+                "complete": False,
+                "error": "empty_page_before_total",
+            }
+            return ([], diag) if return_diagnostics else []
+
+        with tempfile.TemporaryDirectory() as tmp, patch(
+            "config.KLINE_CACHE_DIR", tmp
+        ), patch.object(
+            data_fetcher, "fetch_sector_flow", return_value=sectors
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=incomplete_empty
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=datetime(
+                    2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8))
+                ),
+            )
+
+        quality = result["data_quality"]
+        diagnostics = quality["sector_component_diagnostics"]
+        self.assertEqual(calls, [sector["code"] for sector in sectors[:5]])
+        self.assertEqual(len(diagnostics), 7)
+        self.assertTrue(quality["stock_pool_incomplete"])
+        self.assertFalse(quality["is_official"])
+        self.assertEqual(
+            [diag["error"] for diag in diagnostics[5:]],
+            ["not_requested_after_consecutive_failures"] * 2,
+        )
+        self.assertTrue(all(not diag["complete"] for diag in diagnostics[5:]))
+        self.assertTrue(
+            any("未请求剩余2个板块" in warning for warning in quality["warnings"]),
+            quality["warnings"],
+        )
+
+    def test_collect_daily_data_does_not_count_complete_empty_sector_as_failure(self):
+        sectors = [
+            {"code": f"BK{index:04d}", "name": f"板块{index}", "flow": 1}
+            for index in range(1, 7)
+        ]
+        calls = []
+        final_stock = {"code": "600000", "name": "测试股"}
+
+        def complete_fetch(code, *, return_diagnostics=False):
+            calls.append(code)
+            rows = [final_stock] if code == sectors[-1]["code"] else []
+            diag = {
+                "sector_code": code,
+                "page_size": 100,
+                "requested": len(rows),
+                "fetched": len(rows),
+                "unique": len(rows),
+                "pages": 1,
+                "complete": True,
+                "error": "",
+            }
+            return (rows, diag) if return_diagnostics else rows
+
+        stock_row = {
+            **final_stock,
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+
+        with patch.object(
+            data_fetcher, "fetch_sector_flow", return_value=sectors
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=complete_fetch
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30", generated_at=closed
+            )
+
+        quality = result["data_quality"]
+        self.assertEqual(calls, [sector["code"] for sector in sectors])
+        self.assertEqual(len(quality["sector_component_diagnostics"]), 6)
+        self.assertFalse(quality["stock_pool_incomplete"])
+        self.assertTrue(quality["is_official"])
 
     def test_collect_daily_data_static_sector_fallback_sets_fallback_used(self):
         stock_calls = [{"code": "600000", "name": "测试股"}]

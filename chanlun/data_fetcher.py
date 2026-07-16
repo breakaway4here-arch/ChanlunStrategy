@@ -20,7 +20,7 @@ import requests
 
 from config import (
     DAY_LOOKBACK, MIN30_LOOKBACK_DAYS, TOP_SECTOR_COUNT,
-    SECTOR_COMPONENT_PAGE_SIZE,
+    SECTOR_COMPONENT_PAGE_SIZE, SECTOR_COMPONENT_MAX_PAGES,
     KLINE_CACHE_FORCE_REFRESH,
     DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
     MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
@@ -288,6 +288,9 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     }
     page = 1
     while True:
+        if page > SECTOR_COMPONENT_MAX_PAGES:
+            diagnostics["error"] = "max_pages_exceeded"
+            break
         params = {
             "pn": str(page), "pz": str(SECTOR_COMPONENT_PAGE_SIZE), "po": "0", "np": "1",
             "fltt": "2", "invt": "2", "fid": "f12",
@@ -339,6 +342,9 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
             if total is None:
                 diagnostics["error"] = "missing_total"
                 break
+            if total > SECTOR_COMPONENT_PAGE_SIZE * SECTOR_COMPONENT_MAX_PAGES:
+                diagnostics["error"] = "total_exceeds_limit"
+                break
             if len(stocks_by_code) >= total:
                 diagnostics["complete"] = True
                 break
@@ -354,7 +360,7 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
             page += 1
         except Exception as e:
             print(f"[ERROR] 获取板块 {sector_code} 成分股失败: {e}")
-            diagnostics["error"] = f"request_failed:{type(e).__name__}:{e}"
+            diagnostics["error"] = f"request_failed:{type(e).__name__}"
             break
 
     stocks = [stocks_by_code[code] for code in sorted(stocks_by_code)]
@@ -1142,11 +1148,28 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         sector_component_diagnostics.append(component_diagnostics)
         if not component_diagnostics.get("complete"):
             stock_pool_incomplete = True
-        if not stocks:
+        if not stocks and not component_diagnostics.get("complete"):
             consecutive_failures += 1
             # 连续 5 个板块全部失败 → 代理大概率已挂，直接放弃剩余请求
             if consecutive_failures >= 5:
                 print(f"  连续 {consecutive_failures} 个板块API失败，跳过剩余板块")
+                remaining_sectors = sectors[sector_rank:]
+                for skipped_sector in remaining_sectors:
+                    sector_component_diagnostics.append({
+                        "sector_code": skipped_sector["code"],
+                        "page_size": SECTOR_COMPONENT_PAGE_SIZE,
+                        "requested": None,
+                        "fetched": 0,
+                        "unique": 0,
+                        "pages": 0,
+                        "complete": False,
+                        "error": "not_requested_after_consecutive_failures",
+                    })
+                if remaining_sectors:
+                    warnings.append(
+                        f"板块成分连续{consecutive_failures}次抓取失败，"
+                        f"未请求剩余{len(remaining_sectors)}个板块"
+                    )
                 break
         else:
             consecutive_failures = 0
