@@ -27,6 +27,8 @@ RAW_FEATURE_FIELDS = (
     "ma5",
     "ma10",
     "ma20",
+    "close",
+    "ema5_slope",
     "ma_gap_pct",
     "ma_direction",
     "minute30_confirmations",

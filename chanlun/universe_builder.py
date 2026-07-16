@@ -50,6 +50,7 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     ma5 = _mean(closes[-5:])
     ma10 = _mean(closes[-10:])
     ma20 = _mean(closes[-20:])
+    previous_ma5 = _mean(closes[-6:-1])
     pullback = 1.0 - _clamp(abs(close / ma20 - 1.0) / 0.10) if ma20 else 0.0
     recent_volume = _mean(volumes[-3:])
     prior_volume = _mean(volumes[-13:-3])
@@ -107,6 +108,8 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
         "ma5": ma5,
         "ma10": ma10,
         "ma20": ma20,
+        "close": close,
+        "ema5_slope": ma5 - previous_ma5,
         "ma_gap_pct": (
             (ma5 / ma10 - 1.0) * 100.0 if ma10 else 0.0
         ),

@@ -203,6 +203,11 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
     results = payload.get("policies", []) if isinstance(payload, dict) else []
     execution = (payload or {}).get("execution") or {}
     fusion_threshold_scan = (payload or {}).get("fusion_threshold_scan") if isinstance(payload, dict) else None
+    recall_walkforward = (
+        (payload or {}).get("recall_walkforward")
+        if isinstance(payload, dict)
+        else None
+    )
 
     lines = [
         "# ChanLun Policy Backtest",
@@ -217,6 +222,18 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
     lines.extend(_render_breakdown_section(results))
     if isinstance(fusion_threshold_scan, dict):
         lines.extend(_render_fusion_threshold_section(fusion_threshold_scan))
+    if isinstance(recall_walkforward, dict):
+        gates = recall_walkforward.get("acceptance_gates") or {}
+        lines.extend([
+            "## Recall Walk-forward",
+            "",
+            f"- sample_count: {recall_walkforward.get('sample_count', 'n/a')}",
+            f"- network_requests: {recall_walkforward.get('network_requests', 'n/a')}",
+            f"- accepted: {gates.get('accepted', False)}",
+            f"- attention_p95: {gates.get('attention_p95', 'n/a')}",
+            f"- tail_risk_delta_pp: {gates.get('tail_risk_delta_pp', 'n/a')}",
+            "",
+        ])
 
     lines.append("## Filter Reason Summary")
     for item in results:
@@ -285,6 +302,10 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     parser.add_argument("--output-json", required=True, help="Output JSON path")
     parser.add_argument("--output-md", required=True, help="Output Markdown path")
     parser.add_argument(
+        "--recall-walkforward-json",
+        help="Optional recall walk-forward JSON to attach to the report",
+    )
+    parser.add_argument(
         "--business-metrics",
         action="store_true",
         help="Compatibility flag; currently no-op.",
@@ -305,6 +326,12 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
     try:
         payload = {"generated_at": datetime.now().isoformat()}
         payload.update(run_policy_experiment_metrics(policies))
+        if args.recall_walkforward_json:
+            payload["recall_walkforward"] = json.loads(
+                Path(args.recall_walkforward_json).read_text(
+                    encoding="utf-8"
+                )
+            )
     except Exception as exc:
         print(f"failed to run policies: {exc}", file=sys.stderr)
         return 1

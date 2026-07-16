@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from collections import Counter
+import math
+import random
+import statistics
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
 
 from chanlun.historical_experiment_metrics import (
@@ -189,6 +192,156 @@ def _to_pct(value: int, total: int) -> float:
     if total <= 0:
         return 0.0
     return round(value / total * 100, 2)
+
+
+def bootstrap_mean_confidence_interval(
+    values: Sequence[float],
+    iterations: int = 1000,
+    seed: int = 0,
+) -> Dict[str, Optional[float]]:
+    """Return a deterministic percentile bootstrap interval for the mean."""
+    samples = [float(value) for value in values if value is not None]
+    if not samples:
+        return {"mean": None, "lower": None, "upper": None, "iterations": 0}
+    iterations = max(1, int(iterations))
+    rng = random.Random(int(seed))
+    means = []
+    size = len(samples)
+    for _ in range(iterations):
+        means.append(
+            sum(samples[rng.randrange(size)] for _ in range(size)) / size
+        )
+    means.sort()
+
+    def percentile(probability: float) -> float:
+        index = int(round((len(means) - 1) * probability))
+        return float(means[max(0, min(index, len(means) - 1))])
+
+    return {
+        "mean": round(sum(samples) / len(samples), 6),
+        "lower": round(percentile(0.025), 6),
+        "upper": round(percentile(0.975), 6),
+        "iterations": iterations,
+    }
+
+
+def threshold_selection_stability(
+    selected_thresholds: Sequence[Any],
+    ordered_thresholds: Sequence[Any],
+) -> Dict[str, Any]:
+    selected = list(selected_thresholds)
+    ordered = list(ordered_thresholds)
+    if not selected or not ordered:
+        return {
+            "anchor": None,
+            "stable_folds": 0,
+            "total_folds": len(selected),
+            "accepted": False,
+        }
+    counts = Counter(selected)
+    positions = {value: index for index, value in enumerate(ordered)}
+    anchor = sorted(
+        counts,
+        key=lambda value: (
+            -counts[value],
+            positions.get(value, len(ordered)),
+            str(value),
+        ),
+    )[0]
+    anchor_index = positions.get(anchor)
+    stable = 0
+    for value in selected:
+        value_index = positions.get(value)
+        if (
+            anchor_index is not None
+            and value_index is not None
+            and abs(value_index - anchor_index) <= 1
+        ):
+            stable += 1
+    return {
+        "anchor": anchor,
+        "stable_folds": stable,
+        "total_folds": len(selected),
+        "accepted": stable >= min(4, len(selected)),
+    }
+
+
+def _nearest_rank_percentile(values: Sequence[float], probability: float) -> float:
+    ordered = sorted(float(value) for value in values)
+    if not ordered:
+        return 0.0
+    index = max(0, min(len(ordered) - 1, int(math.ceil(
+        probability * len(ordered)
+    )) - 1))
+    return ordered[index]
+
+
+def evaluate_recall_acceptance_gates(
+    baseline_returns: Sequence[float],
+    candidate_returns: Sequence[float],
+    baseline_drawdowns: Sequence[float],
+    candidate_drawdowns: Sequence[float],
+    observation_counts: Sequence[int],
+    selected_thresholds: Sequence[Any],
+    ordered_thresholds: Sequence[Any],
+    bootstrap_iterations: int = 1000,
+    seed: int = 0,
+) -> Dict[str, Any]:
+    baseline_values = [float(value) for value in baseline_returns]
+    candidate_values = [float(value) for value in candidate_returns]
+    baseline_tail = _to_pct(
+        sum(float(value) <= -5.0 for value in baseline_drawdowns),
+        len(baseline_drawdowns),
+    )
+    candidate_tail = _to_pct(
+        sum(float(value) <= -5.0 for value in candidate_drawdowns),
+        len(candidate_drawdowns),
+    )
+    tail_delta = round(candidate_tail - baseline_tail, 4)
+    baseline_median = (
+        float(statistics.median(baseline_values))
+        if baseline_values else None
+    )
+    candidate_median = (
+        float(statistics.median(candidate_values))
+        if candidate_values else None
+    )
+    median_delta = (
+        round(candidate_median - baseline_median, 6)
+        if baseline_median is not None and candidate_median is not None
+        else None
+    )
+    bootstrap = bootstrap_mean_confidence_interval(
+        candidate_values,
+        iterations=bootstrap_iterations,
+        seed=seed,
+    )
+    stability = threshold_selection_stability(
+        selected_thresholds, ordered_thresholds
+    )
+    attention_p95 = _nearest_rank_percentile(observation_counts, 0.95)
+    checks = {
+        "tail_risk": tail_delta <= 2.0,
+        "median_return": median_delta is not None and median_delta >= 0.0,
+        "bootstrap_not_clearly_negative": (
+            bootstrap["upper"] is not None and bootstrap["upper"] >= 0.0
+        ),
+        "attention": attention_p95 <= 5.0,
+        "threshold_stability": bool(stability["accepted"]),
+    }
+    return {
+        "bootstrap_95_ci": bootstrap,
+        "threshold_stability": stability,
+        "attention_p95": attention_p95,
+        "baseline_tail_risk_pct": baseline_tail,
+        "candidate_tail_risk_pct": candidate_tail,
+        "tail_risk_delta_pp": tail_delta,
+        "baseline_median_return": baseline_median,
+        "candidate_median_return": candidate_median,
+        "median_return_delta": median_delta,
+        "checks": checks,
+        "accepted": all(checks.values()),
+    }
 
 
 def _build_fusion_pick_signal(pick: Optional[dict]) -> dict:
