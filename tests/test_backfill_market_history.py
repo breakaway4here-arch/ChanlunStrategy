@@ -11,6 +11,8 @@ from chanlun import data_fetcher
 from chanlun.market_history_store import MarketHistoryStore
 from scripts.backfill_market_history import (
     BackfillIncomplete,
+    DEFAULT_WORKERS,
+    _retry_fetch,
     merge_completed_run,
     run_shard,
     stable_code_shards,
@@ -63,6 +65,45 @@ class BackfillMarketHistoryTests(unittest.TestCase):
         flattened = [code for shard in shards for code in shard]
         self.assertEqual(sorted(flattened), normalized)
         self.assertEqual(len(flattened), len(set(flattened)))
+        self.assertEqual(3, DEFAULT_WORKERS)
+
+    def test_retry_fetch_uses_sequential_sources_and_exponential_backoff(self):
+        calls = []
+        sleeps = []
+
+        def first(code, count):
+            calls.append(("first", code, count))
+            return None
+
+        attempts = {"count": 0}
+
+        def second(code, count):
+            attempts["count"] += 1
+            calls.append(("second", code, count))
+            if attempts["count"] == 1:
+                return None
+            return {"dates": ["2026-07-15"]}
+
+        result = _retry_fetch(
+            "600000",
+            1000,
+            [first, second],
+            attempts=3,
+            base_delay=0.25,
+            sleep_fn=sleeps.append,
+        )
+
+        self.assertEqual({"dates": ["2026-07-15"]}, result)
+        self.assertEqual(
+            [
+                ("first", "600000", 1000),
+                ("second", "600000", 1000),
+                ("first", "600000", 1000),
+                ("second", "600000", 1000),
+            ],
+            calls,
+        )
+        self.assertEqual([0.25], sleeps)
 
     def test_run_shard_writes_manifest_and_classifies_short_history(self):
         staging = self.root / "shard.sqlite"

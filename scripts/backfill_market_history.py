@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -23,6 +24,7 @@ from config import MARKET_HISTORY_DB_PATH, MIN15_LOOKBACK_BARS  # noqa: E402
 
 
 DEFAULT_SHARD_COUNT = 20
+DEFAULT_WORKERS = 3
 DEFAULT_COUNTS = {"day": 1000, "30m": 500, "15m": MIN15_LOOKBACK_BARS}
 _CN_TZ = timezone(timedelta(hours=8))
 
@@ -415,16 +417,62 @@ def merge_completed_run(
 
 def _remote_fetcher(interval: str):
     if interval == "day":
-        return data_fetcher._fetch_daily_kline_eastmoney_remote
+        sources = (
+            data_fetcher._fetch_daily_kline_remote,
+            data_fetcher._fetch_daily_kline_eastmoney_remote,
+            data_fetcher._fetch_daily_kline_sina_daily_remote,
+        )
+        return lambda code, count: _retry_fetch(
+            code, count, sources
+        )
     if interval == "30m":
-        return lambda code, count: data_fetcher._fetch_eastmoney_minute_kline_remote(
-            code, 30, count
+        return lambda code, count: _retry_fetch(
+            code,
+            count,
+            (
+                lambda current, size: (
+                    data_fetcher._fetch_eastmoney_minute_kline_remote(
+                        current, 30, size
+                    )
+                ),
+            ),
         )
     if interval == "15m":
-        return lambda code, count: data_fetcher._fetch_eastmoney_minute_kline_remote(
-            code, 15, count
+        return lambda code, count: _retry_fetch(
+            code,
+            count,
+            (
+                lambda current, size: (
+                    data_fetcher._fetch_eastmoney_minute_kline_remote(
+                        current, 15, size
+                    )
+                ),
+            ),
         )
     raise ValueError("unsupported interval: {}".format(interval))
+
+
+def _retry_fetch(
+    code: str,
+    count: int,
+    fetchers: Sequence[Callable[[str, int], Optional[Mapping[str, Any]]]],
+    attempts: int = 3,
+    base_delay: float = 0.5,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> Optional[Mapping[str, Any]]:
+    """Try providers sequentially, then retry the provider chain with backoff."""
+    total_attempts = max(1, int(attempts))
+    for attempt in range(total_attempts):
+        for fetcher in fetchers:
+            try:
+                payload = fetcher(code, count)
+            except Exception:
+                payload = None
+            if payload:
+                return payload
+        if attempt + 1 < total_attempts:
+            sleep_fn(float(base_delay) * (2 ** attempt))
+    return None
 
 
 def _read_codes(path: Optional[str], inline: Optional[str]) -> List[str]:
@@ -451,7 +499,7 @@ def run_backfill(
     interval: str,
     codes: Sequence[str],
     shard_count: int = DEFAULT_SHARD_COUNT,
-    workers: int = DEFAULT_SHARD_COUNT,
+    workers: int = DEFAULT_WORKERS,
     count: Optional[int] = None,
     stock_metadata: Optional[Mapping[str, Mapping[str, Any]]] = None,
     meta_as_of: Optional[str] = None,
@@ -511,7 +559,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--codes-file")
     parser.add_argument("--codes")
     parser.add_argument("--shards", type=int, default=DEFAULT_SHARD_COUNT)
-    parser.add_argument("--workers", type=int, default=DEFAULT_SHARD_COUNT)
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS)
     parser.add_argument(
         "--shard-id",
         type=int,
