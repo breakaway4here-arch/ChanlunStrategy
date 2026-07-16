@@ -158,8 +158,10 @@ class BackfillMarketHistoryTests(unittest.TestCase):
     def test_failed_shard_is_resumable_and_retry_is_idempotent(self):
         staging = self.root / "retry.sqlite"
         attempts = {"600001": 0}
+        calls = []
 
         def flaky_fetcher(code, count):
+            calls.append(code)
             if code == "600001" and attempts[code] == 0:
                 attempts[code] += 1
                 return None
@@ -178,6 +180,10 @@ class BackfillMarketHistoryTests(unittest.TestCase):
         )
         self.assertEqual(second["status"], "complete")
         self.assertEqual(second["failure_count"], 0)
+        self.assertEqual(
+            ["600000", "600001", "600001"],
+            calls,
+        )
         with MarketHistoryStore(staging, readonly=True) as store:
             rows = store.connection.execute("SELECT COUNT(*) FROM bars_day").fetchone()[0]
             self.assertEqual(rows, 6)

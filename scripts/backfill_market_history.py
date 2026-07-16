@@ -226,6 +226,7 @@ def run_shard(
     insufficient = []
     success_count = 0
     changed_rows = 0
+    codes_to_process = list(normalized)
     metadata_by_code = dict(stock_metadata or {})
     metadata_date = meta_as_of or (now or datetime.now(_CN_TZ)).astimezone(
         _CN_TZ
@@ -250,8 +251,29 @@ def run_shard(
                     }
                 )
                 return metadata
+            previous_metadata = dict(previous.get("metadata") or {})
+            retry_codes = {
+                str(item.get("code") or "")
+                for item in previous_metadata.get("failures", [])
+                if str(item.get("code") or "")
+            }
+            if retry_codes:
+                codes_to_process = [
+                    code for code in normalized if code in retry_codes
+                ]
+                insufficient = [
+                    dict(item)
+                    for item in previous_metadata.get("insufficient", [])
+                    if str(item.get("code") or "") not in retry_codes
+                ]
+                success_count = int(
+                    previous_metadata.get("success_count", 0)
+                )
+                changed_rows = int(
+                    previous_metadata.get("changed_rows", 0)
+                )
 
-        for code in normalized:
+        for code in codes_to_process:
             try:
                 payload = fetcher(code, expected_count)
                 if not payload:
