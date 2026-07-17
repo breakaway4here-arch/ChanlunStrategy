@@ -153,6 +153,16 @@ def validate_comparison_contract(
         views = snapshot.get("views")
         prices = snapshot.get("prices")
         benchmark = snapshot.get("benchmark")
+        quality = snapshot.get("quality")
+        if not isinstance(quality, Mapping):
+            errors.append(f"comparison quality invalid: {date_value}")
+        else:
+            if not isinstance(quality.get("is_official"), bool):
+                errors.append(f"comparison quality official flag invalid: {date_value}")
+            if quality.get("is_trading_day") is not True:
+                errors.append(f"comparison quality trading flag invalid: {date_value}")
+            if quality.get("status") not in {"official", "quality_warning"}:
+                errors.append(f"comparison quality status invalid: {date_value}")
         if not isinstance(views, Mapping) or not COMPARISON_VIEWS.issubset(views):
             errors.append(f"comparison views incomplete: {date_value}")
             continue

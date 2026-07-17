@@ -1,4 +1,4 @@
-"""Offline price index for comparing formal daily reports.
+"""Offline price index for comparing published trading-day reports.
 
 The index deliberately reads only generated report JSON and the local canonical
 market-history SQLite database.  It never fetches quotes while reports are
@@ -12,6 +12,8 @@ import os
 import sqlite3
 import tempfile
 from datetime import datetime, timezone
+
+from chanlun.report_view_model import build_workspace
 
 
 VIEW_NAMES = (
@@ -31,7 +33,20 @@ def _as_number(value):
         return None
 
 
-def _official_report_dates(data_dir, window_size):
+def _source_views(report):
+    workspace = report.get("workspace") if isinstance(report, dict) else {}
+    views = workspace.get("views") if isinstance(workspace, dict) else {}
+    if isinstance(views, dict) and any(
+        isinstance(views.get(view), list) and len(views.get(view)) > 0
+        for view in VIEW_NAMES
+    ):
+        return views
+    rebuilt = build_workspace(report if isinstance(report, dict) else {})
+    views = rebuilt.get("views") if isinstance(rebuilt, dict) else {}
+    return views if isinstance(views, dict) else {}
+
+
+def _comparison_report_dates(data_dir, window_size):
     manifest_path = os.path.join(data_dir, "index.json")
     with open(manifest_path, "r", encoding="utf-8") as handle:
         manifest = json.load(handle)
@@ -43,7 +58,18 @@ def _official_report_dates(data_dir, window_size):
         if not date or not os.path.isfile(os.path.join(data_dir, date + ".json")):
             continue
         date_meta = meta.get(date, {})
-        if isinstance(date_meta, dict) and date_meta.get("is_official") is False:
+        if isinstance(date_meta, dict) and date_meta.get("is_trading_day") is False:
+            continue
+        with open(os.path.join(data_dir, date + ".json"), "r", encoding="utf-8") as handle:
+            report = json.load(handle)
+        data_quality = report.get("data_quality") if isinstance(report, dict) else {}
+        if isinstance(data_quality, dict) and data_quality.get("is_trading_day") is False:
+            continue
+        views = _source_views(report)
+        if not any(
+            isinstance(views.get(view), list) and len(views.get(view)) > 0
+            for view in VIEW_NAMES
+        ):
             continue
         dates.append(date)
     return sorted(set(dates))[-int(window_size):]
@@ -72,12 +98,10 @@ def _view_row(item, fallback_rank):
     }
 
 
-def _read_report(path):
+def _read_report(path, date_meta=None):
     with open(path, "r", encoding="utf-8") as handle:
         report = json.load(handle)
-    workspace = report.get("workspace") if isinstance(report, dict) else {}
-    workspace = workspace if isinstance(workspace, dict) else {}
-    source_views = workspace.get("views") if isinstance(workspace.get("views"), dict) else {}
+    source_views = _source_views(report)
     views = {}
     for view in VIEW_NAMES:
         rows = []
@@ -89,6 +113,15 @@ def _read_report(path):
     market = report.get("market") if isinstance(report, dict) else {}
     benchmark = market.get("沪深300") if isinstance(market, dict) else {}
     benchmark = benchmark if isinstance(benchmark, dict) else {}
+    data_quality = report.get("data_quality") if isinstance(report, dict) else {}
+    data_quality = data_quality if isinstance(data_quality, dict) else {}
+    date_meta = date_meta if isinstance(date_meta, dict) else {}
+    is_official = data_quality.get("is_official")
+    if not isinstance(is_official, bool):
+        is_official = date_meta.get("is_official") is not False
+    is_trading_day = data_quality.get("is_trading_day")
+    if not isinstance(is_trading_day, bool):
+        is_trading_day = date_meta.get("is_trading_day") is not False
     return {
         "benchmark": {
             "code": "000300",
@@ -96,6 +129,13 @@ def _read_report(path):
             "close": _as_number(benchmark.get("close")),
         },
         "views": views,
+        "quality": {
+            "is_official": bool(is_official),
+            "is_trading_day": bool(is_trading_day),
+            "missing_daily_count": int(_as_number(data_quality.get("missing_daily_count")) or 0),
+            "stale_stock_count": int(_as_number(data_quality.get("stale_stock_count")) or 0),
+            "status": "official" if is_official else "quality_warning",
+        },
     }
 
 
@@ -160,9 +200,13 @@ def _read_final_prices(db_path, dates, codes):
 
 def build_comparison_index(data_dir, db_path, window_size=26):
     """Return the deterministic local-price comparison contract for reports."""
-    dates = _official_report_dates(data_dir, window_size)
+    dates = _comparison_report_dates(data_dir, window_size)
+    with open(os.path.join(data_dir, "index.json"), "r", encoding="utf-8") as handle:
+        manifest = json.load(handle)
+    date_meta = manifest.get("date_meta") if isinstance(manifest, dict) else {}
+    date_meta = date_meta if isinstance(date_meta, dict) else {}
     snapshots = {
-        date: _read_report(os.path.join(data_dir, date + ".json"))
+        date: _read_report(os.path.join(data_dir, date + ".json"), date_meta.get(date))
         for date in dates
     }
     codes = sorted({
@@ -177,6 +221,7 @@ def build_comparison_index(data_dir, db_path, window_size=26):
         prices = {code: final_prices[(date, code)] for code in codes}
         reports[date] = {
             "benchmark": snapshots[date]["benchmark"],
+            "quality": snapshots[date]["quality"],
             "prices": prices,
             "views": snapshots[date]["views"],
             "missing_codes": [code for code in codes if prices[code] is None],

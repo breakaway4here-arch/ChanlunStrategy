@@ -2587,6 +2587,26 @@
     return DEFAULT_VIEW_LABELS[view] || normalizeString(view);
   }
 
+  function comparisonDateLabel(index, date) {
+    var report = index && index.reports && index.reports[date];
+    var quality = report && report.quality || {};
+    return date + (quality.is_official === false ? ' · 历史质量不足' : '');
+  }
+
+  function comparisonQualityWarning(index, sourceDate, targetDate) {
+    var dates = [sourceDate];
+    if (targetDate && targetDate !== 'current' && targetDate !== sourceDate) dates.push(targetDate);
+    var warnings = dates.map(function (date) {
+      var quality = index && index.reports && index.reports[date] && index.reports[date].quality || {};
+      if (quality.is_official !== false) return '';
+      return date + ' 原报告存在日线缺失 ' + safeNumber(quality.missing_daily_count, 0)
+        + '、过期股票 ' + safeNumber(quality.stale_stock_count, 0);
+    }).filter(Boolean);
+    if (!warnings.length) return '';
+    return '<div class="comparison-quality-warning"><strong>历史质量不足</strong><span>'
+      + escapeHtml(warnings.join('；')) + '。收益价格仍使用本地正式收盘数据。</span></div>';
+  }
+
   function dedupeComparisonRows(rows) {
     var seen = {};
     return rows.filter(function (row) {
@@ -2626,8 +2646,8 @@
     root.innerHTML = ''
       + '<header class="comparison-header"><div><p class="comparison-eyebrow">报告复盘</p><h1>榜单表现比对</h1><p>实际涨跌为主指标；沪深300与超额收益用于辅助判断。</p></div><a class="comparison-back" href="../index.html">返回最新日报</a></header>'
       + '<section class="comparison-controls" aria-label="比对条件">'
-      + '<label>源报告日<select id="comparisonSource">' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '"' + (date === sourceDate ? ' selected' : '') + '>' + escapeHtml(date) + '</option>'; }).join('') + '</select></label>'
-      + '<label>对比日<select id="comparisonTarget"><option value="current">当前</option>' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '">' + escapeHtml(date) + '</option>'; }).join('') + '</select></label>'
+      + '<label>源报告日<select id="comparisonSource">' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '"' + (date === sourceDate ? ' selected' : '') + '>' + escapeHtml(comparisonDateLabel(index, date)) + '</option>'; }).join('') + '</select></label>'
+      + '<label>对比日<select id="comparisonTarget"><option value="current">当前</option>' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '">' + escapeHtml(comparisonDateLabel(index, date)) + '</option>'; }).join('') + '</select></label>'
       + '<button id="comparisonRefresh" type="button">刷新对比价</button><span id="comparisonQuoteStatus" class="comparison-status">尚未刷新当前行情</span>'
       + '</section><div id="comparisonContent"></div>';
 
@@ -2740,7 +2760,8 @@
     if (scaleMin === scaleMax) { scaleMin -= 1; scaleMax += 1; }
     var zeroPosition = comparisonScale(0, scaleMin, scaleMax);
     var benchmarkText = benchmarkReturn === null ? '指数数据缺失' : '沪深300：' + formatPct(benchmarkReturn, true);
-    mount.innerHTML = '<section class="comparison-workspace"><aside class="comparison-master"><h2>榜单实际表现</h2><p class="comparison-benchmark">' + benchmarkText + '</p>'
+    mount.innerHTML = comparisonQualityWarning(index, sourceDate, targetDate)
+      + '<section class="comparison-workspace"><aside class="comparison-master"><h2>榜单实际表现</h2><p class="comparison-benchmark">' + benchmarkText + '</p>'
       + '<div class="comparison-chart"><i class="comparison-chart-zero" style="left:' + zeroPosition + '%"></i>'
       + '<i class="comparison-chart-benchmark' + (benchmarkReturn === null ? ' is-missing' : '') + '" style="left:' + comparisonBenchmarkPosition(benchmarkReturn, scaleMin, scaleMax) + '%"></i>'
       + chartSummaries.map(function (summary) {
@@ -2794,7 +2815,7 @@
       var sourceDate = pageIndex > 0 ? dates[pageIndex - 1] : (dates.length > 1 ? dates[dates.length - 2] : dates[dates.length - 1]);
       var report = index.reports && index.reports[sourceDate];
       if (!report) throw new Error('缺少昨日报告');
-      body.innerHTML = '<div class="comparison-summary-toolbar"><span>源报告日 ' + escapeHtml(sourceDate) + '</span><button id="comparisonSummaryRefresh" type="button">刷新对比价</button><small>尚未刷新当前行情</small></div><div class="comparison-summary-results"><div class="comparison-summary-wait">点击“刷新对比价”后计算。</div></div>';
+      body.innerHTML = '<div class="comparison-summary-toolbar"><span>源报告日 ' + escapeHtml(comparisonDateLabel(index, sourceDate)) + '</span><button id="comparisonSummaryRefresh" type="button">刷新对比价</button><small>尚未刷新当前行情</small></div><div class="comparison-summary-results"><div class="comparison-summary-wait">点击“刷新对比价”后计算。</div></div>';
       var button = body.querySelector('#comparisonSummaryRefresh');
       var status = body.querySelector('small');
       var results = body.querySelector('.comparison-summary-results');

@@ -41,6 +41,12 @@ class ReportComparisonFrontendTests(unittest.TestCase):
         self.assertIn("开始比对", self.js)
         self.assertIn("尚未刷新当前行情", self.js)
 
+    def test_nonofficial_report_dates_are_visible_with_quality_warning(self):
+        self.assertIn("function comparisonDateLabel", self.js)
+        self.assertIn("历史质量不足", self.js)
+        self.assertIn("comparison-quality-warning", self.js)
+        self.assertIn("quality.is_official === false", self.js)
+
     def test_comparison_renders_actual_return_primary_and_missing_bucket(self):
         self.assertIn("实际涨跌", self.js)
         self.assertIn("沪深300", self.js)

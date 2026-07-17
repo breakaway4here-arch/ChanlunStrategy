@@ -111,6 +111,8 @@ body {
 .comparison-controls button { min-height: 34px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: #fff; color: var(--text-main); padding: 0 10px; }
 .comparison-controls button { border-color: var(--primary); background: var(--primary); color: #fff; cursor: pointer; font-weight: 700; }
 .comparison-status { align-self: center; color: var(--text-muted); font-size: 12px; }
+.comparison-quality-warning { display: flex; gap: 8px; margin-top: 12px; padding: 10px 12px; border: 1px solid #f0c36a; border-radius: var(--radius-sm); background: #fff8e6; color: #7a5310; font-size: 12px; }
+.comparison-quality-warning strong { flex: 0 0 auto; }
 
 .comparison-workspace {
   display: grid;

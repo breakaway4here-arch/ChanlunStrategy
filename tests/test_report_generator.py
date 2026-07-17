@@ -88,6 +88,7 @@ class TestReportGenerator(unittest.TestCase):
                 "date": "2026-07-17",
                 "market": {"沪深300": {"close": 4529.1}},
                 "data_quality": {"is_trading_day": True, "is_official": True},
+                "picks_pure": [make_pick()],
             }, output_dir=tmpdir)
 
             with open(os.path.join(tmpdir, "data", "comparison-index.json"), encoding="utf-8") as handle:
