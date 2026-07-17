@@ -83,6 +83,7 @@ from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.industry_metadata import hydrate_industry_metadata
+from chanlun.market_close_snapshot import ingest_market_close_snapshot
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
     build_sentiment_history,
@@ -1304,6 +1305,7 @@ def main(debug=False, preview=False, generated_at=None):
     # ================================================================
     # Phase 1: 数据采集
     # ================================================================
+    close_snapshot_diagnostics = None
     if debug:
         # 调试模式：拉取真实板块成分股，随机抽取少量股票
         print("[DEBUG] 使用简化数据（随机采样）")
@@ -1358,6 +1360,23 @@ def main(debug=False, preview=False, generated_at=None):
             "data_quality": data_quality,
         }
     else:
+        if (
+            not preview
+            and time_metadata.get("bar_state") == "closed"
+            and MARKET_HISTORY_CUTOVER_MODE == "sqlite"
+        ):
+            close_snapshot_diagnostics = ingest_market_close_snapshot(
+                MARKET_HISTORY_DB_PATH,
+                today,
+                fetch_all_a_stocks=fetch_all_a_stocks,
+                generated_at=generated_at,
+            )
+            if close_snapshot_diagnostics.get("status") != "complete":
+                raise MarketDataUnavailable(
+                    "全A收盘快照未通过门禁: {}".format(
+                        close_snapshot_diagnostics
+                    )
+                )
         daily_data = collect_daily_data(
             required_date=today,
             allow_missing_index=preview,
@@ -1365,6 +1384,8 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     data_quality = daily_data.get("data_quality", {})
+    if close_snapshot_diagnostics is not None:
+        data_quality["market_close_snapshot"] = close_snapshot_diagnostics
     sectors = daily_data["sectors"]
     sh_kline = daily_data["sh_index"]
     index_error = daily_data.get("index_error", "")

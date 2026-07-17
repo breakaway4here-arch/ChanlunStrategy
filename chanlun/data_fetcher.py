@@ -242,6 +242,17 @@ def get_code_to_name():
     return _CODE_TO_NAME
 
 
+def _a_share_exchange(code):
+    code = str(code or "").strip()
+    if code.startswith("6"):
+        return "SH"
+    if code.startswith(("0", "3")):
+        return "SZ"
+    if code.startswith(("4", "8")):
+        return "BJ"
+    return ""
+
+
 def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
     """Fetch the full active A-share code universe with stable code ordering."""
     stocks_by_code = {}
@@ -264,7 +275,7 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             "invt": "2",
             "fid": "f12",
             "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
-            "fields": "f12,f14,f26,f100",
+            "fields": "f12,f14,f26,f100,f2,f3,f5,f6,f15,f16,f17,f18",
         }
         try:
             payload = _fetch_eastmoney_json(params)
@@ -295,15 +306,26 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             name = str(raw.get("f14") or "").strip()
             listed_date = str(raw.get("f26") or "").strip()
             industry = str(raw.get("f100") or "").strip()
+            exchange = _a_share_exchange(code)
+            if not exchange:
+                continue
             stocks_by_code.setdefault(code, {
                 "code": code,
                 "name": name,
-                "exchange": "SH" if _is_sh(code) else "SZ",
+                "exchange": exchange,
                 "asset_type": "stock",
                 "listed_date": listed_date,
                 "industry": industry,
                 "is_st": "ST" in name.upper(),
                 "delisting_risk": "退" in name,
+                "current_price": _safe_float(raw.get("f2")),
+                "change_pct": _safe_float(raw.get("f3")),
+                "volume": _safe_float(raw.get("f5")),
+                "amount": _safe_float(raw.get("f6")),
+                "high": _safe_float(raw.get("f15")),
+                "low": _safe_float(raw.get("f16")),
+                "open": _safe_float(raw.get("f17")),
+                "prev_close": _safe_float(raw.get("f18")),
             })
         diagnostics["unique"] = len(stocks_by_code)
         requested = diagnostics["requested"]

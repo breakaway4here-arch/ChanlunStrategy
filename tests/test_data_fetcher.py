@@ -165,6 +165,14 @@ class TestFullAIndustryMetadata(unittest.TestCase):
                 "diff": [{
                     "f12": "301230",
                     "f14": "泓博医药",
+                    "f2": 37.21,
+                    "f3": 2.14,
+                    "f5": 12345,
+                    "f6": 45678900.0,
+                    "f15": 38.0,
+                    "f16": 36.4,
+                    "f17": 36.8,
+                    "f18": 36.43,
                     "f26": "20221101",
                     "f100": "医疗服务",
                 }],
@@ -177,8 +185,17 @@ class TestFullAIndustryMetadata(unittest.TestCase):
 
         self.assertTrue(diagnostics["complete"])
         self.assertEqual(rows[0]["industry"], "医疗服务")
+        self.assertEqual(rows[0]["exchange"], "SZ")
+        self.assertEqual(rows[0]["current_price"], 37.21)
+        self.assertEqual(rows[0]["open"], 36.8)
+        self.assertEqual(rows[0]["high"], 38.0)
+        self.assertEqual(rows[0]["low"], 36.4)
+        self.assertEqual(rows[0]["volume"], 12345.0)
+        self.assertEqual(rows[0]["amount"], 45678900.0)
         requested_fields = mock_fetch.call_args[0][0]["fields"].split(",")
         self.assertIn("f100", requested_fields)
+        self.assertIn("f2", requested_fields)
+        self.assertIn("f17", requested_fields)
 
 
 class _JsonResponse:
