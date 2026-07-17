@@ -196,6 +196,23 @@ class TestFullAIndustryMetadata(unittest.TestCase):
         self.assertIn("f100", requested_fields)
         self.assertIn("f2", requested_fields)
         self.assertIn("f17", requested_fields)
+        self.assertIn("m:0+t:81+s:2048", mock_fetch.call_args[0][0]["fs"])
+
+    @patch.object(data_fetcher, "_fetch_eastmoney_json")
+    def test_fetch_all_a_stocks_recognizes_new_beijing_920_codes(self, mock_fetch):
+        mock_fetch.return_value = {
+            "data": {
+                "total": 1,
+                "diff": [{"f12": "920003", "f14": "中诚咨询"}],
+            }
+        }
+
+        rows, diagnostics = data_fetcher.fetch_all_a_stocks(
+            return_diagnostics=True
+        )
+
+        self.assertTrue(diagnostics["complete"])
+        self.assertEqual(rows[0]["exchange"], "BJ")
 
 
 class _JsonResponse:

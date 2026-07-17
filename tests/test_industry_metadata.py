@@ -2,11 +2,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chanlun.industry_metadata import hydrate_industry_metadata
+from chanlun.industry_metadata import _is_a_share_identity, hydrate_industry_metadata
 from chanlun.market_history_store import MarketHistoryStore
 
 
 class IndustryMetadataHydrationTests(unittest.TestCase):
+    def test_new_beijing_920_identity_is_a_share_but_shanghai_900_is_not(self):
+        self.assertTrue(_is_a_share_identity({"exchange": "BJ", "code": "920003"}))
+        self.assertFalse(_is_a_share_identity({"exchange": "SH", "code": "900913"}))
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = Path(self.tmp.name) / "market_history.sqlite"

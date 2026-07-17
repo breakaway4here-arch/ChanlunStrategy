@@ -110,14 +110,15 @@ class MarketCloseSnapshotTests(unittest.TestCase):
     def test_low_valid_quote_coverage_fails_closed(self):
         invalid = dict(_row("000001", "SZ"), current_price=None)
         with MarketHistoryStore(self.path) as store:
-            instrument_id = store.upsert_instrument(
-                "stock", "SH", "600000", name="测试股"
-            )
-            store.upsert_bars("day", instrument_id, [{
-                "ts": "2026-07-16", "open": 10, "high": 10, "low": 10,
-                "close": 10, "volume": 1, "amount": 1000,
-                "adjustment": "qfq", "is_final": True,
-            }])
+            for exchange, code in (("SH", "600000"), ("SZ", "000001")):
+                instrument_id = store.upsert_instrument(
+                    "stock", exchange, code, name="测试股"
+                )
+                store.upsert_bars("day", instrument_id, [{
+                    "ts": "2026-07-16", "open": 10, "high": 10, "low": 10,
+                    "close": 10, "volume": 1, "amount": 1000,
+                    "adjustment": "qfq", "is_final": True,
+                }])
         result = ingest_market_close_snapshot(
             self.path,
             "2026-07-17",

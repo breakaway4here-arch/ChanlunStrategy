@@ -377,6 +377,29 @@ class SentimentHistoryTests(unittest.TestCase):
         self.assertIsNone(result[1]["ma3"])
         self.assertIsNotNone(result[2]["ma3"])
 
+    def test_turnover_scale_break_resets_baseline_instead_of_scoring_false_collapse(self):
+        dates = ["2026-07-%02d" % day for day in range(1, 8)]
+        rows = []
+        for index, trade_date in enumerate(dates):
+            rows.append({
+                "code": "600001",
+                "ts": trade_date,
+                "close": 10 + index * 0.1,
+                "amount": 1000000 if index < 6 else 100,
+                "stock_meta_asof": {},
+            })
+
+        daily = build_daily_inputs_from_windows(
+            {"dates": dates, "rows": rows},
+        )
+
+        self.assertEqual(daily[5]["turnover_ma5"], 1000000)
+        self.assertIsNone(daily[-1]["turnover_ma5"])
+        self.assertEqual(daily[-1]["turnover_quality"], "scale_break")
+        sentiment = build_sentiment_history(daily, window=20)[-1]
+        self.assertFalse(sentiment["evidence"]["turnover"]["available"])
+        self.assertIn("turnover", sentiment["missing_components"])
+
     def test_historical_scores_do_not_change_when_future_day_is_appended(self):
         days = [
             _day("2026-07-%02d" % day, up_count=day + 3, down_count=10 - day)

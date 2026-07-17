@@ -80,6 +80,7 @@ def ingest_market_close_snapshot(
     fetch_all_a_stocks: Callable[..., Any],
     generated_at: Optional[datetime] = None,
     min_coverage: float = 0.90,
+    force_remote: bool = False,
 ) -> Dict[str, Any]:
     """Fetch one full-A quote snapshot and atomically append the final qfq bar."""
     now = generated_at or datetime.now(_CN_TZ)
@@ -96,6 +97,7 @@ def ingest_market_close_snapshot(
         "written": 0,
         "skipped_unquoted": 0,
         "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "coverage": 0.0,
         "remote_calls": 0,
     }
@@ -128,7 +130,11 @@ def ingest_market_close_snapshot(
         db_coverage = (
             final_count / float(len(instruments)) if instruments else 0.0
         )
-        if instruments and db_coverage >= float(min_coverage):
+        if (
+            not force_remote
+            and instruments
+            and db_coverage >= float(min_coverage)
+        ):
             diagnostics.update(
                 status="complete",
                 source="db",
@@ -173,6 +179,12 @@ def ingest_market_close_snapshot(
     with MarketHistoryStore(path) as store:
         previous_closes = _previous_final_closes(store, str(report_date))
         prepared = []
+        valid_identities = {
+            (str(row.get("exchange")), str(row.get("code")))
+            for row in valid_rows
+        }
+        history_eligible = valid_identities.intersection(previous_closes)
+        diagnostics["history_eligible_rows"] = len(history_eligible)
         for row in valid_rows:
             quote = _raw_quote(row)
             if quote is None:
@@ -207,7 +219,9 @@ def ingest_market_close_snapshot(
             )
 
         diagnostics["coverage"] = round(
-            len(prepared) / float(len(valid_rows)), 6
+            len(prepared) / float(len(history_eligible)), 6
+            if history_eligible
+            else 0.0
         )
         if diagnostics["coverage"] < float(min_coverage):
             diagnostics.update(

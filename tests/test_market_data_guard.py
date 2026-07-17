@@ -476,7 +476,7 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(quality["as_of"], "2026-06-30T14:35:00+08:00")
         self.assertFalse(quality["is_official"])
 
-    def test_collect_daily_data_closed_run_forces_daily_refresh_and_can_be_official(self):
+    def test_collect_daily_data_closed_run_uses_db_first_and_can_be_official(self):
         as_of = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
         calls = []
 
@@ -515,7 +515,7 @@ class TestMarketDataGuard(unittest.TestCase):
                 generated_at=as_of,
             )
 
-        self.assertEqual(calls, [True])
+        self.assertEqual(calls, [False])
         self.assertEqual(result["data_quality"]["bar_state"], "closed")
         self.assertTrue(result["data_quality"]["sources_trusted"])
         self.assertTrue(result["data_quality"]["is_official"])

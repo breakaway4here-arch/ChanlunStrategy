@@ -545,13 +545,48 @@ def build_daily_inputs_from_windows(
             <= normalized_trade_date
         )
 
-    turnover_by_date = {}
+    raw_turnover_by_date = {}
     for trade_date in dates:
-        turnover_by_date[trade_date] = sum(
+        raw_turnover_by_date[trade_date] = sum(
             _number(rows[trade_date].get("amount")) or 0.0
             for rows in stock_by_code.values()
             if trade_date in rows
         )
+
+    # Amount provenance can change at a provider cutover (for example an old
+    # volume-derived proxy versus a verified close snapshot).  A discontinuity
+    # in units must reset the moving-average baseline instead of being scored as
+    # a real collapse or explosion in market turnover.
+    turnover_inputs = {}
+    turnover_segment = []
+    for trade_date in dates:
+        current_turnover = raw_turnover_by_date[trade_date]
+        quality = "comparable"
+        if turnover_segment:
+            reference = median(turnover_segment[-5:])
+            ratio = (
+                current_turnover / reference
+                if reference and current_turnover > 0
+                else None
+            )
+            if ratio is None or ratio < 0.2 or ratio > 5.0:
+                turnover_segment = []
+                quality = "scale_break"
+        turnover_inputs[trade_date] = {
+            "turnover": current_turnover,
+            "turnover_ma5": (
+                sum(turnover_segment[-5:]) / 5
+                if len(turnover_segment) >= 5
+                else None
+            ),
+            "turnover_ma20": (
+                sum(turnover_segment[-20:]) / 20
+                if len(turnover_segment) >= 20
+                else None
+            ),
+            "turnover_quality": quality,
+        }
+        turnover_segment.append(current_turnover)
 
     daily = []
     for date_index, trade_date in enumerate(dates):
@@ -594,20 +629,7 @@ def build_daily_inputs_from_windows(
                 ),
             })
 
-        prior_turnovers = [
-            turnover_by_date[value]
-            for value in dates[:date_index]
-        ]
-        turnover_ma5 = (
-            sum(prior_turnovers[-5:]) / 5
-            if len(prior_turnovers) >= 5
-            else None
-        )
-        turnover_ma20 = (
-            sum(prior_turnovers[-20:]) / 20
-            if len(prior_turnovers) >= 20
-            else None
-        )
+        turnover_input = turnover_inputs[trade_date]
 
         index_bars = []
         for code in sorted(index_by_code):
@@ -638,9 +660,10 @@ def build_daily_inputs_from_windows(
             "date": trade_date,
             "stock_bars": stock_bars,
             "index_bars": index_bars,
-            "turnover": turnover_by_date[trade_date],
-            "turnover_ma5": turnover_ma5,
-            "turnover_ma20": turnover_ma20,
+            "turnover": turnover_input["turnover"],
+            "turnover_ma5": turnover_input["turnover_ma5"],
+            "turnover_ma20": turnover_input["turnover_ma20"],
+            "turnover_quality": turnover_input["turnover_quality"],
             "trend": {
                 "above_ma20_ratio": (
                     trend_above / float(trend_total)

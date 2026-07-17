@@ -248,7 +248,7 @@ def _a_share_exchange(code):
         return "SH"
     if code.startswith(("0", "3")):
         return "SZ"
-    if code.startswith(("4", "8")):
+    if code.startswith(("4", "8", "92")):
         return "BJ"
     return ""
 
@@ -274,7 +274,7 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             "fltt": "2",
             "invt": "2",
             "fid": "f12",
-            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
+            "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048",
             "fields": "f12,f14,f26,f100,f2,f3,f5,f6,f15,f16,f17,f18",
         }
         try:
@@ -1911,7 +1911,10 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         all_stocks,
         required_date=required_date,
         allow_stale=allow_missing_index,
-        force_refresh=time_metadata["bar_state"] == "closed",
+        # The official close snapshot has already populated canonical final
+        # bars.  The repository itself refreshes only missing, stale or
+        # non-final rows; forcing every symbol here defeats DB-first operation.
+        force_refresh=False,
     )
     elapsed = time.time() - t0
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")

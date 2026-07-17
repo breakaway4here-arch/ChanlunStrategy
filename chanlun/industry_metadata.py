@@ -21,7 +21,7 @@ def _is_a_share_identity(instrument: Mapping[str, Any]) -> bool:
     if exchange == "SZ":
         return code.startswith(("0", "3"))
     if exchange == "BJ":
-        return code.startswith(("4", "8"))
+        return code.startswith(("4", "8", "92"))
     return False
 
 
