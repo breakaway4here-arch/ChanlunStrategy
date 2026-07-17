@@ -93,6 +93,20 @@ class TestReportGenerator(unittest.TestCase):
 
         self.assertEqual(serialized[0]["decision_engine_v1"], pick["decision_engine_v1"])
 
+    def test_serializers_preserve_absolute_position_evidence(self):
+        pick = make_pick()
+        pick.update({
+            "position_absolute_percentile": 18.75,
+            "position_absolute_window": 120,
+        })
+
+        for serialized in (
+            _serialize_picks([pick])[0],
+            _serialize_picks_light([pick])[0],
+        ):
+            self.assertEqual(serialized["position_absolute_percentile"], 18.75)
+            self.assertEqual(serialized["position_absolute_window"], 120)
+
     def test_serialize_picks_preserves_growth_quality_evidence(self):
         pick = make_pick()
         pick.update({
@@ -100,6 +114,7 @@ class TestReportGenerator(unittest.TestCase):
             "circulating_market_cap": 85,
             "float_market_cap": 85,
             "money20": 150_000_000,
+            "industry": "医药生物",
         })
 
         full = _serialize_picks([pick])[0]
@@ -110,6 +125,7 @@ class TestReportGenerator(unittest.TestCase):
             self.assertEqual(serialized["circulating_market_cap"], 85)
             self.assertEqual(serialized["float_market_cap"], 85)
             self.assertEqual(serialized["money20"], 150_000_000)
+            self.assertEqual(serialized["industry"], "医药生物")
 
     def test_serialize_picks_light_carries_decision_engine_payload(self):
         pick = make_pick()
@@ -1253,6 +1269,10 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("失败门：", self.asset_js)
         self.assertIn("升级条件：", self.asset_js)
         self.assertIn("取消条件：", self.asset_js)
+
+    def test_high_elasticity_watch_label_is_rendered(self):
+        self.assertIn("高弹性观察 Top10", self.asset_js)
+        self.assertIn("非正式推荐", self.asset_js)
 
     def test_market_overview_helper_presence(self):
         for helper in [

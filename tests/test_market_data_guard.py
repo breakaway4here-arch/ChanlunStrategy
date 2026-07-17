@@ -86,6 +86,54 @@ def _complete_sector_fetch(rows_by_code):
 
 class TestMarketDataGuard(unittest.TestCase):
 
+    def test_partial_industry_hydration_is_visible_in_data_quality_warnings(self):
+        quality = {"warnings": []}
+
+        run._record_industry_metadata_quality(
+            quality,
+            {"status": "partial", "missing_after": 12},
+        )
+
+        self.assertTrue(
+            any("行业元数据覆盖不完整" in item for item in quality["warnings"])
+        )
+
+    def test_decision_context_carries_market_sentiment_risk_evidence(self):
+        sentiment = {"score": 35, "turning_signal": "turning_weaker"}
+
+        context = run._build_decision_market_context(
+            market_indices={"上证指数": {"change_pct": -2.0}},
+            sectors=[],
+            report_date="2026-07-16",
+            data_quality={"is_official": True},
+            market_data_status="verified",
+            market_sentiment=sentiment,
+        )
+
+        self.assertIs(context["market_sentiment"], sentiment)
+        self.assertEqual(context["market_sentiment"]["turning_signal"], "turning_weaker")
+
+    def test_position_evidence_uses_120_day_close_percentile_not_same_day_reference(self):
+        closes = [10.0 + index * 0.1 for index in range(119)] + [30.0]
+        row = {
+            "code": "600000",
+            "source_channel": "low_position",
+            "best_buy_point": {
+                "type": "强势启动候选",
+                "source_type": "日线强势启动",
+                "price": 30.0,
+            },
+            "closes": closes,
+            "data_status": {"daily": "verified", "latest_date": "2026-07-16"},
+        }
+
+        result = run._attach_position_evidence(row, "2026-07-16")
+
+        self.assertEqual(result["position_distance_pct"], 0.0)
+        self.assertEqual(result["position_absolute_window"], 120)
+        self.assertGreater(result["position_absolute_percentile"], 50.0)
+        self.assertNotEqual(result["position_absolute_percentile"], 0.0)
+
     def test_sector_pagination_fetches_100_plus_50_and_reports_complete(self):
         calls = []
 

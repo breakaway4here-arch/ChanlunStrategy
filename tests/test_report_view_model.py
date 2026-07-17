@@ -144,9 +144,9 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["counts"]["baseline"], 1)
         self.assertEqual(workspace["counts"]["observation_top5"], 1)
         self.assertEqual(workspace["counts"]["highlights"], 4)
-        self.assertEqual(workspace["counts"]["growth_quality"], 4)
+        self.assertEqual(workspace["counts"]["growth_quality"], 0)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
-        self.assertEqual(workspace["view_meta"]["growth_quality"]["label"], "成长质量 Top10")
+        self.assertEqual(workspace["view_meta"]["growth_quality"]["label"], "高弹性观察 Top10")
         self.assertIn("source_counts", workspace["diagnostics"])
         self.assertEqual(workspace["diagnostics"]["highlights"]["baseline_included"], False)
         self.assertIn("growth_quality_overlap", workspace["diagnostics"])
@@ -194,12 +194,16 @@ class TestReportViewModel(unittest.TestCase):
     def test_growth_quality_view_exists_but_default_is_main(self):
         report_data = _report_data(
             {
-                "picks_fusion": [_fusion_pick(code="600030", score=40), _fusion_pick(code="600031", score=85)],
-                "next_day_boom": {"mode": "enabled", "candidates": [_acceleration_pick(code="600032")]},
-                "luojie_pool": {"candidates": [_luojie_pick(code="600033")]},
-                "startup_watchlist": [_confirming_pick(code="600034")],
+                "picks_fusion": [
+                    _fusion_pick(
+                        code="600030", score=40,
+                        decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+                    ),
+                    _fusion_pick(code="600031", score=85),
+                ],
             }
         )
+        report_data["picks_fusion"][0]["ret20"] = 12.0
 
         workspace = build_workspace(report_data)
 
@@ -275,6 +279,7 @@ class TestReportViewModel(unittest.TestCase):
         elite["ret20"] = 20
         elite["sector_rank"] = 1
         elite["sector_flow"] = 3_500_000_000
+        elite["decision_engine_v1"] = {"decision_code": "observe", "decision": "观察"}
 
         normal = _fusion_pick(
             code="600002",
@@ -287,6 +292,8 @@ class TestReportViewModel(unittest.TestCase):
         normal["money20"] = 100_000
         normal["sector_rank"] = 80
         normal["sector_flow"] = 500_000
+        normal["ret20"] = 10.0
+        normal["decision_engine_v1"] = {"decision_code": "observe", "decision": "观察"}
 
         report_data = _report_data({"picks_fusion": [normal, elite]})
         workspace = build_workspace(report_data)
@@ -598,8 +605,16 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual([row["code"] for row in rows], ["600201", "600202"])
 
     def test_growth_quality_excludes_rows_without_minimum_evidence(self):
-        complete = _fusion_pick(code="600301")
-        missing = _fusion_pick(code="600302")
+        complete = _fusion_pick(
+            code="600301",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        complete["ret20"] = 12.0
+        missing = _fusion_pick(
+            code="600302",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        missing["ret20"] = 12.0
         missing.pop("money20")
         missing.pop("market_cap")
 
@@ -613,6 +628,88 @@ class TestReportViewModel(unittest.TestCase):
             workspace["diagnostics"]["growth_quality"]["excluded_insufficient_evidence"],
             1,
         )
+
+    def test_growth_quality_is_observe_only_and_requires_real_industry(self):
+        observe = _fusion_pick(
+            code="300401",
+            sector="医药生物",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        observe["ret20"] = 12.0
+        recommend = _fusion_pick(code="300402", sector="医药生物")
+        recommend["ret20"] = 12.0
+        no_industry = _fusion_pick(
+            code="300403",
+            sector="",
+            sector_tags=[],
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        no_industry["ret20"] = 12.0
+
+        workspace = build_workspace({"picks_fusion": [observe, recommend, no_industry]})
+
+        self.assertEqual(
+            [row["code"] for row in workspace["views"]["growth_quality"]],
+            ["300401"],
+        )
+        self.assertEqual(workspace["diagnostics"]["growth_quality"]["excluded_non_observe"], 1)
+        self.assertEqual(workspace["diagnostics"]["growth_quality"]["excluded_missing_industry"], 1)
+
+    def test_growth_quality_caps_each_industry_at_two_and_accepts_industry_fallback(self):
+        picks = []
+        for index in range(3):
+            pick = _fusion_pick(
+                code=f"30041{index}",
+                sector="医药生物",
+                decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+            )
+            pick["ret20"] = 10.0 - index
+            picks.append(pick)
+        industry_only = _fusion_pick(
+            code="300420",
+            sector="",
+            sector_tags=[],
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        industry_only["industry"] = "半导体"
+        industry_only["ret20"] = 11.0
+        picks.append(industry_only)
+
+        workspace = build_workspace({"picks_fusion": picks})
+        rows = workspace["views"]["growth_quality"]
+
+        self.assertEqual(sum(row["pool_quality"]["industry_key"] == "医药生物" for row in rows), 2)
+        self.assertIn("300420", [row["code"] for row in rows])
+        self.assertEqual(workspace["diagnostics"]["growth_quality"]["excluded_industry_cap"], 1)
+
+    def test_growth_quality_prefers_canonical_industry_over_theme_sector(self):
+        pick = _fusion_pick(
+            code="300425",
+            sector="机器人概念",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        pick["industry"] = "医药生物"
+        pick["ret20"] = 12.0
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+
+        row = workspace["views"]["growth_quality"][0]
+        self.assertEqual(row["pool_quality"]["industry_key"], "医药生物")
+
+    def test_pool_quality_does_not_use_stock_change_as_sector_quality_and_penalizes_crowded_ret20(self):
+        calm = _fusion_pick(code="300430", sector="电子")
+        calm["ret20"] = 15.0
+        calm["change_pct"] = 1.0
+        crowded = _fusion_pick(code="300431", sector="电子")
+        crowded["ret20"] = 45.0
+        crowded["change_pct"] = 9.0
+
+        calm_quality = _build_pool_quality_features(calm)
+        crowded_quality = _build_pool_quality_features(crowded)
+
+        self.assertEqual(calm_quality["sector_quality_score"], crowded_quality["sector_quality_score"])
+        self.assertGreater(calm_quality["ret20_score"], crowded_quality["ret20_score"])
+        self.assertLess(crowded_quality["ret20_score"], 100.0)
 
     def test_workspace_info_tags_include_extra_sector_tags(self):
         pick = _fusion_pick(code="600005", name="半导体票", sector="电子")

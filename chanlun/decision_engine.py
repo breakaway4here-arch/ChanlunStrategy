@@ -37,7 +37,9 @@ def evaluate_stock(
     """
     stock_dict = _to_dict(stock)
     context = _to_dict(market_context)
-    position_known = _safe_float(_extract_distance(stock_dict), default=None) is not None
+    position_known = _safe_float(
+        _extract_absolute_position_percentile(stock_dict), default=None
+    ) is not None
 
     structure_score, structure_reasons = _calc_structure_score(stock_dict, context)
     position_score, position_reasons = _calc_position_score(stock_dict)
@@ -61,6 +63,25 @@ def evaluate_stock(
         decision = REJECT_NORMAL
         decision_code = REJECT
 
+    risk_reasons = _market_sentiment_risk_reasons(context)
+    if decision_code == RECOMMEND and risk_reasons:
+        decision = WATCH
+        decision_code = OBSERVE
+    elif (
+        decision_code == REJECT
+        and risk_reasons
+        and position_score >= 15
+        and structure_score >= 0
+        and total_score >= 20
+    ):
+        # A cold market blocks execution, but it should not relabel every
+        # structurally valid, non-high-position candidate as a stock-level
+        # rejection.  Keep these in the watch channel while high/poor setups
+        # remain rejected.
+        decision = WATCH
+        decision_code = OBSERVE
+        risk_reasons.append("弱市只观察")
+
     return {
         "version": DECISION_VERSION,
         "code": stock_dict.get("code", "UNKNOWN"),
@@ -71,6 +92,7 @@ def evaluate_stock(
         "structure": {"score": structure_score, "reasons": structure_reasons},
         "position": {"score": position_score, "reasons": position_reasons},
         "sentiment": {"score": sentiment_score, "reasons": sentiment_reasons},
+        "risk_reasons": risk_reasons,
     }
 
 
@@ -130,23 +152,25 @@ def _calc_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
     score = 0
     reasons: List[str] = []
 
-    dist = _safe_float(_extract_distance(stock), default=None)
+    percentile = _safe_float(
+        _extract_absolute_position_percentile(stock), default=None
+    )
 
-    if dist is None:
+    if percentile is None:
         score -= 15
         reasons.append("位置信息不足")
-    elif dist <= 5:
+    elif percentile <= 25:
         score += 35
-        reasons.append("低位启动区")
-    elif dist <= 15:
+        reasons.append("120日收盘分位低位")
+    elif percentile <= 60:
         score += 15
-        reasons.append("中位运行")
-    elif dist <= 30:
+        reasons.append("120日收盘分位中位")
+    elif percentile <= 80:
         score -= 10
-        reasons.append("偏高位置")
+        reasons.append("120日收盘分位偏高")
     else:
         score -= 35
-        reasons.append("高位追涨风险")
+        reasons.append("120日收盘分位高位风险")
 
     if _safe_bool(stock.get("is_extended_move")):
         score -= 25
@@ -160,7 +184,7 @@ def _calc_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
         reasons.append("连续上涨过久")
 
     # Conservative fallback for unknown position state.
-    if dist is None:
+    if percentile is None:
         score -= 5
         reasons.append("位置估计偏保守")
 
@@ -189,6 +213,9 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
     elif phase == "退潮":
         score -= 30
         reasons.append("退潮期风险")
+    elif phase == "弱市":
+        score -= 10
+        reasons.append("弱市风险")
     elif phase:
         score -= 5
         reasons.append("市场不明")
@@ -232,21 +259,32 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
     return score, reasons
 
 
-def _extract_distance(stock: Mapping[str, Any]) -> Any:
+def _extract_absolute_position_percentile(stock: Mapping[str, Any]) -> Any:
     if stock.get("position_data_status") != "verified":
         return None
 
-    dist = _safe_float(stock.get("position_distance_pct"), default=None)
-    reference_price = _safe_float(stock.get("position_reference_price"), default=None)
-    reference_type = stock.get("position_reference_type")
+    percentile = _safe_float(stock.get("position_absolute_percentile"), default=None)
+    window = _safe_int(stock.get("position_absolute_window"), default=None)
     evidence_date = stock.get("position_evidence_date")
-    if dist is None or reference_price is None or reference_price <= 0:
+    if percentile is None or percentile < 0 or percentile > 100:
         return None
-    if not isinstance(reference_type, str) or not reference_type.strip():
+    if window is None or window < 120:
         return None
     if not _is_iso_date(evidence_date):
         return None
-    return dist
+    return percentile
+
+
+def _market_sentiment_risk_reasons(context: Mapping[str, Any]) -> List[str]:
+    sentiment = _to_dict(context.get("market_sentiment"))
+    reasons: List[str] = []
+    score = _safe_float(sentiment.get("score"), default=None)
+    if score is not None and score < 40:
+        reasons.append("市场情绪偏冷")
+    turning_signal = str(sentiment.get("turning_signal") or "").strip().lower()
+    if turning_signal == "turning_weaker":
+        reasons.append("市场情绪转弱")
+    return reasons
 
 
 def _is_iso_date(value: Any) -> bool:
@@ -264,12 +302,12 @@ def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) 
     for key in ("market_phase", "market_regime", "market_trend"):
         phase = stock.get(key)
         if isinstance(phase, str) and phase.strip():
-            return phase.strip()
+            return _normalize_market_phase(phase)
 
     for key in ("market_phase", "market_regime", "market_trend"):
         phase = context.get(key)
         if isinstance(phase, str) and phase.strip():
-            return phase.strip()
+            return _normalize_market_phase(phase)
 
     market_indices = _to_dict(context.get("market_indices"))
     shanghai = _to_dict(market_indices.get("上证指数"))
@@ -282,6 +320,20 @@ def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) 
         return "震荡"
 
     return ""
+
+
+def _normalize_market_phase(phase: str) -> str:
+    normalized = str(phase).strip()
+    lowered = normalized.lower()
+    if lowered == "weak" or normalized in {"弱", "偏弱"}:
+        return "弱市"
+    if lowered in {"weaker", "bear", "bearish"} or normalized in {"走弱", "退潮"}:
+        return "退潮"
+    if lowered in {"strong", "bull", "bullish"} or normalized in {"强", "偏强", "走强", "主升"}:
+        return "主升"
+    if lowered in {"neutral", "range", "sideways"} or normalized in {"中性", "震荡"}:
+        return "震荡"
+    return normalized
 
 
 def _resolve_market_trend(context: Mapping[str, Any]) -> str:

@@ -58,6 +58,7 @@ from chanlun.data_fetcher import (
     _build_code_to_name,
     fetch_sector_outflow, fetch_limit_up_pool, fetch_limit_pool_counts,
     fetch_sector_stocks, fetch_stock_market_caps,
+    fetch_all_a_stocks,
     deduplicate_sector_hierarchy,
 )
 from chanlun.chan_engine import analyze, calc_macd
@@ -81,6 +82,7 @@ from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
+from chanlun.industry_metadata import hydrate_industry_metadata
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
     build_sentiment_history,
@@ -143,6 +145,26 @@ def _inject_decision_engine(items, evaluator: Callable | None, market_context: d
             item["decision_engine_v1"] = decision
 
 
+def _build_decision_market_context(
+    *,
+    market_indices,
+    sectors,
+    report_date,
+    data_quality,
+    market_data_status,
+    market_sentiment,
+):
+    """Build the single decision context, including same-day market risk evidence."""
+    return {
+        "market_indices": market_indices,
+        "sectors": sectors,
+        "date": report_date,
+        "data_quality": data_quality,
+        "market_data_status": market_data_status,
+        "market_sentiment": market_sentiment,
+    }
+
+
 def _safe_number(value, default=None):
     """Convert arbitrary input to finite float when possible."""
     if value is None:
@@ -156,6 +178,21 @@ def _safe_number(value, default=None):
     if not math.isfinite(number):
         return default
     return number
+
+
+def _record_industry_metadata_quality(data_quality, diagnostics):
+    """Expose partial industry coverage instead of silently shrinking views."""
+    if not isinstance(data_quality, dict) or not isinstance(diagnostics, dict):
+        return
+    if diagnostics.get("status") == "complete":
+        return
+    missing = int(diagnostics.get("missing_after") or 0)
+    warning = "行业元数据覆盖不完整"
+    if missing:
+        warning += "（缺失{}只）".format(missing)
+    warnings = data_quality.setdefault("warnings", [])
+    if warning not in warnings:
+        warnings.append(warning)
 
 
 def _as_list(value):
@@ -204,6 +241,8 @@ def _attach_position_evidence(row, report_date):
     row["position_reference_type"] = "none"
     row["position_data_status"] = "missing"
     row["position_evidence_date"] = str(report_date or "")
+    row["position_absolute_percentile"] = None
+    row["position_absolute_window"] = 0
 
     data_status = row.get("data_status")
     data_status = data_status if isinstance(data_status, dict) else {}
@@ -221,6 +260,21 @@ def _attach_position_evidence(row, report_date):
     if current is None or current <= 0:
         row["position_data_status"] = "invalid"
         return row
+
+    absolute_closes = [
+        _safe_number(value, None)
+        for value in closes[-120:]
+    ]
+    if len(absolute_closes) == 120 and all(
+        value is not None and value > 0 for value in absolute_closes
+    ):
+        less = sum(value < current for value in absolute_closes)
+        equal = sum(value == current for value in absolute_closes)
+        row["position_absolute_percentile"] = round(
+            (less + equal * 0.5) / len(absolute_closes) * 100.0,
+            4,
+        )
+        row["position_absolute_window"] = len(absolute_closes)
 
     source_channel = str(row.get("source_channel") or "").strip()
     reference_price = None
@@ -275,18 +329,20 @@ def _attach_position_evidence(row, report_date):
                 buy_point_type,
             )
 
+    has_absolute_position = row["position_absolute_percentile"] is not None
     if (
         reference_price is None
         or reference_price <= 0
         or not reference_type
-    ):
+    ) and not has_absolute_position:
         row["position_data_status"] = "invalid"
         return row
 
-    distance_pct = (current / reference_price - 1.0) * 100.0
-    row["position_distance_pct"] = round(distance_pct, 4)
-    row["position_reference_price"] = round(reference_price, 4)
-    row["position_reference_type"] = reference_type
+    if reference_price is not None and reference_price > 0 and reference_type:
+        distance_pct = (current / reference_price - 1.0) * 100.0
+        row["position_distance_pct"] = round(distance_pct, 4)
+        row["position_reference_price"] = round(reference_price, 4)
+        row["position_reference_type"] = reference_type
     row["position_data_status"] = "verified"
     return row
 
@@ -602,6 +658,25 @@ def _apply_full_a_universe(
         return stocks_with_kline
 
     try:
+        try:
+            diagnostics["industry_metadata"] = hydrate_industry_metadata(
+                MARKET_HISTORY_DB_PATH,
+                report_date,
+                fetch_all_a_stocks=fetch_all_a_stocks,
+            )
+            _record_industry_metadata_quality(
+                data_quality, diagnostics["industry_metadata"]
+            )
+        except Exception as exc:
+            diagnostics["industry_metadata"] = {
+                "status": "fallback",
+                "reason": "industry_hydration_failed",
+                "error": str(exc),
+            }
+            _record_industry_metadata_quality(
+                data_quality, diagnostics["industry_metadata"]
+            )
+            print("[WARN] 行业元数据回填失败，降级继续: {}".format(exc))
         eligibility_audit = []
         with MarketHistoryStore(MARKET_HISTORY_DB_PATH, readonly=True) as store:
             candidates, load_diagnostics = load_eligible_candidates(
@@ -2038,16 +2113,23 @@ def main(debug=False, preview=False, generated_at=None):
     ranked_events = rank_market_impact_events(raw_events, sector_flow=sectors, limit_up_pool=limit_up_pool_data, top_n=EVENT_TOP_N)
     events = normalize_events(enrich_events(ranked_events))
 
-    # 决策引擎评分（可选字段）
+    # 决策引擎评分（可选字段）。情绪必须在决策前完成，避免风险证据只展示不生效。
+    market_sentiment, market_sentiment_history = (
+        _build_market_sentiment_history(
+            today,
+            market_indices=market_indices,
+        )
+    )
     decision_engine = _get_decision_engine()
     if decision_engine:
-        market_context = {
-            "market_indices": market_indices,
-            "sectors": sectors,
-            "date": today,
-            "data_quality": data_quality,
-            "market_data_status": market_data_status,
-        }
+        market_context = _build_decision_market_context(
+            market_indices=market_indices,
+            sectors=sectors,
+            report_date=today,
+            data_quality=data_quality,
+            market_data_status=market_data_status,
+            market_sentiment=market_sentiment,
+        )
         for decision_items in (
             pure_scored,
             fusion_scored,
@@ -2288,12 +2370,6 @@ def main(debug=False, preview=False, generated_at=None):
         "outflow_count": len(sector_outflow),
         "max_workers": 20,
     }
-    market_sentiment, market_sentiment_history = (
-        _build_market_sentiment_history(
-            today,
-            market_indices=market_indices,
-        )
-    )
     sentiment_components = market_sentiment.get("components", {})
     market_temperature = {
         "score": market_sentiment.get("score"),

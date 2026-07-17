@@ -19,11 +19,13 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "verified",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
         })
 
         self.assertEqual(result["decision_code"], "recommend")
         self.assertEqual(result["decision"], "推荐")
-        self.assertIn("低位启动区", result["position"]["reasons"])
+        self.assertIn("120日收盘分位低位", result["position"]["reasons"])
 
     def test_unverified_top_level_position_evidence_is_not_consumed(self):
         result = evaluate_stock({
@@ -37,6 +39,8 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "stale_cache",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
         })
 
         self.assertEqual(result["decision_code"], "observe")
@@ -54,13 +58,14 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "verified",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
         }
         invalid_overrides = (
-            {"position_distance_pct": float("nan")},
-            {"position_reference_price": 0},
-            {"position_reference_type": ""},
             {"position_data_status": "missing"},
             {"position_evidence_date": "2026/07/16"},
+            {"position_absolute_percentile": None},
+            {"position_absolute_window": 119},
         )
 
         for override in invalid_overrides:
@@ -95,6 +100,8 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "verified",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
             "is_extended_move": False,
             "recent_run_days": 1,
             "sector_hot": True,
@@ -136,6 +143,8 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "verified",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
             "is_extended_move": False,
             "recent_run_days": 4,
             "market_regime": "震荡",
@@ -150,7 +159,7 @@ class DecisionEngineTestCase(unittest.TestCase):
         self.assertEqual(result["decision"], "观察")
         self.assertGreaterEqual(result["total_score"], 40)
         self.assertLess(result["total_score"], 60)
-        self.assertEqual(result["position"]["reasons"][0], "中位运行")
+        self.assertEqual(result["position"]["reasons"][0], "120日收盘分位中位")
         self.assertIn("structure", result)
         self.assertIn("sentiment", result)
 
@@ -166,6 +175,8 @@ class DecisionEngineTestCase(unittest.TestCase):
             "position_reference_type": "daily_support",
             "position_data_status": "verified",
             "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 92.0,
+            "position_absolute_window": 120,
             "is_extended_move": True,
             "recent_run_days": 6,
             "market_phase": "主升",
@@ -293,6 +304,162 @@ class DecisionEngineTestCase(unittest.TestCase):
 
         self.assertIn("退潮期风险", result["sentiment"]["reasons"])
         self.assertLessEqual(result["sentiment"]["score"], -30)
+
+    def test_weak_market_regime_is_mild_risk_not_full_recession(self):
+        result = evaluate_stock({
+            "code": "WEAK-REGIME",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_regime": "weak",
+            "position_distance_pct": 1.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "daily_support",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+        })
+
+        self.assertIn("弱市风险", result["sentiment"]["reasons"])
+        self.assertNotIn("退潮期风险", result["sentiment"]["reasons"])
+        self.assertNotIn("市场不明", result["sentiment"]["reasons"])
+
+    def test_weak_market_with_cold_sentiment_caps_good_stock_to_observe_not_reject(self):
+        result = evaluate_stock(
+            {
+                "code": "WEAK-COLD",
+                "trend_type": "上升趋势",
+                "breakout_structure": True,
+                "pullback_confirmed": True,
+                "market_regime": "weak",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "position_absolute_percentile": 12.0,
+                "position_absolute_window": 120,
+                "sector_strength_label": "强",
+                "volume_ratio": 2.0,
+                "ma_bullish": True,
+            },
+            market_context={
+                "market_sentiment": {
+                    "score": 35,
+                    "turning_signal": "turning_weaker",
+                },
+            },
+        )
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertNotEqual(result["decision"], "不推荐")
+
+    def test_cold_market_keeps_non_high_position_candidate_as_watch_not_blanket_reject(self):
+        result = evaluate_stock(
+            {
+                "code": "WEAK-WATCH",
+                "trend_type": "",
+                "pullback_confirmed": True,
+                "market_regime": "weak",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "position_absolute_percentile": 45.0,
+                "position_absolute_window": 120,
+                "volume_ratio": 1.8,
+                "ma_bullish": True,
+                "gf_dma_health": {"summary": "趋势健康度偏弱"},
+            },
+            market_context={
+                "market_sentiment": {
+                    "score": 35,
+                    "turning_signal": "turning_weaker",
+                },
+            },
+        )
+
+        self.assertLess(result["total_score"], 40)
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertIn("弱市只观察", result["risk_reasons"])
+
+    def test_cold_market_does_not_rescue_high_position_reject(self):
+        result = evaluate_stock(
+            {
+                "code": "WEAK-HIGH",
+                "trend_type": "上升趋势",
+                "market_regime": "weak",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "position_absolute_percentile": 90.0,
+                "position_absolute_window": 120,
+            },
+            market_context={"market_sentiment": {"score": 35}},
+        )
+
+        self.assertEqual(result["decision_code"], "reject")
+
+    def test_cold_or_weakening_market_sentiment_caps_recommend_to_observe(self):
+        result = evaluate_stock(
+            {
+                "code": "RISK-CAP",
+                "trend_type": "上升趋势",
+                "breakout_structure": True,
+                "pullback_confirmed": True,
+                "market_phase": "主升",
+                "position_distance_pct": 1.0,
+                "position_reference_price": 10.0,
+                "position_reference_type": "daily_support",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "position_absolute_percentile": 12.0,
+                "position_absolute_window": 120,
+                "sector_strength_label": "强",
+                "volume_ratio": 2.0,
+            },
+            market_context={
+                "market_sentiment": {"score": 35, "turning_signal": "turning_weaker"},
+            },
+        )
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["decision"], "观察")
+        self.assertIn("市场情绪偏冷", result["risk_reasons"])
+        self.assertIn("市场情绪转弱", result["risk_reasons"])
+
+    def test_strong_or_neutral_market_sentiment_does_not_cap_recommend(self):
+        result = evaluate_stock(
+            {
+                "code": "NORMAL-CONTEXT",
+                "trend_type": "上升趋势",
+                "breakout_structure": True,
+                "pullback_confirmed": True,
+                "market_phase": "主升",
+                "position_distance_pct": 1.0,
+                "position_reference_price": 10.0,
+                "position_reference_type": "daily_support",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-07-16",
+                "position_absolute_percentile": 12.0,
+                "position_absolute_window": 120,
+            },
+            market_context={"market_sentiment": {"score": 65, "turning_signal": "stable"}},
+        )
+
+        self.assertEqual(result["decision_code"], "recommend")
+
+    def test_signal_distance_without_absolute_position_is_observe(self):
+        result = evaluate_stock({
+            "code": "SAME-DAY-STARTUP",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "position_distance_pct": 0.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "low_position_channel:daily_startup",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+        })
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
 
 
 if __name__ == "__main__":

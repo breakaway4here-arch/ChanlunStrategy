@@ -515,6 +515,32 @@ class MarketHistoryStoreTests(unittest.TestCase):
         self.assertEqual(row["source_batch"], "source-42")
         self.assertEqual(row["ingest_run_id"], "run-42")
 
+    def test_batch_stock_metadata_upsert_is_atomic_and_round_trips_rows(self):
+        first = self.store.upsert_instrument("stock", "SH", "600000")
+        second = self.store.upsert_instrument("stock", "SZ", "000001")
+        self.assertEqual(
+            self.store.upsert_stock_meta_many([
+                (first, "2026-07-17", {"industry": "银行", "listed_days": 5000}),
+                (second, "2026-07-17", {"industry": "银行", "listed_days": 4000}),
+            ]),
+            2,
+        )
+        self.assertEqual(
+            self.store.query_stock_meta(first, "2026-07-17")["listed_days"], 5000
+        )
+        with self.assertRaisesRegex(ValueError, "as_of"):
+            self.store.upsert_stock_meta_many([
+                (first, "2026-07-18", {"industry": "银行"}),
+                (second, "", {"industry": "银行"}),
+            ])
+        self.assertEqual(
+            self.store.connection.execute(
+                "SELECT COUNT(*) FROM stock_meta_asof WHERE instrument_id=? AND as_of=?",
+                (first, "2026-07-18"),
+            ).fetchone()[0],
+            0,
+        )
+
     def test_readonly_and_immutable_open_support_reads_and_reject_writes(self):
         instrument_id = self.store.upsert_instrument("stock", "SH", "600000")
         self.store.upsert_bars("day", instrument_id, [_bar("2026-07-01")])

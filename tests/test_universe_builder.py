@@ -88,6 +88,61 @@ class UniverseBuilderTests(unittest.TestCase):
         self.assertEqual(rows[0]["circulating_market_cap"], 1800.0)
         self.assertEqual(rows[0]["float_market_cap"], 1800.0)
 
+    def test_eligible_candidates_promote_industry_to_sector(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "market.sqlite"
+            with MarketHistoryStore(path) as store:
+                instrument_id = store.upsert_instrument(
+                    "stock", "SZ", "301230", name="泓博医药"
+                )
+                end = date(2026, 7, 16)
+                store.upsert_bars(
+                    "day",
+                    instrument_id,
+                    [
+                        _bar(
+                            (end - timedelta(days=69 - index)).isoformat(),
+                            20 + index * 0.01,
+                        )
+                        for index in range(70)
+                    ],
+                    adjustment="qfq",
+                )
+                store.upsert_stock_meta(
+                    instrument_id,
+                    "2026-07-16",
+                    {
+                        "name": "泓博医药",
+                        "is_st": False,
+                        "delisting_risk": False,
+                        "listed_days": 1000,
+                        "industry": "医疗服务",
+                    },
+                )
+
+            with MarketHistoryStore(path, readonly=True) as store:
+                rows = load_eligible_candidates(
+                    store,
+                    as_of="2026-07-16",
+                    required_date="2026-07-16",
+                    min_listed_days=60,
+                    min_daily_amount=50_000_000,
+                )
+
+        self.assertEqual(rows[0]["industry"], "医疗服务")
+        self.assertEqual(rows[0]["sector"], "医疗服务")
+
+    def test_empty_overlay_does_not_erase_canonical_industry_sector(self):
+        candidate = _candidate(1)
+        candidate.update({"sector": "医疗服务", "industry": "医疗服务"})
+
+        rows = attach_sector_context(
+            [candidate],
+            [{"code": candidate["code"], "sector": "", "sector_tags": []}],
+        )
+
+        self.assertEqual(rows[0]["sector"], "医疗服务")
+
     def test_no_sector_overlay_expands_base_to_final_capacity(self):
         with patch.multiple(
             run_module,
@@ -400,6 +455,10 @@ class UniverseBuilderTests(unittest.TestCase):
                 FULL_A_BASE_LIMIT=4,
                 FULL_A_OVERLAY_LIMIT=2,
                 FULL_A_FINAL_LIMIT=6,
+            ), patch.object(
+                run_module,
+                "hydrate_industry_metadata",
+                return_value={"status": "complete", "industry_complete": True},
             ):
                 selected = run_module._apply_full_a_universe(
                     existing,

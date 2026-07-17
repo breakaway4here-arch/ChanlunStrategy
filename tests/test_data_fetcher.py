@@ -156,6 +156,31 @@ class TestSectorHierarchyDedup(unittest.TestCase):
         )
 
 
+class TestFullAIndustryMetadata(unittest.TestCase):
+    @patch.object(data_fetcher, "_fetch_eastmoney_json")
+    def test_fetch_all_a_stocks_preserves_industry_metadata(self, mock_fetch):
+        mock_fetch.return_value = {
+            "data": {
+                "total": 1,
+                "diff": [{
+                    "f12": "301230",
+                    "f14": "泓博医药",
+                    "f26": "20221101",
+                    "f100": "医疗服务",
+                }],
+            }
+        }
+
+        rows, diagnostics = data_fetcher.fetch_all_a_stocks(
+            return_diagnostics=True
+        )
+
+        self.assertTrue(diagnostics["complete"])
+        self.assertEqual(rows[0]["industry"], "医疗服务")
+        requested_fields = mock_fetch.call_args[0][0]["fields"].split(",")
+        self.assertIn("f100", requested_fields)
+
+
 class _JsonResponse:
     def __init__(self, payload):
         self.payload = payload

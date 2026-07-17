@@ -259,6 +259,8 @@ def load_eligible_candidates(
             "exchange": instrument["exchange"],
             "asset_type": instrument["asset_type"],
             "stock_meta_asof": meta,
+            "industry": str(meta.get("industry") or "").strip(),
+            "sector": str(meta.get("industry") or "").strip(),
             "market_cap": meta.get("market_cap"),
             "circulating_market_cap": meta.get("circulating_market_cap"),
             "float_market_cap": (
@@ -367,7 +369,8 @@ def attach_sector_context(
         row = dict(candidate)
         context = context_by_code.get(str(row.get("code") or ""), {})
         for field in context_fields:
-            if context.get(field) is not None:
+            context_value = context.get(field)
+            if context_value not in (None, "", []):
                 row[field] = context[field]
         row.setdefault("sector", "")
         row.setdefault("sector_tags", [])

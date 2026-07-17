@@ -264,7 +264,7 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             "invt": "2",
             "fid": "f12",
             "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23",
-            "fields": "f12,f14,f26",
+            "fields": "f12,f14,f26,f100",
         }
         try:
             payload = _fetch_eastmoney_json(params)
@@ -294,12 +294,14 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
                 continue
             name = str(raw.get("f14") or "").strip()
             listed_date = str(raw.get("f26") or "").strip()
+            industry = str(raw.get("f100") or "").strip()
             stocks_by_code.setdefault(code, {
                 "code": code,
                 "name": name,
                 "exchange": "SH" if _is_sh(code) else "SZ",
                 "asset_type": "stock",
                 "listed_date": listed_date,
+                "industry": industry,
                 "is_st": "ST" in name.upper(),
                 "delisting_risk": "退" in name,
             })

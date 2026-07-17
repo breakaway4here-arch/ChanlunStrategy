@@ -456,6 +456,46 @@ class MarketHistoryStore:
                 (instrument_id, str(as_of), _json_dumps(metadata), _utc_now()),
             )
 
+    def upsert_stock_meta_many(
+        self,
+        rows: Sequence[Sequence[Any]],
+    ) -> int:
+        """Write a metadata batch in one transaction.
+
+        Rows use ``(instrument_id, as_of, metadata)`` so callers can hydrate a
+        canonical as-of snapshot without opening staging databases.
+        """
+        self._require_writable()
+        prepared = []
+        for row in rows:
+            if len(row) != 3:
+                raise ValueError("metadata rows require instrument_id, as_of, metadata")
+            instrument_id, as_of, metadata = row
+            if not str(as_of or "").strip():
+                raise ValueError("as_of is required")
+            if not isinstance(metadata, Mapping):
+                raise ValueError("metadata must be a mapping")
+            prepared.append((
+                int(instrument_id),
+                str(as_of),
+                _json_dumps(metadata),
+                _utc_now(),
+            ))
+        if not prepared:
+            return 0
+        with self._write_scope():
+            self.connection.executemany(
+                """
+                INSERT INTO stock_meta_asof(instrument_id, as_of, metadata_json, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(instrument_id, as_of) DO UPDATE SET
+                    metadata_json=excluded.metadata_json,
+                    updated_at=excluded.updated_at
+                """,
+                prepared,
+            )
+        return len(prepared)
+
     def query_stock_meta(
         self, instrument_id: int, as_of: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:

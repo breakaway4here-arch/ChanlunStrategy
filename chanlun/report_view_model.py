@@ -9,6 +9,8 @@ builds a compact, view-oriented workspace for the UI layer. The contract is:
 
 from __future__ import annotations
 
+import math
+
 from typing import Any, Dict, Iterable, List, Mapping
 
 from chanlun.scoring_engine import compute_opportunity_score
@@ -98,9 +100,9 @@ VIEW_META = {
         "description": "日线已有启动线索，但等待确认。",
     },
     "growth_quality": {
-        "label": "成长质量 Top10",
-        "short_label": "成长质量",
-        "description": "按成长质量层级筛选的跨池高质量观察榜。",
+        "label": "高弹性观察 Top10",
+        "short_label": "高弹性观察",
+        "description": "仅展示有真实行业归属与完整交易证据的观察标的，非正式推荐；同一行业最多两只。",
     },
     "baseline": {
         "label": "基准",
@@ -187,6 +189,19 @@ def _resolve_ret20(row: Mapping[str, Any]) -> float | None:
     if base == 0:
         return None
     return round((closes[-1] - base) / base * 100.0, 4)
+
+
+def _resolve_industry_key(row: Mapping[str, Any]) -> str:
+    """Return only a source-provided industry/sector label; never infer one."""
+    for field in ("industry", "sector"):
+        value = _safe_str(row.get(field)).strip()
+        if value:
+            return value
+    for value in _get_list(row.get("sector_tags")):
+        label = _safe_str(value).strip()
+        if label:
+            return label
+    return ""
 
 
 def _to_dict(value: Any) -> dict[str, Any]:
@@ -468,14 +483,18 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
 
     ret20 = _resolve_ret20(row)
     ret20_score = 0.0
-    if ret20 is None:
-        ret20_score = 40.0
-    elif 3.0 <= ret20 <= 45.0:
-        ret20_score = 100.0
-    elif 0.0 < ret20 < 3.0:
-        ret20_score = 45.0
-    elif 45.0 < ret20 <= 60.0:
-        ret20_score = 25.0
+    if ret20 is not None:
+        # Prefer a moderate, sustained 20-day rise.  The old flat 3%-45%
+        # reward made a crowded one-month surge indistinguishable from an
+        # orderly trend.
+        ret20_score = round(
+            _clamp(
+                100.0 * math.exp(-0.5 * ((ret20 - 15.0) / 15.0) ** 2),
+                0.0,
+                100.0,
+            ),
+            4,
+        )
 
     growth_board_score = round(
         code_style_score * 0.35 + market_cap_score * 0.45 + ret20_score * 0.20,
@@ -488,7 +507,7 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
 
     sector_rank = _safe_float(row.get("sector_rank"))
     sector_flow = _safe_float(row.get("sector_flow"))
-    change_pct = _safe_float(row.get("change_pct"))
+    industry_key = _resolve_industry_key(row)
 
     sector_rank_score = 0.0
     if sector_rank is not None:
@@ -508,12 +527,11 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     if sector_flow is not None and sector_flow > 0:
         sector_flow_score = round(_clamp((sector_flow / 3_000_000_000.0) * 100.0, 0.0, 100.0), 4)
 
-    sector_momentum_score = 0.0
-    if change_pct is not None and change_pct > 0:
-        sector_momentum_score = round(_clamp(change_pct * 12.0, 0.0, 100.0), 4)
-
     sector_quality_score = round(
-        (sector_rank_score * 0.45 + sector_flow_score * 0.35 + sector_momentum_score * 0.20),
+        # `change_pct` belongs to the stock and must not be presented as
+        # sector quality.  Only independently collected sector evidence is
+        # allowed here.
+        (sector_rank_score * 0.56 + sector_flow_score * 0.44),
         4,
     )
 
@@ -538,10 +556,10 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     pool_quality_tier = _to_tier(liquidity_score)
     quality_evidence_eligible = (
         market_cap_for_score is not None
-        and (
-            (money20 is not None and money20 > 0)
-            or volume20 > 0
-        )
+        and money20 is not None
+        and money20 > 0
+        and ret20 is not None
+        and bool(industry_key)
     )
     pool_quality_components = [
         {
@@ -601,6 +619,7 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         "market_cap_source": market_cap_source,
         "ret20": ret20,
         "ret20_score": ret20_score,
+        "industry_key": industry_key,
         "sector_quality_score": sector_quality_score,
         "pool_quality_tier": pool_quality_tier,
         "pool_quality_components": pool_quality_components,
@@ -1144,7 +1163,7 @@ def _build_highlights(
 def _build_growth_quality(
     views: dict[str, dict[str, Mapping[str, Any]]],
     data_quality: Mapping[str, Any] | None = None,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], dict[str, int]]:
     merged: dict[str, dict[str, Mapping[str, Any]]] = {}
     source_map = {
         "main": views.get("main_all", views["main"]),
@@ -1158,16 +1177,29 @@ def _build_growth_quality(
             if source not in bucket["by_source"]:
                 bucket["by_source"][source] = raw
 
-    rows = [
+    candidates = [
         _build_item(list(bucket["by_source"].keys()), bucket["by_source"], data_quality=data_quality)
         for bucket in merged.values()
     ]
-    rows = [
-        row
-        for row in rows
-        if _decision_code_from_view_item(row) != "reject"
-        and bool(_to_dict(row.get("pool_quality")).get("quality_evidence_eligible"))
-    ]
+    diagnostics = {
+        "excluded_non_observe": 0,
+        "excluded_missing_industry": 0,
+        "excluded_insufficient_evidence": 0,
+        "excluded_industry_cap": 0,
+    }
+    rows: list[dict[str, Any]] = []
+    for row in candidates:
+        pool_quality = _to_dict(row.get("pool_quality"))
+        if _decision_code_from_view_item(row) != "observe":
+            diagnostics["excluded_non_observe"] += 1
+            continue
+        if not _safe_str(pool_quality.get("industry_key")):
+            diagnostics["excluded_missing_industry"] += 1
+            continue
+        if not bool(pool_quality.get("quality_evidence_eligible")):
+            diagnostics["excluded_insufficient_evidence"] += 1
+            continue
+        rows.append(row)
 
     def _growth_quality_sort_key(item: Mapping[str, Any]) -> tuple[float, float, float, str]:
         item_pool_quality = _to_dict(item.get("pool_quality"))
@@ -1179,10 +1211,20 @@ def _build_growth_quality(
         )
 
     rows.sort(key=_growth_quality_sort_key)
-    top_rows = rows[:10]
+    top_rows: list[dict[str, Any]] = []
+    industry_counts: dict[str, int] = {}
+    for row in rows:
+        industry_key = _safe_str(_to_dict(row.get("pool_quality")).get("industry_key"))
+        if industry_counts.get(industry_key, 0) >= 2:
+            diagnostics["excluded_industry_cap"] += 1
+            continue
+        industry_counts[industry_key] = industry_counts.get(industry_key, 0) + 1
+        top_rows.append(row)
+        if len(top_rows) >= 10:
+            break
     for rank, row in enumerate(top_rows, start=1):
         row["view_rank"] = rank
-    return top_rows
+    return top_rows, diagnostics
 
 
 def _build_observation_top5(
@@ -1268,7 +1310,9 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
             views["confirming"].keys(),
         )
     )
-    growth_quality = _build_growth_quality(views, data_quality=data_quality)
+    growth_quality, growth_quality_diagnostics = _build_growth_quality(
+        views, data_quality=data_quality
+    )
     view_items["growth_quality"] = growth_quality
     observation_top5, observation_diagnostics = _build_observation_top5(
         data, data_quality=data_quality
@@ -1328,9 +1372,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
         "growth_quality": {
             "input_count": growth_quality_input_count,
             "eligible_count": counts["growth_quality"],
-            "excluded_insufficient_evidence": max(
-                0, growth_quality_input_count - counts["growth_quality"]
-            ),
+            **growth_quality_diagnostics,
         },
         "observation_top5": observation_diagnostics,
     }
