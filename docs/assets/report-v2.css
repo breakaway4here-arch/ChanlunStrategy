@@ -1366,14 +1366,57 @@ body {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.market-temperature-card {
+  grid-column: span 2;
+}
+
 .sector-flow-card {
   grid-column: span 2;
 }
 
+.market-temperature-card .decision-card-body {
+  display: block;
+}
+
+.market-temp-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 30%) minmax(0, 70%);
+  gap: 16px;
+  align-items: start;
+}
+
+.market-temp-snapshot,
+.market-temp-trend {
+  min-width: 0;
+}
+
+.market-temp-snapshot {
+  display: grid;
+  gap: 8px;
+}
+
+.market-temp-snapshot .metric-pair-grid {
+  grid-template-columns: 1fr;
+  gap: 4px;
+}
+
+.market-temp-snapshot .metric-pair {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 7px;
+}
+
+.market-temp-snapshot .metric-pair strong {
+  margin-top: 0;
+  font-size: 14px;
+  text-align: right;
+}
+
 .market-sentiment-chart {
   width: 100%;
-  height: 260px;
-  margin-top: 12px;
+  height: 300px;
 }
 
 .aux-module {
@@ -1916,6 +1959,10 @@ body {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
+  .market-temperature-card {
+    grid-column: span 3;
+  }
+
   .sector-flow-card {
     grid-column: span 2;
   }
@@ -1967,6 +2014,33 @@ body {
 
   .sector-flow-card {
     grid-column: auto;
+  }
+
+  .market-temperature-card {
+    grid-column: auto;
+  }
+
+  .market-temp-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .market-temp-snapshot .metric-pair-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .market-temp-snapshot .metric-pair {
+    display: block;
+    padding: 8px;
+  }
+
+  .market-temp-snapshot .metric-pair strong {
+    margin-top: 4px;
+    text-align: left;
+  }
+
+  .market-sentiment-chart {
+    height: 240px;
   }
 
   .workspace {

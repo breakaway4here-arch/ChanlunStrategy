@@ -1964,12 +1964,14 @@
     var scoreText = temperature.score === null ? '--' : temperature.score + ' / 100';
     var gaugeStyle = '--gauge-score: ' + escapeHtml(temperature.score === null ? 0 : temperature.score) + ';';
     var body = ''
-      + '<div class="market-temp-gauge is-' + escapeHtml(temperature.tone) + '" style="' + gaugeStyle + '">'
-      + '  <div class="gauge-meter" aria-hidden="true"></div>'
-      + '  <div class="gauge-value">' + escapeHtml(scoreText) + '</div>'
-      + '  <div class="gauge-summary">' + escapeHtml(temperature.summary) + '</div>'
-      + '</div>'
-      + '<div class="metric-pair-grid">'
+      + '<div class="market-temp-layout">'
+      + '  <div class="market-temp-snapshot">'
+      + '    <div class="market-temp-gauge is-' + escapeHtml(temperature.tone) + '" style="' + gaugeStyle + '">'
+      + '      <div class="gauge-meter" aria-hidden="true"></div>'
+      + '      <div class="gauge-value">' + escapeHtml(scoreText) + '</div>'
+      + '      <div class="gauge-summary">' + escapeHtml(temperature.summary) + '</div>'
+      + '    </div>'
+      + '    <div class="metric-pair-grid">'
       + renderMetricPair('市场情绪', scoreText, 'is-' + escapeHtml(temperature.tone))
       + renderMetricPair('广度得分', (components.breadth_score === null || components.breadth_score === undefined) ? '--' : components.breadth_score, '')
       + renderMetricPair('指数得分', (components.index_score === null || components.index_score === undefined) ? '--' : components.index_score, '')
@@ -1977,8 +1979,12 @@
       + renderMetricPair('量能得分', (components.volume_score === null || components.volume_score === undefined) ? '--' : components.volume_score, '')
       + renderMetricPair('趋势结构', (components.trend_score === null || components.trend_score === undefined) ? '--' : components.trend_score, '')
       + renderMetricPair('证据覆盖', Math.round((temperature.coverage || 0) * 100) + '%', '')
-      + '</div>'
-      + '<div id="marketSentimentChart" class="market-sentiment-chart" aria-label="最近20个交易日市场情绪折线图"></div>';
+      + '    </div>'
+      + '  </div>'
+      + '  <div class="market-temp-trend">'
+      + '    <div id="marketSentimentChart" class="market-sentiment-chart" aria-label="最近20个交易日市场情绪折线图"></div>'
+      + '  </div>'
+      + '</div>';
     return renderDecisionCard({
       title: '市场情绪',
       subtitle: '全A宽度、涨跌停生态、成交与趋势结构',
