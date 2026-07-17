@@ -82,6 +82,78 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 class TestReportGenerator(unittest.TestCase):
 
+    def test_generate_report_refreshes_offline_comparison_index(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generate_report({
+                "date": "2026-07-17",
+                "market": {"沪深300": {"close": 4529.1}},
+                "data_quality": {"is_trading_day": True, "is_official": True},
+            }, output_dir=tmpdir)
+
+            with open(os.path.join(tmpdir, "data", "comparison-index.json"), encoding="utf-8") as handle:
+                index = json.load(handle)
+            self.assertEqual(index["version"], 1)
+            self.assertEqual(index["latest_date"], "2026-07-17")
+
+            comparison_path = os.path.join(tmpdir, "compare", "index.html")
+            self.assertTrue(os.path.exists(comparison_path))
+            with open(comparison_path, encoding="utf-8") as handle:
+                comparison_html = handle.read()
+            self.assertIn('id="comparisonApp"', comparison_html)
+            self.assertIn("pageMode: 'comparison'", comparison_html)
+            self.assertIn(
+                'top10ApiBase: "https://top10-worker.breakaway4here.workers.dev"',
+                comparison_html,
+            )
+            self.assertRegex(
+                comparison_html,
+                r"\.\./assets/report-v2\.css\?v=[0-9a-f]{12}",
+            )
+            self.assertRegex(
+                comparison_html,
+                r"\.\./assets/report-v2\.js\?v=[0-9a-f]{12}",
+            )
+            self.assertNotIn("__CHANLUN_TOP10_API_BASE__", comparison_html)
+
+    def test_custom_output_does_not_open_shared_comparison_database_by_default(self):
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch(
+            "chanlun.report_comparison.sqlite3.connect"
+        ) as connect:
+            generate_report({
+                "date": "2026-07-17",
+                "market": {"沪深300": {"close": 4529.1}},
+                "picks_fusion": [{
+                    "code": "600001",
+                    "name": "示例股",
+                    "decision_engine_v1": {"decision": "推荐", "decision_code": "recommend"},
+                }],
+                "data_quality": {"is_trading_day": True, "is_official": True},
+            }, output_dir=tmpdir)
+
+            connect.assert_not_called()
+            with open(os.path.join(tmpdir, "data", "comparison-index.json"), encoding="utf-8") as handle:
+                index = json.load(handle)
+            self.assertIsNone(index["reports"]["2026-07-17"]["prices"]["600001"])
+
+    def test_absolute_default_docs_output_uses_shared_comparison_database(self):
+        with tempfile.TemporaryDirectory() as tmpdir, mock.patch(
+            "chanlun.report_generator.OUTPUT_DIR", tmpdir
+        ), mock.patch(
+            "chanlun.report_generator.write_comparison_index"
+        ) as write_index:
+            generate_report({
+                "date": "2026-07-17",
+                "data_quality": {"is_trading_day": True, "is_official": True},
+            }, output_dir=os.path.abspath(tmpdir))
+
+            write_index.assert_called_once_with(
+                os.path.join(os.path.realpath(os.path.abspath(tmpdir)), "data"),
+                mock.ANY,
+            )
+            positional, _ = write_index.call_args
+            self.assertTrue(positional[1].endswith("market_history.sqlite"))
+
+
     def test_serialize_picks_carries_decision_engine_payload(self):
         pick = make_pick()
         pick["decision_engine_v1"] = {
@@ -1390,14 +1462,20 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("+ buildDecisionEngineSection(item, raw)", self.asset_js)
 
     def test_candidate_list_uses_view_rank_without_raw_score_fallback_sort(self):
-        self.assertEqual(self.asset_js.count("sort(function"), 1)
         self.assertIn("validChanges.slice().sort(function (a, b) {", self.asset_js)
         self.assertIn("return b.change_pct - a.change_pct;", self.asset_js)
-        self.assertNotIn("return b.raw_score", self.asset_js)
-        self.assertNotIn("return b.boom_score", self.asset_js)
-        self.assertNotIn("return b.watch_score", self.asset_js)
-        self.assertNotIn("return b.opportunity_score", self.asset_js)
-        self.assertIn("var rankValue = safeNumber(item.view_rank, i + 1);", self.asset_js)
+        match = re.search(
+            r"function renderCandidateList\(\) \{([\s\S]*?)\n  function buildConclusionSection",
+            self.asset_js,
+        )
+        self.assertIsNotNone(match)
+        candidate_list = match.group(1)
+        self.assertNotIn(".sort(", candidate_list)
+        self.assertNotIn("raw_score", candidate_list)
+        self.assertNotIn("boom_score", candidate_list)
+        self.assertNotIn("watch_score", candidate_list)
+        self.assertNotIn("opportunity_score", candidate_list)
+        self.assertIn("var rankValue = safeNumber(item.view_rank, i + 1);", candidate_list)
 
     def test_candidate_price_section_uses_raw_best_buy_point_and_closes_fallback(self):
         self.assertIn("function getCandidateCurrentPriceFromRecord", self.asset_js)

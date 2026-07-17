@@ -2498,6 +2498,7 @@
       renderCandidateDetail(first);
       state.activeItem = first;
       renderAuxiliaryCenter();
+      initComparisonSummary();
       renderTop10Control();
       if (state.isMobile && first) {
         nodes.detailPanel.innerHTML = '<div class="detail-empty">选择后查看详情</div>';
@@ -2545,8 +2546,314 @@
   window.renderMarketSentimentChart = renderMarketSentimentChart;
   window.resolveGranted = resolveGranted;
 
+  function comparisonNumber(value) {
+    var number = safeNumber(value, null);
+    return number === null || number === 0 ? null : number;
+  }
+
+  function comparisonReturn(sourcePrice, targetPrice) {
+    var source = comparisonNumber(sourcePrice);
+    var target = comparisonNumber(targetPrice);
+    return source === null || target === null ? null : ((target - source) / source) * 100;
+  }
+
+  function comparisonMedian(values) {
+    var sorted = values.filter(function (value) { return value !== null; }).slice().sort(function (a, b) { return a - b; });
+    if (!sorted.length) return null;
+    var middle = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  function comparisonMean(values) {
+    var valid = values.filter(function (value) { return value !== null; });
+    if (!valid.length) return null;
+    return valid.reduce(function (total, value) { return total + value; }, 0) / valid.length;
+  }
+
+  function isArchiveReportPath(pathname) {
+    var path = normalizeString(pathname).replace(/\/+$/, '');
+    return /\/\d{4}-\d{2}-\d{2}(?:\/index\.html)?$/.test(path);
+  }
+
+  function getComparisonIndexUrl() {
+    if (isComparisonPage()) return '../data/comparison-index.json';
+    return isArchiveReportPath(window.location && window.location.pathname)
+      ? '../data/comparison-index.json'
+      : 'data/comparison-index.json';
+  }
+
+  function comparisonViewLabel(view) {
+    if (view === 'all') return '全部榜单（去重）';
+    return DEFAULT_VIEW_LABELS[view] || normalizeString(view);
+  }
+
+  function dedupeComparisonRows(rows) {
+    var seen = {};
+    return rows.filter(function (row) {
+      var code = normalizeString(row && row.item && row.item.code);
+      if (!code || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    });
+  }
+
+  function comparisonSummary(view, rows) {
+    var values = rows.map(function (row) { return row.actual; }).filter(function (value) { return value !== null; });
+    var wins = values.filter(function (value) { return value > 0; }).length;
+    return {
+      view: view, rows: rows, average: comparisonMean(values), median: comparisonMedian(values),
+      winRate: values.length ? wins / values.length * 100 : null,
+      maximum: values.length ? Math.max.apply(Math, values) : null,
+      minimum: values.length ? Math.min.apply(Math, values) : null,
+      evaluable: values.length, missing: rows.length - values.length,
+    };
+  }
+
+  function comparisonScale(value, minimum, maximum) {
+    if (value === null || maximum === minimum) return 50;
+    return (value - minimum) / (maximum - minimum) * 100;
+  }
+
+  function comparisonBenchmarkPosition(value, minimum, maximum) {
+    return comparisonScale(value, minimum, maximum);
+  }
+
+  function renderComparisonPage(index, root) {
+    var dates = asArray(index && index.dates).slice(-26);
+    var latestDate = normalizeString(index && index.latest_date) || dates[dates.length - 1] || '';
+    var sourceDate = dates.length > 1 ? dates[dates.length - 2] : latestDate;
+    var targetDate = 'current';
+    root.innerHTML = ''
+      + '<header class="comparison-header"><div><p class="comparison-eyebrow">报告复盘</p><h1>榜单表现比对</h1><p>实际涨跌为主指标；沪深300与超额收益用于辅助判断。</p></div><a class="comparison-back" href="../index.html">返回最新日报</a></header>'
+      + '<section class="comparison-controls" aria-label="比对条件">'
+      + '<label>源报告日<select id="comparisonSource">' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '"' + (date === sourceDate ? ' selected' : '') + '>' + escapeHtml(date) + '</option>'; }).join('') + '</select></label>'
+      + '<label>对比日<select id="comparisonTarget"><option value="current">当前</option>' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '">' + escapeHtml(date) + '</option>'; }).join('') + '</select></label>'
+      + '<button id="comparisonRefresh" type="button">刷新对比价</button><span id="comparisonQuoteStatus" class="comparison-status">尚未刷新当前行情</span>'
+      + '</section><div id="comparisonContent"></div>';
+
+    var quoteData = null;
+    var quoteSourceDate = '';
+    function clearComparisonQuotes() {
+      quoteData = null;
+      quoteSourceDate = '';
+    }
+    function syncComparisonControls() {
+      var targetDate = root.querySelector('#comparisonTarget').value;
+      var button = root.querySelector('#comparisonRefresh');
+      var status = root.querySelector('#comparisonQuoteStatus');
+      button.textContent = targetDate === 'current' ? '刷新对比价' : '开始比对';
+      status.textContent = targetDate === 'current' ? '尚未刷新当前行情' : '使用历史报告收盘价';
+    }
+    function render() {
+      var source = root.querySelector('#comparisonSource').value;
+      var target = root.querySelector('#comparisonTarget').value;
+      var sourceDate = source;
+      var targetDate = target;
+      if (targetDate !== 'current' && sourceDate > targetDate) {
+        root.querySelector('#comparisonContent').innerHTML = '<div class="comparison-empty">对比日不能早于源报告日。</div>';
+        return;
+      }
+      if (targetDate === 'current' && (!quoteData || quoteSourceDate !== sourceDate)) {
+        root.querySelector('#comparisonContent').innerHTML = '<div class="comparison-empty">尚未刷新当前行情。点击“刷新对比价”后计算实际涨跌。</div>';
+        return;
+      }
+      renderComparisonResult(index, source, target, quoteData, root.querySelector('#comparisonContent'));
+    }
+    function handleConditionChange() {
+      clearComparisonQuotes();
+      syncComparisonControls();
+      root.querySelector('#comparisonContent').innerHTML = '<div class="comparison-empty">请选择条件后点击“' + (root.querySelector('#comparisonTarget').value === 'current' ? '刷新对比价' : '开始比对') + '”。</div>';
+    }
+    root.querySelector('#comparisonSource').addEventListener('change', handleConditionChange);
+    root.querySelector('#comparisonTarget').addEventListener('change', handleConditionChange);
+    root.querySelector('#comparisonRefresh').addEventListener('click', requestCurrentQuotes);
+    function requestCurrentQuotes() {
+      var source = root.querySelector('#comparisonSource').value;
+      var targetDate = root.querySelector('#comparisonTarget').value;
+      if (targetDate !== 'current') { clearComparisonQuotes(); render(); return; }
+      var sourceReport = (index.reports || {})[source] || {};
+      var codeMap = {};
+      Object.keys(sourceReport.views || {}).forEach(function (view) {
+        asArray(sourceReport.views[view]).forEach(function (item) { if (item && item.code) codeMap[item.code] = true; });
+      });
+      var codes = Object.keys(codeMap);
+      var status = root.querySelector('#comparisonQuoteStatus');
+      var apiBase = getTop10ApiBase();
+      if (!apiBase || !window.fetch) { status.textContent = '当前行情接口未配置'; return; }
+      status.textContent = '正在刷新当前行情…';
+      window.fetch(apiBase + '/api/quotes/current', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: codes }),
+      }).then(function (resp) {
+        if (!resp || !resp.ok) throw new Error('行情请求失败');
+        return resp.json();
+      }).then(function (payload) {
+        quoteData = payload || {};
+        quoteSourceDate = source;
+        status.textContent = '当前行情已刷新：' + formatTop10Date(quoteData.quoted_at || '');
+        render();
+      }).catch(function () { status.textContent = '当前行情刷新失败'; });
+    }
+    syncComparisonControls();
+    render();
+  }
+
+  function renderComparisonResult(index, sourceDate, targetDate, quoteData, mount) {
+    var reports = index.reports || {};
+    var source = reports[sourceDate] || {};
+    var target = targetDate === 'current' ? {} : (reports[targetDate] || {});
+    var quoteMap = {};
+    asArray(quoteData && (quoteData.quotes || quoteData.items || [])).forEach(function (quote) { if (quote && quote.code) quoteMap[quote.code] = quote.current_price; });
+    var useCurrent = targetDate === 'current' && !!quoteData;
+    var benchmarkSource = comparisonNumber(source.benchmark && source.benchmark.close);
+    var benchmarkTarget = useCurrent ? comparisonNumber(quoteData.benchmark && quoteData.benchmark.current_price) : comparisonNumber(target.benchmark && target.benchmark.close);
+    var benchmarkReturn = comparisonReturn(benchmarkSource, benchmarkTarget);
+    var views = source.views || {};
+    var summaries = Object.keys(views).map(function (view) {
+      var rows = asArray(views[view]).map(function (item) {
+        var sourcePrice = source.prices && source.prices[item.code];
+        var targetPrice = useCurrent ? quoteMap[item.code] : target.prices && target.prices[item.code];
+        var actual = comparisonReturn(sourcePrice, targetPrice);
+        return { item: item || {}, sourcePrice: sourcePrice, targetPrice: targetPrice, actual: actual, excess: actual === null || benchmarkReturn === null ? null : actual - benchmarkReturn };
+      });
+      return comparisonSummary(view, rows);
+    });
+    var allRows = dedupeComparisonRows([].concat.apply([], summaries.map(function (summary) { return summary.rows; })));
+    summaries.unshift(comparisonSummary('all', allRows));
+    var chartSummaries = summaries.filter(function (summary) { return summary.view !== 'all'; });
+    var scaleValues = chartSummaries.map(function (summary) { return summary.average; }).filter(function (value) { return value !== null; });
+    if (benchmarkReturn !== null) scaleValues.push(benchmarkReturn);
+    scaleValues.push(0);
+    var scaleMin = Math.min.apply(Math, scaleValues);
+    var scaleMax = Math.max.apply(Math, scaleValues);
+    if (scaleMin === scaleMax) { scaleMin -= 1; scaleMax += 1; }
+    var zeroPosition = comparisonScale(0, scaleMin, scaleMax);
+    var benchmarkText = benchmarkReturn === null ? '指数数据缺失' : '沪深300：' + formatPct(benchmarkReturn, true);
+    mount.innerHTML = '<section class="comparison-workspace"><aside class="comparison-master"><h2>榜单实际表现</h2><p class="comparison-benchmark">' + benchmarkText + '</p>'
+      + '<div class="comparison-chart"><i class="comparison-chart-zero" style="left:' + zeroPosition + '%"></i>'
+      + '<i class="comparison-chart-benchmark' + (benchmarkReturn === null ? ' is-missing' : '') + '" style="left:' + comparisonBenchmarkPosition(benchmarkReturn, scaleMin, scaleMax) + '%"></i>'
+      + chartSummaries.map(function (summary) {
+        var position = comparisonScale(summary.average, scaleMin, scaleMax);
+        var left = Math.min(zeroPosition, position);
+        var width = Math.abs(position - zeroPosition);
+        var tone = summary.average !== null && summary.average >= 0 ? 'is-up' : 'is-down';
+        return '<div class="comparison-chart-row"><span>' + escapeHtml(comparisonViewLabel(summary.view)) + '</span><div><b class="' + tone + '" style="left:' + left + '%;width:' + width + '%"></b></div><strong>' + formatPct(summary.average, true) + '</strong></div>';
+      }).join('') + '</div>'
+      + summaries.map(function (summary) {
+        var tone = summary.average !== null && summary.average >= 0 ? 'is-up' : 'is-down';
+        return '<button class="comparison-view-card" data-comparison-view="' + escapeHtml(summary.view) + '"><span>' + escapeHtml(comparisonViewLabel(summary.view)) + '</span><strong class="' + tone + '">' + formatPct(summary.average, true) + '</strong><small>中位数 ' + formatPct(summary.median, true) + ' · 上涨率 ' + formatPct(summary.winRate) + ' · 有效 ' + summary.evaluable + ' / 缺失 ' + summary.missing + '</small></button>';
+      }).join('') + '</aside><section class="comparison-detail"><div id="comparisonDetail"></div></section></section>';
+    var buttons = mount.querySelectorAll('[data-comparison-view]');
+    function showDetail(view) {
+      var summary = summaries.filter(function (entry) { return entry.view === view; })[0] || summaries[0];
+      if (!summary) { mount.querySelector('#comparisonDetail').innerHTML = '<div class="comparison-empty">源报告日没有可比对的榜单。</div>'; return; }
+      Array.prototype.forEach.call(buttons, function (button) { button.classList.toggle('is-active', button.getAttribute('data-comparison-view') === summary.view); });
+      var missing = summary.rows.filter(function (row) { return row.actual === null; });
+      var rows = summary.rows.filter(function (row) { return row.actual !== null; });
+      mount.querySelector('#comparisonDetail').innerHTML = '<header class="comparison-detail-head"><h2>' + escapeHtml(comparisonViewLabel(summary.view)) + '</h2><div><span>实际平均涨跌 <strong>' + formatPct(summary.average, true) + '</strong></span><span>中位数 <strong>' + formatPct(summary.median, true) + '</strong></span><span>上涨率 <strong>' + formatPct(summary.winRate) + '</strong></span><span>最大涨幅 <strong>' + formatPct(summary.maximum, true) + '</strong></span><span>最大跌幅 <strong>' + formatPct(summary.minimum, true) + '</strong></span><span>有效 / 缺失 <strong>' + summary.evaluable + ' / ' + summary.missing + '</strong></span><span>超额收益 <strong>' + formatPct(summary.average === null || benchmarkReturn === null ? null : summary.average - benchmarkReturn, true) + '</strong></span></div></header>'
+        + renderComparisonTable(rows, benchmarkReturn, false) + (missing.length ? '<h3>缺失数据</h3>' + renderComparisonTable(missing, benchmarkReturn, true) : '');
+    }
+    Array.prototype.forEach.call(buttons, function (button) { button.addEventListener('click', function () { showDetail(button.getAttribute('data-comparison-view')); }); });
+    showDetail(summaries[0] && summaries[0].view);
+  }
+
+  function renderComparisonTable(rows, benchmarkReturn, missing) {
+    return '<div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>股票</th><th>行业</th><th>当时排名/决策</th><th>源收盘</th><th>对比价</th><th>实际涨跌</th><th>沪深300</th><th>超额收益</th></tr></thead><tbody>' + rows.map(function (row) {
+      var item = row.item || {};
+      return '<tr><td data-label="股票">' + escapeHtml(item.name || item.code || '--') + '<small>' + escapeHtml(item.code || '') + '</small></td><td data-label="行业">' + escapeHtml(item.industry || '--') + '</td><td data-label="当时排名/决策">' + escapeHtml((item.rank || '--') + ' / ' + (item.decision || item.decision_code || '--')) + '</td><td data-label="源收盘">' + formatNumber(row.sourcePrice) + '</td><td data-label="对比价">' + formatNumber(row.targetPrice) + '</td><td data-label="实际涨跌" class="' + (row.actual !== null && row.actual >= 0 ? 'is-up' : 'is-down') + '">' + formatPct(row.actual, true) + '</td><td data-label="沪深300">' + formatPct(benchmarkReturn, true) + '</td><td data-label="超额收益">' + formatPct(row.excess, true) + '</td></tr>';
+    }).join('') + (rows.length ? '' : '<tr><td colspan="8">' + (missing ? '缺少源收盘或对比价' : '暂无可比对数据') + '</td></tr>') + '</tbody></table></div>';
+  }
+
+  function initComparisonSummary() {
+    if (!nodes.shell || !window.fetch || document.getElementById('comparisonSummary')) return;
+    var auxCenter = nodes.shell.querySelector('.aux-center');
+    var section = document.createElement('section');
+    section.id = 'comparisonSummary';
+    section.className = 'report-comparison-summary';
+    section.innerHTML = '<header><div><h2>昨日榜单表现</h2><p>实际涨跌为主，沪深300与超额收益为辅助。</p></div><a href="' + (isArchiveReportPath(window.location.pathname) ? '../compare/' : 'compare/') + '">进入完整比对</a></header><div class="comparison-summary-body">正在读取历史报告索引…</div>';
+    nodes.shell.insertBefore(section, auxCenter || null);
+    var body = section.querySelector('.comparison-summary-body');
+    window.fetch(getComparisonIndexUrl()).then(function (resp) {
+      if (!resp || !resp.ok) throw new Error('索引加载失败');
+      return resp.json();
+    }).then(function (index) {
+      var dates = asArray(index && index.dates).slice(-26);
+      var pageDate = normalizeString(state.data && state.data.date);
+      var pageIndex = dates.indexOf(pageDate);
+      var sourceDate = pageIndex > 0 ? dates[pageIndex - 1] : (dates.length > 1 ? dates[dates.length - 2] : dates[dates.length - 1]);
+      var report = index.reports && index.reports[sourceDate];
+      if (!report) throw new Error('缺少昨日报告');
+      body.innerHTML = '<div class="comparison-summary-toolbar"><span>源报告日 ' + escapeHtml(sourceDate) + '</span><button id="comparisonSummaryRefresh" type="button">刷新对比价</button><small>尚未刷新当前行情</small></div><div class="comparison-summary-results"><div class="comparison-summary-wait">点击“刷新对比价”后计算。</div></div>';
+      var button = body.querySelector('#comparisonSummaryRefresh');
+      var status = body.querySelector('small');
+      var results = body.querySelector('.comparison-summary-results');
+      button.addEventListener('click', function () {
+        var codeMap = {};
+        Object.keys(report.views || {}).forEach(function (view) {
+          asArray(report.views[view]).forEach(function (item) { if (item && item.code) codeMap[item.code] = true; });
+        });
+        var codes = Object.keys(codeMap);
+        var apiBase = getTop10ApiBase();
+        if (!apiBase) { status.textContent = '当前行情接口未配置'; return; }
+        button.disabled = true;
+        status.textContent = '正在刷新当前行情…';
+        window.fetch(apiBase + '/api/quotes/current', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: codes }),
+        }).then(function (resp) {
+          if (!resp || !resp.ok) throw new Error('行情请求失败');
+          return resp.json();
+        }).then(function (payload) {
+          renderComparisonSummaryResults(report, payload || {}, results);
+          status.textContent = '已刷新：' + formatTop10Date(payload && payload.quoted_at || '');
+        }).catch(function () { status.textContent = '当前行情刷新失败'; }).finally(function () { button.disabled = false; });
+      });
+    }).catch(function () { body.innerHTML = '<div class="comparison-summary-wait">暂无可用的历史榜单索引。</div>'; });
+  }
+
+  function renderComparisonSummaryResults(report, quoteData, mount) {
+    var quoteMap = {};
+    asArray(quoteData.quotes || quoteData.items || []).forEach(function (quote) { if (quote && quote.code) quoteMap[quote.code] = quote.current_price; });
+    var benchmarkReturn = comparisonReturn(report.benchmark && report.benchmark.close, quoteData.benchmark && quoteData.benchmark.current_price);
+    var summaries = Object.keys(report.views || {}).map(function (view) {
+      var rows = asArray(report.views[view]).map(function (item) {
+        var actual = comparisonReturn(report.prices && report.prices[item.code], quoteMap[item.code]);
+        return { item: item, actual: actual };
+      });
+      return comparisonSummary(view, rows);
+    });
+    var allRows = dedupeComparisonRows([].concat.apply([], summaries.map(function (summary) { return summary.rows; })));
+    summaries.unshift(comparisonSummary('all', allRows));
+    mount.innerHTML = '<div class="comparison-summary-benchmark">' + (benchmarkReturn === null ? '指数数据缺失' : '沪深300 ' + formatPct(benchmarkReturn, true)) + '</div><div class="comparison-summary-grid">' + summaries.map(function (summary) {
+      var excess = summary.average === null || benchmarkReturn === null ? null : summary.average - benchmarkReturn;
+      return '<article><span>' + escapeHtml(comparisonViewLabel(summary.view)) + '</span><strong class="' + (summary.average !== null && summary.average >= 0 ? 'is-up' : 'is-down') + '">' + formatPct(summary.average, true) + '</strong><small>超额 ' + formatPct(excess, true) + ' · 有效 ' + summary.evaluable + ' / 缺失 ' + summary.missing + '</small></article>';
+    }).join('') + '</div>';
+  }
+
+  function initComparisonPage() {
+    var root = document.getElementById('comparisonApp');
+    if (!root) return;
+    if (!window.fetch) { root.innerHTML = '<div class="comparison-empty">当前环境不支持加载历史索引。</div>'; return; }
+    window.fetch(getComparisonIndexUrl()).then(function (resp) {
+      if (!resp || !resp.ok) throw new Error('索引加载失败');
+      return resp.json();
+    }).then(function (index) { renderComparisonPage(index || {}, root); }).catch(function () {
+      root.innerHTML = '<div class="comparison-empty">暂无可用的历史报告索引。</div>';
+    });
+  }
+
+  function isComparisonPage() {
+    var bootstrap = getBootstrap();
+    var path = normalizeString(window.location && window.location.pathname);
+    return bootstrap.pageMode === 'comparison' || /\/compare\/?$/.test(path) || !!document.getElementById('comparisonApp');
+  }
+
+  window.initComparisonSummary = initComparisonSummary;
+
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initReportV2);
+    document.addEventListener('DOMContentLoaded', function () {
+      if (isComparisonPage()) initComparisonPage(); else initReportV2();
+    });
+  } else if (isComparisonPage()) {
+    initComparisonPage();
   } else {
     initReportV2();
   }

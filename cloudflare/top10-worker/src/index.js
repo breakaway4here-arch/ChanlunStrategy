@@ -1,5 +1,10 @@
 const DEFAULT_LOCK_TTL_SECONDS = 600;
 const DEFAULT_JOB_TIMEOUT_SECONDS = 600;
+const MAX_QUOTE_CODES = 200;
+const QUOTE_BATCH_SIZE = 100;
+const EASTMONEY_QUOTE_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get";
+const TENCENT_QUOTE_URL = "https://qt.gtimg.cn/q=";
+const ASHARE_CODE_PATTERN = /^(?:6\d{5}|(?:000|001|002|003|300|301)\d{3}|[48]\d{5}|92\d{4})$/;
 
 function parseAllowedOrigins(rawOrigins) {
   if (!rawOrigins) {
@@ -84,6 +89,167 @@ function parseJson(raw, fallback = null) {
   } catch {
     return fallback;
   }
+}
+
+function normalizeQuoteCodes(codes) {
+  if (!Array.isArray(codes) || codes.length === 0) {
+    return { error: "codes must be a non-empty array" };
+  }
+
+  const normalized = [];
+  const invalidCodes = [];
+  for (const value of codes) {
+    const code = typeof value === "string" ? value.trim() : "";
+    if (!ASHARE_CODE_PATTERN.test(code)) {
+      invalidCodes.push(value);
+    } else if (!normalized.includes(code)) {
+      normalized.push(code);
+    }
+  }
+
+  if (invalidCodes.length > 0) {
+    return { error: "invalid stock codes", invalid_codes: invalidCodes };
+  }
+  if (normalized.length > MAX_QUOTE_CODES) {
+    return { error: `too many codes (maximum ${MAX_QUOTE_CODES})` };
+  }
+  return { codes: normalized };
+}
+
+function quoteSecId(code) {
+  return `${code.startsWith("6") ? "1" : "0"}.${code}`;
+}
+
+function quoteUrl(codes, fixedSecIds = null) {
+  const params = new URLSearchParams({
+    fltt: "2",
+    fields: "f12,f2",
+    secids: (fixedSecIds || codes.map(quoteSecId)).join(","),
+  });
+  return `${EASTMONEY_QUOTE_URL}?${params}`;
+}
+
+function parseQuotePrice(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const text = value.trim();
+  if (!text || text === "-") {
+    return null;
+  }
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function fetchQuoteBatch(codes, fixedSecIds = null) {
+  try {
+    const response = await fetch(quoteUrl(codes, fixedSecIds));
+    if (!response.ok) {
+      throw new Error(`upstream status ${response.status}`);
+    }
+    const payload = await response.json();
+    const rows = Array.isArray(payload?.data?.diff) ? payload.data.diff : [];
+    const prices = new Map();
+    for (const row of rows) {
+      const code = typeof row?.f12 === "string" ? row.f12 : String(row?.f12 || "");
+      const price = parseQuotePrice(row?.f2);
+      if (/^\d{6}$/.test(code) && price !== null) {
+        prices.set(code, price);
+      }
+    }
+    return { prices };
+  } catch {
+    return { error: true };
+  }
+}
+
+function tencentQuoteSymbol(code) {
+  if (code.startsWith("6")) return `sh${code}`;
+  if (/^(?:[48]|92)/.test(code)) return `bj${code}`;
+  return `sz${code}`;
+}
+
+function parseTencentQuotes(raw) {
+  const prices = new Map();
+  for (const match of String(raw || "").matchAll(/v_(?:sh|sz|bj)(\d{6})="([^"]*)"/g)) {
+    const price = parseQuotePrice(match[2].split("~")[3]);
+    if (price !== null) prices.set(match[1], price);
+  }
+  return prices;
+}
+
+async function fetchTencentQuoteBatch(codes, fixedSymbols = null) {
+  try {
+    const symbols = fixedSymbols || codes.map(tencentQuoteSymbol);
+    const response = await fetch(`${TENCENT_QUOTE_URL}${symbols.join(",")}`, {
+      headers: { Referer: "https://gu.qq.com/" },
+    });
+    if (!response.ok) throw new Error(`upstream status ${response.status}`);
+    return { prices: parseTencentQuotes(await response.text()) };
+  } catch {
+    return { error: true };
+  }
+}
+
+async function fetchQuoteBatchWithFallback(codes, fixedSecIds = null, fixedTencentSymbols = null) {
+  const primary = await fetchQuoteBatch(codes, fixedSecIds);
+  if (!primary.error) return primary;
+  return fetchTencentQuoteBatch(codes, fixedTencentSymbols);
+}
+
+function batches(items, size) {
+  const result = [];
+  for (let index = 0; index < items.length; index += size) {
+    result.push(items.slice(index, index + size));
+  }
+  return result;
+}
+
+async function handleCurrentQuotes(request, env, requestOrigin) {
+  const body = await parseJsonBody(request);
+  const normalized = normalizeQuoteCodes(body?.codes);
+  if (normalized.error) {
+    return jsonResponse(400, normalized, requestOrigin, env);
+  }
+
+  const stockBatches = batches(normalized.codes, QUOTE_BATCH_SIZE);
+  const stockResults = await Promise.all(stockBatches.map((batch) => fetchQuoteBatchWithFallback(batch)));
+  const benchmarkResult = await fetchQuoteBatchWithFallback(["000300"], ["1.000300"], ["sh000300"]);
+  const batchResultByCode = new Map();
+  stockBatches.forEach((batch, index) => {
+    batch.forEach((code) => batchResultByCode.set(code, stockResults[index]));
+  });
+  const allStockBatchesFailed = stockResults.every((result) => result.error);
+  const benchmarkFailed = Boolean(benchmarkResult.error);
+
+  if (allStockBatchesFailed && benchmarkFailed) {
+    return jsonResponse(502, { error: "quote upstream unavailable" }, requestOrigin, env);
+  }
+
+  const items = normalized.codes.map((code) => {
+    const batchResult = batchResultByCode.get(code);
+    const price = batchResult?.prices?.get(code);
+    if (price !== undefined) {
+      return { code, current_price: price, status: "ok" };
+    }
+    return { code, current_price: null, status: batchResult?.error ? "upstream_error" : "not_found" };
+  });
+  const benchmarkPrice = benchmarkResult.prices?.get("000300");
+  const benchmark = benchmarkPrice !== undefined
+    ? { code: "000300", current_price: benchmarkPrice, status: "ok" }
+    : { code: "000300", current_price: null, status: benchmarkFailed ? "upstream_error" : "not_found" };
+  const hasFailures = items.some((item) => item.status !== "ok") || benchmark.status !== "ok";
+
+  return jsonResponse(200, {
+    status: hasFailures ? "partial" : "ok",
+    quotes: items,
+    items,
+    benchmark,
+    quoted_at: new Date().toISOString(),
+  }, requestOrigin, env);
 }
 
 function sanitizeToken(value) {
@@ -391,6 +557,9 @@ export async function handleRequest(request, env, ctx) {
   }
   if (url.pathname === "/api/top10/callback" && request.method === "POST") {
     return handleCallback(request, env, requestOrigin);
+  }
+  if (url.pathname === "/api/quotes/current" && request.method === "POST") {
+    return handleCurrentQuotes(request, env, requestOrigin);
   }
 
   return jsonResponse(404, { error: "not found" }, requestOrigin, env);

@@ -15,6 +15,10 @@ from run import fetch_market_indices  # noqa: E402
 from typing import Any, Optional
 
 TZ_CN = timezone(timedelta(hours=8))
+COMPARISON_VIEWS = {
+    "main", "highlights", "observation_top5", "acceleration",
+    "luojie", "confirming", "growth_quality", "baseline",
+}
 
 
 def _safe_float(value: Any, default: Optional[float] = None) -> Optional[float]:
@@ -111,6 +115,63 @@ def validate_manifest_contract(manifest: Mapping[str, Any]) -> list[str]:
         if not isinstance(meta, Mapping):
             errors.append(f"date_meta missing or invalid for date: {d}")
 
+    return errors
+
+
+def validate_comparison_contract(
+    index: Mapping[str, Any], report_date: str = ""
+) -> list[str]:
+    """Validate the static 26-report-day comparison index."""
+    errors: list[str] = []
+    if not isinstance(index, Mapping):
+        return ["comparison index must be a mapping"]
+    if index.get("version") != 1:
+        errors.append("comparison index version must be 1")
+    dates = _as_str_list(index.get("dates"))
+    if not dates:
+        errors.append("comparison index dates must be non-empty")
+        return errors
+    if dates != sorted(set(dates)):
+        errors.append("comparison index dates must be sorted and unique")
+    if len(dates) > 26:
+        errors.append("comparison index exceeds 26 report days")
+    latest = str(index.get("latest_date") or "").strip()
+    if latest != dates[-1]:
+        errors.append("comparison index latest_date mismatch")
+    if report_date and latest != report_date:
+        errors.append(
+            f"comparison index latest_date must equal report date: {report_date}"
+        )
+    reports = index.get("reports")
+    if not isinstance(reports, Mapping):
+        return errors + ["comparison index reports must be a mapping"]
+    for date_value in dates:
+        snapshot = reports.get(date_value)
+        if not isinstance(snapshot, Mapping):
+            errors.append(f"comparison report missing: {date_value}")
+            continue
+        views = snapshot.get("views")
+        prices = snapshot.get("prices")
+        benchmark = snapshot.get("benchmark")
+        if not isinstance(views, Mapping) or not COMPARISON_VIEWS.issubset(views):
+            errors.append(f"comparison views incomplete: {date_value}")
+            continue
+        if not isinstance(prices, Mapping):
+            errors.append(f"comparison prices invalid: {date_value}")
+            continue
+        if not isinstance(benchmark, Mapping) or str(benchmark.get("code")) != "000300":
+            errors.append(f"comparison benchmark invalid: {date_value}")
+        for view in COMPARISON_VIEWS:
+            rows = views.get(view)
+            if not isinstance(rows, list):
+                errors.append(f"comparison view must be an array: {date_value}/{view}")
+                continue
+            for row in rows:
+                code = str(_as_mapping(row).get("code") or "").strip()
+                if not code or code not in prices:
+                    errors.append(
+                        f"comparison row missing indexed price: {date_value}/{view}/{code or '--'}"
+                    )
     return errors
 
 
@@ -511,6 +572,24 @@ def main(argv=None):
     contract_errors.extend(validate_runtime_cutover(report))
     manifest_contract_errors = validate_manifest_contract(manifest)
     contract_errors.extend(manifest_contract_errors)
+
+    comparison_path = ROOT / "docs" / "data" / "comparison-index.json"
+    comparison_page = ROOT / "docs" / "compare" / "index.html"
+    if not comparison_path.exists():
+        contract_errors.append("missing comparison index: docs/data/comparison-index.json")
+    else:
+        comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+        contract_errors.extend(
+            validate_comparison_contract(comparison, report_date=report_date)
+        )
+    if not comparison_page.exists():
+        contract_errors.append("missing comparison page: docs/compare/index.html")
+    else:
+        comparison_html = comparison_page.read_text(encoding="utf-8")
+        if "__CHANLUN_TOP10_API_BASE__" in comparison_html:
+            contract_errors.append("comparison page quote API was not configured")
+        if 'id="comparisonApp"' not in comparison_html:
+            contract_errors.append("comparison page mount is missing")
 
     if contract_errors:
         print("report contract mismatch:", file=sys.stderr)

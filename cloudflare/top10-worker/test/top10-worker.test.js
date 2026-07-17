@@ -272,6 +272,396 @@ async function testLatestByDateFallsBackToGenericLatest() {
   assert.equal(data.snapshot_date, "2026-07-02");
 }
 
+async function testCurrentQuotesRejectsEmptyAndInvalidCodes() {
+  const env = createBaseEnv();
+  const emptyResponse = await handleRequest(
+    createRequest("/api/quotes/current", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ codes: [] }),
+    }),
+    env,
+  );
+  assert.equal(emptyResponse.status, 400);
+  assert.equal((await parseJsonFromResponse(emptyResponse)).error, "codes must be a non-empty array");
+
+  const invalidResponse = await handleRequest(
+    createRequest("/api/quotes/current", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ codes: ["000001", "bad-code"] }),
+    }),
+    env,
+  );
+  assert.equal(invalidResponse.status, 400);
+  assert.deepEqual((await parseJsonFromResponse(invalidResponse)).invalid_codes, ["bad-code"]);
+
+  const nonStockCodes = ["110000", "159001", "200001", "900901"];
+  const nonStockResponse = await handleRequest(
+    createRequest("/api/quotes/current", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ codes: nonStockCodes }),
+    }),
+    env,
+  );
+  assert.equal(nonStockResponse.status, 400);
+  assert.deepEqual((await parseJsonFromResponse(nonStockResponse)).invalid_codes, nonStockCodes);
+}
+
+async function testCurrentQuotesDeduplicatesAndEnforcesLimit() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  const requestedUrls = [];
+  globalThis.fetch = async (url) => {
+    requestedUrls.push(String(url));
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: [{ f12: "000001", f2: 10.25 }, { f12: "000300", f2: 3900.5 }] } };
+      },
+    };
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["000001", "000001"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    assert.equal((await parseJsonFromResponse(response)).quotes.length, 1);
+    assert.ok(requestedUrls.some((url) => url.includes("secids=0.000001")));
+
+    const tooMany = Array.from({ length: 201 }, (_, index) => String(index).padStart(6, "0"));
+    const limitResponse = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: tooMany }),
+      }),
+      env,
+    );
+    assert.equal(limitResponse.status, 400);
+    assert.equal((await parseJsonFromResponse(limitResponse)).error, "too many codes (maximum 200)");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesParsesStocksAndBenchmark() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: [{ f12: "000001", f2: 10.25 }, { f12: "600000", f2: 8.1 }, { f12: "000300", f2: 3900.5 }] } };
+      },
+    };
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["000001", "600000"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const data = await parseJsonFromResponse(response);
+    assert.deepEqual(data.quotes, [
+      { code: "000001", current_price: 10.25, status: "ok" },
+      { code: "600000", current_price: 8.1, status: "ok" },
+    ]);
+    assert.deepEqual(data.benchmark, { code: "000300", current_price: 3900.5, status: "ok" });
+    assert.match(data.quoted_at, /^\d{4}-\d{2}-\d{2}T/);
+    assert.equal(calls.length, 2);
+    assert.ok(calls.every((url) => url.startsWith("https://push2.eastmoney.com/api/qt/ulist.np/get?")));
+    assert.equal(new URL(calls[1]).searchParams.get("secids"), "1.000300");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesMapsSupportedAshareMarkets() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const codes = new URL(String(url)).searchParams.get("secids").split(",").map((secid) => secid.split(".")[1]);
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: codes.map((code) => ({ f12: code, f2: 10 })) } };
+      },
+    };
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["600000", "000001", "300001", "430047", "830799", "920130"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    assert.equal(
+      new URL(calls[0]).searchParams.get("secids"),
+      "1.600000,0.000001,0.300001,0.430047,0.830799,0.920130",
+    );
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesDoesNotCoerceInvalidPricesToZero() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const isBenchmark = new URL(String(url)).searchParams.get("secids") === "1.000300";
+    return {
+      ok: true,
+      async json() {
+        return isBenchmark
+          ? { data: { diff: [{ f12: "000300", f2: 3900.5 }] } }
+          : { data: { diff: [
+            { f12: "600001", f2: null },
+            { f12: "600002", f2: "" },
+            { f12: "600003", f2: "-" },
+          ] } };
+      },
+    };
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["600001", "600002", "600003"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const data = await parseJsonFromResponse(response);
+    assert.deepEqual(data.quotes, [
+      { code: "600001", current_price: null, status: "not_found" },
+      { code: "600002", current_price: null, status: "not_found" },
+      { code: "600003", current_price: null, status: "not_found" },
+    ]);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesReturnsPartialFailure() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes("0.000001")) {
+      throw new Error("upstream unavailable");
+    }
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: [{ f12: "000300", f2: 3900.5 }] } };
+      },
+    };
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["000001"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const data = await parseJsonFromResponse(response);
+    assert.deepEqual(data.quotes, [{ code: "000001", current_price: null, status: "upstream_error" }]);
+    assert.equal(data.benchmark.status, "ok");
+    assert.equal(data.status, "partial");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesReturns502WhenEveryUpstreamRequestFails() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    throw new Error("upstream unavailable");
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["600001"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 502);
+    assert.equal((await parseJsonFromResponse(response)).error, "quote upstream unavailable");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesFallsBackToTencentWhenEastmoneyIsUnavailable() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    if (String(url).startsWith("https://push2.eastmoney.com/")) {
+      throw new Error("eastmoney blocked at edge");
+    }
+    if (String(url).includes("q=sz000001")) {
+      return {
+        ok: true,
+        async text() {
+          return 'v_sz000001="51~Ping An~000001~10.78~10.77~10.75";';
+        },
+      };
+    }
+    if (String(url).includes("q=sh000300")) {
+      return {
+        ok: true,
+        async text() {
+          return 'v_sh000300="1~CSI 300~000300~4728.11~4700.00~4690.00";';
+        },
+      };
+    }
+    throw new Error(`unexpected upstream ${url}`);
+  };
+
+  try {
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes: ["000001"] }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const data = await parseJsonFromResponse(response);
+    assert.equal(data.status, "ok");
+    assert.deepEqual(data.quotes, [{ code: "000001", current_price: 10.78, status: "ok" }]);
+    assert.deepEqual(data.benchmark, { code: "000300", current_price: 4728.11, status: "ok" });
+    assert.equal(calls.filter((url) => url.startsWith("https://push2.eastmoney.com/")).length, 2);
+    assert.equal(calls.filter((url) => url.startsWith("https://qt.gtimg.cn/")).length, 2);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesSplitsMoreThan100CodesIntoBatches() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url) => {
+    calls.push(String(url));
+    const codes = new URL(String(url)).searchParams.get("secids").split(",").map((secid) => secid.split(".")[1]);
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: codes.map((code) => ({ f12: code, f2: 10 })) } };
+      },
+    };
+  };
+
+  try {
+    const codes = Array.from({ length: 101 }, (_, index) => String(600000 + index));
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    assert.equal((await parseJsonFromResponse(response)).quotes.length, 101);
+    assert.equal(calls.length, 3);
+    assert.equal(new URL(calls[0]).searchParams.get("secids").split(",").length, 100);
+    assert.equal(new URL(calls[1]).searchParams.get("secids").split(",").length, 1);
+    assert.equal(new URL(calls[2]).searchParams.get("secids"), "1.000300");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesTracksFailureByOwningBatch() {
+  const env = createBaseEnv();
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const secids = new URL(String(url)).searchParams.get("secids").split(",");
+    if (secids.length === 1 && secids[0] === "1.600100") {
+      throw new Error("second stock batch unavailable");
+    }
+    const rows = secids
+      .map((secid) => secid.split(".")[1])
+      .filter((code) => code !== "600099")
+      .map((code) => ({ f12: code, f2: 10 }));
+    return {
+      ok: true,
+      async json() {
+        return { data: { diff: rows } };
+      },
+    };
+  };
+
+  try {
+    const codes = Array.from({ length: 101 }, (_, index) => String(600000 + index));
+    const response = await handleRequest(
+      createRequest("/api/quotes/current", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ codes }),
+      }),
+      env,
+    );
+    assert.equal(response.status, 200);
+    const data = await parseJsonFromResponse(response);
+    assert.equal(data.status, "partial");
+    assert.deepEqual(data.quotes[99], { code: "600099", current_price: null, status: "not_found" });
+    assert.deepEqual(data.quotes[100], { code: "600100", current_price: null, status: "upstream_error" });
+    assert.equal(data.benchmark.status, "ok");
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+}
+
+async function testCurrentQuotesUsesExistingCorsRules() {
+  const env = createBaseEnv();
+  env.ALLOWED_ORIGINS = "https://allowed.example";
+  const response = await handleRequest(
+    createRequest("/api/quotes/current", {
+      method: "OPTIONS",
+      headers: { origin: "https://allowed.example" },
+    }),
+    env,
+  );
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get("access-control-allow-origin"), "https://allowed.example");
+}
+
 async function main() {
   await testWrongPassword();
   await testRunDispatchSuccess();
@@ -281,6 +671,17 @@ async function main() {
   await testLatestByDate();
   await testLatestMissing();
   await testLatestByDateFallsBackToGenericLatest();
+  await testCurrentQuotesRejectsEmptyAndInvalidCodes();
+  await testCurrentQuotesDeduplicatesAndEnforcesLimit();
+  await testCurrentQuotesParsesStocksAndBenchmark();
+  await testCurrentQuotesMapsSupportedAshareMarkets();
+  await testCurrentQuotesDoesNotCoerceInvalidPricesToZero();
+  await testCurrentQuotesReturnsPartialFailure();
+  await testCurrentQuotesFallsBackToTencentWhenEastmoneyIsUnavailable();
+  await testCurrentQuotesReturns502WhenEveryUpstreamRequestFails();
+  await testCurrentQuotesSplitsMoreThan100CodesIntoBatches();
+  await testCurrentQuotesTracksFailureByOwningBatch();
+  await testCurrentQuotesUsesExistingCorsRules();
 
   console.log("top10-worker.test.js: all tests passed");
 }

@@ -17,10 +17,12 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from chanlun.chan_engine import calc_macd
+from chanlun.report_comparison import write_comparison_index
 from chanlun.report_view_model import build_workspace
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
+    MARKET_HISTORY_DB_PATH,
     ENABLE_WEAK_ACCESS_CONTROL,
     FULL_ACCESS_KEY, FULL_ACCESS_KEY_SALT,
 )
@@ -981,6 +983,39 @@ def copy_report_assets(output_dir):
     return copied
 
 
+def write_comparison_page(output_dir, top10_api_base, asset_version=None):
+    """Render the standalone comparison page with the same quote API config."""
+    source_path = os.path.join(_report_asset_source_dir(), "comparison.html")
+    with open(source_path, "r", encoding="utf-8") as handle:
+        template = handle.read()
+
+    api_base_json = _escape_inline_json(
+        str(top10_api_base or "").strip().rstrip("/")
+    )
+    html = template.replace('"__CHANLUN_TOP10_API_BASE__"', api_base_json)
+    if "__CHANLUN_TOP10_API_BASE__" in html:
+        raise ValueError("comparison bootstrap placeholder was not replaced")
+    if asset_version:
+        html = html.replace(
+            "../assets/report-v2.css\"",
+            f"../assets/report-v2.css?v={asset_version}\"",
+        ).replace(
+            "../assets/report-v2.js\"",
+            f"../assets/report-v2.js?v={asset_version}\"",
+        )
+
+    target_path = os.path.join(output_dir, "compare", "index.html")
+    os.makedirs(os.path.dirname(target_path), exist_ok=True)
+    encoded = html.encode("utf-8")
+    if os.path.exists(target_path):
+        with open(target_path, "rb") as handle:
+            if handle.read() == encoded:
+                return target_path
+    with open(target_path, "wb") as handle:
+        handle.write(encoded)
+    return target_path
+
+
 def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
     """Build the lightweight v2 HTML shell."""
     asset_query = f"?v={asset_version}" if asset_version else ""
@@ -1148,7 +1183,7 @@ def build_recent_reviews(date_str, output_dir):
 # ============================================================
 # HTML 页面生成
 # ============================================================
-def _generate_report_v2(report_data, output_dir=None):
+def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
     """Generate report with the v2 shell and external assets."""
     date_str = report_data.get("date", datetime.now().strftime("%Y-%m-%d"))
 
@@ -1203,9 +1238,13 @@ def _generate_report_v2(report_data, output_dir=None):
     }
     bootstrap_data_json = _escape_inline_json(bootstrap)
 
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    default_output_dir = os.path.realpath(os.path.abspath(os.path.join(base_dir, OUTPUT_DIR)))
     if output_dir is None:
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        output_dir = os.path.join(base_dir, OUTPUT_DIR)
+        output_dir = default_output_dir
+    else:
+        output_dir = os.path.realpath(os.path.abspath(output_dir))
+    is_default_output = output_dir == default_output_dir
 
     date_dir = os.path.join(output_dir, date_str)
     os.makedirs(date_dir, exist_ok=True)
@@ -1220,8 +1259,16 @@ def _generate_report_v2(report_data, output_dir=None):
         is_trading_day=dq.get("is_trading_day", True),
         is_official=dq.get("is_official", True),
     )
+    if comparison_db_path is None:
+        comparison_db_path = MARKET_HISTORY_DB_PATH if is_default_output else ""
+    write_comparison_index(data_dir, comparison_db_path)
     copy_report_assets(output_dir)
     asset_version = _report_asset_version()
+    write_comparison_page(
+        output_dir,
+        bootstrap.get("top10ApiBase", ""),
+        asset_version=asset_version,
+    )
 
     index_path = os.path.join(output_dir, "index.html")
     with open(index_path, "w", encoding="utf-8") as f:
@@ -1247,9 +1294,13 @@ def _generate_report_v2(report_data, output_dir=None):
     return index_path
 
 
-def generate_report(report_data, output_dir=None):
+def generate_report(report_data, output_dir=None, comparison_db_path=None):
     """Backward-compatible entrypoint for report generation."""
-    return _generate_report_v2(report_data, output_dir)
+    return _generate_report_v2(
+        report_data,
+        output_dir,
+        comparison_db_path=comparison_db_path,
+    )
 
 
 # ============================================================

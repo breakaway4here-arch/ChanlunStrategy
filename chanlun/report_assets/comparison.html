@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>榜单表现比对</title>
+  <link rel="stylesheet" href="../assets/report-v2.css">
+</head>
+<body>
+  <main id="comparisonApp" class="comparison-shell" aria-live="polite">
+    <header class="comparison-header">
+      <div>
+        <p class="comparison-eyebrow">报告复盘</p>
+        <h1>榜单表现比对</h1>
+        <p>先看实际涨跌，再看是否跑赢沪深300。打开页面不会请求当前行情。</p>
+      </div>
+      <a class="comparison-back" href="../index.html">返回最新日报</a>
+    </header>
+    <div class="comparison-loading">正在读取历史报告索引…</div>
+  </main>
+  <!-- 历史静态索引：data/comparison-index.json（页面加载时仅读取该文件） -->
+  <script>
+    window.CHANLUN_BOOTSTRAP = Object.assign({}, window.CHANLUN_BOOTSTRAP || {}, {
+      pageMode: 'comparison',
+      top10ApiBase: "__CHANLUN_TOP10_API_BASE__"
+    });
+  </script>
+  <script src="../assets/report-v2.js" defer></script>
+</body>
+</html>
