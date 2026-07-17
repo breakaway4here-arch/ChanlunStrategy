@@ -48,6 +48,12 @@ class ReportComparisonFrontendTests(unittest.TestCase):
         self.assertIn("缺失数据", self.js)
         self.assertIn("sourceDate > targetDate", self.js)
 
+    def test_missing_rows_explain_which_price_is_unavailable(self):
+        self.assertIn("缺少榜单日收盘价", self.js)
+        self.assertIn("缺少历史对比价", self.js)
+        self.assertIn("当前价获取失败", self.js)
+        self.assertIn("row.missingReason", self.js)
+
     def test_all_views_summary_and_complete_statistics_are_present(self):
         self.assertIn("全部榜单（去重）", self.js)
         self.assertIn("dedupeComparisonRows", self.js)

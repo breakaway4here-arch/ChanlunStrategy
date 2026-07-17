@@ -2702,7 +2702,12 @@
     var source = reports[sourceDate] || {};
     var target = targetDate === 'current' ? {} : (reports[targetDate] || {});
     var quoteMap = {};
-    asArray(quoteData && (quoteData.quotes || quoteData.items || [])).forEach(function (quote) { if (quote && quote.code) quoteMap[quote.code] = quote.current_price; });
+    var quoteStatusMap = {};
+    asArray(quoteData && (quoteData.quotes || quoteData.items || [])).forEach(function (quote) {
+      if (!quote || !quote.code) return;
+      quoteMap[quote.code] = quote.current_price;
+      quoteStatusMap[quote.code] = quote.status;
+    });
     var useCurrent = targetDate === 'current' && !!quoteData;
     var benchmarkSource = comparisonNumber(source.benchmark && source.benchmark.close);
     var benchmarkTarget = useCurrent ? comparisonNumber(quoteData.benchmark && quoteData.benchmark.current_price) : comparisonNumber(target.benchmark && target.benchmark.close);
@@ -2713,7 +2718,14 @@
         var sourcePrice = source.prices && source.prices[item.code];
         var targetPrice = useCurrent ? quoteMap[item.code] : target.prices && target.prices[item.code];
         var actual = comparisonReturn(sourcePrice, targetPrice);
-        return { item: item || {}, sourcePrice: sourcePrice, targetPrice: targetPrice, actual: actual, excess: actual === null || benchmarkReturn === null ? null : actual - benchmarkReturn };
+        var missingReason = '';
+        if (comparisonNumber(sourcePrice) === null) missingReason = '缺少榜单日收盘价';
+        else if (comparisonNumber(targetPrice) === null) {
+          missingReason = useCurrent
+            ? (quoteStatusMap[item.code] === 'upstream_error' ? '当前价获取失败' : '当前价缺失')
+            : '缺少历史对比价';
+        }
+        return { item: item || {}, sourcePrice: sourcePrice, targetPrice: targetPrice, actual: actual, excess: actual === null || benchmarkReturn === null ? null : actual - benchmarkReturn, missingReason: missingReason };
       });
       return comparisonSummary(view, rows);
     });
@@ -2759,7 +2771,7 @@
   function renderComparisonTable(rows, benchmarkReturn, missing) {
     return '<div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>股票</th><th>行业</th><th>当时排名/决策</th><th>源收盘</th><th>对比价</th><th>实际涨跌</th><th>沪深300</th><th>超额收益</th></tr></thead><tbody>' + rows.map(function (row) {
       var item = row.item || {};
-      return '<tr><td data-label="股票">' + escapeHtml(item.name || item.code || '--') + '<small>' + escapeHtml(item.code || '') + '</small></td><td data-label="行业">' + escapeHtml(item.industry || '--') + '</td><td data-label="当时排名/决策">' + escapeHtml((item.rank || '--') + ' / ' + (item.decision || item.decision_code || '--')) + '</td><td data-label="源收盘">' + formatNumber(row.sourcePrice) + '</td><td data-label="对比价">' + formatNumber(row.targetPrice) + '</td><td data-label="实际涨跌" class="' + (row.actual !== null && row.actual >= 0 ? 'is-up' : 'is-down') + '">' + formatPct(row.actual, true) + '</td><td data-label="沪深300">' + formatPct(benchmarkReturn, true) + '</td><td data-label="超额收益">' + formatPct(row.excess, true) + '</td></tr>';
+      return '<tr><td data-label="股票">' + escapeHtml(item.name || item.code || '--') + '<small>' + escapeHtml(item.code || '') + '</small></td><td data-label="行业">' + escapeHtml(item.industry || '--') + '</td><td data-label="当时排名/决策">' + escapeHtml((item.rank || '--') + ' / ' + (item.decision || item.decision_code || '--')) + '</td><td data-label="源收盘">' + formatNumber(row.sourcePrice) + '</td><td data-label="对比价">' + formatNumber(row.targetPrice) + '</td><td data-label="实际涨跌" class="' + (row.actual !== null && row.actual >= 0 ? 'is-up' : 'is-down') + '">' + (row.missingReason ? '<span class="comparison-missing-reason">' + escapeHtml(row.missingReason) + '</span>' : formatPct(row.actual, true)) + '</td><td data-label="沪深300">' + formatPct(benchmarkReturn, true) + '</td><td data-label="超额收益">' + formatPct(row.excess, true) + '</td></tr>';
     }).join('') + (rows.length ? '' : '<tr><td colspan="8">' + (missing ? '缺少源收盘或对比价' : '暂无可比对数据') + '</td></tr>') + '</tbody></table></div>';
   }
 

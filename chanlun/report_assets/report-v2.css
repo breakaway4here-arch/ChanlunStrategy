@@ -149,6 +149,7 @@ body {
 .comparison-table th:first-child, .comparison-table th:nth-child(2), .comparison-table th:nth-child(3), .comparison-table td:first-child, .comparison-table td:nth-child(2), .comparison-table td:nth-child(3) { text-align: left; }
 .comparison-table th, .comparison-table td { padding: 9px 7px; border-bottom: 1px solid var(--border-soft); text-align: right; vertical-align: top; }
 .comparison-table td small { display: block; color: var(--text-muted); }
+.comparison-missing-reason { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .comparison-detail h3 { margin-top: 20px; font-size: 14px; }
 .comparison-empty, .comparison-loading { margin-top: 14px; padding: 20px; color: var(--text-muted); }
 .comparison-loading { text-align: center; }
