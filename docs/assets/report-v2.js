@@ -9,6 +9,7 @@
     acceleration: '加速',
     luojie: '罗姐池',
     confirming: '等确认',
+    growth_quality: '高弹性观察 Top10',
     baseline: '基准',
   };
   var DEFAULT_VIEW_DESCRIPTIONS = {
@@ -18,6 +19,7 @@
     acceleration: '加速：强市场下的情绪加速榜。用于从强势启动类候选中二次排序，不是常规主推荐池。',
     luojie: '罗姐池：硬方向 + 15min 生命线观察，不等同于主推。',
     confirming: '等确认：日线已有启动线索，但等待 30min 或次日确认，观察为主，不直接追高。',
+    growth_quality: '高弹性观察 Top10：仅展示有真实行业归属与完整交易证据的观察标的，非正式推荐；同一行业最多两只。',
     baseline: '基准：纯净缠论结构参考池，用于看原始结构信号和主推来源参考。',
   };
   var CHART_EMPTY_TEXT = '暂无图表数据，但保留推荐原因和来源。请检查原始池子数据或 K 线数据。';
