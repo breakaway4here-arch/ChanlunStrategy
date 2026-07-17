@@ -384,8 +384,19 @@ def validate_report_contract(
         if _coerce_int(data_quality.get("missing_daily_count"), default=-1) != 0:
             errors.append("official report requires data_quality.missing_daily_count == 0")
 
-    if picks_fusion and not _as_mapping(views).get("main"):
-        errors.append("main view missing while picks_fusion is non-empty")
+    recommend_rows = [
+        row
+        for row in picks_fusion
+        if str(
+            _as_mapping(_as_mapping(row).get("decision_engine_v1")).get(
+                "decision_code"
+            )
+            or ""
+        ).strip().lower()
+        == "recommend"
+    ]
+    if recommend_rows and not _as_mapping(views).get("main"):
+        errors.append("main view missing while recommend decisions exist")
     if picks_pure and not _as_mapping(views).get("baseline"):
         errors.append("baseline view missing while picks_pure is non-empty")
 

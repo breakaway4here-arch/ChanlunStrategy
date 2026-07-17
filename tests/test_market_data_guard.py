@@ -1437,7 +1437,11 @@ class TestReportContractGuard(unittest.TestCase):
     def test_validate_report_contract_requires_main_with_nonempty_source_pool(self):
         report = {
             "picks_fusion": [
-                {"code": "600003", "change_pct": 2.0},
+                {
+                    "code": "600003",
+                    "change_pct": 2.0,
+                    "decision_engine_v1": {"decision_code": "recommend"},
+                },
             ],
             "picks_pure": [{"code": "600004", "change_pct": 1.0}],
             "next_day_boom": {"candidates": []},
@@ -1453,8 +1457,30 @@ class TestReportContractGuard(unittest.TestCase):
         }
 
         errors = validate_report_contract(report)
-        self.assertIn("main view missing while picks_fusion is non-empty", errors)
+        self.assertIn("main view missing while recommend decisions exist", errors)
         self.assertIn("baseline view missing while picks_pure is non-empty", errors)
+
+    def test_validate_report_contract_allows_empty_main_when_all_are_observe(self):
+        report = {
+            "picks_fusion": [{
+                "code": "600003",
+                "change_pct": 2.0,
+                "decision_engine_v1": {"decision_code": "observe"},
+            }],
+            "picks_pure": [],
+            "next_day_boom": {"candidates": []},
+            "luojie_pool": {"candidates": []},
+            "startup_watchlist": [],
+            "workspace": {
+                "views": {
+                    "highlights": [],
+                    "main": [],
+                    "baseline": [],
+                }
+            },
+        }
+
+        self.assertEqual(validate_report_contract(report), [])
 
     def test_validate_report_contract_handles_malformed_source_pools(self):
         report = {
