@@ -1,5 +1,7 @@
 import tempfile
 import unittest
+import json
+from datetime import date, timedelta
 from pathlib import Path
 
 from chanlun.market_history_store import MarketHistoryStore
@@ -10,6 +12,97 @@ from run import (
 
 
 class RunMarketSentimentTests(unittest.TestCase):
+    def test_reuses_previous_report_for_scoreless_historical_day(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "market.sqlite"
+            report_dir = root / "docs" / "data"
+            report_dir.mkdir(parents=True)
+            with MarketHistoryStore(path) as store:
+                stock_ids = [
+                    store.upsert_instrument(
+                        "stock", "SH", code, name=code
+                    )
+                    for code in ("600000", "600001")
+                ]
+                trade_dates = [
+                    (date(2026, 5, 1) + timedelta(days=offset)).isoformat()
+                    for offset in range(45)
+                ]
+                for day, trade_date in enumerate(trade_dates, start=1):
+                    amount_scale = 100_000_000 if day < 44 else 10_000
+                    for index, instrument_id in enumerate(stock_ids):
+                        close = 10 + index + day * 0.01
+                        store.upsert_bars(
+                            "day",
+                            instrument_id,
+                            [{
+                                "ts": trade_date,
+                                "open": close,
+                                "high": close + 0.1,
+                                "low": close - 0.1,
+                                "close": close,
+                                "volume": 1000,
+                                "amount": amount_scale + day,
+                                "adjustment": "qfq",
+                                "is_final": True,
+                                "source_batch": "test",
+                            }],
+                        )
+                        store.upsert_stock_meta(
+                            instrument_id,
+                            trade_date,
+                            {
+                                "name": "股票",
+                                "is_st": False,
+                                "listed_date": "20000101",
+                            },
+                        )
+
+            previous = {
+                "date": trade_dates[-2],
+                "market_sentiment_history": [{
+                    "date": trade_dates[-2],
+                    "score": 8,
+                    "partial_score": 8,
+                    "label": "冰点",
+                    "coverage": 0.85,
+                    "insufficient": False,
+                    "components": {"index": 0.0},
+                    "evidence": {"index": {"available": True, "score": 0.0}},
+                }],
+            }
+            (report_dir / (trade_dates[-2] + ".json")).write_text(
+                json.dumps(previous), encoding="utf-8"
+            )
+
+            def fetcher(date_str):
+                evidence_date = "{}-{}-{}".format(
+                    date_str[:4], date_str[4:6], date_str[6:8]
+                )
+                return {
+                    "limit_up_count": 2,
+                    "limit_down_count": 1,
+                    "evidence_date": evidence_date,
+                    "data_status": "verified",
+                    "source": "test",
+                }
+
+            current, history = _build_market_sentiment_history(
+                trade_dates[-1],
+                market_indices={"上证指数": {"change_pct": 0.5}},
+                db_path=str(path),
+                report_data_dir=str(report_dir),
+                minimum_instruments=2,
+                fetcher=fetcher,
+                max_workers=4,
+            )
+
+        by_date = {item["date"]: item for item in history}
+        self.assertEqual(by_date[trade_dates[-2]]["score"], 8)
+        self.assertIsNotNone(current["score"])
+        self.assertEqual(current["date"], trade_dates[-1])
+
     def test_builds_twenty_day_sentiment_from_shared_database(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "market.sqlite"

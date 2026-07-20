@@ -87,6 +87,7 @@ from chanlun.market_close_snapshot import ingest_market_close_snapshot
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
     build_sentiment_history,
+    detect_turning_signal,
 )
 from chanlun.candidate_funnel import CandidateFunnel
 from chanlun.universe_builder import (
@@ -406,6 +407,7 @@ def _build_market_sentiment_history(
     market_indices=None,
     *,
     db_path=MARKET_HISTORY_DB_PATH,
+    report_data_dir=None,
     minimum_instruments=1000,
     fetcher=fetch_limit_pool_counts,
     max_workers=20,
@@ -435,6 +437,12 @@ def _build_market_sentiment_history(
             asset_type="stock",
             minimum_instruments=minimum_instruments,
         )
+        index_window = store.query_daily_market_window(
+            as_of=report_date,
+            trading_days=45,
+            asset_type="index",
+            minimum_instruments=1,
+        )
         dates = stock_window.get("dates") or []
         limit_counts = _load_limit_count_evidence(
             store,
@@ -445,7 +453,7 @@ def _build_market_sentiment_history(
 
     daily_inputs = build_daily_inputs_from_windows(
         stock_window,
-        {"dates": [], "rows": []},
+        index_window,
         limit_counts,
     )
     if daily_inputs and market_indices:
@@ -459,6 +467,16 @@ def _build_market_sentiment_history(
             if isinstance(item, dict)
         ]
     history = build_sentiment_history(daily_inputs, window=20)
+    fallback_history = _load_previous_sentiment_history(
+        report_date,
+        report_data_dir or os.path.join(OUTPUT_DIR, "data"),
+    )
+    history = _merge_sentiment_history(
+        history,
+        fallback_history,
+        report_date,
+        window=20,
+    )
     if history:
         return history[-1], history
     return {
@@ -476,6 +494,85 @@ def _build_market_sentiment_history(
             "trend",
         ],
     }, []
+
+
+def _load_previous_sentiment_history(report_date, report_data_dir):
+    """Load the nearest prior report's published sentiment history."""
+    if not report_data_dir or not os.path.isdir(report_data_dir):
+        return []
+    candidates = []
+    for name in os.listdir(report_data_dir):
+        stem, extension = os.path.splitext(name)
+        if extension != ".json" or len(stem) != 10 or stem >= report_date:
+            continue
+        try:
+            datetime.strptime(stem, "%Y-%m-%d")
+        except ValueError:
+            continue
+        candidates.append((stem, os.path.join(report_data_dir, name)))
+
+    for _, path in sorted(candidates, reverse=True):
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            continue
+        history = report.get("market_sentiment_history")
+        history = list(history) if isinstance(history, list) else []
+        current = report.get("market_sentiment")
+        if isinstance(current, dict) and current.get("date"):
+            by_date = {
+                str(item.get("date")): item
+                for item in history
+                if isinstance(item, dict) and item.get("date")
+            }
+            by_date[str(current["date"])] = current
+            history = list(by_date.values())
+        return history
+    return []
+
+
+def _merge_sentiment_history(
+    recalculated,
+    fallback_history,
+    report_date,
+    *,
+    window=20,
+):
+    """Fill scoreless historical points without replacing the current day."""
+    merged = {
+        str(item.get("date")): dict(item)
+        for item in (recalculated or [])
+        if isinstance(item, dict) and item.get("date")
+    }
+    for item in fallback_history or []:
+        if not isinstance(item, dict):
+            continue
+        trade_date = str(item.get("date") or "")
+        if not trade_date or trade_date >= report_date or item.get("score") is None:
+            continue
+        existing = merged.get(trade_date)
+        if existing is None or existing.get("score") is None:
+            merged[trade_date] = dict(item)
+
+    visible = [
+        merged[trade_date]
+        for trade_date in sorted(merged)
+        if trade_date <= report_date
+    ][-max(1, int(window)):]
+    for index, item in enumerate(visible):
+        recent_scores = [
+            point.get("score")
+            for point in visible[max(0, index - 2):index + 1]
+            if isinstance(point.get("score"), (int, float))
+        ]
+        item["ma3"] = (
+            round(sum(recent_scores) / 3, 2)
+            if len(recent_scores) == 3
+            else None
+        )
+        item["turning_signal"] = detect_turning_signal(visible[:index + 1])
+    return visible
 
 
 def _complete_sector_component_evidence(

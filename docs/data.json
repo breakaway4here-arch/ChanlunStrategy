@@ -191651,37 +191651,37 @@
           "close": 3796.28,
           "change_pct": 0.85,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         },
         "深证成指": {
           "close": 13610.23,
           "change_pct": -0.71,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         },
         "创业板指": {
           "close": 3443.1,
           "change_pct": 0.42,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         },
         "科创50": {
           "close": 1718.69,
           "change_pct": 0.19,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         },
         "沪深300": {
           "close": 4598.32,
           "change_pct": 1.53,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         },
         "中证500": {
           "close": 7411.31,
           "change_pct": -1.36,
           "date": "2026-07-20",
-          "source": "tencent_plain"
+          "source": "tencent"
         }
       },
       "chanlun_structure": {
@@ -191809,7 +191809,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -192167,7 +192168,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -192523,7 +192525,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -192877,7 +192880,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -193234,7 +193238,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -193591,7 +193596,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -193916,7 +193922,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -194243,7 +194250,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -194568,7 +194576,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -194922,7 +194931,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -195276,7 +195286,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -195631,7 +195642,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -195987,7 +195999,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -196308,7 +196321,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -196663,7 +196677,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -197019,7 +197034,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -197373,7 +197389,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -197695,7 +197712,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -198049,7 +198067,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -198405,7 +198424,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -198763,7 +198783,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -199120,7 +199141,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -199473,7 +199495,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -199823,7 +199846,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -200177,7 +200201,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -200533,7 +200558,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -200882,7 +200908,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -201236,7 +201263,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -201563,7 +201591,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -201918,7 +201947,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -202274,7 +202304,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -202626,7 +202657,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -202979,7 +203011,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.3913,
@@ -203294,7 +203327,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -203613,7 +203647,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -203964,7 +203999,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -204313,7 +204349,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -204665,7 +204702,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -204925,6 +204963,7 @@
             "source_type": "日线强势启动",
             "confirmed_by": "30min确认",
             "confirmations": [
+              "30min两阳夹两阴确认",
               "30min EMA5维持"
             ],
             "seed_type": "",
@@ -205024,7 +205063,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -205057,6 +205097,7 @@
               "source_type": "日线强势启动",
               "confirmed_by": "30min确认",
               "confirmations": [
+                "30min两阳夹两阴确认",
                 "30min EMA5维持"
               ],
               "seed_type": "",
@@ -205141,6 +205182,7 @@
                 "confirmed_by": "30min确认",
                 "ma_bullish": false,
                 "confirmations": [
+                  "30min两阳夹两阴确认",
                   "30min EMA5维持"
                 ],
                 "startup_signals": [
@@ -205213,6 +205255,7 @@
               "ma_bullish": false,
               "confirmed_by": "30min确认",
               "confirmations": [
+                "30min两阳夹两阴确认",
                 "30min EMA5维持"
               ],
               "startup_signals": [
@@ -205377,7 +205420,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -205726,7 +205770,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.9524,
@@ -206049,7 +206094,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -206402,7 +206448,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -206752,7 +206799,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -207067,7 +207115,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -207415,7 +207464,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.033,
@@ -207729,7 +207779,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -208049,7 +208100,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.6949,
@@ -208370,7 +208422,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.6086,
@@ -208688,7 +208741,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -209011,7 +209065,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -209332,7 +209387,7 @@
               "index": 79,
               "price": 4.12,
               "date": "2026-07-20 15:00:00",
-              "reason": "swing笔底背驰(力度比=35.57%)，仅供参考",
+              "reason": "swing笔底背驰(力度比=34.38%)，仅供参考",
               "strength": "弱",
               "source_type": "",
               "confirmed_by": "",
@@ -209399,7 +209454,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.2364,
@@ -209716,7 +209772,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -210035,7 +210092,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.7505,
@@ -210346,7 +210404,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.0471,
@@ -210664,7 +210723,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -211016,7 +211076,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -211368,7 +211429,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -211685,7 +211747,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -212005,6 +212068,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -212327,7 +212391,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.9703,
@@ -212647,7 +212712,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.0747,
@@ -212967,6 +213033,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -213189,13 +213256,14 @@
             "index": 119,
             "price": 5.68,
             "date": "2026-07-20",
-            "reason": "swing笔底背驰(力度比=19.92%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=19.92%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "confirmations": [
               "关键位不破",
-              "EMA5收复"
+              "EMA5收复",
+              "止跌结构"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -213253,7 +213321,7 @@
               "index": 77,
               "price": 5.68,
               "date": "2026-07-20 14:00:00",
-              "reason": "swing笔底背驰(力度比=74.43%)，仅供参考",
+              "reason": "swing笔底背驰(力度比=74.25%)，仅供参考",
               "strength": "弱",
               "source_type": "",
               "confirmed_by": "",
@@ -213320,7 +213388,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.1127,
@@ -213333,7 +213402,7 @@
           "sector": "IT服务Ⅲ",
           "resonance": {
             "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -213351,13 +213420,14 @@
               "index": 119,
               "price": 5.68,
               "date": "2026-07-20",
-              "reason": "swing笔底背驰(力度比=19.92%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=19.92%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "confirmations": [
                 "关键位不破",
-                "EMA5收复"
+                "EMA5收复",
+                "止跌结构"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -213406,11 +213476,12 @@
               "momentum_persistence": null,
               "breakout_quality": {
                 "volume_ratio": null,
-                "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+                "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
                 "ma_bullish": false,
                 "confirmations": [
                   "关键位不破",
-                  "EMA5收复"
+                  "EMA5收复",
+                  "止跌结构"
                 ],
                 "startup_signals": [],
                 "distance": 2.1127
@@ -213476,10 +213547,11 @@
                 "quality_evidence_status": "insufficient"
               },
               "ma_bullish": false,
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "confirmations": [
                 "关键位不破",
-                "EMA5收复"
+                "EMA5收复",
+                "止跌结构"
               ],
               "startup_signals": []
             },
@@ -213638,7 +213710,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.751,
@@ -213956,7 +214029,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 3.8254,
@@ -214232,7 +214306,7 @@
               "index": 79,
               "price": 35.81,
               "date": "2026-07-20 15:00:00",
-              "reason": "swing笔底背驰(力度比=71.50%)，仅供参考",
+              "reason": "swing笔底背驰(力度比=71.36%)，仅供参考",
               "strength": "弱",
               "source_type": "",
               "confirmed_by": "",
@@ -214299,7 +214373,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.4853,
@@ -214616,6 +214691,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -214903,7 +214979,7 @@
               "index": 77,
               "price": 3.38,
               "date": "2026-07-20 14:00:00",
-              "reason": "swing笔底背驰(力度比=57.06%)，仅供参考",
+              "reason": "swing笔底背驰(力度比=56.38%)，仅供参考",
               "strength": "弱",
               "source_type": "",
               "confirmed_by": "",
@@ -214970,7 +215046,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.0588,
@@ -215291,6 +215368,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -215608,6 +215686,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -215928,7 +216007,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.4443,
@@ -216132,6 +216212,323 @@
           }
         },
         {
+          "code": "603271",
+          "name": "永杰新材",
+          "signal_tier": "candidate",
+          "source_channel": "low_position",
+          "tier": "candidate",
+          "category": "C",
+          "quality_tier": "",
+          "view": "main",
+          "reference_type": "",
+          "change_pct": -2.83,
+          "best_buy_point": {
+            "type": "底背驰候选",
+            "tier": "candidate",
+            "index": 119,
+            "price": 40.93,
+            "date": "2026-07-20",
+            "reason": "swing笔底背驰(力度比=44.44%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "strength": "中",
+            "source_type": "swing底背驰参考",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmations": [
+              "关键位不破",
+              "EMA5收复"
+            ],
+            "seed_type": "swing底背驰候选种子",
+            "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-07-20",
+            "startup_index": null,
+            "startup_date": "",
+            "startup_age_days": null,
+            "confirm_index": null,
+            "confirm_date": "",
+            "confirm_age_days": null,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "",
+            "startup_signals": [],
+            "change_pct": null,
+            "volume_ratio": null
+          },
+          "gf_dma_health": {
+            "code": "603271",
+            "name": "永杰新材",
+            "label": "结构破坏",
+            "score": 0.0,
+            "trend_stage": "broken",
+            "ma": {
+              "ma20": 44.2735,
+              "ma50": 46.0436,
+              "ma100": 46.5899,
+              "ma200": null
+            },
+            "distance_pct": {
+              "vs_ma20": -5.41,
+              "vs_ma50": -9.04,
+              "vs_ma100": -10.11,
+              "vs_ma200": null
+            },
+            "alignment": "broken",
+            "extension_level": "normal",
+            "pullback_health": "broken_down",
+            "fomo_risk": "low",
+            "risk_flags": [],
+            "positive_flags": [
+              "趋势结构尚未触发明显风险"
+            ],
+            "summary": "跌破MA100，结构偏弱，未见明显短线异动，回撤broken_down。",
+            "data_quality": "insufficient_200"
+          },
+          "buy_points_30min": [],
+          "pivots": {
+            "ZG": null,
+            "ZD": null,
+            "count": 0
+          },
+          "trend_type": "无中枢",
+          "score": 56.2,
+          "market_cap": 82.9789,
+          "circulating_market_cap": 39.6084,
+          "float_market_cap": 39.6084,
+          "money20": 15001185670.8,
+          "industry": "",
+          "decision_engine_v1": {
+            "version": "1",
+            "code": "603271",
+            "name": "永杰新材",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 58,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "趋势未定",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 35,
+              "reasons": [
+                "120日收盘分位低位"
+              ]
+            },
+            "sentiment": {
+              "score": 13,
+              "reasons": [
+                "板块热点",
+                "震荡市",
+                "趋势健康度偏弱"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷",
+              "市场情绪转弱"
+            ]
+          },
+          "position_distance_pct": 2.321,
+          "position_reference_price": 40.93,
+          "position_reference_type": "low_position_channel:swing底背驰参考",
+          "position_data_status": "verified",
+          "position_evidence_date": "2026-07-20",
+          "position_absolute_percentile": 5.0,
+          "position_absolute_window": 120,
+          "sector": "铝",
+          "resonance": {
+            "level": "中",
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+          },
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "pure",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "底背驰候选",
+              "tier": "candidate",
+              "index": 119,
+              "price": 40.93,
+              "date": "2026-07-20",
+              "reason": "swing笔底背驰(力度比=44.44%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "strength": "中",
+              "source_type": "swing底背驰参考",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "seed_type": "swing底背驰候选种子",
+              "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null,
+          "opportunity_score": 24,
+          "watch_score": 24,
+          "view_rank": 73,
+          "rank_trace": {
+            "base_source": "baseline",
+            "source_count": 1,
+            "signal_score": 4.5,
+            "entry_score": 11.0,
+            "momentum_score": 0.0,
+            "market_score": 6.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 0.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+                "ma_bullish": false,
+                "confirmations": [
+                  "关键位不破",
+                  "EMA5收复"
+                ],
+                "startup_signals": [],
+                "distance": 2.321
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 0.0,
+                "volume_ratio20": 0.0,
+                "liquidity_label": "高流动性",
+                "liquidity_score": 100.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 100.0,
+                "market_cap_label": "强弹性流通市值",
+                "market_cap_source": "circulating_market_cap",
+                "ret20": null,
+                "ret20_score": 0.0,
+                "industry_key": "铝",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 100.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 100.0,
+                    "source": "circulating_market_cap"
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 0.0
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 40.0,
+                "pool_quality_tags": [
+                  "高流动性",
+                  "强弹性流通市值"
+                ],
+                "market_cap": 82.9789,
+                "circulating_market_cap": 39.6084,
+                "float_market_cap": 39.6084,
+                "liquidity_source": "amounts",
+                "money20": 15001185670.8,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmations": [
+                "关键位不破",
+                "EMA5收复"
+              ],
+              "startup_signals": []
+            },
+            "alpha_bonus": 1.5,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 40.0,
+            "pool_quality_tags": [
+              "高流动性",
+              "强弹性流通市值"
+            ],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0019,
+            "base_opportunity_score": 22,
+            "risk_flags": [],
+            "opportunity_score": 24,
+            "distance_from_reference_pct": 2.321,
+            "change_pct": -2.83,
+            "source:baseline": 1,
+            "selected_reason": "基准池单源入榜"
+          }
+        },
+        {
           "code": "002368",
           "name": "太极股份",
           "signal_tier": "candidate",
@@ -216148,13 +216545,14 @@
             "index": 110,
             "price": 13.02,
             "date": "2026-07-07",
-            "reason": "swing笔底背驰(力度比=58.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "reason": "swing笔底背驰(力度比=58.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "strength": "中",
             "source_type": "swing底背驰参考",
-            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+            "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
             "confirmations": [
               "关键位不破",
-              "EMA5收复"
+              "EMA5收复",
+              "止跌结构"
             ],
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -216212,7 +216610,7 @@
               "index": 69,
               "price": 13.05,
               "date": "2026-07-17 14:00:00",
-              "reason": "swing笔底背驰(力度比=28.66%)，仅供参考",
+              "reason": "swing笔底背驰(力度比=28.82%)，仅供参考",
               "strength": "弱",
               "source_type": "",
               "confirmed_by": "",
@@ -216279,7 +216677,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 2.765,
@@ -216292,7 +216691,7 @@
           "sector": "IT服务Ⅲ",
           "resonance": {
             "level": "中",
-            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5"
+            "reason": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构"
           },
           "ma_bullish": false,
           "stop_loss": null,
@@ -216310,13 +216709,14 @@
               "index": 110,
               "price": 13.02,
               "date": "2026-07-07",
-              "reason": "swing笔底背驰(力度比=58.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "reason": "swing笔底背驰(力度比=58.30%)，仅供参考；次级别确认：30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "strength": "中",
               "source_type": "swing底背驰参考",
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "confirmations": [
                 "关键位不破",
-                "EMA5收复"
+                "EMA5收复",
+                "止跌结构"
               ],
               "seed_type": "swing底背驰候选种子",
               "seed_reason": "接近20日低点；相对20日高点回撤充分；接近swing参考价",
@@ -216345,7 +216745,7 @@
           "pivot_zd": null,
           "opportunity_score": 23,
           "watch_score": 23,
-          "view_rank": 73,
+          "view_rank": 74,
           "rank_trace": {
             "base_source": "baseline",
             "source_count": 1,
@@ -216365,11 +216765,12 @@
               "momentum_persistence": null,
               "breakout_quality": {
                 "volume_ratio": null,
-                "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+                "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
                 "ma_bullish": false,
                 "confirmations": [
                   "关键位不破",
-                  "EMA5收复"
+                  "EMA5收复",
+                  "止跌结构"
                 ],
                 "startup_signals": [],
                 "distance": 2.765
@@ -216435,10 +216836,11 @@
                 "quality_evidence_status": "insufficient"
               },
               "ma_bullish": false,
-              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5",
+              "confirmed_by": "30分钟回拉不破日线关键位 + 30分钟收盘重新站上EMA5 + 30分钟出现止跌K线结构",
               "confirmations": [
                 "关键位不破",
-                "EMA5收复"
+                "EMA5收复",
+                "止跌结构"
               ],
               "startup_signals": []
             },
@@ -216597,6 +216999,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -216663,7 +217066,7 @@
           "pivot_zd": null,
           "opportunity_score": 23,
           "watch_score": 23,
-          "view_rank": 74,
+          "view_rank": 75,
           "rank_trace": {
             "base_source": "baseline",
             "source_count": 1,
@@ -216915,6 +217318,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -216981,7 +217385,7 @@
           "pivot_zd": null,
           "opportunity_score": 23,
           "watch_score": 23,
-          "view_rank": 75,
+          "view_rank": 76,
           "rank_trace": {
             "base_source": "baseline",
             "source_count": 1,
@@ -217235,7 +217639,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 6.5391,
@@ -217299,7 +217704,7 @@
           "pivot_zd": null,
           "opportunity_score": 13,
           "watch_score": 13,
-          "view_rank": 76,
+          "view_rank": 77,
           "rank_trace": {
             "base_source": "baseline",
             "source_count": 1,
@@ -217556,6 +217961,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -217743,6 +218149,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -217959,7 +218366,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 6.5391,
@@ -218144,6 +218552,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -218325,7 +218734,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -218541,6 +218951,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -218754,6 +219165,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -218971,7 +219383,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -219152,7 +219565,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -219372,6 +219786,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -219588,7 +220003,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -219800,7 +220216,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -220015,6 +220432,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -220228,7 +220646,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -220415,6 +220834,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -220627,7 +221047,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -220814,6 +221235,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -221031,7 +221453,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -221246,7 +221669,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -221464,7 +221888,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -221681,7 +222106,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -221895,7 +222321,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 1.3913,
@@ -222079,7 +222506,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -222266,7 +222694,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -222478,7 +222907,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 3.8254,
@@ -222661,7 +223091,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -222844,7 +223275,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -223060,6 +223492,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -223244,7 +223677,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -223425,6 +223859,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -223609,7 +224044,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -223822,6 +224258,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -224008,7 +224445,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -224188,7 +224626,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -224406,7 +224845,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -224618,7 +225058,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -224833,7 +225274,8 @@
               ]
             },
             "risk_reasons": [
-              "市场情绪偏冷"
+              "市场情绪偏冷",
+              "市场情绪转弱"
             ]
           },
           "position_distance_pct": 0.0,
@@ -225053,6 +225495,7 @@
             },
             "risk_reasons": [
               "市场情绪偏冷",
+              "市场情绪转弱",
               "弱市只观察"
             ]
           },
@@ -225357,8 +225800,8 @@
         "missing_components": [
           "turnover"
         ],
-        "ma3": null,
-        "turning_signal": null
+        "ma3": 25.33,
+        "turning_signal": "turning_weaker"
       },
       "market_sentiment_history": [
         {
@@ -226469,7 +226912,7 @@
             "turnover": {
               "available": true,
               "ratio_to_ma5": 1.0802,
-              "ratio_to_ma20": 0.9552,
+              "ratio_to_ma20": 0.9553,
               "score": 51.77
             },
             "trend": {
@@ -226714,9 +227157,9 @@
         {
           "version": "v2",
           "date": "2026-07-17",
-          "score": null,
-          "partial_score": 10,
-          "label": "数据不足",
+          "score": 8,
+          "partial_score": 8,
+          "label": "冰点",
           "weights": {
             "breadth": 0.3,
             "limit_ecology": 0.3,
@@ -226725,46 +227168,47 @@
             "trend": 0.1
           },
           "components": {
-            "breadth": 5.48,
-            "limit_ecology": 9.96,
-            "index": null,
+            "breadth": 5.47,
+            "limit_ecology": 10.0,
+            "index": 0.0,
             "turnover": null,
-            "trend": 24.29
+            "trend": 24.36
           },
           "evidence": {
             "breadth": {
               "available": true,
-              "valid_count": 5211,
-              "advance_count": 408,
-              "decline_count": 4769,
-              "flat_count": 34,
-              "advance_ratio": 7.83,
-              "median_change_pct": -4.276,
-              "rise_over_3_count": 117,
-              "fall_over_3_count": 3455,
-              "score": 5.48
+              "valid_count": 5167,
+              "advance_count": 404,
+              "decline_count": 4731,
+              "flat_count": 32,
+              "advance_ratio": 7.82,
+              "median_change_pct": -4.292,
+              "rise_over_3_count": 112,
+              "fall_over_3_count": 3442,
+              "score": 5.47
             },
             "limit_ecology": {
               "available": true,
-              "valid_count": 5211,
+              "valid_count": 5167,
               "excluded_count": 0,
               "limit_up_count": 33,
               "limit_down_count": 181,
               "limit_ratio": 0.1868,
               "log_limit_ratio": -1.677646,
-              "ratio_score": 2.38,
-              "limit_up_ratio": 0.006333,
-              "limit_down_ratio": 0.034734,
-              "limit_up_score": 31.66,
+              "ratio_score": 2.33,
+              "limit_up_ratio": 0.006387,
+              "limit_down_ratio": 0.03503,
+              "limit_up_score": 31.93,
               "limit_down_score": 0.0,
               "improvement_score": 10.91,
               "source": "eastmoney_limit_pools",
-              "score": 9.96
+              "score": 10.0
             },
             "index": {
-              "available": false,
-              "average_change_pct": null,
-              "score": null
+              "available": true,
+              "average_change_pct": -5.312,
+              "valid_count": 6,
+              "score": 0.0
             },
             "turnover": {
               "available": false,
@@ -226774,18 +227218,17 @@
             },
             "trend": {
               "available": true,
-              "above_ma20_ratio": 0.2429,
-              "score": 24.29
+              "above_ma20_ratio": 0.2436,
+              "score": 24.36
             }
           },
-          "coverage": 0.7,
-          "insufficient": true,
+          "coverage": 0.85,
+          "insufficient": false,
           "missing_components": [
-            "index",
             "turnover"
           ],
-          "ma3": null,
-          "turning_signal": "turning_weaker"
+          "ma3": 33.33,
+          "turning_signal": null
         },
         {
           "version": "v2",
@@ -226860,8 +227303,8 @@
           "missing_components": [
             "turnover"
           ],
-          "ma3": null,
-          "turning_signal": null
+          "ma3": 25.33,
+          "turning_signal": "turning_weaker"
         }
       ],
       "market_temperature": {
@@ -226908,11 +227351,11 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "工信部将新一代通信网列为重点，通信产业链迎政策利好",
+            "headline": "工信部力推新一代通信网建设，5G/6G、光通信及卫星互联网板块迎政策利好",
             "analysis": [
-              "工信部明确推动5G万兆光网规模商用，直接利好通信设备与光通信板块。",
-              "加强6G、光通信、海底光缆等核心技术攻关，将带动上游技术创新与产品研制需求。",
-              "深化5G与脑机接口、智能网联汽车等融合，拓展通信技术下游应用场景。"
+              "工信部将新一代通信网列为重点，推动5G万兆光网规模商用，直接利好通信设备商和光模块企业。",
+              "加强6G、光通信、卫星通信等核心技术创新，光通信和卫星互联网产业链将获得政策与资金支持。",
+              "深化5G与智能网联汽车、脑机接口融合，车联网、物联网等应用场景拓展带来长期增长空间。"
             ],
             "positive_sectors": [
               "通信设备",
@@ -226924,21 +227367,21 @@
               {
                 "name": "中兴通讯",
                 "code": "000063",
-                "reason": "5G主设备龙头，受益于网络建设部署"
+                "reason": "5G/6G核心设备龙头，直接受益网络规模建设"
               },
               {
-                "name": "亨通光电",
-                "code": "600487",
-                "reason": "光纤光缆及海缆供应商，受益于光通信建设"
+                "name": "中际旭创",
+                "code": "300308",
+                "reason": "光模块头部厂商，需求随高速光网络建设提升"
               },
               {
                 "name": "中国卫通",
                 "code": "601698",
-                "reason": "卫星通信运营商，受益于空间网络建设"
+                "reason": "国内卫星通信运营商，政策推动空间网络发展"
               }
             ],
             "negative_stocks": [],
-            "summary": "工信部将新一代通信网列为重点，通信产业链迎政策利好",
+            "summary": "工信部力推新一代通信网建设，5G/6G、光通信及卫星互联网板块迎政策利好",
             "status": "ok"
           },
           "display_title": "工信部：建设新一代通信网是推动信息通信业发展的重点",
@@ -226975,31 +227418,76 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "国家能源集团推进资产注入国电电力，利好电力与央企改革板块",
+            "headline": "国家能源集团推进常规能源资产注入，国电电力迎利好",
             "analysis": [
-              "国家能源集团承诺将常规能源发电资产整合注入国电电力，直接提升公司规模与盈利潜力。",
-              "解决同业竞争问题有助于优化集团资源配置，增强上市公司核心竞争力。",
-              "此举符合央企改革深化方向，可能引发市场对电力资产整合和估值修复的预期。"
+              "资产整合注入有望提升国电电力装机容量和盈利能力。",
+              "减少同业竞争将优化公司治理结构，提升运营效率。",
+              "承诺履行增强市场信心，对股价形成正面催化。"
             ],
             "positive_sectors": [
-              "电力",
-              "央企改革"
+              "电力"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
                 "name": "国电电力",
                 "code": "600795",
-                "reason": "直接受益于大股东资产注入，规模与盈利有望双提升"
+                "reason": "控股股东承诺常规能源资产注入"
               }
             ],
             "negative_stocks": [],
-            "summary": "国家能源集团推进资产注入国电电力，利好电力与央企改革板块",
+            "summary": "国家能源集团推进常规能源资产注入，国电电力迎利好",
             "status": "ok"
           },
           "display_title": "国电电力：为进一步支持公司发展，国家能源集团将继续积极推动资本市场承诺履行，推动减少和解决同业竞争，完善化解同业竞争长效机制，稳步推进国家能源集团常规能源发电资产整合注入。",
           "display_body": "国电电力：为进一步支持公司发展，国家能源集团将继续积极推动资本市场承诺履行，推动减少和解决同业竞争，完善化解同业竞争长效机制，稳步推进国家能源集团常规能源发电资产整合注入。",
           "raw_content": "国电电力：为进一步支持公司发展，国家能源集团将继续积极推动资本市场承诺履行，推动减少和解决同业竞争，完善化解同业竞争长效机制，稳步推进国家能源集团常规能源发电资产整合注入。",
+          "has_redundant_content": true
+        },
+        {
+          "title": "7月20日收评：上证50指数涨超3%，油气、煤电板块集体走强",
+          "content": "1、市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒股表现活跃，古井贡酒涨停，贵州茅台涨近6%。下跌方面，芯片股高开低走，德明利连续4日跌停；PCB概念股下挫，金安国纪等跌停。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。\n2、板块概念方面，油气、电力、煤炭、白酒等板块涨幅居前，电子特气、光刻机、PCB、存储芯片等板块跌幅居前。\n3、两市共1709只个股上涨，54只个股涨停，3415只个股下跌，236只个股跌停，37只股票炸板，炸板率41%。",
+          "brief": "1、市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒股表现活跃，古井贡酒涨停，贵州茅台涨近6%。下跌方面，芯片股高开低走，德明利连续4日跌停；PCB概念股下挫，金安国纪等跌停。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。\n2、板块概念方面，油气、电力、煤炭、白酒等板块涨幅居前，电子特气、光刻机、PCB、存储芯片等板块跌幅居前。\n3、两市共1709只个股上涨，54只个股涨停，3415只个股下跌，236只个股跌停，37只股票炸板，炸板率41%。",
+          "ctime": 1784530853,
+          "stock_list": [],
+          "plate_list": [],
+          "level": 2,
+          "impact_score": 62.0,
+          "impact_level": "重大",
+          "impact_reason": "B级+16；主题映射+8；风险事件+8；命中资金流Top3 电力+22；可交易性+8",
+          "matched_hot_sectors": [
+            "电力"
+          ],
+          "affected_themes": [
+            "半导体",
+            "白酒",
+            "电力",
+            "煤炭"
+          ],
+          "event_category": "risk",
+          "event_category_name": "风险事件",
+          "market_validation": "板块资金流排名1",
+          "validation_details": {
+            "sector_rank": 1,
+            "sector_flow": 3112571904.0
+          },
+          "tradability": "强",
+          "downgrade_reasons": [],
+          "impact": {
+            "headline": "AI分析暂不可用",
+            "analysis": [],
+            "summary": "AI分析暂不可用",
+            "positive_sectors": [],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": true,
+            "status": "failed",
+            "error": "无法从LLM输出中提取有效JSON: "
+          },
+          "display_title": "7月20日收评：上证50指数涨超3%，油气、煤电板块集体走强",
+          "display_body": "1、市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒股表现活跃，古井贡酒涨停，贵州茅台涨近6%。下跌方面，芯片股高开低走，德明利连续4日跌停；PCB概念股下挫，金安国纪等跌停。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0",
+          "raw_content": "1、市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒股表现活跃，古井贡酒涨停，贵州茅台涨近6%。下跌方面，芯片股高开低走，德明利连续4日跌停；PCB概念股下挫，金安国纪等跌停。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。\n2、板块概念方面，油气、电力、煤炭、白酒等板块涨幅居前，电子特气、光刻机、PCB、存储芯片等板块跌幅居前。\n3、两市共1709只个股上涨，54只个股涨停，3415只个股下跌，236只个股跌停，37只股票炸板，炸板率41%。",
           "has_redundant_content": true
         },
         {
@@ -227042,7 +227530,7 @@
             "negative_stocks": [],
             "no_impact": true,
             "status": "failed",
-            "error": "无法从LLM输出中提取有效JSON: "
+            "error": "无法从LLM输出中提取有效JSON: {\n  \"no_impact\": false,\n  \"headline\": \"市场风格切换，传统能源与消费走强，科技股承压\",\n  \"analysis\": [\n    \"早盘三大指数反弹，显示市场短期情绪回暖，资金风险偏好提升。\",\n    \"油气、煤炭等传统能源板块受大宗商品价格驱动，吸引资金流入。\",\n    \"白酒板块活跃，贵州茅台大涨，表明消费类蓝筹重"
           },
           "display_title": "7月20日午间收评：沪指、创业板指均涨超1%，油气、煤炭板块集体走强",
           "display_body": "1、市场早间高开震荡，三大指数集体反弹。油气股集体走强，中国海油、中曼石油、博迈科涨停。煤炭板块拉升，大有能源、郑州煤电等涨停。白酒股表现活跃，古井贡酒涨停，贵州茅台涨超5%。电力股再度爆发，华银电力、涪陵电力等多股涨停。下跌方面，芯片股高开低走，德明利连续4日跌停；PCB概念股下挫，金安国纪等跌停。个股涨多跌少，沪深京三市约3100股飘红，上午半天成交1.68万亿。午间收盘沪指涨1.18%，深成",
@@ -227076,66 +227564,33 @@
           "tradability": "强",
           "downgrade_reasons": [],
           "impact": {
-            "headline": "AI分析暂不可用",
-            "analysis": [],
-            "summary": "AI分析暂不可用",
-            "positive_sectors": [],
+            "no_impact": false,
+            "headline": "控股股东表态及资产注入预期提振龙源电力及新能源板块信心",
+            "analysis": [
+              "控股股东明确无减持计划并表达信心，缓解市场对股东抛压的担忧。",
+              "推进新能源资产注入将增强龙源电力装机规模和盈利能力，提升估值。",
+              "事件彰显国家能源集团对新能源业务的重视，有望带动板块情绪。"
+            ],
+            "positive_sectors": [
+              "新能源",
+              "风电",
+              "光伏"
+            ],
             "negative_sectors": [],
-            "positive_stocks": [],
+            "positive_stocks": [
+              {
+                "name": "龙源电力",
+                "code": "001289",
+                "reason": "资产注入预期直接利好，股东信心提振"
+              }
+            ],
             "negative_stocks": [],
-            "no_impact": true,
-            "status": "failed",
-            "error": "无法从LLM输出中提取有效JSON: {\n  \"no_impact\": false,\n  \"headline\": \"龙源电力控股股东承诺不减持并推进资产注入，直接利好公司及新能源板块\",\n  \"analysis\": [\n    \"控股股东未减持并推进资产注入，彰显对公司长期价值的信心，稳定市场预期。\",\n    \"新能源资产注入将直接增厚公司装机规模和业绩，提升长期成长性与盈利能力。\",\n    "
+            "summary": "控股股东表态及资产注入预期提振龙源电力及新能源板块信心",
+            "status": "ok"
           },
           "display_title": "龙源电力：公司控股股东国家能源集团对公司未来发展充满信心，对公司价值充分认可，公司未接到控股股东及其一致行动人减持公司股票计划的通知。目前国家能源集团正在积极推进下一批新能源资产的注入工作。",
           "display_body": "龙源电力：公司控股股东国家能源集团对公司未来发展充满信心，对公司价值充分认可，公司未接到控股股东及其一致行动人减持公司股票计划的通知。目前国家能源集团正在积极推进下一批新能源资产的注入工作。",
           "raw_content": "龙源电力：公司控股股东国家能源集团对公司未来发展充满信心，对公司价值充分认可，公司未接到控股股东及其一致行动人减持公司股票计划的通知。目前国家能源集团正在积极推进下一批新能源资产的注入工作。",
-          "has_redundant_content": true
-        },
-        {
-          "title": "7月20日收评：上证50指数涨超3%，油气、煤炭板块集体走强",
-          "content": "市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒等消费股走强，古井贡酒涨停，贵州茅台涨近6%。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。",
-          "brief": "市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒等消费股走强，古井贡酒涨停，贵州茅台涨近6%。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。",
-          "ctime": 1784530853,
-          "stock_list": [],
-          "plate_list": [],
-          "level": 2,
-          "impact_score": 59.0,
-          "impact_level": "重大",
-          "impact_reason": "B级+16；主题映射+8；其他+5；命中资金流Top3 电力+22；可交易性+8",
-          "matched_hot_sectors": [
-            "电力"
-          ],
-          "affected_themes": [
-            "白酒",
-            "电力",
-            "煤炭",
-            "大消费"
-          ],
-          "event_category": "other",
-          "event_category_name": "其他",
-          "market_validation": "板块资金流排名1",
-          "validation_details": {
-            "sector_rank": 1,
-            "sector_flow": 3112571904.0
-          },
-          "tradability": "强",
-          "downgrade_reasons": [],
-          "impact": {
-            "headline": "AI分析暂不可用",
-            "analysis": [],
-            "summary": "AI分析暂不可用",
-            "positive_sectors": [],
-            "negative_sectors": [],
-            "positive_stocks": [],
-            "negative_stocks": [],
-            "no_impact": true,
-            "status": "failed",
-            "error": "无法从LLM输出中提取有效JSON: "
-          },
-          "display_title": "7月20日收评：上证50指数涨超3%，油气、煤炭板块集体走强",
-          "display_body": "市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒等消费股走强，古井贡酒涨停，贵州茅台涨近6%。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。",
-          "raw_content": "市场全天宽幅震荡，三大指数涨跌互现。油气股集体大涨，中国海油、中曼石油、博迈科等涨停。煤炭板块拉升，淮北矿业、大有能源、兖矿能源等涨停。电力股反复走强，华银电力、华电辽能、立新能源等涨停。白酒等消费股走强，古井贡酒涨停，贵州茅台涨近6%。个股跌多涨少，沪深京三市超3700股飘绿，今日成交2.72万亿。截止收盘沪指涨0.85%，深成指跌0.71%，创业板指涨0.42%。",
           "has_redundant_content": true
         },
         {
@@ -227166,31 +227621,37 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "电力股集体拉升，多股涨停，板块热度升温",
+            "headline": "电力板块异动拉升，多股涨停，短期提振电力及新能源板块情绪",
             "analysis": [
-              "夏季用电高峰来临，电力供需趋紧，推升板块预期",
-              "电力市场化改革加速，火电及新能源盈利改善，吸引资金流入",
-              "多只电力股涨停形成板块效应，短线活跃度提升"
+              "电力股集体走强，华银电力等封板，显示主力资金加速流入电力板块。",
+              "可能受夏季用电高峰临近、电力市场化改革等预期驱动，板块估值修复。",
+              "涨停潮激发市场对电力、绿电及电网设备板块的炒作热情，结构性机会显现。"
             ],
             "positive_sectors": [
               "电力",
-              "新能源"
+              "新能源电力",
+              "电网设备"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
                 "name": "华银电力",
                 "code": "600744",
-                "reason": "火电龙头，涨停引领板块情绪"
+                "reason": "电力股涨停龙头，资金关注度高"
               },
               {
-                "name": "立新能源",
-                "code": "001258",
-                "reason": "风电光伏装机增长，受益绿电政策"
+                "name": "金开新能",
+                "code": "600821",
+                "reason": "新能源运营商，受益绿电政策预期"
+              },
+              {
+                "name": "乐山电力",
+                "code": "600644",
+                "reason": "区域性电力公司，跟涨板块情绪"
               }
             ],
             "negative_stocks": [],
-            "summary": "电力股集体拉升，多股涨停，板块热度升温",
+            "summary": "电力板块异动拉升，多股涨停，短期提振电力及新能源板块情绪",
             "status": "ok"
           },
           "display_title": "电力股震荡拉升，华银电力、金开新能、立新能源、乐山电力、涪陵电力等多股触及涨停，晋控电力、京能电力等涨超7%。",
@@ -227272,31 +227733,25 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "国投电力获控股股东1.5亿元增持，彰显信心，利好股价及电力板块情绪",
+            "headline": "国投电力获控股股东1.5亿元增持，彰显信心，电力板块情绪或受提振",
             "analysis": [
-              "控股股东大手笔增持释放强烈看好信号，提振市场对国投电力的信心。",
-              "增持直接带来增量资金，有助于稳定股价并可能带动电力板块估值修复。",
-              "国投集团作为央企，增持行为也体现对清洁能源转型的支持，利好绿电板块。"
+              "控股股东通过集中竞价增持，直接释放对公司内在价值认可的信号，短期股价支撑增强。",
+              "增持行为通常被视为产业资本对当前估值的积极判断，有利于修复中小投资者信心。",
+              "尽管增持绝对金额不大，但国有资本动作具示范效应，或引发市场对电力板块价值重估。"
             ],
             "positive_sectors": [
-              "电力",
-              "绿电"
+              "电力"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
                 "name": "国投电力",
                 "code": "600886",
-                "reason": "控股股东拟增持1.5亿元，直接利好股价"
-              },
-              {
-                "name": "长江电力",
-                "code": "600900",
-                "reason": "电力龙头，受板块情绪提振"
+                "reason": "控股股东直接增持，利好股价"
               }
             ],
             "negative_stocks": [],
-            "summary": "国投电力获控股股东1.5亿元增持，彰显信心，利好股价及电力板块情绪",
+            "summary": "国投电力获控股股东1.5亿元增持，彰显信心，电力板块情绪或受提振",
             "status": "ok"
           },
           "display_title": "国投电力：控股股东国投集团计划自本公告披露之日起6个月内以集中竞价交易方式增持公司股票，合计增持金额人民币1.5亿元（含），资金来源为自有及自筹资金。",
@@ -227332,50 +227787,31 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "白酒股异动拉升，古井贡酒涨停带动板块走强，市场情绪受提振",
+            "headline": "白酒板块异动拉升，古井贡酒涨停提振市场情绪",
             "analysis": [
-              "白酒板块集体拉升表明资金积极回补消费类核心资产，短期做多情绪升温",
-              "古井贡酒涨停起到龙头示范效应，带动二三线酒企跟涨，板块热度扩散",
-              "贵州茅台等权重股同步走强，为板块持续性提供支撑，或吸引更多资金流入"
+              "古井贡酒强势涨停，带动白酒板块集体跟涨，显示资金对消费复苏的短期乐观预期。",
+              "白酒作为A股核心消费赛道，异动可能预示市场风格向价值消费切换。",
+              "若白酒行情持续，将提升食品饮料板块关注度，并可能扩散至其他消费细分领域。"
             ],
             "positive_sectors": [
-              "白酒"
+              "白酒",
+              "食品饮料"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
                 "name": "古井贡酒",
                 "code": "000596",
-                "reason": "涨停龙头，带动板块人气"
+                "reason": "触及涨停成为日内龙头"
               },
               {
                 "name": "贵州茅台",
                 "code": "600519",
-                "reason": "权重股跟涨，稳定板块信心"
-              },
-              {
-                "name": "迎驾贡酒",
-                "code": "603198",
-                "reason": "板块跟涨，受益情绪扩散"
-              },
-              {
-                "name": "金徽酒",
-                "code": "603919",
-                "reason": "中小酒企补涨，弹性较大"
-              },
-              {
-                "name": "皇台酒业",
-                "code": "000995",
-                "reason": "低位反弹，资金关注度高"
-              },
-              {
-                "name": "泸州老窖",
-                "code": "000568",
-                "reason": "二线龙头，板块联动上涨"
+                "reason": "白酒权重龙头跟涨"
               }
             ],
             "negative_stocks": [],
-            "summary": "白酒股异动拉升，古井贡酒涨停带动板块走强，市场情绪受提振",
+            "summary": "白酒板块异动拉升，古井贡酒涨停提振市场情绪",
             "status": "ok"
           },
           "display_title": "白酒股震荡拉升，古井贡酒触及涨停，贵州茅台、迎驾贡酒、金徽酒、皇台酒业、泸州老窖跟涨。",
@@ -227408,32 +227844,32 @@
           ],
           "impact": {
             "no_impact": false,
-            "headline": "证监会强调维护市场平稳并回报投资者，提振市场信心",
+            "headline": "证监会表态维护市场平稳运行，强化投资者保护，提振信心",
             "analysis": [
-              "监管层明确全力维护市场平稳运行，有助于稳定投资者预期和市场情绪。",
-              "提高上市公司透明度和真实性将改善公司治理，增强市场对蓝筹股的信心。",
-              "要求更好回报投资者，强化分红导向，利好高股息板块和长期价值投资。"
+              "监管层强调防风险和强监管，有助于降低市场大幅波动风险，稳定投资者预期。",
+              "提高上市公司透明度和回报投资者，将引导资金流向优质蓝筹和高分红企业。",
+              "督促行业机构规范经营，直接利好券商提升服务质量和盈利可持续性。"
             ],
             "positive_sectors": [
+              "券商",
               "银行",
-              "证券",
-              "公用事业"
+              "高股息蓝筹"
             ],
             "negative_sectors": [],
             "positive_stocks": [
               {
-                "name": "工商银行",
-                "code": "601398",
-                "reason": "高股息银行代表，受益于分红导向"
-              },
-              {
                 "name": "中信证券",
                 "code": "600030",
-                "reason": "券商龙头，受益于市场平稳运行和政策呵护"
+                "reason": "券商龙头直接受益于市场稳定和政策支持"
+              },
+              {
+                "name": "招商银行",
+                "code": "600036",
+                "reason": "优质蓝筹，注重股东回报，符合政策导向"
               }
             ],
             "negative_stocks": [],
-            "summary": "证监会强调维护市场平稳并回报投资者，提振市场信心",
+            "summary": "证监会表态维护市场平稳运行，强化投资者保护，提振信心",
             "status": "ok"
           },
           "display_title": "吴清：全力维护市场平稳运行，着力提高上市公司透明度和真实性、更好回报投资者",
@@ -227443,18 +227879,18 @@
         }
       ],
       "forecast": {
-        "core_judgment": "权重放量领涨，上证逼近3800关口，但中小个股分化，需观察突破有效性。",
-        "volume_note": "今日量能较5日均量放大20.9%，显著放量，但资金集中于权重板块。",
+        "core_judgment": "上证无量突破，权重独舞致深度分化，缠论无中枢，等待有效突破或顶分型确认",
+        "volume_note": "放量20.9%但集中推升权重，深成指缩量收跌，调仓换股迹象明显",
         "short_term": [
-          "若上证指数放量站上3800点，且沪深300维持强势，则短期有望看高一线，可关注电力、煤炭等强势板块的三买机会。",
-          "若权重板块出现冲高回落，且资金流出，上证回踩3750点不破，可能形成中枢震荡，关注二买机会。",
-          "观察中证500能否止跌反弹，若继续弱于上证，则结构性行情延续，需谨慎中小盘个股。"
+          "若上证放量站上3800并伴随增量资金扩散至中小盘，则有望延续向上笔，反之若缩量长上影则构成顶分型，考虑一卖",
+          "中证500若继续下探跌破7350，强化结构性熊市风险，需降低仓位应对；若止跌反弹，可介入补涨品种",
+          "电力、煤炭等热点若高位放量滞涨或资金流出，警惕短期回调；若缩量整理则持仓待涨，等待三买"
         ],
-        "mid_term": "中期看，上证指数目前处于上升趋势中，若能在3800附近震荡形成日线中枢，后续有望继续向上离开中枢。关键观察点是量能是否能维持在较高水平，以及热点能否从传统能源扩散到其他产业。若量能萎缩，可能形成中枢后走向背驰。",
+        "mid_term": "日线无中枢，当前为向上线段延伸，关注次级别中枢构筑。若权重轮动至消费、科技，则上证有望挑战4000；若量能萎缩且深成指破位，则将进入中枢震荡，区间参考3600-3800。关键观察点：沪深300与中证500比值能否收敛",
         "risks": [
-          "市场分化加剧：上证50大涨但中证500下跌，若中小盘持续走弱，可能拖累整体情绪。",
-          "量能持续性存疑：今日放量主要依赖权重板块，若后续无增量资金，可能冲高回落。",
-          "热点事件驱动多为短期消息，电力、煤炭板块若利好兑现，可能出现获利回吐。"
+          "权重股吸金导致个股流动性枯竭，被动减持风险上升",
+          "深成指与上证背离加剧，若深成指跌破13500，可能引发系统抛压",
+          "量能若快速萎缩至均量下方，权重补跌将冲击指数，形成二卖结构"
         ]
       },
       "sell_signals": [
@@ -227530,8 +227966,8 @@
           "requested_30min": 415,
           "fetched_30min": 415,
           "formal_kept": 0,
-          "candidate_upgraded": 40,
-          "dropped_no_confirm": 375,
+          "candidate_upgraded": 41,
+          "dropped_no_confirm": 374,
           "dropped_no_30min": 0,
           "dropped_risk_guard": 98,
           "dropped_diverge_far": 256
@@ -227541,7 +227977,7 @@
           "fetched_30min": 415,
           "formal_kept": 0,
           "candidate_upgraded": 38,
-          "dropped_no_confirm": 375,
+          "dropped_no_confirm": 374,
           "dropped_no_30min": 0,
           "dropped_risk_guard": 98
         },
@@ -227556,8 +227992,8 @@
         },
         "fusion_admission": {
           "market_regime": "weak",
-          "input_count": 96,
-          "dropped_by_ma": 58,
+          "input_count": 97,
+          "dropped_by_ma": 59,
           "dropped_by_market_regime": 0,
           "dropped_by_signal_gate": 0,
           "kept_formal": 0,
@@ -227792,6 +228228,12 @@
               "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
             },
             {
+              "code": "603271",
+              "name": "永杰新材",
+              "type": "底背驰候选",
+              "reason": "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"
+            },
+            {
               "code": "601011",
               "name": "宝泰隆",
               "type": "底背驰候选",
@@ -227917,22 +228359,22 @@
         },
         "signal_distribution": {
           "强势启动候选": 51,
-          "底背驰候选": 20,
+          "底背驰候选": 21,
           "趋势延续候选": 5
         },
         "event_analysis_status_counts": {
-          "ok": 7,
-          "failed": 3,
+          "ok": 8,
+          "failed": 2,
           "skipped": 0
         },
         "chart_annotation_coverage": {
-          "total_picks": 76,
-          "with_annotations": 76
+          "total_picks": 77,
+          "with_annotations": 77
         },
         "data_quality": {
           "report_date": "2026-07-20",
-          "generated_at": "2026-07-20T15:05:05+08:00",
-          "as_of": "2026-07-20T15:05:05+08:00",
+          "generated_at": "2026-07-20T16:27:19+08:00",
+          "as_of": "2026-07-20T16:27:19+08:00",
           "bar_state": "closed",
           "is_trading_day": true,
           "is_official": true,
@@ -228151,16 +228593,17 @@
           "market_close_snapshot": {
             "status": "complete",
             "report_date": "2026-07-20",
-            "requested": 5879,
-            "unique": 5879,
-            "valid_a_rows": 5879,
-            "quoted_rows": 5524,
-            "written": 5171,
-            "skipped_unquoted": 355,
-            "skipped_missing_factor": 353,
-            "history_eligible_rows": 5497,
-            "coverage": 0.940695,
-            "remote_calls": 1,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5504,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
+            "coverage": 0.939499,
+            "remote_calls": 0,
+            "source": "db",
             "valid_bar_count": 5171
           },
           "runtime_policy": {
@@ -228193,7 +228636,7 @@
               "as_of": "2026-07-20",
               "required_date": "2026-07-20",
               "instrument_count": 5630,
-              "eligible_count": 4012,
+              "eligible_count": 4011,
               "excluded": {
                 "missing_meta": 73,
                 "st_or_delisting": 478,
@@ -228201,10 +228644,10 @@
                 "insufficient_bars": 7,
                 "nonfinal_bars": 0,
                 "stale_latest_bar": 106,
-                "low_liquidity": 922
+                "low_liquidity": 923
               }
             },
-            "eligible_count": 4012,
+            "eligible_count": 4011,
             "base_target": 800,
             "base_count": 800,
             "overlay_count": 124,
@@ -228239,9 +228682,9 @@
           "official_pool_scope": "active_retrieval_pool",
           "market_cap_evidence": {
             "requested": 924,
-            "db_hits": 567,
-            "remote_requested": 357,
-            "remote_hits": 357,
+            "db_hits": 924,
+            "remote_requested": 0,
+            "remote_hits": 0,
             "hydrated": 924,
             "max_workers": 20
           },
@@ -228293,29 +228736,29 @@
           "trend_watchlist": 119
         },
         "candidate_funnel": {
-          "run_id": "20260720-e0961e654c6a",
+          "run_id": "20260720-2174f734ca68",
           "report_date": "2026-07-20",
           "as_of": "2026-07-20",
           "candidate_count": 5612,
           "stage_counts": {
             "full_a": 5630,
-            "eligible": 4012,
+            "eligible": 4011,
             "retrieval": 924,
             "daily_channel": 522,
-            "minute30": 101,
+            "minute30": 102,
             "fusion": 38,
-            "display": 163
+            "display": 164
           },
           "terminal_counts": {
-            "main": 76,
+            "main": 77,
             "observe": 87,
-            "reject": 5449
+            "reject": 5448
           },
           "first_failure_counts": {
-            "eligible": 1600,
-            "retrieval": 3088,
+            "eligible": 1601,
+            "retrieval": 3087,
             "daily_channel": 521,
-            "minute30": 359
+            "minute30": 358
           },
           "persist_status": "saved",
           "db_path": "/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/market_history.sqlite"
@@ -228323,9 +228766,9 @@
         "recall_shadow": {
           "mode": "active",
           "new_strategy_controls_publish": true,
-          "potential_pure_count": 76,
+          "potential_pure_count": 77,
           "potential_fusion_count": 38,
-          "published_pure_count": 76,
+          "published_pure_count": 77,
           "published_fusion_count": 38,
           "suppressed_codes": []
         },
@@ -228337,14 +228780,14 @@
           "dropped_no_15min": 0,
           "dropped_insufficient_bars": 0,
           "dropped_lifeline_break": 20,
-          "dropped_macd_below_zero": 21,
+          "dropped_macd_below_zero": 22,
           "dropped_77_break_timeout": 0,
           "candidates": 30
         },
         "signal_recency": {
           "max_age_trading_days": 10,
-          "pure_input": 96,
-          "pure_kept": 76,
+          "pure_input": 97,
+          "pure_kept": 77,
           "pure_dropped_expired": 20,
           "fusion_input": 38,
           "fusion_kept": 38,
@@ -228507,8 +228950,8 @@
       },
       "data_quality": {
         "report_date": "2026-07-20",
-        "generated_at": "2026-07-20T15:05:05+08:00",
-        "as_of": "2026-07-20T15:05:05+08:00",
+        "generated_at": "2026-07-20T16:27:19+08:00",
+        "as_of": "2026-07-20T16:27:19+08:00",
         "bar_state": "closed",
         "is_trading_day": true,
         "is_official": true,
@@ -228727,16 +229170,17 @@
         "market_close_snapshot": {
           "status": "complete",
           "report_date": "2026-07-20",
-          "requested": 5879,
-          "unique": 5879,
-          "valid_a_rows": 5879,
-          "quoted_rows": 5524,
-          "written": 5171,
-          "skipped_unquoted": 355,
-          "skipped_missing_factor": 353,
-          "history_eligible_rows": 5497,
-          "coverage": 0.940695,
-          "remote_calls": 1,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5504,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
+          "coverage": 0.939499,
+          "remote_calls": 0,
+          "source": "db",
           "valid_bar_count": 5171
         },
         "runtime_policy": {
@@ -228769,7 +229213,7 @@
             "as_of": "2026-07-20",
             "required_date": "2026-07-20",
             "instrument_count": 5630,
-            "eligible_count": 4012,
+            "eligible_count": 4011,
             "excluded": {
               "missing_meta": 73,
               "st_or_delisting": 478,
@@ -228777,10 +229221,10 @@
               "insufficient_bars": 7,
               "nonfinal_bars": 0,
               "stale_latest_bar": 106,
-              "low_liquidity": 922
+              "low_liquidity": 923
             }
           },
-          "eligible_count": 4012,
+          "eligible_count": 4011,
           "base_target": 800,
           "base_count": 800,
           "overlay_count": 124,
@@ -228815,9 +229259,9 @@
         "official_pool_scope": "active_retrieval_pool",
         "market_cap_evidence": {
           "requested": 924,
-          "db_hits": 567,
-          "remote_requested": 357,
-          "remote_hits": 357,
+          "db_hits": 924,
+          "remote_requested": 0,
+          "remote_hits": 0,
           "hydrated": 924,
           "max_workers": 20
         },
@@ -228858,7 +229302,7 @@
           "dropped_no_15min": 0,
           "dropped_insufficient_bars": 0,
           "dropped_lifeline_break": 20,
-          "dropped_macd_below_zero": 21,
+          "dropped_macd_below_zero": 22,
           "dropped_77_break_timeout": 0,
           "candidates": 30
         },
@@ -228916,7 +229360,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 10.84,
@@ -229119,15 +229564,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 4.38,
             "life_line": 4.21,
             "ma13": 4.35,
             "ma77": 4.27,
-            "distance_life_pct": 4.16,
-            "distance_ma77_pct": 2.51,
+            "distance_life_pct": 4.14,
+            "distance_ma77_pct": 2.49,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -229318,12 +229764,13 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 33.98,
             "life_line": 32.75,
-            "ma13": 33.7,
+            "ma13": 33.69,
             "ma77": 33.27,
             "distance_life_pct": 3.75,
             "distance_ma77_pct": 2.15,
@@ -229521,15 +229968,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 5.22,
             "life_line": 5.12,
             "ma13": 5.21,
             "ma77": 5.19,
-            "distance_life_pct": 2.0,
-            "distance_ma77_pct": 0.51,
+            "distance_life_pct": 1.99,
+            "distance_ma77_pct": 0.5,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -229720,7 +230168,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 3.62,
@@ -229728,7 +230177,7 @@
             "ma13": 3.62,
             "ma77": 3.58,
             "distance_life_pct": 3.75,
-            "distance_ma77_pct": 1.12,
+            "distance_ma77_pct": 1.13,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -229919,7 +230368,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 12.48,
@@ -230118,15 +230568,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 3.44,
             "life_line": 3.34,
-            "ma13": 3.43,
+            "ma13": 3.42,
             "ma77": 3.39,
             "distance_life_pct": 3.12,
-            "distance_ma77_pct": 1.44,
+            "distance_ma77_pct": 1.45,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -230317,7 +230768,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 4.21,
@@ -230516,15 +230968,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 3.07,
             "life_line": 2.98,
             "ma13": 3.06,
             "ma77": 3.03,
-            "distance_life_pct": 3.1,
-            "distance_ma77_pct": 1.28,
+            "distance_life_pct": 3.11,
+            "distance_ma77_pct": 1.3,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -230715,7 +231168,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 3.49,
@@ -230866,6 +231320,206 @@
           },
           {
             "rank": 11,
+            "code": "601567",
+            "name": "三星电气",
+            "sector": "电网设备",
+            "sector_tags": [],
+            "sector_rank": null,
+            "sector_flow": null,
+            "sector_strength_label": "",
+            "data_status": {
+              "daily": "verified",
+              "latest_date": "2026-07-20",
+              "source": "market_history_db",
+              "bars": 120,
+              "stale": false,
+              "is_final": true
+            },
+            "theme_labels": [
+              "六网/新型电网"
+            ],
+            "tier": "买点候选",
+            "score": 70,
+            "decision_engine_v1": {
+              "version": "1",
+              "code": "601567",
+              "name": "三星电气",
+              "decision": "暂不判断（位置信息不足）",
+              "decision_code": "observe",
+              "total_score": -2,
+              "structure": {
+                "score": 5,
+                "reasons": [
+                  "震荡结构"
+                ]
+              },
+              "position": {
+                "score": -20,
+                "reasons": [
+                  "位置信息不足",
+                  "位置估计偏保守"
+                ]
+              },
+              "sentiment": {
+                "score": 13,
+                "reasons": [
+                  "震荡市",
+                  "MA 均线多头"
+                ]
+              },
+              "risk_reasons": [
+                "市场情绪偏冷",
+                "市场情绪转弱"
+              ]
+            },
+            "close": 14.24,
+            "life_line": 13.86,
+            "ma13": 14.1,
+            "ma77": 13.92,
+            "distance_life_pct": 2.71,
+            "distance_ma77_pct": 2.27,
+            "macd_status": "DIF/DEA双线0轴上",
+            "macd_above_zero": true,
+            "buy_point_type": "-",
+            "pivot_status": "未形成中枢",
+            "risk_line": 13.86,
+            "reduce_line": 13.92,
+            "change_pct": 0,
+            "current_price": 14.24,
+            "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
+            "dates": [],
+            "closes": [],
+            "chart_annotations": {
+              "markLines": [],
+              "markPoints": [],
+              "labels": []
+            },
+            "opportunity_score": 24,
+            "watch_score": 24,
+            "view_rank": 11,
+            "rank_trace": {
+              "base_source": "luojie",
+              "source_count": 1,
+              "signal_score": 10.5,
+              "entry_score": 4.0,
+              "momentum_score": 0.0,
+              "market_score": 9.0,
+              "risk_penalty": 0.0,
+              "data_penalty": 0.0,
+              "alpha_features": {
+                "market_regime_factor": {},
+                "sector_strength_factor": {
+                  "sector_flow": null,
+                  "sector_rank": null,
+                  "sector_strength_factor": null
+                },
+                "momentum_persistence": null,
+                "breakout_quality": {
+                  "volume_ratio": null,
+                  "confirmed_by": "",
+                  "ma_bullish": false,
+                  "confirmations": [],
+                  "startup_signals": [],
+                  "distance": null
+                },
+                "alpha_multiplier": null,
+                "pool_quality": {
+                  "volume20": 0.0,
+                  "volume_ratio20": 0.0,
+                  "liquidity_label": "低流动性",
+                  "liquidity_score": 0.0,
+                  "code_style_score": 0.0,
+                  "growth_board_score": 0.0,
+                  "growth_board_label": "",
+                  "market_cap_score": 0.0,
+                  "market_cap_label": "",
+                  "market_cap_source": "",
+                  "ret20": null,
+                  "ret20_score": 0.0,
+                  "industry_key": "电网设备",
+                  "sector_quality_score": 0.0,
+                  "pool_quality_tier": "none",
+                  "pool_quality_components": [
+                    {
+                      "name": "liquidity",
+                      "score": 0.0,
+                      "threshold_elite": 70.0,
+                      "threshold_strong": 55.0
+                    },
+                    {
+                      "name": "growth",
+                      "score": 0.0,
+                      "threshold_elite": 55.0,
+                      "threshold_strong": 55.0
+                    },
+                    {
+                      "name": "market_cap",
+                      "score": 0.0,
+                      "source": ""
+                    },
+                    {
+                      "name": "ret20",
+                      "score": 0.0
+                    },
+                    {
+                      "name": "sector",
+                      "score": 0.0,
+                      "threshold_elite": 70.0,
+                      "threshold_strong": 55.0
+                    }
+                  ],
+                  "pool_quality_score": 0.0,
+                  "pool_quality_tags": [],
+                  "market_cap": null,
+                  "circulating_market_cap": null,
+                  "float_market_cap": null,
+                  "liquidity_source": "",
+                  "money20": null,
+                  "quality_evidence_eligible": false,
+                  "quality_evidence_status": "insufficient"
+                },
+                "ma_bullish": false,
+                "confirmed_by": "",
+                "confirmations": [],
+                "startup_signals": []
+              },
+              "alpha_bonus": 0.0,
+              "pool_quality_bonus": 0.0,
+              "pool_quality_score": 0.0,
+              "pool_quality_tags": [],
+              "pool_quality_tier": "none",
+              "pool_quality_components": [
+                {
+                  "name": "liquidity",
+                  "score": 0.0,
+                  "threshold_elite": 70.0,
+                  "threshold_strong": 55.0
+                },
+                {
+                  "name": "growth",
+                  "score": 0.0,
+                  "threshold_elite": 55.0,
+                  "threshold_strong": 55.0
+                },
+                {
+                  "name": "sector",
+                  "score": 0.0,
+                  "threshold_elite": 70.0,
+                  "threshold_strong": 55.0
+                }
+              ],
+              "alpha_multiplier": 1.0,
+              "base_opportunity_score": 24,
+              "risk_flags": [],
+              "opportunity_score": 24,
+              "distance_from_reference_pct": null,
+              "change_pct": 0.0,
+              "source:luojie": 1,
+              "selected_reason": "罗姐池单源入榜"
+            }
+          },
+          {
+            "rank": 12,
             "code": "601866",
             "name": "中远海发",
             "sector": "航运港口",
@@ -230914,7 +231568,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 2.4,
@@ -230922,7 +231577,7 @@
             "ma13": 2.4,
             "ma77": 2.39,
             "distance_life_pct": 2.44,
-            "distance_ma77_pct": 0.4,
+            "distance_ma77_pct": 0.41,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -230941,7 +231596,7 @@
             },
             "opportunity_score": 24,
             "watch_score": 24,
-            "view_rank": 11,
+            "view_rank": 12,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -231064,7 +231719,7 @@
             }
           },
           {
-            "rank": 12,
+            "rank": 13,
             "code": "603871",
             "name": "嘉友国际",
             "sector": "物流",
@@ -231113,21 +231768,22 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 11.82,
             "life_line": 11.39,
             "ma13": 11.6,
-            "ma77": 11.48,
+            "ma77": 11.47,
             "distance_life_pct": 3.81,
-            "distance_ma77_pct": 3.0,
+            "distance_ma77_pct": 3.01,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
             "pivot_status": "未形成中枢",
             "risk_line": 11.39,
-            "reduce_line": 11.48,
+            "reduce_line": 11.47,
             "change_pct": 0,
             "current_price": 11.82,
             "reason": "国家队硬方向: 六网/物流网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
@@ -231140,7 +231796,7 @@
             },
             "opportunity_score": 24,
             "watch_score": 24,
-            "view_rank": 12,
+            "view_rank": 13,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -231263,7 +231919,7 @@
             }
           },
           {
-            "rank": 13,
+            "rank": 14,
             "code": "600995",
             "name": "南网储能",
             "sector": "电力",
@@ -231316,7 +231972,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 12.49,
@@ -231343,7 +232000,7 @@
             },
             "opportunity_score": 23,
             "watch_score": 23,
-            "view_rank": 13,
+            "view_rank": 14,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -231470,7 +232127,7 @@
             }
           },
           {
-            "rank": 14,
+            "rank": 15,
             "code": "000720",
             "name": "新能泰山",
             "sector": "电网设备",
@@ -231519,7 +232176,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 3.31,
@@ -231546,7 +232204,7 @@
             },
             "opportunity_score": 22,
             "watch_score": 22,
-            "view_rank": 14,
+            "view_rank": 15,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -231669,7 +232327,7 @@
             }
           },
           {
-            "rank": 15,
+            "rank": 16,
             "code": "301291",
             "name": "明阳电气",
             "sector": "电网设备",
@@ -231718,7 +232376,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 38.57,
@@ -231745,7 +232404,7 @@
             },
             "opportunity_score": 21,
             "watch_score": 21,
-            "view_rank": 15,
+            "view_rank": 16,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -231872,7 +232531,7 @@
             }
           },
           {
-            "rank": 16,
+            "rank": 17,
             "code": "600050",
             "name": "中国联通",
             "sector": "通信服务",
@@ -231922,7 +232581,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 4.4,
@@ -231939,206 +232599,6 @@
             "reduce_line": 4.27,
             "change_pct": 0,
             "current_price": 4.4,
-            "reason": "国家队硬方向: 六网/新一代通信网、赛道层/运营商；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
-            "dates": [],
-            "closes": [],
-            "chart_annotations": {
-              "markLines": [],
-              "markPoints": [],
-              "labels": []
-            },
-            "opportunity_score": 21,
-            "watch_score": 21,
-            "view_rank": 16,
-            "rank_trace": {
-              "base_source": "luojie",
-              "source_count": 1,
-              "signal_score": 7.8,
-              "entry_score": 4.0,
-              "momentum_score": 0.0,
-              "market_score": 9.0,
-              "risk_penalty": 0.0,
-              "data_penalty": 0.0,
-              "alpha_features": {
-                "market_regime_factor": {},
-                "sector_strength_factor": {
-                  "sector_flow": null,
-                  "sector_rank": null,
-                  "sector_strength_factor": null
-                },
-                "momentum_persistence": null,
-                "breakout_quality": {
-                  "volume_ratio": null,
-                  "confirmed_by": "",
-                  "ma_bullish": false,
-                  "confirmations": [],
-                  "startup_signals": [],
-                  "distance": null
-                },
-                "alpha_multiplier": null,
-                "pool_quality": {
-                  "volume20": 0.0,
-                  "volume_ratio20": 0.0,
-                  "liquidity_label": "低流动性",
-                  "liquidity_score": 0.0,
-                  "code_style_score": 0.0,
-                  "growth_board_score": 0.0,
-                  "growth_board_label": "",
-                  "market_cap_score": 0.0,
-                  "market_cap_label": "",
-                  "market_cap_source": "",
-                  "ret20": null,
-                  "ret20_score": 0.0,
-                  "industry_key": "通信服务",
-                  "sector_quality_score": 0.0,
-                  "pool_quality_tier": "none",
-                  "pool_quality_components": [
-                    {
-                      "name": "liquidity",
-                      "score": 0.0,
-                      "threshold_elite": 70.0,
-                      "threshold_strong": 55.0
-                    },
-                    {
-                      "name": "growth",
-                      "score": 0.0,
-                      "threshold_elite": 55.0,
-                      "threshold_strong": 55.0
-                    },
-                    {
-                      "name": "market_cap",
-                      "score": 0.0,
-                      "source": ""
-                    },
-                    {
-                      "name": "ret20",
-                      "score": 0.0
-                    },
-                    {
-                      "name": "sector",
-                      "score": 0.0,
-                      "threshold_elite": 70.0,
-                      "threshold_strong": 55.0
-                    }
-                  ],
-                  "pool_quality_score": 0.0,
-                  "pool_quality_tags": [],
-                  "market_cap": null,
-                  "circulating_market_cap": null,
-                  "float_market_cap": null,
-                  "liquidity_source": "",
-                  "money20": null,
-                  "quality_evidence_eligible": false,
-                  "quality_evidence_status": "insufficient"
-                },
-                "ma_bullish": false,
-                "confirmed_by": "",
-                "confirmations": [],
-                "startup_signals": []
-              },
-              "alpha_bonus": 0.0,
-              "pool_quality_bonus": 0.0,
-              "pool_quality_score": 0.0,
-              "pool_quality_tags": [],
-              "pool_quality_tier": "none",
-              "pool_quality_components": [
-                {
-                  "name": "liquidity",
-                  "score": 0.0,
-                  "threshold_elite": 70.0,
-                  "threshold_strong": 55.0
-                },
-                {
-                  "name": "growth",
-                  "score": 0.0,
-                  "threshold_elite": 55.0,
-                  "threshold_strong": 55.0
-                },
-                {
-                  "name": "sector",
-                  "score": 0.0,
-                  "threshold_elite": 70.0,
-                  "threshold_strong": 55.0
-                }
-              ],
-              "alpha_multiplier": 1.0,
-              "base_opportunity_score": 21,
-              "risk_flags": [],
-              "opportunity_score": 21,
-              "distance_from_reference_pct": null,
-              "change_pct": 0.0,
-              "source:luojie": 1,
-              "selected_reason": "罗姐池单源入榜"
-            }
-          },
-          {
-            "rank": 17,
-            "code": "600941",
-            "name": "中国移动",
-            "sector": "通信服务",
-            "sector_tags": [],
-            "sector_rank": null,
-            "sector_flow": null,
-            "sector_strength_label": "",
-            "data_status": {
-              "daily": "verified",
-              "latest_date": "2026-07-20",
-              "source": "market_history_db",
-              "bars": 120,
-              "stale": false,
-              "is_final": true
-            },
-            "theme_labels": [
-              "六网/新一代通信网",
-              "赛道层/运营商"
-            ],
-            "tier": "生命线观察",
-            "score": 52,
-            "decision_engine_v1": {
-              "version": "1",
-              "code": "600941",
-              "name": "中国移动",
-              "decision": "暂不判断（位置信息不足）",
-              "decision_code": "observe",
-              "total_score": -2,
-              "structure": {
-                "score": 5,
-                "reasons": [
-                  "震荡结构"
-                ]
-              },
-              "position": {
-                "score": -20,
-                "reasons": [
-                  "位置信息不足",
-                  "位置估计偏保守"
-                ]
-              },
-              "sentiment": {
-                "score": 13,
-                "reasons": [
-                  "震荡市",
-                  "MA 均线多头"
-                ]
-              },
-              "risk_reasons": [
-                "市场情绪偏冷"
-              ]
-            },
-            "close": 95.8,
-            "life_line": 91.28,
-            "ma13": 95.77,
-            "ma77": 93.42,
-            "distance_life_pct": 4.95,
-            "distance_ma77_pct": 2.55,
-            "macd_status": "DIF/DEA双线0轴上",
-            "macd_above_zero": true,
-            "buy_point_type": "-",
-            "pivot_status": "未形成中枢",
-            "risk_line": 91.28,
-            "reduce_line": 93.42,
-            "change_pct": 0,
-            "current_price": 95.8,
             "reason": "国家队硬方向: 六网/新一代通信网、赛道层/运营商；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
             "dates": [],
             "closes": [],
@@ -232273,6 +232733,207 @@
           },
           {
             "rank": 18,
+            "code": "600941",
+            "name": "中国移动",
+            "sector": "通信服务",
+            "sector_tags": [],
+            "sector_rank": null,
+            "sector_flow": null,
+            "sector_strength_label": "",
+            "data_status": {
+              "daily": "verified",
+              "latest_date": "2026-07-20",
+              "source": "market_history_db",
+              "bars": 120,
+              "stale": false,
+              "is_final": true
+            },
+            "theme_labels": [
+              "六网/新一代通信网",
+              "赛道层/运营商"
+            ],
+            "tier": "生命线观察",
+            "score": 52,
+            "decision_engine_v1": {
+              "version": "1",
+              "code": "600941",
+              "name": "中国移动",
+              "decision": "暂不判断（位置信息不足）",
+              "decision_code": "observe",
+              "total_score": -2,
+              "structure": {
+                "score": 5,
+                "reasons": [
+                  "震荡结构"
+                ]
+              },
+              "position": {
+                "score": -20,
+                "reasons": [
+                  "位置信息不足",
+                  "位置估计偏保守"
+                ]
+              },
+              "sentiment": {
+                "score": 13,
+                "reasons": [
+                  "震荡市",
+                  "MA 均线多头"
+                ]
+              },
+              "risk_reasons": [
+                "市场情绪偏冷",
+                "市场情绪转弱"
+              ]
+            },
+            "close": 95.8,
+            "life_line": 91.28,
+            "ma13": 95.76,
+            "ma77": 93.42,
+            "distance_life_pct": 4.96,
+            "distance_ma77_pct": 2.55,
+            "macd_status": "DIF/DEA双线0轴上",
+            "macd_above_zero": true,
+            "buy_point_type": "-",
+            "pivot_status": "未形成中枢",
+            "risk_line": 91.28,
+            "reduce_line": 93.42,
+            "change_pct": 0,
+            "current_price": 95.8,
+            "reason": "国家队硬方向: 六网/新一代通信网、赛道层/运营商；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
+            "dates": [],
+            "closes": [],
+            "chart_annotations": {
+              "markLines": [],
+              "markPoints": [],
+              "labels": []
+            },
+            "opportunity_score": 21,
+            "watch_score": 21,
+            "view_rank": 18,
+            "rank_trace": {
+              "base_source": "luojie",
+              "source_count": 1,
+              "signal_score": 7.8,
+              "entry_score": 4.0,
+              "momentum_score": 0.0,
+              "market_score": 9.0,
+              "risk_penalty": 0.0,
+              "data_penalty": 0.0,
+              "alpha_features": {
+                "market_regime_factor": {},
+                "sector_strength_factor": {
+                  "sector_flow": null,
+                  "sector_rank": null,
+                  "sector_strength_factor": null
+                },
+                "momentum_persistence": null,
+                "breakout_quality": {
+                  "volume_ratio": null,
+                  "confirmed_by": "",
+                  "ma_bullish": false,
+                  "confirmations": [],
+                  "startup_signals": [],
+                  "distance": null
+                },
+                "alpha_multiplier": null,
+                "pool_quality": {
+                  "volume20": 0.0,
+                  "volume_ratio20": 0.0,
+                  "liquidity_label": "低流动性",
+                  "liquidity_score": 0.0,
+                  "code_style_score": 0.0,
+                  "growth_board_score": 0.0,
+                  "growth_board_label": "",
+                  "market_cap_score": 0.0,
+                  "market_cap_label": "",
+                  "market_cap_source": "",
+                  "ret20": null,
+                  "ret20_score": 0.0,
+                  "industry_key": "通信服务",
+                  "sector_quality_score": 0.0,
+                  "pool_quality_tier": "none",
+                  "pool_quality_components": [
+                    {
+                      "name": "liquidity",
+                      "score": 0.0,
+                      "threshold_elite": 70.0,
+                      "threshold_strong": 55.0
+                    },
+                    {
+                      "name": "growth",
+                      "score": 0.0,
+                      "threshold_elite": 55.0,
+                      "threshold_strong": 55.0
+                    },
+                    {
+                      "name": "market_cap",
+                      "score": 0.0,
+                      "source": ""
+                    },
+                    {
+                      "name": "ret20",
+                      "score": 0.0
+                    },
+                    {
+                      "name": "sector",
+                      "score": 0.0,
+                      "threshold_elite": 70.0,
+                      "threshold_strong": 55.0
+                    }
+                  ],
+                  "pool_quality_score": 0.0,
+                  "pool_quality_tags": [],
+                  "market_cap": null,
+                  "circulating_market_cap": null,
+                  "float_market_cap": null,
+                  "liquidity_source": "",
+                  "money20": null,
+                  "quality_evidence_eligible": false,
+                  "quality_evidence_status": "insufficient"
+                },
+                "ma_bullish": false,
+                "confirmed_by": "",
+                "confirmations": [],
+                "startup_signals": []
+              },
+              "alpha_bonus": 0.0,
+              "pool_quality_bonus": 0.0,
+              "pool_quality_score": 0.0,
+              "pool_quality_tags": [],
+              "pool_quality_tier": "none",
+              "pool_quality_components": [
+                {
+                  "name": "liquidity",
+                  "score": 0.0,
+                  "threshold_elite": 70.0,
+                  "threshold_strong": 55.0
+                },
+                {
+                  "name": "growth",
+                  "score": 0.0,
+                  "threshold_elite": 55.0,
+                  "threshold_strong": 55.0
+                },
+                {
+                  "name": "sector",
+                  "score": 0.0,
+                  "threshold_elite": 70.0,
+                  "threshold_strong": 55.0
+                }
+              ],
+              "alpha_multiplier": 1.0,
+              "base_opportunity_score": 21,
+              "risk_flags": [],
+              "opportunity_score": 21,
+              "distance_from_reference_pct": null,
+              "change_pct": 0.0,
+              "source:luojie": 1,
+              "selected_reason": "罗姐池单源入榜"
+            }
+          },
+          {
+            "rank": 19,
             "code": "601006",
             "name": "大秦铁路",
             "sector": "铁路公路",
@@ -232321,15 +232982,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 4.85,
             "life_line": 4.73,
             "ma13": 4.82,
             "ma77": 4.72,
-            "distance_life_pct": 2.53,
-            "distance_ma77_pct": 2.77,
+            "distance_life_pct": 2.52,
+            "distance_ma77_pct": 2.76,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -232348,7 +233010,7 @@
             },
             "opportunity_score": 21,
             "watch_score": 21,
-            "view_rank": 18,
+            "view_rank": 19,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -232471,7 +233133,7 @@
             }
           },
           {
-            "rank": 19,
+            "rank": 20,
             "code": "601298",
             "name": "青岛港",
             "sector": "航运港口",
@@ -232520,7 +233182,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 8.73,
@@ -232547,7 +233210,7 @@
             },
             "opportunity_score": 21,
             "watch_score": 21,
-            "view_rank": 19,
+            "view_rank": 20,
             "rank_trace": {
               "base_source": "luojie",
               "source_count": 1,
@@ -232670,7 +233333,7 @@
             }
           },
           {
-            "rank": 20,
+            "rank": 21,
             "code": "000429",
             "name": "粤高速Ａ",
             "sector": "铁路公路",
@@ -232719,14 +233382,15 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 14.59,
             "life_line": 14.01,
             "ma13": 14.55,
             "ma77": 14.13,
-            "distance_life_pct": 4.11,
+            "distance_life_pct": 4.12,
             "distance_ma77_pct": 3.28,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
@@ -232736,205 +233400,6 @@
             "reduce_line": 14.13,
             "change_pct": 0,
             "current_price": 14.59,
-            "reason": "国家队硬方向: 六网/物流网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
-            "dates": [],
-            "closes": [],
-            "chart_annotations": {
-              "markLines": [],
-              "markPoints": [],
-              "labels": []
-            },
-            "opportunity_score": 20,
-            "watch_score": 20,
-            "view_rank": 20,
-            "rank_trace": {
-              "base_source": "luojie",
-              "source_count": 1,
-              "signal_score": 7.2,
-              "entry_score": 4.0,
-              "momentum_score": 0.0,
-              "market_score": 9.0,
-              "risk_penalty": 0.0,
-              "data_penalty": 0.0,
-              "alpha_features": {
-                "market_regime_factor": {},
-                "sector_strength_factor": {
-                  "sector_flow": null,
-                  "sector_rank": null,
-                  "sector_strength_factor": null
-                },
-                "momentum_persistence": null,
-                "breakout_quality": {
-                  "volume_ratio": null,
-                  "confirmed_by": "",
-                  "ma_bullish": false,
-                  "confirmations": [],
-                  "startup_signals": [],
-                  "distance": null
-                },
-                "alpha_multiplier": null,
-                "pool_quality": {
-                  "volume20": 0.0,
-                  "volume_ratio20": 0.0,
-                  "liquidity_label": "低流动性",
-                  "liquidity_score": 0.0,
-                  "code_style_score": 0.0,
-                  "growth_board_score": 0.0,
-                  "growth_board_label": "",
-                  "market_cap_score": 0.0,
-                  "market_cap_label": "",
-                  "market_cap_source": "",
-                  "ret20": null,
-                  "ret20_score": 0.0,
-                  "industry_key": "铁路公路",
-                  "sector_quality_score": 0.0,
-                  "pool_quality_tier": "none",
-                  "pool_quality_components": [
-                    {
-                      "name": "liquidity",
-                      "score": 0.0,
-                      "threshold_elite": 70.0,
-                      "threshold_strong": 55.0
-                    },
-                    {
-                      "name": "growth",
-                      "score": 0.0,
-                      "threshold_elite": 55.0,
-                      "threshold_strong": 55.0
-                    },
-                    {
-                      "name": "market_cap",
-                      "score": 0.0,
-                      "source": ""
-                    },
-                    {
-                      "name": "ret20",
-                      "score": 0.0
-                    },
-                    {
-                      "name": "sector",
-                      "score": 0.0,
-                      "threshold_elite": 70.0,
-                      "threshold_strong": 55.0
-                    }
-                  ],
-                  "pool_quality_score": 0.0,
-                  "pool_quality_tags": [],
-                  "market_cap": null,
-                  "circulating_market_cap": null,
-                  "float_market_cap": null,
-                  "liquidity_source": "",
-                  "money20": null,
-                  "quality_evidence_eligible": false,
-                  "quality_evidence_status": "insufficient"
-                },
-                "ma_bullish": false,
-                "confirmed_by": "",
-                "confirmations": [],
-                "startup_signals": []
-              },
-              "alpha_bonus": 0.0,
-              "pool_quality_bonus": 0.0,
-              "pool_quality_score": 0.0,
-              "pool_quality_tags": [],
-              "pool_quality_tier": "none",
-              "pool_quality_components": [
-                {
-                  "name": "liquidity",
-                  "score": 0.0,
-                  "threshold_elite": 70.0,
-                  "threshold_strong": 55.0
-                },
-                {
-                  "name": "growth",
-                  "score": 0.0,
-                  "threshold_elite": 55.0,
-                  "threshold_strong": 55.0
-                },
-                {
-                  "name": "sector",
-                  "score": 0.0,
-                  "threshold_elite": 70.0,
-                  "threshold_strong": 55.0
-                }
-              ],
-              "alpha_multiplier": 1.0,
-              "base_opportunity_score": 20,
-              "risk_flags": [],
-              "opportunity_score": 20,
-              "distance_from_reference_pct": null,
-              "change_pct": 0.0,
-              "source:luojie": 1,
-              "selected_reason": "罗姐池单源入榜"
-            }
-          },
-          {
-            "rank": 21,
-            "code": "001965",
-            "name": "招商公路",
-            "sector": "铁路公路",
-            "sector_tags": [],
-            "sector_rank": null,
-            "sector_flow": null,
-            "sector_strength_label": "",
-            "data_status": {
-              "daily": "verified",
-              "latest_date": "2026-07-20",
-              "source": "market_history_db",
-              "bars": 120,
-              "stale": false,
-              "is_final": true
-            },
-            "theme_labels": [
-              "六网/物流网"
-            ],
-            "tier": "生命线观察",
-            "score": 48,
-            "decision_engine_v1": {
-              "version": "1",
-              "code": "001965",
-              "name": "招商公路",
-              "decision": "暂不判断（位置信息不足）",
-              "decision_code": "observe",
-              "total_score": -2,
-              "structure": {
-                "score": 5,
-                "reasons": [
-                  "震荡结构"
-                ]
-              },
-              "position": {
-                "score": -20,
-                "reasons": [
-                  "位置信息不足",
-                  "位置估计偏保守"
-                ]
-              },
-              "sentiment": {
-                "score": 13,
-                "reasons": [
-                  "震荡市",
-                  "MA 均线多头"
-                ]
-              },
-              "risk_reasons": [
-                "市场情绪偏冷"
-              ]
-            },
-            "close": 10.19,
-            "life_line": 9.7,
-            "ma13": 10.12,
-            "ma77": 9.87,
-            "distance_life_pct": 5.06,
-            "distance_ma77_pct": 3.27,
-            "macd_status": "DIF/DEA双线0轴上",
-            "macd_above_zero": true,
-            "buy_point_type": "-",
-            "pivot_status": "未形成中枢",
-            "risk_line": 9.7,
-            "reduce_line": 9.87,
-            "change_pct": 0,
-            "current_price": 10.19,
             "reason": "国家队硬方向: 六网/物流网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
             "dates": [],
             "closes": [],
@@ -233121,15 +233586,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 5.22,
             "life_line": 4.8,
-            "ma13": 5.16,
+            "ma13": 5.17,
             "ma77": 5.04,
             "distance_life_pct": 8.64,
-            "distance_ma77_pct": 3.65,
+            "distance_ma77_pct": 3.64,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -233332,7 +233798,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 6.42,
@@ -233540,15 +234007,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 5.53,
             "life_line": 5.19,
             "ma13": 5.44,
             "ma77": 5.27,
-            "distance_life_pct": 6.52,
-            "distance_ma77_pct": 4.89,
+            "distance_life_pct": 6.51,
+            "distance_ma77_pct": 4.88,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -233748,15 +234216,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 14.94,
             "life_line": 13.29,
-            "ma13": 14.75,
+            "ma13": 14.74,
             "ma77": 13.83,
-            "distance_life_pct": 12.41,
-            "distance_ma77_pct": 8.04,
+            "distance_life_pct": 12.42,
+            "distance_ma77_pct": 8.05,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -233949,15 +234418,16 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 22.7,
             "life_line": 21.23,
-            "ma13": 22.44,
+            "ma13": 22.45,
             "ma77": 21.53,
-            "distance_life_pct": 6.92,
-            "distance_ma77_pct": 5.45,
+            "distance_life_pct": 6.91,
+            "distance_ma77_pct": 5.44,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -234150,7 +234620,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 38.04,
@@ -234158,7 +234629,7 @@
             "ma13": 37.35,
             "ma77": 36.52,
             "distance_life_pct": 7.79,
-            "distance_ma77_pct": 4.16,
+            "distance_ma77_pct": 4.15,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -234356,7 +234827,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 6.24,
@@ -234364,7 +234836,7 @@
             "ma13": 6.17,
             "ma77": 5.93,
             "distance_life_pct": 8.65,
-            "distance_ma77_pct": 5.32,
+            "distance_ma77_pct": 5.31,
             "macd_status": "DIF/DEA双线0轴上",
             "macd_above_zero": true,
             "buy_point_type": "-",
@@ -234557,7 +235029,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 24.59,
@@ -234758,7 +235231,8 @@
                 ]
               },
               "risk_reasons": [
-                "市场情绪偏冷"
+                "市场情绪偏冷",
+                "市场情绪转弱"
               ]
             },
             "close": 21.96,
