@@ -70,6 +70,7 @@ if [ $run_status -eq 0 ]; then
         git add \
             "docs/index.html" \
             docs/data.json \
+            "docs/data/comparison-index.json" \
             "docs/data/index.json" \
             "docs/data/${TODAY}.json" \
             "docs/${TODAY}/index.html" \

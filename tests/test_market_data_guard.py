@@ -1168,6 +1168,7 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         self.assertNotIn("docs/20*/", script)
         self.assertIn('"docs/${TODAY}/index.html"', script)
         self.assertIn('"docs/data/${TODAY}.json"', script)
+        self.assertIn('"docs/data/comparison-index.json"', script)
         self.assertNotIn("git add docs/index.html docs/data.json docs/data/ docs/20*/", script)
 
     def test_daily_run_revalidates_immediately_before_staging(self):
