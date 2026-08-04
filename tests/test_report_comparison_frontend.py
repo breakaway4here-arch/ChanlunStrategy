@@ -54,6 +54,14 @@ class ReportComparisonFrontendTests(unittest.TestCase):
         self.assertIn("缺失数据", self.js)
         self.assertIn("sourceDate > targetDate", self.js)
 
+    def test_comparison_table_exposes_sort_controls_for_desktop_and_mobile(self):
+        self.assertIn("function comparisonSortRows", self.js)
+        self.assertIn("data-comparison-sort", self.js)
+        self.assertIn("data-comparison-sort-select", self.js)
+        self.assertIn("data-comparison-sort-direction", self.js)
+        self.assertIn("comparison-sort-mobile", self.css)
+        self.assertIn("缺失值排在最后", self.js)
+
     def test_missing_rows_explain_which_price_is_unavailable(self):
         self.assertIn("缺少榜单日收盘价", self.js)
         self.assertIn("缺少历史对比价", self.js)

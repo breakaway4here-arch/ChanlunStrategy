@@ -2635,6 +2635,65 @@
     };
   }
 
+  var COMPARISON_SORT_OPTIONS = [
+    { key: 'rank', label: '当时排名', defaultDirection: 'asc' },
+    { key: 'sourcePrice', label: '源收盘', defaultDirection: 'desc' },
+    { key: 'targetPrice', label: '对比价', defaultDirection: 'desc' },
+    { key: 'actual', label: '实际涨跌', defaultDirection: 'desc' },
+    { key: 'excess', label: '超额收益', defaultDirection: 'desc' },
+  ];
+
+  function comparisonSortOption(key) {
+    return COMPARISON_SORT_OPTIONS.filter(function (option) { return option.key === key; })[0]
+      || COMPARISON_SORT_OPTIONS[0];
+  }
+
+  function comparisonSortValue(row, key) {
+    var item = row && row.item || {};
+    var value = key === 'rank' ? item.rank : row && row[key];
+    return safeNumber(value, null);
+  }
+
+  function comparisonSortRows(rows, key, direction) {
+    var option = comparisonSortOption(key);
+    var order = direction === 'desc' ? -1 : 1;
+    return asArray(rows).map(function (row, index) {
+      return { row: row, index: index, value: comparisonSortValue(row, option.key) };
+    }).sort(function (left, right) {
+      if (left.value === null && right.value === null) return left.index - right.index;
+      if (left.value === null) return 1;
+      if (right.value === null) return -1;
+      if (left.value === right.value) return left.index - right.index;
+      return (left.value < right.value ? -1 : 1) * order;
+    }).map(function (entry) { return entry.row; });
+  }
+
+  function comparisonSortDirection(key) {
+    return comparisonSortOption(key).defaultDirection;
+  }
+
+  function comparisonSortHeader(label, key, sortState) {
+    var active = sortState && sortState.key === key;
+    var direction = active ? sortState.direction : '';
+    var ariaSort = active ? (direction === 'desc' ? 'descending' : 'ascending') : 'none';
+    return '<th class="comparison-sort-header" aria-sort="' + ariaSort + '"><button type="button" class="comparison-sort-button" data-comparison-sort="' + key + '" aria-label="按' + label + '排序" title="按' + label + '排序">'
+      + label + (active ? '<span class="comparison-sort-indicator ' + direction + '" aria-hidden="true"></span>' : '')
+      + '</button></th>';
+  }
+
+  function comparisonSortMobileControls(sortState) {
+    var selectedKey = sortState && sortState.key || 'rank';
+    var direction = sortState && sortState.direction || 'asc';
+    return '<div class="comparison-sort-mobile" aria-label="榜单排序，缺失值排在最后">'
+      + '<label>排序<select data-comparison-sort-select>'
+      + COMPARISON_SORT_OPTIONS.map(function (option) {
+        return '<option value="' + option.key + '"' + (option.key === selectedKey ? ' selected' : '') + '>' + option.label + '</option>';
+      }).join('')
+      + '</select></label>'
+      + '<button type="button" data-comparison-sort-direction aria-label="切换排序方向">' + (direction === 'desc' ? '降序' : '升序') + '</button>'
+      + '<span>缺失值排在最后</span></div>';
+  }
+
   function comparisonScale(value, minimum, maximum) {
     if (value === null || maximum === minimum) return 50;
     return (value - minimum) / (maximum - minimum) * 100;
@@ -2782,6 +2841,7 @@
         return '<button class="comparison-view-card" data-comparison-view="' + escapeHtml(summary.view) + '"><span>' + escapeHtml(comparisonViewLabel(summary.view)) + '</span><strong class="' + tone + '">' + formatPct(summary.average, true) + '</strong><small>中位数 ' + formatPct(summary.median, true) + ' · 上涨率 ' + formatPct(summary.winRate) + ' · 有效 ' + summary.evaluable + ' / 缺失 ' + summary.missing + '</small></button>';
       }).join('') + '</aside><section class="comparison-detail"><div id="comparisonDetail"></div></section></section>';
     var buttons = mount.querySelectorAll('[data-comparison-view]');
+    var sortState = { key: 'rank', direction: 'asc' };
     function showDetail(view) {
       var summary = summaries.filter(function (entry) { return entry.view === view; })[0] || summaries[0];
       if (!summary) { mount.querySelector('#comparisonDetail').innerHTML = '<div class="comparison-empty">源报告日没有可比对的榜单。</div>'; return; }
@@ -2789,17 +2849,52 @@
       var missing = summary.rows.filter(function (row) { return row.actual === null; });
       var rows = summary.rows.filter(function (row) { return row.actual !== null; });
       mount.querySelector('#comparisonDetail').innerHTML = '<header class="comparison-detail-head"><h2>' + escapeHtml(comparisonViewLabel(summary.view)) + '</h2><div><span>实际平均涨跌 <strong>' + formatPct(summary.average, true) + '</strong></span><span>中位数 <strong>' + formatPct(summary.median, true) + '</strong></span><span>上涨率 <strong>' + formatPct(summary.winRate) + '</strong></span><span>最大涨幅 <strong>' + formatPct(summary.maximum, true) + '</strong></span><span>最大跌幅 <strong>' + formatPct(summary.minimum, true) + '</strong></span><span>有效 / 缺失 <strong>' + summary.evaluable + ' / ' + summary.missing + '</strong></span><span>超额收益 <strong>' + formatPct(summary.average === null || benchmarkReturn === null ? null : summary.average - benchmarkReturn, true) + '</strong></span></div></header>'
-        + renderComparisonTable(rows, benchmarkReturn, false) + (missing.length ? '<h3>缺失数据</h3>' + renderComparisonTable(missing, benchmarkReturn, true) : '');
+        + renderComparisonTable(rows, benchmarkReturn, false, sortState) + (missing.length ? '<h3>缺失数据</h3>' + renderComparisonTable(missing, benchmarkReturn, true, sortState) : '');
+      var detail = mount.querySelector('#comparisonDetail');
+      Array.prototype.forEach.call(detail.querySelectorAll('[data-comparison-sort]'), function (button) {
+        button.addEventListener('click', function () {
+          var key = button.getAttribute('data-comparison-sort');
+          if (sortState.key === key) {
+            sortState.direction = sortState.direction === 'desc' ? 'asc' : 'desc';
+          } else {
+            sortState.key = key;
+            sortState.direction = comparisonSortDirection(key);
+          }
+          showDetail(summary.view);
+        });
+      });
+      var sortSelect = detail.querySelector('[data-comparison-sort-select]');
+      if (sortSelect) {
+        sortSelect.addEventListener('change', function () {
+          sortState.key = sortSelect.value;
+          sortState.direction = comparisonSortDirection(sortState.key);
+          showDetail(summary.view);
+        });
+      }
+      var directionButton = detail.querySelector('[data-comparison-sort-direction]');
+      if (directionButton) {
+        directionButton.addEventListener('click', function () {
+          sortState.direction = sortState.direction === 'desc' ? 'asc' : 'desc';
+          showDetail(summary.view);
+        });
+      }
     }
     Array.prototype.forEach.call(buttons, function (button) { button.addEventListener('click', function () { showDetail(button.getAttribute('data-comparison-view')); }); });
     showDetail(summaries[0] && summaries[0].view);
   }
 
-  function renderComparisonTable(rows, benchmarkReturn, missing) {
-    return '<div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>股票</th><th>行业</th><th>当时排名/决策</th><th>源收盘</th><th>对比价</th><th>实际涨跌</th><th>沪深300</th><th>超额收益</th></tr></thead><tbody>' + rows.map(function (row) {
+  function renderComparisonTable(rows, benchmarkReturn, missing, sortState) {
+    var displayRows = missing ? rows : comparisonSortRows(rows, sortState && sortState.key, sortState && sortState.direction);
+    var sortableHeaders = missing ? '<th>当时排名/决策</th><th>源收盘</th><th>对比价</th><th>实际涨跌</th>'
+      : comparisonSortHeader('当时排名/决策', 'rank', sortState)
+        + comparisonSortHeader('源收盘', 'sourcePrice', sortState)
+        + comparisonSortHeader('对比价', 'targetPrice', sortState)
+        + comparisonSortHeader('实际涨跌', 'actual', sortState);
+    var excessHeader = missing ? '<th>超额收益</th>' : comparisonSortHeader('超额收益', 'excess', sortState);
+    return (missing ? '' : comparisonSortMobileControls(sortState)) + '<div class="comparison-table-wrap"><table class="comparison-table"><thead><tr><th>股票</th><th>行业</th>' + sortableHeaders + '<th>沪深300</th>' + excessHeader + '</tr></thead><tbody>' + displayRows.map(function (row) {
       var item = row.item || {};
       return '<tr><td data-label="股票">' + escapeHtml(item.name || item.code || '--') + '<small>' + escapeHtml(item.code || '') + '</small></td><td data-label="行业">' + escapeHtml(item.industry || '--') + '</td><td data-label="当时排名/决策">' + escapeHtml((item.rank || '--') + ' / ' + (item.decision || item.decision_code || '--')) + '</td><td data-label="源收盘">' + formatNumber(row.sourcePrice) + '</td><td data-label="对比价">' + formatNumber(row.targetPrice) + '</td><td data-label="实际涨跌" class="' + (row.actual !== null && row.actual >= 0 ? 'is-up' : 'is-down') + '">' + (row.missingReason ? '<span class="comparison-missing-reason">' + escapeHtml(row.missingReason) + '</span>' : formatPct(row.actual, true)) + '</td><td data-label="沪深300">' + formatPct(benchmarkReturn, true) + '</td><td data-label="超额收益">' + formatPct(row.excess, true) + '</td></tr>';
-    }).join('') + (rows.length ? '' : '<tr><td colspan="8">' + (missing ? '缺少源收盘或对比价' : '暂无可比对数据') + '</td></tr>') + '</tbody></table></div>';
+    }).join('') + (displayRows.length ? '' : '<tr><td colspan="8">' + (missing ? '缺少源收盘或对比价' : '暂无可比对数据') + '</td></tr>') + '</tbody></table></div>';
   }
 
   function initComparisonSummary() {
