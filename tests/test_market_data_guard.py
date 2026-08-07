@@ -533,6 +533,20 @@ class TestMarketDataGuard(unittest.TestCase):
 
         fetch.assert_called_once_with("600000", force_refresh=True)
 
+    def test_batch_fetch_daily_klines_missing_only_overrides_force_refresh(self):
+        kline = _kline(["2026-06-30"] * 60, [10.0] * 60)
+        with patch.object(
+            data_fetcher, "KLINE_REPOSITORY_ENABLED", False
+        ), patch.object(data_fetcher, "fetch_daily_kline", return_value=kline) as fetch:
+            data_fetcher.batch_fetch_daily_klines(
+                [{"code": "600000", "name": "测试股"}],
+                required_date="2026-06-30",
+                force_refresh=True,
+                missing_only=True,
+            )
+
+        fetch.assert_called_once_with("600000", force_refresh=False)
+
     def test_build_kline_status_marks_verified_and_stale(self):
         verified = _kline(
             ["2026-06-29", "2026-06-30"],
@@ -1079,6 +1093,57 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(result["index_error"], "000001 指数多源取数失败")
         self.assertEqual(len(result["stocks"]), 1)
 
+    def test_collect_daily_data_records_missing_only_refresh_mode(self):
+        calls = []
+
+        def fake_batch(
+            stocks,
+            required_date=None,
+            allow_stale=False,
+            max_workers=10,
+            force_refresh=False,
+            missing_only=False,
+        ):
+            calls.append(missing_only)
+            return [{
+                "code": "600000",
+                "name": "测试股",
+                "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+                "data_status": {
+                    "daily": "verified",
+                    "latest_date": "2026-06-30",
+                    "source": "tencent",
+                    "bars": 2,
+                    "stale": False,
+                },
+            }]
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BK0001", "name": "测试板块", "flow_str": "1亿"}
+        ]), patch.object(
+            data_fetcher,
+            "fetch_sector_stocks",
+            side_effect=_complete_sector_fetch(
+                {"BK0001": [{"code": "600000", "name": "测试股"}]}
+            ),
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", side_effect=fake_batch
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=datetime(
+                    2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8))
+                ),
+                missing_only=True,
+            )
+
+        self.assertEqual(calls, [True])
+        self.assertEqual(result["data_quality"]["daily_refresh_mode"], "missing_only")
+
 
 class TestDailyRunScriptGuard(unittest.TestCase):
 
@@ -1160,6 +1225,14 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
         self.assertIn("python3 scripts/validate_today_report.py", script)
         self.assertNotIn("今日产物已存在，跳过补跑", script)
+
+    def test_daily_run_marks_existing_invalid_output_as_missing_only_retry(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        self.assertIn("RETRY_MISSING_ONLY=1", script)
+        self.assertIn("CHANLUN_DAILY_RETRY_MISSING_ONLY", script)
+        self.assertIn("缺失数据增量补跑", script)
 
     def test_daily_run_git_add_scope_is_today_and_assets_only(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:

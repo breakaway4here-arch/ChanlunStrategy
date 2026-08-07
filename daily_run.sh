@@ -1,6 +1,6 @@
 #!/bin/zsh
 # 缠论选股日报 — 自动运行并推送
-# 由 launchd 每个工作日 14:35 触发，15:05 做一次补偿触发
+# 由 launchd 每个工作日收盘后触发；第二次触发用于增量补齐缺失行情
 
 set -e
 
@@ -16,6 +16,7 @@ export CHANLUN_RECALL_STRATEGY_MODE
 TODAY=$(date '+%Y-%m-%d')
 TODAY_DATA_PATH="docs/data/${TODAY}.json"
 INDEX_PATH="docs/index.html"
+RETRY_MISSING_ONLY=0
 
 is_today_output_ready() {
     if [ ! -f "$TODAY_DATA_PATH" ]; then
@@ -58,7 +59,15 @@ if is_today_output_ready; then
         echo "今日产物已存在且行情校验通过，跳过补跑"
         exit 0
     fi
-    echo "今日产物行情校验失败，强制重跑"
+    RETRY_MISSING_ONLY=1
+    echo "今日产物行情校验失败，进入缺失数据增量补跑"
+fi
+
+export CHANLUN_DAILY_RETRY_MISSING_ONLY=$RETRY_MISSING_ONLY
+if [ "$RETRY_MISSING_ONLY" -eq 1 ]; then
+    echo "日报补跑模式：只刷新缺失、过期或未收盘的日线数据"
+else
+    echo "日报首跑模式：使用行情数据库优先，按需刷新日线数据"
 fi
 
 /usr/bin/python3 -c 'import run; import chanlun.data_fetcher as df, chanlun.market_news as mn; df.SESSION.trust_env = False; mn.SESSION.trust_env = False; run.main(False)' 2>&1
@@ -66,7 +75,10 @@ run_status=$?
 
 if [ $run_status -eq 0 ]; then
     if is_today_output_ready; then
-        /usr/bin/python3 scripts/validate_today_report.py "$TODAY"
+        if ! /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
+            echo "正式日报校验失败，保留本地产物但不提交，等待下一次收盘后增量补跑"
+            exit 1
+        fi
         git add \
             "docs/index.html" \
             docs/data.json \

@@ -1386,6 +1386,9 @@ def main(debug=False, preview=False, generated_at=None):
     generated_at = generated_at or datetime.now().astimezone()
     time_metadata = build_market_time_metadata(generated_at=generated_at)
     today = time_metadata["generated_at"].split("T", 1)[0]
+    retry_missing_only = (
+        os.environ.get("CHANLUN_DAILY_RETRY_MISSING_ONLY", "0").strip() == "1"
+    )
     funnel_run_id = "{}-{}".format(
         today.replace("-", ""),
         uuid.uuid4().hex[:12],
@@ -1395,9 +1398,14 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         as_of=today,
     )
-    print(f"缠论选股系统启动 — {today} 14:35")
+    print(f"缠论选股系统启动 — {today} {time_metadata['generated_at'][11:19]}")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
+    print(
+        "日报数据模式: {}".format(
+            "缺失数据增量补跑" if retry_missing_only else "首跑/数据库优先"
+        )
+    )
 
     # ================================================================
     # Phase 1: 数据采集
@@ -1478,9 +1486,13 @@ def main(debug=False, preview=False, generated_at=None):
             required_date=today,
             allow_missing_index=preview,
             generated_at=generated_at,
+            missing_only=retry_missing_only,
         )
 
     data_quality = daily_data.get("data_quality", {})
+    data_quality["daily_run_mode"] = (
+        "missing_only" if retry_missing_only else "db_first"
+    )
     if close_snapshot_diagnostics is not None:
         data_quality["market_close_snapshot"] = close_snapshot_diagnostics
     sectors = daily_data["sectors"]

@@ -1565,7 +1565,12 @@ def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
 # 批量获取
 # ============================================================
 def batch_fetch_daily_klines(
-    stocks, max_workers=10, required_date=None, allow_stale=False, force_refresh=False
+    stocks,
+    max_workers=10,
+    required_date=None,
+    allow_stale=False,
+    force_refresh=False,
+    missing_only=False,
 ):
     """
     并发批量获取日线。
@@ -1574,7 +1579,7 @@ def batch_fetch_daily_klines(
     """
     results = []
     repository_results = None
-    effective_force = (
+    effective_force = False if missing_only else (
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if (
@@ -1600,6 +1605,12 @@ def batch_fetch_daily_klines(
         status = build_kline_status(
             klines, required_date=required_date, source=kline_source,
         )
+        if repository_results is not None:
+            result = repository_results[code]
+            status["remote_refreshed"] = bool(result.fetched_remote)
+            status["remote_refresh_failed"] = bool(
+                result.diagnostics.get("remote_failed")
+            )
         stock["data_status"] = status
 
         if not klines or len(klines.get("closes", [])) < 60:
@@ -1727,7 +1738,12 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
 # ============================================================
 # Phase 1 主流程
 # ============================================================
-def collect_daily_data(required_date=None, allow_missing_index=False, generated_at=None):
+def collect_daily_data(
+    required_date=None,
+    allow_missing_index=False,
+    generated_at=None,
+    missing_only=False,
+):
     """
     完整数据采集流程:
     1. 获取 TOP20 资金流入板块
@@ -1742,6 +1758,11 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
     )
     print("Phase 1: 数据采集")
     print("=" * 60)
+    print(
+        "日线刷新模式: {}".format(
+            "只补缺失/过期/未收盘数据" if missing_only else "数据库优先，按需刷新"
+        )
+    )
 
     print("[1/4] 获取板块资金流向 TOP20 ...")
     used_fallback_sector_source = False
@@ -1915,18 +1936,29 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         # bars.  The repository itself refreshes only missing, stale or
         # non-final rows; forcing every symbol here defeats DB-first operation.
         force_refresh=False,
+        **({"missing_only": True} if missing_only else {}),
     )
     elapsed = time.time() - t0
     print(f"  获取到 {len(stocks_with_kline)} 只有效日线数据，耗时 {elapsed:.1f}s")
 
     stale_stock_count = 0
     missing_daily_count = 0
+    missing_daily_codes = []
+    stale_daily_codes = []
+    remote_refresh_codes = []
+    remote_refresh_failed_codes = []
     for st in all_stocks:
         status = st.get("data_status") or {}
         if status.get("daily") == "stale_cache":
             stale_stock_count += 1
+            stale_daily_codes.append(str(st.get("code") or ""))
         elif status.get("daily") == "missing":
             missing_daily_count += 1
+            missing_daily_codes.append(str(st.get("code") or ""))
+        if status.get("remote_refreshed"):
+            remote_refresh_codes.append(str(st.get("code") or ""))
+        if status.get("remote_refresh_failed"):
+            remote_refresh_failed_codes.append(str(st.get("code") or ""))
 
     print("[4/4] 获取上证指数日线 ...")
     index_error = ""
@@ -1989,6 +2021,16 @@ def collect_daily_data(required_date=None, allow_missing_index=False, generated_
         "sector_source": sector_source,
         "stale_stock_count": stale_stock_count,
         "missing_daily_count": missing_daily_count,
+        "missing_daily_codes": sorted(code for code in missing_daily_codes if code),
+        "stale_daily_codes": sorted(code for code in stale_daily_codes if code),
+        "daily_remote_refresh_count": len(remote_refresh_codes),
+        "daily_remote_refresh_codes": sorted(
+            code for code in remote_refresh_codes if code
+        ),
+        "daily_remote_refresh_failed_codes": sorted(
+            code for code in remote_refresh_failed_codes if code
+        ),
+        "daily_refresh_mode": "missing_only" if missing_only else "db_first",
         "missing_30min_count": 0,
         "stock_pool_incomplete": stock_pool_incomplete,
         "sector_component_diagnostics": sector_component_diagnostics,
