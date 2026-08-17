@@ -1,10 +1,11 @@
 (function () {
   'use strict';
 
-  var DEFAULT_VIEW_ORDER = ['main', 'highlights', 'observation_top5', 'acceleration', 'luojie', 'confirming', 'growth_quality', 'baseline'];
+  var DEFAULT_VIEW_ORDER = ['main', 'highlights', 'h4_t3', 'observation_top5', 'acceleration', 'luojie', 'confirming', 'growth_quality', 'baseline'];
   var DEFAULT_VIEW_LABELS = {
     highlights: '看点 Top10',
     main: '主推',
+    h4_t3: 'H4 T+3',
     observation_top5: '观察 Top5',
     acceleration: '加速',
     luojie: '罗姐池',
@@ -15,6 +16,7 @@
   var DEFAULT_VIEW_DESCRIPTIONS = {
     highlights: '看点 Top10：跨池混合优先观察榜。用于快速扫今天最值得看的标的，不等于全部可立即买入；请结合身份标签、共振标签和操作状态判断。',
     main: '主推：融合推荐池，可执行优先。来自纯净缠论结构 + 30min 确认 + 市场状态 / MA 多头 / admission 门槛过滤。',
+    h4_t3: 'H4 T+3 独立影子池：允许空选，不参与主推荐排序。',
     observation_top5: '观察 Top5：近失样本观察榜，不计入主推荐；显示失败门、升级条件和取消条件。',
     acceleration: '加速：强市场下的情绪加速榜。用于从强势启动类候选中二次排序，不是常规主推荐池。',
     luojie: '罗姐池：硬方向 + 15min 生命线观察，不等同于主推。',
@@ -645,6 +647,7 @@
     var data = state.data || {};
     var luojiePool = data.luojie_pool;
     var nextDayBoom = data.next_day_boom;
+    var h4T3Pool = data.h4_t3_pool;
     state.rawPoolCandidates = {
       picks_fusion: asArray(data.picks_fusion),
       picks_pure: asArray(data.picks_pure),
@@ -652,6 +655,7 @@
       observation_watchlist: asArray(data.observation_watchlist),
       next_day_boom: asArray((nextDayBoom && nextDayBoom.candidates) || []),
       luojie_pool: asArray((luojiePool && luojiePool.candidates) || []),
+      h4_t3_pool: asArray((h4T3Pool && h4T3Pool.candidates) || []),
     };
     return state.rawPoolCandidates;
   }
@@ -661,6 +665,9 @@
     var key = normalizeString(refPool).toLowerCase().replace(/-/g, '_');
     if (key === 'main') {
       return pools.picks_fusion;
+    }
+    if (key === 'h4_t3' || key === 'h4_t3_pool') {
+      return pools.h4_t3_pool;
     }
     if (key === 'acceleration' || key === 'accel' || key === 'next_day_boom') {
       return pools.next_day_boom;
@@ -725,6 +732,7 @@
       pools.startup_watchlist,
       pools.next_day_boom,
       pools.luojie_pool,
+      pools.h4_t3_pool,
     ];
 
     for (var i = 0; i < allPools.length; i += 1) {
@@ -762,6 +770,7 @@
       pools.startup_watchlist,
       pools.luojie_pool,
       pools.next_day_boom,
+      pools.h4_t3_pool,
     ];
 
     for (var i = 0; i < allPools.length; i += 1) {

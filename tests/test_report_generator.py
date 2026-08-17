@@ -10,7 +10,7 @@ import numpy as np
 
 from chanlun.report_generator import (
     _serialize_picks, _serialize_bp, _serialize_startup_watchlist,
-    _serialize_next_day_boom, _serialize_luojie_pool,
+    _serialize_next_day_boom, _serialize_luojie_pool, _serialize_h4_t3_pool,
     build_chart_window, build_chart_annotations, build_startup_watch_chart_annotations,
     _safe_list, NpEncoder, generate_report, build_recent_reviews, write_data_manifest,
     update_data_json, _backfill_workspace_scores, _serialize_picks_light,
@@ -1732,6 +1732,78 @@ class TestLuojiePoolRendering(unittest.TestCase):
         line_names = {line.get("name") for line in ann["markLines"]}
         self.assertIn("current", line_names)
         self.assertIn("source", line_names)
+
+
+class TestH4T3ShadowPoolRendering(unittest.TestCase):
+
+    def test_h4_pool_serializer_preserves_policy_diagnostics_and_predictions(self):
+        pick = make_pick()
+        pick["h4_predictions"] = {
+            "pred_return_pct": 4.2,
+            "pred_loss5": 0.08,
+            "pred_q10_return_pct": -3.1,
+        }
+        payload = _serialize_h4_t3_pool({
+            "mode": "shadow",
+            "horizon": "T+3",
+            "strategy": "H4",
+            "reason": "H4原规则入选1只。",
+            "policy": {"daily_cap": 1, "zero_allowed": True, "no_backfill": True},
+            "diagnostics": {"selected_count": 1},
+            "candidates": [pick],
+        })
+
+        self.assertEqual("shadow", payload["mode"])
+        self.assertEqual("T+3", payload["horizon"])
+        self.assertEqual("H4", payload["strategy"])
+        self.assertEqual(1, payload["diagnostics"]["selected_count"])
+        self.assertEqual(1, len(payload["candidates"]))
+        self.assertEqual(
+            {
+                "pred_return_pct": 4.2,
+                "pred_loss5": 0.08,
+                "pred_q10_return_pct": -3.1,
+            },
+            payload["candidates"][0]["h4_predictions"],
+        )
+
+    def test_generated_report_exposes_empty_h4_pool_and_frontend_mapping(self):
+        with tempfile.TemporaryDirectory(prefix="test_h4_t3_pool_") as tmpdir:
+            report_data = _make_minimal_report_data()
+            report_data["h4_t3_pool"] = {
+                "mode": "shadow",
+                "horizon": "T+3",
+                "strategy": "H4",
+                "reason": "今日空选，不回填。",
+                "policy": {"daily_cap": 1, "zero_allowed": True, "no_backfill": True},
+                "diagnostics": {
+                    "fusion_candidate_count": 119,
+                    "continuation_microstate_count": 0,
+                    "eligible_count": 0,
+                    "selected_count": 0,
+                },
+                "candidates": [],
+            }
+
+            generate_report(report_data, output_dir=tmpdir)
+            with open(
+                os.path.join(tmpdir, "data", "2026-05-26.json"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                day_data = json.load(handle)
+            with open(
+                os.path.join(tmpdir, "assets", "report-v2.js"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                asset = handle.read()
+
+        self.assertEqual("shadow", day_data["h4_t3_pool"]["mode"])
+        self.assertEqual([], day_data["h4_t3_pool"]["candidates"])
+        self.assertIn("h4_t3", day_data["workspace"]["view_order"])
+        self.assertEqual("今日空选，不回填。", day_data["workspace"]["view_meta"]["h4_t3"]["description"])
+        self.assertIn("h4_t3_pool", asset)
 
 
 if __name__ == "__main__":

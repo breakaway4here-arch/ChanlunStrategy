@@ -26,6 +26,7 @@ ViewOrder = List[str]
 VIEW_ORDER: ViewOrder = [
     "highlights",
     "main",
+    "h4_t3",
     "observation_top5",
     "acceleration",
     "luojie",
@@ -36,6 +37,7 @@ VIEW_ORDER: ViewOrder = [
 
 SOURCE_LABELS = {
     "main": "主推",
+    "h4_t3": "H4 T+3",
     "acceleration": "加速",
     "luojie": "罗姐池",
     "confirming": "等确认",
@@ -44,6 +46,7 @@ SOURCE_LABELS = {
 
 SOURCE_POOLS = {
     "main": "picks_fusion",
+    "h4_t3": "h4_t3_pool",
     "acceleration": "next_day_boom",
     "luojie": "luojie_pool",
     "confirming": "startup_watchlist",
@@ -52,10 +55,11 @@ SOURCE_POOLS = {
 
 SOURCE_RANK = {
     "main": 0,
-    "acceleration": 1,
-    "luojie": 2,
-    "confirming": 3,
-    "baseline": 4,
+    "h4_t3": 1,
+    "acceleration": 2,
+    "luojie": 3,
+    "confirming": 4,
+    "baseline": 5,
 }
 
 EXCLUDED_FIELDS = {
@@ -81,6 +85,11 @@ VIEW_META = {
     "main": {
         "label": "主推",
         "description": "融合推荐池，可执行优先。",
+    },
+    "h4_t3": {
+        "label": "H4 T+3",
+        "short_label": "H4 T+3",
+        "description": "H4 T+3 独立影子池；允许空选，不参与主推荐排序。",
     },
     "observation_top5": {
         "label": "观察 Top5",
@@ -808,11 +817,15 @@ def _action_and_reason(
     risk_flags: list[str],
     has_main: bool,
 ) -> tuple[str, str]:
+    has_h4_t3 = "h4_t3" in sources
     has_acceleration = "acceleration" in sources
     has_luojie = "luojie" in sources
     has_confirming = "confirming" in sources
     risk_flags_set = set(risk_flags)
     high_risk = bool(risk_flags_set.intersection({"距参考价偏高", "涨幅过热", "信号接近过期", "30min确认弱", "确认信号未完成"}))
+
+    if has_h4_t3:
+        return "仅观察", "H4 T+3 影子信号，仅记录验证，不影响主推荐。"
 
     if has_main:
         if high_risk and len(risk_flags_set) >= 2:
@@ -979,6 +992,7 @@ def _build_item(
         "risk_flags": all_risk_flags,
         "rank_trace": rank_trace,
         "decision_engine_v1": decision_payload,
+        "h4_predictions": _to_dict(preferred_raw.get("h4_predictions")),
         "source_channel": _safe_str(preferred_raw.get("source_channel")),
         "tier": _safe_str(preferred_raw.get("tier"))
         or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("tier")),
@@ -1060,6 +1074,7 @@ def _collect_views(
     views: dict[str, dict[str, Mapping[str, Any]]] = {
         "main": {},
         "main_all": {},
+        "h4_t3": {},
         "acceleration": {},
         "luojie": {},
         "confirming": {},
@@ -1074,6 +1089,11 @@ def _collect_views(
         for code, raw in views["main_all"].items()
         if _decision_code_from_raw(raw) == "recommend"
     }
+
+    h4_t3 = _to_dict(report_data.get("h4_t3_pool"))
+    views["h4_t3"] = _normalize_pool_items(
+        _get_list(h4_t3.get("candidates")), "h4_t3"
+    )
 
     next_day_boom = _to_dict(report_data.get("next_day_boom"))
     boom_mode = _safe_str(next_day_boom.get("mode"))
@@ -1375,12 +1395,20 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
             **growth_quality_diagnostics,
         },
         "observation_top5": observation_diagnostics,
+        "h4_t3": _to_dict(
+            _to_dict(data.get("h4_t3_pool")).get("diagnostics")
+        ),
     }
+
+    view_meta = {name: dict(meta) for name, meta in VIEW_META.items()}
+    h4_reason = _safe_str(_to_dict(data.get("h4_t3_pool")).get("reason"))
+    if h4_reason:
+        view_meta["h4_t3"]["description"] = h4_reason
 
     return {
         "default_view": "main",
         "view_order": list(VIEW_ORDER),
-        "view_meta": VIEW_META,
+        "view_meta": view_meta,
         "views": view_items,
         "counts": counts,
         "diagnostics": diagnostics,

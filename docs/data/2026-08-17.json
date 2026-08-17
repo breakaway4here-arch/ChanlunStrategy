@@ -416658,11 +416658,44 @@
       "data_status": "verified"
     }
   ],
+  "h4_t3_pool": {
+    "mode": "shadow",
+    "horizon": "T+3",
+    "strategy": "H4",
+    "status": "empty",
+    "reason": "今日119只融合候选中，0只满足H4趋势延续微状态；H4按原规则空选，不回填。",
+    "policy": {
+      "universe": "picks_fusion_then_collapse_then_continuation_microstate",
+      "neighbor_count": 30,
+      "tail_loss5_max": 0.1,
+      "q10_min_return_pct": -5.0,
+      "daily_cap": 1,
+      "zero_allowed": true,
+      "no_backfill": true
+    },
+    "diagnostics": {
+      "report_date": "2026-08-17",
+      "fusion_candidate_count": 119,
+      "collapsed_candidate_count": 119,
+      "duplicate_count": 0,
+      "continuation_microstate_count": 0,
+      "eligible_count": 0,
+      "selected_count": 0,
+      "training_row_count": 427,
+      "training_date_count": 51,
+      "max_training_trade_date": "2026-07-28",
+      "max_training_exit_date": "2026-07-31",
+      "model_ready": true,
+      "future_violation_count": 0
+    },
+    "candidates": []
+  },
   "workspace": {
     "default_view": "main",
     "view_order": [
       "highlights",
       "main",
+      "h4_t3",
       "observation_top5",
       "acceleration",
       "luojie",
@@ -416679,6 +416712,11 @@
       "main": {
         "label": "主推",
         "description": "融合推荐池，可执行优先。"
+      },
+      "h4_t3": {
+        "label": "H4 T+3",
+        "short_label": "H4 T+3",
+        "description": "今日119只融合候选中，0只满足H4趋势延续微状态；H4按原规则空选，不回填。"
       },
       "observation_top5": {
         "label": "观察 Top5",
@@ -417001,6 +417039,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -417305,6 +417344,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -417611,6 +417651,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -417912,6 +417953,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -418211,6 +418253,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -418510,6 +418553,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -418812,6 +418856,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -419119,6 +419164,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -419414,6 +419460,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -419720,6 +419767,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -420012,6 +420060,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -420304,6 +420353,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -420598,6 +420648,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -420896,6 +420947,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -421194,6 +421246,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -421498,6 +421551,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -421796,6 +421850,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -422098,6 +422153,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -422396,6 +422452,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -422691,6 +422748,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -422982,6 +423040,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -423276,6 +423335,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -423576,6 +423636,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -423878,6 +423939,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -424176,6 +424238,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -424477,6 +424540,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -424772,6 +424836,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -425067,6 +425132,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -425362,6 +425428,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -425659,6 +425726,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -425967,6 +426035,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -426281,6 +426350,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -426570,6 +426640,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -426863,6 +426934,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -427159,6 +427231,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -427476,6 +427549,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -427786,6 +427860,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -428102,6 +428177,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -428395,6 +428471,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -428688,6 +428765,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -428998,6 +429076,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -429314,6 +429393,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -429608,6 +429688,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -429902,6 +429983,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -430200,6 +430282,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -430487,6 +430570,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -430774,6 +430858,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -431065,6 +431150,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -431371,6 +431457,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -431668,6 +431755,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -431966,6 +432054,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -432268,6 +432357,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -432548,6 +432638,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -432858,6 +432949,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -433168,6 +433260,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -433463,6 +433556,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -433762,6 +433856,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -434055,6 +434150,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -434351,6 +434447,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -434642,6 +434739,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -434935,6 +435033,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -435214,6 +435313,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -435495,6 +435595,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -435506,6 +435607,7 @@
           }
         }
       ],
+      "h4_t3": [],
       "acceleration": [
         {
           "code": "300054",
@@ -435786,6 +435888,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "",
           "category": "",
@@ -436062,6 +436165,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "",
           "category": "",
@@ -436333,6 +436437,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "",
           "category": "",
@@ -436602,6 +436707,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "",
           "category": "",
@@ -436885,6 +436991,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "",
           "category": "",
@@ -437157,6 +437264,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -437431,6 +437539,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -437708,6 +437817,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -437985,6 +438095,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -438251,6 +438362,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -438520,6 +438632,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -438789,6 +438902,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -439058,6 +439172,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -439327,6 +439442,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -439596,6 +439712,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -439865,6 +439982,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -440130,6 +440248,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -440399,6 +440518,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -440667,6 +440787,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -440935,6 +441056,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -441200,6 +441322,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -441482,6 +441605,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -441763,6 +441887,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -442040,6 +442165,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -442317,6 +442443,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -442598,6 +442725,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -442882,6 +443010,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -443163,6 +443292,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -443444,6 +443574,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -443721,6 +443852,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -443998,6 +444130,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -444275,6 +444408,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -444552,6 +444686,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -444829,6 +444964,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "生命线观察",
           "category": "",
@@ -445095,6 +445231,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "",
           "tier": "买点候选",
           "category": "",
@@ -445394,6 +445531,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -445695,6 +445833,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -445988,6 +446127,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -446285,6 +446425,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -446586,6 +446727,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -446879,6 +447021,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -447180,6 +447323,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -447477,6 +447621,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -447778,6 +447923,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -448071,6 +448217,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -448368,6 +448515,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -448661,6 +448809,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -448962,6 +449111,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -449251,6 +449401,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -449540,6 +449691,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -449829,6 +449981,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -450130,6 +450283,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -450421,6 +450575,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -450714,6 +450869,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -451011,6 +451167,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -451304,6 +451461,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -451597,6 +451755,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -451890,6 +452049,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -452180,6 +452340,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -452469,6 +452630,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -452766,6 +452928,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -453055,6 +453218,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -453345,6 +453509,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -453635,6 +453800,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -453925,6 +454091,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -454219,6 +454386,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -454508,6 +454676,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -454791,6 +454960,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -455085,6 +455255,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -455378,6 +455549,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -455667,6 +455839,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -455956,6 +456129,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -456243,6 +456417,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -456532,6 +456707,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -456822,6 +456998,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -457105,6 +457282,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -457404,6 +457582,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -457697,6 +457876,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -457980,6 +458160,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -458263,6 +458444,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -458546,6 +458728,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -458833,6 +459016,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -459120,6 +459304,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -459409,6 +459594,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -459692,6 +459878,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -459975,6 +460162,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -460258,6 +460446,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -460547,6 +460736,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -460825,6 +461015,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -461121,6 +461312,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -461422,6 +461614,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -461722,6 +461915,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -462023,6 +462217,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -462329,6 +462524,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -462639,6 +462835,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -462944,6 +463141,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -463241,6 +463439,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -463548,6 +463747,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -463851,6 +464051,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -464156,6 +464357,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -464453,6 +464655,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -464755,6 +464958,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -465060,6 +465264,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -465361,6 +465566,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -465670,6 +465876,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -465964,6 +466171,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -466262,6 +466470,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -466560,6 +466769,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -466857,6 +467067,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -467158,6 +467369,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -467459,6 +467671,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -467752,6 +467965,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -468042,6 +468256,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -468340,6 +468555,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -468635,6 +468851,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -468932,6 +469149,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -469241,6 +469459,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -469542,6 +469761,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -469843,6 +470063,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -470152,6 +470373,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -470460,6 +470682,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -470761,6 +470984,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -471053,6 +471277,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -471344,6 +471569,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -471639,6 +471865,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -471932,6 +472159,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -472229,6 +472457,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -472530,6 +472759,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -472833,6 +473063,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -473130,6 +473361,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -473437,6 +473669,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -473738,6 +473971,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -474039,6 +474273,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -474340,6 +474575,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -474634,6 +474870,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -474928,6 +475165,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -475231,6 +475469,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -475525,6 +475764,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -475826,6 +476066,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -476119,6 +476360,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -476424,6 +476666,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -476725,6 +476968,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -477022,6 +477266,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -477313,6 +477558,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -477610,6 +477856,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -477906,6 +478153,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -478212,6 +478460,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -478510,6 +478759,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -478808,6 +479058,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -479108,6 +479359,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -479402,6 +479654,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -479696,6 +479949,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -480001,6 +480255,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -480307,6 +480562,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -480602,6 +480858,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -480909,6 +481166,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -481205,6 +481463,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -481508,6 +481767,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -481813,6 +482073,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -482114,6 +482375,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -482420,6 +482682,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -482716,6 +482979,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -483015,6 +483279,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -483311,6 +483576,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -483603,6 +483869,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -483906,6 +484173,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -484201,6 +484469,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -484500,6 +484769,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -484807,6 +485077,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -485110,6 +485381,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -485415,6 +485687,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -485707,6 +485980,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -485999,6 +486273,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -486297,6 +486572,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -486593,6 +486869,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -486886,6 +487163,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -487179,6 +487457,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -487476,6 +487755,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -487773,6 +488053,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -488082,6 +488363,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -488369,6 +488651,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -488656,6 +488939,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -488958,6 +489242,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -489245,6 +489530,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -489537,6 +489823,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -489832,6 +490119,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -490118,6 +490406,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -490421,6 +490710,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -490710,6 +491000,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -491002,6 +491293,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -491307,6 +491599,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -491603,6 +491896,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -491910,6 +492204,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -492200,6 +492495,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -492494,6 +492790,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -492807,6 +493104,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -493095,6 +493393,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -493377,6 +493676,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -493666,6 +493966,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -493961,6 +494262,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -494269,6 +494571,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -494566,6 +494869,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -494881,6 +495185,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -495190,6 +495495,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -495495,6 +495801,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -495790,6 +496097,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -496106,6 +496414,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -496423,6 +496732,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -496740,6 +497050,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -497029,6 +497340,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -497344,6 +497656,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -497653,6 +497966,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -497962,6 +498276,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -498244,6 +498559,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -498536,6 +498852,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -498834,6 +499151,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -499145,6 +499463,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -499452,6 +499771,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -499732,6 +500052,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -500043,6 +500364,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -500341,6 +500663,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -500639,6 +500962,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -500937,6 +501261,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -501220,6 +501545,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -501529,6 +501855,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -501815,6 +502142,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -502112,6 +502440,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -502406,6 +502735,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -502700,6 +503030,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -502998,6 +503329,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -503313,6 +503645,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -503622,6 +503955,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -503933,6 +504267,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -504223,6 +504558,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -504505,6 +504841,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -504789,6 +505126,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -505085,6 +505423,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -505383,6 +505722,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -505687,6 +506027,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -505988,6 +506329,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -506294,6 +506636,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -506587,6 +506930,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -506886,6 +507230,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -507181,6 +507526,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -507477,6 +507823,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -507777,6 +508124,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -508075,6 +508423,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -508367,6 +508716,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -508664,6 +509014,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -508943,6 +509294,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -509241,6 +509593,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -509519,6 +509872,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -509799,6 +510153,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -510103,6 +510458,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -510398,6 +510754,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -510676,6 +511033,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -510953,6 +511311,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -511230,6 +511589,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -511516,6 +511876,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -511802,6 +512163,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -512083,6 +512445,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -512373,6 +512736,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -512679,6 +513043,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -512957,6 +513322,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -513240,6 +513606,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -513520,6 +513887,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -513811,6 +514179,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -514102,6 +514471,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -514404,6 +514774,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -514706,6 +515077,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -515003,6 +515375,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -515307,6 +515680,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -515609,6 +515983,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -515913,6 +516288,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -516219,6 +516595,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -516520,6 +516897,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -516819,6 +517197,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -517128,6 +517507,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -517430,6 +517810,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -517727,6 +518108,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -518034,6 +518416,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -518342,6 +518725,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -518660,6 +519044,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -518950,6 +519335,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "candidate",
           "category": "A",
@@ -519252,6 +519638,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -519550,6 +519937,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -519852,6 +520240,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -520150,6 +520539,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -520431,6 +520821,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -520734,6 +521125,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "A",
@@ -521011,6 +521403,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "candidate",
           "category": "C",
@@ -521289,6 +521682,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "watch",
           "category": "C",
@@ -521578,6 +521972,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "watch",
           "category": "C",
@@ -521885,6 +522280,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -522193,6 +522589,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "low_position",
           "tier": "watch",
           "category": "C",
@@ -522480,6 +522877,7 @@
             },
             "risk_reasons": []
           },
+          "h4_predictions": {},
           "source_channel": "trend_continuation",
           "tier": "watch",
           "category": "C",
@@ -522505,6 +522903,7 @@
     },
     "counts": {
       "main": 63,
+      "h4_t3": 0,
       "acceleration": 5,
       "luojie": 30,
       "confirming": 54,
@@ -522574,6 +522973,21 @@
         "max_total": 5,
         "max_per_sector": 2,
         "max_per_reason": 2
+      },
+      "h4_t3": {
+        "report_date": "2026-08-17",
+        "fusion_candidate_count": 119,
+        "collapsed_candidate_count": 119,
+        "duplicate_count": 0,
+        "continuation_microstate_count": 0,
+        "eligible_count": 0,
+        "selected_count": 0,
+        "training_row_count": 427,
+        "training_date_count": 51,
+        "max_training_trade_date": "2026-07-28",
+        "max_training_exit_date": "2026-07-31",
+        "model_ready": true,
+        "future_violation_count": 0
       }
     }
   }
