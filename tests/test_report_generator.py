@@ -1498,7 +1498,8 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             cls.asset_js = f.read()
 
     def test_auxiliary_center_title(self):
-        self.assertIn('辅助决策中心', self.asset_js)
+        self.assertIn('辅助决策驾驶舱', self.asset_js)
+        self.assertIn('先看方向，再沿证据链定位到板块与重点股', self.asset_js)
 
     def test_observation_top5_tab_and_failure_details_are_rendered(self):
         self.assertIn("observation_top5: '观察 Top5'", self.asset_js)
@@ -1526,11 +1527,11 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             'function clamp',
             'function renderMarketTemperatureCard',
             'function renderSectorFlowCard',
-            'function renderSellSignalsCard',
-            'function getReviewName',
-            'function buildReviewMeta',
-            'function buildReviewDataLine',
-            'function buildReviewOutcome',
+            'function renderLimitUpEcologyCard',
+            'function renderDecisionDirections',
+            'function renderPersonalWatchlist',
+            'function renderHoldingRiskSection',
+            'function renderStrategyScorecards',
         ]:
             self.assertIn(helper, self.asset_js)
 
@@ -1545,23 +1546,19 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             self.assertIn(helper, self.asset_js)
 
     def test_auxiliary_center_modules(self):
-        module_names = ['市场情绪', '板块资金', '涨停情绪', '事件驱动', '卖出提醒', '策略回看', '数据诊断']
+        module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险', '策略记分牌', '数据诊断']
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
-        self.assertEqual(self.asset_js.count("renderDecisionCard({"), 7)
+        self.assertNotIn("title: '卖出提醒'", self.asset_js)
+        self.assertNotIn("title: '事件驱动'", self.asset_js)
 
-    def test_recent_reviews_show_real_review_fields(self):
-        self.assertIn("buildReviewMeta(rec)", self.asset_js)
-        self.assertIn("buildReviewDataLine(rec)", self.asset_js)
-        self.assertIn("asArray((data || {}).recent_reviews);", self.asset_js)
-        self.assertNotIn("recent_reviews).slice(0, 6)", self.asset_js)
-        self.assertIn('class="review-list"', self.asset_js)
-        self.assertIn("'推荐日 ' + date", self.asset_js)
-        self.assertIn("推荐 ' + formatNumber(refPrice, 2)", self.asset_js)
-        self.assertIn("现价 ' + formatNumber(currentPrice, 2)", self.asset_js)
-        self.assertIn("formatPct(change, true)", self.asset_js)
-        self.assertNotIn("待回看", self.asset_js)
-        self.assertIn('class="review-outcome ', self.asset_js)
+    def test_strategy_reviews_use_attributed_scorecards(self):
+        self.assertIn("strategy_scorecards", self.asset_js)
+        self.assertIn("representative_samples", self.asset_js)
+        self.assertIn("renderStrategyReturn('T+1'", self.asset_js)
+        self.assertIn("renderStrategyReturn('T+3'", self.asset_js)
+        self.assertIn("renderStrategyReturn('T+5'", self.asset_js)
+        self.assertNotIn("asArray((data || {}).recent_reviews);", self.asset_js)
 
     def test_diagnostics_card_defaults_to_collapsed_details(self):
         self.assertIn('<details class="diagnostics-details">', self.asset_js)

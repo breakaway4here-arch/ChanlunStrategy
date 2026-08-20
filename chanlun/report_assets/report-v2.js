@@ -855,7 +855,7 @@
       + '  <section class="aux-center decision-center">'
       + '    <details id="auxCenter" open>'
       + '      <summary>'
-      + '        <span><strong>辅助决策中心</strong><small>市场、资金、情绪、事件、风险、回看、诊断</small></span>'
+      + '        <span><strong>辅助决策驾驶舱</strong><small>先看方向，再沿证据链定位到板块与重点股</small></span>'
       + '      </summary>'
       + '      <div class="aux-grid decision-grid" id="auxGrid"></div>'
       + '    </details>'
@@ -2131,144 +2131,371 @@
     });
   }
 
-  function renderLimitUpCard(data) {
-    var rows = asArray((data || {}).limit_up_pool).slice(0, 6);
-    var body = rows.length ? rows.map(function (item) {
-      var rec = item || {};
+  function getLimitUpStatusMeta(status) {
+    if (status === 'verified_complete') return { label: '数据完整', tone: 'positive' };
+    if (status === 'verified_empty') return { label: '确认空池', tone: 'neutral' };
+    if (status === 'partial') return { label: '数据不完整', tone: 'warning' };
+    if (status === 'error') return { label: '数据异常', tone: 'danger' };
+    return { label: '数据缺失', tone: 'neutral' };
+  }
+
+  function renderLimitUpEcologyCard(data) {
+    var snapshot = (data || {}).limit_up_snapshot || {};
+    var status = normalizeString(snapshot.status || 'missing');
+    var meta = getLimitUpStatusMeta(status);
+    var total = safeNumber(snapshot.raw_total, null);
+    var parsed = safeNumber(snapshot.parsed_count, null);
+    var coverage = safeNumber(snapshot.coverage, null);
+    var downTotal = safeNumber(snapshot.limit_down_total, null);
+    var groups = asArray(snapshot.theme_groups).slice(0, 5);
+    var leaders = asArray(snapshot.leaders).slice(0, 5);
+    var stateHtml = '';
+    if (status === 'verified_empty') {
+      stateHtml = '<div class="decision-empty is-verified">上游明确返回 0 只涨停</div>';
+    } else if (status === 'partial') {
+      stateHtml = '<div class="decision-empty is-warning">仅展示已解析部分，不能据此判断完整涨停生态</div>';
+    } else if (status === 'error') {
+      stateHtml = '<div class="decision-empty is-error">涨停数据存在冲突或解析异常</div>';
+    } else if (status === 'missing') {
+      stateHtml = '<div class="decision-empty">数据缺失，不等于没有涨停</div>';
+    }
+    var metrics = ''
+      + '<div class="metric-pair-grid ecology-metrics">'
+      + '  <div class="metric-pair"><span>涨停总数</span><strong>' + escapeHtml(total === null ? '--' : formatNumber(total, 0)) + '</strong></div>'
+      + '  <div class="metric-pair"><span>跌停总数</span><strong>' + escapeHtml(downTotal === null ? '--' : formatNumber(downTotal, 0)) + '</strong></div>'
+      + '  <div class="metric-pair"><span>成功解析</span><strong>' + escapeHtml(parsed === null ? '--' : formatNumber(parsed, 0)) + '</strong></div>'
+      + '  <div class="metric-pair"><span>覆盖率</span><strong>' + escapeHtml(coverage === null ? '--' : formatPct(coverage * 100)) + '</strong></div>'
+      + '</div>';
+    var groupHtml = groups.length ? groups.map(function (group) {
+      return '<span class="ecology-theme"><strong>' + escapeHtml(group.name || '--') + '</strong><small>' + escapeHtml(formatNumber(group.count, 0)) + '只</small></span>';
+    }).join('') : '<span class="evidence-missing">暂无可验证题材梯队</span>';
+    var leaderHtml = leaders.length ? leaders.map(function (leader) {
+      var boards = safeNumber(leader.lianban, 0);
       return ''
-        + '<div class="stock-signal-row">'
-        + '  <div class="stock-signal-main"><strong>' + escapeHtml(rec.name || '--') + '</strong><span>' + escapeHtml(rec.code || '') + '</span></div>'
-        + '  <div class="stock-signal-reason"><span class="tag-chip">题材</span>' + escapeHtml(rec.reason || rec.note || '原因未标注') + '</div>'
+        + '<div class="ecology-leader">'
+        + '  <span><strong>' + escapeHtml(leader.name || '--') + '</strong><small>' + escapeHtml(leader.code || '') + '</small></span>'
+        + '  <span>' + escapeHtml(leader.sector || '题材未标注') + '</span>'
+        + '  <strong>' + escapeHtml(boards > 1 ? formatNumber(boards, 0) + '连板' : normalizeString(leader.first_time || '首板')) + '</strong>'
         + '</div>';
-    }).join('') : '<div class="decision-empty">暂无涨停池</div>';
+    }).join('') : '<div class="evidence-missing">暂无已验证领涨样本</div>';
     return renderDecisionCard({
-      title: '涨停情绪',
-      subtitle: '短线情绪观察',
-      badge: { text: rows.length ? rows.length + '只' : '暂无', tone: rows.length ? 'warning' : 'neutral' },
-      className: 'limit-up-card',
+      title: '涨停生态',
+      subtitle: '总量、题材梯队与领涨样本放在同一证据面板',
+      badge: { text: meta.label, tone: meta.tone },
+      className: 'limit-up-ecology-card',
+      bodyHtml: stateHtml + metrics
+        + '<div class="ecology-section"><span class="mini-section-title">题材梯队</span><div class="ecology-themes">' + groupHtml + '</div></div>'
+        + '<div class="ecology-section"><span class="mini-section-title">领涨样本</span><div class="ecology-leaders">' + leaderHtml + '</div></div>',
+    });
+  }
+
+  function getDirectionMeta(direction) {
+    if (direction === 'positive') return { label: '偏多', tone: 'positive' };
+    if (direction === 'negative') return { label: '风险', tone: 'danger' };
+    if (direction === 'mixed') return { label: '分化', tone: 'warning' };
+    return { label: '观察', tone: 'neutral' };
+  }
+
+  function getStageLabel(stage) {
+    if (stage === 'confirmed') return '盘面已确认';
+    if (stage === 'developing') return '催化待确认';
+    if (stage === 'risk') return '风险成立';
+    return '继续观察';
+  }
+
+  function renderEvidenceStep(label, value, stateLabel) {
+    var text = normalizeString(value);
+    return ''
+      + '<div class="evidence-step' + (text ? '' : ' is-missing') + '">'
+      + '  <span>' + escapeHtml(label) + '</span>'
+      + '  <strong>' + escapeHtml(text || stateLabel || '未验证') + '</strong>'
+      + '</div>';
+  }
+
+  function buildEvidenceRegistryMap(decisionBrief) {
+    var registryMap = {};
+    asArray((decisionBrief || {}).evidence_registry).forEach(function (evidence) {
+      var ref = normalizeString(evidence && evidence.evidence_ref);
+      if (ref) registryMap[ref] = evidence;
+    });
+    return registryMap;
+  }
+
+  function renderDirectionRow(row, index, registryMap) {
+    var rec = row || {};
+    var meta = getDirectionMeta(rec.direction);
+    var eventRefs = asArray(rec.evidence_refs).filter(function (ref) {
+      return normalizeString(ref).indexOf('event:') === 0;
+    });
+    var eventEvidence = eventRefs.map(function (ref) {
+      return registryMap[normalizeString(ref)] || null;
+    }).filter(Boolean);
+    var eventTitles = eventEvidence.map(function (evidence) {
+      var score = safeNumber(evidence.impact_score, null);
+      return normalizeString(evidence.title || '事件标题缺失')
+        + (score === null ? '' : ' · 影响' + formatNumber(score, 0));
+    });
+    var sectors = asArray(rec.sector_links).map(function (link) {
+      var evidence = registryMap[normalizeString(link && link.evidence_ref)] || {};
+      var change = safeNumber(evidence.change_pct, null);
+      return normalizeString(link && link.name)
+        + (change === null ? '' : ' ' + formatPct(change, true));
+    }).filter(Boolean);
+    var limitEvidence = asArray(rec.evidence_refs).map(function (ref) {
+      var evidence = registryMap[normalizeString(ref)] || null;
+      return evidence && evidence.kind === 'limit_up_theme' ? evidence : null;
+    }).filter(Boolean);
+    var limitLabels = limitEvidence.map(function (evidence) {
+      var count = safeNumber(evidence.count, null);
+      return normalizeString(evidence.name || '涨停题材')
+        + (count === null ? '' : ' ' + formatNumber(count, 0) + '只');
+    });
+    var stocks = asArray(rec.stock_links);
+    var stockNames = stocks.map(function (link) {
+      var role = link && link.link_type === 'limit_up_leader' ? '领涨样本' : (link && link.link_type === 'watchlist_intersection' ? '重点池' : '事件点名');
+      return normalizeString(link && link.name) + '·' + role;
+    }).filter(Boolean);
+    var summary = normalizeString(rec.llm_summary || rec.rule_summary || '暂无方向解释');
+    var triggerHtml = asArray(rec.next_trigger).map(function (item) {
+      return '<li>' + escapeHtml(item) + '</li>';
+    }).join('');
+    var invalidationHtml = asArray(rec.invalidation).map(function (item) {
+      return '<li>' + escapeHtml(item) + '</li>';
+    }).join('');
+    var refHtml = asArray(rec.evidence_refs).slice(0, 8).map(function (ref) {
+      return '<code>' + escapeHtml(ref) + '</code>';
+    }).join('');
+    return ''
+      + '<details class="decision-direction"' + (index === 0 ? ' open' : '') + '>'
+      + '  <summary>'
+      + '    <span class="direction-rank">' + escapeHtml(String(index + 1)) + '</span>'
+      + '    <span class="direction-heading"><strong>' + escapeHtml(rec.theme || '--') + '</strong><small>' + escapeHtml(summary) + '</small></span>'
+      + '    <span class="status-badge is-' + escapeHtml(meta.tone) + '">' + escapeHtml(meta.label) + '</span>'
+      + '    <span class="direction-stage">' + escapeHtml(getStageLabel(rec.stage)) + '</span>'
+      + '  </summary>'
+      + '  <div class="evidence-chain">'
+      + renderEvidenceStep('事件', eventTitles.join(' / '), eventRefs.length ? '事件标题缺失' : '无事件证据')
+      + renderEvidenceStep('板块', sectors.join(' / '), '资金未验证')
+      + renderEvidenceStep('盘面', limitLabels.length ? limitLabels.join(' / ') + ' · ' + getStageLabel(rec.stage) : getStageLabel(rec.stage), '待盘面确认')
+      + renderEvidenceStep('个股', stockNames.join(' / '), '未映射到个股')
+      + '  </div>'
+      + '  <div class="direction-detail-grid">'
+      + '    <div><span>下一确认</span><ul>' + (triggerHtml || '<li>暂无新增确认条件</li>') + '</ul></div>'
+      + '    <div><span>失效条件</span><ul>' + (invalidationHtml || '<li>暂无新增失效条件</li>') + '</ul></div>'
+      + '  </div>'
+      + '  <div class="evidence-refs"><span>证据编号</span>' + (refHtml || '<small>暂无</small>') + '</div>'
+      + '</details>';
+  }
+
+  function renderDecisionDirections(data) {
+    var decisionBrief = (data || {}).decision_brief || {};
+    var rows = asArray(decisionBrief.theses).slice(0, 3);
+    var registryMap = buildEvidenceRegistryMap(decisionBrief);
+    var status = normalizeString(decisionBrief.status || 'missing');
+    var statusText = status === 'ok' ? 'LLM 已审计' : (status === 'rules_only' ? '规则兜底' : '暂无方向');
+    var body = rows.length ? rows.map(function (row, index) {
+      return renderDirectionRow(row, index, registryMap);
+    }).join('') : ''
+      + '<div class="decision-empty">今天没有通过证据门的方向，不为凑数生成结论。</div>';
+    if (decisionBrief.llm_error) {
+      body += '<div class="decision-source-note">LLM 未采用：' + escapeHtml(decisionBrief.llm_error) + '</div>';
+    }
+    return renderDecisionCard({
+      title: '今日方向',
+      subtitle: '事件 → 板块 → 盘面 → 个股，最多三条且不凑数',
+      badge: { text: statusText, tone: rows.length ? 'info' : 'neutral' },
+      className: 'decision-directions-card',
       bodyHtml: body,
     });
   }
 
-  function renderEventsCard(data) {
-    var rows = asArray((data || {}).events).slice(0, 6);
-    var body = rows.length ? rows.map(function (item) {
-      var rec = item || {};
-      var summary = rec.impact && rec.impact.summary ? rec.impact.summary : (rec.summary || rec.brief || '暂无影响摘要');
-      return ''
-        + '<div class="event-row">'
-        + '  <strong>' + escapeHtml(rec.title || rec.display_title || '未命名事件') + '</strong>'
-        + '  <span class="event-summary">影响：' + escapeHtml(summary) + '</span>'
-        + '</div>';
-    }).join('') : '<div class="decision-empty">暂无事件</div>';
-    return renderDecisionCard({
-      title: '事件驱动',
-      subtitle: '题材催化与影响摘要',
-      badge: { text: rows.length ? '待确认' : '暂无', tone: rows.length ? 'info' : 'neutral' },
-      className: 'events-card',
-      bodyHtml: body,
+  function getWatchDirectionRows(decisionBrief, code) {
+    return asArray((decisionBrief || {}).theses).filter(function (thesis) {
+      return asArray(thesis && thesis.watchlist_impacts).map(normalizeString).indexOf(code) !== -1;
     });
   }
 
-  function renderSellSignalsCard(data) {
-    var rows = asArray((data || {}).sell_signals).slice(0, 6);
-    var body = rows.length ? rows.map(function (item) {
-      var rec = item || {};
-      var firstPoint = rec.sell_points && rec.sell_points.length ? rec.sell_points[0] : null;
-      var reason = firstPoint && firstPoint.reason ? firstPoint.reason : (rec.reason || '暂无卖出理由');
-      var action = firstPoint && firstPoint.action ? firstPoint.action : '优先处理';
+  function getWatchPoolLabel(pool) {
+    var labels = {
+      fusion: '融合候选池',
+      observation: '观察池',
+      sector: '板块池',
+      event: '事件池',
+    };
+    return labels[normalizeString(pool)] || normalizeString(pool || '候选池');
+  }
+
+  function renderWatchPriceLevels(priceLevels) {
+    var labels = {
+      support: '支撑',
+      resistance: '压力',
+      range_low_20d: '20日区间低',
+      range_high_20d: '20日区间高',
+    };
+    var rows = Object.keys(priceLevels || {}).slice(0, 4).map(function (key) {
+      var value = safeNumber(priceLevels[key], null);
+      if (value === null) return '';
+      return '<span>' + escapeHtml(labels[key] || key) + ' <strong>' + escapeHtml(formatNumber(value, 2)) + '</strong></span>';
+    }).filter(Boolean);
+    return rows.length ? rows.join('') : '<span class="is-muted">关键价位待确认</span>';
+  }
+
+  function renderWatchDirectionAnalysis(directionRows, registryMap) {
+    if (!directionRows.length) {
+      return '<div class="watch-direction-empty">今日暂无方向级证据关联；这不是个股独立结论。</div>';
+    }
+    return directionRows.map(function (thesis) {
+      var meta = getDirectionMeta(thesis.direction);
+      var eventTitles = asArray(thesis.evidence_refs).map(function (ref) {
+        var evidence = registryMap[normalizeString(ref)] || null;
+        return evidence && evidence.kind === 'event' ? normalizeString(evidence.title) : '';
+      }).filter(Boolean);
+      var sectors = asArray(thesis.sector_links).map(function (link) {
+        return normalizeString(link && link.name);
+      }).filter(Boolean);
+      var hasLlm = Boolean(normalizeString(thesis.llm_summary));
+      var sourceLabel = hasLlm ? '方向级 LLM 关联' : '方向级规则关联';
+      var summary = normalizeString(thesis.llm_summary || thesis.rule_summary || '暂无方向解释');
+      var trigger = asArray(thesis.next_trigger).map(normalizeString).filter(Boolean).join('；') || '暂无新增确认条件';
+      var invalidation = asArray(thesis.invalidation).map(normalizeString).filter(Boolean).join('；') || '暂无新增失效条件';
       return ''
-        + '<div class="stock-signal-row is-risk-row">'
-        + '  <div class="stock-signal-main"><strong>' + escapeHtml(rec.name || '--') + '</strong><span>' + escapeHtml(rec.code || '') + '</span></div>'
-        + '  <div class="stock-signal-reason"><span class="tag-chip is-risk">风险</span>' + escapeHtml(reason) + '</div>'
-        + '  <div class="decision-note">动作：' + escapeHtml(action) + '</div>'
-        + '</div>';
-    }).join('') : '<div class="decision-empty">暂无卖出信号</div>';
-    return renderDecisionCard({
-      title: '卖出提醒',
-      subtitle: '风险优先展示',
-      badge: { text: rows.length ? '风险' : '暂无', tone: rows.length ? 'danger' : 'neutral' },
-      className: 'sell-signals-card',
-      bodyHtml: body,
-    });
-  }
-
-  function getReviewName(rec) {
-    return normalizeString(rec.name || rec.display_name || rec.stock_name || rec.code || '--');
-  }
-
-  function buildReviewMeta(rec) {
-    var parts = [];
-    var date = formatDateLabel(rec.rec_date || rec.date);
-    var type = normalizeString(rec.type || rec.signal_type);
-    var version = normalizeString(rec.version);
-    if (date !== '--') parts.push('推荐日 ' + date);
-    if (type) parts.push(type);
-    if (version) parts.push(version);
-    return parts.join(' · ') || '近期信号';
-  }
-
-  function buildReviewDataLine(rec) {
-    var parts = [];
-    var refPrice = safeNumber(rec.ref_price, null);
-    var currentPrice = safeNumber(rec.current_price, null);
-    var lookbackDays = safeNumber(rec.lookback_days, null);
-    var triggerDate = normalizeString(rec.trigger_date);
-    if (refPrice !== null) parts.push('推荐 ' + formatNumber(refPrice, 2));
-    if (currentPrice !== null) parts.push('现价 ' + formatNumber(currentPrice, 2));
-    if (lookbackDays !== null && lookbackDays > 0) parts.push('回看 ' + formatNumber(lookbackDays, 0) + '日');
-    if (triggerDate) parts.push('触发 ' + formatDateLabel(triggerDate));
-    return parts.join(' · ') || '暂无现价';
-  }
-
-  function buildReviewOutcome(rec) {
-    var change = safeNumber(rec.change_pct, null);
-    var refPrice = safeNumber(rec.ref_price, null);
-    var currentPrice = safeNumber(rec.current_price, null);
-    if (change === null && refPrice !== null && currentPrice !== null && refPrice !== 0) {
-      change = ((currentPrice - refPrice) / refPrice) * 100;
-    }
-    if (change !== null) {
-      return {
-        text: formatPct(change, true),
-        tone: change >= 0 ? 'is-up' : 'is-down'
-      };
-    }
-    if (rec.stop_triggered === true) {
-      return { text: '触止损', tone: 'is-down' };
-    }
-    if (normalizeString(rec.result || rec.outcome)) {
-      return { text: normalizeString(rec.result || rec.outcome), tone: 'is-neutral' };
-    }
-    return { text: '暂无现价', tone: 'is-neutral' };
-  }
-
-  function renderRecentReviewsCard(data) {
-    var rows = asArray((data || {}).recent_reviews);
-    var body = rows.length ? rows.map(function (item) {
-      var rec = item || {};
-      var outcome = buildReviewOutcome(rec);
-      return ''
-        + '<div class="review-row">'
-        + '  <div class="review-main">'
-        + '    <strong>' + escapeHtml(getReviewName(rec)) + '</strong>'
-        + '    <span>' + escapeHtml(rec.code || '') + '</span>'
+        + '<div class="watch-direction-analysis">'
+        + '  <div class="watch-direction-heading">'
+        + '    <span><strong>' + escapeHtml(thesis.theme || '--') + '</strong><small>' + escapeHtml(sourceLabel) + '</small></span>'
+        + '    <span class="status-badge is-' + escapeHtml(meta.tone) + '">' + escapeHtml(meta.label) + '</span>'
         + '  </div>'
-        + '  <div class="review-detail">'
-        + '    <span>' + escapeHtml(buildReviewMeta(rec)) + '</span>'
-        + '    <small>' + escapeHtml(buildReviewDataLine(rec)) + '</small>'
+        + '  <div class="watch-direction-links">'
+        + '    <span>事件 <strong>' + escapeHtml(eventTitles.join(' / ') || '未关联事件') + '</strong></span>'
+        + '    <span>板块 <strong>' + escapeHtml(sectors.join(' / ') || '未关联板块') + '</strong></span>'
         + '  </div>'
-        + '  <strong class="review-outcome ' + outcome.tone + '">' + escapeHtml(outcome.text) + '</strong>'
+        + '  <p>' + escapeHtml(summary) + '</p>'
+        + '  <div class="watch-direction-gates">'
+        + '    <span>下一确认 <strong>' + escapeHtml(trigger) + '</strong></span>'
+        + '    <span>失效条件 <strong>' + escapeHtml(invalidation) + '</strong></span>'
+        + '  </div>'
+        + '  <small class="watch-direction-disclaimer">方向证据关联，不是个股独立结论。</small>'
         + '</div>';
-    }).join('') : '<div class="decision-empty">暂无回看记录</div>';
-    if (rows.length) {
-      body = '<div class="review-list">' + body + '</div>';
-    }
+    }).join('');
+  }
+
+  function renderPersonalWatchlist(data) {
+    var personalWatchlist = (data || {}).personal_watchlist || {};
+    var decisionBrief = (data || {}).decision_brief || {};
+    var evidenceRegistry = asArray(decisionBrief.evidence_registry);
+    var registryMap = buildEvidenceRegistryMap({ evidence_registry: evidenceRegistry });
+    var rows = asArray(personalWatchlist.items).filter(function (item) {
+      return item && item.enabled !== false;
+    });
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      var current = rec.current || {};
+      var factStatus = normalizeString(rec.fact_status || 'missing');
+      var statusLabel = factStatus === 'fresh' ? '当日事实' : (factStatus === 'stale' ? '数据过期' : '事实缺失');
+      var statusTone = factStatus === 'fresh' ? 'positive' : (factStatus === 'stale' ? 'warning' : 'neutral');
+      var price = factStatus === 'fresh' ? safeNumber(current.current_price, null) : null;
+      var change = factStatus === 'fresh' ? safeNumber(current.change_pct, null) : null;
+      var evidenceDate = normalizeString(rec.evidence_date || '--');
+      var changeStatus = normalizeString(rec.change_status) === 'new' ? '今日加入' : '持续跟踪';
+      var actionStatus = normalizeString(rec.action_status) === 'awaiting_confirmation' ? '等待触发确认' : '事实不足';
+      var priceLevels = factStatus === 'fresh' && rec.price_levels && typeof rec.price_levels === 'object' ? rec.price_levels : {};
+      var candidateIntersections = factStatus === 'fresh' ? asArray(rec.candidate_intersections) : [];
+      var poolHtml = candidateIntersections.length ? candidateIntersections.map(function (intersection) {
+        return '<span class="watch-relation">' + escapeHtml(getWatchPoolLabel(intersection && intersection.pool)) + '</span>';
+      }).join('') : '<span class="watch-relation is-muted">未进入候选池</span>';
+      var directionRows = getWatchDirectionRows(decisionBrief, normalizeString(rec.code));
+      return ''
+        + '<article class="personal-watch-row is-' + escapeHtml(factStatus) + '">'
+        + '  <div class="personal-watch-heading">'
+        + '    <span><strong>' + escapeHtml(rec.name || '--') + '</strong><small>' + escapeHtml(rec.code || '') + '</small></span>'
+        + '    <span class="status-badge is-' + escapeHtml(statusTone) + '">' + escapeHtml(statusLabel) + '</span>'
+        + '  </div>'
+        + '  <div class="watch-user-thesis"><span>个人观察逻辑</span><p>' + escapeHtml(rec.thesis || rec.note || '尚未填写个人观察逻辑') + '</p></div>'
+        + '  <div class="watch-facts">'
+        + '    <span>现价 <strong>' + escapeHtml(price === null ? '--' : formatNumber(price, 2)) + '</strong></span>'
+        + '    <span>当日 <strong class="' + (change !== null && change >= 0 ? 'is-up' : (change !== null ? 'is-down' : '')) + '">' + escapeHtml(change === null ? '--' : formatPct(change, true)) + '</strong></span>'
+        + '    <span>结构 <strong>' + escapeHtml(factStatus === 'fresh' ? normalizeString(current.trend_type || '待确认') : '不提供旧结论') + '</strong></span>'
+        + '    <span>事实日期 <strong>' + escapeHtml(evidenceDate) + '</strong></span>'
+        + '    <span>跟踪状态 <strong>' + escapeHtml(changeStatus) + '</strong></span>'
+        + '    <span>动作状态 <strong>' + escapeHtml(actionStatus) + '</strong></span>'
+        + '  </div>'
+        + '  <div class="watch-price-levels">' + renderWatchPriceLevels(priceLevels) + '</div>'
+        + '  <div class="watch-relations">' + poolHtml + '</div>'
+        + '  <div class="watch-direction-list">' + renderWatchDirectionAnalysis(directionRows, registryMap) + '</div>'
+        + '</article>';
+    }).join('') : '<div class="decision-empty">重点观察池尚未配置</div>';
+    var freshCount = safeNumber(personalWatchlist.fresh_count, 0);
     return renderDecisionCard({
-      title: '策略回看',
-      subtitle: '近期信号反馈',
-      badge: { text: rows.length ? rows.length + '条' : '暂无', tone: rows.length ? 'info' : 'neutral' },
-      className: 'recent-reviews-card',
+      title: '我的重点观察',
+      subtitle: '个人逻辑与当日事实分开保存；过期数据不输出动作',
+      badge: { text: rows.length ? formatNumber(freshCount, 0) + '/' + rows.length + ' 当日' : '未配置', tone: freshCount === rows.length && rows.length ? 'positive' : 'warning' },
+      className: 'personal-watchlist-card',
+      bodyHtml: '<div class="personal-watch-list">' + body + '</div>',
+    });
+  }
+
+  function renderHoldingRiskSection(data) {
+    var source = (data || {}).holding_risks;
+    var rows = Array.isArray(source) ? source : asArray(source && source.items);
+    if (!rows.length) return '';
+    var body = rows.map(function (item) {
+      var rec = item || {};
+      return ''
+        + '<div class="holding-risk-row">'
+        + '  <div><strong>' + escapeHtml(rec.name || '--') + '</strong><small>' + escapeHtml(rec.code || '') + '</small></div>'
+        + '  <p>' + escapeHtml(rec.reason || '持仓风险已触发') + '</p>'
+        + '  <strong>' + escapeHtml(rec.action || '核对持仓风险') + '</strong>'
+        + '</div>';
+    }).join('');
+    return renderDecisionCard({
+      title: '持仓风险',
+      subtitle: '只展示已确认且未过期持仓与风险信号的交集',
+      badge: { text: rows.length + '项', tone: 'danger' },
+      className: 'holding-risk-card',
+      bodyHtml: body,
+    });
+  }
+
+  function renderStrategyReturn(label, value) {
+    var number = safeNumber(value, null);
+    return ''
+      + '<span class="strategy-return">'
+      + '  <small>' + escapeHtml(label) + '</small>'
+      + '  <strong class="' + (number !== null && number >= 0 ? 'is-up' : (number !== null ? 'is-down' : '')) + '">' + escapeHtml(number === null ? '--' : formatPct(number, true)) + '</strong>'
+      + '</span>';
+  }
+
+  function renderStrategyScorecards(data) {
+    var scorecards = (data || {}).strategy_scorecards || {};
+    var rows = Array.isArray(scorecards) ? scorecards : asArray(scorecards.items || scorecards.scorecards);
+    var body = rows.length ? rows.map(function (item) {
+      var rec = item || {};
+      var returns = rec.returns || rec.horizons || {};
+      var samples = asArray(rec.representative_samples).slice(0, 3);
+      var sampleHtml = samples.length ? samples.map(function (sample) {
+        return ''
+          + '<li><span>' + escapeHtml(sample.name || sample.code || '--') + '</span>'
+          + '<strong>' + escapeHtml(sample.outcome_label || formatPct(sample.return_pct, true)) + '</strong></li>';
+      }).join('') : '<li><span>暂无已到期样本</span><strong>--</strong></li>';
+      return ''
+        + '<details class="strategy-scorecard">'
+        + '  <summary>'
+        + '    <span><strong>' + escapeHtml(rec.name || rec.strategy || '未命名策略') + '</strong><small>' + escapeHtml(rec.version || '版本未知') + '</small></span>'
+        + '    <span><strong>' + escapeHtml(formatNumber(rec.sample_size, 0)) + '</strong><small>已到期样本</small></span>'
+        + '    <span><strong>' + escapeHtml(rec.win_rate == null ? '--' : formatPct(rec.win_rate)) + '</strong><small>上涨率</small></span>'
+        + '  </summary>'
+        + '  <div class="strategy-returns">'
+        + renderStrategyReturn('T+1', returns.t1)
+        + renderStrategyReturn('T+3', returns.t3)
+        + renderStrategyReturn('T+5', returns.t5)
+        + '  </div>'
+        + '  <ul class="strategy-samples">' + sampleHtml + '</ul>'
+        + '</details>';
+    }).join('') : '<div class="decision-empty">策略归因账本尚无已到期样本；旧的无归因翻页记录不再作为结论。</div>';
+    return renderDecisionCard({
+      title: '策略记分牌',
+      subtitle: '按策略与版本归因，默认只看已到期样本和代表案例',
+      badge: { text: rows.length ? rows.length + '个策略' : '待积累', tone: rows.length ? 'info' : 'neutral' },
+      className: 'strategy-scorecards-card',
       bodyHtml: body,
     });
   }
@@ -2311,17 +2538,32 @@
     });
   }
 
+  function bindSingleOpenDecisionDetails() {
+    if (!nodes.auxGrid) return;
+    var details = nodes.auxGrid.querySelectorAll('.decision-direction, .strategy-scorecard');
+    Array.prototype.forEach.call(details, function (current) {
+      current.addEventListener('toggle', function () {
+        if (!current.open) return;
+        Array.prototype.forEach.call(details, function (detail) {
+          if (detail !== current) detail.open = false;
+        });
+      });
+    });
+  }
+
   function renderAuxiliaryCenter() {
     if (!nodes.auxGrid) return;
     var data = state.data || {};
     nodes.auxGrid.innerHTML = ''
       + renderMarketTemperatureCard(data)
       + renderSectorFlowCard(data)
-      + renderLimitUpCard(data)
-      + renderEventsCard(data)
-      + renderSellSignalsCard(data)
-      + renderRecentReviewsCard(data)
+      + renderDecisionDirections(data)
+      + renderPersonalWatchlist(data)
+      + renderLimitUpEcologyCard(data)
+      + renderHoldingRiskSection(data)
+      + renderStrategyScorecards(data)
       + renderDiagnosticsCard(data);
+    bindSingleOpenDecisionDetails();
     setTimeout(renderMarketSentimentChart, 0);
   }
 
