@@ -1,4 +1,6 @@
+import json
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from chanlun import data_fetcher
@@ -224,6 +226,87 @@ class _JsonResponse:
 
 
 class TestLimitPoolEvidence(unittest.TestCase):
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_up_pool_formats_integer_first_board_time(self, mock_get):
+        fixture_path = (
+            Path(__file__).parent / "fixtures" / "limit_up_pool_int_fbt.json"
+        )
+        mock_get.return_value = _JsonResponse(
+            json.loads(fixture_path.read_text(encoding="utf-8"))
+        )
+
+        result = data_fetcher.fetch_limit_up_pool("20260820")
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["code"], "300308")
+        self.assertEqual(result[0]["first_time"], "09:25")
+
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_up_pool_can_return_auditable_diagnostics(self, mock_get):
+        fixture_path = (
+            Path(__file__).parent / "fixtures" / "limit_up_pool_int_fbt.json"
+        )
+        mock_get.return_value = _JsonResponse(
+            json.loads(fixture_path.read_text(encoding="utf-8"))
+        )
+
+        rows, diagnostics = data_fetcher.fetch_limit_up_pool(
+            "20260820", return_diagnostics=True
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(diagnostics["raw_total"], 1)
+        self.assertEqual(diagnostics["parsed_count"], 1)
+        self.assertEqual(diagnostics["parse_error_count"], 0)
+        self.assertEqual(diagnostics["evidence_date"], "2026-08-20")
+        self.assertEqual(diagnostics["data_status"], "verified")
+
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_up_pool_reports_partial_row_parsing(self, mock_get):
+        mock_get.return_value = _JsonResponse({
+            "data": {
+                "qdate": 20260820,
+                "tc": 2,
+                "pool": [
+                    {
+                        "c": "300308",
+                        "n": "中际旭创",
+                        "p": 468200,
+                        "fbt": 92500,
+                    },
+                    {
+                        "c": "002281",
+                        "n": "光迅科技",
+                        "p": "invalid-price",
+                        "fbt": 93100,
+                    },
+                ],
+            }
+        })
+
+        rows, diagnostics = data_fetcher.fetch_limit_up_pool(
+            "20260820", return_diagnostics=True
+        )
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(diagnostics["raw_total"], 2)
+        self.assertEqual(diagnostics["parsed_count"], 1)
+        self.assertEqual(diagnostics["parse_error_count"], 1)
+
+    @patch.object(data_fetcher.SESSION, "get")
+    def test_fetch_limit_up_pool_fails_closed_on_date_mismatch(self, mock_get):
+        mock_get.return_value = _JsonResponse({
+            "data": {"qdate": 20260819, "tc": 1, "pool": []}
+        })
+
+        rows, diagnostics = data_fetcher.fetch_limit_up_pool(
+            "20260820", return_diagnostics=True
+        )
+
+        self.assertEqual(rows, [])
+        self.assertEqual(diagnostics["data_status"], "missing")
+        self.assertIn("date mismatch", diagnostics["error"])
+
     @patch.object(data_fetcher.SESSION, "get")
     def test_fetch_limit_pool_counts_requires_same_verified_date(self, mock_get):
         mock_get.side_effect = [

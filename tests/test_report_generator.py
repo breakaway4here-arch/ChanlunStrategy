@@ -407,6 +407,37 @@ def _make_minimal_report_data():
     }
 
 
+class TestAuxiliaryDecisionSerialization(unittest.TestCase):
+
+    def test_limit_up_snapshot_is_preserved_in_daily_report(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_aux_snapshot_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["limit_up_snapshot"] = {
+            "date": "2026-05-26",
+            "status": "partial",
+            "raw_total": 2,
+            "parsed_count": 1,
+            "parse_error_count": 1,
+            "coverage": 0.5,
+            "items": [{"code": "300308", "name": "中际旭创"}],
+            "theme_groups": [{"name": "通信设备", "count": 1}],
+            "leaders": [{"code": "300308", "link_type": "limit_up_leader"}],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        self.assertEqual(payload["limit_up_snapshot"]["status"], "partial")
+        self.assertEqual(payload["limit_up_snapshot"]["raw_total"], 2)
+        self.assertEqual(payload["limit_up_snapshot"]["parsed_count"], 1)
+
+
 class TestH4T3ReportSerialization(unittest.TestCase):
 
     def test_attested_h4_pool_is_serialized_with_predictions(self):

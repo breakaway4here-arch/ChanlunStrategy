@@ -71,6 +71,7 @@ from chanlun.report_generator import generate_report, update_data_json
 from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_events, enrich_events, generate_forecast
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
+from chanlun.auxiliary_decision import build_limit_up_snapshot
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.trend_continuation import (
     build_trend_continuation_pool,
@@ -2242,7 +2243,10 @@ def main(debug=False, preview=False, generated_at=None):
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
 
     # 涨停池提前获取，供事件影响力评分复用
-    limit_up_pool_data = fetch_limit_up_pool(today.replace("-", ""))
+    limit_up_pool_data, limit_up_pool_diagnostics = fetch_limit_up_pool(
+        today.replace("-", ""),
+        return_diagnostics=True,
+    )
 
     # 热点事件 — 影响力评分排序后再 LLM 增强
     raw_events = fetch_cls_news(CLS_NEWS_COUNT)
@@ -2255,6 +2259,15 @@ def main(debug=False, preview=False, generated_at=None):
             today,
             market_indices=market_indices,
         )
+    )
+    limit_ecology_evidence = (
+        market_sentiment.get("evidence", {}).get("limit_ecology", {})
+    )
+    limit_up_snapshot = build_limit_up_snapshot(
+        today,
+        limit_up_pool_data,
+        limit_up_pool_diagnostics,
+        limit_down_total=limit_ecology_evidence.get("limit_down_count"),
     )
     decision_engine = _get_decision_engine()
     if decision_engine:
@@ -2538,6 +2551,7 @@ def main(debug=False, preview=False, generated_at=None):
         # 新增模块
         "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
+        "limit_up_snapshot": limit_up_snapshot,
         "market_temperature": market_temperature,
         "market_sentiment": market_sentiment,
         "market_sentiment_history": market_sentiment_history,

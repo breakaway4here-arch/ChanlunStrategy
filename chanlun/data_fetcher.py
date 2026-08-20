@@ -2194,7 +2194,7 @@ def fetch_limit_pool_counts(date_str=None):
     }
 
 
-def fetch_limit_up_pool(date_str=None):
+def fetch_limit_up_pool(date_str=None, return_diagnostics=False):
     """
     获取当日涨停板池。东方财富 getTopicZTPool 接口。
     返回: [{"code": ..., "name": ..., "price": ..., "change_pct": ...,
@@ -2202,6 +2202,23 @@ def fetch_limit_up_pool(date_str=None):
     """
     if date_str is None:
         date_str = datetime.now().strftime("%Y%m%d")
+    compact_date = str(date_str).replace("-", "")
+    try:
+        evidence_date = datetime.strptime(
+            compact_date, "%Y%m%d"
+        ).strftime("%Y-%m-%d")
+    except ValueError:
+        diagnostics = {
+            "raw_total": None,
+            "parsed_count": 0,
+            "parse_error_count": 0,
+            "evidence_date": "",
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "as_of": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "error": "invalid_date",
+        }
+        return ([], diagnostics) if return_diagnostics else []
 
     url = "https://push2ex.eastmoney.com/getTopicZTPool"
     params = {
@@ -2210,21 +2227,34 @@ def fetch_limit_up_pool(date_str=None):
         "Pageindex": "0",
         "pagesize": "200",
         "sort": "fbt:asc",
-        "date": date_str,
+        "date": compact_date,
     }
     try:
         resp = SESSION.get(url, params=params, timeout=15)
-        data = resp.json()
-        pool = data.get("data", {}).get("pool", [])
-        if not pool:
-            return []
+        payload = resp.json()
+        data = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(data, dict):
+            raise ValueError("getTopicZTPool missing data")
+        if str(data.get("qdate") or "") != compact_date:
+            raise ValueError("getTopicZTPool date mismatch")
+        raw_total = data.get("tc")
+        if isinstance(raw_total, bool):
+            raise ValueError("getTopicZTPool invalid total")
+        raw_total = int(raw_total)
+        if raw_total < 0:
+            raise ValueError("getTopicZTPool negative total")
+        pool = data.get("pool") or []
+        if not isinstance(pool, list):
+            raise ValueError("getTopicZTPool invalid pool")
         result = []
-        for it in pool:
+        parse_errors = []
+        for index, it in enumerate(pool):
             try:
+                raw_price = it.get("p", 0)
                 result.append({
                     "code": it.get("c", ""),
                     "name": it.get("n", ""),
-                    "price": it.get("p", 0) / 1000.0 if it.get("p") else 0,
+                    "price": float(raw_price) / 1000.0 if raw_price else 0,
                     "change_pct": it.get("zdp", 0),
                     "sector": it.get("hybk", ""),
                     "lianban": it.get("lbc", 0),
@@ -2232,19 +2262,53 @@ def fetch_limit_up_pool(date_str=None):
                     "fund": it.get("fund", 0),
                     "zhaban": it.get("zbc", 0),
                 })
-            except Exception:
+            except Exception as exc:
+                parse_errors.append(
+                    "row {}: {}: {}".format(
+                        index, type(exc).__name__, str(exc)[:80]
+                    )
+                )
                 continue
-        return result
+        diagnostics = {
+            "raw_total": raw_total,
+            "parsed_count": len(result),
+            "parse_error_count": len(parse_errors),
+            "evidence_date": evidence_date,
+            "data_status": "verified",
+            "source": "eastmoney_limit_pools",
+            "as_of": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "error": "; ".join(parse_errors),
+        }
+        return (result, diagnostics) if return_diagnostics else result
     except Exception as e:
         print(f"[ERROR] 获取涨停板池失败: {e}")
-        return []
+        diagnostics = {
+            "raw_total": None,
+            "parsed_count": 0,
+            "parse_error_count": 0,
+            "evidence_date": evidence_date,
+            "data_status": "missing",
+            "source": "eastmoney_limit_pools",
+            "as_of": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "error": "{}: {}".format(type(e).__name__, e),
+        }
+        return ([], diagnostics) if return_diagnostics else []
 
 
 def _fmt_btime(raw):
     """格式化首次封板时间 HHmmss → HH:mm"""
-    if not raw or len(raw) < 4:
-        return raw
-    return f"{raw[:2]}:{raw[2:4]}"
+    if raw is None or raw == "":
+        return ""
+    text = str(raw).strip()
+    if not text.isdigit() or len(text) > 6:
+        return ""
+    text = text.zfill(6)
+    hour = int(text[:2])
+    minute = int(text[2:4])
+    second = int(text[4:6])
+    if hour > 23 or minute > 59 or second > 59:
+        return ""
+    return f"{text[:2]}:{text[2:4]}"
 
 
 # ============================================================
