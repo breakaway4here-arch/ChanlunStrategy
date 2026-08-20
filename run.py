@@ -72,6 +72,13 @@ from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
 from chanlun.auxiliary_decision import build_limit_up_snapshot
+from chanlun.personal_watchlist import (
+    build_personal_watchlist_snapshot,
+    build_watchlist_fact_index,
+    ensure_watchlist_stocks,
+    load_personal_watchlist,
+    load_previous_personal_watchlist,
+)
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.trend_continuation import (
     build_trend_continuation_pool,
@@ -1405,6 +1412,7 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         as_of=today,
     )
+    personal_watchlist_config = load_personal_watchlist()
     print(f"缠论选股系统启动 — {today} {time_metadata['generated_at'][11:19]}")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
@@ -1533,6 +1541,20 @@ def main(debug=False, preview=False, generated_at=None):
                 stocks_with_kline,
                 today,
             )
+    stocks_with_kline, personal_watchlist_acquisition = (
+        ensure_watchlist_stocks(
+            stocks_with_kline,
+            personal_watchlist_config,
+            fetch_daily_kline,
+            today,
+            as_of=time_metadata.get("as_of"),
+        )
+    )
+    data_quality["personal_watchlist_acquisition"] = {
+        key: value
+        for key, value in personal_watchlist_acquisition.items()
+        if key != "by_code"
+    }
     data_quality["market_cap_evidence"] = _hydrate_market_cap_evidence(
         stocks_with_kline,
         today,
@@ -2541,6 +2563,38 @@ def main(debug=False, preview=False, generated_at=None):
             "trend_score": sentiment_components.get("trend"),
         },
     }
+    output_dir_name = (
+        DEBUG_OUTPUT_DIR
+        if debug
+        else (PREVIEW_OUTPUT_DIR if preview else OUTPUT_DIR)
+    )
+    output_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), output_dir_name
+    )
+    personal_watchlist_facts = build_watchlist_fact_index(
+        personal_watchlist_config,
+        stocks_with_kline,
+        chan_results,
+        today,
+        candidate_pools={
+            "pure": pure_scored,
+            "fusion": fusion_scored,
+            "observation": observation_watchlist,
+            "next_day_boom": next_day_boom.get("candidates", []),
+            "luojie": luojie_pool.get("candidates", []),
+        },
+        acquisition=personal_watchlist_acquisition,
+    )
+    personal_watchlist_snapshot = build_personal_watchlist_snapshot(
+        personal_watchlist_config,
+        personal_watchlist_facts,
+        today,
+        as_of=time_metadata.get("as_of"),
+        generated_at=time_metadata.get("generated_at"),
+        previous_snapshot=load_previous_personal_watchlist(
+            today, os.path.join(output_dir, "data")
+        ),
+    )
     report_data = {
         "date": today,
         "market": market_indices,
@@ -2552,6 +2606,7 @@ def main(debug=False, preview=False, generated_at=None):
         "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
         "limit_up_snapshot": limit_up_snapshot,
+        "personal_watchlist": personal_watchlist_snapshot,
         "market_temperature": market_temperature,
         "market_sentiment": market_sentiment,
         "market_sentiment_history": market_sentiment_history,
@@ -2568,8 +2623,6 @@ def main(debug=False, preview=False, generated_at=None):
     }
 
     # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
-    output_dir_name = DEBUG_OUTPUT_DIR if debug else (PREVIEW_OUTPUT_DIR if preview else OUTPUT_DIR)
-    output_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), output_dir_name)
     generate_report(report_data, output_dir)
     update_data_json(report_data, output_dir)
 

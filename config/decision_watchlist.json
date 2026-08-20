@@ -1,0 +1,58 @@
+{
+  "schema_version": "1",
+  "revision": "watchlist-20260820-01",
+  "updated_at": "2026-08-20T16:00:00+08:00",
+  "updated_by": "user",
+  "items": [
+    {
+      "enabled": true,
+      "added_at": "2026-08-20",
+      "code": "300139",
+      "role": "strong_watch",
+      "priority": 1,
+      "tags": ["用户重点观察", "黄金科技"],
+      "note": "晓程科技",
+      "thesis": "跟踪贵金属、芯片设计与公司自身催化是否形成盘面共振。"
+    },
+    {
+      "enabled": true,
+      "added_at": "2026-08-20",
+      "code": "002281",
+      "role": "strong_watch",
+      "priority": 2,
+      "tags": ["用户重点观察", "光通信"],
+      "note": "光迅科技",
+      "thesis": "跟踪光模块与通信设备方向的事件、板块资金和个股结构共振。"
+    },
+    {
+      "enabled": true,
+      "added_at": "2026-08-20",
+      "code": "300308",
+      "role": "strong_watch",
+      "priority": 3,
+      "tags": ["用户重点观察", "光通信"],
+      "note": "中际旭创",
+      "thesis": "跟踪海外算力和高速光模块催化能否被板块与个股强度确认。"
+    },
+    {
+      "enabled": true,
+      "added_at": "2026-08-20",
+      "code": "688041",
+      "role": "strong_watch",
+      "priority": 4,
+      "tags": ["用户重点观察", "国产算力"],
+      "note": "海光信息",
+      "thesis": "跟踪国产算力、服务器和先进计算产业链的持续性与结构位置。"
+    },
+    {
+      "enabled": true,
+      "added_at": "2026-08-20",
+      "code": "688525",
+      "role": "strong_watch",
+      "priority": 5,
+      "tags": ["用户重点观察", "存储"],
+      "note": "佰维存储",
+      "thesis": "跟踪存储涨价、端侧 AI 和半导体资金方向能否形成有效共振。"
+    }
+  ]
+}

@@ -437,6 +437,43 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
         self.assertEqual(payload["limit_up_snapshot"]["raw_total"], 2)
         self.assertEqual(payload["limit_up_snapshot"]["parsed_count"], 1)
 
+    def test_personal_watchlist_snapshot_is_preserved_in_daily_report(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_personal_watchlist_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["personal_watchlist"] = {
+            "schema_version": "1",
+            "config_revision": "watchlist-20260820-01",
+            "analysis_revision": "watchlist-20260820-01:2026-05-26:abc",
+            "date": "2026-05-26",
+            "as_of": "2026-05-26T15:10:00+08:00",
+            "status": "partial",
+            "items": [
+                {
+                    "code": "300308",
+                    "name": "中际旭创",
+                    "fact_status": "fresh",
+                    "current": {"current_price": 102.0},
+                }
+            ],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        self.assertEqual(
+            payload["personal_watchlist"]["config_revision"],
+            "watchlist-20260820-01",
+        )
+        self.assertEqual(
+            payload["personal_watchlist"]["items"][0]["code"], "300308"
+        )
+
 
 class TestH4T3ReportSerialization(unittest.TestCase):
 
