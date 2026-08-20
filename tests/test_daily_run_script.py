@@ -13,11 +13,13 @@ class TestDailyRunScript(unittest.TestCase):
         with open(SCRIPT_PATH, "r", encoding="utf-8") as handle:
             cls.script = handle.read()
 
-    def test_remote_is_synchronized_before_ready_output_can_short_circuit(self):
-        self.assertIn("if ! sync_with_remote; then", self.script)
-        sync_call = self.script.index("if ! sync_with_remote; then")
-        ready_check = self.script.index("if is_today_output_ready; then")
+    def test_remote_is_synchronized_before_first_generation(self):
+        self.assertIn("if ! is_today_output_ready; then", self.script)
+        missing_output = self.script.index("if ! is_today_output_ready; then")
+        sync_call = self.script.index("if ! sync_with_remote; then", missing_output)
+        ready_check = self.script.index("if is_today_output_ready; then", sync_call)
 
+        self.assertLess(missing_output, sync_call)
         self.assertLess(sync_call, ready_check)
 
     def test_ready_output_path_retries_pending_commits(self):
@@ -28,7 +30,7 @@ class TestDailyRunScript(unittest.TestCase):
         )
         ready_block = self.script[ready_check:generation_start]
 
-        self.assertIn("push_pending_commits", ready_block)
+        self.assertIn("publish_ready_report", ready_block)
 
     def test_automatic_sync_is_fast_forward_only(self):
         self.assertIn("sync_with_remote() {", self.script)

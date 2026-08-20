@@ -107,63 +107,85 @@ push_pending_commits() {
     push_with_proxy_fallback
 }
 
-echo "=== 缠论选股日报 $(date '+%Y-%m-%d %H:%M:%S') ==="
+main() {
+    local run_status
 
-if ! sync_with_remote; then
-    echo "远端同步未完成，停止生成，避免产生分叉提交"
-    exit 1
-fi
+    echo "=== 缠论选股日报 $(date '+%Y-%m-%d %H:%M:%S') ==="
 
-if is_today_output_ready; then
-    if /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
-        if ! push_pending_commits; then
+    if ! is_today_output_ready; then
+        if ! sync_with_remote; then
+            echo "远端同步未完成，停止生成，避免产生分叉提交"
             exit 1
         fi
-        echo "今日产物已存在且行情校验通过，跳过补跑"
-        exit 0
     fi
-    RETRY_MISSING_ONLY=1
-    echo "今日产物行情校验失败，进入缺失数据增量补跑"
-fi
 
-export CHANLUN_DAILY_RETRY_MISSING_ONLY=$RETRY_MISSING_ONLY
-if [ "$RETRY_MISSING_ONLY" -eq 1 ]; then
-    echo "日报补跑模式：只刷新缺失、过期或未收盘的日线数据"
-else
-    echo "日报首跑模式：使用行情数据库优先，按需刷新日线数据"
-fi
-
-/usr/bin/python3 -c 'import run; import chanlun.data_fetcher as df, chanlun.market_news as mn; df.SESSION.trust_env = False; mn.SESSION.trust_env = False; run.main(False)' 2>&1
-run_status=$?
-
-if [ $run_status -eq 0 ]; then
     if is_today_output_ready; then
-        if ! /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
-            echo "正式日报校验失败，保留本地产物但不提交，等待下一次收盘后增量补跑"
-            exit 1
+        if /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
+            if ! publish_ready_report; then
+                exit 1
+            fi
+            echo "今日产物已存在且行情校验通过，跳过补跑"
+            exit 0
         fi
-        git add \
-            "docs/index.html" \
-            docs/data.json \
-            "docs/data/comparison-index.json" \
-            "docs/data/index.json" \
-            "docs/data/${TODAY}.json" \
-            "docs/${TODAY}/index.html" \
-            "docs/assets/report-v2.css" \
-            "docs/assets/report-v2.js"
-        if ! git diff --cached --quiet; then
-            git commit -m "chore: 自动更新 ${TODAY} 日报数据"
-            if ! push_pending_commits; then
+        RETRY_MISSING_ONLY=1
+        echo "今日产物行情校验失败，进入缺失数据增量补跑"
+    fi
+
+    export CHANLUN_DAILY_RETRY_MISSING_ONLY=$RETRY_MISSING_ONLY
+    if [ "$RETRY_MISSING_ONLY" -eq 1 ]; then
+        echo "日报补跑模式：只刷新缺失、过期或未收盘的日线数据"
+    else
+        echo "日报首跑模式：使用行情数据库优先，按需刷新日线数据"
+    fi
+
+    /usr/bin/python3 -c 'import run; import chanlun.data_fetcher as df, chanlun.market_news as mn; df.SESSION.trust_env = False; mn.SESSION.trust_env = False; run.main(False)' 2>&1
+    run_status=$?
+
+    if [ $run_status -eq 0 ]; then
+        if is_today_output_ready; then
+            if ! /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
+                echo "正式日报校验失败，保留本地产物但不提交，等待下一次收盘后增量补跑"
+                exit 1
+            fi
+            if ! publish_ready_report; then
                 exit 1
             fi
         else
-            echo "无数据变更，跳过推送"
+            echo "run.py 返回成功，但今日产物未生成，跳过推送"
+            exit 1
         fi
     else
-        echo "run.py 返回成功，但今日产物未生成，跳过推送"
-        exit 1
+        echo "run.py 执行失败，跳过推送"
+        exit $run_status
     fi
-else
-    echo "run.py 执行失败，跳过推送"
-    exit $run_status
-fi
+}
+
+commit_today_report_if_changed() {
+    git add \
+        "docs/index.html" \
+        docs/data.json \
+        "docs/data/comparison-index.json" \
+        "docs/data/index.json" \
+        "docs/data/${TODAY}.json" \
+        "docs/${TODAY}/index.html" \
+        "docs/assets/report-v2.css" \
+        "docs/assets/report-v2.js"
+    if ! git diff --cached --quiet; then
+        git commit -m "chore: 自动更新 ${TODAY} 日报数据"
+    else
+        echo "无日报数据变更，检查是否存在待补推提交"
+    fi
+}
+
+publish_ready_report() {
+    if ! sync_with_remote; then
+        echo "远端同步未完成，保留已校验产物，等待下一次补推"
+        return 1
+    fi
+    if ! commit_today_report_if_changed; then
+        return 1
+    fi
+    push_pending_commits
+}
+
+main "$@"
