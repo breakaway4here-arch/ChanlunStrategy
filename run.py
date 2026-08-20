@@ -68,10 +68,20 @@ from chanlun.daily_structure_pool import build_daily_structure_pool
 from chanlun.candidate_upgrade import upgrade_daily_candidates_with_30min
 from chanlun.scorer import apply_scores
 from chanlun.report_generator import generate_report, update_data_json
-from chanlun.market_news import fetch_cls_news, rank_events, rank_market_impact_events, enrich_events, generate_forecast
+from chanlun.market_news import (
+    analyze_decision_brief_facts,
+    enrich_events,
+    fetch_cls_news,
+    generate_forecast,
+    rank_events,
+    rank_market_impact_events,
+)
 from chanlun.fusion_admission import apply_fusion_admission
 from chanlun.event_normalizer import normalize_events
-from chanlun.auxiliary_decision import build_limit_up_snapshot
+from chanlun.auxiliary_decision import (
+    build_decision_brief,
+    build_limit_up_snapshot,
+)
 from chanlun.personal_watchlist import (
     build_personal_watchlist_snapshot,
     build_watchlist_fact_index,
@@ -2595,6 +2605,15 @@ def main(debug=False, preview=False, generated_at=None):
             today, os.path.join(output_dir, "data")
         ),
     )
+    decision_brief = build_decision_brief(
+        today,
+        events,
+        sector_flow=sectors,
+        limit_up_snapshot=limit_up_snapshot,
+        personal_watchlist=personal_watchlist_snapshot,
+        llm_analyzer=analyze_decision_brief_facts,
+        generated_at=time_metadata.get("generated_at"),
+    )
     report_data = {
         "date": today,
         "market": market_indices,
@@ -2607,6 +2626,7 @@ def main(debug=False, preview=False, generated_at=None):
         "limit_up_pool": limit_up_pool_data,
         "limit_up_snapshot": limit_up_snapshot,
         "personal_watchlist": personal_watchlist_snapshot,
+        "decision_brief": decision_brief,
         "market_temperature": market_temperature,
         "market_sentiment": market_sentiment,
         "market_sentiment_history": market_sentiment_history,

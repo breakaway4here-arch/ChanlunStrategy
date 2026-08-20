@@ -474,6 +474,57 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             payload["personal_watchlist"]["items"][0]["code"], "300308"
         )
 
+    def test_decision_brief_preserves_grounded_theses_and_arbitration(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_decision_brief_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["decision_brief"] = {
+            "status": "ok",
+            "model": "deepseek-test",
+            "prompt_version": "decision-brief-v1",
+            "schema_version": "1",
+            "theses": [
+                {
+                    "thesis_id": "thesis:2026-05-26:abc",
+                    "theme": "光模块",
+                    "direction": "positive",
+                    "evidence_refs": ["event:2026-05-26:abc"],
+                    "stock_links": [
+                        {
+                            "code": "300308",
+                            "name": "中际旭创",
+                            "link_type": "watchlist_intersection",
+                            "evidence_ref": "watch-fact:2026-05-26:300308",
+                        }
+                    ],
+                }
+            ],
+            "arbitration": [
+                {
+                    "event_ref": "event:2026-05-26:abc",
+                    "rule_result": "confirmed_catalyst",
+                    "llm_result": "positive",
+                    "arbitration_result": "catalyst",
+                }
+            ],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        self.assertEqual(payload["decision_brief"]["status"], "ok")
+        self.assertEqual(
+            payload["decision_brief"]["theses"][0]["stock_links"][0][
+                "link_type"
+            ],
+            "watchlist_intersection",
+        )
+
 
 class TestH4T3ReportSerialization(unittest.TestCase):
 

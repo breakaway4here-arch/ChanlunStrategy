@@ -1,12 +1,37 @@
 """Tests for market_news — JSON parsing + impact scoring."""
+import json
 import unittest
 from unittest.mock import Mock, patch
 from chanlun.market_news import (
+    _DECISION_BRIEF_SYSTEM_PROMPT, _analyze_event_llm,
     _extract_first_json_object, _parse_llm_json,
+    analyze_decision_brief_facts,
     THEME_SYNONYMS, classify_event_category, classify_event_type,
     score_market_impact, dedupe_or_downgrade_events, fetch_cls_news,
     rank_market_impact_events, rank_events,
 )
+
+
+class TestEventImpactLlmSchema(unittest.TestCase):
+    @patch("chanlun.market_news._call_llm_with_retry")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    def test_malformed_sector_arrays_are_rejected(self, mock_call):
+        malformed_values = [123, [{"name": "通信"}], ["通信", 3]]
+
+        for malformed in malformed_values:
+            with self.subTest(malformed=malformed):
+                mock_call.return_value = json.dumps({
+                    "headline": "产业事件",
+                    "analysis": ["待验证"],
+                    "positive_sectors": malformed,
+                    "negative_sectors": [],
+                    "positive_stocks": [],
+                    "negative_stocks": [],
+                    "no_impact": False,
+                }, ensure_ascii=False)
+
+                with self.assertRaisesRegex(ValueError, "positive_sectors"):
+                    _analyze_event_llm({"title": "产业事件"})
 
 
 class TestMarketNewsJsonParsing(unittest.TestCase):
@@ -100,6 +125,71 @@ class TestMarketNewsJsonParsing(unittest.TestCase):
     def test_empty_string_raises(self):
         with self.assertRaises(ValueError):
             _parse_llm_json("")
+
+
+class TestDecisionBriefLlmProvider(unittest.TestCase):
+    def test_prompt_forbids_leader_word_in_free_text(self):
+        self.assertIn("自由文本", _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn("禁止使用“龙头”", _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertNotIn(
+            "不得称某只股票为龙头，除非",
+            _DECISION_BRIEF_SYSTEM_PROMPT,
+        )
+
+    @patch("chanlun.market_news._call_llm_with_retry")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    @patch("chanlun.market_news._DS_MODEL", "deepseek-test")
+    def test_provider_sends_structured_evidence_and_attaches_trusted_metadata(
+        self, mock_call
+    ):
+        mock_call.return_value = {
+            "theses": [
+                {
+                    "theme": "光模块",
+                    "direction": "positive",
+                    "stage": "confirmed",
+                    "confidence": "medium",
+                    "evidence_refs": ["event:2026-08-20:abc"],
+                    "watchlist_codes": ["300308"],
+                    "summary": "光通信催化已获得盘面验证。",
+                    "next_trigger": ["涨停梯队扩散"],
+                    "invalidation": ["板块资金转负"],
+                }
+            ]
+        }
+        packet = {
+            "schema_version": "1",
+            "report_date": "2026-08-20",
+            "evidence_registry": [
+                {
+                    "evidence_ref": "event:2026-08-20:abc",
+                    "kind": "event",
+                    "title": "海外光通信上涨",
+                }
+            ],
+            "directions": [
+                {
+                    "theme": "光模块",
+                    "direction": "positive",
+                    "evidence_refs": ["event:2026-08-20:abc"],
+                    "watchlist_codes": ["300308"],
+                }
+            ],
+        }
+
+        result = analyze_decision_brief_facts(packet)
+
+        self.assertEqual(result["model"], "deepseek-test")
+        self.assertEqual(result["prompt_version"], "decision-brief-v1")
+        self.assertEqual(result["schema_version"], "1")
+        messages = mock_call.call_args[0][0]
+        self.assertIn("event:2026-08-20:abc", messages[1]["content"])
+        self.assertIn("300308", messages[1]["content"])
+
+    @patch("chanlun.market_news._DS_API_KEY", "")
+    def test_provider_fails_explicitly_when_unconfigured(self):
+        with self.assertRaises(RuntimeError):
+            analyze_decision_brief_facts({"directions": []})
 
 
 class TestFetchClsNews(unittest.TestCase):

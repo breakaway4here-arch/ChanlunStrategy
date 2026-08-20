@@ -1237,6 +1237,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
+        "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []
@@ -1456,6 +1457,7 @@ def update_data_json(report_data, output_dir=None):
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
+        "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []

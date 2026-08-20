@@ -611,8 +611,8 @@ _SYSTEM_PROMPT = """你是A股市场分析师。分析新闻事件对A股的影�
 1. headline 一句话总结事件对A股的影响，20-30字
 2. analysis 给出2-4句具体分析，每句15-30字，包含逻辑推理
 3. 板块用A股标准行业名（半导体、白酒、光伏、银行、军工等），不超过3个
-4. 个股代码6位数字（上海60xxxx、深圳00xxxx/001xxx、创业30xxxx），至少给1-2个最相关的
-5. reason 一句话说清逻辑（15字以内），字段名用英文 reason
+4. 个股仅限新闻正文直接点名且代码可核对的标的；未点名时个股数组必须留空，禁止凭印象补龙头
+5. reason 一句话说清新闻直接关联逻辑（15字以内），字段名用英文 reason
 6. 无明显影响时 no_impact=true，其余数组留空，headline写"对A股无明显影响"
 7. 事件提到具体个股或代码时，必须放入对应数组
 8. 只输出JSON，不要markdown包裹，不要其他文字"""
@@ -675,6 +675,38 @@ def _parse_llm_json(raw):
     raise ValueError(f"无法从LLM输出中提取有效JSON: {raw[:200]}")
 
 
+def _validate_event_impact_payload(impact):
+    """Reject malformed model output before it reaches report contracts."""
+    if not isinstance(impact, dict):
+        raise ValueError("事件影响分析必须是JSON对象")
+    for field in ("headline", "summary"):
+        if not isinstance(impact.get(field, ""), str):
+            raise ValueError(f"事件影响字段 {field} 必须是字符串")
+    if not isinstance(impact.get("no_impact"), bool):
+        raise ValueError("事件影响字段 no_impact 必须是布尔值")
+    for field in ("analysis", "positive_sectors", "negative_sectors"):
+        value = impact.get(field)
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise ValueError(f"事件影响字段 {field} 必须是字符串数组")
+    for field in ("positive_stocks", "negative_stocks"):
+        value = impact.get(field)
+        if not isinstance(value, list):
+            raise ValueError(f"事件影响字段 {field} 必须是对象数组")
+        for stock in value:
+            if not isinstance(stock, dict):
+                raise ValueError(f"事件影响字段 {field} 包含非对象元素")
+            if any(
+                not isinstance(stock.get(key, ""), str)
+                for key in ("name", "code", "reason")
+            ):
+                raise ValueError(f"事件影响字段 {field} 的股票字段类型错误")
+            code = stock.get("code", "")
+            if code and (len(code) != 6 or not code.isdigit()):
+                raise ValueError(f"事件影响字段 {field} 包含非法股票代码")
+
+
 def _analyze_event_llm(event):
     """调用 DeepSeek 分析单条事件（带重试）"""
     if not _DS_API_KEY:
@@ -699,12 +731,14 @@ def _analyze_event_llm(event):
 
     # Normalize fields
     impact.setdefault("headline", "")
+    impact.setdefault("summary", "")
     impact.setdefault("analysis", [])
     impact.setdefault("positive_sectors", [])
     impact.setdefault("negative_sectors", [])
     impact.setdefault("positive_stocks", [])
     impact.setdefault("negative_stocks", [])
     impact.setdefault("no_impact", False)
+    _validate_event_impact_payload(impact)
 
     # Backward-compat: fill summary from headline for old consumers
     if not impact.get("summary"):
@@ -736,6 +770,8 @@ def enrich_events(events):
                 "positive_sectors": [], "negative_sectors": [],
                 "positive_stocks": [], "negative_stocks": [],
                 "no_impact": True, "status": "skipped",
+                "model": "", "prompt_version": "event-impact-v1",
+                "schema_version": "1",
             }
         return events
 
@@ -743,6 +779,9 @@ def enrich_events(events):
         try:
             e["impact"] = _analyze_event_llm(e)
             e["impact"]["status"] = "ok"
+            e["impact"]["model"] = _DS_MODEL
+            e["impact"]["prompt_version"] = "event-impact-v1"
+            e["impact"]["schema_version"] = "1"
             print(f"  [LLM] 事件{i+1}/10 完成: {e['impact'].get('headline', '')[:60]}")
         except Exception as err:
             print(f"  [LLM] 事件{i+1}/10 失败 ({err})")
@@ -755,6 +794,9 @@ def enrich_events(events):
                 "no_impact": True,
                 "status": "failed",
                 "error": str(err)[:200],
+                "model": _DS_MODEL,
+                "prompt_version": "event-impact-v1",
+                "schema_version": "1",
             }
 
     return events
@@ -837,6 +879,80 @@ def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=12
                 print(f"  [LLM] 第{attempt+1}次失败，{wait}s后重试: {e}")
                 time.sleep(wait)
     raise last_error
+
+
+_DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到的是代码已经整理好的结构化证据和规则方向。
+
+你的职责：
+1. 把事件、板块资金、涨停梯队和个人重点池之间的关系解释清楚。
+2. 为每个已有方向整理下一确认条件和失效条件。
+3. 可以指出规则与语义之间的矛盾，但不能修改行情数值、编造证据或新增方向。
+
+硬规则：
+- 只能从 directions 中选择 theme，最多返回3条，不得为了凑数新增方向。
+- evidence_refs 只能原样引用输入中该方向已有的证据编号。
+- watchlist_codes 只能引用该方向输入中已有的重点池代码。
+- direction 仅限 positive/negative/mixed/neutral。
+- stage 仅限 confirmed/developing/risk/monitor。
+- confidence 仅限 low/medium/high。
+- summary/next_trigger/invalidation 等自由文本禁止使用“龙头”；龙头角色只能在 stock_mentions 中原样引用已有的 limit_up_leader，由页面模板展示。
+- 不得自行计算或输出输入中没有的价格、涨幅、排名或概率。
+
+只输出JSON对象：
+{
+  "theses": [{
+    "theme": "输入中的主题",
+    "direction": "positive",
+    "stage": "confirmed",
+    "confidence": "medium",
+    "evidence_refs": ["原样引用的证据编号"],
+    "watchlist_codes": ["输入中已有的6位代码"],
+    "stock_mentions": [{
+      "code": "只能来自 stock_links",
+      "link_type": "只能原样引用 stock_links.link_type",
+      "evidence_ref": "只能原样引用 stock_links.evidence_ref"
+    }],
+    "summary": "事件到板块再到重点股的简洁解释",
+    "next_trigger": ["下一确认条件"],
+    "invalidation": ["失效条件"]
+  }]
+}
+不要markdown，不要附加说明。"""
+
+
+def analyze_decision_brief_facts(packet):
+    """Ask the configured LLM to synthesize only registered decision facts."""
+    if not _DS_API_KEY:
+        raise RuntimeError("ANTHROPIC_AUTH_TOKEN 未设置")
+    if not isinstance(packet, dict):
+        raise ValueError("decision brief fact packet must be an object")
+    messages = [
+        {"role": "system", "content": _DECISION_BRIEF_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": "基于以下证据生成辅助决策方向：\n{}".format(
+                json.dumps(
+                    packet,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+            ),
+        },
+    ]
+    result = _call_llm_with_retry(
+        messages,
+        max_retries=2,
+        temperature=0.2,
+        max_tokens=1600,
+    )
+    if not isinstance(result, dict):
+        raise ValueError("decision brief LLM response must be an object")
+    result = dict(result)
+    result["model"] = _DS_MODEL
+    result["prompt_version"] = "decision-brief-v1"
+    result["schema_version"] = "1"
+    return result
 
 
 def _build_forecast_user_prompt(market_indices, chanlun_structure, sector_flow, sh_volumes, events):
