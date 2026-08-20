@@ -80,6 +80,7 @@ from chanlun.trend_continuation import (
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
+from chanlun.h4_t3_pool import build_h4_t3_pool
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.industry_metadata import hydrate_industry_metadata
@@ -97,6 +98,11 @@ from chanlun.universe_builder import (
     build_sector_groups,
     load_eligible_candidates,
 )
+
+
+def _build_daily_h4_t3_pool(fusion_candidates, trade_date):
+    """Build H4 from the same real fusion candidates published by the daily run."""
+    return build_h4_t3_pool(fusion_candidates, trade_date)
 
 
 # ============================================================
@@ -2275,6 +2281,14 @@ def main(debug=False, preview=False, generated_at=None):
         _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
+    h4_t3_pool = _build_daily_h4_t3_pool(fusion_scored, today)
+    print(
+        "  H4 T+3: 微状态{}只，过门{}只".format(
+            h4_t3_pool["diagnostics"]["microstate_count"],
+            h4_t3_pool["diagnostics"]["eligible_count"],
+        )
+    )
+
     candidate_funnel.register_many(
         list(experimental_pure_scored)
         + list(experimental_fusion_scored)
@@ -2536,6 +2550,7 @@ def main(debug=False, preview=False, generated_at=None):
         "observation_watchlist": observation_watchlist,
         "next_day_boom": next_day_boom,
         "luojie_pool": luojie_pool,
+        "h4_t3_pool": h4_t3_pool,
     }
 
     # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
