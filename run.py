@@ -89,6 +89,14 @@ from chanlun.personal_watchlist import (
     load_personal_watchlist,
     load_previous_personal_watchlist,
 )
+from chanlun.position_book import (
+    PUBLIC_HOLDING_RISK_ENV,
+    build_public_holding_risks,
+    build_public_position_diagnostics,
+    build_holding_risks,
+    load_position_book,
+    position_book_error_snapshot,
+)
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.trend_continuation import (
     build_trend_continuation_pool,
@@ -1407,6 +1415,7 @@ def _refresh_active_universe_quality(
 # 主流程
 # ============================================================
 def main(debug=False, preview=False, generated_at=None):
+    is_explicit_replay = generated_at is not None
     generated_at = generated_at or datetime.now().astimezone()
     time_metadata = build_market_time_metadata(generated_at=generated_at)
     today = time_metadata["generated_at"].split("T", 1)[0]
@@ -2614,6 +2623,36 @@ def main(debug=False, preview=False, generated_at=None):
         llm_analyzer=analyze_decision_brief_facts,
         generated_at=time_metadata.get("generated_at"),
     )
+    position_name_map = {
+        str(stock.get("code") or ""): str(stock.get("name") or "")
+        for stock in stocks_with_kline
+        if isinstance(stock, dict) and stock.get("code") and stock.get("name")
+    }
+    position_evaluation_time = (
+        time_metadata.get("as_of")
+        if is_explicit_replay
+        else None
+    )
+    try:
+        position_book = load_position_book(
+            now=position_evaluation_time,
+            name_map=position_name_map,
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        position_book = position_book_error_snapshot(exc)
+    holding_risks = build_holding_risks(position_book, sell_signals)
+    allow_holding_identifiers = str(
+        os.environ.get(PUBLIC_HOLDING_RISK_ENV) or ""
+    ).strip().lower() in {"1", "true", "yes"}
+    public_holding_risks = build_public_holding_risks(
+        holding_risks,
+        allow_identifiers=allow_holding_identifiers,
+    )
+    diagnostics["position_book"] = build_public_position_diagnostics(
+        position_book,
+        public_holding_risks,
+        details_published=allow_holding_identifiers,
+    )
     report_data = {
         "date": today,
         "market": market_indices,
@@ -2633,6 +2672,7 @@ def main(debug=False, preview=False, generated_at=None):
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
+        "holding_risks": public_holding_risks,
         "data_quality": data_quality,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,

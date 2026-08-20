@@ -455,6 +455,28 @@ def _serialize_sell_signals(sell_list):
     return result
 
 
+def _serialize_holding_risks(risk_list):
+    """Serialize only the already-verified position/signal intersection."""
+    result = []
+    for risk in risk_list or []:
+        if not isinstance(risk, dict):
+            continue
+        result.append({
+            "code": str(risk.get("code") or ""),
+            "name": str(risk.get("name") or ""),
+            "sector": str(risk.get("sector") or ""),
+            "trend_type": str(risk.get("trend_type") or ""),
+            "reason": str(risk.get("reason") or ""),
+            "action": str(risk.get("action") or ""),
+            "position_source": str(risk.get("position_source") or ""),
+            "position_as_of": str(risk.get("position_as_of") or ""),
+            "confirmed_at": str(risk.get("confirmed_at") or ""),
+            "stale_after": str(risk.get("stale_after") or ""),
+            "privacy_scope": str(risk.get("privacy_scope") or ""),
+        })
+    return result
+
+
 def _serialize_startup_watchlist(watchlist):
     """Serialize startup watchlist items for JSON output, including chart data."""
     result = []
@@ -1246,6 +1268,9 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
+        "holding_risks": _serialize_holding_risks(
+            report_data.get("holding_risks", [])
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
@@ -1466,6 +1491,9 @@ def update_data_json(report_data, output_dir=None):
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
         "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
+        "holding_risks": _serialize_holding_risks(
+            report_data.get("holding_risks", [])
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),

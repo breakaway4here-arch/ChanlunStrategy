@@ -2439,16 +2439,23 @@
     if (!rows.length) return '';
     var body = rows.map(function (item) {
       var rec = item || {};
+      var sourceLabel = normalizeString(rec.position_source || '来源未标注');
+      var positionAsOf = normalizeString(rec.position_as_of || '--');
+      var confirmedAt = normalizeString(rec.confirmed_at || '--');
       return ''
         + '<div class="holding-risk-row">'
-        + '  <div><strong>' + escapeHtml(rec.name || '--') + '</strong><small>' + escapeHtml(rec.code || '') + '</small></div>'
-        + '  <p>' + escapeHtml(rec.reason || '持仓风险已触发') + '</p>'
-        + '  <strong>' + escapeHtml(rec.action || '核对持仓风险') + '</strong>'
+        + '  <div class="holding-risk-position">'
+        + '    <strong>' + escapeHtml(rec.name || '--') + '</strong><small>' + escapeHtml(rec.code || '') + '</small>'
+        + '  </div>'
+        + '  <div class="holding-risk-evidence"><span>风险证据</span><p>' + escapeHtml(rec.reason || '持仓风险已触发') + '</p>'
+        + '    <small>持仓来源 ' + escapeHtml(sourceLabel) + ' · 快照 ' + escapeHtml(positionAsOf) + ' · 确认 ' + escapeHtml(confirmedAt) + '</small>'
+        + '  </div>'
+        + '  <strong class="holding-risk-action">' + escapeHtml(rec.action || '核对持仓风险') + '</strong>'
         + '</div>';
     }).join('');
     return renderDecisionCard({
       title: '持仓风险',
-      subtitle: '只展示已确认且未过期持仓与风险信号的交集',
+      subtitle: '仅在显式允许公开股票标识后，展示确认持仓与风险信号的交集',
       badge: { text: rows.length + '项', tone: 'danger' },
       className: 'holding-risk-card',
       bodyHtml: body,
@@ -2503,18 +2510,24 @@
   function renderDiagnosticsCard(data) {
     var diagnostics = (data || {}).diagnostics || {};
     var allKeys = Object.keys(diagnostics);
-    var keys = allKeys.slice(0, 8);
+    var priorityKeys = ['position_book'];
+    var keys = priorityKeys.filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(diagnostics, key);
+    }).concat(allKeys.filter(function (key) {
+      return priorityKeys.indexOf(key) === -1;
+    })).slice(0, 8);
+    var keyLabels = { position_book: '持仓配置' };
     var rowsHtml = keys.length ? keys.map(function (key) {
       var value = diagnostics[key];
       var text = '';
       if (value && typeof value === 'object') {
-        text = normalizeString(value.status || value.summary || '已记录');
+        text = normalizeString(value.message || value.summary || value.status || '已记录');
       } else {
         text = normalizeString(value);
       }
       return ''
         + '<div class="diagnostic-row">'
-        + '  <strong>' + escapeHtml(key) + '</strong>'
+        + '  <strong>' + escapeHtml(keyLabels[key] || key) + '</strong>'
         + '  <span>' + escapeHtml(text || '已记录') + '</span>'
         + '</div>';
     }).join('') : '<div class="decision-empty">暂无诊断信息</div>';

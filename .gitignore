@@ -5,6 +5,7 @@ __pycache__/
 output_debug/
 .env
 config.json
+config/position_book.json
 docs/*.md
 daily_run.log
 .cache/

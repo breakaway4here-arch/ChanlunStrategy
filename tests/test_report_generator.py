@@ -389,6 +389,7 @@ def _make_minimal_report_data():
         "events": [],
         "forecast": {},
         "sell_signals": [],
+        "holding_risks": [],
         "diagnostics": {},
         "market_sentiment": {
             "version": "v2",
@@ -408,6 +409,46 @@ def _make_minimal_report_data():
 
 
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
+
+    def test_holding_risks_are_preserved_separately_from_global_signals(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_holding_risks_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["sell_signals"] = [{
+            "code": "600000",
+            "name": "未持有股票",
+            "sell_points": [{"type": "一卖"}],
+        }]
+        report_data["holding_risks"] = [{
+            "code": "300308",
+            "name": "中际旭创",
+            "quantity": 100,
+            "cost_price": 188.5,
+            "reason": "一卖：日线一卖风险",
+            "action": "复核减仓或退出条件",
+            "position_source": "manual-confirmation",
+            "position_as_of": "2026-05-26T15:00:00+08:00",
+            "confirmed_at": "2026-05-26T15:05:00+08:00",
+            "stale_after": "2026-05-27T09:00:00+08:00",
+        }]
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        self.assertEqual(len(payload["sell_signals"]), 1)
+        self.assertEqual(len(payload["holding_risks"]), 1)
+        self.assertEqual(payload["holding_risks"][0]["code"], "300308")
+        self.assertEqual(
+            payload["holding_risks"][0]["position_source"],
+            "manual-confirmation",
+        )
+        self.assertNotIn("quantity", payload["holding_risks"][0])
+        self.assertNotIn("cost_price", payload["holding_risks"][0])
 
     def test_limit_up_snapshot_is_preserved_in_daily_report(self):
         tmpdir = tempfile.mkdtemp(prefix="test_aux_snapshot_")

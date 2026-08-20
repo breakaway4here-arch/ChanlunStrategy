@@ -117,7 +117,19 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         end = JS.index("function renderStrategyScorecards", start)
         renderer = JS[start:end]
         self.assertIn("if (!rows.length) return '';", renderer)
+        for field in ("position_source", "position_as_of", "confirmed_at"):
+            self.assertIn(field, renderer)
+        self.assertNotIn("rec.quantity", renderer)
+        self.assertNotIn("rec.cost_price", renderer)
         self.assertNotIn("sell_signals", renderer)
+
+    def test_position_configuration_diagnostic_is_prioritized_and_explained(self):
+        start = JS.index("function renderDiagnosticsCard")
+        end = JS.index("function bindSingleOpenDecisionDetails", start)
+        renderer = JS[start:end]
+        self.assertIn("position_book", renderer)
+        self.assertIn("priorityKeys", renderer)
+        self.assertIn("value.message", renderer)
 
     def test_strategy_review_is_bounded_by_scorecard_and_drilldown(self):
         start = JS.index("function renderStrategyScorecards")
