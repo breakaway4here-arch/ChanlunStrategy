@@ -121,70 +121,6 @@ def _report_data(overrides=None):
 
 class TestReportViewModel(unittest.TestCase):
 
-    def test_h4_t3_shadow_pool_is_a_standalone_view_with_empty_reason(self):
-        reason = "119只融合候选中，0只满足H4趋势延续微状态；今日空选，不回填。"
-        workspace = build_workspace(
-            _report_data(
-                {
-                    "picks_fusion": [_fusion_pick()],
-                    "h4_t3_pool": {
-                        "mode": "shadow",
-                        "reason": reason,
-                        "diagnostics": {
-                            "fusion_candidate_count": 119,
-                            "continuation_microstate_count": 0,
-                            "eligible_count": 0,
-                            "selected_count": 0,
-                        },
-                        "candidates": [],
-                    },
-                }
-            )
-        )
-
-        self.assertIn("h4_t3", workspace["view_order"])
-        self.assertEqual([], workspace["views"]["h4_t3"])
-        self.assertEqual(0, workspace["counts"]["h4_t3"])
-        self.assertEqual("H4 T+3", workspace["view_meta"]["h4_t3"]["label"])
-        self.assertEqual(reason, workspace["view_meta"]["h4_t3"]["description"])
-        self.assertEqual(
-            workspace["diagnostics"]["h4_t3"],
-            {
-                "fusion_candidate_count": 119,
-                "continuation_microstate_count": 0,
-                "eligible_count": 0,
-                "selected_count": 0,
-            },
-        )
-        self.assertNotIn("h4_t3", workspace["views"]["highlights"][0]["sources"])
-
-    def test_h4_t3_shadow_candidate_keeps_an_independent_pool_reference(self):
-        candidate = _fusion_pick(code="600777")
-        candidate["h4_predictions"] = {
-            "pred_return_pct": 4.2,
-            "pred_loss5": 0.08,
-            "pred_q10_return_pct": -3.1,
-        }
-        workspace = build_workspace(
-            _report_data(
-                {
-                    "picks_fusion": [candidate],
-                    "h4_t3_pool": {
-                        "mode": "shadow",
-                        "reason": "H4原规则入选1只。",
-                        "diagnostics": {"selected_count": 1},
-                        "candidates": [candidate],
-                    },
-                }
-            )
-        )
-
-        row = workspace["views"]["h4_t3"][0]
-        self.assertEqual("600777", row["code"])
-        self.assertEqual({"pool": "h4_t3_pool", "code": "600777"}, row["ref"])
-        self.assertEqual(["H4 T+3"], row["source_labels"])
-        self.assertNotIn("h4_t3", workspace["views"]["highlights"][0]["sources"])
-
     def test_workspace_shape_view_order_meta_counts_and_diagnostics(self):
         report_data = _report_data(
             {
@@ -201,7 +137,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["default_view"], "main")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "h4_t3", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
+            ["highlights", "main", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
