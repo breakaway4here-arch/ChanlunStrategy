@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import tempfile
 import unittest
 from unittest import mock
@@ -404,6 +405,49 @@ def _make_minimal_report_data():
             }
         ],
     }
+
+
+class TestH4T3ReportSerialization(unittest.TestCase):
+
+    def test_attested_h4_pool_is_serialized_with_predictions(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_h4_t3_report_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["h4_t3_pool"] = {
+            "status": "ok",
+            "mode": "production",
+            "production_attested": True,
+            "strategy": "H4",
+            "horizon": "T+3",
+            "strategy_version": "h4_t3_k30_tail_safe_v1",
+            "daily_cap": None,
+            "no_backfill": True,
+            "diagnostics": {"eligible_count": 1},
+            "candidates": [
+                {
+                    "code": "600001",
+                    "name": "H4候选",
+                    "score": 82,
+                    "decision_engine_v1": {"decision_code": "recommend"},
+                    "h4_predictions": {
+                        "pred_return": 4.2,
+                        "pred_tail_loss5": 0.08,
+                        "pred_q10_return": -2.0,
+                    },
+                }
+            ],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "data", "2026-05-26.json"), "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+        self.assertEqual("production", payload["h4_t3_pool"]["mode"])
+        self.assertEqual(
+            4.2,
+            payload["h4_t3_pool"]["candidates"][0]["h4_predictions"]["pred_return"],
+        )
+        self.assertIn("h4_t3", payload["workspace"]["view_order"])
 
 
 class TestAccessControl(unittest.TestCase):

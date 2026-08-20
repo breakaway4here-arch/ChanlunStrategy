@@ -727,6 +727,35 @@ def _serialize_luojie_pool(data):
     }
 
 
+def _serialize_h4_t3_pool(data):
+    """Serialize the production-attested H4 T+3 pool."""
+    data = data or {}
+    raw_candidates = data.get("candidates", []) or []
+    candidates = _serialize_picks(raw_candidates)
+    for raw, item in zip(raw_candidates, candidates):
+        predictions = raw.get("h4_predictions")
+        item["h4_predictions"] = (
+            dict(predictions) if isinstance(predictions, Mapping) else {}
+        )
+        item["reason"] = raw.get("reason", "H4 T+3 全部门槛通过")
+    return {
+        "status": data.get("status", "error"),
+        "production_attested": data.get("production_attested") is True,
+        "mode": data.get("mode", "production"),
+        "horizon": data.get("horizon", "T+3"),
+        "strategy": data.get("strategy", "H4"),
+        "strategy_version": data.get("strategy_version", ""),
+        "model_date": data.get("model_date"),
+        "daily_cap": data.get("daily_cap"),
+        "no_backfill": data.get("no_backfill") is True,
+        "score_policy": data.get("score_policy", ""),
+        "reason": data.get("reason", ""),
+        "policy": data.get("policy", {}),
+        "diagnostics": data.get("diagnostics", {}),
+        "candidates": candidates,
+    }
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -918,6 +947,10 @@ def _backfill_workspace_scores(daily_data):
     luojie_pool = daily_data.get("luojie_pool") or {}
     if isinstance(luojie_pool, dict):
         _backfill_workspace_scores_for_items(luojie_pool.get("candidates", []), views.get("luojie", []))
+
+    h4_t3_pool = daily_data.get("h4_t3_pool") or {}
+    if isinstance(h4_t3_pool, dict):
+        _backfill_workspace_scores_for_items(h4_t3_pool.get("candidates", []), views.get("h4_t3", []))
 
 
 def _escape_inline_json(data):
@@ -1218,6 +1251,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         ),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
+        "h4_t3_pool": _serialize_h4_t3_pool(report_data.get("h4_t3_pool", {})),
         "recent_reviews": build_recent_reviews(
             date_str,
             output_dir or os.path.join(

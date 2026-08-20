@@ -36,6 +36,7 @@ VIEW_ORDER: ViewOrder = [
 
 SOURCE_LABELS = {
     "main": "主推",
+    "h4_t3": "H4 T+3",
     "acceleration": "加速",
     "luojie": "罗姐池",
     "confirming": "等确认",
@@ -44,6 +45,7 @@ SOURCE_LABELS = {
 
 SOURCE_POOLS = {
     "main": "picks_fusion",
+    "h4_t3": "h4_t3_pool",
     "acceleration": "next_day_boom",
     "luojie": "luojie_pool",
     "confirming": "startup_watchlist",
@@ -52,10 +54,11 @@ SOURCE_POOLS = {
 
 SOURCE_RANK = {
     "main": 0,
-    "acceleration": 1,
-    "luojie": 2,
-    "confirming": 3,
-    "baseline": 4,
+    "h4_t3": 1,
+    "acceleration": 2,
+    "luojie": 3,
+    "confirming": 4,
+    "baseline": 5,
 }
 
 EXCLUDED_FIELDS = {
@@ -81,6 +84,11 @@ VIEW_META = {
     "main": {
         "label": "主推",
         "description": "融合推荐池，可执行优先。",
+    },
+    "h4_t3": {
+        "label": "H4 T+3",
+        "short_label": "H4 T+3",
+        "description": "H4 T+3 生产池；全部过门候选按现有统一分排序。",
     },
     "observation_top5": {
         "label": "观察 Top5",
@@ -979,6 +987,7 @@ def _build_item(
         "risk_flags": all_risk_flags,
         "rank_trace": rank_trace,
         "decision_engine_v1": decision_payload,
+        "h4_predictions": _to_dict(preferred_raw.get("h4_predictions")),
         "source_channel": _safe_str(preferred_raw.get("source_channel")),
         "tier": _safe_str(preferred_raw.get("tier"))
         or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("tier")),
@@ -1075,6 +1084,16 @@ def _collect_views(
         if _decision_code_from_raw(raw) == "recommend"
     }
 
+    h4_t3 = _to_dict(report_data.get("h4_t3_pool"))
+    if (
+        h4_t3.get("production_attested") is True
+        and _safe_str(h4_t3.get("mode")) == "production"
+        and _safe_str(h4_t3.get("status")) == "ok"
+    ):
+        views["h4_t3"] = _normalize_pool_items(
+            _get_list(h4_t3.get("candidates")), "h4_t3"
+        )
+
     next_day_boom = _to_dict(report_data.get("next_day_boom"))
     boom_mode = _safe_str(next_day_boom.get("mode"))
     if boom_mode == "enabled":
@@ -1112,6 +1131,11 @@ def _build_view_items(
             {source_for_ranking or view_source: raw},
             data_quality=data_quality,
         )
+        if view_source == "h4_t3":
+            row["sources"] = ["h4_t3"]
+            row["source_labels"] = [SOURCE_LABELS["h4_t3"]]
+            row["ref"] = {"pool": "h4_t3_pool", "code": row["code"]}
+            row["h4_predictions"] = _to_dict(raw.get("h4_predictions"))
         row["view_rank"] = 0
         rows.append(row)
     rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
@@ -1294,8 +1318,17 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     views = _collect_views(data)
     data_quality = data.get("data_quality")
 
+    view_order = list(VIEW_ORDER)
+    if "h4_t3" in views:
+        view_order.insert(view_order.index("main") + 1, "h4_t3")
+
     view_items = {
-        view: _build_view_items(view, source_data, data_quality=data_quality)
+        view: _build_view_items(
+            view,
+            source_data,
+            source_for_ranking="main" if view == "h4_t3" else None,
+            data_quality=data_quality,
+        )
         for view, source_data in views.items()
         if view in SOURCE_POOLS
     }
@@ -1321,7 +1354,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
 
     # Re-rank opportunity-score views after dedupe/sorting. growth_quality keeps
     # its tier/quality-first order by design.
-    for name in VIEW_ORDER:
+    for name in view_order:
         rows = view_items[name]
         if name == "highlights":
             rows.sort(
@@ -1344,6 +1377,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     diagnostics = {
         "source_counts": {
             "main": len(views["main"]),
+            "h4_t3": len(views.get("h4_t3", {})),
             "acceleration": len(views["acceleration"]),
             "luojie": len(views["luojie"]),
             "confirming": len(views["confirming"]),
@@ -1375,12 +1409,13 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
             **growth_quality_diagnostics,
         },
         "observation_top5": observation_diagnostics,
+        "h4_t3": _to_dict(_to_dict(data.get("h4_t3_pool")).get("diagnostics")),
     }
 
     return {
         "default_view": "main",
-        "view_order": list(VIEW_ORDER),
-        "view_meta": VIEW_META,
+        "view_order": view_order,
+        "view_meta": {name: dict(VIEW_META[name]) for name in view_order},
         "views": view_items,
         "counts": counts,
         "diagnostics": diagnostics,
