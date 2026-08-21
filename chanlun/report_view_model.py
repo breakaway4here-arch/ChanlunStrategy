@@ -14,6 +14,7 @@ import math
 from typing import Any, Dict, Iterable, List, Mapping
 
 from chanlun.scoring_engine import compute_opportunity_score
+from chanlun.candidate_funnel import resolve_horizon_contract
 from config import (
     OBSERVATION_MAX_PER_REASON,
     OBSERVATION_MAX_PER_SECTOR,
@@ -40,7 +41,27 @@ SOURCE_LABELS = {
     "acceleration": "加速",
     "luojie": "罗姐池",
     "confirming": "等确认",
-    "baseline": "基准",
+    "baseline": "基础候选",
+}
+
+STRATEGY_SOURCE_LABELS = {
+    "chanlun_structure": "原始缠论结构",
+    "strong_startup": "强势启动",
+    "trend_continuation": "趋势延续",
+    "daily_fusion": "融合决策",
+    "next_day_boom": "加速观察",
+    "luojie_pool": "罗姐池观察",
+    "startup_watchlist": "等确认观察",
+    "h4_t3": "H4 T+3",
+}
+
+SOURCE_STATUS_LABELS = {
+    "candidate": "已确认候选",
+    "recommend": "主推通过",
+    "observe": "仅观察",
+    "watch": "仅观察",
+    "seed": "初筛",
+    "reject": "未通过",
 }
 
 SOURCE_POOLS = {
@@ -79,42 +100,51 @@ VIEW_META = {
     "highlights": {
         "label": "看点 Top10",
         "short_label": "看点",
-        "description": "跨池混合优先观察榜，不等于全部可立即买入。",
+        "description": "跨池混合优先观察榜，仅用于快速浏览，不构成主推。",
+        "backend_key": "derived:highlights",
     },
     "main": {
         "label": "主推",
-        "description": "融合推荐池，可执行优先。",
+        "description": "融合最终决策为 recommend 的完整主推池；允许空池、不截数量、不回填。",
+        "backend_key": "picks_fusion[decision_code=recommend]",
     },
     "h4_t3": {
         "label": "H4 T+3",
         "short_label": "H4 T+3",
         "description": "H4 T+3 生产池；全部过门候选按现有统一分排序。",
+        "backend_key": "h4_t3_pool",
     },
     "observation_top5": {
         "label": "观察 Top5",
         "short_label": "观察",
-        "description": "近失样本观察榜，不计入主推荐，不代表可立即买入。",
+        "description": "近失样本观察榜，不计入主推，仅展示失败门和升级条件。",
+        "backend_key": "observation_watchlist",
     },
     "acceleration": {
         "label": "加速",
-        "description": "强市场下的情绪加速榜。",
+        "description": "强市场下的情绪加速观察榜，当前不构成主推。",
+        "backend_key": "next_day_boom.candidates",
     },
     "luojie": {
         "label": "罗姐池",
         "description": "硬方向 + 15min生命线观察，不等同于主推。",
+        "backend_key": "luojie_pool.candidates",
     },
     "confirming": {
         "label": "等确认",
-        "description": "日线已有启动线索，但等待确认。",
+        "description": "日线已有启动线索，但仍在等待确认，仅用于观察。",
+        "backend_key": "startup_watchlist",
     },
     "growth_quality": {
         "label": "高弹性观察 Top10",
         "short_label": "高弹性观察",
         "description": "仅展示有真实行业归属与完整交易证据的观察标的，非正式推荐；同一行业最多两只。",
+        "backend_key": "derived:growth_quality",
     },
     "baseline": {
-        "label": "基准",
-        "description": "纯净缠论结构参考池，不参与Top10。",
+        "label": "基础候选",
+        "description": "各独立策略确认结果合流后的共同上游全集，不构成主推；卡片保留各来源策略。",
+        "backend_key": "picks_pure",
     },
 }
 
@@ -157,6 +187,78 @@ def _safe_float(value: Any, *, default: float | None = None) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_risk_reason(
+    value: Any,
+    allowed_refs: set[str],
+) -> dict[str, Any] | None:
+    raw = _to_dict(value)
+    reason = _safe_str(raw.get("reason")).strip()
+    impact = _safe_str(raw.get("impact")).strip()
+    refs = list(dict.fromkeys(
+        _safe_str(ref).strip()
+        for ref in _get_list(raw.get("evidence_refs"))
+        if _safe_str(ref).strip()
+    ))
+    if (
+        not reason
+        or not impact
+        or not refs
+        or any(ref not in allowed_refs for ref in refs)
+    ):
+        return None
+    return {
+        "reason": reason,
+        "impact": impact,
+        "evidence_refs": refs,
+    }
+
+
+def normalize_decision_brief(value: Any) -> dict[str, Any]:
+    """Fail-close legacy risk rows that do not explain why risk is valid."""
+    brief = dict(_to_dict(value))
+    theses = []
+    has_risk = False
+    insufficient = False
+    for value_row in _get_list(brief.get("theses")):
+        row = dict(_to_dict(value_row))
+        allowed_refs = {
+            _safe_str(ref).strip()
+            for ref in _get_list(row.get("evidence_refs"))
+            if _safe_str(ref).strip()
+        }
+        reasons = [
+            normalized
+            for raw_reason in _get_list(row.get("risk_reasons"))
+            for normalized in [_normalize_risk_reason(raw_reason, allowed_refs)]
+            if normalized is not None
+        ]
+        row["risk_reasons"] = reasons
+        is_risk = (
+            _safe_str(row.get("direction")).lower() == "negative"
+            or _safe_str(row.get("stage")).lower() == "risk"
+        )
+        if is_risk:
+            has_risk = True
+            row["risk_reason_status"] = (
+                "verified" if reasons else "insufficient"
+            )
+            if not reasons:
+                insufficient = True
+        else:
+            row["risk_reason_status"] = "not_applicable"
+        theses.append(row)
+
+    brief["theses"] = theses
+    if insufficient:
+        brief["risk_reason_status"] = "insufficient"
+        brief["status"] = "partial"
+    elif has_risk:
+        brief["risk_reason_status"] = "verified"
+    else:
+        brief["risk_reason_status"] = "not_applicable"
+    return brief
 
 
 def _safe_int(value: Any, *, default: int | None = None) -> int | None:
@@ -356,8 +458,7 @@ def _extract_main_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
         "current_price": _resolve_current_price(item),
         "reference_price": _resolve_reference_price(item),
         "distance": _resolve_distance_pct(item, source="main"),
-        "primary_reason": _safe_str(_to_dict(item).get("resonance", {}).get("reason"))
-        or _safe_str(buy_point.get("reason"))
+        "primary_reason": _safe_str(buy_point.get("reason"))
         or _safe_str(item.get("fusion_admission", {}).get("reason"))
         or _safe_str(item.get("reason")),
     }
@@ -767,7 +868,7 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
             age = _safe_float(bp.get("signal_age_days"))
             if age is not None and age >= 8:
                 reasons.append("信号接近过期")
-        if not bp and not _to_dict(item.get("resonance")).get("level"):
+        if not bp:
             reasons.append("30min确认弱")
 
     if source == "acceleration":
@@ -796,18 +897,7 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
 
 
 def _resonance_label(sources: list[str]) -> str:
-    source_set = set(sources)
-    if len(source_set) >= 3:
-        return "强共振"
-    if source_set == {"main", "acceleration"}:
-        return "共振·进攻"
-    if source_set == {"main", "luojie"}:
-        return "共振·主线"
-    if "confirming" in source_set:
-        if source_set in ({"acceleration", "confirming"}, {"luojie", "confirming"}, {"main", "confirming"}, {"main", "acceleration", "confirming"}, {"main", "luojie", "confirming"}, {"acceleration", "luojie", "confirming"}):
-            return "共振·启动"
-        if source_set == {"luojie", "acceleration", "confirming"}:
-            return "共振·启动"
+    # Multiple sources are parallel provenance, never an automatic upgrade.
     return ""
 
 
@@ -830,19 +920,13 @@ def _action_and_reason(
         return "可上车", "主推命中，确认与结构条件已满足，偏执行优先。"
 
     if has_acceleration and not has_main:
-        if high_risk:
-            return "慎追", "加速信号强但位置/热度偏高，先盯盘。"
-        return "盯盘", "加速信号待观察，当前仅用于二次关注。"
+        return "仅观察", "加速观察信号仅用于二次关注，不构成主推。"
 
     if has_luojie and not has_main:
-        if high_risk:
-            return "盯盘", "罗姐池方向成立但结构风险存在，先盯盘。"
-        return "盯盘", "罗姐池观察信号，先确认方向后考虑进场。"
+        return "仅观察", "罗姐池信号仅用于方向与生命线观察，不构成主推。"
 
     if has_confirming and not (has_main or has_acceleration or has_luojie):
-        if high_risk:
-            return "仅观察", "等确认池位置信号受限，当前仅观察。"
-        return "等回踩", "等确认池，等待确认后再考虑。"
+        return "仅观察", "等确认池尚未完成确认，仅保留观察。"
 
     # Fallback, should rarely occur.
     return "仅观察", "暂不满足交易条件，仅观察。"
@@ -862,12 +946,17 @@ def _apply_decision_action_cap(
     if decision_code == "reject":
         return (
             "仅观察",
-            f"决策上限（reject）：最多仅观察。原动作依据：{action_reason}",
+            "最终决策为不推荐，仅保留审计与风险说明。",
         )
-    if decision_code == "observe" and action in _EXECUTABLE_ACTIONS:
+    if decision_code == "observe":
         return (
             "仅观察",
-            f"决策上限（observe）：不得执行上车动作。原动作依据：{action_reason}",
+            "最终决策为观察，不构成主推。",
+        )
+    if decision_code not in {"recommend", "observe", "reject"}:
+        return (
+            "仅观察",
+            "决策缺失，仅保留观察。",
         )
     return action, action_reason
 
@@ -909,6 +998,149 @@ def _compact_data_status(raw: Mapping[str, Any]) -> dict[str, Any]:
         for field in _COMPACT_DATA_STATUS_FIELDS
         if field in data_status
     }
+
+
+def _valid_horizon(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        normalized = int(value)
+    except (TypeError, ValueError):
+        return None
+    return normalized if normalized in (1, 3, 5) else None
+
+
+def _strategy_source_id(raw: Mapping[str, Any], pool_source: str) -> str:
+    explicit = _safe_str(raw.get("strategy_source")).strip()
+    if explicit:
+        return explicit
+    channel = _safe_str(raw.get("source_channel")).strip()
+    if channel == "trend_continuation":
+        return "trend_continuation"
+    if raw.get("startup_reason") or raw.get("startup_signals"):
+        return "strong_startup"
+    return {
+        "main": "daily_fusion",
+        "baseline": "chanlun_structure",
+        "acceleration": "next_day_boom",
+        "luojie": "luojie_pool",
+        "confirming": "startup_watchlist",
+        "h4_t3": "h4_t3",
+    }.get(pool_source, pool_source)
+
+
+def _source_reason(raw: Mapping[str, Any]) -> str:
+    best_buy = _to_dict(raw.get("best_buy_point"))
+    return _safe_str(
+        raw.get("reason")
+        or raw.get("startup_reason")
+        or raw.get("watch_reason")
+        or raw.get("boom_reason")
+        or best_buy.get("reason")
+    ).strip()
+
+
+def _source_details(
+    ordered_sources: Iterable[str],
+    by_source: Mapping[str, Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    details = []
+    seen = set()
+    for pool_source in ordered_sources:
+        raw = _to_dict(by_source.get(pool_source))
+        snapshots = [
+            _to_dict(row) for row in _get_list(raw.get("strategy_sources"))
+        ]
+        if not snapshots:
+            snapshots = [{
+                "strategy_source": _strategy_source_id(raw, pool_source),
+                "source_status": (
+                    "candidate"
+                    if pool_source in {"main", "baseline", "h4_t3"}
+                    else "observe"
+                ),
+                "reason": _source_reason(raw),
+                "intended_horizon": raw.get("intended_horizon"),
+                "evidence_refs": raw.get("evidence_refs") or [],
+            }]
+        for snapshot in snapshots:
+            strategy_source = _safe_str(
+                snapshot.get("strategy_source")
+            ).strip() or _strategy_source_id(raw, pool_source)
+            status = _safe_str(
+                snapshot.get("source_status")
+            ).strip().lower() or "observe"
+            horizon = _valid_horizon(snapshot.get("intended_horizon"))
+            reason = _safe_str(snapshot.get("reason")).strip()
+            key = (pool_source, strategy_source, status, reason, horizon)
+            if key in seen:
+                continue
+            seen.add(key)
+            details.append({
+                "pool_source": pool_source,
+                "pool_label": SOURCE_LABELS.get(pool_source, pool_source),
+                "strategy_source": strategy_source,
+                "strategy_label": STRATEGY_SOURCE_LABELS.get(
+                    strategy_source, strategy_source or "来源未确认"
+                ),
+                "status": status,
+                "status_label": SOURCE_STATUS_LABELS.get(
+                    status, status or "状态未确认"
+                ),
+                "reason": reason or "来源原因未记录",
+                "intended_horizon": horizon,
+                "horizon_label": (
+                    "T+{}".format(horizon) if horizon else "周期未确认"
+                ),
+                "evidence_refs": [
+                    _safe_str(value)
+                    for value in snapshot.get("evidence_refs") or []
+                    if _safe_str(value)
+                ],
+            })
+    return details
+
+
+def _horizon_contract(raw: Mapping[str, Any]) -> tuple[int | None, str]:
+    horizon, status, _ = resolve_horizon_contract(raw)
+    return horizon, status
+
+
+def _signal_close(raw: Mapping[str, Any]) -> float | None:
+    direct = _safe_float(raw.get("signal_close"))
+    if direct is not None and direct > 0:
+        return direct
+    closes = raw.get("closes")
+    try:
+        values = list(closes) if closes is not None else []
+    except TypeError:
+        values = []
+    latest = _safe_float(values[-1]) if values else None
+    return latest if latest is not None and latest > 0 else None
+
+
+def _research_entry_contract(
+    raw: Mapping[str, Any],
+) -> tuple[str, str, float | None]:
+    mode = _safe_str(raw.get("entry_mode")).strip().lower()
+    labels = {
+        "immediate_close": "信号日收盘价",
+        "delay1_open": "次一交易日开盘价",
+        "delay1_close": "次一交易日收盘价",
+    }
+    if mode not in labels:
+        return "unknown", "入场口径未确认", None
+    if mode == "immediate_close":
+        price = _signal_close(raw)
+    else:
+        price = _safe_float(
+            raw.get("entry_price")
+            if raw.get("entry_price") is not None
+            else raw.get("research_entry_price")
+        )
+        if price is not None and price <= 0:
+            price = None
+    return mode, labels[mode], price
 
 
 def _build_item(
@@ -954,6 +1186,24 @@ def _build_item(
         risk_flags=all_risk_flags,
         pool_quality=pool_quality,
     )
+    representative_source = _safe_str(
+        preferred_raw.get("representative_strategy_source")
+        or _to_dict(preferred_raw.get("decision_engine_v1")).get(
+            "representative_strategy_source"
+        )
+    )
+    representative_label = _safe_str(
+        STRATEGY_SOURCE_LABELS.get(
+            representative_source, representative_source
+        )
+    )
+    if representative_label:
+        rank_trace["selected_reason"] = (
+            "{}；融合排名代表来源：{}（来源不叠加加分）".format(
+                rank_trace.get("selected_reason") or "",
+                representative_label,
+            ).strip("；")
+        )
 
     action, action_reason = _action_and_reason(ordered_sources, all_risk_flags, "main" in ordered_sources)
     decision_payload = preferred_raw.get("decision_engine_v1")
@@ -962,6 +1212,31 @@ def _build_item(
         action_reason,
         decision_payload,
     )
+    source_details = _source_details(ordered_sources, by_source)
+    intended_horizon, horizon_status = _horizon_contract(preferred_raw)
+    selection_contract_mode = _safe_str(
+        preferred_raw.get("selection_contract_mode")
+    )
+    if selection_contract_mode == "legacy_production":
+        if horizon_status == "conflict":
+            horizon_label = "现网旧口径·周期冲突"
+        elif horizon_status == "missing":
+            horizon_label = "现网旧口径·周期缺失"
+        else:
+            horizon_status = "legacy_unverified"
+            horizon_label = "现网旧口径·声明T+{}但未验".format(
+                intended_horizon
+            )
+    else:
+        horizon_label = (
+            "T+{}".format(intended_horizon)
+            if intended_horizon is not None else "周期未确认"
+        )
+    (
+        research_entry_mode,
+        research_entry_label,
+        research_entry_price,
+    ) = _research_entry_contract(preferred_raw)
 
     item = {
         "code": code,
@@ -972,7 +1247,31 @@ def _build_item(
         "data_badges": _build_data_badges(preferred_raw, data_quality),
         "data_status": _compact_data_status(preferred_raw),
         "source_labels": [_safe_str(SOURCE_LABELS[s]) for s in ordered_sources if s in SOURCE_LABELS],
-        "resonance_label": _resonance_label(ordered_sources),
+        "source_details": source_details,
+        "strategy_source_labels": list(dict.fromkeys(
+            row["strategy_label"] for row in source_details
+        )),
+        "representative_strategy_source": representative_source,
+        "representative_strategy_label": representative_label,
+        "representative_source_reason": _safe_str(
+            preferred_raw.get("representative_source_reason")
+        ),
+        "representative_source_score": preferred_raw.get(
+            "representative_source_score"
+        ),
+        "resonance_label": "",
+        "intended_horizon": intended_horizon,
+        "horizon_status": horizon_status,
+        "horizon_label": horizon_label,
+        "selection_contract_mode": selection_contract_mode,
+        "horizon_contract_eligible": preferred_raw.get(
+            "horizon_contract_eligible"
+        ),
+        "high_return_eligible": preferred_raw.get("high_return_eligible"),
+        "research_entry_mode": research_entry_mode,
+        "research_entry_label": research_entry_label,
+        "research_entry_price": research_entry_price,
+        "research_results": _to_dict(preferred_raw.get("research_results")),
         "view_rank": 0,
         "watch_score": opportunity_score,
         "opportunity_score": opportunity_score,
@@ -1043,11 +1342,9 @@ def _build_selected_reason(base_source: str, sources: Iterable[str]) -> str:
             return "罗姐池单源入榜"
         if base_source == "confirming":
             return "等确认池单源入榜"
-        return "基准池单源入榜"
+        return "基础候选池单源入榜"
 
-    if _resonance_label(ordered_sources):
-        return f"{_resonance_label(ordered_sources)}，多池共振上提"
-    return "多池命中，质量上提"
+    return "多来源并列展示（不加分、不自动升级）"
 
 
 def _normalize_pool_items(raw_items: Iterable[Mapping[str, Any]], source: str) -> dict[str, Mapping[str, Any]]:
@@ -1061,6 +1358,32 @@ def _normalize_pool_items(raw_items: Iterable[Mapping[str, Any]], source: str) -
         if code not in by_code:
             by_code[code] = candidate
     return by_code
+
+
+def _cap_observation_view(row: dict[str, Any], view_name: str) -> None:
+    label = _safe_str(_to_dict(VIEW_META.get(view_name)).get("label"))
+    diagnostic_prefix = (
+        "决策缺失；"
+        if "决策缺失" in _safe_str(row.get("action_reason")) else ""
+    )
+    row["action"] = "仅观察"
+    row["action_reason"] = "{}{}仅用于观察，不构成主推。".format(
+        diagnostic_prefix, label or "当前榜单"
+    )
+    source_decision = dict(_to_dict(row.get("decision_engine_v1")))
+    source_decision_code = _safe_str(
+        source_decision.get("decision_code")
+    ).lower()
+    source_decision_text = _safe_str(source_decision.get("decision"))
+    if source_decision_code and source_decision_code != "observe":
+        source_decision.setdefault(
+            "source_decision_code", source_decision_code
+        )
+    if source_decision_text and source_decision_code != "observe":
+        source_decision.setdefault("source_decision", source_decision_text)
+    source_decision["decision_code"] = "observe"
+    source_decision["decision"] = "观察"
+    row["decision_engine_v1"] = source_decision
 
 
 def _collect_views(
@@ -1082,6 +1405,11 @@ def _collect_views(
         code: raw
         for code, raw in views["main_all"].items()
         if _decision_code_from_raw(raw) == "recommend"
+        and (
+            _horizon_contract(raw)[1] == "verified"
+            or _safe_str(raw.get("selection_contract_mode"))
+            == "legacy_production"
+        )
     }
 
     h4_t3 = _to_dict(report_data.get("h4_t3_pool"))
@@ -1136,6 +1464,14 @@ def _build_view_items(
             row["source_labels"] = [SOURCE_LABELS["h4_t3"]]
             row["ref"] = {"pool": "h4_t3_pool", "code": row["code"]}
             row["h4_predictions"] = _to_dict(raw.get("h4_predictions"))
+            # The production-attested H4 v1 pool owns a frozen T+3 contract.
+            # Adapt only the view payload; do not alter model features.
+            row["intended_horizon"] = 3
+            row["horizon_status"] = "verified"
+            row["horizon_label"] = "T+3"
+            row["selection_contract_mode"] = "h4_v1_frozen"
+        if view_source not in {"main", "h4_t3"}:
+            _cap_observation_view(row, view_source)
         row["view_rank"] = 0
         rows.append(row)
     rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
@@ -1150,7 +1486,7 @@ def _build_highlights(
 ) -> list[dict[str, Any]]:
     merged: dict[str, dict[str, Mapping[str, Any]]] = {}
     source_map = {
-        "main": views.get("main_all", views["main"]),
+        "main": views["main"],
         "acceleration": views["acceleration"],
         "luojie": views["luojie"],
         "confirming": views["confirming"],
@@ -1181,6 +1517,7 @@ def _build_highlights(
     top_rows = rows[:10]
     for rank, row in enumerate(top_rows, start=1):
         row["view_rank"] = rank
+        _cap_observation_view(row, "highlights")
     return top_rows
 
 
@@ -1248,6 +1585,7 @@ def _build_growth_quality(
             break
     for rank, row in enumerate(top_rows, start=1):
         row["view_rank"] = rank
+        _cap_observation_view(row, "growth_quality")
     return top_rows, diagnostics
 
 
@@ -1277,6 +1615,7 @@ def _build_observation_top5(
             "cancel_conditions": list(raw.get("cancel_conditions") or []),
             "ref": {"pool": "observation_watchlist", "code": code},
         })
+        _cap_observation_view(row, "observation_top5")
         ranked.append(row)
     ranked.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
 

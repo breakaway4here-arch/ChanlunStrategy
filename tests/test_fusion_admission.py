@@ -1,6 +1,7 @@
 """Tests for fusion_admission — threshold matrix, market regime, MA checks."""
 import unittest
 import numpy as np
+import run
 
 from chanlun.fusion_admission import (
     apply_fusion_admission,
@@ -183,6 +184,32 @@ class TestFusionAdmission(unittest.TestCase):
         picks, diag = apply_fusion_admission([s1], self._make_sh_closes(True))
         self.assertFalse(diag["pure_fusion_identical"])
 
+    def test_index_ema50_fact_has_one_explicit_fusion_owner_and_effect(self):
+        stock = self._make_stock("二买候选", strength="中")
+
+        picks, _ = apply_fusion_admission(
+            [stock], self._make_sh_closes(False)
+        )
+
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(
+            stock["market_facts"],
+            [{
+                "fact_code": "index_above_ema50",
+                "value": False,
+                "source": "shanghai_close_vs_ema50",
+            }],
+        )
+        effects = [
+            row for row in stock["market_effects"]
+            if row["fact_code"] == "index_above_ema50"
+        ]
+        self.assertEqual(len(effects), 1)
+        self.assertEqual(effects[0]["owner_pool"], "picks_fusion")
+        self.assertEqual(effects[0]["stage"], "fusion_admission")
+        self.assertEqual(effects[0]["effect"], "gate")
+        self.assertTrue(effects[0]["reason_code"])
+
     def test_ermai_candidate_strong_market_no_ma_kept(self):
         stock = self._make_stock("二买候选", strength="中")
         stock["closes"] = self._make_non_bullish_closes()
@@ -193,12 +220,20 @@ class TestFusionAdmission(unittest.TestCase):
 
     def test_strong_startup_candidate_strong_market_ma_ok(self):
         stock = self._make_stock("强势启动候选", strength="强")
+        stock["best_buy_point"].update({
+            "daily_startup_grade": "strong",
+            "sublevel_confirm_grade": "A",
+        })
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["fusion_admission"]["reason"], "强势启动候选强市通过")
 
     def test_strong_startup_candidate_no_ma_filtered(self):
         stock = self._make_stock("强势启动候选", strength="强")
+        stock["best_buy_point"].update({
+            "daily_startup_grade": "strong",
+            "sublevel_confirm_grade": "A",
+        })
         stock["closes"] = self._make_non_bullish_closes()
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(True))
         self.assertEqual(len(picks), 0)
@@ -206,13 +241,49 @@ class TestFusionAdmission(unittest.TestCase):
 
     def test_strong_startup_candidate_weak_market_medium_confirm_ok(self):
         stock = self._make_stock("强势启动候选", strength="中")
+        stock["best_buy_point"].update({
+            "daily_startup_grade": "strong",
+            "sublevel_confirm_grade": "A",
+        })
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
         self.assertEqual(len(picks), 1)
 
     def test_strong_startup_candidate_weak_market_weak_confirm_filtered(self):
         stock = self._make_stock("强势启动候选", strength="弱")
+        stock["best_buy_point"].update({
+            "daily_startup_grade": "strong",
+            "sublevel_confirm_grade": "A",
+        })
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
         self.assertEqual(len(picks), 0)
+
+    def test_strong_startup_without_strong_daily_and_sa_confirm_is_filtered(self):
+        stock = self._make_stock("强势启动候选", strength="强")
+        stock["best_buy_point"].update({
+            "daily_startup_grade": "weak",
+            "sublevel_confirm_grade": "B",
+        })
+
+        picks, diag = apply_fusion_admission(
+            [stock], self._make_sh_closes(True)
+        )
+
+        self.assertEqual(picks, [])
+        self.assertIn("日线strong且30min为S/A", diag["drop_details"][0]["reason"])
+
+    def test_observation_source_status_cannot_enter_fusion(self):
+        stock = self._make_stock("二买候选", strength="强")
+        stock["source_status"] = "observe"
+
+        picks, diag = apply_fusion_admission(
+            [stock], self._make_sh_closes(True)
+        )
+
+        self.assertEqual(picks, [])
+        self.assertEqual(
+            diag["drop_details"][0]["reason"],
+            "来源池状态observe不可晋级",
+        )
 
     def test_unknown_type_not_admitted(self):
         stock = self._make_stock("未知买点类型", strength="强")
@@ -236,6 +307,62 @@ class TestFusionAdmission(unittest.TestCase):
 
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["source_channel"], "trend_continuation")
+
+    def test_trend_continuation_requires_two_distinct_30min_confirmations(self):
+        stock = self._make_stock("趋势延续候选", strength="中")
+        stock.update({
+            "source_channel": "trend_continuation",
+            "reference_type": "platform_high_20d",
+            "reference_price": 50.0,
+            "confirmations": ["30min突破位不破"],
+        })
+
+        picks, diag = apply_fusion_admission(
+            [stock], self._make_sh_closes(True)
+        )
+
+        self.assertEqual(picks, [])
+        self.assertIn("至少两项30min确认", diag["drop_details"][0]["reason"])
+
+    def test_same_stock_sources_are_admitted_independently_and_order_free(self):
+        rejected_structure = self._make_stock(
+            "三买候选", strength="中"
+        )
+        rejected_structure.update({
+            "strategy_source": "chanlun_structure",
+            "source_status": "candidate",
+            "closes": self._make_non_bullish_closes(),
+        })
+        admitted_trend = self._make_stock(
+            "趋势延续候选", strength="中"
+        )
+        admitted_trend.update({
+            "strategy_source": "trend_continuation",
+            "source_channel": "trend_continuation",
+            "source_status": "candidate",
+            "confirmations": ["30min突破位不破", "30min EMA5维持"],
+        })
+
+        first, first_diag = run._apply_fusion_admission_by_source(
+            [rejected_structure, admitted_trend],
+            self._make_sh_closes(True),
+        )
+        reversed_rows, reversed_diag = run._apply_fusion_admission_by_source(
+            [admitted_trend, rejected_structure],
+            self._make_sh_closes(True),
+        )
+
+        self.assertEqual([row["code"] for row in first], ["600519"])
+        self.assertEqual(first, reversed_rows)
+        self.assertEqual(first_diag["output_count"], 1)
+        self.assertEqual(reversed_diag["output_count"], 1)
+        self.assertEqual(
+            [
+                row["strategy_source"]
+                for row in first[0]["strategy_sources"]
+            ],
+            ["trend_continuation"],
+        )
 
 
 if __name__ == "__main__":

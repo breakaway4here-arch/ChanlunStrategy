@@ -209,6 +209,7 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         "startup_watch": 0,
         "dropped_no_30min_confirm": 0,
         "watch_due_to_no_30min_confirm": 0,
+        "watch_due_to_quality_gate": 0,
     }
 
     # Index 30min results by code
@@ -237,7 +238,29 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         confirmations = _check_30min_confirmations(min30_result, seed)
         seed["confirmations"] = confirmations
 
-        if confirmations:
+        quality = annotate_startup_quality({
+            "change_pct": seed.get("change_pct", 0),
+            "startup_signals": seed.get("startup_signals", []),
+            "startup_reason": seed.get("startup_reason", ""),
+            "confirmations": confirmations,
+        })
+        for field in (
+            "daily_startup_grade",
+            "daily_startup_label",
+            "daily_startup_warning",
+            "sublevel_confirm_grade",
+            "sublevel_confirm_label",
+            "sublevel_confirm_reason",
+            "confirmation_facts",
+        ):
+            if quality.get(field) is not None:
+                seed[field] = quality[field]
+        quality_eligible = bool(
+            quality.get("daily_startup_grade") == "strong"
+            and quality.get("sublevel_confirm_grade") in {"S", "A"}
+        )
+
+        if confirmations and quality_eligible:
             # Has 30min confirmation → candidate
             diag["startup_candidate"] += 1
             seed["result_30min"] = min30_result
@@ -247,6 +270,8 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
             seed["source_channel"] = "low_position"
             seed["view"] = "main"
             seed["avoid_chase"] = False
+            seed["source_status"] = "candidate"
+            seed["strategy_source"] = "strong_startup"
 
             closes_30 = min30_result.closes
             dates_30 = min30_result.dates if hasattr(min30_result, 'dates') else []
@@ -260,6 +285,15 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
                 seed["confirm_age_days"] = seed.get("startup_age_days", 0)
 
             candidates.append(seed)
+        elif confirmations:
+            diag["watch_due_to_quality_gate"] += 1
+            watch_item = _make_watch_item(
+                seed,
+                seed["startup_reason"],
+                "启动质量未达到日线strong且30min为S/A，仅观察",
+                ["日线重新形成强启动", "30min出现S/A级确认"],
+            )
+            new_watchlist.append(watch_item)
         else:
             # No 30min confirmation → watch
             diag["watch_due_to_no_30min_confirm"] += 1
@@ -451,6 +485,8 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "source_channel": "low_position",
         "view": "observation",
         "source_type": "日线强势启动",
+        "strategy_source": "strong_startup",
+        "source_status": "observe",
         "startup_reason": startup_reason,
         "startup_signals": seed.get("startup_signals", []),
         "startup_index": seed.get("startup_index"),
@@ -479,6 +515,13 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "volumes": seed.get("volumes", []),
         "dates": seed.get("dates", []),
         "result_30min": None,
+        "daily_startup_grade": seed.get("daily_startup_grade", ""),
+        "daily_startup_label": seed.get("daily_startup_label", ""),
+        "daily_startup_warning": seed.get("daily_startup_warning", ""),
+        "sublevel_confirm_grade": seed.get("sublevel_confirm_grade", ""),
+        "sublevel_confirm_label": seed.get("sublevel_confirm_label", ""),
+        "sublevel_confirm_reason": seed.get("sublevel_confirm_reason", ""),
+        "confirmation_facts": list(seed.get("confirmation_facts") or []),
     }
 
 
@@ -535,5 +578,25 @@ def annotate_startup_quality(bp):
         bp["sublevel_confirm_grade"] = "C"
         bp["sublevel_confirm_label"] = "C级确认"
         bp["sublevel_confirm_reason"] = "暂无30min确认信号"
+
+    eligible = bool(
+        bp["daily_startup_grade"] == "strong"
+        and bp["sublevel_confirm_grade"] in {"S", "A"}
+    )
+    if eligible:
+        reason_code = "strong_startup_sa_confirmed"
+    elif bp["daily_startup_grade"] != "strong":
+        reason_code = "strong_startup_daily_not_strong"
+    else:
+        reason_code = "strong_startup_sublevel_insufficient"
+    bp["confirmation_facts"] = [{
+        "owner_pool": "strong_startup",
+        "stage": "30min_confirmation",
+        "effect": "candidate" if eligible else "observe",
+        "reason_code": reason_code,
+        "eligible": eligible,
+        "quality_grade": bp["sublevel_confirm_grade"],
+        "signals": list(confirmations),
+    }]
 
     return bp

@@ -249,8 +249,14 @@ def _empty_outcome(entry, status):
         "name": str(entry.get("name") or ""),
         "report_date": str(entry.get("report_date") or ""),
         "status": status,
+        "entry_mode": "unknown",
         "entry_date": "",
         "entry_price": None,
+        "intended_horizon": None,
+        "intended_horizon_label": "",
+        "close_return": None,
+        "primary_mfe": None,
+        "primary_mae": None,
         "target_dates": {"t1": "", "t3": "", "t5": ""},
         "returns": {"t1": None, "t3": None, "t5": None},
         "mae": {"t1": None, "t3": None, "t5": None},
@@ -267,6 +273,17 @@ def _empty_outcome(entry, status):
             "t5": "not_requested",
         },
         "excess_returns": {"t1": None, "t3": None, "t5": None},
+        "research_results": {
+            key: {
+                "horizon": "T+{}".format(horizon),
+                "status": "unavailable",
+                "target_date": "",
+                "close_return": None,
+                "mfe": None,
+                "mae": None,
+            }
+            for key, horizon in (("t1", 1), ("t3", 3), ("t5", 5))
+        },
     }
 
 
@@ -320,6 +337,49 @@ def _entry_mode(entry, contribution=None):
     return "unknown"
 
 
+def _intended_horizon(contribution):
+    if not isinstance(contribution, dict):
+        return None
+    value = contribution.get("intended_horizon")
+    if isinstance(value, bool):
+        return None
+    try:
+        horizon = int(value)
+    except (TypeError, ValueError):
+        return None
+    return horizon if horizon in HORIZONS else None
+
+
+def _attach_research_contract(outcome, contribution):
+    horizon = _intended_horizon(contribution)
+    outcome["intended_horizon"] = horizon
+    outcome["intended_horizon_label"] = (
+        "T+{}".format(horizon) if horizon is not None else ""
+    )
+    outcome["research_results"] = {
+        key: {
+            "horizon": "T+{}".format(value),
+            "status": outcome["maturity"].get(key, "unavailable"),
+            "target_date": outcome["target_dates"].get(key, ""),
+            "close_return": outcome["returns"].get(key),
+            "mfe": outcome["mfe"].get(key),
+            "mae": outcome["mae"].get(key),
+        }
+        for key, value in (("t1", 1), ("t3", 3), ("t5", 5))
+    }
+    primary_key = "t{}".format(horizon) if horizon is not None else None
+    outcome["close_return"] = (
+        outcome["returns"].get(primary_key) if primary_key else None
+    )
+    outcome["primary_mfe"] = (
+        outcome["mfe"].get(primary_key) if primary_key else None
+    )
+    outcome["primary_mae"] = (
+        outcome["mae"].get(primary_key) if primary_key else None
+    )
+    return outcome
+
+
 def _normalized_calendar(trading_calendar):
     dates = [
         str(value).split(" ", 1)[0]
@@ -366,9 +426,20 @@ def _evaluate_without_benchmark(
         outcome["status"] = "recommendation_not_final"
         return outcome
     mode = _entry_mode(entry, contribution)
+    outcome["entry_mode"] = mode
     if mode == "unknown":
         outcome["status"] = "entry_mode_unknown"
         return outcome
+    if mode == "immediate_close":
+        return _evaluate_immediate_close(
+            outcome,
+            normalized,
+            calendar,
+            report_calendar_index,
+            report_index,
+            date_index,
+            contribution,
+        )
     if mode != "delay1_open":
         outcome["status"] = "unsupported_entry_mode"
         return outcome
@@ -478,7 +549,101 @@ def _evaluate_without_benchmark(
         outcome["status"] = "partial"
     else:
         outcome["status"] = "right_censored"
-    return outcome
+    return _attach_research_contract(outcome, contribution)
+
+
+def _evaluate_immediate_close(
+    outcome,
+    normalized,
+    calendar,
+    report_calendar_index,
+    report_index,
+    date_index,
+    contribution,
+):
+    entry_price = normalized["closes"][report_index]
+    if entry_price is None or entry_price <= 0:
+        outcome["status"] = "market_data_invalid"
+        return _attach_research_contract(outcome, contribution)
+    outcome["entry_date"] = calendar[report_calendar_index]
+    outcome["entry_price"] = entry_price
+    maturity = {}
+    returns = {}
+    target_dates = {}
+    mae = {}
+    mfe = {}
+    maturity_reasons = {}
+    for horizon in HORIZONS:
+        key = "t{}".format(horizon)
+        target_calendar_index = report_calendar_index + horizon
+        if target_calendar_index >= len(calendar):
+            target_dates[key] = ""
+            maturity[key] = "pending"
+            maturity_reasons[key] = "future_horizon_not_available"
+            returns[key] = None
+            mae[key] = None
+            mfe[key] = None
+            continue
+        path_dates = calendar[
+            report_calendar_index + 1:target_calendar_index + 1
+        ]
+        target_dates[key] = calendar[target_calendar_index]
+        if any(trade_date not in date_index for trade_date in path_dates):
+            maturity[key] = "insufficient"
+            maturity_reasons[key] = "future_trade_bar_missing"
+            returns[key] = None
+            mae[key] = None
+            mfe[key] = None
+            continue
+        path_indexes = [date_index[trade_date] for trade_date in path_dates]
+        if any(not normalized["is_final"][index] for index in path_indexes):
+            maturity[key] = "pending"
+            maturity_reasons[key] = "future_bar_not_final"
+            returns[key] = None
+            mae[key] = None
+            mfe[key] = None
+            continue
+        if any(
+            normalized["volumes"][index] is None
+            or normalized["volumes"][index] <= 0
+            for index in path_indexes
+        ):
+            maturity[key] = "insufficient"
+            maturity_reasons[key] = "suspended_or_non_trading_bar"
+            returns[key] = None
+            mae[key] = None
+            mfe[key] = None
+            continue
+        endpoint = path_indexes[-1]
+        maturity[key] = "mature"
+        maturity_reasons[key] = ""
+        returns[key] = (
+            (normalized["closes"][endpoint] - entry_price)
+            / entry_price * 100.0
+        )
+        mae[key] = (
+            min(normalized["lows"][index] for index in path_indexes)
+            / entry_price - 1.0
+        ) * 100.0
+        mfe[key] = (
+            max(normalized["highs"][index] for index in path_indexes)
+            / entry_price - 1.0
+        ) * 100.0
+    outcome["target_dates"] = target_dates
+    outcome["returns"] = returns
+    outcome["mae"] = mae
+    outcome["mfe"] = mfe
+    outcome["maturity"] = maturity
+    outcome["maturity_reasons"] = maturity_reasons
+    if maturity["t5"] == "mature":
+        outcome["status"] = "evaluated"
+    elif any(value == "mature" for value in maturity.values()):
+        outcome["status"] = "partial"
+    elif any(value == "pending" for value in maturity.values()):
+        outcome["status"] = "pending"
+    else:
+        outcome["status"] = "insufficient"
+    return _attach_research_contract(outcome, contribution)
 
 
 def evaluate_recommendation_entry(
@@ -490,7 +655,7 @@ def evaluate_recommendation_entry(
     benchmark_kline=None,
     expected_adjustment=EXPECTED_ADJUSTMENT,
 ):
-    """Evaluate one record with executable T+1-open entry and censoring."""
+    """Evaluate one record under its declared research entry contract."""
     entry = entry if isinstance(entry, dict) else {}
     outcome = _evaluate_without_benchmark(
         entry,
@@ -626,6 +791,142 @@ def _episode_rows(rows, trading_calendar):
     return episodes
 
 
+def _percentage(values, predicate):
+    if not values:
+        return None
+    return sum(1 for value in values if predicate(value)) / len(values) * 100.0
+
+
+def _return_summary(rows):
+    values = [
+        float(row["return_pct"])
+        for row in rows
+        if row.get("return_pct") is not None
+    ]
+    return {
+        "sample_size": len(values),
+        "mean_close_return": mean(values) if values else None,
+        "median_close_return": median(values) if values else None,
+        "up_rate": _percentage(values, lambda value: value > 0),
+        "hit_rate_ge_5": _percentage(values, lambda value: value >= 5),
+        "loss_rate_le_minus_5": _percentage(
+            values, lambda value: value <= -5
+        ),
+        "worst_close_return": min(values) if values else None,
+    }
+
+
+def _time_stability(rows):
+    by_month = defaultdict(list)
+    by_date = defaultdict(list)
+    for row in rows:
+        rec_date = str(row.get("rec_date") or "")
+        if row.get("return_pct") is None or not rec_date:
+            continue
+        by_month[rec_date[:7]].append(row)
+        by_date[rec_date].append(row)
+
+    monthly = []
+    for month_name in sorted(by_month):
+        summary = _return_summary(by_month[month_name])
+        summary["month"] = month_name
+        monthly.append(summary)
+
+    rolling = []
+    active_dates = sorted(by_date)
+    window_size = 20
+    for start in range(0, len(active_dates), window_size):
+        window_dates = active_dates[start:start + window_size]
+        if not window_dates:
+            continue
+        window_rows = [
+            row for trade_date in window_dates for row in by_date[trade_date]
+        ]
+        summary = _return_summary(window_rows)
+        summary.update({
+            "start_date": window_dates[0],
+            "end_date": window_dates[-1],
+            "active_dates": len(window_dates),
+        })
+        rolling.append(summary)
+
+    month_means = [
+        item["mean_close_return"]
+        for item in monthly
+        if item.get("mean_close_return") is not None
+    ]
+    return {
+        "monthly": monthly,
+        "rolling_20_active_dates": rolling,
+        "positive_month_rate": _percentage(
+            month_means, lambda value: value > 0
+        ),
+        "worst_month_mean": min(month_means) if month_means else None,
+    }
+
+
+def _top_k_diagnostics(rows):
+    by_date = defaultdict(list)
+    for row in rows:
+        if row.get("return_pct") is None:
+            continue
+        by_date[str(row.get("rec_date") or "")].append(row)
+    if not by_date:
+        return []
+
+    diagnostics = []
+    for limit in (1, 3, 5, 10):
+        selected = []
+        for rec_date in sorted(by_date):
+            ranked = sorted(
+                by_date[rec_date],
+                key=lambda row: (
+                    -_recommendation_score(row),
+                    str(row.get("code") or ""),
+                ),
+            )
+            selected.extend(ranked[:limit])
+        summary = _return_summary(selected)
+        summary.update({
+            "top_k": limit,
+            "active_dates": len(by_date),
+            "diagnostic_only": True,
+        })
+        diagnostics.append(summary)
+
+    all_summary = _return_summary([
+        row for rec_date in sorted(by_date) for row in by_date[rec_date]
+    ])
+    all_summary.update({
+        "top_k": "all",
+        "active_dates": len(by_date),
+        "diagnostic_only": True,
+    })
+    diagnostics.append(all_summary)
+    return diagnostics
+
+
+def _recommendation_score(row):
+    value = row.get("recommendation_score")
+    if isinstance(value, bool):
+        return 0.0
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return value if math.isfinite(value) else 0.0
+
+
+def _market_regime_slices(rows):
+    grouped = defaultdict(list)
+    for row in rows:
+        grouped[str(row.get("market_regime") or "unknown")].append(row)
+    return {
+        regime: _return_summary(grouped[regime])
+        for regime in sorted(grouped)
+    }
+
+
 def build_strategy_scorecards(
     entries,
     kline_by_code,
@@ -644,15 +945,26 @@ def build_strategy_scorecards(
                 continue
             strategy = str(contribution.get("strategy_name") or "unknown")
             version = str(contribution.get("strategy_version") or "unknown")
-            key = (strategy, version)
+            source_pool = str(
+                contribution.get("source_pool") or strategy
+            )
+            entry_mode = str(
+                contribution.get("entry_mode") or "unknown"
+            )
+            intended_horizon = _intended_horizon(contribution)
+            key = (
+                strategy, version, source_pool, entry_mode, intended_horizon
+            )
             card = cards.setdefault(key, {
                 "strategy": strategy,
                 "version": version,
+                "source_pool": source_pool,
+                "entry_mode": entry_mode,
+                "intended_horizon": intended_horizon,
                 "display_names": Counter(),
                 "attribution_statuses": Counter(),
                 "gate_outcomes": Counter(),
                 "publication_outcomes": Counter(),
-                "intended_horizons": set(),
             })
             card["display_names"][
                 str(contribution.get("display_name") or strategy)
@@ -669,10 +981,6 @@ def build_strategy_scorecards(
                 contribution.get("user_action") or "unknown"
             )
             card["publication_outcomes"][user_action] += 1
-            if contribution.get("intended_horizon") in HORIZONS:
-                card["intended_horizons"].add(
-                    int(contribution["intended_horizon"])
-                )
             if contribution.get("cohort_eligible") is True:
                 recommend_rows[key].append({
                     "entry": entry,
@@ -680,10 +988,12 @@ def build_strategy_scorecards(
                 })
 
     result = []
-    for key in sorted(cards):
+    for key in sorted(
+        cards,
+        key=lambda row: (row[0], row[1], row[2], row[3], row[4] or 0),
+    ):
         card = cards[key]
-        intended = sorted(card["intended_horizons"])
-        primary_horizon = intended[0] if len(intended) == 1 else None
+        primary_horizon = card["intended_horizon"]
         primary_key = (
             "t{}".format(primary_horizon) if primary_horizon else None
         )
@@ -712,6 +1022,20 @@ def build_strategy_scorecards(
             if primary_return is not None or any(
                 value is not None for value in outcome["returns"].values()
             ):
+                reason_snapshot = row["contribution"].get(
+                    "reason_snapshot"
+                )
+                reason_snapshot = (
+                    reason_snapshot
+                    if isinstance(reason_snapshot, dict) else {}
+                )
+                decision_snapshot = reason_snapshot.get(
+                    "decision_engine_v1"
+                )
+                decision_snapshot = (
+                    decision_snapshot
+                    if isinstance(decision_snapshot, dict) else {}
+                )
                 sample_rows.append({
                     "recommendation_id": entry.get("recommendation_id"),
                     "rec_date": entry.get("report_date"),
@@ -732,6 +1056,26 @@ def build_strategy_scorecards(
                     "reason_summary": _reason_summary(row["contribution"]),
                     "entry_date": outcome.get("entry_date"),
                     "entry_price": outcome.get("entry_price"),
+                    "mae": (
+                        outcome["mae"].get(primary_key)
+                        if primary_key else None
+                    ),
+                    "mfe": (
+                        outcome["mfe"].get(primary_key)
+                        if primary_key else None
+                    ),
+                    "recommendation_score": decision_snapshot.get(
+                        "total_score"
+                    ),
+                    "market_regime": (
+                        reason_snapshot.get("market_regime")
+                        or decision_snapshot.get("market_regime")
+                        or "unknown"
+                    ),
+                    "maturity_status": (
+                        outcome["maturity"].get(primary_key)
+                        if primary_key else None
+                    ),
                 })
 
         values = {
@@ -804,13 +1148,82 @@ def build_strategy_scorecards(
             any(value is not None for value in outcome["returns"].values())
             for outcome in outcomes
         )
+        primary_samples = [
+            row for row in sample_rows if row.get("return_pct") is not None
+        ]
+        high_return_summary = _return_summary(primary_samples)
+        active_dates = len({
+            str(row.get("rec_date") or "") for row in primary_samples
+            if row.get("rec_date")
+        })
+        active_months = len({
+            str(row.get("rec_date") or "")[:7] for row in primary_samples
+            if row.get("rec_date")
+        })
+        primary_mae = [
+            float(row["mae"]) for row in primary_samples
+            if row.get("mae") is not None
+        ]
+        primary_mfe = [
+            float(row["mfe"]) for row in primary_samples
+            if row.get("mfe") is not None
+        ]
+        gate_count_by_date = Counter(
+            str(row["entry"].get("report_date") or "")
+            for row in recommend_rows.get(key, [])
+            if row["entry"].get("report_date")
+        )
+        gate_counts = list(gate_count_by_date.values())
         result.append({
             "strategy": card["strategy"],
             "name": display_name,
             "version": card["version"],
+            "entry_mode": card["entry_mode"],
             "attribution_status": attribution_status,
             "attribution_status_counts": attribution_status_counts,
             "intended_horizon": primary_horizon,
+            "active_dates": active_dates,
+            "active_months": active_months,
+            "average_daily_count": (
+                mean(gate_counts) if gate_counts else 0.0
+            ),
+            "daily_gate_count_distribution": dict(
+                sorted(gate_count_by_date.items())
+            ),
+            "mean_close_return": high_return_summary[
+                "mean_close_return"
+            ],
+            "median_close_return": high_return_summary[
+                "median_close_return"
+            ],
+            "up_rate": high_return_summary["up_rate"],
+            "hit_rate_ge_5": high_return_summary["hit_rate_ge_5"],
+            "loss_rate_le_minus_5": high_return_summary[
+                "loss_rate_le_minus_5"
+            ],
+            "worst_close_return": high_return_summary[
+                "worst_close_return"
+            ],
+            "mean_mae": mean(primary_mae) if primary_mae else None,
+            "mean_mfe": mean(primary_mfe) if primary_mfe else None,
+            "time_stability": _time_stability(primary_samples),
+            "market_regime_slices": _market_regime_slices(
+                primary_samples
+            ),
+            "top_k_diagnostics": _top_k_diagnostics(primary_samples),
+            "selection_cap_applied": False,
+            "research_evidence": {
+                "truth_verified": None,
+                "leakage_free": card["entry_mode"] == "immediate_close",
+                "maturity_verified": (
+                    bool(primary_samples)
+                    and all(
+                        row.get("maturity_status") == "mature"
+                        for row in primary_samples
+                    )
+                ),
+                "oot_locked": False,
+            },
             "episode_count": len(episodes),
             "evaluable_episode_count": evaluable_episode_count,
             "sample_size": (

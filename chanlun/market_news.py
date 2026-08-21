@@ -1140,7 +1140,8 @@ _DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到�
 你的职责：
 1. 把事件、板块资金、涨停梯队和个人重点池之间的关系解释清楚。
 2. 为每个已有方向整理下一确认条件和失效条件。
-3. 可以指出规则与语义之间的矛盾，但不能修改行情数值、编造证据或新增方向。
+3. 对负向或风险方向，逐条说明具体风险事实、可能影响与对应证据。
+4. 可以指出规则与语义之间的矛盾，但不能修改行情数值、编造证据或新增方向。
 
 硬规则：
 - 只能从 directions 中选择 theme，最多返回3条，不得为了凑数新增方向。
@@ -1149,8 +1150,9 @@ _DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到�
 - direction 仅限 positive/negative/mixed/neutral。
 - stage 仅限 confirmed/developing/risk/monitor。
 - confidence 仅限 low/medium/high。
-- summary/next_trigger/invalidation 等自由文本禁止使用“龙头”；龙头角色只能在 stock_mentions 中原样引用已有的 limit_up_leader，由页面模板展示。
-- summary/next_trigger/invalidation 禁止写任何阿拉伯数字、中文数量、价格、涨幅、数量、排名或概率；所有数值由页面模板直接展示结构化证据。
+- 负向或风险方向的 risk_reasons 至少一条；每条必须包含非空 reason、impact 和 evidence_refs，证据编号只能来自该方向。
+- summary/next_trigger/invalidation/risk_reasons 等自由文本禁止使用“龙头”；龙头角色只能在 stock_mentions 中原样引用已有的 limit_up_leader，由页面模板展示。
+- summary/next_trigger/invalidation/risk_reasons 禁止写任何阿拉伯数字、中文数量、价格、涨幅、数量、排名或概率；所有数值由页面模板直接展示结构化证据。
 - 只有证据中的字母数字产品型号（如5G、iPhone18、H100）可以原样复述，不得改写或新增型号。
 
 只输出JSON对象：
@@ -1168,6 +1170,11 @@ _DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到�
       "evidence_ref": "只能原样引用 stock_links.evidence_ref"
     }],
     "summary": "事件到板块再到重点股的简洁解释",
+    "risk_reasons": [{
+      "reason": "具体风险事实；非风险方向返回空数组",
+      "impact": "对方向或关联股票的可能影响",
+      "evidence_refs": ["只能原样引用该方向已有的证据编号"]
+    }],
     "next_trigger": ["下一确认条件"],
     "invalidation": ["失效条件"]
   }]
@@ -1210,7 +1217,7 @@ def analyze_decision_brief_facts(packet):
         raise ValueError("decision brief LLM response must be an object")
     result = dict(result)
     result["model"] = model
-    result["prompt_version"] = "decision-brief-v3"
+    result["prompt_version"] = "decision-brief-v4"
     result["schema_version"] = "1"
     return result
 

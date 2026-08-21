@@ -969,6 +969,20 @@ body {
   border: 1px solid rgba(148, 163, 184, 0.30);
 }
 
+.tag-strategy-source,
+.tag-horizon,
+.horizon-chip {
+  color: #1D4ED8;
+  background: #EFF6FF;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.tag-horizon.is-missing {
+  color: var(--risk-orange);
+  background: var(--risk-orange-soft);
+  border-color: rgba(234, 88, 12, 0.24);
+}
+
 .tag-resonance {
   color: #6D28D9;
   background: linear-gradient(180deg, #F5F3FF, #EFE7FF);
@@ -1202,10 +1216,68 @@ body {
   padding: 2px 0;
 }
 
+.source-contract {
+  margin-top: 10px;
+}
+
+.source-contract h4 {
+  margin: 0 0 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.source-contract-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.5fr);
+  gap: 10px;
+  align-items: start;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: var(--card-soft);
+}
+
+.source-contract-row + .source-contract-row {
+  margin-top: 6px;
+}
+
+.source-contract-row strong,
+.source-contract-row small {
+  display: block;
+}
+
+.source-contract-row small,
+.source-contract-row p,
+.source-contract-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.source-contract-row p {
+  margin: 0;
+  line-height: 1.5;
+}
+
 .detail-price-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
+}
+
+.research-return-grid {
+  display: grid;
+  gap: 7px;
+}
+
+.research-return-row {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) repeat(2, minmax(100px, 0.8fr));
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--card-soft);
+  color: var(--text-sub);
+  font-size: 12px;
 }
 
 .price-cell {
@@ -1697,6 +1769,69 @@ body {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   padding: 4px 12px 10px;
+}
+
+.direction-risk-reasons {
+  margin: 4px 12px 12px;
+  padding: 10px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #fff7f7;
+}
+
+.direction-risk-reasons h4 {
+  margin: 0 0 8px;
+  color: #b91c1c;
+  font-size: 12px;
+}
+
+.direction-risk-reason + .direction-risk-reason {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #fecaca;
+}
+
+.direction-risk-reason strong,
+.direction-risk-reason p {
+  display: block;
+  margin: 0;
+  color: #7f1d1d;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.direction-risk-reason p span,
+.direction-risk-evidence > span {
+  margin-right: 6px;
+  color: #991b1b;
+  font-weight: 800;
+}
+
+.direction-risk-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 6px;
+  color: #991b1b;
+  font-size: 11px;
+}
+
+.direction-risk-evidence code {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: #fee2e2;
+  overflow-wrap: anywhere;
+}
+
+.direction-risk-reasons.is-insufficient {
+  border-style: dashed;
+  border-color: #fdba74;
+  background: #fff7ed;
+}
+
+.direction-risk-reasons.is-insufficient h4,
+.direction-risk-reasons.is-insufficient p {
+  color: #9a3412;
 }
 
 .direction-detail-grid > div {
@@ -3022,6 +3157,15 @@ body {
 
   .candidate-price {
     font-size: 14px;
+  }
+
+  .source-contract-row,
+  .research-return-row {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-price-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .source-chip,

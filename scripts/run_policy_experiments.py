@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -14,8 +15,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from chanlun.policy_experiment_metrics import (
+    evaluate_high_return_version_selection,
     run_policy_experiment_metrics,
     supports_policy_experiment,
+    verify_oot_attestation,
 )
 
 
@@ -29,6 +32,89 @@ def _normalize_policies(policies_arg: str) -> List[str]:
         seen.add(clean)
         policies.append(clean)
     return policies
+
+
+def _current_code_sha() -> str:
+    status = subprocess.run(
+        [
+            "git", "-C", ROOT, "status", "--porcelain",
+            "--untracked-files=no",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+        text=True,
+    )
+    if status.stdout.strip():
+        raise ValueError(
+            "OOT attestation code worktree is dirty; code SHA is not exact"
+        )
+    completed = subprocess.run(
+        ["git", "-C", ROOT, "rev-parse", "HEAD"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _load_verified_oot_attestations(
+    manifest_path: Path,
+    scorecards: Iterable[Dict[str, Any]],
+):
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        raise ValueError("OOT attestation manifest schema_version must be 1")
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise ValueError("OOT attestation manifest artifacts must be a list")
+
+    cards_by_key = {}
+    for card in scorecards:
+        if not isinstance(card, dict):
+            continue
+        key = (
+            str(card.get("source_pool") or "").strip(),
+            str(card.get("version") or "").strip(),
+            card.get("intended_horizon"),
+            str(card.get("entry_mode") or "").strip(),
+            str(card.get("oot_cutoff") or "").strip(),
+        )
+        cards_by_key[key] = card
+
+    code_sha = _current_code_sha()
+    verified = []
+    seen = set()
+    for item in artifacts:
+        if not isinstance(item, dict):
+            raise ValueError("OOT attestation artifact entry must be an object")
+        key = (
+            str(item.get("source_pool") or "").strip(),
+            str(item.get("strategy_version") or "").strip(),
+            item.get("intended_horizon"),
+            str(item.get("entry_mode") or "").strip(),
+            str(item.get("cutoff") or "").strip(),
+        )
+        if key in seen:
+            raise ValueError("duplicate OOT attestation artifact binding")
+        seen.add(key)
+        card = cards_by_key.get(key)
+        if card is None:
+            raise ValueError("OOT attestation artifact has no matching scorecard")
+        artifact_name = str(item.get("artifact_path") or "").strip()
+        if not artifact_name:
+            raise ValueError("OOT attestation artifact_path is required")
+        artifact_path = (manifest_path.parent / artifact_name).resolve()
+        if not artifact_path.is_file():
+            raise ValueError("OOT attestation artifact_path is not a file")
+        verified.append(verify_oot_attestation(
+            card,
+            item,
+            artifact_path.read_bytes(),
+            current_code_sha=code_sha,
+        ))
+    return verified
 
 
 def _table_row(name: str, result: Dict[str, Any]) -> str:
@@ -199,12 +285,74 @@ def _render_fusion_threshold_section(scan: Dict[str, Any]) -> List[str]:
     return lines
 
 
+def _render_high_return_selection(selection: Dict[str, Any]) -> List[str]:
+    candidates = selection.get("candidates") or []
+    lines = [
+        "## High-return Version Selection",
+        "",
+        f"- baseline: {selection.get('baseline_version', '-')}",
+        f"- selected: {selection.get('selected_version', '-')}",
+        f"- ranking: {selection.get('ranking_metric', 'mean_close_return')}",
+        "- production count rule: no production Top-K cap",
+        "",
+        "| Version | Pool | Entry | Horizon | Samples | Active dates | Avg/day | Months | Mean close | Median close | Up % | >=5% | <=-5% | Worst | Mean MAE | Mean MFE | Tier | outlier_driven | Promotion |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+    ]
+    for item in candidates:
+        lines.append(
+            "| {version} | {pool} | {entry} | T+{horizon} | {samples} | "
+            "{dates} | {daily} | {months} | {mean} | {median} | {up} | "
+            "{hit5} | {loss5} | {worst} | {mae} | {mfe} | {tier} | "
+            "{outlier} | {promotion} |".format(
+                version=item.get("version", "-"),
+                pool=item.get("source_pool", "-"),
+                entry=item.get("entry_mode", "-"),
+                horizon=item.get("intended_horizon", "-"),
+                samples=item.get("sample_size", 0),
+                dates=item.get("active_dates", 0),
+                daily=item.get("average_daily_count", "n/a"),
+                months=item.get("active_months", 0),
+                mean=item.get("mean_close_return", "n/a"),
+                median=item.get("median_close_return", "n/a"),
+                up=item.get("up_rate", "n/a"),
+                hit5=item.get("hit_rate_ge_5", "n/a"),
+                loss5=item.get("loss_rate_le_minus_5", "n/a"),
+                worst=item.get("worst_close_return", "n/a"),
+                mae=item.get("mean_mae", "n/a"),
+                mfe=item.get("mean_mfe", "n/a"),
+                tier=item.get("research_tier", "unknown"),
+                outlier=item.get("outlier_driven", False),
+                promotion=item.get("promotion_eligible", False),
+            )
+        )
+    if not candidates:
+        lines.append("| no candidates | - | - | - | 0 | 0 | 0 | 0 | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | - | - | - |")
+    lines.extend(["", "### Time Stability and Top-K Diagnostics"])
+    for item in candidates:
+        stability = item.get("time_stability") or {}
+        lines.append(
+            "- {version}: positive_month_rate={positive}, "
+            "worst_month_mean={worst}, Top-K is diagnostic only".format(
+                version=item.get("version", "-"),
+                positive=stability.get("positive_month_rate", "n/a"),
+                worst=stability.get("worst_month_mean", "n/a"),
+            )
+        )
+    lines.append("")
+    return lines
+
+
 def _render_markdown(payload: Dict[str, Any]) -> str:
     results = payload.get("policies", []) if isinstance(payload, dict) else []
     execution = (payload or {}).get("execution") or {}
     fusion_threshold_scan = (payload or {}).get("fusion_threshold_scan") if isinstance(payload, dict) else None
     recall_walkforward = (
         (payload or {}).get("recall_walkforward")
+        if isinstance(payload, dict)
+        else None
+    )
+    high_return_selection = (
+        (payload or {}).get("high_return_version_selection")
         if isinstance(payload, dict)
         else None
     )
@@ -234,6 +382,8 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
             f"- tail_risk_delta_pp: {gates.get('tail_risk_delta_pp', 'n/a')}",
             "",
         ])
+    if isinstance(high_return_selection, dict):
+        lines.extend(_render_high_return_selection(high_return_selection))
 
     lines.append("## Filter Reason Summary")
     for item in results:
@@ -306,6 +456,18 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
         help="Optional recall walk-forward JSON to attach to the report",
     )
     parser.add_argument(
+        "--high-return-scorecards-json",
+        help=(
+            "Optional locked OOT scorecard JSON with baseline and candidates"
+        ),
+    )
+    parser.add_argument(
+        "--high-return-oot-attestation-json",
+        help=(
+            "Optional read-only OOT attestation manifest for scorecard promotion"
+        ),
+    )
+    parser.add_argument(
         "--business-metrics",
         action="store_true",
         help="Compatibility flag; currently no-op.",
@@ -330,6 +492,39 @@ def main(argv: Optional[Iterable[str]] = None) -> int:
             payload["recall_walkforward"] = json.loads(
                 Path(args.recall_walkforward_json).read_text(
                     encoding="utf-8"
+                )
+            )
+        if args.high_return_oot_attestation_json and not (
+            args.high_return_scorecards_json
+        ):
+            raise ValueError(
+                "high-return OOT attestation requires scorecards JSON"
+            )
+        if args.high_return_scorecards_json:
+            scorecards_payload = json.loads(
+                Path(args.high_return_scorecards_json).read_text(
+                    encoding="utf-8"
+                )
+            )
+            baseline = scorecards_payload.get("baseline")
+            candidates = scorecards_payload.get("candidates")
+            if not isinstance(baseline, dict) or not isinstance(
+                candidates, list
+            ):
+                raise ValueError(
+                    "high-return scorecards require baseline and candidates"
+                )
+            attestations = []
+            if args.high_return_oot_attestation_json:
+                attestations = _load_verified_oot_attestations(
+                    Path(args.high_return_oot_attestation_json),
+                    [baseline] + candidates,
+                )
+            payload["high_return_version_selection"] = (
+                evaluate_high_return_version_selection(
+                    baseline,
+                    candidates,
+                    oot_attestations=attestations,
                 )
             )
     except Exception as exc:

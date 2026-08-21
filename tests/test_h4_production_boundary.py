@@ -54,12 +54,19 @@ class TestH4ProductionBoundary(unittest.TestCase):
             {"600001", "600002"},
             {row["code"] for row in workspace["views"]["h4_t3"]},
         )
+        self.assertTrue(all(
+            row["intended_horizon"] == 3
+            and row["horizon_status"] == "verified"
+            and row["horizon_label"] == "T+3"
+            for row in workspace["views"]["h4_t3"]
+        ))
 
     def test_h4_membership_does_not_bonus_or_block_main_score(self):
         candidate = {
             "code": "600001",
             "name": "统一分主推",
             "score": 81,
+            "intended_horizon": 3,
             "decision_engine_v1": {
                 "decision_code": "recommend",
                 "decision": "推荐",

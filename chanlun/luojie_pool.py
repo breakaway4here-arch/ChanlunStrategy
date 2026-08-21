@@ -209,6 +209,8 @@ def _build_candidate(stock, min15, themes):
         "code": stock.get("code", ""),
         "name": stock.get("name", ""),
         "sector": stock.get("sector", ""),
+        "strategy_source": "luojie_pool",
+        "source_status": "observe",
         "sector_tags": stock.get("sector_tags", []),
         "sector_rank": stock.get("sector_rank"),
         "sector_flow": stock.get("sector_flow"),

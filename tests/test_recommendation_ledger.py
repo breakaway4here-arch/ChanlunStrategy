@@ -44,7 +44,7 @@ def _strategy(name, version, items, **extra):
         "strategy_name": name,
         "strategy_version": version,
         "source_pool": name,
-        "entry_mode": "delay1_open",
+        "entry_mode": "immediate_close",
         "intended_horizon": 3,
         "publication_status": "published",
         "user_action_from_decision": True,
@@ -55,6 +55,164 @@ def _strategy(name, version, items, **extra):
 
 
 class RecommendationLedgerTests(unittest.TestCase):
+    def test_immediate_close_contract_freezes_signal_close_and_horizon(self):
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_fusion", "fusion-v2", [_item()])],
+        )
+
+        entry = entries[0]
+        contribution = entry["strategy_contributions"][0]
+        self.assertEqual(entry["schema_version"], "2")
+        self.assertEqual(entry["signal_close"], 188.0)
+        self.assertEqual(contribution["entry_mode"], "immediate_close")
+        self.assertEqual(contribution["entry_price"], 188.0)
+        self.assertEqual(contribution["intended_horizon"], 3)
+        self.assertEqual(contribution["intended_horizon_label"], "T+3")
+        self.assertEqual(contribution["horizon_status"], "verified")
+
+    def test_missing_or_conflicting_horizon_cannot_enter_recommendation_cohort(self):
+        missing = _strategy(
+            "daily_fusion", "fusion-v2", [_item()], intended_horizon=None
+        )
+        conflict_item = _item("300139")
+        conflict_item["strategy_sources"] = [
+            {"strategy_source": "source-a", "intended_horizon": 1},
+            {"strategy_source": "source-b", "intended_horizon": 5},
+        ]
+        conflict = _strategy(
+            "daily_fusion", "fusion-v2", [conflict_item],
+            intended_horizon=None,
+        )
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [missing, conflict],
+        )
+        by_code = {
+            row["code"]: row["strategy_contributions"][0]
+            for row in entries
+        }
+        self.assertEqual(by_code["300308"]["horizon_status"], "missing")
+        self.assertEqual(by_code["300139"]["horizon_status"], "conflict")
+        self.assertFalse(by_code["300308"]["cohort_eligible"])
+        self.assertFalse(by_code["300139"]["cohort_eligible"])
+
+    def test_top_level_horizon_cannot_hide_source_conflict(self):
+        item = _item("300140")
+        item["intended_horizon"] = 1
+        item["strategy_sources"] = [
+            {
+                "strategy_source": "source-a",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "source-b",
+                "source_status": "candidate",
+                "intended_horizon": 5,
+            },
+        ]
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_fusion", "fusion-v2", [item])],
+        )
+
+        contribution = entries[0]["strategy_contributions"][0]
+        self.assertEqual(contribution["horizon_status"], "conflict")
+        self.assertIsNone(contribution["intended_horizon"])
+        self.assertFalse(contribution["cohort_eligible"])
+
+    def test_h4_uses_its_own_t3_source_not_upstream_fusion_horizons(self):
+        item = _item("300141")
+        item["intended_horizon"] = 3
+        item["strategy_source"] = "h4_t3"
+        item["strategy_sources"] = [{
+            "strategy_source": "h4_t3",
+            "source_status": "candidate",
+            "intended_horizon": 3,
+        }]
+        item["upstream_strategy_sources"] = [
+            {
+                "strategy_source": "chanlun_structure",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "trend_continuation",
+                "source_status": "candidate",
+                "intended_horizon": 5,
+            },
+        ]
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("h4_t3", "h4-v1", [item])],
+        )
+
+        contribution = entries[0]["strategy_contributions"][0]
+        self.assertEqual(3, contribution["intended_horizon"])
+        self.assertEqual([3], contribution["source_horizons"])
+        self.assertEqual("verified", contribution["horizon_status"])
+        self.assertTrue(contribution["cohort_eligible"])
+        self.assertEqual(
+            "chanlun_structure",
+            contribution["reason_snapshot"][
+                "upstream_strategy_sources"
+            ][0]["strategy_source"],
+        )
+
+    def test_daily_pure_is_a_candidate_universe_not_a_recommendation(self):
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_pure", "", [_item()])],
+        )
+
+        contribution = entries[0]["strategy_contributions"][0]
+        self.assertEqual(
+            contribution["strategy_version"],
+            "daily-pure-candidate-universe-v1",
+        )
+        self.assertEqual(contribution["version_status"], "verified")
+        self.assertEqual(contribution["publication_status"], "candidate")
+        self.assertEqual(contribution["user_action"], "watch")
+        self.assertFalse(contribution["cohort_eligible"])
+
+    def test_daily_fusion_only_publishes_recommend_decisions(self):
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy(
+                "daily_fusion",
+                "",
+                [
+                    _item("300308", "recommend"),
+                    _item("300139", "observe"),
+                ],
+            )],
+        )
+
+        by_code = {
+            entry["code"]: entry["strategy_contributions"][0]
+            for entry in entries
+        }
+        self.assertEqual(
+            by_code["300308"]["strategy_version"],
+            "daily-fusion-main-v2",
+        )
+        self.assertEqual(by_code["300308"]["publication_status"], "published")
+        self.assertEqual(by_code["300308"]["user_action"], "recommendation")
+        self.assertTrue(by_code["300308"]["cohort_eligible"])
+        self.assertEqual(by_code["300139"]["publication_status"], "internal")
+        self.assertEqual(by_code["300139"]["user_action"], "watch")
+        self.assertFalse(by_code["300139"]["cohort_eligible"])
+
     def test_numpy_vector_fields_are_frozen_as_json_arrays(self):
         item = _item()
         item["dates"] = np.array(["2026-08-19", "2026-08-20"])
@@ -196,8 +354,8 @@ class RecommendationLedgerTests(unittest.TestCase):
             "2026-08-20",
             "2026-08-20T15:10:00+08:00",
             [_strategy(
-                "daily_pure",
-                "pure-v1",
+                "daily_fusion",
+                "fusion-v2",
                 [
                     _item("300308", "recommend"),
                     _item("300139", "observe"),
@@ -214,30 +372,34 @@ class RecommendationLedgerTests(unittest.TestCase):
         self.assertEqual(actions["300139"], "watch")
         self.assertEqual(actions["688041"], "none")
 
-    def test_explicit_candidate_strategy_still_respects_a_present_gate_decision(self):
+    def test_unvalidated_observation_strategies_never_enter_recommendation_cohort(self):
         observe = _item("300308", "observe")
         no_gate = _item("300139", "recommend")
         no_gate.pop("decision_engine_v1")
-        entries = build_recommendation_entries(
-            "2026-08-20",
-            "2026-08-20T15:10:00+08:00",
-            [_strategy(
-                "next_day_boom",
-                "boom-v1",
-                [observe, no_gate],
-                intended_horizon=1,
-                published_decision_code="recommend",
-            )],
-        )
+        for strategy_name, horizon in (
+            ("next_day_boom", 1),
+            ("luojie_pool", None),
+        ):
+            entries = build_recommendation_entries(
+                "2026-08-20",
+                "2026-08-20T15:10:00+08:00",
+                [_strategy(
+                    strategy_name,
+                    "observation-v1",
+                    [observe, no_gate],
+                    intended_horizon=horizon,
+                    published_decision_code="recommend",
+                )],
+            )
 
-        by_code = {
-            entry["code"]: entry["strategy_contributions"][0]
-            for entry in entries
-        }
-        self.assertEqual(by_code["300308"]["user_action"], "watch")
-        self.assertFalse(by_code["300308"]["cohort_eligible"])
-        self.assertEqual(by_code["300139"]["user_action"], "recommendation")
-        self.assertTrue(by_code["300139"]["cohort_eligible"])
+            by_code = {
+                entry["code"]: entry["strategy_contributions"][0]
+                for entry in entries
+            }
+            for contribution in by_code.values():
+                self.assertEqual(contribution["publication_status"], "internal")
+                self.assertEqual(contribution["user_action"], "watch")
+                self.assertFalse(contribution["cohort_eligible"])
 
     def test_append_is_idempotent_and_never_rewrites_existing_reason(self):
         with tempfile.TemporaryDirectory() as tmpdir:

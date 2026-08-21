@@ -7,6 +7,152 @@ from chanlun.decision_engine import evaluate_stock
 
 
 class DecisionEngineTestCase(unittest.TestCase):
+    def test_fusion_owned_market_fact_is_not_scored_again(self):
+        fusion_effect = {
+            "fact_code": "index_above_ema50",
+            "owner_pool": "picks_fusion",
+            "stage": "fusion_admission",
+            "effect": "gate",
+            "reason_code": "fusion_weak_market_gate",
+            "outcome": "admitted",
+        }
+        result = evaluate_stock({
+            "code": "NO-DOUBLE-MARKET",
+            "trend_type": "上升趋势",
+            "market_regime": "weak",
+            "market_effects": [fusion_effect],
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-08-20",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        })
+
+        self.assertNotIn("弱市风险", result["sentiment"]["reasons"])
+        self.assertIn(
+            "弱市风险",
+            result["legacy_h4_v1"]["sentiment"]["reasons"],
+        )
+        index_effects = [
+            row for row in result["market_effects"]
+            if row["fact_code"] == "index_above_ema50"
+        ]
+        self.assertEqual(index_effects, [fusion_effect])
+
+    def test_arbitrary_confirmation_text_is_not_pullback_confirmation(self):
+        result = evaluate_stock({
+            "code": "UNTYPED-CONFIRMATION",
+            "trend_type": "上升趋势",
+            "confirmed_by": "这是任意非空确认文本",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-08-20",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        })
+
+        self.assertNotIn("回踩确认", result["structure"]["reasons"])
+
+    def test_trend_continuation_uses_reference_position_not_low_position_percentile(self):
+        result = evaluate_stock({
+            "code": "TREND-NEAR-REFERENCE",
+            "source_channel": "trend_continuation",
+            "source_status": "candidate",
+            "trend_type": "up",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "position_distance_pct": 2.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "channel_reference:platform_high_20d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-08-20",
+            "position_absolute_percentile": 95.0,
+            "position_absolute_window": 120,
+            "sector_strength_label": "强",
+            "volume_ratio": 1.8,
+            "change_pct": 3.0,
+            "gap_pct": 1.0,
+        })
+
+        self.assertEqual(result["decision_code"], "recommend")
+        self.assertIn("趋势向上", result["structure"]["reasons"])
+        self.assertIn("趋势参考位附近", result["position"]["reasons"])
+        self.assertNotIn("120日收盘分位高位风险", result["position"]["reasons"])
+
+    def test_trend_continuation_overextension_is_rejected_by_own_position_contract(self):
+        result = evaluate_stock({
+            "code": "TREND-OVEREXTENDED",
+            "source_channel": "trend_continuation",
+            "source_status": "candidate",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "position_distance_pct": 15.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "channel_reference:platform_high_20d",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-08-20",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+            "sector_strength_label": "强",
+            "volume_ratio": 1.8,
+            "change_pct": 4.0,
+            "gap_pct": 1.0,
+        })
+
+        self.assertEqual(result["decision_code"], "reject")
+        self.assertIn("远离趋势参考位", result["position"]["reasons"])
+        self.assertEqual(
+            result["legacy_h4_v1"]["structure"]["score"],
+            50,
+        )
+
+    def test_observation_source_status_caps_an_otherwise_recommendable_stock(self):
+        result = evaluate_stock({
+            "code": "SOURCE-OBSERVE",
+            "source_status": "observe",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "position_distance_pct": 3.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "daily_support",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+            "sector_strength_label": "强",
+            "volume_ratio": 1.8,
+        })
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["source_status_cap"], "observe")
+        self.assertIn("来源池", result["decision"])
+
+    def test_insufficient_source_status_also_caps_recommendation(self):
+        result = evaluate_stock({
+            "code": "SOURCE-INSUFFICIENT",
+            "source_status": "insufficient",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_phase": "主升",
+            "position_distance_pct": 3.0,
+            "position_reference_price": 10.0,
+            "position_reference_type": "daily_support",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+            "sector_strength_label": "强",
+            "volume_ratio": 1.8,
+        })
+
+        self.assertEqual(result["decision_code"], "observe")
+        self.assertEqual(result["source_status_cap"], "observe")
+
+
     def test_verified_top_level_position_evidence_is_consumed(self):
         result = evaluate_stock({
             "code": "VERIFIED",

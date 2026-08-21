@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
+from copy import deepcopy
 from datetime import date
 import json
 import math
@@ -146,7 +147,7 @@ def _wide_feature_vector(row):
     features = _features(row)
     if not isinstance(features, Mapping):
         raise H4T3PoolError("candidate features are missing")
-    decision = _mapping(features.get("decision_engine_v1")) or {}
+    decision = _frozen_decision_v1(features)
     sentiment = _mapping(decision.get("sentiment")) or {}
     structure = _mapping(decision.get("structure")) or {}
     position = _mapping(decision.get("position")) or {}
@@ -218,7 +219,7 @@ def build_tail_feature_vector(row):
     health = _mapping(features.get("gf_dma_health")) or {}
     distance = _mapping(health.get("distance_pct")) or {}
     best = _mapping(features.get("best_buy_point")) or {}
-    position = _mapping(features.get("decision_engine_v1")) or {}
+    position = _frozen_decision_v1(features)
     position = _mapping(position.get("position")) or {}
     change, change_missing = _number(best.get("change_pct", features.get("change_pct")))
     volume, volume_missing = _number(best.get("volume_ratio", features.get("volume_ratio")))
@@ -253,6 +254,12 @@ def build_tail_feature_vector(row):
     if vector.shape != (FEATURE_DIMENSION,) or not np.isfinite(vector).all():
         raise H4T3PoolError("tail feature vector is invalid")
     return vector
+
+
+def _frozen_decision_v1(features):
+    decision = _mapping(features.get("decision_engine_v1")) or {}
+    legacy = _mapping(decision.get("legacy_h4_v1")) or {}
+    return legacy or decision
 
 
 def is_continuation_microstate(row):
@@ -397,7 +404,27 @@ def build_h4_t3_pool(picks_fusion, trade_date, model_path=None):
         raise H4T3PoolError("picks_fusion is invalid")
     model = load_model(model_path)
     predict, mature = _fit_predictor(model["training_rows"], trade_date)
-    microstate = [row for row in picks_fusion if is_continuation_microstate(row)]
+    source_candidates = []
+    for parent in picks_fusion:
+        variants = [
+            row
+            for row in parent.get("strategy_variants") or []
+            if isinstance(row, Mapping)
+        ] if isinstance(parent, Mapping) else []
+        if not variants:
+            source_candidates.append(parent)
+            continue
+        for variant in variants:
+            if variant.get("source_channel") != "trend_continuation":
+                continue
+            source_item = deepcopy(dict(variant))
+            source_item["strategy_sources"] = deepcopy(
+                list(parent.get("strategy_sources") or [])
+            )
+            source_candidates.append(source_item)
+    microstate = [
+        row for row in source_candidates if is_continuation_microstate(row)
+    ]
     eligible = []
     rejected_base = rejected_tail = rejected_q10 = 0
     for candidate in microstate:
@@ -411,11 +438,60 @@ def build_h4_t3_pool(picks_fusion, trade_date, model_path=None):
         if failed_base or failed_tail or failed_q10:
             continue
         item = dict(candidate)
+        upstream_sources = candidate.get("strategy_sources")
+        item["upstream_strategy_sources"] = deepcopy(
+            list(upstream_sources)
+            if isinstance(upstream_sources, (list, tuple)) else []
+        )
+        item["strategy_source"] = "h4_t3"
+        item["intended_horizon"] = 3
+        item["strategy_sources"] = [{
+            "strategy_source": "h4_t3",
+            "source_status": "candidate",
+            "reason": "H4 T+3 K30 tail-safe 全部门槛通过",
+            "intended_horizon": 3,
+            "evidence_refs": [
+                "h4_predictions",
+                "h4_model:{}".format(STRATEGY_VERSION),
+            ],
+        }]
         item["h4_predictions"] = {
             key: round(float(value), 6) for key, value in prediction.items()
         }
         item["reason"] = "H4 T+3 K30 tail-safe 全部门槛通过"
+        item["upstream_decision_engine_v1"] = deepcopy(
+            candidate.get("decision_engine_v1") or {}
+        )
+        item["decision_engine_v1"] = {
+            "version": STRATEGY_VERSION,
+            "decision": "推荐",
+            "decision_code": "recommend",
+            "total_score": item.get("score"),
+            "reason": item["reason"],
+            "risk_reasons": [],
+            "h4_predictions": deepcopy(item["h4_predictions"]),
+        }
         eligible.append(item)
+    eligible_by_code = {}
+    for item in eligible:
+        code = str(item.get("code") or "")
+        current = eligible_by_code.get(code)
+        rank = (
+            float(item["h4_predictions"]["pred_tail_loss5"]),
+            -float(item["h4_predictions"]["pred_return"]),
+            -float(_finite(item.get("score")) or 0.0),
+        )
+        if current is None:
+            eligible_by_code[code] = item
+            continue
+        current_rank = (
+            float(current["h4_predictions"]["pred_tail_loss5"]),
+            -float(current["h4_predictions"]["pred_return"]),
+            -float(_finite(current.get("score")) or 0.0),
+        )
+        if rank < current_rank:
+            eligible_by_code[code] = item
+    eligible = list(eligible_by_code.values())
     eligible.sort(
         key=lambda row: (
             -float(_finite(row.get("score")) or 0.0),

@@ -10,6 +10,8 @@ import math
 from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+import config
+
 DecisionResult = Dict[str, Any]
 
 
@@ -37,16 +39,95 @@ def evaluate_stock(
     """
     stock_dict = _to_dict(stock)
     context = _to_dict(market_context)
-    position_known = _safe_float(
-        _extract_absolute_position_percentile(stock_dict), default=None
-    ) is not None
+    position_known = _has_verified_position_evidence(stock_dict)
 
     structure_score, structure_reasons = _calc_structure_score(stock_dict, context)
     position_score, position_reasons = _calc_position_score(stock_dict)
-    sentiment_score, sentiment_reasons = _calc_sentiment_score(stock_dict, context)
+    sentiment_score, sentiment_reasons = _calc_sentiment_score(
+        stock_dict, context, respect_market_ownership=True
+    )
 
     total_score = structure_score + position_score + sentiment_score
+    source_status_cap = _source_status_cap(stock_dict)
+    decision, decision_code, risk_reasons = _classify_decision(
+        position_known=position_known,
+        position_score=position_score,
+        structure_score=structure_score,
+        total_score=total_score,
+        context=context,
+        source_status_cap=source_status_cap,
+    )
 
+    legacy_stock = dict(stock_dict)
+    if str(stock_dict.get("source_channel") or "").strip() == "trend_continuation":
+        legacy_stock["trend_type"] = "up"
+    legacy_structure_score, legacy_structure_reasons = _calc_structure_score(
+        legacy_stock, context, normalize_trend=False
+    )
+    legacy_position_score, legacy_position_reasons = _calc_low_position_score(
+        legacy_stock
+    )
+    legacy_sentiment_score, legacy_sentiment_reasons = _calc_sentiment_score(
+        legacy_stock, context, respect_market_ownership=False
+    )
+    legacy_total_score = (
+        legacy_structure_score + legacy_position_score + legacy_sentiment_score
+    )
+    _, legacy_decision_code, legacy_risk_reasons = _classify_decision(
+        position_known=_safe_float(
+            _extract_absolute_position_percentile(stock_dict), default=None
+        ) is not None,
+        position_score=legacy_position_score,
+        structure_score=legacy_structure_score,
+        total_score=legacy_total_score,
+        context=context,
+        source_status_cap=source_status_cap,
+    )
+
+    return {
+        "version": DECISION_VERSION,
+        "code": stock_dict.get("code", "UNKNOWN"),
+        "name": stock_dict.get("name", ""),
+        "decision": decision,
+        "decision_code": decision_code,
+        "total_score": total_score,
+        "structure": {"score": structure_score, "reasons": structure_reasons},
+        "position": {"score": position_score, "reasons": position_reasons},
+        "sentiment": {"score": sentiment_score, "reasons": sentiment_reasons},
+        "risk_reasons": risk_reasons,
+        "source_status_cap": source_status_cap,
+        "market_effects": _collect_market_effects(
+            stock_dict, context, risk_reasons
+        ),
+        "legacy_h4_v1": {
+            "decision_code": legacy_decision_code,
+            "total_score": legacy_total_score,
+            "structure": {
+                "score": legacy_structure_score,
+                "reasons": legacy_structure_reasons,
+            },
+            "position": {
+                "score": legacy_position_score,
+                "reasons": legacy_position_reasons,
+            },
+            "sentiment": {
+                "score": legacy_sentiment_score,
+                "reasons": legacy_sentiment_reasons,
+            },
+            "risk_reasons": legacy_risk_reasons,
+        },
+    }
+
+
+def _classify_decision(
+    *,
+    position_known: bool,
+    position_score: int,
+    structure_score: int,
+    total_score: int,
+    context: Mapping[str, Any],
+    source_status_cap: str,
+) -> Tuple[str, str, List[str]]:
     if not position_known:
         decision = WATCH_MISSING_POSITION
         decision_code = OBSERVE
@@ -74,29 +155,52 @@ def evaluate_stock(
         and structure_score >= 0
         and total_score >= 20
     ):
-        # A cold market blocks execution, but it should not relabel every
-        # structurally valid, non-high-position candidate as a stock-level
-        # rejection.  Keep these in the watch channel while high/poor setups
-        # remain rejected.
         decision = WATCH
         decision_code = OBSERVE
         risk_reasons.append("弱市只观察")
 
-    return {
-        "version": DECISION_VERSION,
-        "code": stock_dict.get("code", "UNKNOWN"),
-        "name": stock_dict.get("name", ""),
-        "decision": decision,
-        "decision_code": decision_code,
-        "total_score": total_score,
-        "structure": {"score": structure_score, "reasons": structure_reasons},
-        "position": {"score": position_score, "reasons": position_reasons},
-        "sentiment": {"score": sentiment_score, "reasons": sentiment_reasons},
-        "risk_reasons": risk_reasons,
+    if source_status_cap == OBSERVE and decision_code == RECOMMEND:
+        decision = "观察（来源池未取得推荐资格）"
+        decision_code = OBSERVE
+    elif source_status_cap == REJECT and decision_code != REJECT:
+        decision = "不推荐（来源池已拒绝）"
+        decision_code = REJECT
+    return decision, decision_code, risk_reasons
+
+
+def _source_status_cap(stock: Mapping[str, Any]) -> str:
+    explicit = str(stock.get("source_status") or "").strip().lower()
+    if explicit == REJECT:
+        return REJECT
+    if explicit in {OBSERVE, "insufficient", "watch", "internal"}:
+        return OBSERVE
+    source_rows = _to_list(stock.get("strategy_sources"))
+    statuses = {
+        str(_to_dict(row).get("source_status") or "").strip().lower()
+        for row in source_rows
     }
+    statuses.discard("")
+    if statuses and "candidate" not in statuses:
+        return REJECT if REJECT in statuses else OBSERVE
+    if str(stock.get("view") or "").strip().lower() == "observation":
+        return OBSERVE
+    if str(stock.get("tier") or "").strip().lower() == "watch":
+        return OBSERVE
+    best_buy = _to_dict(stock.get("best_buy_point"))
+    if (
+        best_buy.get("daily_startup_grade") in {"weak", "pullback"}
+        or best_buy.get("sublevel_confirm_grade") in {"B", "C"}
+    ):
+        return OBSERVE
+    return "candidate"
 
 
-def _calc_structure_score(stock: Mapping[str, Any], context: Mapping[str, Any]) -> Tuple[int, List[str]]:
+def _calc_structure_score(
+    stock: Mapping[str, Any],
+    context: Mapping[str, Any],
+    *,
+    normalize_trend: bool = True,
+) -> Tuple[int, List[str]]:
     score = 0
     reasons: List[str] = []
 
@@ -105,7 +209,9 @@ def _calc_structure_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
         reasons.append("突破结构")
 
     trend = stock.get("trend_type") or _resolve_market_trend(context)
-    if trend == "上升趋势":
+    if normalize_trend:
+        trend = _normalize_trend_type(trend)
+    if trend in {"上升趋势", "uptrend"}:
         score += 20
         reasons.append("趋势向上")
     elif trend == "震荡":
@@ -149,6 +255,12 @@ def _calc_structure_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
 
 
 def _calc_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
+    if str(stock.get("source_channel") or "").strip() == "trend_continuation":
+        return _calc_trend_position_score(stock)
+    return _calc_low_position_score(stock)
+
+
+def _calc_low_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
     score = 0
     reasons: List[str] = []
 
@@ -191,7 +303,52 @@ def _calc_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
     return score, reasons
 
 
-def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) -> Tuple[int, List[str]]:
+def _calc_trend_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:
+    score = 0
+    reasons: List[str] = []
+    distance = _safe_float(stock.get("position_distance_pct"), default=None)
+    gap_pct = _safe_float(stock.get("gap_pct"), default=0.0) or 0.0
+    change_pct = _safe_float(stock.get("change_pct"), default=0.0) or 0.0
+
+    if distance is None:
+        score -= 20
+        reasons.append("趋势参考位信息不足")
+    elif distance < -0.5:
+        score -= 35
+        reasons.append("跌破趋势参考位")
+    elif distance <= 4.0:
+        score += 30
+        reasons.append("趋势参考位附近")
+    elif distance <= float(config.TREND_CONTINUATION_MAX_EXTENSION_PCT):
+        score += 10
+        reasons.append("趋势延伸可控")
+    else:
+        score -= 35
+        reasons.append("远离趋势参考位")
+
+    if gap_pct >= float(config.TREND_CONTINUATION_MAX_GAP_PCT):
+        score -= 20
+        reasons.append("趋势跳空过大")
+    if change_pct >= float(config.LIMIT_UP_THRESHOLD):
+        score -= 25
+        reasons.append("涨停当日不追")
+    if _safe_bool(stock.get("is_extended_move")) or _safe_bool(stock.get("overheat")):
+        score -= 25
+        reasons.append("趋势加速过热")
+
+    recent_run_days = _safe_int(stock.get("recent_run_days"), default=None)
+    if recent_run_days is not None and recent_run_days >= 5:
+        score -= 15
+        reasons.append("趋势连续拉升过久")
+    return score, reasons
+
+
+def _calc_sentiment_score(
+    stock: Mapping[str, Any],
+    context: Mapping[str, Any],
+    *,
+    respect_market_ownership: bool = True,
+) -> Tuple[int, List[str]]:
     score = 0
     reasons: List[str] = []
 
@@ -203,7 +360,9 @@ def _calc_sentiment_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
         score += 15
         reasons.append("放量启动")
 
-    phase = _resolve_market_phase(stock, context)
+    phase, _ = _resolve_market_phase_detail(
+        stock, context, respect_market_ownership=respect_market_ownership
+    )
     if phase == "主升":
         score += 25
         reasons.append("主升周期")
@@ -275,6 +434,32 @@ def _extract_absolute_position_percentile(stock: Mapping[str, Any]) -> Any:
     return percentile
 
 
+def _has_verified_position_evidence(stock: Mapping[str, Any]) -> bool:
+    if str(stock.get("source_channel") or "").strip() != "trend_continuation":
+        return _safe_float(
+            _extract_absolute_position_percentile(stock), default=None
+        ) is not None
+    return bool(
+        stock.get("position_data_status") == "verified"
+        and _safe_float(stock.get("position_distance_pct"), default=None) is not None
+        and (_safe_float(stock.get("position_reference_price"), default=0.0) or 0.0) > 0
+        and str(stock.get("position_reference_type") or "").strip()
+        and _is_iso_date(stock.get("position_evidence_date"))
+    )
+
+
+def _normalize_trend_type(value: Any) -> str:
+    normalized = str(value or "").strip()
+    lowered = normalized.lower()
+    if lowered in {"up", "uptrend", "bull", "bullish"} or normalized in {
+        "上升趋势", "上涨趋势", "趋势向上",
+    }:
+        return "uptrend"
+    if lowered in {"range", "sideways", "neutral"} or normalized == "震荡":
+        return "震荡"
+    return normalized
+
+
 def _market_sentiment_risk_reasons(context: Mapping[str, Any]) -> List[str]:
     sentiment = _to_dict(context.get("market_sentiment"))
     reasons: List[str] = []
@@ -298,28 +483,49 @@ def _is_iso_date(value: Any) -> bool:
     return parsed.isoformat() == normalized
 
 
-def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:
+def _resolve_market_phase_detail(
+    stock: Mapping[str, Any],
+    context: Mapping[str, Any],
+    *,
+    respect_market_ownership: bool = True,
+) -> Tuple[str, str]:
+    owned_index_fact = (
+        respect_market_ownership
+        and _has_owned_market_fact(stock, "index_above_ema50")
+    )
     for key in ("market_phase", "market_regime", "market_trend"):
+        if key == "market_regime" and owned_index_fact:
+            continue
         phase = stock.get(key)
         if isinstance(phase, str) and phase.strip():
-            return _normalize_market_phase(phase)
+            fact_code = (
+                "index_above_ema50"
+                if key == "market_regime" and phase.strip().lower() in {"strong", "weak"}
+                else "explicit_{}".format(key)
+            )
+            return _normalize_market_phase(phase), fact_code
 
     for key in ("market_phase", "market_regime", "market_trend"):
         phase = context.get(key)
         if isinstance(phase, str) and phase.strip():
-            return _normalize_market_phase(phase)
+            return _normalize_market_phase(phase), "context_{}".format(key)
 
     market_indices = _to_dict(context.get("market_indices"))
     shanghai = _to_dict(market_indices.get("上证指数"))
     change_pct = _safe_float(shanghai.get("change_pct"), default=None)
     if change_pct is not None:
         if change_pct >= 1.0:
-            return "主升"
+            return "主升", "shanghai_change_pct"
         if change_pct <= -1.5:
-            return "退潮"
-        return "震荡"
+            return "退潮", "shanghai_change_pct"
+        return "震荡", "shanghai_change_pct"
 
-    return ""
+    return "", ""
+
+
+def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:
+    phase, _ = _resolve_market_phase_detail(stock, context)
+    return phase
 
 
 def _normalize_market_phase(phase: str) -> str:
@@ -339,6 +545,75 @@ def _normalize_market_phase(phase: str) -> str:
 def _resolve_market_trend(context: Mapping[str, Any]) -> str:
     phase = _resolve_market_phase({}, context)
     return phase
+
+
+def _has_owned_market_fact(stock: Mapping[str, Any], fact_code: str) -> bool:
+    return any(
+        isinstance(row, Mapping)
+        and row.get("fact_code") == fact_code
+        and str(row.get("owner_pool") or "").strip()
+        and str(row.get("stage") or "").strip()
+        and str(row.get("effect") or "").strip()
+        and str(row.get("reason_code") or "").strip()
+        for row in _to_list(stock.get("market_effects"))
+    )
+
+
+def _collect_market_effects(
+    stock: Mapping[str, Any],
+    context: Mapping[str, Any],
+    risk_reasons: Iterable[str],
+) -> List[Dict[str, Any]]:
+    effects = [
+        dict(row)
+        for row in _to_list(stock.get("market_effects"))
+        if isinstance(row, Mapping)
+    ]
+    phase, fact_code = _resolve_market_phase_detail(stock, context)
+    if phase and fact_code:
+        delta = {
+            "主升": 25,
+            "震荡": 5,
+            "退潮": -30,
+            "弱市": -10,
+        }.get(phase, -5)
+        effects.append({
+            "fact_code": fact_code,
+            "owner_pool": _decision_owner_pool(stock),
+            "stage": "decision_score",
+            "effect": "bonus" if delta > 0 else "penalty",
+            "reason_code": "decision_market_phase_{}".format(
+                "positive" if delta > 0 else "negative"
+            ),
+            "score_delta": delta,
+        })
+    for reason in risk_reasons:
+        if reason not in {"市场情绪偏冷", "市场情绪转弱"}:
+            continue
+        effects.append({
+            "fact_code": (
+                "market_sentiment_score"
+                if reason == "市场情绪偏冷"
+                else "market_sentiment_turning_signal"
+            ),
+            "owner_pool": _decision_owner_pool(stock),
+            "stage": "decision_gate",
+            "effect": "gate",
+            "reason_code": (
+                "market_sentiment_cold_cap"
+                if reason == "市场情绪偏冷"
+                else "market_sentiment_weakening_cap"
+            ),
+        })
+    return effects
+
+
+def _decision_owner_pool(stock: Mapping[str, Any]) -> str:
+    return str(
+        stock.get("strategy_source")
+        or stock.get("source_channel")
+        or "general_decision"
+    ).strip()
 
 
 def _is_sector_hot(stock: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
@@ -374,15 +649,33 @@ def _is_volume_expansion(stock: Mapping[str, Any]) -> bool:
 
 
 def _is_confirmed_by(stock: Mapping[str, Any]) -> bool:
-    confirmed_by = stock.get("confirmed_by")
-    if isinstance(confirmed_by, str) and confirmed_by.strip():
-        return True
     bp = _to_dict(stock.get("best_buy_point"))
-    confirmed_by_bp = bp.get("confirmed_by")
-    if isinstance(confirmed_by_bp, str) and confirmed_by_bp.strip():
-        return True
-    return _has_nonempty_strings(_to_list(stock.get("confirmations"))) or _has_nonempty_strings(
-        _to_list(_to_dict(stock.get("best_buy_point")).get("confirmations"))
+    facts = _to_list(stock.get("confirmation_facts")) + _to_list(
+        bp.get("confirmation_facts")
+    )
+    typed_facts = [row for row in facts if isinstance(row, Mapping)]
+    if typed_facts:
+        return any(row.get("eligible") is True for row in typed_facts)
+
+    texts = [stock.get("confirmed_by"), bp.get("confirmed_by")]
+    texts.extend(_to_list(stock.get("confirmations")))
+    texts.extend(_to_list(bp.get("confirmations")))
+    accepted_tokens = (
+        "底分型",
+        "MACD金叉",
+        "关键位不破",
+        "EMA5收复",
+        "回踩不破",
+        "二买",
+        "三买",
+        "两阳夹",
+        "突破位不破",
+        "EMA5维持",
+        "缩量回踩",
+    )
+    return any(
+        any(token in str(text or "") for token in accepted_tokens)
+        for text in texts
     )
 
 

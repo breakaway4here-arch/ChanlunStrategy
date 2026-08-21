@@ -2,11 +2,116 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import chanlun.candidate_funnel as candidate_funnel_module
 from chanlun.candidate_funnel import CandidateFunnel, FUNNEL_STAGES
 from chanlun.market_history_store import MarketHistoryStore
 
 
 class CandidateFunnelTest(unittest.TestCase):
+    def test_retrieval_provenance_and_source_evidence_are_preserved(self):
+        funnel = CandidateFunnel("run-provenance", "2026-07-15")
+        funnel.register({
+            "code": "000001",
+            "source_channel": "trend_continuation",
+            "retrieval_pool": "base",
+            "retrieval_sources": ["trend", "score_fill"],
+            "retrieval_evidence_refs": [
+                "retrieval:trend_retrieval_score",
+                "retrieval:score_fill",
+            ],
+            "strategy_sources": [
+                {
+                    "strategy_source": "trend_continuation",
+                    "source_status": "candidate",
+                    "reason": "趋势确认",
+                    "evidence_refs": ["trend:daily", "trend:30m"],
+                }
+            ],
+        })
+        funnel.register({
+            "code": "000001",
+            "retrieval_sources": ["neutral"],
+            "retrieval_evidence_refs": ["retrieval:neutral_retrieval_score"],
+            "strategy_sources": [
+                {
+                    "strategy_source": "chanlun_structure",
+                    "source_status": "candidate",
+                    "reason": "三买结构成立",
+                    "evidence_refs": ["structure:daily"],
+                }
+            ],
+        })
+
+        event = funnel.event_for("000001")
+        self.assertIn("retrieval_evidence_refs", event)
+        self.assertIn("strategy_sources", event)
+        self.assertEqual(
+            event.get("retrieval_sources"),
+            ["trend", "score_fill", "neutral"],
+        )
+        self.assertEqual(
+            event.get("retrieval_evidence_refs"),
+            [
+                "retrieval:trend_retrieval_score",
+                "retrieval:score_fill",
+                "retrieval:neutral_retrieval_score",
+            ],
+        )
+        self.assertEqual(
+            (event.get("strategy_sources") or [{}])[0].get("strategy_source"),
+            "trend_continuation",
+        )
+        self.assertEqual(
+            (event.get("strategy_sources") or [{}])[0].get("evidence_refs"),
+            ["trend:daily", "trend:30m"],
+        )
+        self.assertEqual(
+            [
+                row.get("strategy_source")
+                for row in event.get("strategy_sources") or []
+            ],
+            ["trend_continuation", "chanlun_structure"],
+        )
+
+    def test_confirmed_candidate_merge_keeps_parallel_source_snapshots(self):
+        merge = getattr(
+            candidate_funnel_module,
+            "merge_confirmed_candidates",
+            None,
+        )
+        self.assertIsNotNone(merge)
+        if merge is None:
+            return
+
+        merged = merge([
+            {
+                "code": "000001",
+                "name": "测试股",
+                "strategy_source": "chanlun_structure",
+                "source_status": "candidate",
+                "reason": "三买结构成立",
+                "evidence_refs": ["structure:daily"],
+            },
+            {
+                "code": "000001",
+                "name": "测试股",
+                "strategy_source": "trend_continuation",
+                "source_status": "candidate",
+                "reason": "趋势延续确认",
+                "evidence_refs": ["trend:daily", "trend:30m"],
+            },
+        ])
+
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(
+            [
+                row["strategy_source"]
+                for row in merged[0]["strategy_sources"]
+            ],
+            ["chanlun_structure", "trend_continuation"],
+        )
+        self.assertNotIn("resonance_bonus", merged[0])
+
     def test_first_failure_is_recorded_once_and_raw_features_are_preserved(self):
         funnel = CandidateFunnel("run-1", "2026-07-15")
         funnel.register(
@@ -97,8 +202,51 @@ class CandidateFunnelTest(unittest.TestCase):
         self.assertEqual("observe", funnel.event_for("000002")["final_state"])
         self.assertEqual("reject", funnel.event_for("000003")["final_state"])
         self.assertEqual(
-            {"main": 1, "observe": 1, "reject": 1},
+            {"main": 1, "candidate": 0, "observe": 1, "reject": 1},
             funnel.summary()["terminal_counts"],
+        )
+
+    def test_base_candidate_has_own_terminal_state(self):
+        funnel = CandidateFunnel("run-candidate", "2026-07-15")
+        funnel.register({"code": "000010"})
+
+        funnel.finalize(
+            main_codes=[],
+            observation_codes=[],
+            candidate_codes=["000010"],
+        )
+
+        self.assertEqual(
+            "candidate", funnel.event_for("000010")["final_state"]
+        )
+        self.assertEqual(
+            1, funnel.summary()["terminal_counts"]["candidate"]
+        )
+
+    def test_base_candidate_wins_when_same_code_also_appears_in_observation(self):
+        funnel = CandidateFunnel("run-overlap", "2026-07-15")
+        funnel.register({"code": "600001"})
+        funnel.record_source_failure(
+            "600001",
+            "daily_channel",
+            "observation_only",
+            strategy_source="strong_startup",
+        )
+
+        funnel.finalize(
+            main_codes=[],
+            candidate_codes=["600001"],
+            observation_codes=["600001"],
+        )
+
+        self.assertEqual(
+            "candidate", funnel.event_for("600001")["final_state"]
+        )
+        self.assertEqual("", funnel.event_for("600001")["first_failure_gate"])
+        self.assertEqual({}, funnel.summary()["first_failure_counts"])
+        self.assertEqual(
+            "observation_only",
+            funnel.event_for("600001")["source_failures"][0]["reason"],
         )
 
     def test_funnel_run_and_events_persist_to_single_market_database(self):

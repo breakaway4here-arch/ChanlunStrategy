@@ -1,3 +1,5 @@
+import hashlib
+import json
 import unittest
 from unittest.mock import patch
 
@@ -7,6 +9,8 @@ from chanlun.policy_experiment_metrics import (
     bottom_quality_guard_reasons,
     bottom_trend_guard_reasons,
     evaluate_recall_acceptance_gates,
+    evaluate_high_return_version_selection,
+    verify_oot_attestation,
     should_filter_for_policy,
     run_policy_experiment_metrics,
 )
@@ -62,7 +66,461 @@ def _make_fusion_pick(
     }
 
 
+def _returns_matching_scorecard(card):
+    count = card["sample_size"]
+    hit_count = round(card["hit_rate_ge_5"] * count / 100.0)
+    median_value = float(card["median_close_return"])
+    mean_value = float(card["mean_close_return"])
+    if median_value < 5.0 and 0 < hit_count < count // 2:
+        low_count = count - hit_count
+        lower_count = count // 2 - 1
+        high_value = max(
+            5.0,
+            median_value + count * (mean_value - median_value) / hit_count,
+        )
+        median_count = low_count - lower_count
+        lower_value = (
+            count * mean_value
+            - median_count * median_value
+            - hit_count * high_value
+        ) / lower_count
+        return (
+            [lower_value] * lower_count
+            + [median_value] * median_count
+            + [high_value] * hit_count
+        )
+    if median_value >= 5.0 and hit_count >= count // 2:
+        non_hit_count = count - hit_count
+        median_count = count // 2 + 1 - non_hit_count
+        high_count = hit_count - median_count
+        high_value = (
+            count * mean_value - median_count * median_value
+        ) / high_count
+        return (
+            [0.0] * non_hit_count
+            + [median_value] * median_count
+            + [high_value] * high_count
+        )
+    raise AssertionError("unsupported synthetic scorecard fixture")
+
+
 class PolicyExperimentMetricsTests(unittest.TestCase):
+    _TEST_CODE_SHA = "a" * 40
+
+    @staticmethod
+    def _high_return_card(
+        version,
+        *,
+        mean_return,
+        median_return,
+        hit5,
+        samples=120,
+        active_dates=24,
+        active_months=2,
+        source_pool="picks_fusion",
+        truth_verified=True,
+    ):
+        return {
+            "source_pool": source_pool,
+            "version": version,
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "sample_size": samples,
+            "active_dates": active_dates,
+            "active_months": active_months,
+            "mean_close_return": mean_return,
+            "median_close_return": median_return,
+            "hit_rate_ge_5": hit5,
+            "mean_mfe": 20.0,
+            "research_evidence": {
+                "truth_verified": truth_verified,
+                "leakage_free": True,
+                "maturity_verified": True,
+                "oot_locked": True,
+            },
+        }
+
+    @classmethod
+    def _verified_oot_attestation(cls, card, cutoff="2026-08-20"):
+        card["oot_cutoff"] = cutoff
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": cutoff,
+            "code_sha": cls._TEST_CODE_SHA,
+        }
+        active_dates = []
+        for index in range(card["active_dates"]):
+            month = "07" if index < (card["active_dates"] + 1) // 2 else "08"
+            day = index + 1 if month == "07" else index + 1 - (
+                (card["active_dates"] + 1) // 2
+            )
+            active_dates.append("2026-{}-{:02d}".format(month, day))
+        samples = []
+        close_returns = _returns_matching_scorecard(card)
+        for index in range(card["sample_size"]):
+            report_date = active_dates[index % len(active_dates)]
+            samples.append({
+                "report_date": report_date,
+                "target_date": cutoff,
+                "feature_as_of": report_date,
+                "maturity_status": "mature",
+                "close_return": close_returns[index],
+                "source_record_hash": hashlib.sha256(
+                    "{}:{}".format(card["version"], index).encode("utf-8")
+                ).hexdigest(),
+            })
+        artifact = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": samples,
+        }, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        attestation = dict(contract)
+        attestation["data_hash"] = hashlib.sha256(artifact).hexdigest()
+        return verify_oot_attestation(
+            card,
+            attestation,
+            artifact,
+            current_code_sha=cls._TEST_CODE_SHA,
+        )
+
+    def test_high_return_selection_blocks_outliers_and_enforces_oot_gates(self):
+        baseline = self._high_return_card(
+            "baseline-v1", mean_return=2.0, median_return=2.0, hit5=40.0
+        )
+        healthy = self._high_return_card(
+            "healthy-v2", mean_return=3.0, median_return=2.2, hit5=45.0
+        )
+        high_mean_low_mfe = self._high_return_card(
+            "high-mean-v2",
+            mean_return=3.5,
+            median_return=2.3,
+            hit5=55.0 / 120.0 * 100.0,
+        )
+        high_mean_low_mfe.update({
+            "mean_mfe": 1.0,
+            "loss_rate_le_minus_5": 30.0,
+            "worst_close_return": -20.0,
+        })
+        outlier = self._high_return_card(
+            "outlier-v2", mean_return=4.0, median_return=1.0, hit5=30.0
+        )
+        shadow = self._high_return_card(
+            "shadow-v2",
+            mean_return=6.0,
+            median_return=5.0,
+            hit5=60.0,
+            samples=50,
+            active_dates=12,
+        )
+        unverified = self._high_return_card(
+            "unverified-v2",
+            mean_return=8.0,
+            median_return=7.0,
+            hit5=70.0,
+            truth_verified=False,
+        )
+
+        attestations = [
+            self._verified_oot_attestation(card)
+            for card in (
+                baseline, outlier, shadow, healthy, high_mean_low_mfe
+            )
+        ]
+        result = evaluate_high_return_version_selection(
+            baseline,
+            [outlier, shadow, unverified, healthy, high_mean_low_mfe],
+            oot_attestations=attestations,
+        )
+        by_version = {
+            item["version"]: item for item in result["candidates"]
+        }
+
+        self.assertIsNone(result["selected_version"])
+        self.assertFalse(by_version["healthy-v2"]["promotion_eligible"])
+        self.assertEqual(
+            by_version["healthy-v2"]["comparison_status"],
+            "baseline_not_production",
+        )
+        self.assertFalse(by_version["high-mean-v2"]["promotion_eligible"])
+        self.assertIn(
+            "trusted_oot_provenance_unavailable",
+            by_version["high-mean-v2"]["hard_gate_reasons"],
+        )
+        self.assertTrue(by_version["outlier-v2"]["outlier_driven"])
+        self.assertFalse(by_version["outlier-v2"]["promotion_eligible"])
+        self.assertEqual(by_version["shadow-v2"]["research_tier"], "shadow")
+        self.assertFalse(by_version["shadow-v2"]["promotion_eligible"])
+        self.assertEqual(
+            by_version["unverified-v2"]["research_tier"],
+            "hard_gate_failed",
+        )
+        self.assertFalse(by_version["unverified-v2"]["promotion_eligible"])
+        self.assertEqual(result["ranking_metric"], "mean_close_return")
+        self.assertEqual(result["pareto_frontier"], [])
+        self.assertFalse(result["production_top_k_cap"])
+
+    def test_high_return_selection_requires_same_pool_horizon_and_entry_mode(self):
+        baseline = self._high_return_card(
+            "baseline-v1", mean_return=2.0, median_return=2.0, hit5=40.0
+        )
+        other_pool = self._high_return_card(
+            "other-v2",
+            mean_return=9.0,
+            median_return=8.0,
+            hit5=80.0,
+            source_pool="trend_continuation",
+        )
+
+        result = evaluate_high_return_version_selection(
+            baseline,
+            [other_pool],
+            oot_attestations=[
+                self._verified_oot_attestation(baseline),
+                self._verified_oot_attestation(other_pool),
+            ],
+        )
+
+        self.assertIsNone(result["selected_version"])
+        self.assertEqual(
+            result["candidates"][0]["comparison_status"],
+            "slice_mismatch",
+        )
+
+    def test_high_return_selection_does_not_trust_caller_boolean_flags(self):
+        baseline = self._high_return_card(
+            "baseline-v1", mean_return=2.0, median_return=2.0, hit5=40.0
+        )
+        candidate = self._high_return_card(
+            "candidate-v2", mean_return=3.0, median_return=2.2, hit5=45.0
+        )
+
+        result = evaluate_high_return_version_selection(
+            baseline, [candidate]
+        )
+
+        self.assertIsNone(result["selected_version"])
+        self.assertEqual(result["baseline_research_tier"], "hard_gate_failed")
+        self.assertIn(
+            "oot_attestation_verified",
+            result["baseline_hard_gate_reasons"],
+        )
+
+    def test_oot_attestation_rejects_tampered_data_and_contract_mismatch(self):
+        card = self._high_return_card(
+            "candidate-v2", mean_return=3.0, median_return=2.2, hit5=45.0
+        )
+        card["oot_cutoff"] = "2026-08-20"
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": card["oot_cutoff"],
+            "code_sha": self._TEST_CODE_SHA,
+        }
+        artifact = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": [{"report_date": "2026-07-01", "code": "000001"}],
+        }, sort_keys=True).encode("utf-8")
+        attestation = dict(contract)
+        attestation["data_hash"] = hashlib.sha256(artifact).hexdigest()
+
+        with self.assertRaisesRegex(ValueError, "data_hash"):
+            verify_oot_attestation(
+                card,
+                attestation,
+                artifact + b" ",
+                current_code_sha=self._TEST_CODE_SHA,
+            )
+
+        mismatched = dict(attestation)
+        mismatched["strategy_version"] = "other-v3"
+        with self.assertRaisesRegex(ValueError, "strategy_version"):
+            verify_oot_attestation(
+                card,
+                mismatched,
+                artifact,
+                current_code_sha=self._TEST_CODE_SHA,
+            )
+
+    def test_oot_attestation_requires_sample_gates_from_hashed_artifact(self):
+        card = self._high_return_card(
+            "candidate-v2", mean_return=3.0, median_return=2.2, hit5=45.0
+        )
+        card["oot_cutoff"] = "2026-08-20"
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": card["oot_cutoff"],
+            "code_sha": self._TEST_CODE_SHA,
+        }
+        artifact = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": [{"report_date": "2026-07-01"}],
+        }, sort_keys=True).encode("utf-8")
+        attestation = dict(contract)
+        attestation["data_hash"] = hashlib.sha256(artifact).hexdigest()
+
+        with self.assertRaisesRegex(ValueError, "sample_size"):
+            verify_oot_attestation(
+                card,
+                attestation,
+                artifact,
+                current_code_sha=self._TEST_CODE_SHA,
+            )
+
+    def test_oot_attestation_requires_row_provenance_and_time_boundaries(self):
+        card = self._high_return_card(
+            "candidate-v2",
+            mean_return=3.0,
+            median_return=2.2,
+            hit5=45.0,
+            samples=1,
+            active_dates=1,
+            active_months=1,
+        )
+        card["oot_cutoff"] = "2026-08-20"
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": card["oot_cutoff"],
+            "code_sha": self._TEST_CODE_SHA,
+        }
+        artifact = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": [{
+                "report_date": "2026-07-01",
+                "target_date": "2026-07-06",
+                "feature_as_of": "2026-07-01",
+                "maturity_status": "mature",
+            }],
+        }, sort_keys=True).encode("utf-8")
+        attestation = dict(contract)
+        attestation["data_hash"] = hashlib.sha256(artifact).hexdigest()
+
+        with self.assertRaisesRegex(ValueError, "source_record_hash"):
+            verify_oot_attestation(
+                card,
+                attestation,
+                artifact,
+                current_code_sha=self._TEST_CODE_SHA,
+            )
+
+    def test_oot_attestation_rejects_forged_high_return_scorecard(self):
+        card = self._high_return_card(
+            "forged-v2",
+            mean_return=99.0,
+            median_return=99.0,
+            hit5=100.0,
+            samples=3,
+            active_dates=3,
+            active_months=2,
+        )
+        card["oot_cutoff"] = "2026-08-20"
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": card["oot_cutoff"],
+            "code_sha": self._TEST_CODE_SHA,
+        }
+        samples = []
+        for index, (report_date, close_return) in enumerate((
+            ("2026-07-01", 1.0),
+            ("2026-07-02", 2.0),
+            ("2026-08-01", 3.0),
+        )):
+            samples.append({
+                "report_date": report_date,
+                "target_date": "2026-08-20",
+                "feature_as_of": report_date,
+                "maturity_status": "mature",
+                "close_return": close_return,
+                "source_record_hash": hashlib.sha256(
+                    "forged:{}".format(index).encode("utf-8")
+                ).hexdigest(),
+            })
+        artifact = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": samples,
+        }, sort_keys=True).encode("utf-8")
+        attestation = dict(contract)
+        attestation["data_hash"] = hashlib.sha256(artifact).hexdigest()
+
+        with self.assertRaisesRegex(ValueError, "mean_close_return"):
+            verify_oot_attestation(
+                card,
+                attestation,
+                artifact,
+                current_code_sha=self._TEST_CODE_SHA,
+            )
+
+    def test_high_return_selection_uses_attested_metrics_after_verification(self):
+        baseline = self._high_return_card(
+            "baseline-v1", mean_return=2.0, median_return=2.0, hit5=40.0
+        )
+        candidate = self._high_return_card(
+            "candidate-v2", mean_return=3.0, median_return=2.2, hit5=45.0
+        )
+        baseline_attestation = self._verified_oot_attestation(baseline)
+        candidate_attestation = self._verified_oot_attestation(candidate)
+        candidate["mean_close_return"] = 99.0
+
+        result = evaluate_high_return_version_selection(
+            baseline,
+            [candidate],
+            oot_attestations=[
+                baseline_attestation, candidate_attestation,
+            ],
+        )
+
+        self.assertIsNone(result["selected_version"])
+        self.assertAlmostEqual(
+            result["candidates"][0]["mean_close_return"], 3.0
+        )
+        self.assertIn(
+            "trusted_oot_provenance_unavailable",
+            result["candidates"][0]["hard_gate_reasons"],
+        )
+
+    def test_self_hashed_artifact_without_trusted_provenance_stays_shadow(self):
+        baseline = self._high_return_card(
+            "baseline-v1", mean_return=2.0, median_return=2.0, hit5=40.0
+        )
+        forged = self._high_return_card(
+            "forged-v2",
+            mean_return=99.0,
+            median_return=99.0,
+            hit5=100.0,
+        )
+        result = evaluate_high_return_version_selection(
+            baseline,
+            [forged],
+            oot_attestations=[
+                self._verified_oot_attestation(baseline),
+                self._verified_oot_attestation(forged),
+            ],
+        )
+
+        self.assertIsNone(result["selected_version"])
+        self.assertFalse(result["candidates"][0]["promotion_eligible"])
+        self.assertEqual(result["candidates"][0]["research_tier"], "shadow")
+        self.assertIn(
+            "trusted_oot_provenance_unavailable",
+            result["candidates"][0]["hard_gate_reasons"],
+        )
     def test_list_policy_experiments(self):
         names = set(list_policy_experiments())
         self.assertEqual(

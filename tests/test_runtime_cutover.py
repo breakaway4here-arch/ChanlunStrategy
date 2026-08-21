@@ -1,5 +1,8 @@
 import unittest
+import os
 from pathlib import Path
+import subprocess
+import sys
 
 import config
 from run import (
@@ -106,9 +109,27 @@ class RuntimeCutoverTest(unittest.TestCase):
     def test_defaults_and_daily_runner_publish_new_strategy(self):
         self.assertEqual("sqlite", config.MARKET_HISTORY_CUTOVER_MODE)
         self.assertEqual("active", config.RECALL_STRATEGY_MODE)
+        self.assertEqual("shadow", config.HIGH_RETURN_SELECTION_MODE)
         script = Path("daily_run.sh").read_text(encoding="utf-8")
         self.assertIn("CHANLUN_MARKET_DATA_MODE:=sqlite", script)
         self.assertIn("CHANLUN_RECALL_STRATEGY_MODE:=active", script)
+        self.assertIn("CHANLUN_HIGH_RETURN_SELECTION_MODE:=shadow", script)
+
+    def test_high_return_active_mode_is_blocked_until_runtime_attestation_exists(self):
+        env = dict(os.environ)
+        env["CHANLUN_HIGH_RETURN_SELECTION_MODE"] = "active"
+
+        completed = subprocess.run(
+            [sys.executable, "-c", "import config"],
+            cwd=str(Path(__file__).resolve().parents[1]),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn("runtime OOT cutover manifest", completed.stderr)
 
     def test_active_universe_quality_uses_the_actual_published_pool(self):
         quality = {

@@ -1,5 +1,6 @@
 """Tests for strong_startup detection and 30min upgrade."""
 import unittest
+from unittest.mock import patch
 import numpy as np
 
 from chanlun.strong_startup import (
@@ -250,6 +251,47 @@ def _make_seed(code="000001", name="测试"):
 
 
 class TestUpgrade30min(unittest.TestCase):
+
+    def test_b_grade_confirmation_stays_in_watchlist(self):
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+
+        with patch(
+            "chanlun.strong_startup._check_30min_confirmations",
+            return_value=["30min两阳夹一阴确认"],
+        ):
+            candidates, watchlist, diag = upgrade_strong_startup_with_30min(
+                [seed], [min30]
+            )
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(len(watchlist), 1)
+        self.assertEqual(watchlist[0]["source_status"], "observe")
+        self.assertEqual(watchlist[0]["sublevel_confirm_grade"], "B")
+        self.assertEqual(diag["watch_due_to_quality_gate"], 1)
+
+    def test_weak_daily_startup_stays_in_watchlist_even_with_s_confirmation(self):
+        seed = _make_seed()
+        seed.update({
+            "change_pct": 1.0,
+            "startup_signals": ["close_above_ma5"],
+            "startup_reason": "低位放量",
+        })
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+
+        with patch(
+            "chanlun.strong_startup._check_30min_confirmations",
+            return_value=["30min 二买"],
+        ):
+            candidates, watchlist, _ = upgrade_strong_startup_with_30min(
+                [seed], [min30]
+            )
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(len(watchlist), 1)
+        self.assertEqual(watchlist[0]["daily_startup_grade"], "weak")
+        self.assertEqual(watchlist[0]["sublevel_confirm_grade"], "S")
+
 
     def test_30min_confirm_upgrades_to_candidate(self):
         """Seed with 30min EMA5 > EMA10 → candidate."""

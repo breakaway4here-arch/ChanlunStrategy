@@ -216,6 +216,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             "code": "600001",
             "name": "真实工作区票",
             "score": 82,
+            "intended_horizon": 3,
             "decision_engine_v1": {
                 "decision_code": "recommend",
                 "decision": "推荐",
@@ -276,6 +277,7 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                     "code": "600001",
                     "name": "状态测试票",
                     "score": 82,
+                    "intended_horizon": 3,
                     "decision_engine_v1": {
                         "decision_code": "recommend",
                         "decision": "推荐",

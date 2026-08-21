@@ -3,10 +3,15 @@
 from __future__ import annotations
 
 from collections import Counter
+from dataclasses import dataclass
+from datetime import date
+import hashlib
+import json
 import math
 import random
+import re
 import statistics
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple, cast
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, cast
 
 from chanlun.historical_experiment_metrics import (
     _evaluate_pick_sample,
@@ -40,6 +45,65 @@ _FUSION_STRICT_STARTUP_RESCUE_V1 = "fusion_strict_startup_rescue_v1"
 _FUSION_MID = "fusion_mid"
 _FUSION_LOOSE = "fusion_loose"
 _ENTRY_MODE_IMMEDIATE = "immediate_close"
+_SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
+_GIT_SHA_PATTERN = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+
+
+@dataclass(frozen=True)
+class VerifiedOOTAttestation:
+    """Process-local proof that a read-only OOT artifact matched its card."""
+
+    source_pool: str
+    strategy_version: str
+    intended_horizon: int
+    entry_mode: str
+    cutoff: str
+    data_hash: str
+    code_sha: str
+    sample_size: int
+    active_dates: int
+    active_months: int
+    mean_close_return: Optional[float]
+    median_close_return: Optional[float]
+    hit_rate_ge_5: Optional[float]
+
+    @property
+    def key(self) -> Tuple[str, str, int, str, str]:
+        return (
+            self.source_pool,
+            self.strategy_version,
+            self.intended_horizon,
+            self.entry_mode,
+            self.cutoff,
+        )
+
+    def audit_summary(self) -> Dict[str, Any]:
+        return {
+            "status": "verified",
+            "source_pool": self.source_pool,
+            "strategy_version": self.strategy_version,
+            "intended_horizon": self.intended_horizon,
+            "entry_mode": self.entry_mode,
+            "cutoff": self.cutoff,
+            "data_hash": self.data_hash,
+            "code_sha": self.code_sha,
+            "sample_size": self.sample_size,
+            "active_dates": self.active_dates,
+            "active_months": self.active_months,
+            "mean_close_return": self.mean_close_return,
+            "median_close_return": self.median_close_return,
+            "hit_rate_ge_5": self.hit_rate_ge_5,
+        }
+
+    def trusted_scorecard_metrics(self) -> Dict[str, Any]:
+        return {
+            "sample_size": self.sample_size,
+            "active_dates": self.active_dates,
+            "active_months": self.active_months,
+            "mean_close_return": self.mean_close_return,
+            "median_close_return": self.median_close_return,
+            "hit_rate_ge_5": self.hit_rate_ge_5,
+        }
 
 POLICY_EXPERIMENTS = {
     "delay1_v1": {
@@ -341,6 +405,552 @@ def evaluate_recall_acceptance_gates(
         "median_return_delta": median_delta,
         "checks": checks,
         "accepted": all(checks.values()),
+    }
+
+
+def _required_text(value: Any, field: str) -> str:
+    clean = str(value or "").strip()
+    if not clean:
+        raise ValueError("OOT attestation {} is required".format(field))
+    return clean
+
+
+def _required_horizon(value: Any, field: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError("OOT attestation {} must be 1, 3, or 5".format(field))
+    try:
+        horizon = int(value)
+    except (TypeError, ValueError):
+        raise ValueError(
+            "OOT attestation {} must be 1, 3, or 5".format(field)
+        )
+    if horizon not in (1, 3, 5):
+        raise ValueError("OOT attestation {} must be 1, 3, or 5".format(field))
+    return horizon
+
+
+def _required_iso_date(value: Any, field: str) -> str:
+    clean = _required_text(value, field)
+    try:
+        parsed = date.fromisoformat(clean)
+    except ValueError:
+        raise ValueError("OOT attestation {} must be YYYY-MM-DD".format(field))
+    return parsed.isoformat()
+
+
+def _required_nonnegative_int(value: Any, field: str) -> int:
+    if isinstance(value, bool):
+        raise ValueError("OOT attestation {} must be an integer".format(field))
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("OOT attestation {} must be an integer".format(field))
+    if parsed < 0:
+        raise ValueError("OOT attestation {} must be non-negative".format(field))
+    return parsed
+
+
+def verify_oot_attestation(
+    card: Mapping[str, Any],
+    attestation: Mapping[str, Any],
+    artifact_bytes: bytes,
+    *,
+    current_code_sha: str,
+) -> VerifiedOOTAttestation:
+    """Verify a scorecard against a separately hashed, read-only OOT artifact."""
+    if not isinstance(card, Mapping) or not isinstance(attestation, Mapping):
+        raise ValueError("OOT attestation card and manifest entry must be objects")
+    if not isinstance(artifact_bytes, bytes):
+        raise ValueError("OOT attestation artifact must be read as bytes")
+
+    source_pool, horizon, entry_mode = _high_return_slice(dict(card))
+    card_contract = {
+        "source_pool": source_pool,
+        "strategy_version": _required_text(
+            card.get("version"), "strategy_version"
+        ),
+        "intended_horizon": horizon,
+        "entry_mode": entry_mode,
+        "cutoff": _required_iso_date(card.get("oot_cutoff"), "cutoff"),
+    }
+    manifest_contract = {
+        "source_pool": _required_text(
+            attestation.get("source_pool"), "source_pool"
+        ),
+        "strategy_version": _required_text(
+            attestation.get("strategy_version"), "strategy_version"
+        ),
+        "intended_horizon": _required_horizon(
+            attestation.get("intended_horizon"), "intended_horizon"
+        ),
+        "entry_mode": _required_text(
+            attestation.get("entry_mode"), "entry_mode"
+        ),
+        "cutoff": _required_iso_date(attestation.get("cutoff"), "cutoff"),
+    }
+    for field, expected in card_contract.items():
+        if manifest_contract[field] != expected:
+            raise ValueError(
+                "OOT attestation {} does not match scorecard".format(field)
+            )
+
+    data_hash = _required_text(attestation.get("data_hash"), "data_hash").lower()
+    if not _SHA256_PATTERN.fullmatch(data_hash):
+        raise ValueError("OOT attestation data_hash must be full SHA-256")
+    if hashlib.sha256(artifact_bytes).hexdigest() != data_hash:
+        raise ValueError("OOT attestation data_hash does not match artifact")
+
+    code_sha = _required_text(attestation.get("code_sha"), "code_sha").lower()
+    actual_code_sha = _required_text(current_code_sha, "current_code_sha").lower()
+    if not _GIT_SHA_PATTERN.fullmatch(code_sha):
+        raise ValueError("OOT attestation code_sha must be a full Git SHA")
+    if code_sha != actual_code_sha:
+        raise ValueError("OOT attestation code_sha does not match current code")
+
+    try:
+        artifact = json.loads(artifact_bytes.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise ValueError("OOT attestation artifact must be valid UTF-8 JSON")
+    if not isinstance(artifact, dict) or artifact.get("schema_version") != 1:
+        raise ValueError("OOT attestation artifact schema_version must be 1")
+    artifact_contract = artifact.get("contract")
+    if not isinstance(artifact_contract, dict):
+        raise ValueError("OOT attestation artifact contract is required")
+    expected_artifact_contract = dict(manifest_contract)
+    expected_artifact_contract["code_sha"] = code_sha
+    for field, expected in expected_artifact_contract.items():
+        actual = artifact_contract.get(field)
+        if field == "intended_horizon":
+            actual = _required_horizon(actual, field)
+        else:
+            actual = _required_text(actual, field)
+        if actual != expected:
+            raise ValueError(
+                "OOT attestation artifact {} does not match manifest".format(field)
+            )
+    samples = artifact.get("samples")
+    if not isinstance(samples, list):
+        raise ValueError("OOT attestation artifact samples must be a list")
+    expected_sample_size = _required_nonnegative_int(
+        card.get("sample_size"), "sample_size"
+    )
+    if len(samples) != expected_sample_size:
+        raise ValueError(
+            "OOT attestation artifact sample_size does not match scorecard"
+        )
+
+    cutoff_date = date.fromisoformat(manifest_contract["cutoff"])
+    report_dates = set()
+    close_returns = []
+    for index, sample in enumerate(samples):
+        if not isinstance(sample, dict):
+            raise ValueError(
+                "OOT attestation sample {} must be an object".format(index)
+            )
+        source_record_hash = _required_text(
+            sample.get("source_record_hash"), "source_record_hash"
+        ).lower()
+        if not _SHA256_PATTERN.fullmatch(source_record_hash):
+            raise ValueError(
+                "OOT attestation source_record_hash must be full SHA-256"
+            )
+        report_date = date.fromisoformat(_required_iso_date(
+            sample.get("report_date"), "sample.report_date"
+        ))
+        feature_as_of = date.fromisoformat(_required_iso_date(
+            sample.get("feature_as_of"), "sample.feature_as_of"
+        ))
+        target_date = date.fromisoformat(_required_iso_date(
+            sample.get("target_date"), "sample.target_date"
+        ))
+        if feature_as_of > report_date:
+            raise ValueError(
+                "OOT attestation sample feature_as_of exceeds report_date"
+            )
+        if target_date <= report_date or target_date > cutoff_date:
+            raise ValueError(
+                "OOT attestation sample target_date violates cutoff"
+            )
+        if str(sample.get("maturity_status") or "") != "mature":
+            raise ValueError(
+                "OOT attestation sample maturity_status must be mature"
+            )
+        close_return = sample.get("close_return")
+        if (
+            isinstance(close_return, bool)
+            or not isinstance(close_return, (int, float))
+            or not math.isfinite(float(close_return))
+        ):
+            raise ValueError(
+                "OOT attestation sample close_return must be finite"
+            )
+        close_returns.append(float(close_return))
+        report_dates.add(report_date.isoformat())
+
+    expected_active_dates = _required_nonnegative_int(
+        card.get("active_dates"), "active_dates"
+    )
+    if len(report_dates) != expected_active_dates:
+        raise ValueError(
+            "OOT attestation artifact active_dates does not match scorecard"
+        )
+    active_months = {value[:7] for value in report_dates}
+    expected_active_months = _required_nonnegative_int(
+        card.get("active_months"), "active_months"
+    )
+    if len(active_months) != expected_active_months:
+        raise ValueError(
+            "OOT attestation artifact active_months does not match scorecard"
+        )
+
+    recomputed_metrics = {
+        "mean_close_return": (
+            statistics.mean(close_returns) if close_returns else None
+        ),
+        "median_close_return": (
+            statistics.median(close_returns) if close_returns else None
+        ),
+        "hit_rate_ge_5": (
+            sum(value >= 5.0 for value in close_returns)
+            / len(close_returns) * 100.0
+            if close_returns else None
+        ),
+    }
+    for field, recomputed in recomputed_metrics.items():
+        declared = _metric_number(dict(card), field)
+        if recomputed is None:
+            matches = declared is None
+        else:
+            matches = (
+                declared is not None
+                and math.isclose(
+                    declared, recomputed, rel_tol=1e-9, abs_tol=1e-6
+                )
+            )
+        if not matches:
+            raise ValueError(
+                "OOT attestation {} does not match hashed samples".format(
+                    field
+                )
+            )
+
+    return VerifiedOOTAttestation(
+        source_pool=manifest_contract["source_pool"],
+        strategy_version=manifest_contract["strategy_version"],
+        intended_horizon=manifest_contract["intended_horizon"],
+        entry_mode=manifest_contract["entry_mode"],
+        cutoff=manifest_contract["cutoff"],
+        data_hash=data_hash,
+        code_sha=code_sha,
+        sample_size=len(close_returns),
+        active_dates=len(report_dates),
+        active_months=len(active_months),
+        mean_close_return=recomputed_metrics["mean_close_return"],
+        median_close_return=recomputed_metrics["median_close_return"],
+        hit_rate_ge_5=recomputed_metrics["hit_rate_ge_5"],
+    )
+
+
+def _attestation_key(card: dict) -> Tuple[str, str, Optional[int], str, str]:
+    source_pool, horizon, entry_mode = _high_return_slice(card)
+    return (
+        source_pool,
+        str(card.get("version") or "").strip(),
+        horizon,
+        entry_mode,
+        str(card.get("oot_cutoff") or "").strip(),
+    )
+
+
+def _research_tier(
+    card: dict,
+    attestation: Optional[VerifiedOOTAttestation] = None,
+) -> Tuple[str, List[str]]:
+    failed = []
+    if (
+        not isinstance(attestation, VerifiedOOTAttestation)
+        or _attestation_key(card) != attestation.key
+    ):
+        failed.append("oot_attestation_verified")
+    version = str(card.get("version") or "").strip().lower()
+    source_pool, horizon, entry_mode = _high_return_slice(card)
+    if not version or version == "unknown":
+        failed.append("version_boundary_verified")
+    if not source_pool:
+        failed.append("source_pool_verified")
+    if horizon not in (1, 3, 5):
+        failed.append("intended_horizon_verified")
+    if entry_mode != "immediate_close":
+        failed.append("immediate_close_contract")
+    if failed:
+        return "hard_gate_failed", failed
+
+    def _count(name):
+        value = card.get(name)
+        if isinstance(value, bool):
+            return 0
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return max(value, 0)
+
+    samples = _count("sample_size")
+    active_dates = _count("active_dates")
+    active_months = _count("active_months")
+    if samples >= 100 and active_dates >= 20 and active_months >= 2:
+        return "shadow", ["trusted_oot_provenance_unavailable"]
+    if 30 <= samples < 100 or 10 <= active_dates < 20:
+        return "shadow", [
+            "production_sample_gate",
+            "trusted_oot_provenance_unavailable",
+        ]
+    reasons = []
+    if samples < 30:
+        reasons.append("mature_samples_below_30")
+    if active_dates < 10:
+        reasons.append("active_dates_below_10")
+    if active_months < 2:
+        reasons.append("active_months_below_2")
+    if not reasons:
+        reasons.append("production_sample_gate")
+    return "insufficient", reasons
+
+
+def _high_return_slice(card: dict) -> Tuple[str, Optional[int], str]:
+    horizon = card.get("intended_horizon")
+    try:
+        horizon = int(horizon) if horizon is not None else None
+    except (TypeError, ValueError):
+        horizon = None
+    return (
+        str(card.get("source_pool") or ""),
+        horizon,
+        str(card.get("entry_mode") or ""),
+    )
+
+
+def _metric_number(card: dict, name: str) -> Optional[float]:
+    value = card.get(name)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if not math.isfinite(float(value)):
+        return None
+    return float(value)
+
+
+def _dominates_high_return(left: dict, right: dict) -> bool:
+    left_metrics = tuple(
+        _metric_number(left, name)
+        for name in (
+            "mean_close_return", "median_close_return", "hit_rate_ge_5"
+        )
+    )
+    right_metrics = tuple(
+        _metric_number(right, name)
+        for name in (
+            "mean_close_return", "median_close_return", "hit_rate_ge_5"
+        )
+    )
+    if any(value is None for value in left_metrics + right_metrics):
+        return False
+    return (
+        all(left >= right for left, right in zip(left_metrics, right_metrics))
+        and any(left > right for left, right in zip(left_metrics, right_metrics))
+    )
+
+
+def evaluate_high_return_version_selection(
+    baseline: dict,
+    candidates: Sequence[dict],
+    *,
+    oot_attestations: Sequence[VerifiedOOTAttestation] = (),
+) -> Dict[str, Any]:
+    """Rank same-slice OOT versions by mean close return, fail closed."""
+    attestation_by_key = {
+        attestation.key: attestation
+        for attestation in oot_attestations or ()
+        if isinstance(attestation, VerifiedOOTAttestation)
+    }
+    baseline = dict(baseline or {})
+    baseline_attestation = attestation_by_key.get(_attestation_key(baseline))
+    if baseline_attestation is not None:
+        baseline.update(baseline_attestation.trusted_scorecard_metrics())
+    baseline_tier, baseline_gate_reasons = _research_tier(
+        baseline, baseline_attestation
+    )
+    baseline_slice = _high_return_slice(baseline)
+    baseline_mean = _metric_number(baseline, "mean_close_return")
+    baseline_median = _metric_number(baseline, "median_close_return")
+    baseline_hit5 = _metric_number(baseline, "hit_rate_ge_5")
+    baseline_metrics_ready = None not in (
+        baseline_mean, baseline_median, baseline_hit5
+    )
+    baseline_ready = (
+        baseline_tier == "production"
+        and baseline_metrics_ready
+    )
+
+    evaluated = []
+    for candidate_input in candidates or []:
+        candidate = dict(candidate_input or {})
+        candidate_attestation = attestation_by_key.get(
+            _attestation_key(candidate)
+        )
+        if candidate_attestation is not None:
+            candidate.update(
+                candidate_attestation.trusted_scorecard_metrics()
+            )
+        tier, gate_reasons = _research_tier(
+            candidate, candidate_attestation
+        )
+        comparable = _high_return_slice(candidate) == baseline_slice
+        candidate_mean = _metric_number(
+            candidate, "mean_close_return"
+        )
+        candidate_median = _metric_number(
+            candidate, "median_close_return"
+        )
+        candidate_hit5 = _metric_number(candidate, "hit_rate_ge_5")
+        metrics_ready = None not in (
+            candidate_mean, candidate_median, candidate_hit5
+        )
+        outlier_driven = bool(
+            comparable
+            and metrics_ready
+            and baseline_metrics_ready
+            and candidate_mean > baseline_mean
+            and candidate_median < baseline_median
+            and candidate_hit5 < baseline_hit5
+        )
+        mean_improved = bool(
+            comparable
+            and metrics_ready
+            and baseline_metrics_ready
+            and candidate_mean > baseline_mean
+        )
+        version_distinct = str(candidate.get("version") or "") != str(
+            baseline.get("version") or ""
+        )
+        promotion_eligible = bool(
+            comparable
+            and version_distinct
+            and baseline_ready
+            and tier == "production"
+            and metrics_ready
+            and mean_improved
+            and not outlier_driven
+        )
+
+        if not comparable:
+            comparison_status = "slice_mismatch"
+        elif not version_distinct:
+            comparison_status = "same_version"
+        elif not baseline_ready:
+            comparison_status = "baseline_not_production"
+        elif tier == "hard_gate_failed":
+            comparison_status = "hard_gate_failed"
+        elif tier == "shadow":
+            comparison_status = "shadow_only"
+        elif tier != "production":
+            comparison_status = "insufficient"
+        elif not metrics_ready:
+            comparison_status = "metrics_missing"
+        elif outlier_driven:
+            comparison_status = "outlier_driven"
+        elif not mean_improved:
+            comparison_status = "mean_not_improved"
+        else:
+            comparison_status = "eligible"
+
+        candidate.update({
+            "oot_attestation": (
+                candidate_attestation.audit_summary()
+                if candidate_attestation is not None else {
+                    "status": "missing_or_invalid"
+                }
+            ),
+            "research_tier": tier,
+            "hard_gate_reasons": gate_reasons,
+            "comparison_status": comparison_status,
+            "mean_improved": mean_improved,
+            "outlier_driven": outlier_driven,
+            "promotion_eligible": promotion_eligible,
+        })
+        evaluated.append(candidate)
+
+    frontier_candidates = [
+        item for item in evaluated
+        if item.get("promotion_eligible")
+    ]
+    pareto_frontier = []
+    for item in frontier_candidates:
+        dominated = any(
+            _dominates_high_return(other, item)
+            for other in frontier_candidates
+            if other is not item
+        )
+        item["non_dominated"] = not dominated
+        if dominated:
+            item["promotion_eligible"] = False
+            item["comparison_status"] = "dominated"
+        else:
+            pareto_frontier.append(item.get("version"))
+    for item in evaluated:
+        item.setdefault("non_dominated", False)
+
+    eligible = [
+        item for item in evaluated if item.get("promotion_eligible")
+    ]
+    eligible.sort(
+        key=lambda item: (
+            (
+                _metric_number(item, "mean_close_return")
+                if _metric_number(item, "mean_close_return") is not None
+                else -math.inf
+            ),
+            (
+                _metric_number(item, "median_close_return")
+                if _metric_number(item, "median_close_return") is not None
+                else -math.inf
+            ),
+            (
+                _metric_number(item, "hit_rate_ge_5")
+                if _metric_number(item, "hit_rate_ge_5") is not None
+                else -math.inf
+            ),
+            str(item.get("version") or ""),
+        ),
+        reverse=True,
+    )
+    selected = eligible[0] if eligible else None
+
+    return {
+        "baseline_version": baseline.get("version"),
+        "baseline_slice": {
+            "source_pool": baseline_slice[0],
+            "intended_horizon": baseline_slice[1],
+            "entry_mode": baseline_slice[2],
+        },
+        "baseline_research_tier": baseline_tier,
+        "baseline_hard_gate_reasons": baseline_gate_reasons,
+        "baseline_oot_attestation": (
+            baseline_attestation.audit_summary()
+            if baseline_attestation is not None else {
+                "status": "missing_or_invalid"
+            }
+        ),
+        "ranking_metric": "mean_close_return",
+        "support_metrics": ["median_close_return", "hit_rate_ge_5"],
+        "display_only_metrics": ["mean_mfe"],
+        "production_top_k_cap": False,
+        "pareto_frontier": sorted(
+            str(version) for version in pareto_frontier if version is not None
+        ),
+        "selected_version": (
+            selected.get("version") if selected is not None else None
+        ),
+        "candidates": evaluated,
     }
 
 

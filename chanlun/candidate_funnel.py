@@ -16,7 +16,7 @@ FUNNEL_STAGES = (
     "display",
 )
 
-TERMINAL_STATES = ("main", "observe", "reject")
+TERMINAL_STATES = ("main", "candidate", "observe", "reject")
 
 RAW_FEATURE_FIELDS = (
     "low_position_retrieval_score",
@@ -84,6 +84,201 @@ def _codes(values: Iterable[Any]) -> set:
     return result
 
 
+def _unique_strings(values: Iterable[Any]) -> List[str]:
+    result = []
+    for value in values or []:
+        normalized = str(value or "").strip()
+        if normalized and normalized not in result:
+            result.append(normalized)
+    return result
+
+
+def _valid_horizon(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    try:
+        horizon = int(value)
+    except (TypeError, ValueError):
+        return None
+    return horizon if horizon in (1, 3, 5) else None
+
+
+def resolve_horizon_contract(
+    candidate: Mapping[str, Any],
+    fallback_horizon: Any = None,
+) -> tuple[Optional[int], str, List[int]]:
+    """Resolve a horizon with source snapshots as the conflict authority."""
+    explicit = _valid_horizon(candidate.get("intended_horizon"))
+    if explicit is None:
+        explicit = _valid_horizon(fallback_horizon)
+    source_horizons = sorted({
+        horizon
+        for row in candidate.get("strategy_sources") or []
+        if isinstance(row, Mapping)
+        and str(row.get("source_status") or "candidate").lower()
+        == "candidate"
+        for horizon in [_valid_horizon(row.get("intended_horizon"))]
+        if horizon is not None
+    })
+    if len(source_horizons) > 1:
+        return None, "conflict", source_horizons
+    if len(source_horizons) == 1:
+        source_horizon = source_horizons[0]
+        if explicit is not None and explicit != source_horizon:
+            return None, "conflict", source_horizons
+        return source_horizon, "verified", source_horizons
+    if explicit is not None:
+        return explicit, "verified", []
+    return None, "missing", []
+
+
+def _candidate_reason(candidate: Mapping[str, Any]) -> str:
+    best_buy = candidate.get("best_buy_point")
+    best_buy = best_buy if isinstance(best_buy, Mapping) else {}
+    trend_signals = candidate.get("trend_signals")
+    if isinstance(trend_signals, (list, tuple)):
+        trend_reason = "；".join(
+            str(value).strip() for value in trend_signals if str(value).strip()
+        )
+    else:
+        trend_reason = ""
+    return str(
+        candidate.get("reason")
+        or candidate.get("startup_reason")
+        or candidate.get("watch_reason")
+        or best_buy.get("reason")
+        or trend_reason
+        or ""
+    ).strip()
+
+
+def _candidate_strategy_source(candidate: Mapping[str, Any]) -> str:
+    explicit = str(candidate.get("strategy_source") or "").strip()
+    if explicit:
+        return explicit
+    channel = str(candidate.get("source_channel") or "").strip()
+    if channel == "trend_continuation":
+        return "trend_continuation"
+    if candidate.get("startup_reason") or candidate.get("startup_signals"):
+        return "strong_startup"
+    return "chanlun_structure"
+
+
+def _source_snapshot(candidate: Mapping[str, Any]) -> Dict[str, Any]:
+    horizon = candidate.get("intended_horizon")
+    snapshot = {
+        "strategy_source": _candidate_strategy_source(candidate),
+        "source_channel": str(candidate.get("source_channel") or ""),
+        "source_status": str(
+            candidate.get("source_status")
+            or candidate.get("publication_status")
+            or "candidate"
+        ),
+        "reason": _candidate_reason(candidate),
+        "evidence_refs": _unique_strings(candidate.get("evidence_refs") or []),
+        "intended_horizon": horizon if horizon in (1, 3, 5) else None,
+    }
+    for field in (
+        "best_buy_point",
+        "confirmations",
+        "confirmation_facts",
+        "fusion_admission",
+        "ma_bullish",
+        "market_regime",
+        "decision_engine_v1",
+    ):
+        value = candidate.get(field)
+        if value not in (None, "", [], {}):
+            snapshot[field] = deepcopy(value)
+    return snapshot
+
+
+def _merge_source_snapshots(
+    existing: Iterable[Mapping[str, Any]],
+    incoming: Iterable[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    merged = []
+    by_source = {}
+    for raw in list(existing or []) + list(incoming or []):
+        if not isinstance(raw, Mapping):
+            continue
+        snapshot = deepcopy(dict(raw))
+        source = str(snapshot.get("strategy_source") or "").strip()
+        if not source:
+            continue
+        if source not in by_source:
+            by_source[source] = snapshot
+            merged.append(snapshot)
+            continue
+        current = by_source[source]
+        current["evidence_refs"] = _unique_strings(
+            list(current.get("evidence_refs") or [])
+            + list(snapshot.get("evidence_refs") or [])
+        )
+        for field in (
+            "source_channel",
+            "source_status",
+            "reason",
+            "intended_horizon",
+            "best_buy_point",
+            "confirmations",
+            "confirmation_facts",
+            "fusion_admission",
+            "ma_bullish",
+            "market_regime",
+            "decision_engine_v1",
+        ):
+            if current.get(field) in (None, "") and snapshot.get(field) not in (
+                None,
+                "",
+            ):
+                current[field] = snapshot[field]
+    return merged
+
+
+def merge_confirmed_candidates(
+    candidates: Iterable[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Deduplicate confirmed candidates without erasing source ownership."""
+    merged = []
+    by_code = {}
+    for raw in candidates or []:
+        if not isinstance(raw, Mapping):
+            continue
+        candidate = deepcopy(dict(raw))
+        incoming_variants = candidate.pop("strategy_variants", None)
+        if not isinstance(incoming_variants, list):
+            variant = deepcopy(candidate)
+            variant.pop("strategy_sources", None)
+            incoming_variants = [variant]
+        code = str(candidate.get("code") or "").strip()
+        if not code:
+            continue
+        snapshots = candidate.get("strategy_sources")
+        snapshots = (
+            list(snapshots)
+            if isinstance(snapshots, (list, tuple))
+            else []
+        )
+        snapshots = _merge_source_snapshots(
+            snapshots,
+            [_source_snapshot(candidate)],
+        )
+        if code not in by_code:
+            candidate["strategy_sources"] = snapshots
+            candidate["strategy_variants"] = incoming_variants
+            by_code[code] = candidate
+            merged.append(candidate)
+            continue
+        existing = by_code[code]
+        existing["strategy_sources"] = _merge_source_snapshots(
+            existing.get("strategy_sources") or [],
+            snapshots,
+        )
+        existing["strategy_variants"].extend(incoming_variants)
+    return merged
+
+
 class CandidateFunnel:
     """Accumulate one immutable first-failure record per candidate."""
 
@@ -140,6 +335,16 @@ class CandidateFunnel:
                 "retrieval_sources": list(
                     candidate.get("retrieval_sources") or []
                 ),
+                "retrieval_evidence_refs": _unique_strings(
+                    candidate.get("retrieval_evidence_refs") or []
+                ),
+                "strategy_sources": _merge_source_snapshots(
+                    [],
+                    candidate.get("strategy_sources") or [],
+                ),
+                "source_failures": deepcopy(
+                    list(candidate.get("source_failures") or [])
+                ),
                 "retrieval_score": candidate.get("retrieval_score"),
                 "first_failure_gate": "",
                 "first_failure_reason": "",
@@ -158,6 +363,14 @@ class CandidateFunnel:
             }
             for field in RAW_FEATURE_FIELDS:
                 event[field] = _first_value(candidate, field)
+            if (
+                not event["retrieval_evidence_refs"]
+                and event["retrieval_sources"]
+            ):
+                event["retrieval_evidence_refs"] = [
+                    "retrieval:{}".format(source)
+                    for source in event["retrieval_sources"]
+                ]
             if event["retrieval_score"] is None:
                 retrieval_values = [
                     event.get("low_position_retrieval_score"),
@@ -181,7 +394,35 @@ class CandidateFunnel:
                 if candidate.get(field) not in (None, ""):
                     event[field] = candidate.get(field)
             if candidate.get("retrieval_sources"):
-                event["retrieval_sources"] = list(candidate["retrieval_sources"])
+                event["retrieval_sources"] = _unique_strings(
+                    list(event.get("retrieval_sources") or [])
+                    + list(candidate["retrieval_sources"])
+                )
+                if not candidate.get("retrieval_evidence_refs"):
+                    event["retrieval_evidence_refs"] = _unique_strings(
+                        list(event.get("retrieval_evidence_refs") or [])
+                        + [
+                            "retrieval:{}".format(source)
+                            for source in candidate["retrieval_sources"]
+                        ]
+                    )
+            if candidate.get("retrieval_evidence_refs"):
+                event["retrieval_evidence_refs"] = _unique_strings(
+                    list(event.get("retrieval_evidence_refs") or [])
+                    + list(candidate["retrieval_evidence_refs"])
+                )
+            if candidate.get("strategy_sources"):
+                event["strategy_sources"] = _merge_source_snapshots(
+                    event.get("strategy_sources") or [],
+                    candidate["strategy_sources"],
+                )
+            if candidate.get("source_failures"):
+                for failure in candidate["source_failures"]:
+                    if (
+                        isinstance(failure, Mapping)
+                        and failure not in event["source_failures"]
+                    ):
+                        event["source_failures"].append(deepcopy(dict(failure)))
             for field in RAW_FEATURE_FIELDS:
                 value = _first_value(candidate, field)
                 if value is not None:
@@ -260,6 +501,31 @@ class CandidateFunnel:
         event["actual_value"] = actual_value
         event["threshold"] = threshold
 
+    def record_source_failure(
+        self,
+        code: str,
+        stage: str,
+        reason: str,
+        *,
+        strategy_source: str = "",
+        source_channel: str = "",
+        actual_value: Any = None,
+        threshold: Any = None,
+    ) -> None:
+        """Keep a parallel strategy failure without changing global recall."""
+        event = self._event(code)
+        self._stage_index(stage)
+        failure = {
+            "stage": str(stage),
+            "reason": str(reason or "{}_failed".format(stage)),
+            "strategy_source": str(strategy_source or ""),
+            "source_channel": str(source_channel or ""),
+            "actual_value": deepcopy(actual_value),
+            "threshold": deepcopy(threshold),
+        }
+        if failure not in event["source_failures"]:
+            event["source_failures"].append(failure)
+
     def mark_membership(
         self,
         stage: str,
@@ -291,13 +557,18 @@ class CandidateFunnel:
         main_codes: Sequence[Any],
         observation_codes: Sequence[Any],
         decision_by_code: Optional[Mapping[str, Mapping[str, Any]]] = None,
+        candidate_codes: Sequence[Any] = (),
     ) -> None:
         main = _codes(main_codes)
-        observe = _codes(observation_codes) - main
+        candidates = _codes(candidate_codes) - main
+        observe = _codes(observation_codes) - main - candidates
         decisions = decision_by_code or {}
         for code, event in self._events.items():
             if code in main:
                 event["final_state"] = "main"
+                self.pass_stage(code, "display")
+            elif code in candidates:
+                event["final_state"] = "candidate"
                 self.pass_stage(code, "display")
             elif code in observe:
                 event["final_state"] = "observe"
