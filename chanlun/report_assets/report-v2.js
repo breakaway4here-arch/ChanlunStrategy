@@ -48,6 +48,18 @@
       pollCount: 0,
       busy: false,
     },
+    watchlistManager: {
+      loaded: false,
+      loading: false,
+      saving: false,
+      config: null,
+      etag: '',
+      dirty: false,
+      conflict: false,
+      open: false,
+      message: '',
+      tone: 'neutral',
+    },
   };
 
   var nodes = {
@@ -311,6 +323,10 @@
 
   function getTop10ApiBase() {
     return normalizeString(getBootstrap().top10ApiBase);
+  }
+
+  function getDecisionWatchlistUrl() {
+    return normalizeString(getBootstrap().decisionWatchlistUrl);
   }
 
   function getTop10PageDate() {
@@ -2378,6 +2394,301 @@
     }).join('');
   }
 
+  function watchlistManagerState() {
+    state.watchlistManager = state.watchlistManager || {};
+    return state.watchlistManager;
+  }
+
+  function normalizeWatchlistManagerConfig(payload, personalWatchlist) {
+    var source = payload && Array.isArray(payload.items) ? payload : null;
+    var items = source ? payload.items : asArray((personalWatchlist || {}).items);
+    return {
+      revision: normalizeString(
+        (source && source.revision)
+        || (personalWatchlist || {}).config_revision
+        || 'snapshot-unknown'
+      ),
+      updated_at: normalizeString((source && source.updated_at) || ''),
+      items: items.map(function (item, index) {
+        var rec = item || {};
+        return {
+          code: normalizeString(rec.code).trim(),
+          note: normalizeString(rec.note || rec.name || rec.code).trim(),
+          role: normalizeString(rec.role || 'strong_watch'),
+          enabled: rec.enabled !== false,
+          priority: index + 1,
+          tags: asArray(rec.tags).slice(0, 5),
+          thesis: normalizeString(rec.thesis || ''),
+        };
+      }),
+    };
+  }
+
+  function setWatchlistManagerMessage(message, tone) {
+    var manager = watchlistManagerState();
+    manager.message = normalizeString(message);
+    manager.tone = normalizeString(tone || 'neutral');
+  }
+
+  function addWatchlistManagerItem(code, note) {
+    var manager = watchlistManagerState();
+    var normalizedCode = normalizeString(code).trim();
+    if (!/^(?:6\d{5}|(?:000|001|002|003|300|301)\d{3}|[48]\d{5}|92\d{4})$/.test(normalizedCode)) {
+      setWatchlistManagerMessage('股票代码格式不正确', 'danger');
+      return false;
+    }
+    manager.config = manager.config || { revision: 'snapshot-unknown', items: [] };
+    if (manager.config.items.some(function (item) { return item.code === normalizedCode; })) {
+      setWatchlistManagerMessage('该股票已在重点观察池', 'warning');
+      return false;
+    }
+    if (manager.config.items.length >= 20) {
+      setWatchlistManagerMessage('重点观察池最多 20 只', 'warning');
+      return false;
+    }
+    manager.config.items.push({
+      code: normalizedCode,
+      note: normalizeString(note || normalizedCode).trim(),
+      role: 'strong_watch',
+      enabled: true,
+      priority: manager.config.items.length + 1,
+      tags: ['用户重点观察'],
+      thesis: '',
+    });
+    manager.dirty = true;
+    setWatchlistManagerMessage('已加入待保存列表', 'info');
+    return true;
+  }
+
+  function removeWatchlistManagerItem(index) {
+    var manager = watchlistManagerState();
+    if (!manager.config || !manager.config.items[index]) return false;
+    manager.config.items.splice(index, 1);
+    manager.config.items.forEach(function (item, itemIndex) {
+      item.priority = itemIndex + 1;
+    });
+    manager.dirty = true;
+    setWatchlistManagerMessage('已移除，保存后生效', 'info');
+    return true;
+  }
+
+  function moveWatchlistManagerItem(index, direction) {
+    var manager = watchlistManagerState();
+    if (!manager.config) return false;
+    var target = index + direction;
+    if (index < 0 || target < 0 || index >= manager.config.items.length || target >= manager.config.items.length) return false;
+    var moved = manager.config.items.splice(index, 1)[0];
+    manager.config.items.splice(target, 0, moved);
+    manager.config.items.forEach(function (item, itemIndex) {
+      item.priority = itemIndex + 1;
+    });
+    manager.dirty = true;
+    setWatchlistManagerMessage('顺序已调整，保存后生效', 'info');
+    return true;
+  }
+
+  function toggleWatchlistManagerItem(index, enabled) {
+    var manager = watchlistManagerState();
+    if (!manager.config || !manager.config.items[index]) return false;
+    manager.config.items[index].enabled = Boolean(enabled);
+    manager.dirty = true;
+    setWatchlistManagerMessage('启用状态已修改，保存后生效', 'info');
+    return true;
+  }
+
+  function renderWatchlistManager(personalWatchlist) {
+    var manager = watchlistManagerState();
+    var apiBase = getDecisionWatchlistUrl();
+    var config = manager.config || normalizeWatchlistManagerConfig(null, personalWatchlist);
+    var liveRevision = normalizeString(config.revision || '--');
+    var snapshotRevision = normalizeString((personalWatchlist || {}).config_revision || '--');
+    var rows = asArray(config.items).map(function (item, index) {
+      var rec = item || {};
+      return ''
+        + '<div class="watchlist-manager-row" data-watch-index="' + index + '">'
+        + '  <label class="watchlist-manager-enabled"><input type="checkbox" data-watch-field="enabled"' + (rec.enabled === false ? '' : ' checked') + '>启用</label>'
+        + '  <input class="watchlist-manager-code" data-watch-field="code" value="' + escapeHtml(rec.code || '') + '" maxlength="6" inputmode="numeric" aria-label="股票代码">'
+        + '  <input class="watchlist-manager-name" data-watch-field="note" value="' + escapeHtml(rec.note || '') + '" maxlength="24" aria-label="股票名称">'
+        + '  <select data-watch-field="role" aria-label="观察角色">'
+        + '    <option value="strong_watch"' + (rec.role === 'strong_watch' ? ' selected' : '') + '>强观察</option>'
+        + '    <option value="watch"' + (rec.role === 'watch' ? ' selected' : '') + '>普通观察</option>'
+        + '    <option value="research"' + (rec.role === 'research' ? ' selected' : '') + '>研究</option>'
+        + '    <option value="risk_watch"' + (rec.role === 'risk_watch' ? ' selected' : '') + '>风险观察</option>'
+        + '  </select>'
+        + '  <textarea data-watch-field="thesis" maxlength="240" aria-label="个人观察逻辑" placeholder="写下你关注它的逻辑">' + escapeHtml(rec.thesis || '') + '</textarea>'
+        + '  <div class="watchlist-manager-actions">'
+        + '    <button type="button" data-watch-action="up" aria-label="上移"' + (index === 0 ? ' disabled' : '') + '>↑</button>'
+        + '    <button type="button" data-watch-action="down" aria-label="下移"' + (index === config.items.length - 1 ? ' disabled' : '') + '>↓</button>'
+        + '    <button type="button" data-watch-action="remove">移除</button>'
+        + '  </div>'
+        + '</div>';
+    }).join('');
+    var statusText = manager.message || (manager.loading ? '正在载入线上配置…' : '线上配置与当前日报分析快照彼此独立');
+    var disabled = !apiBase || manager.loading || manager.saving;
+    return ''
+      + '<details class="watchlist-manager"' + (manager.open ? ' open' : '') + '>'
+      + '  <summary><span><strong>管理重点观察池</strong><small>增删、排序、停用</small></span><span>当前 ' + escapeHtml(String(config.items.length)) + ' 只</span></summary>'
+      + '  <div class="watchlist-manager-panel">'
+      + '    <div class="watchlist-manager-revisions"><span>线上配置 <strong>' + escapeHtml(liveRevision) + '</strong></span><span>本日报快照 <strong>' + escapeHtml(snapshotRevision) + '</strong></span></div>'
+      + '    <p class="watchlist-manager-snapshot-note">保存只更新后续配置；当前日报快照及其中的 LLM 分析不会被改写。</p>'
+      + '    <div class="watchlist-manager-list">' + (rows || '<div class="decision-empty">观察池为空，可在下方新增</div>') + '</div>'
+      + '    <div class="watchlist-manager-add"><input data-watch-add-code maxlength="6" inputmode="numeric" placeholder="股票代码"><input data-watch-add-note maxlength="24" placeholder="股票名称"><button type="button" data-watch-action="add">加入</button></div>'
+      + '    <div class="watchlist-manager-save"><label>管理密码<input type="password" data-watch-password autocomplete="current-password" placeholder="仅本次保存使用"></label><button type="button" data-watch-action="save"' + (disabled ? ' disabled' : '') + '>' + (manager.saving ? '保存中…' : '保存配置') + '</button><button type="button" data-watch-action="reload"' + (!apiBase || manager.loading ? ' disabled' : '') + '>重新载入线上配置</button></div>'
+      + '    <p class="watchlist-manager-status is-' + escapeHtml(manager.tone || 'neutral') + '">' + escapeHtml(statusText) + '</p>'
+      + (!apiBase ? '<p class="watchlist-manager-status is-warning">管理接口未配置；本日报仍显示内嵌快照。</p>' : '')
+      + '  </div>'
+      + '</details>';
+  }
+
+  function loadWatchlistManagerConfig(force) {
+    var manager = watchlistManagerState();
+    var apiBase = getDecisionWatchlistUrl();
+    if (!apiBase || !window.fetch || manager.loading || (manager.loaded && !force)) return;
+    manager.loading = true;
+    manager.message = '正在载入线上配置…';
+    window.fetch(apiBase, { method: 'GET', cache: 'no-store' }).then(function (resp) {
+      if (!resp || !resp.ok) throw new Error('线上配置加载失败');
+      manager.etag = normalizeString(resp.headers && resp.headers.get ? resp.headers.get('ETag') : '');
+      return resp.json();
+    }).then(function (payload) {
+      manager.config = normalizeWatchlistManagerConfig(payload, {});
+      manager.loaded = true;
+      manager.dirty = false;
+      manager.conflict = false;
+      setWatchlistManagerMessage('线上配置已载入；当前日报快照保持不变', 'positive');
+    }).catch(function () {
+      manager.loaded = true;
+      setWatchlistManagerMessage('线上配置加载失败，仍保留当前日报快照', 'danger');
+    }).finally(function () {
+      manager.loading = false;
+      renderAuxiliaryCenter();
+    });
+  }
+
+  function syncWatchlistManagerForm(root) {
+    var manager = watchlistManagerState();
+    if (!manager.config || !root) return;
+    Array.prototype.forEach.call(root.querySelectorAll('[data-watch-index]'), function (row) {
+      var index = Number(row.getAttribute('data-watch-index'));
+      var item = manager.config.items[index];
+      if (!item) return;
+      Array.prototype.forEach.call(row.querySelectorAll('[data-watch-field]'), function (field) {
+        var key = field.getAttribute('data-watch-field');
+        item[key] = key === 'enabled' ? Boolean(field.checked) : normalizeString(field.value).trim();
+      });
+    });
+  }
+
+  function saveWatchlistManagerConfig(root) {
+    var manager = watchlistManagerState();
+    var apiBase = getDecisionWatchlistUrl();
+    if (!apiBase || !window.fetch || manager.saving) return;
+    syncWatchlistManagerForm(root);
+    var passwordInput = root && root.querySelector('[data-watch-password]');
+    var password = normalizeString(passwordInput && passwordInput.value).trim();
+    if (passwordInput) passwordInput.value = '';
+    if (!password) {
+      setWatchlistManagerMessage('请输入管理密码后再保存', 'warning');
+      renderAuxiliaryCenter();
+      return;
+    }
+    if (!manager.etag) {
+      setWatchlistManagerMessage('缺少线上版本，请先重新载入线上配置', 'warning');
+      renderAuxiliaryCenter();
+      return;
+    }
+    manager.saving = true;
+    manager.open = true;
+    setWatchlistManagerMessage('正在保存配置…', 'info');
+    window.fetch(apiBase, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + password,
+        'If-Match': manager.etag,
+      },
+      body: JSON.stringify({ items: asArray(manager.config && manager.config.items) }),
+    }).then(function (resp) {
+      return resp.json().catch(function () { return {}; }).then(function (payload) {
+        if (resp.status === 412 || payload.error === 'watchlist revision conflict') {
+          manager.conflict = true;
+          throw new Error('配置版本冲突；请重新载入线上配置后再合并修改');
+        }
+        if (!resp.ok) throw new Error(payload.error || '保存失败');
+        manager.etag = normalizeString(resp.headers && resp.headers.get ? resp.headers.get('ETag') : '');
+        manager.config = normalizeWatchlistManagerConfig(payload, {});
+        manager.dirty = false;
+        manager.conflict = false;
+        setWatchlistManagerMessage('配置已保存，等待下次日报分析；当前日报快照保持不变', 'positive');
+      });
+    }).catch(function (error) {
+      var message = normalizeString(error && error.message);
+      setWatchlistManagerMessage(message.indexOf('配置版本冲突') !== -1 ? message : '保存失败：' + (message || '网络异常'), 'danger');
+    }).finally(function () {
+      manager.saving = false;
+      renderAuxiliaryCenter();
+    });
+  }
+
+  function bindWatchlistManager() {
+    if (!nodes.auxGrid) return;
+    var root = nodes.auxGrid.querySelector('.watchlist-manager');
+    if (!root) return;
+    var manager = watchlistManagerState();
+    if (!manager.config) {
+      manager.config = normalizeWatchlistManagerConfig(null, (state.data || {}).personal_watchlist || {});
+    }
+    root.addEventListener('toggle', function () {
+      manager.open = root.open;
+    });
+    root.addEventListener('input', function () {
+      syncWatchlistManagerForm(root);
+      manager.dirty = true;
+    });
+    root.addEventListener('change', function (event) {
+      var field = event.target && event.target.getAttribute('data-watch-field');
+      if (field === 'enabled') {
+        var row = event.target.closest('[data-watch-index]');
+        toggleWatchlistManagerItem(Number(row.getAttribute('data-watch-index')), event.target.checked);
+      } else {
+        syncWatchlistManagerForm(root);
+        manager.dirty = true;
+      }
+    });
+    root.addEventListener('click', function (event) {
+      var button = event.target && event.target.closest('[data-watch-action]');
+      if (!button) return;
+      var action = button.getAttribute('data-watch-action');
+      var row = button.closest('[data-watch-index]');
+      var index = row ? Number(row.getAttribute('data-watch-index')) : -1;
+      syncWatchlistManagerForm(root);
+      if (action === 'add') {
+        var codeInput = root.querySelector('[data-watch-add-code]');
+        var noteInput = root.querySelector('[data-watch-add-note]');
+        if (addWatchlistManagerItem(codeInput && codeInput.value, noteInput && noteInput.value)) {
+          manager.open = true;
+          renderAuxiliaryCenter();
+        }
+      } else if (action === 'remove' && removeWatchlistManagerItem(index)) {
+        manager.open = true;
+        renderAuxiliaryCenter();
+      } else if (action === 'up' && moveWatchlistManagerItem(index, -1)) {
+        manager.open = true;
+        renderAuxiliaryCenter();
+      } else if (action === 'down' && moveWatchlistManagerItem(index, 1)) {
+        manager.open = true;
+        renderAuxiliaryCenter();
+      } else if (action === 'save') {
+        saveWatchlistManagerConfig(root);
+      } else if (action === 'reload') {
+        manager.open = true;
+        manager.loaded = false;
+        loadWatchlistManagerConfig(true);
+      }
+    });
+    loadWatchlistManagerConfig(false);
+  }
+
   function renderPersonalWatchlist(data) {
     var personalWatchlist = (data || {}).personal_watchlist || {};
     var decisionBrief = (data || {}).decision_brief || {};
@@ -2429,7 +2740,7 @@
       subtitle: '个人逻辑与当日事实分开保存；过期数据不输出动作',
       badge: { text: rows.length ? formatNumber(freshCount, 0) + '/' + rows.length + ' 当日' : '未配置', tone: freshCount === rows.length && rows.length ? 'positive' : 'warning' },
       className: 'personal-watchlist-card',
-      bodyHtml: '<div class="personal-watch-list">' + body + '</div>',
+      bodyHtml: '<div class="personal-watch-list">' + body + '</div>' + renderWatchlistManager(personalWatchlist),
     });
   }
 
@@ -2625,6 +2936,7 @@
       + renderStrategyScorecards(data)
       + renderDiagnosticsCard(data);
     bindSingleOpenDecisionDetails();
+    bindWatchlistManager();
     setTimeout(renderMarketSentimentChart, 0);
   }
 

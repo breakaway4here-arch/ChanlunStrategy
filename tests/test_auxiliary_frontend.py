@@ -54,6 +54,50 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         self.assertIn("不是个股独立结论", renderer)
         self.assertIn("evidence_registry", renderer)
 
+    def test_watchlist_manager_supports_versioned_crud_without_mutating_snapshot(self):
+        for helper in (
+            "function renderWatchlistManager",
+            "function loadWatchlistManagerConfig",
+            "function addWatchlistManagerItem",
+            "function removeWatchlistManagerItem",
+            "function moveWatchlistManagerItem",
+            "function toggleWatchlistManagerItem",
+            "function saveWatchlistManagerConfig",
+            "function bindWatchlistManager",
+        ):
+            self.assertIn(helper, JS)
+        self.assertIn("function getDecisionWatchlistUrl", JS)
+        self.assertIn("getBootstrap().decisionWatchlistUrl", JS)
+        self.assertIn("If-Match", JS)
+        self.assertIn("watchlist revision conflict", JS)
+        self.assertIn("等待下次日报分析", JS)
+        self.assertIn("当前日报快照", JS)
+        self.assertIn("type=\"password\"", JS)
+        self.assertNotIn("WATCHLIST_ADMIN_PASSWORD", JS)
+
+        save_start = JS.index("function saveWatchlistManagerConfig")
+        save_end = JS.index("function bindWatchlistManager", save_start)
+        save = JS[save_start:save_end]
+        load_start = JS.index("function loadWatchlistManagerConfig")
+        load_end = JS.index("function syncWatchlistManagerForm", load_start)
+        load = JS[load_start:load_end]
+        self.assertIn("getDecisionWatchlistUrl()", load)
+        self.assertIn("window.fetch(apiBase", load)
+        self.assertIn("getDecisionWatchlistUrl()", save)
+        self.assertIn("window.fetch(apiBase", save)
+        self.assertNotIn("state.data.personal_watchlist =", save)
+
+    def test_watchlist_manager_has_conflict_and_save_failure_states(self):
+        for text in (
+            "配置版本冲突",
+            "保存失败",
+            "重新载入线上配置",
+            "配置已保存",
+        ):
+            self.assertIn(text, JS)
+        self.assertIn(".watchlist-manager", CSS)
+        self.assertIn(".watchlist-manager-row", CSS)
+
     def test_directions_are_capped_and_watchlist_is_not_truncated(self):
         self.assertIn("decisionBrief.theses).slice(0, 3)", JS)
         self.assertIn("personalWatchlist.items).filter", JS)

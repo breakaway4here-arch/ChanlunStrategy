@@ -3,23 +3,25 @@
 import hashlib
 import json
 import os
+import re
 from datetime import datetime
+from urllib.request import Request, urlopen
 
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_WATCHLIST_PATH = os.path.join(
     BASE_DIR, "config", "decision_watchlist.json"
 )
-SUPPORTED_ROLES = {"strong_watch", "watch", "risk_watch"}
+DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
+SUPPORTED_ROLES = {"strong_watch", "watch", "research", "risk_watch"}
 
 
 def _is_a_share_code(value):
     code = str(value or "").strip()
-    return (
-        len(code) == 6
-        and code.isdigit()
-        and code.startswith(("0", "3", "4", "6", "8", "92"))
-    )
+    return bool(re.match(
+        r"^(?:6\d{5}|(?:000|001|002|003|300|301)\d{3}|[48]\d{5}|92\d{4})$",
+        code,
+    ))
 
 
 def _normalized_text(value, field, maximum=500):
@@ -46,19 +48,7 @@ def _normalized_tags(value):
     return tags
 
 
-def load_personal_watchlist(path=None, name_map=None):
-    """Load and validate the canonical watchlist.
-
-    Display names are always derived from the trusted local code mapping. Any
-    name in the editable JSON is ignored deliberately.
-    """
-    path = os.fspath(path or DEFAULT_WATCHLIST_PATH)
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, ValueError, TypeError) as exc:
-        raise ValueError("cannot load personal watchlist: {}".format(exc))
-
+def _normalize_personal_watchlist(payload, name_map=None):
     if not isinstance(payload, dict):
         raise ValueError("watchlist must be an object")
     schema_version = str(payload.get("schema_version") or "")
@@ -70,8 +60,8 @@ def load_personal_watchlist(path=None, name_map=None):
     raw_items = payload.get("items")
     if not isinstance(raw_items, list):
         raise ValueError("watchlist items must be a list")
-    if len(raw_items) > 50:
-        raise ValueError("watchlist cannot contain more than 50 items")
+    if len(raw_items) > 20:
+        raise ValueError("watchlist cannot contain more than 20 items")
 
     if name_map is None:
         from .data_fetcher import get_code_to_name
@@ -94,8 +84,6 @@ def load_personal_watchlist(path=None, name_map=None):
         if code in seen:
             raise ValueError("duplicate watchlist code: {}".format(code))
         seen.add(code)
-        if code not in name_map:
-            raise ValueError("stock name mapping is missing for {}".format(code))
 
         enabled = raw.get("enabled", True)
         if not isinstance(enabled, bool):
@@ -111,7 +99,7 @@ def load_personal_watchlist(path=None, name_map=None):
 
         items.append({
             "code": code,
-            "name": name_map[code],
+            "name": name_map.get(code, code),
             "enabled": enabled,
             "added_at": _normalized_text(
                 raw.get("added_at"), "added_at", maximum=40
@@ -134,6 +122,104 @@ def load_personal_watchlist(path=None, name_map=None):
             payload.get("updated_by"), "updated_by", maximum=80
         ),
         "items": items,
+        "name_resolution_missing_codes": [
+            item["code"] for item in items if item["name"] == item["code"]
+        ],
+    }
+
+
+def load_personal_watchlist(path=None, name_map=None):
+    """Load and validate the repository fallback watchlist.
+
+    Display names are always derived from the trusted local code mapping. Any
+    name in the editable JSON is ignored deliberately.
+    """
+    path = os.fspath(path or DEFAULT_WATCHLIST_PATH)
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError) as exc:
+        raise ValueError("cannot load personal watchlist: {}".format(exc))
+    return _normalize_personal_watchlist(payload, name_map=name_map)
+
+
+def _fetch_remote_personal_watchlist(url):
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "ChanlunStrategy/decision-watchlist",
+        },
+    )
+    with urlopen(request, timeout=5) as response:
+        raw = response.read().decode("utf-8")
+    return json.loads(raw)
+
+
+def resolve_decision_watchlist_url(top10_api_base=None):
+    """Use the same Worker origin as the generated report page."""
+    if top10_api_base is None:
+        top10_api_base = os.environ.get(
+            "CHANLUN_TOP10_API_BASE",
+            DEFAULT_TOP10_API_BASE,
+        )
+    base = str(top10_api_base or "").strip().rstrip("/")
+    return base + "/api/decision-watchlist" if base else ""
+
+
+def resolve_personal_watchlist(
+    path=None,
+    remote_url=None,
+    fetcher=None,
+    name_map=None,
+):
+    """Resolve the immutable config used by this report run.
+
+    A valid Worker version replaces the repository bootstrap as a whole. Any
+    transport or validation failure fails closed to the local file and is
+    returned as explicit diagnostics; items are never partially merged.
+    """
+    if name_map is None:
+        from .data_fetcher import get_code_to_name
+
+        name_map = get_code_to_name()
+    local_config = load_personal_watchlist(path=path, name_map=name_map)
+    if remote_url is None:
+        remote_url = resolve_decision_watchlist_url()
+    remote_url = str(remote_url or "").strip()
+    diagnostics = {
+        "status": "local_only" if not remote_url else "local_fallback",
+        "source": "local_file",
+        "revision": local_config["revision"],
+        "remote_url": remote_url,
+        "remote_error": "",
+        "name_resolution_missing_codes": local_config.get(
+            "name_resolution_missing_codes", []
+        ),
+    }
+    if not remote_url:
+        return local_config, diagnostics
+
+    fetcher = fetcher or _fetch_remote_personal_watchlist
+    try:
+        remote_payload = fetcher(remote_url)
+        remote_config = _normalize_personal_watchlist(
+            remote_payload,
+            name_map=name_map,
+        )
+    except Exception as exc:
+        diagnostics["remote_error"] = str(exc)[:500]
+        return local_config, diagnostics
+
+    return remote_config, {
+        "status": "remote_live",
+        "source": "worker",
+        "revision": remote_config["revision"],
+        "remote_url": remote_url,
+        "remote_error": "",
+        "name_resolution_missing_codes": remote_config.get(
+            "name_resolution_missing_codes", []
+        ),
     }
 
 

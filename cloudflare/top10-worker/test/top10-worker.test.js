@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { handleRequest } from "../src/index.js";
+import { DecisionWatchlist, handleRequest } from "../src/index.js";
 
 class MemoryKV {
   constructor() {
@@ -27,8 +27,44 @@ class MemoryKV {
   }
 }
 
+class MemoryDurableStorage {
+  constructor() {
+    this.store = new Map();
+    this.queue = Promise.resolve();
+  }
+
+  async get(key) {
+    return this.store.get(key);
+  }
+
+  async put(key, value) {
+    this.store.set(key, structuredClone(value));
+  }
+
+  async transaction(callback) {
+    const run = this.queue.then(() => callback(this));
+    this.queue = run.catch(() => undefined);
+    return run;
+  }
+}
+
+class MemoryDurableNamespace {
+  constructor(env) {
+    this.storage = new MemoryDurableStorage();
+    this.object = new DecisionWatchlist({ storage: this.storage }, env);
+  }
+
+  idFromName(name) {
+    return name;
+  }
+
+  get() {
+    return { fetch: (request) => this.object.fetch(request) };
+  }
+}
+
 function createBaseEnv() {
-  return {
+  const env = {
     TRIGGER_PASSWORD: "secret-1",
     CALLBACK_TOKEN: "callback-1",
     GITHUB_TOKEN: "ghp_mock_token",
@@ -36,8 +72,11 @@ function createBaseEnv() {
     GITHUB_REPO: "repo-1",
     GITHUB_WORKFLOW_ID: "workflow.yml",
     GITHUB_REF: "main",
+    WATCHLIST_ADMIN_PASSWORD: "watch-secret-1",
     TOP10_KV: new MemoryKV(),
   };
+  env.DECISION_WATCHLIST = new MemoryDurableNamespace(env);
+  return env;
 }
 
 function parseJsonFromResponse(response) {
@@ -662,6 +701,211 @@ async function testCurrentQuotesUsesExistingCorsRules() {
   assert.equal(response.headers.get("access-control-allow-origin"), "https://allowed.example");
 }
 
+function watchlistItem(code = "300308", overrides = {}) {
+  return {
+    code,
+    note: code === "300308" ? "中际旭创" : "测试股",
+    role: "strong_watch",
+    enabled: true,
+    tags: ["用户重点观察"],
+    thesis: "等待板块、事件和个股结构共振。",
+    ...overrides,
+  };
+}
+
+async function testWatchlistGetReturnsRevisionAndEtag() {
+  const env = createBaseEnv();
+  const response = await handleRequest(
+    createRequest("/api/decision-watchlist", { method: "GET" }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const data = await parseJsonFromResponse(response);
+  assert.ok(data.revision);
+  assert.ok(Array.isArray(data.items));
+  assert.equal(data.items.length, 5);
+  assert.equal(response.headers.get("etag"), `"${data.revision}"`);
+}
+
+async function testWatchlistPutRequiresAuthenticationAndIfMatch() {
+  const env = createBaseEnv();
+  const current = await handleRequest(
+    createRequest("/api/decision-watchlist", { method: "GET" }), env,
+  );
+  const etag = current.headers.get("etag");
+  const body = JSON.stringify({ items: [watchlistItem()] });
+
+  const unauthenticated = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers: { "content-type": "application/json", "if-match": etag },
+      body,
+    }),
+    env,
+  );
+  assert.equal(unauthenticated.status, 401);
+
+  const missingEtag = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer watch-secret-1",
+      },
+      body,
+    }),
+    env,
+  );
+  assert.equal(missingEtag.status, 428);
+}
+
+async function testWatchlistPutRejectsConflictAndReturnsCurrentRevision() {
+  const env = createBaseEnv();
+  const response = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer watch-secret-1",
+        "if-match": '"stale-revision"',
+      },
+      body: JSON.stringify({ items: [watchlistItem()] }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 412);
+  const data = await parseJsonFromResponse(response);
+  assert.equal(data.error, "watchlist revision conflict");
+  assert.ok(data.current?.revision);
+  assert.equal(response.headers.get("etag"), `"${data.current.revision}"`);
+}
+
+async function testWatchlistPutValidatesItemsAndMaximumSize() {
+  const env = createBaseEnv();
+  const current = await handleRequest(
+    createRequest("/api/decision-watchlist", { method: "GET" }), env,
+  );
+  const headers = {
+    "content-type": "application/json",
+    authorization: "Bearer watch-secret-1",
+    "if-match": current.headers.get("etag"),
+  };
+  const invalid = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ items: [watchlistItem("bad", { role: "owner" })] }),
+    }),
+    env,
+  );
+  assert.equal(invalid.status, 400);
+
+  const invalidRole = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ items: [watchlistItem("300308", { role: "owner" })] }),
+    }),
+    env,
+  );
+  assert.equal(invalidRole.status, 400);
+  assert.equal((await parseJsonFromResponse(invalidRole)).error, "invalid watchlist role");
+
+  const tooMany = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({
+        items: Array.from({ length: 21 }, (_, index) => watchlistItem(String(600000 + index))),
+      }),
+    }),
+    env,
+  );
+  assert.equal(tooMany.status, 400);
+  assert.equal((await parseJsonFromResponse(tooMany)).error, "watchlist maximum is 20 items");
+}
+
+async function testWatchlistPutUpdatesRevisionAndCreatesAuditRecord() {
+  const env = createBaseEnv();
+  const current = await handleRequest(
+    createRequest("/api/decision-watchlist", { method: "GET" }), env,
+  );
+  const previous = await parseJsonFromResponse(current);
+  const response = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer watch-secret-1",
+        "if-match": current.headers.get("etag"),
+      },
+      body: JSON.stringify({
+        items: [watchlistItem("300139", { note: "晓程科技" }), watchlistItem()],
+      }),
+    }),
+    env,
+  );
+  assert.equal(response.status, 200);
+  const data = await parseJsonFromResponse(response);
+  assert.notEqual(data.revision, previous.revision);
+  assert.equal(data.items[0].priority, 1);
+  assert.equal(data.items[1].priority, 2);
+  assert.equal(data.analysis_effect, "next_report");
+  assert.equal(response.headers.get("etag"), `"${data.revision}"`);
+  const saved = await env.DECISION_WATCHLIST.storage.get("decision:watchlist:current");
+  assert.equal(saved.revision, data.revision);
+  const audit = await env.DECISION_WATCHLIST.storage.get(`decision:watchlist:audit:${data.revision}`);
+  assert.equal(audit.previous_revision, previous.revision);
+  assert.equal(audit.updated_by, "web_admin");
+}
+
+async function testWatchlistConcurrentPutAllowsExactlyOneRevisionWinner() {
+  const env = createBaseEnv();
+  const current = await handleRequest(
+    createRequest("/api/decision-watchlist", { method: "GET" }), env,
+  );
+  const etag = current.headers.get("etag");
+  const requestFor = (code) => handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "PUT",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer watch-secret-1",
+        "if-match": etag,
+      },
+      body: JSON.stringify({ items: [watchlistItem(code)] }),
+    }),
+    env,
+  );
+
+  const responses = await Promise.all([
+    requestFor("300139"),
+    requestFor("300308"),
+  ]);
+  assert.deepEqual(responses.map((response) => response.status).sort(), [200, 412]);
+  const winner = await responses.find((response) => response.status === 200).json();
+  const saved = await env.DECISION_WATCHLIST.storage.get("decision:watchlist:current");
+  const audit = await env.DECISION_WATCHLIST.storage.get(`decision:watchlist:audit:${winner.revision}`);
+  assert.equal(saved.revision, winner.revision);
+  assert.equal(audit.revision, winner.revision);
+}
+
+async function testWatchlistCorsAllowsVersionedPutHeaders() {
+  const env = createBaseEnv();
+  env.ALLOWED_ORIGINS = "https://allowed.example";
+  const response = await handleRequest(
+    createRequest("/api/decision-watchlist", {
+      method: "OPTIONS",
+      headers: { origin: "https://allowed.example" },
+    }),
+    env,
+  );
+  assert.equal(response.status, 204);
+  assert.match(response.headers.get("access-control-allow-methods"), /PUT/);
+  assert.match(response.headers.get("access-control-allow-headers"), /if-match/);
+  assert.match(response.headers.get("access-control-expose-headers"), /ETag/i);
+}
+
 async function main() {
   await testWrongPassword();
   await testRunDispatchSuccess();
@@ -682,6 +926,13 @@ async function main() {
   await testCurrentQuotesSplitsMoreThan100CodesIntoBatches();
   await testCurrentQuotesTracksFailureByOwningBatch();
   await testCurrentQuotesUsesExistingCorsRules();
+  await testWatchlistGetReturnsRevisionAndEtag();
+  await testWatchlistPutRequiresAuthenticationAndIfMatch();
+  await testWatchlistPutRejectsConflictAndReturnsCurrentRevision();
+  await testWatchlistPutValidatesItemsAndMaximumSize();
+  await testWatchlistPutUpdatesRevisionAndCreatesAuditRecord();
+  await testWatchlistConcurrentPutAllowsExactlyOneRevisionWinner();
+  await testWatchlistCorsAllowsVersionedPutHeaders();
 
   console.log("top10-worker.test.js: all tests passed");
 }

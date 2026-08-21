@@ -19,6 +19,7 @@ import numpy as np
 from chanlun.chan_engine import calc_macd
 from chanlun.report_comparison import write_comparison_index
 from chanlun.report_view_model import build_workspace
+from chanlun.personal_watchlist import resolve_decision_watchlist_url
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
@@ -1288,10 +1289,20 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
     daily_data["workspace"] = build_workspace(daily_data)
     _backfill_workspace_scores(daily_data)
 
+    top10_api_base = os.environ.get(
+        "CHANLUN_TOP10_API_BASE", DEFAULT_TOP10_API_BASE
+    ).strip().rstrip("/")
+    decision_watchlist_url = (
+        ""
+        if daily_data.get("data_quality", {}).get("stock_pool_source")
+        == "manual_debug"
+        else resolve_decision_watchlist_url(top10_api_base)
+    )
     bootstrap = {
         "pageDate": date_str,
         "inlineReportData": daily_data,
-        "top10ApiBase": os.environ.get("CHANLUN_TOP10_API_BASE", DEFAULT_TOP10_API_BASE).strip().rstrip("/"),
+        "top10ApiBase": top10_api_base,
+        "decisionWatchlistUrl": decision_watchlist_url,
         "accessControlEnabled": bool(ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY),
         "accessKeyHash": access_key_hash,
         "accessKeySalt": FULL_ACCESS_KEY_SALT if ENABLE_WEAK_ACCESS_CONTROL else "",

@@ -1960,6 +1960,162 @@ body {
   font-size: 10px;
 }
 
+.watchlist-manager {
+  margin-top: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.watchlist-manager > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  color: #334155;
+  cursor: pointer;
+  list-style: none;
+}
+
+.watchlist-manager > summary::-webkit-details-marker {
+  display: none;
+}
+
+.watchlist-manager > summary span:first-child strong,
+.watchlist-manager > summary span:first-child small {
+  display: block;
+}
+
+.watchlist-manager > summary small,
+.watchlist-manager > summary > span:last-child {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.watchlist-manager[open] > summary {
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+
+.watchlist-manager-panel {
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+}
+
+.watchlist-manager-revisions,
+.watchlist-manager-add,
+.watchlist-manager-save,
+.watchlist-manager-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.watchlist-manager-revisions span {
+  padding: 5px 7px;
+  border-radius: 7px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.watchlist-manager-revisions strong {
+  color: #334155;
+}
+
+.watchlist-manager-snapshot-note {
+  margin: 0 !important;
+  padding: 7px 8px;
+  border-left: 2px solid #3b82f6;
+  background: #eff6ff;
+  color: #475569 !important;
+}
+
+.watchlist-manager-list {
+  display: grid;
+  gap: 7px;
+}
+
+.watchlist-manager-row {
+  display: grid;
+  grid-template-columns: auto 78px 96px 96px minmax(130px, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 7px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.watchlist-manager-row input,
+.watchlist-manager-row select,
+.watchlist-manager-row textarea,
+.watchlist-manager-add input,
+.watchlist-manager-save input {
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #1e293b;
+  font: inherit;
+  font-size: 11px;
+  padding: 7px;
+}
+
+.watchlist-manager-row textarea {
+  min-height: 48px;
+  resize: vertical;
+}
+
+.watchlist-manager-enabled,
+.watchlist-manager-save label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #475569;
+  font-size: 11px;
+}
+
+.watchlist-manager button {
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.watchlist-manager button:hover:not(:disabled) {
+  border-color: #60a5fa;
+  color: #1d4ed8;
+}
+
+.watchlist-manager button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.watchlist-manager-save button[data-watch-action="save"] {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.watchlist-manager-status {
+  margin: 0 !important;
+  font-size: 11px !important;
+}
+
+.watchlist-manager-status.is-positive { color: #15803d !important; }
+.watchlist-manager-status.is-info { color: #1d4ed8 !important; }
+.watchlist-manager-status.is-warning { color: #b45309 !important; }
+.watchlist-manager-status.is-danger { color: #b91c1c !important; }
+
 .ecology-metrics {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
@@ -2749,6 +2905,30 @@ body {
   .direction-detail-grid,
   .personal-watch-list {
     grid-template-columns: 1fr;
+  }
+
+  .watchlist-manager-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .watchlist-manager-enabled,
+  .watchlist-manager-row textarea,
+  .watchlist-manager-actions {
+    grid-column: 1 / -1;
+  }
+
+  .watchlist-manager-add,
+  .watchlist-manager-save {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .watchlist-manager-add input,
+  .watchlist-manager-add button,
+  .watchlist-manager-save label,
+  .watchlist-manager-save input,
+  .watchlist-manager-save button {
+    width: 100%;
   }
 
   .ecology-metrics {

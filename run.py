@@ -86,8 +86,8 @@ from chanlun.personal_watchlist import (
     build_personal_watchlist_snapshot,
     build_watchlist_fact_index,
     ensure_watchlist_stocks,
-    load_personal_watchlist,
     load_previous_personal_watchlist,
+    resolve_personal_watchlist,
 )
 from chanlun.position_book import (
     PUBLIC_HOLDING_RISK_ENV,
@@ -1459,7 +1459,9 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         as_of=today,
     )
-    personal_watchlist_config = load_personal_watchlist()
+    personal_watchlist_config, personal_watchlist_config_diagnostics = (
+        resolve_personal_watchlist(remote_url="" if debug else None)
+    )
     print(f"缠论选股系统启动 — {today} {time_metadata['generated_at'][11:19]}")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
@@ -1552,6 +1554,30 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     data_quality = daily_data.get("data_quality", {})
+    data_quality["personal_watchlist_config"] = (
+        personal_watchlist_config_diagnostics
+    )
+    if (
+        personal_watchlist_config_diagnostics.get("status")
+        == "local_fallback"
+    ):
+        data_quality.setdefault("warnings", []).append(
+            "重点观察池远端配置不可用，本次使用仓库回退版本 {}: {}".format(
+                personal_watchlist_config_diagnostics.get("revision", ""),
+                personal_watchlist_config_diagnostics.get(
+                    "remote_error", "unknown error"
+                ),
+            )
+        )
+    unresolved_watch_names = personal_watchlist_config_diagnostics.get(
+        "name_resolution_missing_codes", []
+    )
+    if unresolved_watch_names:
+        data_quality.setdefault("warnings", []).append(
+            "重点观察池股票名称映射尚未同步，暂以代码展示: {}".format(
+                ", ".join(unresolved_watch_names)
+            )
+        )
     data_quality["daily_run_mode"] = (
         "missing_only" if retry_missing_only else "db_first"
     )

@@ -9,6 +9,20 @@
       "id": "9ac3f37ffcb34dfab4569f68da3fab55"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "DECISION_WATCHLIST",
+        "class_name": "DecisionWatchlist"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-decision-watchlist",
+      "new_sqlite_classes": ["DecisionWatchlist"]
+    }
+  ],
   "vars": {
     "ALLOWED_ORIGINS": "https://breakaway4here-arch.github.io",
     "GITHUB_OWNER": "breakaway4here-arch",

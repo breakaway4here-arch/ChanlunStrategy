@@ -4,9 +4,9 @@
 
 **Goal:** Rebuild the auxiliary decision area into an evidence-linked decision cockpit with reliable limit-up data, a persistent personal watchlist, grounded LLM analysis, real-position-only risk alerts, and attributable strategy reviews.
 
-**Architecture:** Deterministic code owns market facts, data status, recommendation provenance, return calculations, and hard action gates. The LLM receives only structured facts with evidence IDs and returns validated event arbitration, direction clusters, watchlist relationships, and conditional explanations. The static report embeds an immutable analysis snapshot; the existing Cloudflare Worker later manages versioned watchlist configuration without mutating the current report snapshot.
+**Architecture:** Deterministic code owns market facts, data status, recommendation provenance, return calculations, and hard action gates. The LLM receives only structured facts with evidence IDs and returns validated event arbitration, direction clusters, watchlist relationships, and conditional explanations. The static report embeds an immutable analysis snapshot; the existing Cloudflare Worker fronts a single SQLite-backed Durable Object that transactionally stores current configuration, full revision snapshots and audit history without mutating the current report snapshot. Workers KV is not used for watchlist version locking because it has no atomic compare-and-swap contract.
 
-**Tech Stack:** Python 3, `unittest`, plain JavaScript/CSS, existing report generator, JSON fixtures, Cloudflare Worker KV, Node test runner.
+**Tech Stack:** Python 3, `unittest`, plain JavaScript/CSS, existing report generator, JSON fixtures, Cloudflare Worker, SQLite-backed Durable Object, Node test runner.
 
 ---
 
@@ -366,10 +366,14 @@ git commit -m "feat: 增加推荐账本与策略归因回看"
 ### Task 7: Add versioned watchlist management to the existing Worker
 
 **Files:**
+- Modify: `chanlun/personal_watchlist.py`
+- Modify: `run.py`
 - Modify: `cloudflare/top10-worker/src/index.js`
 - Modify: `cloudflare/top10-worker/test/top10-worker.test.js`
 - Modify: `chanlun/report_assets/report-v2.js`
 - Modify: `chanlun/report_assets/report-v2.css`
+- Modify: `docs/plans/2026-08-20-auxiliary-decision-copilot-design.md`
+- Test: `tests/test_personal_watchlist.py`
 - Test: `tests/test_auxiliary_frontend.py`
 
 **Step 1: Write failing Worker API tests**
@@ -384,7 +388,7 @@ Expected: FAIL because watchlist routes do not exist.
 
 **Step 3: Implement Worker-side configuration routes**
 
-Keep write secrets server-side. Do not embed credentials in static JavaScript. Return revision/ETag and require optimistic locking for updates.
+Keep write secrets server-side. Do not embed credentials in static JavaScript. Return revision/ETag and require optimistic locking for updates. Store current, complete immutable revision snapshots, and audits inside one Durable Object transaction so concurrent requests with the same ETag cannot both succeed.
 
 **Step 4: Write failing management UI tests**
 
@@ -396,20 +400,34 @@ Keep live configuration distinct from the embedded analysis snapshot. A save mus
 
 **Step 6: Verify GREEN**
 
+Make the next report resolve the same Worker revision saved by the page. A valid remote version replaces the local bootstrap as a whole; a transport or schema failure must fall back with explicit `data_quality` diagnostics.
+
 Run:
 
 ```bash
 node --test cloudflare/top10-worker/test/top10-worker.test.js
 node --check chanlun/report_assets/report-v2.js
-python3 -m unittest tests.test_auxiliary_frontend -v
+python3 -m unittest tests.test_personal_watchlist tests.test_auxiliary_frontend -v
 ```
 
 Expected: PASS.
 
+**Deployment preflight and live acceptance**
+
+Before deploying from `cloudflare/top10-worker`, configure the write secret with `npx wrangler secret put WATCHLIST_ADMIN_PASSWORD`; never store its value in the repository. The committed Durable Object migration in `wrangler.jsonc` must be applied by the Worker deployment.
+
+After deployment, acceptance is not complete until a real page operation proves the full revision chain:
+
+1. Page GET returns revision `R0` and ETag `R0`.
+2. Authenticated page PUT with `If-Match: R0` returns revision `R1`.
+3. Worker GET returns the exact full `R1` configuration.
+4. The next non-debug report records `data_quality.personal_watchlist_config.revision=R1` and `personal_watchlist.config_revision=R1`.
+5. A concurrent or stale PUT using `R0` returns 412 and does not create a second winner.
+
 **Step 7: Commit**
 
 ```bash
-git add cloudflare/top10-worker/src/index.js cloudflare/top10-worker/test/top10-worker.test.js chanlun/report_assets/report-v2.js chanlun/report_assets/report-v2.css tests/test_auxiliary_frontend.py
+git add chanlun/personal_watchlist.py run.py cloudflare/top10-worker/src/index.js cloudflare/top10-worker/test/top10-worker.test.js chanlun/report_assets/report-v2.js chanlun/report_assets/report-v2.css docs/plans/2026-08-20-auxiliary-decision-copilot-design.md docs/plans/2026-08-20-auxiliary-decision-copilot-implementation.md tests/test_personal_watchlist.py tests/test_auxiliary_frontend.py
 git commit -m "feat: 增加重点观察池页面管理"
 ```
 

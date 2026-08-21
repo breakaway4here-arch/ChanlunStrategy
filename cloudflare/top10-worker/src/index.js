@@ -5,6 +5,22 @@ const QUOTE_BATCH_SIZE = 100;
 const EASTMONEY_QUOTE_URL = "https://push2.eastmoney.com/api/qt/ulist.np/get";
 const TENCENT_QUOTE_URL = "https://qt.gtimg.cn/q=";
 const ASHARE_CODE_PATTERN = /^(?:6\d{5}|(?:000|001|002|003|300|301)\d{3}|[48]\d{5}|92\d{4})$/;
+const WATCHLIST_KEY = "decision:watchlist:current";
+const WATCHLIST_MAX_ITEMS = 20;
+const WATCHLIST_ROLES = new Set(["strong_watch", "watch", "research", "risk_watch"]);
+const DEFAULT_DECISION_WATCHLIST = {
+  schema_version: "1",
+  revision: "watchlist-20260820-01",
+  updated_at: "2026-08-20T16:00:00+08:00",
+  updated_by: "user",
+  items: [
+    { code: "300139", note: "晓程科技", role: "strong_watch", enabled: true, priority: 1, tags: ["用户重点观察", "黄金科技"], thesis: "跟踪贵金属、芯片设计与公司自身催化是否形成盘面共振。" },
+    { code: "002281", note: "光迅科技", role: "strong_watch", enabled: true, priority: 2, tags: ["用户重点观察", "光通信"], thesis: "跟踪光模块与通信设备方向的事件、板块资金和个股结构共振。" },
+    { code: "300308", note: "中际旭创", role: "strong_watch", enabled: true, priority: 3, tags: ["用户重点观察", "光通信"], thesis: "跟踪海外算力和高速光模块催化能否被板块与个股强度确认。" },
+    { code: "688041", note: "海光信息", role: "strong_watch", enabled: true, priority: 4, tags: ["用户重点观察", "国产算力"], thesis: "跟踪国产算力、服务器和先进计算产业链的持续性与结构位置。" },
+    { code: "688525", note: "佰维存储", role: "strong_watch", enabled: true, priority: 5, tags: ["用户重点观察", "存储"], thesis: "跟踪存储涨价、端侧 AI 和半导体资金方向能否形成有效共振。" },
+  ],
+};
 
 function parseAllowedOrigins(rawOrigins) {
   if (!rawOrigins) {
@@ -35,8 +51,9 @@ function getCorsOrigin(requestOrigin, env) {
 
 function makeCorsHeaders(requestOrigin, env, extra = {}) {
   const headers = {
-    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    "Access-Control-Allow-Headers": "authorization,content-type,x-callback-token",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,OPTIONS",
+    "Access-Control-Allow-Headers": "authorization,content-type,if-match,x-callback-token",
+    "Access-Control-Expose-Headers": "ETag",
     "Access-Control-Max-Age": "86400",
     ...extra,
   };
@@ -259,6 +276,196 @@ function sanitizeToken(value) {
 function sanitizeDate(value) {
   const text = sanitizeToken(value);
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : "";
+}
+
+function watchlistEtag(revision) {
+  return `"${sanitizeToken(revision)}"`;
+}
+
+function cloneDefaultWatchlist() {
+  return JSON.parse(JSON.stringify(DEFAULT_DECISION_WATCHLIST));
+}
+
+async function loadDecisionWatchlist(storage) {
+  const raw = await storage.get(WATCHLIST_KEY);
+  if (!raw) return cloneDefaultWatchlist();
+  const current = typeof raw === "string" ? parseJson(raw, null) : raw;
+  if (!current || !sanitizeToken(current.revision) || !Array.isArray(current.items)) {
+    throw new Error("invalid watchlist state");
+  }
+  return current;
+}
+
+function limitedText(value, maximum, fallback = "") {
+  const text = typeof value === "string" ? value.trim() : fallback;
+  return text.slice(0, maximum);
+}
+
+function normalizeWatchlistItems(items) {
+  if (!Array.isArray(items)) return { error: "watchlist items must be an array" };
+  if (items.length > WATCHLIST_MAX_ITEMS) {
+    return { error: `watchlist maximum is ${WATCHLIST_MAX_ITEMS} items` };
+  }
+  const seen = new Set();
+  const normalized = [];
+  for (let index = 0; index < items.length; index += 1) {
+    const source = items[index];
+    if (!source || typeof source !== "object" || Array.isArray(source)) {
+      return { error: "invalid watchlist item", index };
+    }
+    const code = sanitizeToken(source.code);
+    const role = sanitizeToken(source.role || "strong_watch");
+    if (!ASHARE_CODE_PATTERN.test(code)) {
+      return { error: "invalid watchlist stock code", index, code };
+    }
+    if (seen.has(code)) {
+      return { error: "duplicate watchlist stock code", index, code };
+    }
+    if (!WATCHLIST_ROLES.has(role)) {
+      return { error: "invalid watchlist role", index, role };
+    }
+    seen.add(code);
+    const tags = Array.isArray(source.tags)
+      ? source.tags.map((tag) => limitedText(tag, 20)).filter(Boolean).slice(0, 5)
+      : [];
+    normalized.push({
+      code,
+      note: limitedText(source.note, 24, code) || code,
+      role,
+      enabled: source.enabled !== false,
+      priority: index + 1,
+      tags,
+      thesis: limitedText(source.thesis, 240),
+    });
+  }
+  return { items: normalized };
+}
+
+function watchlistAdminAuthorized(request, env) {
+  const expected = sanitizeToken(env.WATCHLIST_ADMIN_PASSWORD);
+  const header = sanitizeToken(request.headers.get("authorization"));
+  const supplied = header.toLowerCase().startsWith("bearer ")
+    ? sanitizeToken(header.slice(7))
+    : "";
+  return Boolean(expected && supplied && supplied === expected);
+}
+
+async function handleDecisionWatchlistGet(storage, env, requestOrigin) {
+  try {
+    const current = await loadDecisionWatchlist(storage);
+    return jsonResponse(200, current, requestOrigin, env, {
+      ETag: watchlistEtag(current.revision),
+      "Cache-Control": "no-store",
+    });
+  } catch {
+    return jsonResponse(500, { error: "invalid watchlist state" }, requestOrigin, env);
+  }
+}
+
+async function handleDecisionWatchlistPut(request, state, env, requestOrigin) {
+  if (!sanitizeToken(env.WATCHLIST_ADMIN_PASSWORD)) {
+    return jsonResponse(503, { error: "watchlist writes are disabled" }, requestOrigin, env);
+  }
+  if (!watchlistAdminAuthorized(request, env)) {
+    return jsonResponse(401, { error: "invalid watchlist credentials" }, requestOrigin, env);
+  }
+  const ifMatch = sanitizeToken(request.headers.get("if-match"));
+  if (!ifMatch) {
+    return jsonResponse(428, { error: "If-Match is required" }, requestOrigin, env);
+  }
+  const body = await parseJsonBody(request);
+  const normalized = normalizeWatchlistItems(body?.items);
+  if (normalized.error) {
+    return jsonResponse(400, normalized, requestOrigin, env);
+  }
+
+  let outcome;
+  try {
+    outcome = await state.storage.transaction(async (txn) => {
+      const current = await loadDecisionWatchlist(txn);
+      const currentEtag = watchlistEtag(current.revision);
+      if (ifMatch !== currentEtag) {
+        return { status: "conflict", current, currentEtag };
+      }
+      const updatedAt = new Date().toISOString();
+      const revision = `watchlist-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+      const next = {
+        schema_version: "1",
+        revision,
+        updated_at: updatedAt,
+        updated_by: "web_admin",
+        items: normalized.items,
+        analysis_effect: "next_report",
+        analysis_message: "配置已保存，等待下次日报分析；当前日报快照不会改变。",
+      };
+      const audit = {
+        revision,
+        previous_revision: current.revision,
+        updated_at: updatedAt,
+        updated_by: "web_admin",
+        previous_config: current,
+        next_config: next,
+      };
+      await txn.put(WATCHLIST_KEY, next);
+      await txn.put(`decision:watchlist:revision:${current.revision}`, current);
+      await txn.put(`decision:watchlist:revision:${revision}`, next);
+      await txn.put(`decision:watchlist:audit:${revision}`, audit);
+      return { status: "saved", next };
+    });
+  } catch {
+    return jsonResponse(500, { error: "watchlist transaction failed" }, requestOrigin, env);
+  }
+
+  if (outcome.status === "conflict") {
+    return jsonResponse(412, {
+      error: "watchlist revision conflict",
+      current: outcome.current,
+    }, requestOrigin, env, {
+      ETag: outcome.currentEtag,
+      "Cache-Control": "no-store",
+    });
+  }
+  return jsonResponse(200, outcome.next, requestOrigin, env, {
+    ETag: watchlistEtag(outcome.next.revision),
+    "Cache-Control": "no-store",
+  });
+}
+
+export class DecisionWatchlist {
+  constructor(state, env) {
+    this.state = state;
+    this.env = env;
+  }
+
+  async fetch(request) {
+    const requestOrigin = request.headers.get("origin");
+    if (request.method === "GET") {
+      return handleDecisionWatchlistGet(
+        this.state.storage,
+        this.env,
+        requestOrigin,
+      );
+    }
+    if (request.method === "PUT") {
+      return handleDecisionWatchlistPut(
+        request,
+        this.state,
+        this.env,
+        requestOrigin,
+      );
+    }
+    return jsonResponse(405, { error: "method not allowed" }, requestOrigin, this.env);
+  }
+}
+
+async function forwardDecisionWatchlist(request, env, requestOrigin) {
+  if (!env.DECISION_WATCHLIST) {
+    return jsonResponse(503, {
+      error: "decision watchlist durable object is not configured",
+    }, requestOrigin, env);
+  }
+  const id = env.DECISION_WATCHLIST.idFromName("global");
+  return env.DECISION_WATCHLIST.get(id).fetch(request);
 }
 
 function getTimeoutMs(state, env) {
@@ -560,6 +767,12 @@ export async function handleRequest(request, env, ctx) {
   }
   if (url.pathname === "/api/quotes/current" && request.method === "POST") {
     return handleCurrentQuotes(request, env, requestOrigin);
+  }
+  if (url.pathname === "/api/decision-watchlist" && request.method === "GET") {
+    return forwardDecisionWatchlist(request, env, requestOrigin);
+  }
+  if (url.pathname === "/api/decision-watchlist" && request.method === "PUT") {
+    return forwardDecisionWatchlist(request, env, requestOrigin);
   }
 
   return jsonResponse(404, { error: "not found" }, requestOrigin, env);

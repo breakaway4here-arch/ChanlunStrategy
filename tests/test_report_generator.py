@@ -410,6 +410,45 @@ def _make_minimal_report_data():
 
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
 
+    def test_debug_report_cannot_write_production_watchlist(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_debug_watchlist_url_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data.setdefault("data_quality", {})[
+            "stock_pool_source"
+        ] = "manual_debug"
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "index.html"), "r", encoding="utf-8") as handle:
+            bootstrap = _extract_bootstrap(handle.read())
+        self.assertEqual(bootstrap["decisionWatchlistUrl"], "")
+        self.assertEqual(
+            bootstrap["top10ApiBase"],
+            "https://top10-worker.breakaway4here.workers.dev",
+        )
+
+    def test_custom_worker_origin_is_shared_by_page_and_report_runtime(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_shared_watchlist_url_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+
+        with mock.patch.dict(
+            os.environ,
+            {"CHANLUN_TOP10_API_BASE": "https://worker.example.test/base/"},
+        ):
+            generate_report(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "index.html"), "r", encoding="utf-8") as handle:
+            bootstrap = _extract_bootstrap(handle.read())
+        self.assertEqual(
+            bootstrap["top10ApiBase"], "https://worker.example.test/base"
+        )
+        self.assertEqual(
+            bootstrap["decisionWatchlistUrl"],
+            "https://worker.example.test/base/api/decision-watchlist",
+        )
+
     def test_holding_risks_are_preserved_separately_from_global_signals(self):
         tmpdir = tempfile.mkdtemp(prefix="test_holding_risks_")
         self.addCleanup(shutil.rmtree, tmpdir)
@@ -732,6 +771,10 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("market", self.bootstrap["inlineReportData"])
         self.assertIn("top10ApiBase", self.bootstrap)
         self.assertEqual(self.bootstrap.get("top10ApiBase"), "https://top10-worker.breakaway4here.workers.dev")
+        self.assertEqual(
+            self.bootstrap.get("decisionWatchlistUrl"),
+            "https://top10-worker.breakaway4here.workers.dev/api/decision-watchlist",
+        )
 
     def test_no_public_dates_in_html(self):
         """HTML no longer embeds the public-date allowlist."""

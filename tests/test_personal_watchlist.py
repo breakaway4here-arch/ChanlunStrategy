@@ -8,6 +8,7 @@ from chanlun.personal_watchlist import (
     build_watchlist_fact_index,
     ensure_watchlist_stocks,
     load_personal_watchlist,
+    resolve_personal_watchlist,
 )
 
 
@@ -81,7 +82,7 @@ class PersonalWatchlistConfigTests(unittest.TestCase):
             [NAME_MAP[code] for code in INITIAL_CODES],
         )
 
-    def test_rejects_duplicate_invalid_code_unknown_name_and_role(self):
+    def test_rejects_duplicate_invalid_code_and_role(self):
         cases = []
         duplicate = self._payload()
         duplicate["items"].append(dict(duplicate["items"][0]))
@@ -95,16 +96,93 @@ class PersonalWatchlistConfigTests(unittest.TestCase):
         unsupported_role["items"][0]["role"] = "holding"
         cases.append(unsupported_role)
 
-        unknown_name = self._payload()
-        unknown_name["items"][0]["code"] = "600999"
-        cases.append(unknown_name)
-
         for payload in cases:
             with self.subTest(payload=payload["items"][0]):
                 with self.assertRaises(ValueError):
                     load_personal_watchlist(
                         self._write_config(payload), name_map=NAME_MAP
                     )
+
+    def test_worker_valid_code_without_local_name_map_uses_code_not_user_label(self):
+        payload = self._payload(items=[{
+            "code": "600999",
+            "note": "不可信的任意名称",
+            "enabled": True,
+            "role": "research",
+            "priority": 1,
+            "thesis": "等待本地证券名称表更新",
+        }])
+
+        config = load_personal_watchlist(
+            self._write_config(payload), name_map=NAME_MAP
+        )
+
+        self.assertEqual(config["items"][0]["name"], "600999")
+        self.assertEqual(config["name_resolution_missing_codes"], ["600999"])
+
+    def test_remote_version_wins_and_supports_research_role(self):
+        remote = self._payload(items=[
+            {
+                "code": "688041",
+                "enabled": True,
+                "role": "research",
+                "priority": 1,
+                "thesis": "跟踪国产算力验证",
+            }
+        ])
+        remote["revision"] = "watchlist-remote-02"
+
+        config, diagnostics = resolve_personal_watchlist(
+            path=self._write_config(self._payload()),
+            remote_url="https://example.test/api/decision-watchlist",
+            fetcher=lambda _url: remote,
+            name_map=NAME_MAP,
+        )
+
+        self.assertEqual(config["revision"], "watchlist-remote-02")
+        self.assertEqual(config["items"][0]["role"], "research")
+        self.assertEqual(diagnostics["status"], "remote_live")
+        self.assertEqual(diagnostics["source"], "worker")
+        self.assertEqual(diagnostics["revision"], "watchlist-remote-02")
+
+    def test_remote_failure_falls_back_to_local_with_explicit_diagnostics(self):
+        def fail(_url):
+            raise TimeoutError("timed out")
+
+        config, diagnostics = resolve_personal_watchlist(
+            path=self._write_config(self._payload()),
+            remote_url="https://example.test/api/decision-watchlist",
+            fetcher=fail,
+            name_map=NAME_MAP,
+        )
+
+        self.assertEqual(config["revision"], "watchlist-20260820-01")
+        self.assertEqual(diagnostics["status"], "local_fallback")
+        self.assertEqual(diagnostics["source"], "local_file")
+        self.assertIn("timed out", diagnostics["remote_error"])
+
+    def test_invalid_remote_payload_does_not_partially_merge(self):
+        remote = self._payload(items=[
+            {
+                "code": "300139",
+                "enabled": True,
+                "role": "holding",
+                "priority": 1,
+            }
+        ])
+
+        config, diagnostics = resolve_personal_watchlist(
+            path=self._write_config(self._payload()),
+            remote_url="https://example.test/api/decision-watchlist",
+            fetcher=lambda _url: remote,
+            name_map=NAME_MAP,
+        )
+
+        self.assertEqual(
+            [item["code"] for item in config["items"]], INITIAL_CODES
+        )
+        self.assertEqual(diagnostics["status"], "local_fallback")
+        self.assertIn("unsupported watchlist role", diagnostics["remote_error"])
 
 
 class PersonalWatchlistSnapshotTests(unittest.TestCase):

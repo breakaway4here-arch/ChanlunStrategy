@@ -293,9 +293,11 @@ LLM 失败时展示规则聚类和事实证据，并明确标记“LLM 分析不
 
 ## 8. 动态维护
 
-### 8.1 第一阶段
+### 8.1 运行时真相与故障回退
 
-仓库内版本化配置作为 canonical truth，日报嵌入本次分析快照。这能先保证五只股票每日稳定进入分析。
+Cloudflare Worker 后的单一 SQLite-backed Durable Object 是版本化配置的 live truth；仓库内版本化配置只作为首次部署和远端不可用时的 bootstrap/fallback。日报生成必须先读取并严格校验远端完整版本，成功后整体替换本地版本，禁止逐项静默合并。远端连接或校验失败时，使用本地回退版本，并在 `data_quality.personal_watchlist_config` 中披露来源、revision 和错误。Workers KV 仍服务原有 Top10 数据，但因 eventual consistency 且没有原子 CAS，不参与重点池的 ETag 版本锁。
+
+日报始终嵌入本次真正使用的不可变分析快照。页面保存只更新下一次运行要读取的配置，不得改写已经生成的日报。
 
 ### 8.2 页面管理
 
@@ -307,6 +309,9 @@ LLM 失败时展示规则聚类和事实证据，并明确标记“LLM 分析不
 - 校验代码、角色、最大数量、schema 和 CORS。
 - 保留审计与回滚所需的 revision。
 - 静态页面不保存可写凭据。
+- 日报生成从同一 Worker GET 接口读取配置，确保页面保存与下次分析之间存在真实闭环。
+
+重点池的 current revision、完整 revision 快照和审计记录必须在单一 Durable Object 的事务内写入。不能用 Workers KV 的非原子 read-check-write 冒充 ETag 并发保护。调试报告不注入可写的重点池地址，避免从 debug 页面误改生产配置。
 
 保存后的新配置只显示“等待下次日报分析”，不能混入当天快照并伪装已分析。
 
