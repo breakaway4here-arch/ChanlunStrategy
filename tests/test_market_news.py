@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import Mock, patch
 from chanlun.market_news import (
     _DECISION_BRIEF_SYSTEM_PROMPT, _analyze_event_llm,
-    _extract_first_json_object, _parse_llm_json,
+    _call_llm_with_retry, _extract_first_json_object, _parse_llm_json,
     analyze_decision_brief_facts,
     THEME_SYNONYMS, classify_event_category, classify_event_type,
     score_market_impact, dedupe_or_downgrade_events, fetch_cls_news,
@@ -20,7 +20,7 @@ class TestEventImpactLlmSchema(unittest.TestCase):
 
         for malformed in malformed_values:
             with self.subTest(malformed=malformed):
-                mock_call.return_value = json.dumps({
+                mock_call.return_value = {
                     "headline": "产业事件",
                     "analysis": ["待验证"],
                     "positive_sectors": malformed,
@@ -28,13 +28,111 @@ class TestEventImpactLlmSchema(unittest.TestCase):
                     "positive_stocks": [],
                     "negative_stocks": [],
                     "no_impact": False,
-                }, ensure_ascii=False)
+                }
 
                 with self.assertRaisesRegex(ValueError, "positive_sectors"):
                     _analyze_event_llm({"title": "产业事件"})
 
+    @patch("chanlun.market_news._call_llm_with_retry")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    def test_event_analysis_has_capacity_for_complete_json(self, mock_call):
+        mock_call.return_value = {
+            "headline": "产业事件",
+            "analysis": ["待验证"],
+            "positive_sectors": ["半导体"],
+            "negative_sectors": [],
+            "positive_stocks": [],
+            "negative_stocks": [],
+            "no_impact": False,
+        }
+
+        _analyze_event_llm({"title": "产业事件"})
+
+        self.assertEqual(mock_call.call_args[1]["max_retries"], 3)
+        self.assertEqual(mock_call.call_args[1]["max_tokens"], 2400)
+        self.assertNotIn("raw_response", mock_call.call_args[1])
+
 
 class TestMarketNewsJsonParsing(unittest.TestCase):
+
+    @patch("chanlun.market_news.time.sleep")
+    @patch("chanlun.market_news.requests.post")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    def test_retry_client_accepts_valid_json_with_surrounding_text(
+        self, mock_post, _mock_sleep
+    ):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "choices": [{
+                "message": {"content": '前缀\n{"ok": true}\n后缀'}
+            }]
+        }
+        mock_post.return_value = response
+
+        result = _call_llm_with_retry(
+            [{"role": "user", "content": "test"}], max_retries=1
+        )
+
+        self.assertEqual(result, {"ok": True})
+
+    @patch("chanlun.market_news.time.sleep")
+    @patch("chanlun.market_news.requests.post")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    def test_retry_client_explains_reasoning_token_exhaustion(
+        self, mock_post, _mock_sleep
+    ):
+        response = Mock()
+        response.raise_for_status.return_value = None
+        response.json.return_value = {
+            "choices": [{
+                "finish_reason": "length",
+                "message": {
+                    "content": "",
+                    "reasoning_content": "推理过程",
+                },
+            }]
+        }
+        mock_post.return_value = response
+
+        with self.assertRaisesRegex(
+            ValueError, "finish_reason=length.*reasoning_chars=4"
+        ):
+            _call_llm_with_retry(
+                [{"role": "user", "content": "test"}], max_retries=1
+            )
+
+    @patch("chanlun.market_news.time.sleep")
+    @patch("chanlun.market_news.requests.post")
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    def test_retry_client_retries_truncated_nonempty_json(
+        self, mock_post, mock_sleep
+    ):
+        truncated = Mock()
+        truncated.raise_for_status.return_value = None
+        truncated.json.return_value = {
+            "choices": [{
+                "finish_reason": "length",
+                "message": {"content": '{"headline":"未完成"'},
+            }]
+        }
+        complete = Mock()
+        complete.raise_for_status.return_value = None
+        complete.json.return_value = {
+            "choices": [{
+                "finish_reason": "stop",
+                "message": {"content": '{"headline":"完成"}'},
+            }]
+        }
+        mock_post.side_effect = [truncated, complete]
+
+        result = _call_llm_with_retry(
+            [{"role": "user", "content": "test"}], max_retries=2
+        )
+
+        self.assertEqual(result, {"headline": "完成"})
+        self.assertEqual(mock_post.call_count, 2)
+        mock_sleep.assert_called_once_with(1)
 
     def test_extract_clean_json(self):
         raw = '{"no_impact": false, "headline": "test"}'
@@ -180,11 +278,13 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
         result = analyze_decision_brief_facts(packet)
 
         self.assertEqual(result["model"], "deepseek-test")
-        self.assertEqual(result["prompt_version"], "decision-brief-v1")
+        self.assertEqual(result["prompt_version"], "decision-brief-v3")
         self.assertEqual(result["schema_version"], "1")
         messages = mock_call.call_args[0][0]
         self.assertIn("event:2026-08-20:abc", messages[1]["content"])
         self.assertIn("300308", messages[1]["content"])
+        self.assertEqual(mock_call.call_args[1]["max_retries"], 3)
+        self.assertEqual(mock_call.call_args[1]["max_tokens"], 4800)
 
     @patch("chanlun.market_news._DS_API_KEY", "")
     def test_provider_fails_explicitly_when_unconfigured(self):

@@ -15,7 +15,13 @@ class ReportSentimentLayoutTests(unittest.TestCase):
         self.assertIn('class="market-temp-layout"', self.asset_js)
         self.assertIn('class="market-temp-snapshot"', self.asset_js)
         self.assertIn('class="market-temp-trend"', self.asset_js)
-        self.assertIn(".market-temperature-card {\n  grid-column: span 2;", self.asset_css)
+        self.assertIn(
+            ".market-temperature-card,\n"
+            ".sector-flow-card,\n"
+            ".decision-directions-card {\n"
+            "  grid-column: span 4;",
+            self.asset_css,
+        )
         self.assertIn(
             "grid-template-columns: minmax(210px, 30%) minmax(0, 70%);",
             self.asset_css,
@@ -32,7 +38,14 @@ class ReportSentimentLayoutTests(unittest.TestCase):
     def test_sentiment_card_expands_on_tablet_and_stacks_on_mobile(self):
         tablet_css = self.asset_css.split("@media (max-width: 1180px)", 1)[1]
         tablet_css = tablet_css.split("@media (max-width: 760px)", 1)[0]
-        self.assertIn(".market-temperature-card {\n    grid-column: span 3;", tablet_css)
+        self.assertIn(
+            ".market-temperature-card,\n"
+            "  .sector-flow-card,\n"
+            "  .decision-directions-card,\n"
+            "  .personal-watchlist-card {\n"
+            "    grid-column: span 2;",
+            tablet_css,
+        )
 
         mobile_css = self.asset_css.rsplit("@media (max-width: 760px)", 1)[1]
         self.assertIn(".market-temp-layout {\n    grid-template-columns: 1fr;", mobile_css)

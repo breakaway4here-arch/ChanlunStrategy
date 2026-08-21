@@ -494,3 +494,20 @@ Fetch and merge the latest `origin/main`, confirm it is an ancestor, then rerun 
 git add docs/assets/report-v2.js docs/assets/report-v2.css docs/index.html docs/data/<current-date>.json docs/<current-date>/index.html
 git commit -m "chore: 更新辅助决策驾驶舱日报"
 ```
+
+## 2026-08-21 本地验收记录
+
+本轮只生成 `output_debug/` 预览，不覆盖或提交正式日报快照。完整 `--debug` 主流程（非正式全 A 日报）运行退出码为 0，并完成以下用户可见验收：
+
+- 涨停生态为 `verified_complete`，原始 45 条、成功解析 45 条、覆盖率 100%。
+- 重点观察池版本为 `watchlist-20260820-01`；晓程科技、光迅科技、中际旭创、海光信息、佰维存储 5/5 均有当日事实。
+- 事件 LLM 10 条全部成功；终局方向为 `status=ok`、模型 `deepseek-v4-pro`、提示词 `decision-brief-v3`。
+- 终局方向输出光伏风险、半导体偏多、消费电子偏多三条证据链；半导体方向明确关联晓程科技和佰维存储，并同时展示下一确认与失效条件。
+- 未配置已确认持仓时，`holding_risks=0`，页面不生成卖出动作。
+- 报告合同与运行切换校验均为 0 错误；根页面、当日 JSON、归档页面均返回 HTTP 200。
+- 桌面 DOM 可读性检查通过；390px 移动端根页面无横向溢出，五只观察股和三条方向均可访问，浏览器控制台无错误。
+- Python 全量测试 1083 项通过；Worker 测试、前端 JavaScript 语法、Python 编译与 `git diff --check` 均通过。
+
+完整 debug 运行还暴露并修复了两项稳定性问题：推荐账本处理 NumPy 向量时先调用 `item()` 导致崩溃；推理模型在完成预算不足时可能返回空正文或非空但截断的 JSON。现在账本先转换数组，事件与终局分析分别获得受控预算，终局 LLM 只接收实际方向引用的证据；空正文和截断 JSON 都会重试并记录 `finish_reason` 与正文长度等诊断。
+
+线上验收仍保留为独立发布门槛：本轮未部署 Worker、未配置线上写入 secret，也未执行 `R0 -> PUT R1 -> GET R1 -> 下一份正式日报读取 R1` 的完整链路，因此不得把本地管理页面验收描述成线上已生效。

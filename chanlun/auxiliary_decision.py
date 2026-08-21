@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import datetime
 import hashlib
+import json
 import re
 
 
@@ -742,10 +743,20 @@ def _base_direction_rows(
 
 
 def _llm_packet(report_date, registry, directions):
+    referenced = {
+        str(ref)
+        for row in directions
+        for ref in row.get("evidence_refs") or []
+        if str(ref)
+    }
     return {
         "schema_version": "1",
         "report_date": str(report_date),
-        "evidence_registry": registry,
+        "evidence_registry": [
+            row
+            for row in registry
+            if str(row.get("evidence_ref") or "") in referenced
+        ],
         "directions": [
             {
                 "theme": row["theme"],
@@ -810,7 +821,57 @@ def _validate_stock_mentions(raw, target):
     return result
 
 
-def _validate_llm_free_text(texts, target, stock_mentions, known_stock_map):
+_ALPHANUMERIC_IDENTIFIER_RE = re.compile(
+    r"(?<![A-Za-z0-9])"
+    r"(?=[A-Za-z0-9+._-]*[A-Za-z])"
+    r"(?=[A-Za-z0-9+._-]*\d)"
+    r"[A-Za-z0-9][A-Za-z0-9+._-]*"
+    r"(?![A-Za-z0-9])"
+)
+_CHINESE_NUMBER_CHARS = "零〇一二两三四五六七八九十百千万亿"
+
+
+def _grounded_alphanumeric_identifiers(target, registry):
+    refs = set(target.get("evidence_refs") or [])
+    source_parts = [str(target.get("theme") or "")]
+    for evidence in registry or []:
+        if (
+            not isinstance(evidence, dict)
+            or evidence.get("evidence_ref") not in refs
+        ):
+            continue
+        semantic_evidence = {
+            key: value
+            for key, value in evidence.items()
+            if key != "evidence_ref"
+        }
+        source_parts.append(json.dumps(
+            semantic_evidence,
+            ensure_ascii=False,
+            sort_keys=True,
+        ))
+    for field in ("sector_links", "stock_links"):
+        grounded_links = [
+            link
+            for link in target.get(field) or []
+            if isinstance(link, dict)
+            and str(link.get("evidence_ref") or "") in refs
+        ]
+        source_parts.append(json.dumps(
+            grounded_links,
+            ensure_ascii=False,
+            sort_keys=True,
+        ))
+    return set(_ALPHANUMERIC_IDENTIFIER_RE.findall(" ".join(source_parts)))
+
+
+def _validate_llm_free_text(
+    texts,
+    target,
+    stock_mentions,
+    known_stock_map,
+    registry,
+):
     combined = " ".join(str(text or "") for text in texts)
     allowed_links = [
         link
@@ -844,11 +905,47 @@ def _validate_llm_free_text(texts, target, stock_mentions, known_stock_map):
             raise ValueError("ungrounded stock name in LLM free text")
         if str(code) not in mentioned_codes:
             raise ValueError("stock name in free text lacks structured mention")
-    numeric_claim = re.search(
-        r"\d+(?:\.\d+)?\s*(?:%|元|亿|万|倍|日|只|位)", combined
+    residual = combined
+    grounded_identifiers = _grounded_alphanumeric_identifiers(
+        target, registry
     )
-    if numeric_claim:
-        raise ValueError("numeric claim is not allowed in LLM free text")
+    for identifier in _ALPHANUMERIC_IDENTIFIER_RE.findall(combined):
+        if identifier not in grounded_identifiers:
+            raise ValueError(
+                "ungrounded alphanumeric identifier in LLM free text: {}".format(
+                    identifier
+                )
+            )
+        residual = residual.replace(identifier, "")
+    for code in mentioned_codes:
+        residual = re.sub(
+            r"(?<!\d){}(?!\d)".format(re.escape(code)),
+            "",
+            residual,
+        )
+    mentioned_names = {
+        str(link.get("name") or "").strip()
+        for link in allowed_links
+        if str(link.get("code") or "") in mentioned_codes
+        and str(link.get("name") or "").strip()
+    }
+    for name in sorted(mentioned_names, key=len, reverse=True):
+        residual = residual.replace(name, "")
+    chinese_numeric_patterns = [
+        r"百分之[{}]+".format(_CHINESE_NUMBER_CHARS),
+        r"第[{}]+".format(_CHINESE_NUMBER_CHARS),
+        r"[{}]+(?:个百分点|连板|季度|只|元|倍|日|天|位|个|家|成|亿|万|点|年|月|周|名|股|板|%|％)".format(
+            _CHINESE_NUMBER_CHARS
+        ),
+    ]
+    if re.search(r"\d", residual) or any(
+        re.search(pattern, residual)
+        for pattern in chinese_numeric_patterns
+    ):
+        raise ValueError(
+            "numeric expressions are not allowed in LLM free text; "
+            "render structured evidence instead"
+        )
     if "龙头" in combined:
         raise ValueError(
             "leader claims are not allowed in LLM free text; use grounded links"
@@ -941,11 +1038,14 @@ def _validate_llm_payload(
         stock_mentions = _validate_stock_mentions(
             raw.get("stock_mentions"), target
         )
+        text_target = dict(target)
+        text_target["evidence_refs"] = refs
         _validate_llm_free_text(
             [summary] + next_trigger + invalidation,
-            target,
+            text_target,
             stock_mentions,
             known_stock_map,
+            registry,
         )
         normalized.append({
             "theme": theme,
@@ -1084,7 +1184,7 @@ def build_decision_brief(
     )[:max(0, int(max_theses))]
     status = "rules_only"
     model = ""
-    prompt_version = "decision-brief-v1"
+    prompt_version = "decision-brief-v3"
     schema_version = "1"
     llm_error = ""
     if llm_analyzer is not None and directions:

@@ -41,10 +41,10 @@ def _json_safe(value):
         }
     if isinstance(value, (list, tuple, set)):
         return [_json_safe(item) for item in value]
-    if hasattr(value, "item"):
-        return _json_safe(value.item())
     if hasattr(value, "tolist"):
         return _json_safe(value.tolist())
+    if hasattr(value, "item"):
+        return _json_safe(value.item())
     return str(value)
 
 

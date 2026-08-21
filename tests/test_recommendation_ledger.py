@@ -3,6 +3,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import numpy as np
+
 from chanlun.recommendation_ledger import (
     append_recommendation_entries,
     build_recommendation_entries,
@@ -53,6 +55,27 @@ def _strategy(name, version, items, **extra):
 
 
 class RecommendationLedgerTests(unittest.TestCase):
+    def test_numpy_vector_fields_are_frozen_as_json_arrays(self):
+        item = _item()
+        item["dates"] = np.array(["2026-08-19", "2026-08-20"])
+        item["closes"] = np.array([180.0, 188.0])
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_pure", "pure-v1", [item])],
+            policy_version="decision-v1",
+            config_revision="cfg-abc",
+            code_version="commit-123",
+        )
+
+        self.assertEqual(entries[0]["reference_close"], 188.0)
+        self.assertEqual(
+            entries[0]["strategy_contributions"][0]["reason_snapshot"]
+            ["best_buy_point"]["price"],
+            186.0,
+        )
+
     def test_ids_are_stable_and_input_order_independent(self):
         strategies = [
             _strategy("daily_pure", "pure-v1", [_item("300308")]),

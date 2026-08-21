@@ -157,6 +157,10 @@ def _watchlist():
                 "fact_status": "fresh",
                 "candidate_intersections": [],
                 "evidence_refs": ["watch-fact:2026-08-20:300308"],
+                "price_levels": {
+                    "range_high_20d": 145.8,
+                    "range_low_20d": 132.6,
+                },
             },
             {
                 "code": "688525",
@@ -172,11 +176,17 @@ def _watchlist():
 
 
 class DecisionBriefTests(unittest.TestCase):
-    def _brief(self, events, llm_analyzer=None):
+    def _brief(
+        self,
+        events,
+        llm_analyzer=None,
+        known_stock_map=None,
+        sector_flow=None,
+    ):
         return build_decision_brief(
             "2026-08-20",
             events,
-            sector_flow=[
+            sector_flow=sector_flow or [
                 {"name": "通信", "flow": 20.0, "change_pct": 2.0},
                 {"name": "半导体", "flow": 10.0, "change_pct": 1.0},
             ],
@@ -195,6 +205,7 @@ class DecisionBriefTests(unittest.TestCase):
             },
             personal_watchlist=_watchlist(),
             llm_analyzer=llm_analyzer,
+            known_stock_map=known_stock_map,
         )
 
     def test_overseas_optical_event_links_watchlist_with_evidence(self):
@@ -236,6 +247,32 @@ class DecisionBriefTests(unittest.TestCase):
         self.assertEqual(
             brief["arbitration"][0]["arbitration_result"], "no_impact"
         )
+
+    def test_llm_packet_only_contains_evidence_used_by_directions(self):
+        captured = {}
+
+        def analyzer(packet):
+            captured.update(packet)
+            raise RuntimeError("stop after packet capture")
+
+        self._brief([
+            _event(
+                "整点回顾：指数反弹与板块复盘",
+                "光模块",
+                no_impact=True,
+            ),
+            _event("光模块行业新增订单", "光模块", score=40),
+        ], analyzer)
+
+        direction_refs = {
+            ref
+            for row in captured["directions"]
+            for ref in row["evidence_refs"]
+        }
+        registry_refs = {
+            row["evidence_ref"] for row in captured["evidence_registry"]
+        }
+        self.assertEqual(registry_refs, direction_refs)
 
     def test_positive_and_risk_directions_can_coexist(self):
         brief = self._brief([
@@ -291,6 +328,251 @@ class DecisionBriefTests(unittest.TestCase):
         self.assertEqual(
             brief["theses"][0]["next_trigger"], ["通信涨停梯队继续扩散"]
         )
+
+    def test_llm_cannot_reframe_registered_numbers_in_free_text(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v2",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "通信设备已有3只涨停，事件与盘面形成交叉验证。",
+                    "next_trigger": ["放量突破20日区间高点且涨停梯队继续扩散"],
+                    "invalidation": ["板块资金与梯队同时转弱"],
+                }],
+            }
+
+        brief = self._brief([_event("光通信需求上行", "光模块")], analyzer)
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertIn("numeric", brief["llm_error"])
+
+    def test_llm_ungrounded_numeric_claim_still_falls_back(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v2",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "通信设备已有99只涨停。",
+                    "next_trigger": [],
+                    "invalidation": [],
+                }],
+            }
+
+        brief = self._brief([_event("光通信需求上行", "光模块")], analyzer)
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertIn("numeric", brief["llm_error"])
+
+    def test_llm_rejects_same_value_wrong_meaning_probability_and_rank(self):
+        summaries = [
+            "目标价145.8元，等待确认。",
+            "上涨概率80个百分点，等待确认。",
+            "板块排名第3，等待确认。",
+            "通信设备已有九十九只涨停。",
+            "板块上涨八个百分点。",
+            "上涨概率八成。",
+            "上涨概率百分之八十。",
+            "板块上涨十二%。",
+            "连续三天走强。",
+            "形成三连板。",
+            "涉及五家公司。",
+        ]
+        for summary in summaries:
+            with self.subTest(summary=summary):
+                def analyzer(packet, summary=summary):
+                    row = packet["directions"][0]
+                    return {
+                        "model": "fake-model",
+                        "prompt_version": "decision-brief-v3",
+                        "schema_version": "1",
+                        "theses": [{
+                            "theme": row["theme"],
+                            "direction": row["direction"],
+                            "stage": row["stage"],
+                            "confidence": row["confidence"],
+                            "evidence_refs": row["evidence_refs"],
+                            "watchlist_codes": row["watchlist_codes"],
+                            "stock_mentions": [],
+                            "summary": summary,
+                            "next_trigger": [],
+                            "invalidation": [],
+                        }],
+                    }
+
+                brief = self._brief(
+                    [_event("光通信需求上行", "光模块")], analyzer
+                )
+
+                self.assertEqual(brief["status"], "rules_only")
+                self.assertIn("numeric", brief["llm_error"])
+
+    def test_llm_cannot_borrow_number_from_unreferenced_direction_evidence(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            event_ref = next(
+                ref for ref in row["evidence_refs"]
+                if ref.startswith("event:")
+            )
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v3",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": [event_ref],
+                    "watchlist_codes": [],
+                    "stock_mentions": [],
+                    "summary": "通信设备已有3只涨停。",
+                    "next_trigger": [],
+                    "invalidation": [],
+                }],
+            }
+
+        brief = self._brief([_event("光通信需求上行", "光模块")], analyzer)
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertIn("numeric", brief["llm_error"])
+
+    def test_llm_cannot_borrow_identifier_from_unreferenced_sector_link(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            event_ref = next(
+                ref for ref in row["evidence_refs"]
+                if ref.startswith("event:")
+            )
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v3",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": [event_ref],
+                    "watchlist_codes": [],
+                    "stock_mentions": [],
+                    "summary": "H100形成产业催化。",
+                    "next_trigger": [],
+                    "invalidation": [],
+                }],
+            }
+
+        brief = self._brief(
+            [_event("算力产业催化", "AI芯片")],
+            analyzer,
+            sector_flow=[{
+                "name": "H100 AI芯片",
+                "flow": 20.0,
+                "change_pct": 2.0,
+            }],
+        )
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertIn("identifier", brief["llm_error"])
+
+    def test_llm_may_repeat_grounded_alphanumeric_product_identifier(self):
+        def analyzer(
+            packet,
+            identifiers="5G、6G、3D、iPhone18与H100",
+        ):
+            row = packet["directions"][0]
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v3",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "{}形成产业催化。".format(identifiers),
+                    "next_trigger": ["板块强度继续确认"],
+                    "invalidation": ["量产预期被证伪"],
+                }],
+            }
+
+        events = [_event(
+            "5G、6G、3D、iPhone18与H100产业进展",
+            "消费电子",
+        )]
+        brief = self._brief(events, analyzer)
+        self.assertEqual(brief["status"], "ok")
+
+        rejected = self._brief(
+            events,
+            lambda packet: analyzer(packet, identifiers="iPhone99"),
+        )
+        self.assertEqual(rejected["status"], "rules_only")
+        self.assertIn("identifier", rejected["llm_error"])
+
+    def test_llm_may_name_structured_stock_with_numeric_code_or_name(self):
+        event = _event("休闲食品需求改善", "休闲食品")
+        event["stock_list"] = [{
+            "code": "300783",
+            "name": "三只松鼠",
+            "sector": "休闲食品",
+        }]
+
+        def analyzer(packet):
+            row = packet["directions"][0]
+            link = next(
+                item for item in row["stock_links"]
+                if item["code"] == "300783"
+            )
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v3",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [{
+                        "code": link["code"],
+                        "link_type": link["link_type"],
+                        "evidence_ref": link["evidence_ref"],
+                    }],
+                    "summary": "三只松鼠300783与休闲食品事件形成结构化映射。",
+                    "next_trigger": ["板块强度继续确认"],
+                    "invalidation": ["事件映射被证伪"],
+                }],
+            }
+
+        brief = self._brief(
+            [event],
+            analyzer,
+            known_stock_map={"300783": "三只松鼠"},
+        )
+
+        self.assertEqual(brief["status"], "ok")
 
     def test_invalid_llm_schema_evidence_or_stock_falls_back_explicitly(self):
         bad_payloads = [

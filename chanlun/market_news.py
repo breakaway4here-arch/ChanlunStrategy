@@ -723,11 +723,14 @@ def _analyze_event_llm(event):
     ]
 
     try:
-        raw = _call_llm_with_retry(messages, max_retries=2, temperature=0.3, max_tokens=800, raw_response=True)
+        impact = _call_llm_with_retry(
+            messages,
+            max_retries=3,
+            temperature=0.3,
+            max_tokens=2400,
+        )
     except Exception:
         raise
-
-    impact = _parse_llm_json(raw)
 
     # Normalize fields
     impact.setdefault("headline", "")
@@ -864,14 +867,30 @@ def _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=12
             )
             resp.raise_for_status()
             body = resp.json()
-            raw = body["choices"][0]["message"]["content"]
+            choice = body["choices"][0]
+            message = choice["message"]
+            raw = message.get("content") or ""
+            if not raw.strip():
+                raise ValueError(
+                    "LLM returned empty content "
+                    "(finish_reason={}, reasoning_chars={})".format(
+                        choice.get("finish_reason") or "unknown",
+                        len(message.get("reasoning_content") or ""),
+                    )
+                )
             if raw_response:
                 return raw.strip()
-            raw = raw.strip()
-            if raw.startswith("```"):
-                raw = re.sub(r"^```\w*\n?", "", raw)
-                raw = re.sub(r"\n?```$", "", raw)
-            return json.loads(raw)
+            try:
+                return _parse_llm_json(raw.strip())
+            except (TypeError, ValueError, json.JSONDecodeError) as parse_error:
+                raise ValueError(
+                    "LLM JSON parse failed "
+                    "(finish_reason={}, content_chars={}): {}".format(
+                        choice.get("finish_reason") or "unknown",
+                        len(raw),
+                        parse_error,
+                    )
+                )
         except Exception as e:
             last_error = e
             if attempt < max_retries - 1:
@@ -896,7 +915,8 @@ _DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到�
 - stage 仅限 confirmed/developing/risk/monitor。
 - confidence 仅限 low/medium/high。
 - summary/next_trigger/invalidation 等自由文本禁止使用“龙头”；龙头角色只能在 stock_mentions 中原样引用已有的 limit_up_leader，由页面模板展示。
-- 不得自行计算或输出输入中没有的价格、涨幅、排名或概率。
+- summary/next_trigger/invalidation 禁止写任何阿拉伯数字、中文数量、价格、涨幅、数量、排名或概率；所有数值由页面模板直接展示结构化证据。
+- 只有证据中的字母数字产品型号（如5G、iPhone18、H100）可以原样复述，不得改写或新增型号。
 
 只输出JSON对象：
 {
@@ -942,15 +962,15 @@ def analyze_decision_brief_facts(packet):
     ]
     result = _call_llm_with_retry(
         messages,
-        max_retries=2,
+        max_retries=3,
         temperature=0.2,
-        max_tokens=1600,
+        max_tokens=4800,
     )
     if not isinstance(result, dict):
         raise ValueError("decision brief LLM response must be an object")
     result = dict(result)
     result["model"] = _DS_MODEL
-    result["prompt_version"] = "decision-brief-v1"
+    result["prompt_version"] = "decision-brief-v3"
     result["schema_version"] = "1"
     return result
 
