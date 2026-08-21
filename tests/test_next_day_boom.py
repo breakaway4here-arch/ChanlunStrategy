@@ -78,6 +78,10 @@ class TestNextDayBoomCandidates(unittest.TestCase):
         self.assertEqual(result["candidates"][0]["sector_strength_label"], "资金流入TOP2")
         self.assertEqual(result["candidates"][0]["data_status"]["daily"], "verified")
         self.assertEqual(result["candidates"][1]["sector_tags"], ["测试板块", "涨停"])
+        for candidate in result["candidates"]:
+            self.assertEqual(candidate["source_status"], "observe")
+            self.assertEqual(candidate["strategy_source"], "next_day_boom")
+            self.assertEqual(candidate["intended_horizon"], 1)
 
     def test_deduplicates_same_code_with_higher_scored_source(self):
         result = build_next_day_boom_candidates(

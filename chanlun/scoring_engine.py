@@ -120,6 +120,7 @@ def compute_opportunity_score(
         "entry_score": entry_score,
         "momentum_score": momentum_score,
         "market_score": market_score,
+        "multi_source_bonus": 0.0,
         "risk_penalty": risk_penalty,
         "data_penalty": data_penalty,
         "alpha_features": alpha_features,
@@ -241,8 +242,8 @@ def _score_momentum(change_pct: float | None) -> float:
 
 def _score_market(source: str, source_count: int) -> float:
     base = MARKET_BASE.get(source, 5.0)
-    multi_source_bonus = max(0, source_count - 1) * 2.0
-    return min(MAX_MARKET_SCORE, base + multi_source_bonus)
+    # Parallel provenance is displayed for audit but never upgrades rank.
+    return min(MAX_MARKET_SCORE, base)
 
 
 def _resolve_alpha_features(
@@ -762,7 +763,7 @@ def _extract_risk_flags(item: Mapping[str, Any], source: str) -> list[str]:
         age = _safe_float(bp.get("signal_age_days"))
         if age is not None and age >= 8:
             flags.append("信号接近过期")
-        if not bp and not _to_dict(item.get("resonance")).get("level"):
+        if not bp:
             flags.append("30min确认弱")
 
     if source == "acceleration" and item.get("next_day_reason") in {"高位", "过热"}:

@@ -118,7 +118,7 @@ class TestLocalCodexProvider(unittest.TestCase):
         result = market_news.analyze_decision_brief_facts(packet)
 
         self.assertEqual(result["model"], "gpt-test")
-        self.assertEqual(result["prompt_version"], "decision-brief-v3")
+        self.assertEqual(result["prompt_version"], "decision-brief-v4")
         self.assertEqual(mock_codex.call_count, 1)
         self.assertIn("directions", mock_codex.call_args[0][1])
 
@@ -370,6 +370,13 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
             _DECISION_BRIEF_SYSTEM_PROMPT,
         )
 
+    def test_prompt_requires_independent_structured_risk_reasons(self):
+        self.assertIn('"risk_reasons"', _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn('"reason"', _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn('"impact"', _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn('"evidence_refs"', _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn("负向或风险方向", _DECISION_BRIEF_SYSTEM_PROMPT)
+
     @patch("chanlun.market_news._call_llm_with_retry")
     @patch("chanlun.market_news._LLM_PROVIDER", "deepseek")
     @patch("chanlun.market_news._DS_API_KEY", "configured")
@@ -415,7 +422,7 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
         result = analyze_decision_brief_facts(packet)
 
         self.assertEqual(result["model"], "deepseek-test")
-        self.assertEqual(result["prompt_version"], "decision-brief-v3")
+        self.assertEqual(result["prompt_version"], "decision-brief-v4")
         self.assertEqual(result["schema_version"], "1")
         messages = mock_call.call_args[0][0]
         self.assertIn("event:2026-08-20:abc", messages[1]["content"])

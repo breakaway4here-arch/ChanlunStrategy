@@ -53,6 +53,8 @@ class TrendContinuationTests(unittest.TestCase):
         self.assertAlmostEqual(seeds[0]["reference_price"], 12.0)
         self.assertNotIn(seeds[0]["reference_price"], (7.0, 6.5))
         self.assertEqual(seeds[0]["source_channel"], "trend_continuation")
+        self.assertEqual(seeds[0]["strategy_source"], "trend_continuation")
+        self.assertEqual(seeds[0]["source_status"], "seed")
         self.assertEqual(seeds[0]["view"], "main")
         self.assertEqual(diagnostics["trend_seed"], 1)
 
@@ -84,6 +86,7 @@ class TrendContinuationTests(unittest.TestCase):
         self.assertEqual(seeds, [])
         self.assertEqual([row["code"] for row in watchlist], ["600005"])
         self.assertEqual(watchlist[0]["reason_code"], "volume_near_miss")
+        self.assertEqual(watchlist[0]["source_status"], "observe")
         self.assertEqual(watchlist[0]["view"], "observation")
         self.assertEqual(diagnostics["watch_near_miss"], 1)
 
@@ -148,8 +151,17 @@ class TrendContinuationTests(unittest.TestCase):
         self.assertEqual(candidates[0]["reference_price"], 12.0)
         self.assertEqual(candidates[0]["tier"], "candidate")
         self.assertEqual(candidates[0]["category"], "A")
+        self.assertEqual(candidates[0]["source_status"], "candidate")
+        fact = candidates[0]["confirmation_facts"][0]
+        self.assertEqual(fact["owner_pool"], "trend_continuation")
+        self.assertEqual(fact["stage"], "30min_confirmation")
+        self.assertEqual(fact["effect"], "candidate")
+        self.assertTrue(fact["eligible"])
+        self.assertGreaterEqual(fact["confirmation_count"], 2)
+        self.assertEqual(fact["required_count"], 2)
         self.assertEqual(diagnostics["trend_candidate"], 1)
         pick = normalize_trend_candidate(candidates[0])
+        self.assertEqual(pick["trend_type"], "上升趋势")
         self.assertEqual(
             pick["best_buy_point"]["price"],
             candidates[0]["reference_price"],

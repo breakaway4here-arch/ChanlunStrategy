@@ -165,6 +165,14 @@ if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
     raise ValueError(
         "CHANLUN_RECALL_STRATEGY_MODE must be legacy, shadow or active"
     )
+HIGH_RETURN_SELECTION_MODE = os.environ.get(
+    "CHANLUN_HIGH_RETURN_SELECTION_MODE", "shadow"
+).strip().lower()
+if HIGH_RETURN_SELECTION_MODE != "shadow":
+    raise ValueError(
+        "CHANLUN_HIGH_RETURN_SELECTION_MODE must remain shadow until a "
+        "runtime OOT cutover manifest is implemented and verified"
+    )
 ENABLE_FULL_A_UNIVERSE = True
 FULL_A_LOW_QUOTA = 350
 FULL_A_TREND_QUOTA = 350

@@ -534,6 +534,41 @@ class TestScoringEngine(unittest.TestCase):
 
         self.assertEqual(trace["source_count"], 3)
 
+    def test_parallel_sources_do_not_add_resonance_score(self):
+        item = {
+            "score": 60,
+            "best_buy_point": {"distance_from_reference_pct": 2.0},
+            "data_status": {"daily": "verified"},
+        }
+        single_score, single_trace = compute_opportunity_score(
+            item,
+            "main",
+            {
+                "alpha_enabled": False,
+                "sources": ["main"],
+                "by_source": {"main": item},
+                "data_quality": {"market_status": "verified"},
+            },
+        )
+        multi_score, multi_trace = compute_opportunity_score(
+            item,
+            "main",
+            {
+                "alpha_enabled": False,
+                "sources": ["main", "acceleration", "luojie"],
+                "by_source": {
+                    "main": item,
+                    "acceleration": {"data_status": {"daily": "verified"}},
+                    "luojie": {"data_status": {"daily": "verified"}},
+                },
+                "data_quality": {"market_status": "verified"},
+            },
+        )
+
+        self.assertEqual(multi_score, single_score)
+        self.assertEqual(multi_trace["market_score"], single_trace["market_score"])
+        self.assertEqual(multi_trace["source_count"], 3)
+
     def test_risk_penalty_is_capped(self):
         by_source = {
             "main": {

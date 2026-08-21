@@ -70,6 +70,7 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
         "volumes": np.ones(n) * 1000,
         "macd_hist": np.zeros(n),
         "score": 85.0,
+        "intended_horizon": 3,
         "buy_points": [],
         "reference_buy_points": [],
         "blocked_buy_points": [],
@@ -127,6 +128,7 @@ class TestReportGenerator(unittest.TestCase):
                 "picks_fusion": [{
                     "code": "600001",
                     "name": "示例股",
+                    "intended_horizon": 3,
                     "decision_engine_v1": {"decision": "推荐", "decision_code": "recommend"},
                 }],
                 "data_quality": {"is_trading_day": True, "is_official": True},
@@ -136,6 +138,41 @@ class TestReportGenerator(unittest.TestCase):
             with open(os.path.join(tmpdir, "data", "comparison-index.json"), encoding="utf-8") as handle:
                 index = json.load(handle)
             self.assertIsNone(index["reports"]["2026-07-17"]["prices"]["600001"])
+
+    def test_pick_serializers_preserve_selection_contract_for_workspace(self):
+        pick = make_pick()
+        pick.update({
+            "strategy_source": "trend_continuation",
+            "strategy_sources": [{
+                "strategy_source": "trend_continuation",
+                "source_status": "candidate",
+                "reason": "趋势延续确认",
+                "intended_horizon": 3,
+                "evidence_refs": ["30m:first_buy", "30m:pivot_break"],
+            }],
+            "entry_mode": "immediate_close",
+            "signal_close": 50.0,
+            "research_results": {
+                "t3": {"close_return": 5.0, "mfe": 10.0, "mae": -2.0},
+            },
+            "representative_strategy_source": "trend_continuation",
+            "representative_source_reason": "趋势延续确认",
+            "representative_source_score": 88,
+        })
+
+        for serialized in (_serialize_picks([pick]), _serialize_picks_light([pick])):
+            item = serialized[0]
+            self.assertEqual(item["intended_horizon"], 3)
+            self.assertEqual(item["strategy_source"], "trend_continuation")
+            self.assertEqual(item["strategy_sources"][0]["reason"], "趋势延续确认")
+            self.assertEqual(item["entry_mode"], "immediate_close")
+            self.assertEqual(item["signal_close"], 50.0)
+            self.assertEqual(item["research_results"]["t3"]["mfe"], 10.0)
+            self.assertEqual(
+                item["representative_strategy_source"],
+                "trend_continuation",
+            )
+            self.assertEqual(item["representative_source_score"], 88)
 
     def test_absolute_default_docs_output_uses_shared_comparison_database(self):
         with tempfile.TemporaryDirectory() as tmpdir, mock.patch(
@@ -605,6 +642,36 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "watchlist_intersection",
         )
 
+    def test_decision_brief_downgrades_unexplained_risk_before_report(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_decision_risk_contract_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["decision_brief"] = {
+            "status": "ok",
+            "theses": [{
+                "theme": "半导体",
+                "direction": "negative",
+                "stage": "risk",
+                "evidence_refs": ["event:2026-05-26:risk"],
+                "rule_summary": "风险成立",
+            }],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        decision_brief = payload["decision_brief"]
+        self.assertEqual(decision_brief["status"], "partial")
+        self.assertEqual(
+            decision_brief["theses"][0]["risk_reason_status"],
+            "insufficient",
+        )
+
     def test_recommendation_ledger_and_strategy_scorecards_are_preserved(self):
         tmpdir = tempfile.mkdtemp(prefix="test_strategy_attribution_")
         self.addCleanup(shutil.rmtree, tmpdir)
@@ -676,6 +743,13 @@ class TestH4T3ReportSerialization(unittest.TestCase):
                     "name": "H4候选",
                     "score": 82,
                     "decision_engine_v1": {"decision_code": "recommend"},
+                    "upstream_strategy_sources": [{
+                        "strategy_source": "trend_continuation",
+                        "intended_horizon": 3,
+                    }],
+                    "upstream_decision_engine_v1": {
+                        "decision_code": "observe",
+                    },
                     "h4_predictions": {
                         "pred_return": 4.2,
                         "pred_tail_loss5": 0.08,
@@ -693,6 +767,19 @@ class TestH4T3ReportSerialization(unittest.TestCase):
         self.assertEqual(
             4.2,
             payload["h4_t3_pool"]["candidates"][0]["h4_predictions"]["pred_return"],
+        )
+        h4_candidate = payload["h4_t3_pool"]["candidates"][0]
+        self.assertEqual(
+            "trend_continuation",
+            h4_candidate["upstream_strategy_sources"][0][
+                "strategy_source"
+            ],
+        )
+        self.assertEqual(
+            "observe",
+            h4_candidate["upstream_decision_engine_v1"][
+                "decision_code"
+            ],
         )
         self.assertIn("h4_t3", payload["workspace"]["view_order"])
 
@@ -1422,6 +1509,10 @@ class TestDataManifestAndQuality(unittest.TestCase):
             "is_official": True,
         })
         self.assertEqual(aggregate["reports"]["2026-06-30"]["data_quality"], report_data["data_quality"])
+        aggregate_day = aggregate["reports"]["2026-06-30"]
+        self.assertIn("startup_watchlist", aggregate_day)
+        self.assertIn("observation_watchlist", aggregate_day)
+        self.assertIn("h4_t3_pool", aggregate_day)
 
 
 class TestHTMLEscape(unittest.TestCase):
@@ -1639,6 +1730,12 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("升级条件：", self.asset_js)
         self.assertIn("取消条件：", self.asset_js)
 
+    def test_direction_risk_reasons_are_rendered_independently(self):
+        self.assertIn("function renderDirectionRiskReasons", self.asset_js)
+        self.assertIn("风险原因不足", self.asset_js)
+        self.assertIn("可能影响", self.asset_js)
+        self.assertIn("对应证据", self.asset_js)
+
     def test_high_elasticity_watch_label_is_rendered(self):
         self.assertIn("高弹性观察 Top10", self.asset_js)
         self.assertIn("非正式推荐", self.asset_js)
@@ -1673,9 +1770,9 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             'function getRiskClass',
             'function getSourceClass',
             'function getRankClass',
-            'function getResonanceClass',
         ]:
             self.assertIn(helper, self.asset_js)
+        self.assertNotIn('主推与共振优先', self.asset_js)
 
     def test_auxiliary_center_modules(self):
         module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险', '策略记分牌', '数据诊断']
@@ -1692,16 +1789,27 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("renderStrategyReturn('T+5'", self.asset_js)
         self.assertIn("median_returns", self.asset_js)
         self.assertIn("excess_returns", self.asset_js)
-        self.assertIn("MAE / MFE", self.asset_js)
+        self.assertIn("期间最低 / 期间最高", self.asset_js)
         self.assertIn("上涨率", self.asset_js)
         self.assertIn("样本积累中", self.asset_js)
         self.assertIn("T+1'", self.asset_js)
-        self.assertIn("label + ' 均值'", self.asset_js)
+        self.assertIn("label + ' 收盘收益均值'", self.asset_js)
         self.assertIn("benchmark_status", self.asset_js)
         self.assertIn("超额收益显示 --", self.asset_js)
         self.assertIn("主周期未声明", self.asset_js)
         self.assertIn("publication_outcomes", self.asset_js)
         self.assertNotIn("asArray((data || {}).recent_reviews);", self.asset_js)
+
+    def test_stock_selection_ui_uses_user_visible_pool_and_research_labels(self):
+        self.assertIn("baseline: '基础候选'", self.asset_js)
+        self.assertNotIn("baseline: '基准'", self.asset_js)
+        for label in (
+            "来源策略", "持有周期", "信号日收盘价", "收盘收益",
+            "期间最高", "期间最低",
+        ):
+            self.assertIn(label, self.asset_js)
+        self.assertIn("source_details", self.asset_js)
+        self.assertIn("horizon_label", self.asset_js)
 
     def test_diagnostics_card_defaults_to_collapsed_details(self):
         self.assertIn('<details class="diagnostics-details">', self.asset_js)

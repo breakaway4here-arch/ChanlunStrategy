@@ -639,6 +639,8 @@ def _base_direction_rows(
                 "watchlist_impacts": [],
                 "rule_summary": "",
                 "llm_summary": "",
+                "risk_reasons": [],
+                "risk_reason_status": "not_applicable",
                 "next_trigger": [],
                 "invalidation": [],
                 "_market_confirmed": False,
@@ -647,6 +649,20 @@ def _base_direction_rows(
                 row["rule_score"], arbitration["rule_score"]
             )
             row["evidence_refs"].append(event_ref)
+            if direction == "negative":
+                impact = event.get("impact")
+                impact = impact if isinstance(impact, dict) else {}
+                reason = str(
+                    event.get("title") or impact.get("headline") or ""
+                ).strip()
+                if reason:
+                    row["risk_reasons"].append({
+                        "reason": reason,
+                        "impact": "{}方向风险偏好与关联股票可能承压。".format(
+                            theme
+                        ),
+                        "evidence_refs": [event_ref],
+                    })
             if any(
                 _theme_matches(theme, matched_sector)
                 for matched_sector in _safe_text_list(
@@ -719,6 +735,20 @@ def _base_direction_rows(
                 watch_codes.append(link["code"])
         row["watchlist_impacts"] = list(dict.fromkeys(watch_codes))
         if row["direction"] == "negative":
+            row["risk_reasons"] = list({
+                (
+                    reason["reason"],
+                    reason["impact"],
+                    tuple(reason["evidence_refs"]),
+                ): reason
+                for reason in row["risk_reasons"]
+                if reason.get("reason")
+                and reason.get("impact")
+                and reason.get("evidence_refs")
+            }.values())
+            row["risk_reason_status"] = (
+                "verified" if row["risk_reasons"] else "insufficient"
+            )
             row["rule_summary"] = "{}出现风险事件，等待风险释放与结构修复。".format(
                 row["theme"]
             )
@@ -768,6 +798,7 @@ def _llm_packet(report_date, registry, directions):
                 "sector_links": row["sector_links"],
                 "stock_links": row["stock_links"],
                 "rule_summary": row["rule_summary"],
+                "risk_reasons": row.get("risk_reasons") or [],
             }
             for row in directions
         ],
@@ -785,6 +816,38 @@ def _string_list(value, field, limit=6):
             raise ValueError("{} contains an invalid string".format(field))
         result.append(item.strip()[:200])
     return result
+
+
+def _validate_llm_risk_reasons(raw, target):
+    values = raw if raw is not None else []
+    if not isinstance(values, list):
+        raise ValueError("risk_reasons must be a list")
+    allowed_refs = set(target.get("evidence_refs") or [])
+    normalized = []
+    for value in values[:4]:
+        if not isinstance(value, dict):
+            raise ValueError("risk reason must be an object")
+        reason = str(value.get("reason") or "").strip()
+        impact = str(value.get("impact") or "").strip()
+        refs = _string_list(
+            value.get("evidence_refs"), "risk_reasons.evidence_refs"
+        )
+        if not reason or not impact:
+            raise ValueError("risk_reasons require reason and impact")
+        if not refs or any(ref not in allowed_refs for ref in refs):
+            raise ValueError("risk_reasons evidence is missing or ungrounded")
+        normalized.append({
+            "reason": reason[:300],
+            "impact": impact[:300],
+            "evidence_refs": list(dict.fromkeys(refs)),
+        })
+    target_is_risk = (
+        target.get("direction") == "negative"
+        or target.get("stage") == "risk"
+    )
+    if target_is_risk and not normalized:
+        raise ValueError("risk_reasons are required for risk directions")
+    return normalized
 
 
 def _validate_stock_mentions(raw, target):
@@ -1035,13 +1098,22 @@ def _validate_llm_payload(
         invalidation = _string_list(
             raw.get("invalidation"), "invalidation"
         )
+        risk_reasons = _validate_llm_risk_reasons(
+            raw.get("risk_reasons"), target
+        )
         stock_mentions = _validate_stock_mentions(
             raw.get("stock_mentions"), target
         )
         text_target = dict(target)
         text_target["evidence_refs"] = refs
         _validate_llm_free_text(
-            [summary] + next_trigger + invalidation,
+            [summary] + next_trigger + invalidation + [
+                text
+                for risk_reason in risk_reasons
+                for text in (
+                    risk_reason["reason"], risk_reason["impact"]
+                )
+            ],
             text_target,
             stock_mentions,
             known_stock_map,
@@ -1057,6 +1129,7 @@ def _validate_llm_payload(
             "watchlist_codes": codes,
             "stock_mentions": stock_mentions,
             "summary": summary[:500],
+            "risk_reasons": risk_reasons,
             "next_trigger": next_trigger,
             "invalidation": invalidation,
         })
@@ -1122,6 +1195,9 @@ def _merge_llm_directions(directions, llm_payload, arbitration):
         row["llm_stage"] = llm_row["stage"]
         row["llm_confidence"] = llm_row["confidence"]
         row["llm_stock_mentions"] = llm_row["stock_mentions"]
+        if llm_row["risk_reasons"]:
+            row["risk_reasons"] = llm_row["risk_reasons"]
+            row["risk_reason_status"] = "verified"
         if llm_row["next_trigger"]:
             row["next_trigger"] = llm_row["next_trigger"]
         if llm_row["invalidation"]:
@@ -1184,7 +1260,7 @@ def build_decision_brief(
     )[:max(0, int(max_theses))]
     status = "rules_only"
     model = ""
-    prompt_version = "decision-brief-v3"
+    prompt_version = "decision-brief-v4"
     schema_version = "1"
     llm_error = ""
     if llm_analyzer is not None and directions:
@@ -1212,6 +1288,28 @@ def build_decision_brief(
             status = "ok"
         except Exception as exc:
             llm_error = "{}: {}".format(type(exc).__name__, exc)[:500]
+    has_risk_direction = False
+    missing_risk_reasons = False
+    for direction in directions:
+        is_risk = (
+            direction.get("direction") == "negative"
+            or direction.get("stage") == "risk"
+        )
+        if not is_risk:
+            direction["risk_reason_status"] = "not_applicable"
+            direction.setdefault("risk_reasons", [])
+            continue
+        has_risk_direction = True
+        reasons = direction.get("risk_reasons") or []
+        direction["risk_reason_status"] = (
+            "verified" if reasons else "insufficient"
+        )
+        if not reasons:
+            missing_risk_reasons = True
+    if missing_risk_reasons:
+        status = "partial"
+        if not llm_error:
+            llm_error = "risk_reasons missing for a risk direction"
     generated_at = generated_at or datetime.now().astimezone().isoformat(
         timespec="seconds"
     )
@@ -1220,6 +1318,11 @@ def build_decision_brief(
         "model": model,
         "prompt_version": prompt_version,
         "schema_version": schema_version,
+        "risk_reason_status": (
+            "insufficient"
+            if missing_risk_reasons
+            else ("verified" if has_risk_direction else "not_applicable")
+        ),
         "generated_at": generated_at,
         "evidence_registry": registry,
         "theses": directions,

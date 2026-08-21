@@ -80,6 +80,8 @@ class TestBuildLuojiePool(unittest.TestCase):
         self.assertEqual(candidate["sector_flow"], 123456)
         self.assertEqual(candidate["sector_strength_label"], "资金流入TOP5")
         self.assertEqual(candidate["data_status"]["daily"], "verified")
+        self.assertEqual(candidate["source_status"], "observe")
+        self.assertEqual(candidate["strategy_source"], "luojie_pool")
 
     def test_drops_stock_when_macd_double_lines_not_above_zero(self):
         closes = _rising_array()

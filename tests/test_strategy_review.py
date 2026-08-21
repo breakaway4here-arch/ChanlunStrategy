@@ -55,9 +55,10 @@ def _entry(
     code="300308",
     strategies=None,
     intended_horizon=3,
+    entry_mode="delay1_open",
 ):
     strategies = strategies or [
-        ("daily_pure", "pure-v1", "recommend"),
+        ("daily_fusion", "fusion-v2", "recommend"),
     ]
     specs = []
     for name, version, decision in strategies:
@@ -65,7 +66,7 @@ def _entry(
             "strategy_name": name,
             "strategy_version": version,
             "source_pool": name,
-            "entry_mode": "delay1_open",
+            "entry_mode": entry_mode,
             "intended_horizon": intended_horizon,
             "publication_status": "published",
             "user_action_from_decision": True,
@@ -112,6 +113,42 @@ def _evaluate(entry=None, kline=None, **kwargs):
 
 
 class StrategyReviewEvaluationTests(unittest.TestCase):
+    def test_immediate_close_uses_future_closes_and_excludes_signal_day_range(self):
+        kline = _kline(
+            dates=[
+                "2026-08-20", "2026-08-21", "2026-08-24",
+                "2026-08-25", "2026-08-26", "2026-08-27",
+            ],
+            opens=[9.5, 10.2, 10.6, 10.7, 10.8, 10.9],
+            closes=[10.0, 10.5, 10.8, 11.0, 10.9, 11.2],
+            highs=[50.0, 11.0, 11.2, 11.4, 11.3, 11.6],
+            lows=[1.0, 9.8, 10.1, 10.4, 10.3, 10.5],
+        )
+        entry = _entry(entry_mode="immediate_close")
+
+        outcome = _evaluate(
+            entry=entry,
+            kline=kline,
+            trading_calendar=kline["dates"],
+        )
+
+        self.assertEqual(outcome["entry_mode"], "immediate_close")
+        self.assertEqual(outcome["entry_date"], "2026-08-20")
+        self.assertEqual(outcome["entry_price"], 10.0)
+        self.assertAlmostEqual(outcome["returns"]["t1"], 5.0)
+        self.assertAlmostEqual(outcome["mfe"]["t1"], 10.0)
+        self.assertAlmostEqual(outcome["mae"]["t1"], -2.0)
+        self.assertAlmostEqual(outcome["returns"]["t3"], 10.0)
+        self.assertAlmostEqual(outcome["mfe"]["t3"], 14.0)
+        self.assertAlmostEqual(outcome["mae"]["t3"], -2.0)
+        self.assertEqual(
+            outcome["research_results"]["t1"]["close_return"],
+            outcome["returns"]["t1"],
+        )
+        self.assertEqual(outcome["intended_horizon"], 3)
+        self.assertEqual(outcome["intended_horizon_label"], "T+3")
+        self.assertEqual(outcome["close_return"], outcome["returns"]["t3"])
+
     def test_uses_next_open_and_reports_t1_t3_t5_after_maturity(self):
         outcome = _evaluate()
 
@@ -122,6 +159,40 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
         self.assertAlmostEqual(outcome["returns"]["t3"], 3.960396, places=5)
         self.assertAlmostEqual(outcome["returns"]["t5"], 8.910891, places=5)
         self.assertEqual(outcome["maturity"]["t5"], "mature")
+
+    def test_immediate_close_marks_missing_stock_trade_day_insufficient(self):
+        calendar = _kline()["dates"]
+        stock = _kline(
+            dates=[calendar[0]] + calendar[2:],
+            opens=[100, 103, 104, 106, 108],
+            closes=[100, 104, 105, 108, 110],
+            highs=[500, 105, 106, 109, 111],
+            lows=[1, 102, 103, 105, 107],
+        )
+        outcome = _evaluate(
+            entry=_entry(entry_mode="immediate_close"),
+            kline=stock,
+            trading_calendar=calendar,
+        )
+
+        self.assertEqual(outcome["maturity"]["t1"], "insufficient")
+        self.assertIsNone(outcome["returns"]["t1"])
+        self.assertIsNone(outcome["mfe"]["t1"])
+
+    def test_immediate_close_explains_zero_volume_as_suspended_window(self):
+        stock = _kline(volumes=[1000, 0, 1000, 1000, 1000, 1000])
+
+        outcome = _evaluate(
+            entry=_entry(entry_mode="immediate_close"),
+            kline=stock,
+            trading_calendar=stock["dates"],
+        )
+
+        self.assertEqual(outcome["maturity"]["t1"], "insufficient")
+        self.assertEqual(
+            outcome["maturity_reasons"]["t1"],
+            "suspended_or_non_trading_bar",
+        )
 
     def test_right_censoring_does_not_turn_immature_horizon_into_loss(self):
         kline = _kline(
@@ -257,6 +328,7 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
             ("daily_fusion", "fusion-v2", "recommend"),
         ])
         entry["strategy_contributions"][1]["entry_mode"] = "same_close"
+        entry["strategy_contributions"][1]["cohort_eligible"] = True
 
         outcome = evaluate_recommendation_entry(
             entry,
@@ -268,6 +340,32 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
 
 
 class StrategyScorecardTests(unittest.TestCase):
+    def test_scorecards_do_not_mix_entry_modes_for_same_strategy_version(self):
+        legacy = _entry(entry_mode="delay1_open")
+        immediate = _entry("2026-08-21", entry_mode="immediate_close")
+        kline = _kline(
+            dates=[
+                "2026-08-20", "2026-08-21", "2026-08-24",
+                "2026-08-25", "2026-08-26", "2026-08-27",
+                "2026-08-28",
+            ],
+            opens=[100, 101, 102, 103, 104, 105, 106],
+            closes=[100, 101, 102, 103, 104, 105, 106],
+            highs=[101, 102, 103, 104, 105, 106, 107],
+            lows=[99, 100, 101, 102, 103, 104, 105],
+        )
+
+        cards = build_strategy_scorecards(
+            [legacy, immediate],
+            {"300308": kline},
+            trading_calendar=kline["dates"],
+        )
+
+        self.assertEqual(len(cards), 2)
+        self.assertEqual(
+            {card["entry_mode"] for card in cards},
+            {"delay1_open", "immediate_close"},
+        )
     def test_verified_benchmark_history_is_persisted_for_runtime_review(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "market-history.sqlite"
@@ -363,14 +461,14 @@ class StrategyScorecardTests(unittest.TestCase):
         )
         by_name = {card["strategy"]: card for card in cards}
 
-        self.assertEqual(by_name["daily_pure"]["sample_size"], 1)
+        self.assertEqual(by_name["daily_pure"]["sample_size"], 0)
         self.assertEqual(by_name["daily_fusion"]["sample_size"], 1)
         self.assertEqual(by_name["daily_pure"]["gate_outcomes"]["observe"], 1)
         self.assertEqual(by_name["daily_pure"]["gate_outcomes"]["recommend"], 1)
         self.assertIn("median_returns", by_name["daily_pure"])
         self.assertIn("excess_returns", by_name["daily_pure"])
         self.assertIn("mae", by_name["daily_pure"]["excursions"])
-        self.assertIsNotNone(by_name["daily_pure"]["win_rates"]["t1"])
+        self.assertIsNone(by_name["daily_pure"]["win_rates"]["t1"])
 
     def test_consecutive_recommendations_are_deduped_into_one_episode(self):
         first = _entry("2026-08-20")
@@ -431,7 +529,7 @@ class StrategyScorecardTests(unittest.TestCase):
         self.assertLessEqual(len(card["representative_samples"]), 3)
         sample = card["representative_samples"][0]
         self.assertIn("recommendation_id", sample)
-        self.assertEqual(sample["strategy"], "daily_pure")
+        self.assertEqual(sample["strategy"], "daily_fusion")
         self.assertIn("reason_summary", sample)
 
     def test_intended_t1_strategy_uses_mature_t1_representative_sample(self):
@@ -450,8 +548,8 @@ class StrategyScorecardTests(unittest.TestCase):
             "2026-08-20",
             "2026-08-20T15:10:00+08:00",
             [{
-                "strategy_name": "next_day_boom",
-                "strategy_version": "boom-v1",
+                "strategy_name": "daily_fusion",
+                "strategy_version": "fusion-t1-v1",
                 "entry_mode": "delay1_open",
                 "intended_horizon": 1,
                 "publication_status": "published",
@@ -513,7 +611,8 @@ class StrategyScorecardTests(unittest.TestCase):
 
         self.assertIsNone(card["intended_horizon"])
         self.assertIsNone(card["win_rate"])
-        self.assertGreater(card["evaluable_episode_count"], 0)
+        self.assertEqual(card["episode_count"], 0)
+        self.assertEqual(card["evaluable_episode_count"], 0)
 
     def test_attribution_status_is_order_independent_and_reports_mixed(self):
         verified = _entry()
@@ -541,6 +640,45 @@ class StrategyScorecardTests(unittest.TestCase):
             first["attribution_status_counts"],
             second["attribution_status_counts"],
         )
+
+    def test_high_return_scorecard_reports_primary_horizon_support_metrics(self):
+        closes = [110.0, 100.0, 95.0]
+        entries = []
+        klines = {}
+        for index, future_close in enumerate(closes):
+            code = "300{:03d}".format(501 + index)
+            entries.append(_entry(
+                code=code,
+                intended_horizon=1,
+                entry_mode="immediate_close",
+            ))
+            klines[code] = _kline(
+                dates=["2026-08-20", "2026-08-21"],
+                opens=[100.0, 100.0],
+                closes=[100.0, future_close],
+                highs=[101.0, future_close + 2.0],
+                lows=[99.0, future_close - 2.0],
+            )
+
+        card = build_strategy_scorecards(
+            entries,
+            klines,
+            trading_calendar=["2026-08-20", "2026-08-21"],
+        )[0]
+
+        self.assertEqual(card["sample_size"], 3)
+        self.assertEqual(card["active_dates"], 1)
+        self.assertEqual(card["active_months"], 1)
+        self.assertEqual(card["average_daily_count"], 3.0)
+        self.assertAlmostEqual(card["mean_close_return"], 5.0 / 3.0)
+        self.assertEqual(card["median_close_return"], 0.0)
+        self.assertAlmostEqual(card["up_rate"], 100.0 / 3.0)
+        self.assertAlmostEqual(card["hit_rate_ge_5"], 100.0 / 3.0)
+        self.assertAlmostEqual(card["loss_rate_le_minus_5"], 100.0 / 3.0)
+        self.assertEqual(card["worst_close_return"], -5.0)
+        self.assertIn("monthly", card["time_stability"])
+        self.assertTrue(card["top_k_diagnostics"])
+        self.assertFalse(card["selection_cap_applied"])
 
 
 if __name__ == "__main__":

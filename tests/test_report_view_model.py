@@ -1,9 +1,59 @@
 import unittest
 
-from chanlun.report_view_model import EXCLUDED_FIELDS, build_workspace, _build_pool_quality_features
+from chanlun.report_view_model import (
+    EXCLUDED_FIELDS,
+    _build_pool_quality_features,
+    build_workspace,
+    normalize_decision_brief,
+)
 
 
 LARGE_FIELDS = EXCLUDED_FIELDS
+
+
+class DecisionBriefRiskContractTests(unittest.TestCase):
+    def test_legacy_risk_without_reasons_is_downgraded_to_partial(self):
+        brief = normalize_decision_brief({
+            "status": "ok",
+            "theses": [{
+                "theme": "半导体",
+                "direction": "negative",
+                "stage": "risk",
+                "rule_summary": "风险成立",
+                "evidence_refs": ["event:risk:1"],
+                "next_trigger": ["风险减弱"],
+                "invalidation": ["风险扩散"],
+            }],
+        })
+
+        self.assertEqual(brief["status"], "partial")
+        self.assertEqual(brief["risk_reason_status"], "insufficient")
+        thesis = brief["theses"][0]
+        self.assertEqual(thesis["risk_reason_status"], "insufficient")
+        self.assertEqual(thesis["risk_reasons"], [])
+
+    def test_valid_risk_reasons_are_preserved_and_grounded(self):
+        brief = normalize_decision_brief({
+            "status": "rules_only",
+            "theses": [{
+                "theme": "半导体",
+                "direction": "negative",
+                "stage": "risk",
+                "evidence_refs": ["event:risk:1"],
+                "risk_reasons": [{
+                    "reason": "公司被立案调查",
+                    "impact": "板块风险偏好可能承压",
+                    "evidence_refs": ["event:risk:1"],
+                }],
+            }],
+        })
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertEqual(brief["risk_reason_status"], "verified")
+        self.assertEqual(
+            brief["theses"][0]["risk_reasons"][0]["impact"],
+            "板块风险偏好可能承压",
+        )
 
 
 def _fusion_pick(
@@ -46,6 +96,8 @@ def _fusion_pick(
         "sector_tags": list(sector_tags or []),
         "money20": 150_000_000,
         "market_cap": 120,
+        "intended_horizon": 3,
+        "entry_mode": "immediate_close",
     }
     pick["decision_engine_v1"] = decision_engine_v1 or {
         "decision_code": "recommend",
@@ -120,6 +172,101 @@ def _report_data(overrides=None):
 
 
 class TestReportViewModel(unittest.TestCase):
+
+    def test_main_view_fails_closed_when_horizon_is_missing(self):
+        pick = _fusion_pick(code="600000", name="周期缺失")
+        pick.pop("intended_horizon")
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+
+        self.assertEqual(workspace["views"]["main"], [])
+        self.assertEqual(workspace["views"]["highlights"], [])
+
+    def test_shadow_legacy_main_remains_visible_without_fake_horizon(self):
+        pick = _fusion_pick(code="600009", name="现网旧口径")
+        pick.pop("intended_horizon")
+        pick["selection_contract_mode"] = "legacy_production"
+        pick["high_return_eligible"] = False
+
+        workspace = build_workspace({"picks_fusion": [pick]})
+
+        item = workspace["views"]["main"][0]
+        self.assertEqual(item["horizon_status"], "missing")
+        self.assertEqual(item["horizon_label"], "现网旧口径·周期缺失")
+        self.assertEqual(item["selection_contract_mode"], "legacy_production")
+
+    def test_shadow_legacy_declared_horizon_is_not_displayed_as_verified(self):
+        pick = _fusion_pick(code="600010", name="旧口径声明周期")
+        pick["selection_contract_mode"] = "legacy_production"
+        pick["high_return_eligible"] = False
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["horizon_status"], "legacy_unverified")
+        self.assertEqual(item["horizon_label"], "现网旧口径·声明T+3但未验")
+
+    def test_source_horizon_conflict_overrides_top_level_horizon(self):
+        pick = _baseline_pick(code="600011", name="周期冲突")
+        pick["intended_horizon"] = 1
+        pick["strategy_sources"] = [
+            {
+                "strategy_source": "source-t1",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "source-t5",
+                "source_status": "candidate",
+                "intended_horizon": 5,
+            },
+        ]
+
+        item = build_workspace({"picks_pure": [pick]})["views"]["baseline"][0]
+
+        self.assertEqual(item["horizon_status"], "conflict")
+        self.assertEqual(item["horizon_label"], "周期未确认")
+
+    def test_shadow_legacy_conflict_keeps_conflict_reason_visible(self):
+        pick = _fusion_pick(code="600012", name="旧口径周期冲突")
+        pick["selection_contract_mode"] = "legacy_production"
+        pick["strategy_sources"] = [
+            {
+                "strategy_source": "source-t1",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "source-t5",
+                "source_status": "candidate",
+                "intended_horizon": 5,
+            },
+        ]
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["horizon_status"], "conflict")
+        self.assertEqual(item["horizon_label"], "现网旧口径·周期冲突")
+
+    def test_legacy_entry_mode_is_preserved_instead_of_relabelled(self):
+        pick = _fusion_pick(code="600019", name="旧开盘口径")
+        pick["entry_mode"] = "delay1_open"
+        pick["entry_price"] = 10.25
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["research_entry_mode"], "delay1_open")
+        self.assertEqual(item["research_entry_label"], "次一交易日开盘价")
+        self.assertEqual(item["research_entry_price"], 10.25)
+
+    def test_missing_entry_mode_is_explicitly_unknown(self):
+        pick = _fusion_pick(code="600020", name="未知口径")
+        pick.pop("entry_mode")
+
+        item = build_workspace({"picks_fusion": [pick]})["views"]["main"][0]
+
+        self.assertEqual(item["research_entry_mode"], "unknown")
+        self.assertEqual(item["research_entry_label"], "入场口径未确认")
+        self.assertIsNone(item["research_entry_price"])
 
     def test_workspace_shape_view_order_meta_counts_and_diagnostics(self):
         report_data = _report_data(
@@ -228,6 +375,20 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual([item["code"] for item in workspace["views"]["baseline"]], ["600099"])
         self.assertEqual(workspace["views"]["highlights"], [])
 
+    def test_observation_tabs_cap_display_decision_and_keep_source_audit(self):
+        workspace = build_workspace({
+            "picks_pure": [_baseline_pick()],
+            "picks_fusion": [_fusion_pick()],
+        })
+
+        for view_name in ("baseline", "highlights"):
+            row = workspace["views"][view_name][0]
+            decision = row["decision_engine_v1"]
+            self.assertEqual(decision["decision_code"], "observe")
+            self.assertEqual(decision["decision"], "观察")
+            self.assertEqual(decision["source_decision_code"], "recommend")
+            self.assertEqual(row["action"], "仅观察")
+
     def test_growth_quality_order_does_not_change_highlights_ranking(self):
         near_reference_weak = _fusion_pick(
             code="600030",
@@ -332,7 +493,7 @@ class TestReportViewModel(unittest.TestCase):
         pick["volume_ratio20"] = 0.4
         self.assertLess(_build_pool_quality_features(pick)["liquidity_score"], 30.0)
 
-    def test_highlights_dedupe_and_resonance_label(self):
+    def test_highlights_dedupe_keeps_parallel_sources_without_resonance_upgrade(self):
         report_data = _report_data(
             {
                 "picks_fusion": [_fusion_pick(code="600010", name="共振票")],
@@ -350,10 +511,118 @@ class TestReportViewModel(unittest.TestCase):
         item = highlights[0]
         self.assertEqual(item["sources"], ["main", "acceleration"])
         self.assertEqual(item["source_labels"], ["主推", "加速"])
-        self.assertEqual(item["resonance_label"], "共振·进攻")
+        self.assertEqual(item["resonance_label"], "")
+        self.assertIn("不加分", item["rank_trace"]["selected_reason"])
         self.assertEqual(item["ref"]["pool"], "picks_fusion")
         self.assertIn("source:main", item["rank_trace"])
         self.assertIn("source:acceleration", item["rank_trace"])
+
+    def test_basic_candidate_and_main_expose_source_horizon_and_close_contract(self):
+        baseline = _baseline_pick(code="600210", name="多来源候选")
+        baseline.update({
+            "intended_horizon": 3,
+            "strategy_sources": [
+                {
+                    "strategy_source": "chanlun_structure",
+                    "source_status": "candidate",
+                    "reason": "三买结构成立",
+                    "intended_horizon": 3,
+                    "evidence_refs": ["structure:daily"],
+                },
+                {
+                    "strategy_source": "trend_continuation",
+                    "source_status": "candidate",
+                    "reason": "趋势与量能确认",
+                    "intended_horizon": 3,
+                    "evidence_refs": ["trend:30m"],
+                },
+            ],
+        })
+        main = _fusion_pick(code="600211", name="周期主推")
+        main.update({
+            "intended_horizon": 5,
+            "strategy_sources": [{
+                "strategy_source": "strong_startup",
+                "source_status": "candidate",
+                "reason": "日线强启动且30min确认",
+                "intended_horizon": 5,
+                "evidence_refs": ["startup:daily", "startup:30m"],
+            }],
+        })
+
+        workspace = build_workspace({
+            "picks_pure": [baseline],
+            "picks_fusion": [main],
+        })
+        baseline_item = workspace["views"]["baseline"][0]
+        main_item = workspace["views"]["main"][0]
+
+        self.assertEqual(
+            workspace["view_meta"]["baseline"]["label"], "基础候选"
+        )
+        self.assertEqual(
+            workspace["view_meta"]["baseline"]["backend_key"],
+            "picks_pure",
+        )
+        self.assertEqual(baseline_item["horizon_label"], "T+3")
+        self.assertEqual(main_item["horizon_label"], "T+5")
+        self.assertEqual(main_item["research_entry_label"], "信号日收盘价")
+        self.assertEqual(main_item["research_entry_price"], 10.18)
+        self.assertEqual(
+            [row["strategy_label"] for row in baseline_item["source_details"]],
+            ["原始缠论结构", "趋势延续"],
+        )
+        self.assertEqual(
+            [row["reason"] for row in baseline_item["source_details"]],
+            ["三买结构成立", "趋势与量能确认"],
+        )
+        self.assertTrue(all(
+            row["status_label"] == "已确认候选"
+            for row in baseline_item["source_details"]
+        ))
+
+    def test_observation_views_never_emit_formal_entry_wording(self):
+        main = _fusion_pick(code="600220", name="看点主推")
+        acceleration = _acceleration_pick(
+            code="600221", name="过热加速", change_pct=9.2
+        )
+        acceleration["decision_engine_v1"] = {
+            "decision_code": "recommend", "decision": "推荐"
+        }
+        luojie = _luojie_pick(code="600222", name="罗姐观察")
+        luojie["decision_engine_v1"] = {
+            "decision_code": "recommend", "decision": "推荐"
+        }
+        confirming = _confirming_pick(code="600223", name="等待观察")
+        confirming["decision_engine_v1"] = {
+            "decision_code": "recommend", "decision": "推荐"
+        }
+        growth = _fusion_pick(
+            code="600224",
+            name="高弹性观察",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        growth["ret20"] = 12.0
+
+        workspace = build_workspace({
+            "picks_fusion": [main, growth],
+            "next_day_boom": {"mode": "enabled", "candidates": [acceleration]},
+            "luojie_pool": {"candidates": [luojie]},
+            "startup_watchlist": [confirming],
+            "observation_watchlist": [confirming],
+        })
+
+        banned = ("上车", "进场", "买入", "慎追", "等回踩")
+        for view_name in (
+            "highlights", "observation_top5", "acceleration",
+            "luojie", "confirming", "growth_quality",
+        ):
+            for item in workspace["views"][view_name]:
+                self.assertIn(item["action"], {"仅观察", "盯盘"})
+                text = item["action"] + item["action_reason"]
+                self.assertFalse(any(word in text for word in banned), (
+                    view_name, text
+                ))
 
     def test_main_opportunity_score_balances_signal_with_entry_quality(self):
         near_reference_weak = _fusion_pick(
@@ -474,7 +743,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn(("source", "主推"), tags)
         self.assertIn(("signal", "底背驰候选"), tags)
 
-    def test_workspace_item_preserves_observe_decision_payload_in_highlights(self):
+    def test_workspace_observe_payload_moves_out_of_highlights(self):
         decision = {
             "version": "1",
             "decision": "观察",
@@ -491,6 +760,7 @@ class TestReportViewModel(unittest.TestCase):
             distance=0.5,
             decision_engine_v1=decision,
         )
+        with_decision["ret20"] = 12.0
         higher_rank = _fusion_pick(
             code="600049",
             name="高机会分",
@@ -501,10 +771,12 @@ class TestReportViewModel(unittest.TestCase):
         workspace = build_workspace({"picks_fusion": [with_decision, higher_rank]})
         main_rows = workspace["views"]["main"]
         highlight_rows = workspace["views"]["highlights"]
+        growth_rows = workspace["views"]["growth_quality"]
 
         self.assertEqual([item["code"] for item in main_rows], ["600049"])
-        self.assertEqual([item["code"] for item in highlight_rows], ["600049", "600050"])
-        self.assertEqual(highlight_rows[1]["decision_engine_v1"], decision)
+        self.assertEqual([item["code"] for item in highlight_rows], ["600049"])
+        self.assertEqual([item["code"] for item in growth_rows], ["600050"])
+        self.assertEqual(growth_rows[0]["decision_engine_v1"], decision)
 
     def test_workspace_reject_decision_is_excluded_from_main_and_highlights(self):
         pick = _fusion_pick(
@@ -518,7 +790,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["views"]["main"], [])
         self.assertEqual(workspace["views"]["highlights"], [])
 
-    def test_workspace_observe_decision_is_excluded_from_main_but_kept_in_highlights(self):
+    def test_workspace_observe_decision_is_excluded_from_main_and_highlights(self):
         pick = _fusion_pick(
             decision_engine_v1={
                 "decision_code": "observe",
@@ -529,10 +801,7 @@ class TestReportViewModel(unittest.TestCase):
 
         workspace = build_workspace({"picks_fusion": [pick]})
         self.assertEqual(workspace["views"]["main"], [])
-        item = workspace["views"]["highlights"][0]
-        self.assertEqual(item["action"], "仅观察")
-        self.assertIn("observe", item["action_reason"])
-        self.assertIn("决策上限", item["action_reason"])
+        self.assertEqual(workspace["views"]["highlights"], [])
 
     def test_workspace_main_keeps_recommend_and_excludes_missing_decision(self):
         missing_decision = _fusion_pick(code="600051")
@@ -555,6 +824,21 @@ class TestReportViewModel(unittest.TestCase):
 
         self.assertEqual(list(items), ["600050"])
         self.assertEqual(items["600050"]["action"], "可上车")
+
+        highlights = build_workspace(
+            {"picks_fusion": rows}
+        )["views"]["highlights"]
+        self.assertEqual([item["code"] for item in highlights], ["600050"])
+
+    def test_observation_pool_without_decision_never_gets_executable_action(self):
+        pick = _acceleration_pick(change_pct=9.0)
+
+        item = build_workspace({
+            "next_day_boom": {"mode": "enabled", "candidates": [pick]},
+        })["views"]["highlights"][0]
+
+        self.assertEqual(item["action"], "仅观察")
+        self.assertIn("决策缺失", item["action_reason"])
 
     def test_workspace_does_not_treat_chinese_decision_without_code_as_recommend(self):
         pick = _fusion_pick(
@@ -589,7 +873,7 @@ class TestReportViewModel(unittest.TestCase):
             )
         )
 
-    def test_highlights_prioritizes_recommend_before_observe(self):
+    def test_highlights_only_uses_recommended_fusion_rows(self):
         recommend = _fusion_pick(code="600201", score=20)
         observe = _fusion_pick(
             code="600202",
@@ -602,7 +886,7 @@ class TestReportViewModel(unittest.TestCase):
 
         rows = build_workspace({"picks_fusion": [observe, recommend]})["views"]["highlights"]
 
-        self.assertEqual([row["code"] for row in rows], ["600201", "600202"])
+        self.assertEqual([row["code"] for row in rows], ["600201"])
 
     def test_growth_quality_excludes_rows_without_minimum_evidence(self):
         complete = _fusion_pick(
@@ -908,7 +1192,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(main_item["action"], "慎追")
         self.assertIn("距参考价偏高", main_item["risk_flags"])
         self.assertIn("涨幅过热", main_item["risk_flags"])
-        self.assertEqual(confirming_item["action"], "等回踩")
+        self.assertEqual(confirming_item["action"], "仅观察")
         self.assertNotEqual(confirming_item["action"], "可上车")
 
     def test_confirming_observe_action_is_not_duplicated_as_risk_tag(self):

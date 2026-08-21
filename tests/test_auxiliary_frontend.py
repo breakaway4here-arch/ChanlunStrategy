@@ -20,6 +20,21 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         ):
             self.assertIn(helper, JS)
 
+    def test_workspace_decision_takes_priority_over_raw_pool_decision(self):
+        start = JS.index("function resolveDecisionEngine")
+        end = JS.index("function getDecisionScore", start)
+        resolver = JS[start:end]
+
+        self.assertLess(
+            resolver.index("item && item.decision_engine_v1"),
+            resolver.index("raw && raw.decision_engine_v1"),
+        )
+
+    def test_fusion_ranking_representative_is_visible(self):
+        self.assertIn("representative_strategy_label", JS)
+        self.assertIn("排名代表 ", JS)
+        self.assertIn("不叠加加分", JS)
+
     def test_primary_path_uses_decision_contracts_not_global_sell_list(self):
         start = JS.index("function renderAuxiliaryCenter")
         end = JS.index("function openMobileDetailDrawer", start)

@@ -13,6 +13,8 @@ import os
 import fcntl
 from datetime import date, datetime
 
+from chanlun.candidate_funnel import resolve_horizon_contract
+
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEFAULT_LEDGER_PATH = os.path.join(
@@ -21,10 +23,18 @@ DEFAULT_LEDGER_PATH = os.path.join(
 DEFAULT_PENDING_DIR = os.path.join(
     BASE_DIR, ".cache", "chanlun", "recommendation_pending"
 )
-LEDGER_SCHEMA_VERSION = "1"
+LEDGER_SCHEMA_VERSION = "2"
 VALID_DECISIONS = {"recommend", "observe", "reject"}
-VALID_PUBLICATION_STATUSES = {"published", "internal", "unknown"}
+VALID_PUBLICATION_STATUSES = {"published", "candidate", "internal", "unknown"}
 VALID_USER_ACTIONS = {"recommendation", "watch", "none", "unknown"}
+
+STRATEGY_CONTRACT_VERSIONS = {
+    "daily_pure": "daily-pure-candidate-universe-v1",
+    "daily_fusion": "daily-fusion-main-v2",
+    "observation_gate": "observation-gate-v1",
+    "next_day_boom": "next-day-boom-observation-v1",
+    "luojie_pool": "luojie-observation-v1",
+}
 
 
 def _json_safe(value):
@@ -83,6 +93,13 @@ def _latest_close(item):
     return number if math.isfinite(number) and number > 0 else None
 
 
+def _resolve_horizon(item, strategy):
+    return resolve_horizon_contract(
+        item,
+        fallback_horizon=strategy.get("intended_horizon"),
+    )
+
+
 def _decision_snapshot(item):
     decision = item.get("decision_engine_v1")
     decision = decision if isinstance(decision, dict) else {}
@@ -94,6 +111,21 @@ def _decision_snapshot(item):
         "opportunity_score": item.get("opportunity_score"),
         "watch_score": item.get("watch_score"),
         "score": item.get("score"),
+        "representative_strategy_source": item.get(
+            "representative_strategy_source"
+        ),
+        "representative_source_reason": item.get(
+            "representative_source_reason"
+        ),
+        "representative_source_score": item.get(
+            "representative_source_score"
+        ),
+        "upstream_strategy_sources": item.get(
+            "upstream_strategy_sources"
+        ),
+        "upstream_decision_engine_v1": item.get(
+            "upstream_decision_engine_v1"
+        ),
         "source_channel": item.get("source_channel"),
         "trend_type": item.get("trend_type"),
         "sector": item.get("sector"),
@@ -103,6 +135,8 @@ def _decision_snapshot(item):
 def _contribution(report_date, code, item, strategy):
     name = str(strategy.get("strategy_name") or "unknown").strip() or "unknown"
     version = str(strategy.get("strategy_version") or "").strip()
+    if not version:
+        version = STRATEGY_CONTRACT_VERSIONS.get(name, "")
     version_status = "verified" if version else "unknown"
     version = version or "unknown"
     decision = item.get("decision_engine_v1")
@@ -124,16 +158,15 @@ def _contribution(report_date, code, item, strategy):
     )
     source_pool = str(strategy.get("source_pool") or name).strip() or name
     display_name = str(strategy.get("display_name") or name).strip() or name
-    entry_mode = str(strategy.get("entry_mode") or "unknown").strip()
-    intended_horizon = strategy.get("intended_horizon")
-    if isinstance(intended_horizon, bool):
-        intended_horizon = None
-    try:
-        intended_horizon = int(intended_horizon)
-    except (TypeError, ValueError):
-        intended_horizon = None
-    if intended_horizon not in (1, 3, 5):
-        intended_horizon = None
+    entry_mode = str(
+        item.get("entry_mode") or strategy.get("entry_mode") or "unknown"
+    ).strip()
+    intended_horizon, horizon_status, source_horizons = _resolve_horizon(
+        item, strategy
+    )
+    entry_price = (
+        _latest_close(item) if entry_mode == "immediate_close" else None
+    )
     publication_status = str(
         strategy.get("publication_status") or "unknown"
     ).strip().lower()
@@ -151,10 +184,23 @@ def _contribution(report_date, code, item, strategy):
         ).strip().lower()
     if user_action not in VALID_USER_ACTIONS:
         user_action = "unknown"
+    if name == "daily_pure":
+        publication_status = "candidate"
+        user_action = "watch"
+    elif name == "daily_fusion" and decision_code != "recommend":
+        publication_status = "internal"
+        user_action = {
+            "observe": "watch",
+            "reject": "none",
+        }.get(decision_code, "unknown")
+    elif name in {"next_day_boom", "luojie_pool"}:
+        publication_status = "internal"
+        user_action = "watch"
     cohort_eligible = bool(
         publication_status == "published"
         and user_action == "recommendation"
         and decision_code == "recommend"
+        and horizon_status == "verified"
     )
     return {
         "contribution_id": "contrib:{}".format(_stable_hash(
@@ -169,7 +215,14 @@ def _contribution(report_date, code, item, strategy):
         "decision_label": str(decision.get("decision") or ""),
         "decision_engine_version": str(decision.get("version") or "unknown"),
         "entry_mode": entry_mode,
+        "entry_price": entry_price,
         "intended_horizon": intended_horizon,
+        "intended_horizon_label": (
+            "T+{}".format(intended_horizon)
+            if intended_horizon is not None else ""
+        ),
+        "horizon_status": horizon_status,
+        "source_horizons": source_horizons,
         "publication_status": publication_status,
         "user_action": user_action,
         "cohort_eligible": cohort_eligible,
@@ -225,6 +278,7 @@ def build_recommendation_entries(
                 "code": code,
                 "name": str(item.get("name") or code),
                 "reference_close": _latest_close(item),
+                "signal_close": _latest_close(item),
                 "policy_version": str(policy_version or "unknown"),
                 "config_revision": _revision(config_revision),
                 "code_version": str(code_version or "unknown"),

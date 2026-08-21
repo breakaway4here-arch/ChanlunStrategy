@@ -87,6 +87,8 @@ def filter_recent_picks(picks, max_age=None):
                 "name": p.get("name", "?"),
                 "type": "?",
                 "reason": "缺少best_buy_point",
+                "strategy_source": p.get("strategy_source", ""),
+                "source_channel": p.get("source_channel", ""),
             })
             continue
 
@@ -105,6 +107,8 @@ def filter_recent_picks(picks, max_age=None):
                 "type": bp.get("type", "?"),
                 "signal_age_days": bp.get("signal_age_days"),
                 "reason": bp.get("recency_reason", "信号过期"),
+                "strategy_source": p.get("strategy_source", ""),
+                "source_channel": p.get("source_channel", ""),
             })
 
     return kept, diag

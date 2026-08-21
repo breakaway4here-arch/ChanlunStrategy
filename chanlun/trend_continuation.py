@@ -97,6 +97,8 @@ def _base_payload(
         "sector": sector.get("sector", ""),
         "sector_tags": list(sector.get("sector_tags", []) or []),
         "source_channel": "trend_continuation",
+        "strategy_source": "trend_continuation",
+        "source_status": "seed",
         "tier": "seed",
         "category": "B",
         "quality_tier": "",
@@ -148,6 +150,7 @@ def _watch(
         "tier": "watch",
         "category": "C",
         "view": "observation",
+        "source_status": "observe",
         "avoid_chase": True,
         "reason_code": reason_code,
         "failure_gate": failure_gate,
@@ -307,6 +310,7 @@ def upgrade_trend_continuation_with_30min(
         seed = dict(raw)
         result = result_by_code.get(str(seed.get("code") or ""))
         if result is None:
+            seed["confirmation_facts"] = [_trend_confirmation_fact([])]
             watchlist.append(_watch(
                 seed,
                 "waiting_30m_confirm",
@@ -321,6 +325,9 @@ def upgrade_trend_continuation_with_30min(
         confirmations = _confirm_30min(
             result, float(seed["reference_price"])
         )
+        seed["confirmation_facts"] = [
+            _trend_confirmation_fact(confirmations)
+        ]
         if len(confirmations) < 2:
             watchlist.append(_watch(
                 seed,
@@ -339,6 +346,7 @@ def upgrade_trend_continuation_with_30min(
             "category": "A",
             "quality_tier": "A",
             "view": "main",
+            "source_status": "candidate",
             "confirmations": confirmations,
             "confirmed_by": "+".join(confirmations),
             "result_30min": result,
@@ -371,6 +379,7 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         "source_type": "日线趋势延续",
         "confirmed_by": "+".join(confirmations),
         "confirmations": confirmations,
+        "confirmation_facts": list(row.get("confirmation_facts") or []),
         "change_pct": row.get("change_pct", 0),
         "volume_ratio": row.get("volume_ratio", 0),
     }
@@ -383,10 +392,31 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         "reference_buy_points": [],
         "blocked_buy_points": [],
         "pivots": {},
-        "trend_type": "up",
+        "trend_type": "上升趋势",
         "score": 0,
         "resonance": {},
         "ma_bullish": True,
         "fusion_admission": {},
         "market_regime": "",
+    }
+
+
+def _trend_confirmation_fact(confirmations: Sequence[str]) -> Dict[str, Any]:
+    signals = list(dict.fromkeys(
+        str(value).strip() for value in confirmations if str(value).strip()
+    ))
+    eligible = len(signals) >= 2
+    return {
+        "owner_pool": "trend_continuation",
+        "stage": "30min_confirmation",
+        "effect": "candidate" if eligible else "observe",
+        "reason_code": (
+            "trend_two_confirmations_met"
+            if eligible
+            else "trend_confirmation_insufficient"
+        ),
+        "eligible": eligible,
+        "confirmation_count": len(signals),
+        "required_count": 2,
+        "signals": signals,
     }

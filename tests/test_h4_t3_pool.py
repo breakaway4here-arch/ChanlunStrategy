@@ -140,6 +140,104 @@ class H4T3PoolTests(unittest.TestCase):
         self.assertEqual([], pool["candidates"])
         self.assertEqual(1, pool["diagnostics"]["base_return_rejected_count"])
 
+    def test_h4_output_owns_t3_source_without_erasing_upstream_audit(self):
+        model_path = self._model_path(return_pct=6.0)
+        candidate = _candidate()
+        candidate["decision_engine_v1"] = {
+            "decision_code": "observe",
+            "decision": "观察",
+        }
+        candidate["intended_horizon"] = 1
+        candidate["strategy_sources"] = [
+            {
+                "strategy_source": "chanlun_structure",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "trend_continuation",
+                "source_status": "candidate",
+                "intended_horizon": 5,
+            },
+        ]
+
+        item = build_h4_t3_pool(
+            [candidate], "2026-08-20", model_path=model_path
+        )["candidates"][0]
+
+        self.assertEqual("h4_t3", item["strategy_source"])
+        self.assertEqual(3, item["intended_horizon"])
+        self.assertEqual(
+            [{
+                "strategy_source": "h4_t3",
+                "source_status": "candidate",
+                "reason": "H4 T+3 K30 tail-safe 全部门槛通过",
+                "intended_horizon": 3,
+                "evidence_refs": [
+                    "h4_predictions",
+                    "h4_model:h4_t3_k30_tail_safe_v1",
+                ],
+            }],
+            item["strategy_sources"],
+        )
+        self.assertEqual(
+            candidate["strategy_sources"],
+            item["upstream_strategy_sources"],
+        )
+        self.assertEqual(
+            "recommend", item["decision_engine_v1"]["decision_code"]
+        )
+        self.assertEqual(
+            "h4_t3_k30_tail_safe_v1",
+            item["decision_engine_v1"]["version"],
+        )
+        self.assertEqual(
+            "observe",
+            item["upstream_decision_engine_v1"]["decision_code"],
+        )
+
+    def test_same_code_structure_representative_does_not_hide_trend_variant(self):
+        model_path = self._model_path(return_pct=6.0)
+        trend = _candidate()
+        trend["strategy_source"] = "trend_continuation"
+        structure = copy.deepcopy(trend)
+        structure.update({
+            "strategy_source": "chanlun_structure",
+            "source_channel": "low_position",
+        })
+        parent = copy.deepcopy(structure)
+        parent["strategy_variants"] = [structure, trend]
+        parent["strategy_sources"] = [
+            {
+                "strategy_source": "chanlun_structure",
+                "source_status": "candidate",
+                "intended_horizon": 1,
+            },
+            {
+                "strategy_source": "trend_continuation",
+                "source_status": "candidate",
+                "intended_horizon": 3,
+            },
+        ]
+
+        pool = build_h4_t3_pool(
+            [parent], "2026-08-20", model_path=model_path
+        )
+
+        self.assertEqual(1, pool["diagnostics"]["microstate_count"])
+        self.assertEqual(["000001"], [
+            row["code"] for row in pool["candidates"]
+        ])
+        self.assertEqual(
+            ["chanlun_structure", "trend_continuation"],
+            [
+                row["strategy_source"]
+                for row in pool["candidates"][0][
+                    "upstream_strategy_sources"
+                ]
+            ],
+        )
+
     def test_missing_or_invalid_model_fails_instead_of_becoming_empty(self):
         missing = Path(tempfile.gettempdir()) / "missing-h4-t3-model.json"
         self._unlink(missing)
@@ -156,6 +254,23 @@ class H4T3PoolTests(unittest.TestCase):
             Path("chanlun/data/h4_t3_model_v1.json").stat().st_size,
             5 * 1024 * 1024,
         )
+
+    def test_v1_vector_prefers_frozen_legacy_decision_snapshot(self):
+        original = _candidate()
+        expected = build_tail_feature_vector(original).tolist()
+        migrated = copy.deepcopy(original)
+        legacy = copy.deepcopy(migrated["decision_engine_v1"])
+        migrated["decision_engine_v1"] = {
+            "decision_code": "reject",
+            "total_score": -99,
+            "sentiment": {"score": -30},
+            "structure": {"score": 90},
+            "position": {"score": -80},
+            "risk_reasons": ["新语义风险"],
+            "legacy_h4_v1": legacy,
+        }
+
+        self.assertEqual(expected, build_tail_feature_vector(migrated).tolist())
 
     def test_exporter_keeps_only_collapsed_t3_microstate_training_rows(self):
         from scripts.export_h4_t3_production_model import build_model_payload
@@ -213,6 +328,22 @@ class H4T3PoolTests(unittest.TestCase):
 
         self.assertIs(expected, actual)
         builder.assert_called_once_with(candidates, "2026-08-20")
+
+    def test_daily_runner_isolates_h4_model_failure(self):
+        from chanlun.h4_t3_pool import H4T3PoolError
+        from run import _build_daily_h4_t3_pool
+
+        with mock.patch(
+            "run.build_h4_t3_pool",
+            side_effect=H4T3PoolError("broken model"),
+        ):
+            actual = _build_daily_h4_t3_pool([], "2026-08-20")
+
+        self.assertEqual(actual["status"], "error")
+        self.assertFalse(actual["production_attested"])
+        self.assertEqual(actual["candidates"], [])
+        self.assertIn("broken model", actual["reason"])
+        self.assertEqual(actual["diagnostics"]["eligible_count"], 0)
 
     def test_incremental_backfill_preserves_existing_daily_pools(self):
         from scripts.backfill_h4_t3_pool import backfill_h4_t3_pool

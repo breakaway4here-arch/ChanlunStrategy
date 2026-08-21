@@ -49,6 +49,7 @@ from config import (
     FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
     FULL_A_MIN_ELIGIBLE_COUNT,
     MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
+    HIGH_RETURN_SELECTION_MODE,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
@@ -99,6 +100,7 @@ from chanlun.position_book import (
 )
 from chanlun.recommendation_ledger import (
     DEFAULT_LEDGER_PATH,
+    STRATEGY_CONTRACT_VERSIONS,
     build_recommendation_entries,
     pending_ledger_path,
     prepare_recommendation_history,
@@ -117,7 +119,7 @@ from chanlun.trend_continuation import (
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
-from chanlun.h4_t3_pool import build_h4_t3_pool
+from chanlun.h4_t3_pool import H4T3PoolError, build_h4_t3_pool
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.industry_metadata import hydrate_industry_metadata
@@ -127,7 +129,11 @@ from chanlun.market_sentiment import (
     build_sentiment_history,
     detect_turning_signal,
 )
-from chanlun.candidate_funnel import CandidateFunnel
+from chanlun.candidate_funnel import (
+    CandidateFunnel,
+    merge_confirmed_candidates,
+    resolve_horizon_contract,
+)
 from chanlun.universe_builder import (
     UniverseConfig,
     attach_sector_context,
@@ -139,7 +145,25 @@ from chanlun.universe_builder import (
 
 def _build_daily_h4_t3_pool(fusion_candidates, trade_date):
     """Build H4 from the same real fusion candidates published by the daily run."""
-    return build_h4_t3_pool(fusion_candidates, trade_date)
+    try:
+        return build_h4_t3_pool(fusion_candidates, trade_date)
+    except H4T3PoolError as exc:
+        return {
+            "status": "error",
+            "production_attested": False,
+            "mode": "unavailable",
+            "strategy": "H4",
+            "horizon": "T+3",
+            "reason": "H4 独立池不可用：{}".format(exc),
+            "diagnostics": {
+                "fusion_count": len(fusion_candidates or []),
+                "microstate_count": 0,
+                "eligible_count": 0,
+                "selected_count": 0,
+                "error": str(exc),
+            },
+            "candidates": [],
+        }
 
 
 # ============================================================
@@ -188,6 +212,504 @@ def _inject_decision_engine(items, evaluator: Callable | None, market_context: d
         decision = _evaluate_with_context(evaluator, item, market_context)
         if decision is not None:
             item["decision_engine_v1"] = decision
+
+
+_FUSION_SOURCE_PRIORITY = {
+    "chanlun_structure": 0,
+    "strong_startup": 1,
+    "trend_continuation": 2,
+}
+
+_FUSION_REPRESENTATIVE_FIELDS = (
+    "source_channel",
+    "strategy_source",
+    "source_status",
+    "reason",
+    "startup_reason",
+    "watch_reason",
+    "trend_signals",
+    "best_buy_point",
+    "confirmations",
+    "confirmation_facts",
+    "reference_type",
+    "reference_price",
+    "score",
+    "gf_dma_health",
+    "position_distance_pct",
+    "position_reference_price",
+    "position_reference_type",
+    "position_data_status",
+    "position_evidence_date",
+    "position_absolute_percentile",
+    "position_absolute_window",
+)
+
+
+def _inject_fusion_decision_engine(
+    items,
+    evaluator: Callable | None,
+    market_context: dict | None = None,
+):
+    """Evaluate source variants separately, then preserve independent wins.
+
+    Any independently recommended source can represent the stock.  If none
+    recommends, observe wins over reject.  Shared market risk still applies
+    inside every source evaluation; source-specific rejection cannot veto a
+    different strategy.  Multiple sources never add score.
+    """
+    if not evaluator:
+        return
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        variants = [
+            variant
+            for variant in item.get("strategy_variants") or []
+            if isinstance(variant, dict)
+        ]
+        if not variants:
+            decision = _evaluate_with_context(
+                evaluator, item, market_context
+            )
+            if decision is not None:
+                item["decision_engine_v1"] = decision
+            continue
+
+        variants.sort(key=lambda variant: (
+            _FUSION_SOURCE_PRIORITY.get(
+                str(variant.get("strategy_source") or ""), 99
+            ),
+            str(variant.get("strategy_source") or ""),
+            str(variant.get("source_channel") or ""),
+        ))
+        source_decisions = []
+        for variant in variants:
+            decision = _evaluate_with_context(
+                evaluator, variant, market_context
+            )
+            if not isinstance(decision, dict):
+                continue
+            source_decisions.append({
+                "strategy_source": str(
+                    variant.get("strategy_source") or "chanlun_structure"
+                ),
+                "source_channel": str(
+                    variant.get("source_channel") or ""
+                ),
+                "decision_engine_v1": decision,
+                "_variant": variant,
+            })
+            variant["decision_engine_v1"] = decision
+        if not source_decisions:
+            continue
+
+        by_code = {
+            "reject": [],
+            "recommend": [],
+            "observe": [],
+        }
+        for row in source_decisions:
+            code = str(
+                row["decision_engine_v1"].get("decision_code") or "observe"
+            ).lower()
+            by_code.setdefault(code, []).append(row)
+        if by_code.get("recommend"):
+            selected = by_code["recommend"][0]
+        elif by_code.get("observe"):
+            selected = by_code["observe"][0]
+        else:
+            selected = (by_code.get("reject") or source_decisions)[0]
+
+        selected_variant = selected.get("_variant") or {}
+        for row in source_decisions:
+            row.pop("_variant", None)
+        aggregate = dict(selected["decision_engine_v1"])
+        aggregate["representative_strategy_source"] = selected[
+            "strategy_source"
+        ]
+        aggregate["aggregation_rule"] = (
+            "any_recommend_then_observe_then_reject"
+        )
+        aggregate["source_decision_count"] = len(source_decisions)
+        item["decision_engine_v1"] = aggregate
+        item["source_decisions"] = source_decisions
+        item["representative_strategy_source"] = selected[
+            "strategy_source"
+        ]
+        item["representative_source_reason"] = (
+            selected_variant.get("reason")
+            or selected_variant.get("startup_reason")
+            or (selected_variant.get("best_buy_point") or {}).get("reason")
+            or ""
+        )
+        item["representative_source_score"] = selected_variant.get("score")
+        for field in _FUSION_REPRESENTATIVE_FIELDS:
+            if field in selected_variant:
+                item[field] = selected_variant[field]
+
+        decision_by_source = {
+            row["strategy_source"]: row["decision_engine_v1"]
+            for row in source_decisions
+        }
+        for snapshot in item.get("strategy_sources") or []:
+            if not isinstance(snapshot, dict):
+                continue
+            source = str(snapshot.get("strategy_source") or "")
+            if source in decision_by_source:
+                snapshot["decision_engine_v1"] = decision_by_source[source]
+
+
+def _enforce_fusion_horizon_contract(items, mode="active"):
+    """Audit horizons and enforce them only after an explicit cutover.
+
+    Shadow mode keeps the current production recommendation intact while
+    recording that it is not eligible for the new high-return contract.  This
+    avoids inventing a horizon for legacy strategies or silently emptying the
+    live main pool before strategy-level OOT evidence exists.
+    """
+    selected_mode = str(mode or "shadow").strip().lower()
+    if selected_mode not in {"shadow", "active"}:
+        raise ValueError("unsupported high-return selection mode: {}".format(
+            selected_mode
+        ))
+    diagnostics = {
+        "mode": selected_mode,
+        "input_count": 0,
+        "horizon_contract_eligible_count": 0,
+        "high_return_eligible_count": 0,
+        "legacy_production_count": 0,
+        "downgraded_count": 0,
+        "missing_horizon_count": 0,
+        "conflicting_horizon_count": 0,
+    }
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        diagnostics["input_count"] += 1
+        horizon, status, source_horizons = resolve_horizon_contract(item)
+        item["intended_horizon"] = horizon
+        item["intended_horizon_label"] = (
+            "T+{}".format(horizon) if horizon is not None else ""
+        )
+        item["horizon_status"] = status
+        item["source_horizons"] = source_horizons
+        if status == "missing":
+            diagnostics["missing_horizon_count"] += 1
+        elif status == "conflict":
+            diagnostics["conflicting_horizon_count"] += 1
+        decision = item.get("decision_engine_v1")
+        is_recommend = (
+            isinstance(decision, dict)
+            and decision.get("decision_code") == "recommend"
+        )
+        horizon_contract_eligible = status == "verified" and is_recommend
+        item["horizon_contract_eligible"] = horizon_contract_eligible
+        if horizon_contract_eligible:
+            diagnostics["horizon_contract_eligible_count"] += 1
+        high_return_eligible = (
+            selected_mode == "active" and horizon_contract_eligible
+        )
+        item["high_return_eligible"] = high_return_eligible
+        if high_return_eligible:
+            diagnostics["high_return_eligible_count"] += 1
+            item["selection_contract_mode"] = "high_return_verified"
+        elif selected_mode == "shadow" and is_recommend:
+            item["selection_contract_mode"] = "legacy_production"
+            diagnostics["legacy_production_count"] += 1
+        else:
+            item["selection_contract_mode"] = selected_mode
+        if (
+            selected_mode == "active"
+            and status != "verified"
+            and is_recommend
+        ):
+            downgraded = dict(decision)
+            downgraded["decision_code"] = "observe"
+            downgraded["decision"] = (
+                "观察（主要周期冲突）"
+                if status == "conflict"
+                else "观察（主要周期未验证）"
+            )
+            downgraded["horizon_status"] = status
+            item["decision_engine_v1"] = downgraded
+            diagnostics["downgraded_count"] += 1
+    return diagnostics
+
+
+def _apply_fusion_admission_by_source(
+    candidates,
+    sh_closes,
+    sector_stocks=None,
+):
+    """Admit each strategy candidate before same-code aggregation.
+
+    The stable ordering is only a representation rule.  It neither adds a
+    multi-source bonus nor lets one source bypass another source's admission
+    contract.
+    """
+    import copy
+
+    source_candidates = [
+        copy.deepcopy(item)
+        for item in (candidates or [])
+        if isinstance(item, dict)
+    ]
+
+    def stable_key(item):
+        bp = item.get("best_buy_point") or {}
+        return (
+            str(item.get("code") or ""),
+            str(item.get("strategy_source") or ""),
+            str(item.get("source_channel") or ""),
+            str(bp.get("type") or ""),
+        )
+
+    source_candidates.sort(key=stable_key)
+    admitted_sources, diagnostics = apply_fusion_admission(
+        source_candidates,
+        sh_closes,
+        sector_stocks,
+    )
+    merged = merge_confirmed_candidates(admitted_sources)
+    diagnostics = dict(diagnostics or {})
+    diagnostics["source_input_count"] = len(source_candidates)
+    diagnostics["source_output_count"] = len(admitted_sources)
+    diagnostics["output_count"] = len(merged)
+    diagnostics["aggregation"] = "per_source_then_same_code"
+    return merged, diagnostics
+
+
+def _prepare_fusion_strategy_variants(items, sector_rank_map=None):
+    """Score and health-check each admitted source without cross-source bonus."""
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        variants = [
+            variant
+            for variant in item.get("strategy_variants") or []
+            if isinstance(variant, dict)
+        ]
+        apply_scores(
+            variants,
+            version="fusion",
+            sector_rank_map=sector_rank_map,
+        )
+        _attach_gf_dma_health(variants)
+        item["strategy_variants"] = [
+            _attach_signal_dimensions(
+                variant,
+                default_channel=(
+                    variant.get("source_channel") or "low_position"
+                ),
+            )
+            for variant in variants
+        ]
+    return items
+
+
+def _filter_recent_strategy_sources(items, max_age):
+    """Apply signal recency per source, then rebuild the same-code aggregate."""
+    original_codes = {
+        str(item.get("code") or "")
+        for item in items or []
+        if isinstance(item, dict) and item.get("code")
+    }
+    source_items = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        variants = [
+            variant
+            for variant in item.get("strategy_variants") or []
+            if isinstance(variant, dict)
+        ]
+        source_items.extend(variants or [item])
+    kept_sources, source_diag = filter_recent_picks(
+        source_items,
+        max_age,
+    )
+    merged = merge_confirmed_candidates(kept_sources)
+    kept_codes = {
+        str(item.get("code") or "")
+        for item in merged
+        if item.get("code")
+    }
+    dropped_details = [
+        dict(detail)
+        for detail in source_diag.get("dropped_details") or []
+        if isinstance(detail, dict)
+    ]
+    diagnostics = {
+        "max_age_trading_days": max_age,
+        "input": len(original_codes),
+        "kept": len(kept_codes),
+        "dropped_expired": len(original_codes - kept_codes),
+        "dropped_details": dropped_details,
+        "source_input": source_diag.get("input", 0),
+        "source_kept": source_diag.get("kept", 0),
+        "source_dropped_expired": source_diag.get(
+            "dropped_expired", 0
+        ),
+        "aggregation": "per_source_recency_then_same_code",
+    }
+    return merged, diagnostics
+
+
+def _record_fusion_funnel_outcomes(
+    candidate_funnel,
+    pure_items,
+    fusion_items,
+    diagnostics,
+):
+    """Record code-level admission and exact per-source rejection evidence."""
+    pure_codes = {
+        str(item.get("code") or "")
+        for item in pure_items or []
+        if isinstance(item, dict) and item.get("code")
+    }
+    candidate_funnel.mark_membership(
+        "fusion",
+        fusion_items,
+        failure_reason="fusion_not_admitted",
+        eligible_codes=sorted(pure_codes),
+    )
+    for detail in (diagnostics or {}).get("drop_details") or []:
+        if not isinstance(detail, dict):
+            continue
+        code = str(detail.get("code") or "")
+        if not code or code not in pure_codes:
+            continue
+        candidate_funnel.record_source_failure(
+            code,
+            "fusion",
+            detail.get("reason") or "fusion_not_admitted",
+            strategy_source=detail.get("strategy_source") or "",
+            source_channel=detail.get("source_channel") or "",
+        )
+
+
+def _record_observation_funnel_outcome(
+    candidate_funnel,
+    watch,
+    protected_codes,
+):
+    """Keep an observation near-miss source-local when another path survived."""
+    if not isinstance(watch, dict) or not watch.get("code"):
+        return
+    failure_gate = str(watch.get("failure_gate") or "").strip()
+    if failure_gate not in {
+        "eligible",
+        "retrieval",
+        "daily_channel",
+        "minute30",
+        "fusion",
+        "display",
+    }:
+        failure_gate = "daily_channel"
+    reason = (
+        watch.get("reason_code")
+        or watch.get("watch_reason")
+        or "observation_only"
+    )
+    features = {
+        key: watch.get(key)
+        for key in (
+            "volume_ratio",
+            "amount_ratio",
+            "distance_3pct",
+            "distance_12pct",
+            "ma5",
+            "ma10",
+            "ma20",
+            "ma_gap_pct",
+            "ma_direction",
+            "confirmations",
+            "confirmation_strength",
+            "reference_type",
+            "reference_price",
+            "distance_from_reference_pct",
+            "upgrade_conditions",
+            "cancel_conditions",
+        )
+        if watch.get(key) is not None
+    }
+    code = str(watch["code"])
+    candidate_funnel.record_source_failure(
+        code,
+        failure_gate,
+        reason,
+        strategy_source=(
+            watch.get("strategy_source") or "observation_gate"
+        ),
+        source_channel=watch.get("source_channel") or "",
+        actual_value=watch.get("actual_value"),
+        threshold=watch.get("threshold"),
+    )
+    if code in {str(value) for value in protected_codes or []}:
+        return
+    candidate_funnel.fail_stage(
+        code,
+        failure_gate,
+        reason,
+        actual_value=watch.get("actual_value"),
+        threshold=watch.get("threshold"),
+        features=features,
+    )
+
+
+def _published_main_candidates(items):
+    """Return exactly the rows exposed by the current main-view contract."""
+    result = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        decision = item.get("decision_engine_v1") or {}
+        if not isinstance(decision, dict):
+            continue
+        if str(decision.get("decision_code") or "").lower() != "recommend":
+            continue
+        if (
+            item.get("horizon_status") == "verified"
+            or item.get("selection_contract_mode") == "legacy_production"
+        ):
+            result.append(item)
+    return result
+
+
+def _build_funnel_decision_map(
+    pure_items,
+    fusion_items,
+    observation_items,
+):
+    """Match persisted decisions to main > candidate > observe terminal state."""
+    decision_by_code = {}
+
+    def attach(items):
+        for item in items or []:
+            if isinstance(item, dict) and item.get("code"):
+                decision_by_code[str(item["code"])] = (
+                    item.get("decision_engine_v1") or {}
+                )
+
+    attach(observation_items)
+    attach(pure_items)
+    attach(_published_main_candidates(fusion_items))
+    return decision_by_code
+
+
+def _attach_current_research_entry_contract(items):
+    """Declare the confirmed close-price research contract on new daily rows."""
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        closes = item.get("closes") or []
+        signal_close = _safe_number(closes[-1], None) if closes else None
+        item["entry_mode"] = "immediate_close"
+        item["signal_close"] = signal_close
+        _attach_current_research_entry_contract(
+            item.get("strategy_variants") or []
+        )
+    return items
 
 
 def _build_decision_market_context(
@@ -1594,6 +2116,7 @@ def main(debug=False, preview=False, generated_at=None):
     data_quality["runtime_policy"] = {
         "market_history_cutover_mode": MARKET_HISTORY_CUTOVER_MODE,
         "recall_strategy_mode": RECALL_STRATEGY_MODE,
+        "high_return_selection_mode": HIGH_RETURN_SELECTION_MODE,
         "decision_semantics": "v2_missing_position_is_observe",
     }
     if not debug and RECALL_STRATEGY_MODE != "legacy":
@@ -1965,7 +2488,7 @@ def main(debug=False, preview=False, generated_at=None):
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
             if ENABLE_FUSION_ADMISSION_POLICY:
-                fusion_confirmed, fusion_admission_diag = apply_fusion_admission(
+                fusion_confirmed, fusion_admission_diag = _apply_fusion_admission_by_source(
                     pure_confirmed, sh_closes, sector_stocks)
                 upgrade_diag_fusion = {"requested_30min": 0, "fetched_30min": 0,
                                        "formal_kept": len(pure_confirmed),
@@ -2098,13 +2621,8 @@ def main(debug=False, preview=False, generated_at=None):
                     _attach_liquidity(_attach_sector_metadata(item))
                     for item in trend_additional_watchlist
                 )
-                existing_codes = {
-                    str(item.get("code") or "") for item in pure_confirmed
-                }
                 normalized_trend = []
                 for candidate in trend_candidates:
-                    if str(candidate.get("code") or "") in existing_codes:
-                        continue
                     pick = normalize_trend_candidate(candidate)
                     pick["macd_hist"] = calc_macd(
                         candidate.get("closes", [])
@@ -2122,10 +2640,13 @@ def main(debug=False, preview=False, generated_at=None):
             if ENABLE_FUSION_ADMISSION_POLICY:
                 # Fusion: apply admission policy on top of pure confirmed picks
                 print("[融合版admission]")
-                import copy
-                fusion_ready = copy.deepcopy(pure_confirmed)
-                fusion_confirmed, fusion_admission_diag = apply_fusion_admission(
-                    fusion_ready, sh_closes, sector_stocks)
+                fusion_confirmed, fusion_admission_diag = (
+                    _apply_fusion_admission_by_source(
+                        pure_confirmed,
+                        sh_closes,
+                        sector_stocks,
+                    )
+                )
                 print(f"  input={fusion_admission_diag['input_count']}, "
                       f"regime={fusion_admission_diag['market_regime']}, "
                       f"kept_formal={fusion_admission_diag['kept_formal']}, "
@@ -2200,6 +2721,8 @@ def main(debug=False, preview=False, generated_at=None):
             for item in trend_additional_watchlist
         )
 
+    pure_confirmed = merge_confirmed_candidates(pure_confirmed)
+
     # ================================================================
     # Phase 6: Score + generate report
     # ================================================================
@@ -2208,8 +2731,14 @@ def main(debug=False, preview=False, generated_at=None):
     print("=" * 60)
 
     # Signal recency filter (before scoring, per spec)
-    pure_confirmed, recency_pure_diag = filter_recent_picks(pure_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
-    fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
+    pure_confirmed, recency_pure_diag = _filter_recent_strategy_sources(
+        pure_confirmed,
+        SIGNAL_MAX_AGE_TRADING_DAYS,
+    )
+    fusion_confirmed, recency_fusion_diag = _filter_recent_strategy_sources(
+        fusion_confirmed,
+        SIGNAL_MAX_AGE_TRADING_DAYS,
+    )
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
     trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
@@ -2250,6 +2779,7 @@ def main(debug=False, preview=False, generated_at=None):
     fusion_scored = _attach_gf_dma_health(fusion_scored)
     pure_scored = [_attach_signal_dimensions(p) for p in pure_scored]
     fusion_scored = [_attach_signal_dimensions(p) for p in fusion_scored]
+    _prepare_fusion_strategy_variants(fusion_scored, sectors)
     experimental_pure_scored = list(pure_scored)
     experimental_fusion_scored = list(fusion_scored)
     pure_scored, fusion_scored, recall_shadow_diag = (
@@ -2341,6 +2871,15 @@ def main(debug=False, preview=False, generated_at=None):
         next_day_candidates.append(merged)
     next_day_boom["candidates"] = next_day_candidates
 
+    for research_items in (
+        pure_scored,
+        fusion_scored,
+        observation_watchlist,
+        next_day_boom.get("candidates", []),
+        luojie_pool.get("candidates", []),
+    ):
+        _attach_current_research_entry_contract(research_items)
+
     # 上证缠论结构
     print("  分析上证缠论结构 ...")
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
@@ -2391,13 +2930,28 @@ def main(debug=False, preview=False, generated_at=None):
         ):
             for decision_item in decision_items or []:
                 _attach_position_evidence(decision_item, today)
+        for fusion_item in fusion_scored or []:
+            if not isinstance(fusion_item, dict):
+                continue
+            for variant in fusion_item.get("strategy_variants") or []:
+                if isinstance(variant, dict):
+                    # Position references belong to the individual source.
+                    # Recomputing here preserves the low-position/trend
+                    # semantics instead of copying the merged representative.
+                    _attach_position_evidence(variant, today)
         _inject_decision_engine(pure_scored, decision_engine, market_context)
-        _inject_decision_engine(fusion_scored, decision_engine, market_context)
+        _inject_fusion_decision_engine(
+            fusion_scored, decision_engine, market_context
+        )
         _inject_decision_engine(observation_watchlist, decision_engine, market_context)
         _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
     h4_t3_pool = _build_daily_h4_t3_pool(fusion_scored, today)
+    high_return_horizon_diag = _enforce_fusion_horizon_contract(
+        fusion_scored,
+        mode=HIGH_RETURN_SELECTION_MODE,
+    )
     print(
         "  H4 T+3: 微状态{}只，过门{}只".format(
             h4_t3_pool["diagnostics"]["microstate_count"],
@@ -2410,74 +2964,36 @@ def main(debug=False, preview=False, generated_at=None):
         + list(experimental_fusion_scored)
         + list(observation_watchlist)
     )
-    candidate_funnel.mark_membership(
-        "fusion",
+    _record_fusion_funnel_outcomes(
+        candidate_funnel,
+        experimental_pure_scored,
         experimental_fusion_scored,
-        eligible_codes=[
-            item.get("code") for item in experimental_fusion_scored
-        ],
+        fusion_admission_diag,
     )
-    for watch in observation_watchlist:
-        if not isinstance(watch, dict) or not watch.get("code"):
-            continue
-        failure_gate = str(watch.get("failure_gate") or "").strip()
-        if failure_gate not in {
-            "eligible",
-            "retrieval",
-            "daily_channel",
-            "minute30",
-            "fusion",
-            "display",
-        }:
-            failure_gate = "daily_channel"
-        candidate_funnel.fail_stage(
-            watch["code"],
-            failure_gate,
-            watch.get("reason_code")
-            or watch.get("watch_reason")
-            or "observation_only",
-            actual_value=watch.get("actual_value"),
-            threshold=watch.get("threshold"),
-            features={
-                key: watch.get(key)
-                for key in (
-                    "volume_ratio",
-                    "amount_ratio",
-                    "distance_3pct",
-                    "distance_12pct",
-                    "ma5",
-                    "ma10",
-                    "ma20",
-                    "ma_gap_pct",
-                    "ma_direction",
-                    "confirmations",
-                    "confirmation_strength",
-                    "reference_type",
-                    "reference_price",
-                    "distance_from_reference_pct",
-                    "upgrade_conditions",
-                    "cancel_conditions",
-                )
-                if watch.get(key) is not None
-            },
+    protected_funnel_codes = {
+        str(item.get("code") or "")
+        for item in (
+            list(pure_scored)
+            + list(_published_main_candidates(fusion_scored))
         )
-    decision_by_code = {}
-    for item in (
-        list(experimental_pure_scored)
-        + list(experimental_fusion_scored)
-        + list(observation_watchlist)
-    ):
-        if isinstance(item, dict) and item.get("code"):
-            decision_by_code[str(item["code"])] = (
-                item.get("decision_engine_v1") or {}
-            )
+        if isinstance(item, dict) and item.get("code")
+    }
+    for watch in observation_watchlist:
+        _record_observation_funnel_outcome(
+            candidate_funnel,
+            watch,
+            protected_funnel_codes,
+        )
+    decision_by_code = _build_funnel_decision_map(
+        pure_scored,
+        fusion_scored,
+        observation_watchlist,
+    )
     candidate_funnel.finalize(
-        main_codes=(
-            list(experimental_pure_scored)
-            + list(experimental_fusion_scored)
-        ),
+        main_codes=_published_main_candidates(fusion_scored),
         observation_codes=observation_watchlist,
         decision_by_code=decision_by_code,
+        candidate_codes=pure_scored,
     )
     funnel_persist_status = "saved"
     try:
@@ -2577,6 +3093,7 @@ def main(debug=False, preview=False, generated_at=None):
             "db_path": MARKET_HISTORY_DB_PATH,
         },
         "recall_shadow": recall_shadow_diag,
+        "high_return_horizon": high_return_horizon_diag,
         "luojie_pool": luojie_pool.get("diagnostics", {}),
         "signal_recency": {
             "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
@@ -2718,21 +3235,21 @@ def main(debug=False, preview=False, generated_at=None):
     strategy_inputs = [
         {
             "strategy_name": "daily_pure",
-            "display_name": "日线纯净策略",
-            "strategy_version": "",
+            "display_name": "基础候选全集",
+            "strategy_version": STRATEGY_CONTRACT_VERSIONS["daily_pure"],
             "source_pool": "picks_pure",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
-            "publication_status": "published",
-            "user_action_from_decision": True,
+            "publication_status": "candidate",
+            "user_action": "watch",
             "items": pure_scored,
         },
         {
             "strategy_name": "daily_fusion",
             "display_name": "日线融合策略",
-            "strategy_version": "",
+            "strategy_version": STRATEGY_CONTRACT_VERSIONS["daily_fusion"],
             "source_pool": "picks_fusion",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
             "user_action_from_decision": True,
@@ -2741,9 +3258,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "observation_gate",
             "display_name": "观察池门控",
-            "strategy_version": "",
+            "strategy_version": STRATEGY_CONTRACT_VERSIONS["observation_gate"],
             "source_pool": "observation_watchlist",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "internal",
             "user_action": "watch",
@@ -2752,23 +3269,22 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "next_day_boom",
             "display_name": "次日大涨策略",
-            "strategy_version": "",
+            "strategy_version": STRATEGY_CONTRACT_VERSIONS["next_day_boom"],
             "source_pool": "next_day_boom",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": 1,
-            "publication_status": "published",
-            "user_action_from_decision": True,
-            "published_decision_code": "recommend",
+            "publication_status": "internal",
+            "user_action": "watch",
             "items": next_day_boom.get("candidates", []),
         },
         {
             "strategy_name": "luojie_pool",
             "display_name": "罗杰主题策略",
-            "strategy_version": "",
+            "strategy_version": STRATEGY_CONTRACT_VERSIONS["luojie_pool"],
             "source_pool": "luojie_pool",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
-            "publication_status": "published",
+            "publication_status": "internal",
             "user_action": "watch",
             "items": luojie_pool.get("candidates", []),
         },
@@ -2777,7 +3293,7 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "H4 T+3 策略",
             "strategy_version": h4_t3_pool.get("strategy_version", ""),
             "source_pool": "h4_t3_pool",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": 3,
             "publication_status": "published",
             "user_action_from_decision": True,

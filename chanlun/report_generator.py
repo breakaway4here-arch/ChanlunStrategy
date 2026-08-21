@@ -18,7 +18,7 @@ import numpy as np
 
 from chanlun.chan_engine import calc_macd
 from chanlun.report_comparison import write_comparison_index
-from chanlun.report_view_model import build_workspace
+from chanlun.report_view_model import build_workspace, normalize_decision_brief
 from chanlun.personal_watchlist import resolve_decision_watchlist_url
 
 from config import (
@@ -379,6 +379,20 @@ def _serialize_picks(picks):
             "quality_tier": p.get("quality_tier", ""),
             "view": p.get("view", "main"),
             "reference_type": p.get("reference_type", ""),
+            "strategy_source": p.get("strategy_source", ""),
+            "strategy_sources": p.get("strategy_sources", []),
+            "source_decisions": p.get("source_decisions", []),
+            "representative_strategy_source": p.get("representative_strategy_source", ""),
+            "representative_source_reason": p.get("representative_source_reason", ""),
+            "representative_source_score": p.get("representative_source_score"),
+            "intended_horizon": p.get("intended_horizon"),
+            "horizon_status": p.get("horizon_status", ""),
+            "horizon_contract_eligible": p.get("horizon_contract_eligible"),
+            "selection_contract_mode": p.get("selection_contract_mode", ""),
+            "high_return_eligible": p.get("high_return_eligible"),
+            "entry_mode": p.get("entry_mode", ""),
+            "signal_close": p.get("signal_close"),
+            "research_results": p.get("research_results", {}),
             "change_pct": change_pct,
             "best_buy_point": _adjust_bp_keep(bp_enhanced),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
@@ -761,6 +775,14 @@ def _serialize_h4_t3_pool(data):
             dict(predictions) if isinstance(predictions, Mapping) else {}
         )
         item["reason"] = raw.get("reason", "H4 T+3 全部门槛通过")
+        item["upstream_strategy_sources"] = list(
+            raw.get("upstream_strategy_sources") or []
+        )
+        upstream_decision = raw.get("upstream_decision_engine_v1")
+        item["upstream_decision_engine_v1"] = (
+            dict(upstream_decision)
+            if isinstance(upstream_decision, Mapping) else {}
+        )
     return {
         "status": data.get("status", "error"),
         "production_attested": data.get("production_attested") is True,
@@ -794,6 +816,20 @@ def _serialize_picks_light(picks):
             "quality_tier": p.get("quality_tier", ""),
             "view": p.get("view", "main"),
             "reference_type": p.get("reference_type", ""),
+            "strategy_source": p.get("strategy_source", ""),
+            "strategy_sources": p.get("strategy_sources", []),
+            "source_decisions": p.get("source_decisions", []),
+            "representative_strategy_source": p.get("representative_strategy_source", ""),
+            "representative_source_reason": p.get("representative_source_reason", ""),
+            "representative_source_score": p.get("representative_source_score"),
+            "intended_horizon": p.get("intended_horizon"),
+            "horizon_status": p.get("horizon_status", ""),
+            "horizon_contract_eligible": p.get("horizon_contract_eligible"),
+            "selection_contract_mode": p.get("selection_contract_mode", ""),
+            "high_return_eligible": p.get("high_return_eligible"),
+            "entry_mode": p.get("entry_mode", ""),
+            "signal_close": p.get("signal_close"),
+            "research_results": p.get("research_results", {}),
             "change_pct": _compute_pick_change_pct(p, bp),
             "best_buy_point": _serialize_bp(bp),
             "gf_dma_health": p.get("gf_dma_health", {}),
@@ -1249,6 +1285,9 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
         ).hexdigest()
 
+    decision_brief = normalize_decision_brief(
+        report_data.get("decision_brief", {})
+    )
     daily_data = {
         "date": date_str,
         "market": report_data.get("market", {}),
@@ -1260,7 +1299,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
-        "decision_brief": report_data.get("decision_brief", {}),
+        "decision_brief": decision_brief,
         "market_sentiment": report_data.get("market_sentiment", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []
@@ -1481,6 +1520,9 @@ def update_data_json(report_data, output_dir=None):
     date_str = report_data["date"]
 
     # 写入当日（picks 去掉图表数组，data.json 只存轻量索引）
+    decision_brief = normalize_decision_brief(
+        report_data.get("decision_brief", {})
+    )
     day_entry = {
         "market": report_data.get("market", {}),
         "chanlun_structure": report_data.get("chanlun_structure", {}),
@@ -1491,7 +1533,7 @@ def update_data_json(report_data, output_dir=None):
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
-        "decision_brief": report_data.get("decision_brief", {}),
+        "decision_brief": decision_brief,
         "market_sentiment": report_data.get("market_sentiment", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []
@@ -1509,8 +1551,17 @@ def update_data_json(report_data, output_dir=None):
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
+        "startup_watchlist": _serialize_startup_watchlist(
+            report_data.get("startup_watchlist", [])
+        ),
+        "observation_watchlist": _serialize_startup_watchlist(
+            report_data.get("observation_watchlist", [])
+        ),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
+        "h4_t3_pool": _serialize_h4_t3_pool(
+            report_data.get("h4_t3_pool", {})
+        ),
     }
     day_entry["workspace"] = build_workspace(day_entry)
     _backfill_workspace_scores(day_entry)

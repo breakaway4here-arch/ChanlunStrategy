@@ -1,3 +1,4 @@
+import hashlib
 import json
 import tempfile
 import unittest
@@ -6,7 +7,7 @@ from io import StringIO
 from contextlib import redirect_stderr
 from unittest.mock import patch
 
-from scripts.run_policy_experiments import main
+from scripts.run_policy_experiments import _current_code_sha, main
 
 
 def _fake_payload():
@@ -127,7 +128,258 @@ def _build_simple_breakdown():
     }
 
 
+def _returns_matching_scorecard(card):
+    count = card["sample_size"]
+    hit_count = round(card["hit_rate_ge_5"] * count / 100.0)
+    median_value = float(card["median_close_return"])
+    mean_value = float(card["mean_close_return"])
+    low_count = count - hit_count
+    lower_count = count // 2 - 1
+    high_value = max(
+        5.0,
+        median_value + count * (mean_value - median_value) / hit_count,
+    )
+    median_count = low_count - lower_count
+    lower_value = (
+        count * mean_value
+        - median_count * median_value
+        - hit_count * high_value
+    ) / lower_count
+    return (
+        [lower_value] * lower_count
+        + [median_value] * median_count
+        + [high_value] * hit_count
+    )
+
+
+def _write_oot_manifest(root, cards, code_sha):
+    artifacts = []
+    for card in cards:
+        contract = {
+            "source_pool": card["source_pool"],
+            "strategy_version": card["version"],
+            "intended_horizon": card["intended_horizon"],
+            "entry_mode": card["entry_mode"],
+            "cutoff": card["oot_cutoff"],
+            "code_sha": code_sha,
+        }
+        artifact_path = root / "{}.json".format(card["version"])
+        active_dates = []
+        for index in range(card["active_dates"]):
+            month = "07" if index < (card["active_dates"] + 1) // 2 else "08"
+            day = index + 1 if month == "07" else index + 1 - (
+                (card["active_dates"] + 1) // 2
+            )
+            active_dates.append("2026-{}-{:02d}".format(month, day))
+        samples = []
+        close_returns = _returns_matching_scorecard(card)
+        for index in range(card["sample_size"]):
+            report_date = active_dates[index % len(active_dates)]
+            samples.append({
+                "report_date": report_date,
+                "target_date": card["oot_cutoff"],
+                "feature_as_of": report_date,
+                "maturity_status": "mature",
+                "close_return": close_returns[index],
+                "source_record_hash": hashlib.sha256(
+                    "{}:{}".format(card["version"], index).encode("utf-8")
+                ).hexdigest(),
+            })
+        artifact_bytes = json.dumps({
+            "schema_version": 1,
+            "contract": contract,
+            "samples": samples,
+        }, sort_keys=True).encode("utf-8")
+        artifact_path.write_bytes(artifact_bytes)
+        manifest_entry = dict(contract)
+        manifest_entry.update({
+            "data_hash": hashlib.sha256(artifact_bytes).hexdigest(),
+            "artifact_path": artifact_path.name,
+        })
+        artifacts.append(manifest_entry)
+    manifest_path = root / "oot-attestation.json"
+    manifest_path.write_text(json.dumps({
+        "schema_version": 1,
+        "artifacts": artifacts,
+    }), encoding="utf-8")
+    return manifest_path
+
+
 class PolicyExperimentRunnerScriptTests(unittest.TestCase):
+    @patch("scripts.run_policy_experiments.subprocess.run")
+    def test_code_sha_attestation_rejects_dirty_tracked_files(self, run_mock):
+        run_mock.return_value.stdout = " M chanlun/policy_experiment_metrics.py\n"
+
+        with self.assertRaisesRegex(ValueError, "dirty"):
+            _current_code_sha()
+
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_can_evaluate_locked_high_return_scorecards_as_shadow(self, run_mock):
+        run_mock.return_value = _fake_payload()
+        evidence = {
+            "truth_verified": True,
+            "leakage_free": True,
+            "maturity_verified": True,
+            "oot_locked": True,
+        }
+        baseline = {
+            "source_pool": "picks_fusion",
+            "version": "baseline-v1",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "oot_cutoff": "2026-08-20",
+            "sample_size": 120,
+            "active_dates": 24,
+            "active_months": 2,
+            "mean_close_return": 2.0,
+            "median_close_return": 1.8,
+            "hit_rate_ge_5": 40.0,
+            "research_evidence": evidence,
+        }
+        candidate = dict(baseline)
+        candidate.update({
+            "version": "candidate-v2",
+            "mean_close_return": 3.0,
+            "median_close_return": 2.0,
+            "hit_rate_ge_5": 45.0,
+        })
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "scorecards.json"
+            input_path.write_text(json.dumps({
+                "baseline": baseline,
+                "candidates": [candidate],
+            }), encoding="utf-8")
+            output_json = Path(tmpdir) / "policy.json"
+            output_md = Path(tmpdir) / "policy.md"
+            code_sha = "a" * 40
+            attestation_path = _write_oot_manifest(
+                Path(tmpdir), [baseline, candidate], code_sha
+            )
+            with patch(
+                "scripts.run_policy_experiments._current_code_sha",
+                return_value=code_sha,
+            ):
+                rc = main([
+                    "--policies", "delay1_v1",
+                    "--high-return-scorecards-json", str(input_path),
+                    "--high-return-oot-attestation-json",
+                    str(attestation_path),
+                    "--output-json", str(output_json),
+                    "--output-md", str(output_md),
+                ])
+
+            self.assertEqual(rc, 0)
+            payload = json.loads(output_json.read_text(encoding="utf-8"))
+            selection = payload["high_return_version_selection"]
+            self.assertIsNone(selection["selected_version"])
+            self.assertEqual(selection["candidates"][0]["research_tier"], "shadow")
+            self.assertIn(
+                "trusted_oot_provenance_unavailable",
+                selection["candidates"][0]["hard_gate_reasons"],
+            )
+
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_scorecard_boolean_flags_without_attestation_cannot_promote(
+        self, run_mock
+    ):
+        run_mock.return_value = _fake_payload()
+        baseline = {
+            "source_pool": "picks_fusion",
+            "version": "baseline-v1",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "oot_cutoff": "2026-08-20",
+            "sample_size": 120,
+            "active_dates": 24,
+            "active_months": 2,
+            "mean_close_return": 2.0,
+            "median_close_return": 1.8,
+            "hit_rate_ge_5": 40.0,
+            "research_evidence": {
+                "truth_verified": True,
+                "leakage_free": True,
+                "maturity_verified": True,
+                "oot_locked": True,
+            },
+        }
+        candidate = dict(baseline)
+        candidate.update({
+            "version": "candidate-v2",
+            "mean_close_return": 3.0,
+            "median_close_return": 2.0,
+            "hit_rate_ge_5": 45.0,
+        })
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = Path(tmpdir) / "scorecards.json"
+            input_path.write_text(json.dumps({
+                "baseline": baseline,
+                "candidates": [candidate],
+            }), encoding="utf-8")
+            output_json = Path(tmpdir) / "policy.json"
+            output_md = Path(tmpdir) / "policy.md"
+
+            rc = main([
+                "--policies", "delay1_v1",
+                "--high-return-scorecards-json", str(input_path),
+                "--output-json", str(output_json),
+                "--output-md", str(output_md),
+            ])
+
+            self.assertEqual(rc, 0)
+            selection = json.loads(
+                output_json.read_text(encoding="utf-8")
+            )["high_return_version_selection"]
+            self.assertIsNone(selection["selected_version"])
+            self.assertIn(
+                "oot_attestation_verified",
+                selection["baseline_hard_gate_reasons"],
+            )
+
+    @patch("scripts.run_policy_experiments.run_policy_experiment_metrics")
+    def test_markdown_includes_high_return_selection_without_top_k_cap(
+        self, run_mock
+    ):
+        payload = _fake_payload()
+        payload["high_return_version_selection"] = {
+            "baseline_version": "baseline-v1",
+            "selected_version": "healthy-v2",
+            "ranking_metric": "mean_close_return",
+            "production_top_k_cap": False,
+            "candidates": [
+                {
+                    "version": "healthy-v2",
+                    "source_pool": "picks_fusion",
+                    "entry_mode": "immediate_close",
+                    "intended_horizon": 3,
+                    "sample_size": 120,
+                    "active_dates": 24,
+                    "active_months": 2,
+                    "mean_close_return": 3.0,
+                    "median_close_return": 2.2,
+                    "hit_rate_ge_5": 45.0,
+                    "research_tier": "production",
+                    "outlier_driven": False,
+                    "promotion_eligible": True,
+                }
+            ],
+        }
+        run_mock.return_value = payload
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_json = Path(tmpdir) / "policy.json"
+            output_md = Path(tmpdir) / "policy.md"
+            rc = main([
+                "--policies", "delay1_v1",
+                "--output-json", str(output_json),
+                "--output-md", str(output_md),
+            ])
+
+            self.assertEqual(rc, 0)
+            text = output_md.read_text(encoding="utf-8")
+            self.assertIn("High-return Version Selection", text)
+            self.assertIn("healthy-v2", text)
+            self.assertIn("outlier_driven", text)
+            self.assertIn("no production Top-K cap", text)
+
     def test_unknown_policy_fails(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             output_json = Path(tmpdir) / "policy_unknown.json"

@@ -49,6 +49,12 @@ class TestAnnotateStartupQuality(unittest.TestCase):
         })
         self.assertEqual(bp["sublevel_confirm_grade"], "S")
         self.assertEqual(bp["sublevel_confirm_label"], "S级确认")
+        fact = bp["confirmation_facts"][0]
+        self.assertEqual(fact["owner_pool"], "strong_startup")
+        self.assertEqual(fact["stage"], "30min_confirmation")
+        self.assertEqual(fact["effect"], "observe")
+        self.assertFalse(fact["eligible"])
+        self.assertEqual(fact["reason_code"], "strong_startup_daily_not_strong")
 
     def test_sublevel_grade_a_for_strong_with_ema5(self):
         bp = annotate_startup_quality({
@@ -57,6 +63,20 @@ class TestAnnotateStartupQuality(unittest.TestCase):
             "confirmations": ["30min EMA5维持"],
         })
         self.assertEqual(bp["sublevel_confirm_grade"], "A")
+        fact = bp["confirmation_facts"][0]
+        self.assertEqual(fact["effect"], "candidate")
+        self.assertTrue(fact["eligible"])
+        self.assertEqual(fact["reason_code"], "strong_startup_sa_confirmed")
+
+    def test_arbitrary_nonempty_confirmation_is_typed_as_ineligible_b(self):
+        bp = annotate_startup_quality({
+            "change_pct": 5.0,
+            "startup_signals": [],
+            "confirmations": ["任意确认文本"],
+        })
+
+        self.assertEqual(bp["sublevel_confirm_grade"], "B")
+        self.assertFalse(bp["confirmation_facts"][0]["eligible"])
 
     def test_sublevel_grade_b_for_ema_only_confirmation_not_strong(self):
         bp = annotate_startup_quality({

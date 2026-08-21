@@ -290,6 +290,107 @@ class DecisionBriefTests(unittest.TestCase):
             {"positive", "negative"},
         )
 
+    def test_rule_risk_has_independent_structured_reasons(self):
+        brief = self._brief([
+            _event(
+                "半导体公司被立案调查",
+                "半导体",
+                category="risk",
+                score=50,
+            ),
+        ])
+
+        thesis = brief["theses"][0]
+        self.assertEqual(thesis["direction"], "negative")
+        self.assertEqual(thesis["risk_reason_status"], "verified")
+        self.assertTrue(thesis["risk_reasons"])
+        for reason in thesis["risk_reasons"]:
+            self.assertTrue(reason["reason"].strip())
+            self.assertTrue(reason["impact"].strip())
+            self.assertTrue(reason["evidence_refs"])
+            self.assertTrue(set(reason["evidence_refs"]).issubset(
+                set(thesis["evidence_refs"])
+            ))
+
+    def test_risk_llm_without_structured_reasons_falls_back_to_rules(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v4",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "风险事件可能压制板块风险偏好。",
+                    "next_trigger": [],
+                    "invalidation": [],
+                }],
+            }
+
+        brief = self._brief([
+            _event(
+                "半导体公司被立案调查",
+                "半导体",
+                category="risk",
+                score=50,
+            ),
+        ], analyzer)
+
+        self.assertEqual(brief["status"], "rules_only")
+        self.assertIn("risk_reasons", brief["llm_error"])
+        self.assertEqual(
+            brief["theses"][0]["risk_reason_status"], "verified"
+        )
+
+    def test_valid_llm_risk_reasons_replace_rule_explanation_only(self):
+        def analyzer(packet):
+            row = packet["directions"][0]
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-v4",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "监管风险可能压制板块风险偏好。",
+                    "risk_reasons": [{
+                        "reason": "公司被立案调查",
+                        "impact": "关联板块与股票风险偏好可能承压",
+                        "evidence_refs": [row["evidence_refs"][0]],
+                    }],
+                    "next_trigger": [],
+                    "invalidation": [],
+                }],
+            }
+
+        brief = self._brief([
+            _event(
+                "半导体公司被立案调查",
+                "半导体",
+                category="risk",
+                score=50,
+            ),
+        ], analyzer)
+
+        self.assertEqual(brief["status"], "ok")
+        thesis = brief["theses"][0]
+        self.assertEqual(thesis["risk_reason_status"], "verified")
+        self.assertEqual(
+            thesis["risk_reasons"][0]["reason"], "公司被立案调查"
+        )
+        self.assertEqual(thesis["direction"], "negative")
+
     def test_does_not_fabricate_rows_to_reach_three(self):
         brief = self._brief([_event("单一半导体催化", "半导体")])
 
