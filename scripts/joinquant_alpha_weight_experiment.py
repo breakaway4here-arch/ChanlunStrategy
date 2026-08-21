@@ -68,7 +68,25 @@ WEIGHT_SPECS = [
 ]
 
 
+def debug_log(message):
+    text = "[alpha_weight_exp] %s" % message
+    try:
+        log.info(text)
+    except Exception:
+        try:
+            print(text)
+        except Exception:
+            pass
+
+
+debug_log("module loaded")
+
+
 def initialize(context):
+    debug_log("initialize start current_dt=%s previous_date=%s" % (
+        getattr(context, "current_dt", None),
+        getattr(context, "previous_date", None),
+    ))
     set_benchmark("000300.XSHG")
     set_option("use_real_price", True)
     try:
@@ -85,16 +103,47 @@ def initialize(context):
         pass
 
     g.index_code = "000985.XSHG"
-    g.max_universe = 900
-    g.min_history_bars = 70
+    g.max_universe = 1800
+    g.max_candidate_pool = 500
+    g.min_history_bars = 61
     g.history_bars = 90
+    g.min_proxy_score = 30.0
+    g.main_source_min_score = 45.0
     g.top_k = 10
-    g.rebalance_every_n_days = 1
+    g.selection_pool_size = 180
+    g.retention_rank = 180
+    g.exit_rank = 240
+    g.exit_grace_rebalances = 2
+    g.rebalance_every_n_days = 3
     g.real_trade_label = "alpha_1_5x"
     g.enable_real_trade = True
+    g.min_money20 = 50000000.0
+    g.qualified_money20 = 100000000.0
+    g.high_money20 = 200000000.0
+    g.min_market_cap = 30.0
+    g.max_market_cap = 1200.0
+    g.preferred_market_cap = 800.0
+    g.min_pool_quality_score = 50.0
+    g.prefer_growth_boards = True
+    g.virtual_open_commission = 0.0003
+    g.virtual_close_commission = 0.0003
+    g.virtual_close_tax = 0.001
     g.summary_interval = 20
     g.day_count = 0
     g.last_targets = {}
+    g.last_real_targets = []
+    g.target_miss_counts = {}
+    g.real_target_miss_counts = {}
+    g.market_cap_by_code = {}
+    g.circulating_cap_by_code = {}
+    g.current_market_context = {}
+    g.market_buy_scale = 1.0
+    g.last_candidate_diag = {}
+    g.last_rebalance_date = None
+    g.debug_first_days = 5
+    g.debug_history_fail_samples = []
+    g.pending_pick_return_batches = []
+    g.pick_return_stats = {}
 
     start_cash = getattr(context.portfolio, "starting_cash", None) or 1000000.0
     g.virtual = {}
@@ -109,22 +158,50 @@ def initialize(context):
             "last_equity": float(start_cash),
         }
 
-    run_daily(rebalance, time="9:30")
+    try:
+        run_daily(rebalance, time="open")
+        debug_log("scheduled run_daily at open")
+    except Exception as exc:
+        debug_log("run_daily schedule failed: %s" % exc)
+    debug_log("initialize done start_cash=%.2f specs=%s" % (float(start_cash), [x[0] for x in WEIGHT_SPECS]))
 
 
 def rebalance(context):
-    g.day_count += 1
-    if g.day_count % g.rebalance_every_n_days != 1:
+    current_dt = getattr(context, "current_dt", None)
+    current_date = current_dt.date() if hasattr(current_dt, "date") else current_dt
+    if getattr(g, "last_rebalance_date", None) == current_date:
         return
+    g.last_rebalance_date = current_date
+    g.day_count += 1
+    if g.day_count <= getattr(g, "debug_first_days", 5) or g.day_count % getattr(g, "summary_interval", 20) == 0:
+        debug_log("rebalance enter day=%s current_dt=%s previous_date=%s" % (
+            g.day_count,
+            current_dt,
+            getattr(context, "previous_date", None),
+        ))
 
     current_data = get_current_data()
+    evaluate_pending_pick_returns(context, current_data)
     for label, _weight in WEIGHT_SPECS:
         update_virtual_equity(label, current_data)
 
+    if g.day_count % g.summary_interval == 0:
+        log_summary("summary day=%s" % g.day_count)
+
+    if (g.day_count - 1) % g.rebalance_every_n_days != 0:
+        debug_log("rebalance skipped by cadence day=%s every_n=%s" % (g.day_count, g.rebalance_every_n_days))
+        return
+
     candidates = build_candidates(context)
     if not candidates:
-        log.warn("No candidates on %s" % context.current_dt)
+        log.warn("No candidates on %s diag=%s" % (context.current_dt, g.last_candidate_diag))
         return
+    if g.day_count <= getattr(g, "debug_first_days", 5):
+        debug_log("candidate sample day=%s codes=%s diag=%s" % (
+            g.day_count,
+            [c.get("code") for c in candidates[:10]],
+            g.last_candidate_diag,
+        ))
 
     ranked_by_label = {}
     for label, weight in WEIGHT_SPECS:
@@ -133,25 +210,29 @@ def rebalance(context):
             score, trace = compute_weighted_score(candidate, weight)
             rows.append((score, candidate["code"], candidate, trace))
         rows.sort(key=lambda x: (-x[0], x[1]))
-        ranked_by_label[label] = rows[: g.top_k]
+        ranked_by_label[label] = rows[: max(g.top_k, g.selection_pool_size, g.retention_rank, g.exit_rank)]
 
     for label, top_rows in ranked_by_label.items():
-        targets = [row[1] for row in top_rows]
+        previous_targets = g.last_targets.get(label) or []
+        targets, kept_count = select_targets_with_retention(label, top_rows, previous_targets)
         rebalance_virtual_portfolio(label, targets, current_data)
         g.last_targets[label] = targets
+        if label == g.real_trade_label:
+            debug_log(
+                "virtual targets %s kept=%s replaced=%s targets=%s"
+                % (label, kept_count, max(0, len(targets) - kept_count), targets)
+            )
 
     if g.enable_real_trade:
         trade_real_portfolio(context, ranked_by_label.get(g.real_trade_label, []), current_data)
 
     log_top_candidates(ranked_by_label)
 
-    if g.day_count % g.summary_interval == 0:
-        log_summary("summary day=%s" % g.day_count)
-
     try:
         record(
             base=value_ratio("baseline"),
             a10=value_ratio("alpha_1_0x"),
+            a12=value_ratio("alpha_1_2x"),
             a15=value_ratio("alpha_1_5x"),
             a18=value_ratio("alpha_1_8x"),
         )
@@ -160,19 +241,57 @@ def rebalance(context):
 
 
 def handle_data(context, data):
-    pass
+    if not hasattr(g, "virtual"):
+        return
+    rebalance(context)
 
 
 def build_candidates(context):
+    g.debug_history_fail_samples = []
+    diag = {
+        "universe": 0,
+        "index_universe": 0,
+        "tradable_universe": 0,
+        "cap_universe": 0,
+        "history_ok": 0,
+        "proxy_candidates": 0,
+        "source_candidates": 0,
+        "drop_no_history": 0,
+        "drop_short_history": 0,
+        "drop_bad_close": 0,
+        "drop_low_proxy_score": 0,
+        "drop_low_liquidity": 0,
+        "drop_low_pool_quality": 0,
+        "drop_no_source": 0,
+    }
     universe = get_base_universe(context)
+    base_diag = getattr(g, "last_universe_diag", {})
+    diag.update(base_diag)
+    diag["universe"] = len(universe)
     market = calc_market_context(context, universe)
+    g.current_market_context = market
+    g.market_buy_scale = calc_market_buy_scale(market)
+    diag["market_buy_scale"] = g.market_buy_scale
     raw_candidates = []
 
     for code in universe:
-        item = build_candidate_item(context, code)
+        item = build_candidate_item(context, code, diag)
         if not item:
             continue
         raw_candidates.append(item)
+    diag["proxy_candidates"] = len(raw_candidates)
+    raw_candidates.sort(
+        key=lambda x: (
+            -x.get("pool_quality_score", 0.0),
+            -x.get("universe_growth_score", 0.0),
+            -x.get("score", 0.0),
+            x.get("code", ""),
+        )
+    )
+    max_candidate_pool = int(getattr(g, "max_candidate_pool", 0) or 0)
+    if max_candidate_pool > 0:
+        raw_candidates = raw_candidates[:max_candidate_pool]
+    diag["growth_pool_candidates"] = len(raw_candidates)
 
     attach_sector_strength(context, raw_candidates)
 
@@ -180,6 +299,7 @@ def build_candidates(context):
     for item in raw_candidates:
         sources, by_source = infer_sources(item)
         if not sources:
+            diag["drop_no_source"] += 1
             continue
         primary = sorted(sources, key=lambda s: SOURCE_RANK.get(s, 99))[0]
         candidate = {
@@ -192,19 +312,36 @@ def build_candidates(context):
         }
         candidates.append(candidate)
 
+    diag["source_candidates"] = len(candidates)
+    if g.debug_history_fail_samples:
+        diag["history_fail_samples"] = list(g.debug_history_fail_samples[:5])
+    g.last_candidate_diag = diag
+    if getattr(g, "day_count", 0) <= getattr(g, "debug_first_days", 5):
+        debug_log("build_candidates diag=%s" % diag)
     return candidates
 
 
 def get_base_universe(context):
     date = context.previous_date
+    diag = {"index_universe": 0, "tradable_universe": 0, "cap_universe": 0}
     try:
         stocks = list(get_index_stocks(g.index_code, date=date))
-    except Exception:
+        debug_log("get_index_stocks index=%s date=%s n=%s" % (g.index_code, date, len(stocks)))
+    except Exception as exc:
+        debug_log("get_index_stocks failed index=%s date=%s err=%s; fallback all securities" % (g.index_code, date, exc))
         stocks = list(get_all_securities(["stock"], date=date).index)
+    diag["index_universe"] = len(stocks)
 
     stocks = filter_current_tradable(stocks, context)
+    diag["tradable_universe"] = len(stocks)
     stocks = filter_by_market_cap(stocks, context)
-    return stocks[: g.max_universe]
+    diag["cap_universe"] = len(stocks)
+    result = stocks[: g.max_universe]
+    diag["universe"] = len(result)
+    g.last_universe_diag = diag
+    if getattr(g, "day_count", 0) <= getattr(g, "debug_first_days", 5):
+        debug_log("universe diag=%s sample=%s" % (diag, result[:10]))
+    return result
 
 
 def filter_current_tradable(stocks, context):
@@ -218,13 +355,16 @@ def filter_current_tradable(stocks, context):
     result = []
     for code in stocks:
         cd = current_data_for(current_data, code)
-        if cd is None:
+        if cd is not None and getattr(cd, "paused", False):
             continue
-        if getattr(cd, "paused", False):
-            continue
-        if getattr(cd, "is_st", False):
+        if cd is not None and getattr(cd, "is_st", False):
             continue
         name = getattr(cd, "name", "") or ""
+        if not name and securities is not None and code in securities.index:
+            try:
+                name = securities.loc[code, "display_name"]
+            except Exception:
+                name = ""
         if "ST" in name or "*" in name or "退" in name:
             continue
         if securities is not None and code in securities.index:
@@ -243,41 +383,241 @@ def filter_by_market_cap(stocks, context):
         return []
     try:
         q = (
-            query(valuation.code, valuation.market_cap)
-            .filter(valuation.code.in_(stocks))
-            .order_by(valuation.market_cap.desc())
-            .limit(g.max_universe)
+            query(valuation.code, valuation.market_cap, valuation.circulating_market_cap)
+            .filter(
+                valuation.code.in_(stocks),
+                valuation.market_cap >= float(getattr(g, "min_market_cap", 20.0)),
+                valuation.market_cap <= float(getattr(g, "max_market_cap", 1200.0)),
+            )
         )
         df = get_fundamentals(q, date=context.previous_date)
         if df is not None and len(df) > 0:
-            return list(df["code"])
+            market_cap_by_code = {}
+            circulating_cap_by_code = {}
+            for _idx, row in df.iterrows():
+                code = row["code"]
+                market_cap_by_code[code] = _safe_float(row.get("market_cap"), 0.0) or 0.0
+                circulating_cap_by_code[code] = _safe_float(row.get("circulating_market_cap"), 0.0) or 0.0
+            g.market_cap_by_code = market_cap_by_code
+            g.circulating_cap_by_code = circulating_cap_by_code
+            ranked = list(df["code"])
+            ranked.sort(
+                key=lambda code: (
+                    -calc_static_universe_preference(code, market_cap_by_code.get(code)),
+                    code,
+                )
+            )
+            return ranked
     except Exception as exc:
         log.warn("market_cap filter fallback: %s" % exc)
+        g.market_cap_by_code = {}
+        g.circulating_cap_by_code = {}
     return stocks[: g.max_universe]
 
 
-def build_candidate_item(context, code):
+def calc_static_universe_preference(code, market_cap):
+    cap = _safe_float(market_cap)
+    score = board_growth_bonus(code)
+    if cap is None or cap <= 0:
+        return score
+    if 30.0 <= cap <= 300.0:
+        score += 30.0
+    elif 300.0 < cap <= 800.0:
+        score += 18.0
+    elif 800.0 < cap <= 1200.0:
+        score += 6.0
+    elif 20.0 <= cap < 30.0:
+        score += 10.0
+    return score
+
+
+def board_growth_bonus(code):
+    if not getattr(g, "prefer_growth_boards", True):
+        return 0.0
+    raw = str(code or "")
+    if raw.startswith("300") or raw.startswith("301"):
+        return 25.0
+    if raw.startswith("688") or raw.startswith("689"):
+        return 15.0
+    if raw.startswith("002"):
+        return 8.0
+    return 0.0
+
+
+def get_market_cap(code):
     try:
-        hist = attribute_history(
+        return _safe_float((getattr(g, "market_cap_by_code", {}) or {}).get(code), 0.0) or 0.0
+    except Exception:
+        return 0.0
+
+
+def get_circulating_market_cap(code):
+    try:
+        return _safe_float((getattr(g, "circulating_cap_by_code", {}) or {}).get(code), 0.0) or 0.0
+    except Exception:
+        return 0.0
+
+
+def calc_liquidity_score(money20):
+    liquidity = _safe_float(money20, 0.0) or 0.0
+    if liquidity >= float(getattr(g, "high_money20", 200000000.0)):
+        return 100.0
+    if liquidity >= float(getattr(g, "qualified_money20", 100000000.0)):
+        return 75.0 + min(20.0, (liquidity - 100000000.0) / 100000000.0 * 20.0)
+    if liquidity >= float(getattr(g, "min_money20", 50000000.0)):
+        return 50.0 + min(20.0, (liquidity - 50000000.0) / 50000000.0 * 20.0)
+    if liquidity >= 30000000.0:
+        return min(35.0, (liquidity - 30000000.0) / 20000000.0 * 35.0)
+    return 0.0
+
+
+def calc_market_cap_score(market_cap):
+    cap = _safe_float(market_cap, 0.0) or 0.0
+    if 30.0 <= cap <= 300.0:
+        return 100.0
+    if 300.0 < cap <= float(getattr(g, "preferred_market_cap", 800.0)):
+        return 70.0
+    if float(getattr(g, "preferred_market_cap", 800.0)) < cap <= float(getattr(g, "max_market_cap", 1200.0)):
+        return 35.0
+    return 0.0
+
+
+def calc_momentum_quality_score(ret20, ret60, volume_ratio, range_pos20):
+    score = 0.0
+    r20 = _safe_float(ret20, 0.0) or 0.0
+    r60 = _safe_float(ret60, 0.0) or 0.0
+    vol = _safe_float(volume_ratio, 0.0) or 0.0
+    pos = _safe_float(range_pos20, 0.0) or 0.0
+    if 3.0 <= r20 <= 45.0:
+        score += 45.0
+    elif 0.0 < r20 < 3.0:
+        score += 20.0
+    elif 45.0 < r20 <= 60.0:
+        score += 12.0
+    if 8.0 <= r60 <= 100.0:
+        score += 20.0
+    if 1.05 <= vol <= 3.0:
+        score += 20.0
+    elif 1.0 <= vol < 1.05:
+        score += 8.0
+    if pos >= 0.75:
+        score += 15.0
+    elif pos >= 0.65:
+        score += 8.0
+    return _clamp(score, 0.0, 100.0)
+
+
+def calc_pool_quality_score(code, market_cap, money20, ret20, ret60, volume_ratio, range_pos20):
+    liquidity_score = calc_liquidity_score(money20)
+    market_cap_score = calc_market_cap_score(market_cap)
+    board_score = min(100.0, board_growth_bonus(code) * 4.0)
+    momentum_score = calc_momentum_quality_score(ret20, ret60, volume_ratio, range_pos20)
+    score = (
+        liquidity_score * 0.35
+        + market_cap_score * 0.30
+        + board_score * 0.15
+        + momentum_score * 0.20
+    )
+    return {
+        "pool_quality_score": round(score, 4),
+        "liquidity_score": round(liquidity_score, 4),
+        "market_cap_score": round(market_cap_score, 4),
+        "board_growth_score": round(board_score, 4),
+        "momentum_quality_score": round(momentum_score, 4),
+    }
+
+
+def calc_universe_growth_score(code, market_cap, money20, ret20, ret60, volume_ratio, range_pos20):
+    score = calc_static_universe_preference(code, market_cap)
+    cap = _safe_float(market_cap)
+    if cap is not None and cap > 0:
+        if 30.0 <= cap <= 300.0:
+            score += 12.0
+        elif 300.0 < cap <= 800.0:
+            score += 6.0
+
+    liquidity = _safe_float(money20, 0.0) or 0.0
+    if liquidity >= 200000000.0:
+        score += 10.0
+    elif liquidity >= 100000000.0:
+        score += 7.0
+    elif liquidity >= 50000000.0:
+        score += 4.0
+
+    r20 = _safe_float(ret20, 0.0) or 0.0
+    r60 = _safe_float(ret60, 0.0) or 0.0
+    vol = _safe_float(volume_ratio, 0.0) or 0.0
+    pos = _safe_float(range_pos20, 0.0) or 0.0
+    if 3.0 <= r20 <= 45.0:
+        score += min(20.0, r20 * 0.8)
+    if 8.0 <= r60 <= 100.0:
+        score += min(15.0, r60 * 0.25)
+    if 1.1 <= vol <= 3.0:
+        score += 10.0
+    elif 1.0 <= vol < 1.1:
+        score += 4.0
+    if pos >= 0.75:
+        score += 8.0
+    elif pos >= 0.65:
+        score += 5.0
+    return round(score, 4)
+
+
+def get_daily_history(context, code, count, fields):
+    end_date = getattr(context, "previous_date", None)
+    try:
+        hist = get_price(
             code,
-            g.history_bars,
+            count=count,
+            end_date=end_date,
+            frequency="daily",
+            fields=fields,
+            skip_paused=True,
+            fq="pre",
+            panel=False,
+        )
+        if hist is not None and len(hist) > 0:
+            return hist
+    except Exception as exc:
+        remember_history_fail(code, "get_price:%s" % exc)
+
+    try:
+        return attribute_history(
+            code,
+            count,
             unit="1d",
-            fields=["open", "close", "high", "low", "volume", "money"],
+            fields=fields,
             skip_paused=True,
             df=True,
         )
+    except Exception as exc:
+        remember_history_fail(code, "attribute_history:%s" % exc)
+        return None
+
+
+def build_candidate_item(context, code, diag=None):
+    fields = ["open", "close", "high", "low", "volume", "money"]
+    hist = get_daily_history(context, code, g.history_bars, fields)
+    if hist is None:
+        inc_diag(diag, "drop_no_history")
+        return None
+
+    if len(hist) < g.min_history_bars:
+        inc_diag(diag, "drop_short_history")
+        return None
+
+    try:
+        closes = [float(x) for x in list(hist["close"])]
+        highs = [float(x) for x in list(hist["high"])]
+        lows = [float(x) for x in list(hist["low"])]
+        volumes = [float(x) for x in list(hist["volume"])]
+        money = [float(x) for x in list(hist["money"])]
     except Exception:
+        inc_diag(diag, "drop_no_history")
         return None
 
-    if hist is None or len(hist) < g.min_history_bars:
-        return None
-
-    closes = [float(x) for x in list(hist["close"])]
-    highs = [float(x) for x in list(hist["high"])]
-    lows = [float(x) for x in list(hist["low"])]
-    volumes = [float(x) for x in list(hist["volume"])]
-    money = [float(x) for x in list(hist["money"])]
     if not closes or closes[-1] <= 0:
+        inc_diag(diag, "drop_bad_close")
         return None
 
     ma5 = avg(closes[-5:])
@@ -290,6 +630,9 @@ def build_candidate_item(context, code):
     low20 = min(lows[-20:])
     volume_ratio = volumes[-1] / avg(volumes[-20:-1]) if avg(volumes[-20:-1]) > 0 else 0.0
     money20 = avg(money[-20:])
+    if money20 < float(getattr(g, "min_money20", 0.0)):
+        inc_diag(diag, "drop_low_liquidity")
+        return None
     change_pct = pct(close, prev_close)
     distance_ma20 = pct(close, ma20)
     ret10 = pct(close, closes[-11]) if len(closes) >= 11 else 0.0
@@ -314,8 +657,33 @@ def build_candidate_item(context, code):
         money20=money20,
     )
 
-    if score < 35:
+    inc_diag(diag, "history_ok")
+    if score < float(getattr(g, "min_proxy_score", 24.0)):
+        inc_diag(diag, "drop_low_proxy_score")
         return None
+    market_cap = get_market_cap(code)
+    circulating_market_cap = get_circulating_market_cap(code)
+    pool_quality = calc_pool_quality_score(
+        code=code,
+        market_cap=market_cap,
+        money20=money20,
+        ret20=ret20,
+        ret60=ret60,
+        volume_ratio=volume_ratio,
+        range_pos20=range_pos20,
+    )
+    if pool_quality["pool_quality_score"] < float(getattr(g, "min_pool_quality_score", 0.0)):
+        inc_diag(diag, "drop_low_pool_quality")
+        return None
+    universe_growth_score = calc_universe_growth_score(
+        code=code,
+        market_cap=market_cap,
+        money20=money20,
+        ret20=ret20,
+        ret60=ret60,
+        volume_ratio=volume_ratio,
+        range_pos20=range_pos20,
+    )
 
     return {
         "code": code,
@@ -328,6 +696,14 @@ def build_candidate_item(context, code):
         "distance_life_pct": distance_ma20,
         "volume_ratio": volume_ratio,
         "money20": money20,
+        "market_cap": market_cap,
+        "circulating_market_cap": circulating_market_cap,
+        "universe_growth_score": universe_growth_score,
+        "pool_quality_score": pool_quality["pool_quality_score"],
+        "liquidity_score": pool_quality["liquidity_score"],
+        "market_cap_score": pool_quality["market_cap_score"],
+        "board_growth_score": pool_quality["board_growth_score"],
+        "momentum_quality_score": pool_quality["momentum_quality_score"],
         "ret10": ret10,
         "ret20": ret20,
         "ret60": ret60,
@@ -383,7 +759,7 @@ def infer_sources(item):
     sources = []
     by_source = {}
 
-    if item["score"] >= 45:
+    if item["score"] >= float(getattr(g, "main_source_min_score", 40.0)):
         sources.append("main")
         by_source["main"] = dict(item)
 
@@ -405,6 +781,10 @@ def infer_sources(item):
         cf["startup_age_days"] = 1
         by_source["confirming"] = cf
 
+    if not sources and item["score"] >= float(getattr(g, "min_proxy_score", 24.0)):
+        sources.append("baseline")
+        by_source["baseline"] = dict(item)
+
     deduped = []
     seen = set()
     for source in sources:
@@ -419,7 +799,7 @@ def calc_market_context(context, universe):
     index_scores = []
     for code in ["000300.XSHG", "000905.XSHG"]:
         try:
-            hist = attribute_history(code, 60, "1d", ["close"], skip_paused=True, df=True)
+            hist = get_daily_history(context, code, 60, ["close"])
             closes = [float(x) for x in list(hist["close"])]
             if len(closes) >= 20:
                 ma20 = avg(closes[-20:])
@@ -431,7 +811,7 @@ def calc_market_context(context, universe):
     breadth_values = []
     for code in universe[:250]:
         try:
-            hist = attribute_history(code, 30, "1d", ["close"], skip_paused=True, df=True)
+            hist = get_daily_history(context, code, 30, ["close"])
             closes = [float(x) for x in list(hist["close"])]
             if len(closes) >= 20:
                 breadth_values.append(1.0 if closes[-1] > avg(closes[-20:]) else 0.0)
@@ -445,6 +825,17 @@ def calc_market_context(context, universe):
         "breadth_score": breadth_score,
         "market_regime_factor": (index_trend_score * 0.55 + breadth_score * 0.45),
     }
+
+
+def calc_market_buy_scale(market):
+    regime = _safe_float((market or {}).get("market_regime_factor"), 50.0) or 50.0
+    breadth = _safe_float((market or {}).get("breadth_score"), 50.0) or 50.0
+    index_trend = _safe_float((market or {}).get("index_trend_score"), 50.0) or 50.0
+    if regime < 38.0 and breadth < 42.0:
+        return 0.25
+    if regime < 45.0 or (breadth < 45.0 and index_trend < 48.0):
+        return 0.5
+    return 1.0
 
 
 def get_sector_key(code, context):
@@ -492,19 +883,32 @@ def compute_weighted_score(candidate, alpha_weight):
         "market": candidate["market"],
     }
     score, trace = compute_opportunity_score(item, source, context, alpha_enabled=(alpha_weight is not None))
+    growth_bonus = calc_universe_growth_bonus(item)
     if alpha_weight is None:
-        return score, trace
+        adjusted_score = max(0, int(round(score + growth_bonus * 0.5)))
+        trace = dict(trace)
+        trace["universe_growth_bonus"] = round(growth_bonus * 0.5, 4)
+        trace["opportunity_score"] = adjusted_score
+        return adjusted_score, trace
 
     base = trace["base_opportunity_score"]
     bonus = trace["alpha_bonus"] * alpha_weight
     multiplier = 1.0 + (trace["alpha_multiplier"] - 1.0) * alpha_weight
-    weighted_score = max(0, int(round(base * multiplier + bonus)))
+    weighted_score = max(0, int(round(base * multiplier + bonus + growth_bonus)))
     trace = dict(trace)
     trace["alpha_weight"] = alpha_weight
     trace["weighted_alpha_bonus"] = round(bonus, 4)
     trace["weighted_alpha_multiplier"] = round(multiplier, 4)
+    trace["universe_growth_bonus"] = round(growth_bonus, 4)
     trace["opportunity_score"] = weighted_score
     return weighted_score, trace
+
+
+def calc_universe_growth_bonus(item):
+    growth_score = _safe_float(item.get("universe_growth_score"), 0.0) or 0.0
+    if growth_score <= 0:
+        return 0.0
+    return _clamp(growth_score / 12.0, 0.0, 8.0)
 
 
 def compute_opportunity_score(item, source, context, alpha_enabled=False):
@@ -628,6 +1032,13 @@ def _resolve_alpha_features(context, item, metrics, source):
         "confirmed_by": str(item.get("confirmed_by") or ""),
         "distance": _safe_float(metrics.get("distance")),
     }
+    pool_quality = {
+        "pool_quality_score": _safe_float(item.get("pool_quality_score")),
+        "liquidity_score": _safe_float(item.get("liquidity_score")),
+        "market_cap_score": _safe_float(item.get("market_cap_score")),
+        "board_growth_score": _safe_float(item.get("board_growth_score")),
+        "momentum_quality_score": _safe_float(item.get("momentum_quality_score")),
+    }
     return {
         "market_regime_factor": {
             "index_trend_score": _safe_float(market_ctx.get("index_trend_score")),
@@ -637,6 +1048,7 @@ def _resolve_alpha_features(context, item, metrics, source):
         "sector_strength_factor": sector_strength,
         "momentum_persistence": _calc_momentum_persistence_from_closes(item.get("closes") or []),
         "breakout_quality": breakout_quality,
+        "pool_quality": pool_quality,
     }
 
 
@@ -646,6 +1058,7 @@ def _score_alpha_bonus(alpha_features, by_source, source, item, metrics):
     bonus += _score_sector_strength_bonus(alpha_features.get("sector_strength_factor") or {})
     bonus += _score_momentum_persistence_bonus(alpha_features.get("momentum_persistence"), item, source)
     bonus += _score_breakout_quality_bonus(alpha_features.get("breakout_quality") or {}, by_source, source, item, metrics)
+    bonus += _score_pool_quality_bonus(alpha_features.get("pool_quality") or {})
     return round(_clamp(bonus, 0.0, ALPHA_BONUS_LIMIT), 4)
 
 
@@ -715,6 +1128,24 @@ def _score_breakout_quality_bonus(features, by_source, source, item, metrics):
         elif abs(distance) <= 5.0:
             score += 0.5
     return _clamp(score, 0.0, 2.8)
+
+
+def _score_pool_quality_bonus(features):
+    liquidity = _safe_float(features.get("liquidity_score"), 0.0) or 0.0
+    market_cap = _safe_float(features.get("market_cap_score"), 0.0) or 0.0
+    board = _safe_float(features.get("board_growth_score"), 0.0) or 0.0
+    momentum = _safe_float(features.get("momentum_quality_score"), 0.0) or 0.0
+    quality = _safe_float(features.get("pool_quality_score"), 0.0) or 0.0
+    if liquidity < 50.0 or market_cap < 35.0:
+        return 0.0
+    core = liquidity * 0.35 + market_cap * 0.35 + board * 0.10 + momentum * 0.20
+    if quality >= 75.0 and liquidity >= 70.0 and market_cap >= 70.0:
+        return _clamp(core / 100.0 * 2.2, 0.0, 2.2)
+    if quality >= 60.0 and liquidity >= 55.0 and market_cap >= 55.0:
+        return _clamp(core / 100.0 * 1.4, 0.0, 1.4)
+    if quality >= 50.0:
+        return _clamp(core / 100.0 * 0.6, 0.0, 0.6)
+    return 0.0
 
 
 def _collect_risk_flags(by_source, sources):
@@ -813,27 +1244,102 @@ def _calc_momentum_persistence_from_closes(closes):
     return weighted[0] * weights[0] + weighted[1] * weights[1] + weighted[2] * weights[2]
 
 
+def select_targets_with_retention(label, top_rows, previous_targets):
+    top_k = int(getattr(g, "top_k", 10))
+    retention_rank = int(getattr(g, "retention_rank", getattr(g, "selection_pool_size", top_k)))
+    retention_rank = max(top_k, retention_rank)
+    exit_rank = int(getattr(g, "exit_rank", retention_rank))
+    exit_rank = max(retention_rank, exit_rank)
+    exit_grace = max(1, int(getattr(g, "exit_grace_rebalances", 1)))
+    retention_codes = set([row[1] for row in top_rows[:retention_rank]])
+    exit_codes = set([row[1] for row in top_rows[:exit_rank]])
+    miss_counts_by_label = getattr(g, "target_miss_counts", {})
+    miss_counts = miss_counts_by_label.setdefault(label, {})
+    g.target_miss_counts = miss_counts_by_label
+    selected = []
+
+    for code in previous_targets or []:
+        if code in retention_codes:
+            miss_counts[code] = 0
+            if code not in selected:
+                selected.append(code)
+        elif code in exit_codes:
+            miss_counts[code] = int(miss_counts.get(code, 0) or 0) + 1
+            if miss_counts[code] < exit_grace and code not in selected:
+                selected.append(code)
+        else:
+            miss_counts.pop(code, None)
+        if len(selected) >= top_k:
+            break
+
+    kept_count = len(selected)
+    for _score, code, _candidate, _trace in top_rows:
+        if len(selected) >= top_k:
+            break
+        if code not in selected:
+            miss_counts[code] = 0
+            selected.append(code)
+
+    active_codes = set(selected)
+    for code in list(miss_counts.keys()):
+        if code not in active_codes:
+            miss_counts.pop(code, None)
+
+    if len(selected) < top_k:
+        debug_log("target shortfall label=%s selected=%s pool=%s" % (label, len(selected), len(top_rows)))
+    return selected[:top_k], kept_count
+
+
 def rebalance_virtual_portfolio(label, targets, current_data):
     portfolio = g.virtual[label]
-    equity = calc_virtual_equity(portfolio, current_data)
+    cash = float(portfolio.get("cash") or 0.0)
     positions = {}
     target_count = len(targets)
-    if target_count <= 0 or equity <= 0:
+    if target_count <= 0:
+        equity = calc_virtual_equity(portfolio, current_data)
         portfolio["cash"] = equity
         portfolio["positions"] = {}
         return
 
-    target_value = equity / float(target_count)
-    used = 0.0
-    for code in targets:
+    target_set = set(targets)
+    for code, shares in list((portfolio.get("positions") or {}).items()):
         price = get_trade_price(code, current_data)
         if price is None or price <= 0:
             continue
-        shares = target_value / price
+        value = float(shares) * price
+        if code in target_set:
+            positions[code] = float(shares)
+        else:
+            close_cost = value * (
+                float(getattr(g, "virtual_close_commission", 0.0))
+                + float(getattr(g, "virtual_close_tax", 0.0))
+            )
+            cash += max(0.0, value - close_cost)
+
+    missing_targets = [code for code in targets if code not in positions]
+    buy_scale = get_market_buy_scale()
+    deploy_cash = cash * buy_scale
+    if missing_targets and deploy_cash > 0:
+        buy_budget = deploy_cash / float(len(missing_targets))
+    else:
+        buy_budget = 0.0
+
+    for code in missing_targets:
+        price = get_trade_price(code, current_data)
+        if price is None or price <= 0:
+            continue
+        gross_value = min(cash, buy_budget)
+        open_cost_rate = float(getattr(g, "virtual_open_commission", 0.0))
+        shares = gross_value / (price * (1.0 + open_cost_rate)) if gross_value > 0 else 0.0
+        if shares <= 0:
+            continue
+        used = shares * price * (1.0 + open_cost_rate)
+        if used > cash + 0.0001:
+            continue
         positions[code] = shares
-        used += shares * price
+        cash -= used
     portfolio["positions"] = positions
-    portfolio["cash"] = max(0.0, equity - used)
+    portfolio["cash"] = max(0.0, cash)
 
 
 def update_virtual_equity(label, current_data):
@@ -860,17 +1366,27 @@ def calc_virtual_equity(portfolio, current_data):
 
 
 def trade_real_portfolio(context, top_rows, current_data):
-    targets = [row[1] for row in top_rows]
+    targets = select_real_trade_targets(context, top_rows, current_data)
+    track_pick_return_batch(context, g.real_trade_label, targets, current_data, "real_targets")
     target_set = set(targets)
     for code in list(context.portfolio.positions.keys()):
         if code not in target_set:
-            order_target_value(code, 0)
+            submit_target_value_order(code, 0, current_data, side="sell")
 
     if not targets:
+        g.last_real_targets = []
         return
-    total_value = context.portfolio.total_value
-    target_value = total_value / float(len(targets))
-    for code in targets:
+    current_positions = set(context.portfolio.positions.keys())
+    new_targets = [code for code in targets if code not in current_positions or get_position_amount(context, code) <= 0]
+    if not new_targets:
+        g.last_real_targets = list(targets)
+        debug_log("real targets %s %s no_new_targets" % (g.real_trade_label, targets))
+        return
+
+    available_cash = get_available_cash(context)
+    buy_scale = get_market_buy_scale()
+    target_value = available_cash * 0.98 * buy_scale / float(len(new_targets)) if available_cash > 0 else 0.0
+    for code in new_targets:
         cd = current_data_for(current_data, code)
         if cd is None or getattr(cd, "paused", False):
             continue
@@ -878,7 +1394,197 @@ def trade_real_portfolio(context, top_rows, current_data):
         high_limit = getattr(cd, "high_limit", None)
         if high_limit is not None and price is not None and price >= high_limit * 0.999:
             continue
-        order_target_value(code, target_value)
+        if not can_open_target_value(code, target_value, price, context):
+            debug_log("skip open %s target=%.2f price=%.2f min_shares=%s" % (
+                code,
+                target_value,
+                price,
+                min_buy_shares(code),
+            ))
+            continue
+        if not can_submit_target_adjustment(code, target_value, price, context):
+            debug_log("skip small adjustment %s target=%.2f price=%.2f min_shares=%s" % (
+                code,
+                target_value,
+                price,
+                min_buy_shares(code),
+            ))
+            continue
+        submit_target_value_order(code, target_value, current_data, side="buy")
+    g.last_real_targets = list(targets)
+    debug_log(
+        "real targets %s kept=%s new=%s cash=%.2f buy_scale=%.2f targets=%s"
+        % (g.real_trade_label, len(targets) - len(new_targets), len(new_targets), available_cash, buy_scale, targets)
+    )
+
+
+def select_real_trade_targets(context, top_rows, current_data):
+    current_positions = set(context.portfolio.positions.keys())
+    portfolio_value = context.portfolio.total_value
+    target_value = portfolio_value / float(max(1, g.top_k))
+    retention_rank = int(getattr(g, "retention_rank", getattr(g, "selection_pool_size", g.top_k)))
+    retention_rank = max(int(g.top_k), retention_rank)
+    exit_rank = int(getattr(g, "exit_rank", retention_rank))
+    exit_rank = max(retention_rank, exit_rank)
+    exit_grace = max(1, int(getattr(g, "exit_grace_rebalances", 1)))
+    retention_codes = set([row[1] for row in top_rows[:retention_rank]])
+    exit_codes = set([row[1] for row in top_rows[:exit_rank]])
+    miss_counts = getattr(g, "real_target_miss_counts", {}) or {}
+    previous_targets = []
+    for code in list(getattr(g, "last_real_targets", []) or []) + list(current_positions):
+        if code not in previous_targets:
+            previous_targets.append(code)
+
+    selected = []
+    for code in previous_targets:
+        if len(selected) >= g.top_k:
+            break
+        if code in selected:
+            continue
+        if code in retention_codes:
+            miss_counts[code] = 0
+            if can_hold_real_target(code, current_data):
+                selected.append(code)
+        elif code in exit_codes:
+            miss_counts[code] = int(miss_counts.get(code, 0) or 0) + 1
+            if miss_counts[code] < exit_grace and can_hold_real_target(code, current_data):
+                selected.append(code)
+        else:
+            miss_counts.pop(code, None)
+
+    kept_count = len(selected)
+    for _score, code, _candidate, _trace in top_rows:
+        if len(selected) >= g.top_k:
+            break
+        if code in selected:
+            continue
+        miss_counts[code] = 0
+        cd = current_data_for(current_data, code)
+        if cd is None or getattr(cd, "paused", False):
+            continue
+        price = get_trade_price(code, current_data)
+        if price is None or price <= 0:
+            continue
+        high_limit = getattr(cd, "high_limit", None)
+        if high_limit is not None and price >= high_limit * 0.999:
+            continue
+        if code not in current_positions and not can_open_target_value(code, target_value, price, context):
+            continue
+        selected.append(code)
+    active_codes = set(selected)
+    for code in list(miss_counts.keys()):
+        if code not in active_codes:
+            miss_counts.pop(code, None)
+    g.real_target_miss_counts = miss_counts
+    if len(selected) < g.top_k:
+        debug_log("real target shortfall label=%s selected=%s pool=%s" % (
+            g.real_trade_label,
+            len(selected),
+            len(top_rows),
+        ))
+    debug_log(
+        "real retention label=%s kept=%s replaced=%s retention_rank=%s exit_rank=%s grace=%s"
+        % (g.real_trade_label, kept_count, max(0, len(selected) - kept_count), retention_rank, exit_rank, exit_grace)
+    )
+    return selected
+
+
+def can_hold_real_target(code, current_data):
+    cd = current_data_for(current_data, code)
+    if cd is not None and getattr(cd, "paused", False):
+        return True
+    price = get_trade_price(code, current_data)
+    return price is not None and price > 0
+
+
+def submit_target_value_order(code, target_value, current_data, side):
+    price = get_trade_price(code, current_data)
+    style = build_order_style(code, price, current_data, side)
+    try:
+        if style is None:
+            return order_target_value(code, target_value)
+        return order_target_value(code, target_value, style=style)
+    except TypeError:
+        return order_target_value(code, target_value)
+
+
+def build_order_style(code, price, current_data, side):
+    if not is_star_market(code) or price is None or price <= 0:
+        return None
+    cd = current_data_for(current_data, code)
+    if cd is None:
+        return None
+    if side == "buy":
+        limit_price = price * 1.02
+        high_limit = _safe_float(getattr(cd, "high_limit", None))
+        if high_limit is not None and high_limit > 0:
+            limit_price = min(limit_price, high_limit)
+    else:
+        limit_price = price * 0.98
+        low_limit = _safe_float(getattr(cd, "low_limit", None))
+        if low_limit is not None and low_limit > 0:
+            limit_price = max(limit_price, low_limit)
+    try:
+        return LimitOrderStyle(round(limit_price, 2))
+    except Exception:
+        return None
+
+
+def can_open_target_value(code, target_value, price, context):
+    if price is None or price <= 0:
+        return False
+    current_amount = get_position_amount(context, code)
+    if current_amount and current_amount > 0:
+        return True
+    return target_value >= price * min_buy_shares(code)
+
+
+def can_submit_target_adjustment(code, target_value, price, context):
+    current_amount = get_position_amount(context, code)
+    if not current_amount or current_amount <= 0:
+        return True
+    current_value = current_amount * price
+    delta_value = target_value - current_value
+    if delta_value <= 0:
+        return True
+    return delta_value >= price * min_buy_shares(code)
+
+
+def get_position_amount(context, code):
+    try:
+        positions = context.portfolio.positions
+        if code not in positions:
+            return 0.0
+        position = positions[code]
+    except Exception:
+        return 0.0
+    return _safe_float(getattr(position, "total_amount", 0), 0.0) or 0.0
+
+
+def get_available_cash(context):
+    for field in ("available_cash", "cash"):
+        value = _safe_float(getattr(context.portfolio, field, None))
+        if value is not None:
+            return max(0.0, value)
+    return 0.0
+
+
+def get_market_buy_scale():
+    value = _safe_float(getattr(g, "market_buy_scale", 1.0), 1.0)
+    if value is None:
+        return 1.0
+    return _clamp(value, 0.0, 1.0)
+
+
+def min_buy_shares(code):
+    if is_star_market(code):
+        return 200
+    return 100
+
+
+def is_star_market(code):
+    raw = str(code or "")
+    return raw.endswith(".XSHG") and (raw.startswith("688") or raw.startswith("689"))
 
 
 def get_trade_price(code, current_data):
@@ -898,6 +1604,182 @@ def current_data_for(current_data, code):
         return current_data[code]
     except Exception:
         return None
+
+
+def track_pick_return_batch(context, label, targets, current_data, source):
+    if not targets:
+        return
+    signal_date = _date_text(getattr(context, "current_dt", None))
+    entries = []
+    seen = set()
+    for code in targets:
+        if code in seen:
+            continue
+        seen.add(code)
+        price = get_trade_price(code, current_data)
+        if price is None or price <= 0:
+            continue
+        entries.append({"code": code, "entry_price": float(price)})
+    if not entries:
+        return
+
+    g.pending_pick_return_batches.append({
+        "label": label,
+        "source": source,
+        "signal_date": signal_date,
+        "entries": entries,
+    })
+    debug_log(
+        "next_day_return_track label=%s source=%s signal_date=%s n=%s targets=%s"
+        % (label, source, signal_date, len(entries), [row["code"] for row in entries])
+    )
+
+
+def evaluate_pending_pick_returns(context, current_data):
+    pending = list(getattr(g, "pending_pick_return_batches", []) or [])
+    if not pending:
+        return
+
+    eval_date = _date_text(getattr(context, "current_dt", None))
+    remaining = []
+    for batch in pending:
+        signal_date = str(batch.get("signal_date") or "")
+        if signal_date == eval_date:
+            remaining.append(batch)
+            continue
+
+        label = batch.get("label") or "unknown"
+        source = batch.get("source") or "unknown"
+        returns = []
+        missing = 0
+        for entry in batch.get("entries") or []:
+            code = entry.get("code")
+            entry_price = _safe_float(entry.get("entry_price"))
+            exit_price = get_trade_price(code, current_data)
+            if entry_price is None or entry_price <= 0 or exit_price is None or exit_price <= 0:
+                missing += 1
+                continue
+            return_pct = calc_adjusted_next_day_return(code, signal_date, eval_date, entry_price, exit_price)
+            returns.append((code, return_pct))
+
+        if not returns:
+            debug_log(
+                "next_day_return label=%s source=%s signal_date=%s eval_date=%s n=0 missing=%s"
+                % (label, source, signal_date, eval_date, missing)
+            )
+            continue
+
+        values = [row[1] for row in returns]
+        up_count = sum(1 for value in values if value > 0)
+        down_count = sum(1 for value in values if value < 0)
+        flat_count = len(values) - up_count - down_count
+        win_rate = up_count / float(len(values)) * 100.0
+        mean_return = avg(values)
+        median_return = median_value(values)
+        best = max(returns, key=lambda row: row[1])
+        worst = min(returns, key=lambda row: row[1])
+
+        update_pick_return_stats(label, values, up_count, down_count, flat_count)
+        log.info(
+            "[alpha_weight_exp] next_day_return label=%s source=%s signal_date=%s eval_date=%s "
+            "n=%d up=%d down=%d flat=%d win=%.1f%% avg=%.2f%% median=%.2f%% "
+            "best=%s:%.2f%% worst=%s:%.2f%% missing=%d"
+            % (
+                label,
+                source,
+                signal_date,
+                eval_date,
+                len(values),
+                up_count,
+                down_count,
+                flat_count,
+                win_rate,
+                mean_return,
+                median_return,
+                best[0],
+                best[1],
+                worst[0],
+                worst[1],
+                missing,
+            )
+        )
+    g.pending_pick_return_batches = remaining
+
+
+def calc_adjusted_next_day_return(code, signal_date, eval_date, entry_price, exit_price):
+    try:
+        hist = get_price(
+            code,
+            start_date=signal_date,
+            end_date=eval_date,
+            frequency="daily",
+            fields=["open"],
+            skip_paused=False,
+            fq="pre",
+            panel=False,
+        )
+        if hist is not None and len(hist) >= 2:
+            opens = [float(x) for x in list(hist["open"])]
+            start_open = opens[0]
+            end_open = opens[-1]
+            if start_open > 0 and end_open > 0:
+                return pct(end_open, start_open)
+    except Exception:
+        pass
+    return pct(exit_price, entry_price)
+
+
+def update_pick_return_stats(label, values, up_count, down_count, flat_count):
+    stats = g.pick_return_stats.get(label)
+    if not stats:
+        stats = {
+            "batches": 0,
+            "stocks": 0,
+            "up": 0,
+            "down": 0,
+            "flat": 0,
+            "return_sum": 0.0,
+            "returns": [],
+        }
+        g.pick_return_stats[label] = stats
+    stats["batches"] += 1
+    stats["stocks"] += len(values)
+    stats["up"] += up_count
+    stats["down"] += down_count
+    stats["flat"] += flat_count
+    stats["return_sum"] += sum(values)
+    stats["returns"].extend(values)
+
+
+def log_pick_return_summary():
+    stats_by_label = getattr(g, "pick_return_stats", {}) or {}
+    for label in sorted(stats_by_label.keys()):
+        stats = stats_by_label[label]
+        values = stats.get("returns") or []
+        if not values:
+            continue
+        best = max(values)
+        worst = min(values)
+        win_rate = stats.get("up", 0) / float(len(values)) * 100.0
+        mean_return = avg(values)
+        median_return = median_value(values)
+        log.info(
+            "[alpha_weight_exp] next_day_return_summary label=%s batches=%d stocks=%d "
+            "up=%d down=%d flat=%d win=%.1f%% avg=%.2f%% median=%.2f%% best=%.2f%% worst=%.2f%%"
+            % (
+                label,
+                stats.get("batches", 0),
+                len(values),
+                stats.get("up", 0),
+                stats.get("down", 0),
+                stats.get("flat", 0),
+                win_rate,
+                mean_return,
+                median_return,
+                best,
+                worst,
+            )
+        )
 
 
 def value_ratio(label):
@@ -958,6 +1840,7 @@ def log_summary(title):
                 len(g.virtual[label].get("positions") or {}),
             )
         )
+    log_pick_return_summary()
 
 
 def avg(values):
@@ -965,6 +1848,36 @@ def avg(values):
     if not values:
         return 0.0
     return sum(values) / float(len(values))
+
+
+def median_value(values):
+    numeric = sorted([float(x) for x in values if x is not None])
+    if not numeric:
+        return 0.0
+    middle = len(numeric) // 2
+    if len(numeric) % 2:
+        return numeric[middle]
+    return (numeric[middle - 1] + numeric[middle]) / 2.0
+
+
+def _date_text(value):
+    if hasattr(value, "date"):
+        return str(value.date())
+    return str(value)
+
+
+def inc_diag(diag, key):
+    if isinstance(diag, dict):
+        diag[key] = int(diag.get(key) or 0) + 1
+
+
+def remember_history_fail(code, reason):
+    try:
+        samples = getattr(g, "debug_history_fail_samples", None)
+        if isinstance(samples, list) and len(samples) < 5:
+            samples.append("%s:%s" % (code, reason))
+    except Exception:
+        pass
 
 
 def pct(value, base):
