@@ -22,6 +22,12 @@ class TestDailyRunScript(unittest.TestCase):
         self.assertLess(missing_output, sync_call)
         self.assertLess(sync_call, ready_check)
 
+    def test_daily_analysis_defaults_to_local_codex_cli(self):
+        self.assertIn("CHANLUN_LLM_PROVIDER:=codex", self.script)
+        self.assertIn("CHANLUN_CODEX_MODEL:=gpt-5.6-luna", self.script)
+        self.assertIn("export CHANLUN_LLM_PROVIDER", self.script)
+        self.assertIn("export CHANLUN_CODEX_MODEL", self.script)
+
     def test_ready_output_path_retries_pending_commits(self):
         ready_check = self.script.index("if is_today_output_ready; then")
         generation_start = self.script.index(

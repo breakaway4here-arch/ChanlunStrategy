@@ -8,6 +8,9 @@
 import json
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 import numpy as np
 import requests
@@ -18,6 +21,130 @@ SESSION.headers.update({
     "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 })
+
+_LLM_PROVIDER = os.environ.get("CHANLUN_LLM_PROVIDER", "codex").strip().lower()
+_CODEX_BIN = (
+    os.environ.get("CHANLUN_CODEX_BIN")
+    or shutil.which("codex")
+    or "/opt/homebrew/bin/codex"
+)
+_CODEX_MODEL = os.environ.get("CHANLUN_CODEX_MODEL", "gpt-5.6-luna")
+_CODEX_CWD = os.environ.get("CHANLUN_CODEX_CWD", tempfile.gettempdir())
+_CODEX_ENV_ALLOWLIST = {
+    "ALL_PROXY",
+    "CODEX_HOME",
+    "HOME",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "LANG",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LOGNAME",
+    "NO_PROXY",
+    "PATH",
+    "REQUESTS_CA_BUNDLE",
+    "SHELL",
+    "SSL_CERT_DIR",
+    "SSL_CERT_FILE",
+    "TEMP",
+    "TERM",
+    "TMP",
+    "TMPDIR",
+    "USER",
+    "all_proxy",
+    "http_proxy",
+    "https_proxy",
+    "no_proxy",
+}
+try:
+    _CODEX_TIMEOUT_SECONDS = int(
+        os.environ.get("CHANLUN_CODEX_TIMEOUT_SECONDS", "180")
+    )
+except ValueError:
+    _CODEX_TIMEOUT_SECONDS = 180
+
+
+def _require_llm_provider():
+    if _LLM_PROVIDER not in {"codex", "deepseek"}:
+        raise RuntimeError(
+            "不支持的 LLM provider: {}".format(_LLM_PROVIDER or "<empty>")
+        )
+    return _LLM_PROVIDER
+
+
+def _extract_codex_message(stdout):
+    messages = []
+    for line in (stdout or "").splitlines():
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        item = event.get("item") or {}
+        if (
+            event.get("type") == "item.completed"
+            and item.get("type") == "agent_message"
+        ):
+            value = item.get("text")
+            if isinstance(value, str) and value.strip():
+                messages.append(value.strip())
+    return messages[-1] if messages else (stdout or "").strip()
+
+
+def _codex_subprocess_env():
+    """Pass only runtime/auth paths needed by Codex, never unrelated secrets."""
+    return {
+        name: value
+        for name, value in os.environ.items()
+        if name in _CODEX_ENV_ALLOWLIST
+    }
+
+
+def _codex_exec_json(system_prompt, user_prompt):
+    """Run one stateless, read-only Codex CLI analysis and parse its JSON."""
+    if not _CODEX_BIN or not os.path.exists(_CODEX_BIN):
+        raise RuntimeError("找不到 Codex CLI: {}".format(_CODEX_BIN or "codex"))
+    prompt = (
+        "你只负责文本分析，不要调用工具、读取文件或修改代码。\n"
+        "只输出符合要求的 JSON，不要 markdown、解释或其他文字。\n\n"
+        "{}\n\n{}".format(system_prompt, user_prompt)
+    )
+    command = [
+        _CODEX_BIN,
+        "exec",
+        "--json",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--skip-git-repo-check",
+        "-C",
+        _CODEX_CWD,
+        "-m",
+        _CODEX_MODEL,
+        "-s",
+        "read-only",
+        "-",
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            input=prompt,
+            text=True,
+            capture_output=True,
+            timeout=_CODEX_TIMEOUT_SECONDS,
+            check=False,
+            env=_codex_subprocess_env(),
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "Codex CLI 超时（{}s）".format(_CODEX_TIMEOUT_SECONDS)
+        ) from exc
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(
+            "Codex CLI 失败({}): {}".format(
+                completed.returncode, detail[-500:]
+            )
+        )
+    return _parse_llm_json(_extract_codex_message(completed.stdout))
 
 # DeepSeek API 配置（优先 config.json，其次环境变量 ANTHROPIC_AUTH_TOKEN）
 def _load_config():
@@ -755,8 +882,112 @@ def _analyze_event_llm(event):
     return impact
 
 
+_CODEX_EVENT_BATCH_SYSTEM_PROMPT = _SYSTEM_PROMPT + """
+
+批量输出规则：
+- 输入包含多个事件，event_index 从 1 开始；必须每个事件输出一个结果。
+- 最终只输出一个 JSON 对象：
+  {"items": [{"event_index": 1, "impact": {"上述事件影响字段": "..."}}]}
+- 不要把收评、盘中复盘等描述性新闻强行识别成新增利好；没有新增催化剂时 no_impact=true。
+- positive_sectors 与 negative_sectors 不得包含同一个板块。
+- 名称和代码无法确认时不要猜测股票。
+"""
+
+
+def _normalize_event_impact(impact):
+    if not isinstance(impact, dict):
+        raise ValueError("LLM 事件影响结果不是对象")
+    normalized = dict(impact)
+    normalized.setdefault("headline", "")
+    normalized.setdefault("summary", "")
+    normalized.setdefault("analysis", [])
+    normalized.setdefault("positive_sectors", [])
+    normalized.setdefault("negative_sectors", [])
+    normalized.setdefault("positive_stocks", [])
+    normalized.setdefault("negative_stocks", [])
+    normalized.setdefault("no_impact", False)
+    _validate_event_impact_payload(normalized)
+    if not normalized["summary"]:
+        normalized["summary"] = normalized["headline"]
+    if not normalized["headline"] and normalized["summary"]:
+        normalized["headline"] = normalized["summary"]
+    if not normalized["analysis"] and normalized["summary"]:
+        normalized["analysis"] = [normalized["summary"]]
+    return normalized
+
+
+def _build_codex_event_batch_prompt(events):
+    lines = ["请按 event_index 分别分析以下事件："]
+    for index, event in enumerate(events, 1):
+        text = "\n".join([
+            str(event.get("title") or ""),
+            str(event.get("brief") or ""),
+            str(event.get("content") or ""),
+        ]).strip()
+        lines.append("\n## event_index={}\n{}".format(index, text))
+    return "\n".join(lines)
+
+
+def _failed_impact(error, model):
+    return {
+        "headline": "AI分析暂不可用",
+        "analysis": [],
+        "summary": "AI分析暂不可用",
+        "positive_sectors": [],
+        "negative_sectors": [],
+        "positive_stocks": [],
+        "negative_stocks": [],
+        "no_impact": True,
+        "status": "failed",
+        "error": str(error)[:200],
+        "model": model,
+        "prompt_version": "event-impact-v1",
+        "schema_version": "1",
+    }
+
+
+def _enrich_events_codex(events):
+    if not events:
+        return events
+    try:
+        result = _codex_exec_json(
+            _CODEX_EVENT_BATCH_SYSTEM_PROMPT,
+            _build_codex_event_batch_prompt(events),
+        )
+        items = result.get("items") if isinstance(result, dict) else None
+        if not isinstance(items, list):
+            raise ValueError("Codex 批量事件结果缺少 items 数组")
+        impacts = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            try:
+                event_index = int(item.get("event_index"))
+            except (TypeError, ValueError):
+                continue
+            if 1 <= event_index <= len(events) and event_index not in impacts:
+                impacts[event_index] = _normalize_event_impact(
+                    item.get("impact")
+                )
+        if len(impacts) != len(events):
+            missing = sorted(set(range(1, len(events) + 1)) - set(impacts))
+            raise ValueError("Codex 未返回全部事件: {}".format(missing))
+        for index, event in enumerate(events, 1):
+            event["impact"] = impacts[index]
+            event["impact"].update({
+                "status": "ok",
+                "model": _CODEX_MODEL,
+                "prompt_version": "event-impact-v1",
+                "schema_version": "1",
+            })
+    except Exception as error:
+        for event in events:
+            event["impact"] = _failed_impact(error, _CODEX_MODEL)
+    return events
+
+
 # ============================================================
-# 事件影响分析 — DeepSeek LLM
+# 事件影响分析 — LLM
 # ============================================================
 
 def enrich_events(events):
@@ -764,6 +995,10 @@ def enrich_events(events):
     对每条事件调 LLM 做影响分析。
     返回: events 列表，每条增加 impact 字段（含 status/error 内部字段）
     """
+    provider = _require_llm_provider()
+    if provider == "codex":
+        return _enrich_events_codex(events)
+
     if not _DS_API_KEY:
         print("  [WARN] ANTHROPIC_AUTH_TOKEN 未设置，事件分析跳过")
         for e in events:
@@ -942,34 +1177,39 @@ _DECISION_BRIEF_SYSTEM_PROMPT = """你是A股辅助决策分析师。你收到�
 
 def analyze_decision_brief_facts(packet):
     """Ask the configured LLM to synthesize only registered decision facts."""
-    if not _DS_API_KEY:
-        raise RuntimeError("ANTHROPIC_AUTH_TOKEN 未设置")
     if not isinstance(packet, dict):
         raise ValueError("decision brief fact packet must be an object")
-    messages = [
-        {"role": "system", "content": _DECISION_BRIEF_SYSTEM_PROMPT},
-        {
-            "role": "user",
-            "content": "基于以下证据生成辅助决策方向：\n{}".format(
-                json.dumps(
-                    packet,
-                    ensure_ascii=False,
-                    sort_keys=True,
-                    separators=(",", ":"),
-                )
-            ),
-        },
-    ]
-    result = _call_llm_with_retry(
-        messages,
-        max_retries=3,
-        temperature=0.2,
-        max_tokens=4800,
+    user_prompt = "基于以下证据生成辅助决策方向：\n{}".format(
+        json.dumps(
+            packet,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
     )
+    provider = _require_llm_provider()
+    if provider == "codex":
+        result = _codex_exec_json(
+            _DECISION_BRIEF_SYSTEM_PROMPT, user_prompt
+        )
+        model = _CODEX_MODEL
+    else:
+        if not _DS_API_KEY:
+            raise RuntimeError("ANTHROPIC_AUTH_TOKEN 未设置")
+        result = _call_llm_with_retry(
+            [
+                {"role": "system", "content": _DECISION_BRIEF_SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            max_retries=3,
+            temperature=0.2,
+            max_tokens=4800,
+        )
+        model = _DS_MODEL
     if not isinstance(result, dict):
         raise ValueError("decision brief LLM response must be an object")
     result = dict(result)
-    result["model"] = _DS_MODEL
+    result["model"] = model
     result["prompt_version"] = "decision-brief-v3"
     result["schema_version"] = "1"
     return result
@@ -1096,7 +1336,8 @@ def generate_forecast(market_indices, chanlun_structure, sector_flow, sh_volumes
         "risks": [...],
     }
     """
-    if not _DS_API_KEY:
+    provider = _require_llm_provider()
+    if provider == "deepseek" and not _DS_API_KEY:
         return {
             "core_judgment": "LLM 服务未配置（缺少 ANTHROPIC_AUTH_TOKEN）",
             "volume_note": "",
@@ -1109,13 +1350,19 @@ def generate_forecast(market_indices, chanlun_structure, sector_flow, sh_volumes
         market_indices, chanlun_structure, sector_flow, sh_volumes, events
     )
 
-    messages = [
-        {"role": "system", "content": _FORECAST_SYSTEM_PROMPT},
-        {"role": "user", "content": user_prompt},
-    ]
-
     try:
-        result = _call_llm_with_retry(messages, max_retries=3, temperature=0.3, max_tokens=1200)
+        if provider == "codex":
+            result = _codex_exec_json(_FORECAST_SYSTEM_PROMPT, user_prompt)
+        else:
+            result = _call_llm_with_retry(
+                [
+                    {"role": "system", "content": _FORECAST_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ],
+                max_retries=3,
+                temperature=0.3,
+                max_tokens=1200,
+            )
         print(f"  [LLM] forecast 完成: {result.get('core_judgment', '')[:80]}")
     except Exception as e:
         print(f"  [LLM] forecast 最终失败: {e}")

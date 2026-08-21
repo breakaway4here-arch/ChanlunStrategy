@@ -2,6 +2,7 @@
 import json
 import unittest
 from unittest.mock import Mock, patch
+import chanlun.market_news as market_news
 from chanlun.market_news import (
     _DECISION_BRIEF_SYSTEM_PROMPT, _analyze_event_llm,
     _call_llm_with_retry, _extract_first_json_object, _parse_llm_json,
@@ -10,6 +11,141 @@ from chanlun.market_news import (
     score_market_impact, dedupe_or_downgrade_events, fetch_cls_news,
     rank_market_impact_events, rank_events,
 )
+
+
+class TestLocalCodexProvider(unittest.TestCase):
+    def test_provider_defaults_to_ephemeral_codex_cli(self):
+        self.assertEqual(getattr(market_news, "_LLM_PROVIDER", None), "codex")
+        self.assertTrue(callable(getattr(market_news, "_codex_exec_json", None)))
+
+    @patch("chanlun.market_news.subprocess.run")
+    @patch("chanlun.market_news.os.path.exists", return_value=True)
+    @patch("chanlun.market_news._CODEX_BIN", "/usr/local/bin/codex")
+    @patch.dict(
+        "chanlun.market_news.os.environ",
+        {
+            "HOME": "/Users/tester",
+            "PATH": "/usr/local/bin:/usr/bin:/bin",
+            "CODEX_HOME": "/Users/tester/.codex",
+            "HTTPS_PROXY": "http://127.0.0.1:7890",
+            "OPENAI_API_KEY": "must-not-leak",
+            "ANTHROPIC_AUTH_TOKEN": "must-not-leak",
+            "UNRELATED_SECRET": "must-not-leak",
+        },
+        clear=True,
+    )
+    def test_codex_call_starts_read_only_ephemeral_session(
+        self, _mock_exists, mock_run
+    ):
+        mock_run.return_value = Mock(
+            returncode=0,
+            stdout=(
+                '{"type":"item.completed","item":'
+                '{"type":"agent_message","text":"{\\"ok\\":true}"}}\n'
+            ),
+            stderr="",
+        )
+
+        result = market_news._codex_exec_json("system", "user")
+
+        self.assertEqual(result, {"ok": True})
+        command = mock_run.call_args[0][0]
+        self.assertIn("--ephemeral", command)
+        self.assertIn("read-only", command)
+        self.assertNotIn("resume", command)
+        self.assertNotIn("--ignore-rules", command)
+        self.assertIn("system", mock_run.call_args[1]["input"])
+        self.assertIn("user", mock_run.call_args[1]["input"])
+        child_env = mock_run.call_args[1]["env"]
+        self.assertEqual(child_env["HOME"], "/Users/tester")
+        self.assertEqual(child_env["CODEX_HOME"], "/Users/tester/.codex")
+        self.assertEqual(child_env["HTTPS_PROXY"], "http://127.0.0.1:7890")
+        self.assertNotIn("OPENAI_API_KEY", child_env)
+        self.assertNotIn("ANTHROPIC_AUTH_TOKEN", child_env)
+        self.assertNotIn("UNRELATED_SECRET", child_env)
+
+    @patch("chanlun.market_news._CODEX_MODEL", "gpt-test")
+    @patch("chanlun.market_news._DS_API_KEY", "")
+    @patch("chanlun.market_news._LLM_PROVIDER", "codex")
+    @patch("chanlun.market_news._codex_exec_json")
+    def test_event_analysis_uses_one_codex_batch(self, mock_codex):
+        mock_codex.return_value = {
+            "items": [
+                {
+                    "event_index": 1,
+                    "impact": {
+                        "no_impact": False,
+                        "headline": "半导体需求回暖",
+                        "analysis": ["需求改善"],
+                        "positive_sectors": ["半导体"],
+                        "negative_sectors": [],
+                        "positive_stocks": [],
+                        "negative_stocks": [],
+                    },
+                },
+                {
+                    "event_index": 2,
+                    "impact": {
+                        "no_impact": True,
+                        "headline": "没有新增催化",
+                        "analysis": [],
+                        "positive_sectors": [],
+                        "negative_sectors": [],
+                        "positive_stocks": [],
+                        "negative_stocks": [],
+                    },
+                },
+            ]
+        }
+        events = [{"title": "事件一"}, {"title": "事件二"}]
+
+        result = market_news.enrich_events(events)
+
+        self.assertIs(result, events)
+        self.assertEqual(mock_codex.call_count, 1)
+        self.assertEqual(result[0]["impact"]["status"], "ok")
+        self.assertEqual(result[0]["impact"]["model"], "gpt-test")
+        self.assertEqual(result[1]["impact"]["headline"], "没有新增催化")
+
+    @patch("chanlun.market_news._CODEX_MODEL", "gpt-test")
+    @patch("chanlun.market_news._DS_API_KEY", "")
+    @patch("chanlun.market_news._LLM_PROVIDER", "codex")
+    @patch("chanlun.market_news._codex_exec_json")
+    def test_decision_brief_uses_codex_with_trusted_metadata(self, mock_codex):
+        mock_codex.return_value = {"theses": []}
+        packet = {"report_date": "2026-08-21", "directions": []}
+
+        result = market_news.analyze_decision_brief_facts(packet)
+
+        self.assertEqual(result["model"], "gpt-test")
+        self.assertEqual(result["prompt_version"], "decision-brief-v3")
+        self.assertEqual(mock_codex.call_count, 1)
+        self.assertIn("directions", mock_codex.call_args[0][1])
+
+    @patch("chanlun.market_news._DS_API_KEY", "")
+    @patch("chanlun.market_news._LLM_PROVIDER", "codex")
+    @patch("chanlun.market_news._codex_exec_json")
+    def test_forecast_uses_codex_without_deepseek_key(self, mock_codex):
+        mock_codex.return_value = {
+            "core_judgment": "科技方向偏强",
+            "volume_note": "量能平稳",
+            "short_term": ["观察持续性"],
+            "mid_term": "等待结构确认",
+            "risks": ["高位分化"],
+        }
+
+        result = market_news.generate_forecast({}, {}, [], [], [])
+
+        self.assertEqual(result["core_judgment"], "科技方向偏强")
+        self.assertEqual(mock_codex.call_count, 1)
+
+    @patch("chanlun.market_news._DS_API_KEY", "configured")
+    @patch("chanlun.market_news._LLM_PROVIDER", "codeex")
+    @patch("chanlun.market_news._call_llm_with_retry")
+    def test_unknown_provider_does_not_fall_back_to_deepseek(self, mock_call):
+        with self.assertRaisesRegex(RuntimeError, "不支持的 LLM provider"):
+            market_news.analyze_decision_brief_facts({"directions": []})
+        mock_call.assert_not_called()
 
 
 class TestEventImpactLlmSchema(unittest.TestCase):
@@ -235,6 +371,7 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
         )
 
     @patch("chanlun.market_news._call_llm_with_retry")
+    @patch("chanlun.market_news._LLM_PROVIDER", "deepseek")
     @patch("chanlun.market_news._DS_API_KEY", "configured")
     @patch("chanlun.market_news._DS_MODEL", "deepseek-test")
     def test_provider_sends_structured_evidence_and_attaches_trusted_metadata(
@@ -286,6 +423,7 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
         self.assertEqual(mock_call.call_args[1]["max_retries"], 3)
         self.assertEqual(mock_call.call_args[1]["max_tokens"], 4800)
 
+    @patch("chanlun.market_news._LLM_PROVIDER", "deepseek")
     @patch("chanlun.market_news._DS_API_KEY", "")
     def test_provider_fails_explicitly_when_unconfigured(self):
         with self.assertRaises(RuntimeError):
