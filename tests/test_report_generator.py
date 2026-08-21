@@ -566,6 +566,54 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "watchlist_intersection",
         )
 
+    def test_recommendation_ledger_and_strategy_scorecards_are_preserved(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_strategy_attribution_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["recommendation_ledger"] = [{
+            "recommendation_id": "rec:stable-id",
+            "report_date": "2026-05-26",
+            "code": "300308",
+            "strategy_contributions": [{
+                "strategy_name": "daily_fusion",
+                "strategy_version": "fusion-v1",
+                "decision_code": "recommend",
+                "reason_snapshot": {"best_buy_point": {"type": "三买"}},
+            }],
+        }]
+        report_data["strategy_scorecards"] = [{
+            "strategy": "daily_fusion",
+            "name": "融合策略",
+            "version": "fusion-v1",
+            "sample_size": 3,
+            "returns": {"t1": 1.0, "t3": 2.0, "t5": 3.0},
+            "win_rate": 66.7,
+            "representative_samples": [{
+                "recommendation_id": "rec:stable-id",
+                "name": "中际旭创",
+                "return_pct": 2.0,
+                "reason_summary": "推荐 · 三买",
+            }],
+        }]
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            payload = json.load(handle)
+        self.assertEqual(
+            payload["recommendation_ledger"][0]["recommendation_id"],
+            "rec:stable-id",
+        )
+        self.assertEqual(
+            payload["strategy_scorecards"][0]["strategy"],
+            "daily_fusion",
+        )
+        self.assertNotIn("recent_reviews", payload)
+
 
 class TestH4T3ReportSerialization(unittest.TestCase):
 
@@ -1599,6 +1647,17 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("renderStrategyReturn('T+1'", self.asset_js)
         self.assertIn("renderStrategyReturn('T+3'", self.asset_js)
         self.assertIn("renderStrategyReturn('T+5'", self.asset_js)
+        self.assertIn("median_returns", self.asset_js)
+        self.assertIn("excess_returns", self.asset_js)
+        self.assertIn("MAE / MFE", self.asset_js)
+        self.assertIn("上涨率", self.asset_js)
+        self.assertIn("样本积累中", self.asset_js)
+        self.assertIn("T+1'", self.asset_js)
+        self.assertIn("label + ' 均值'", self.asset_js)
+        self.assertIn("benchmark_status", self.asset_js)
+        self.assertIn("超额收益显示 --", self.asset_js)
+        self.assertIn("主周期未声明", self.asset_js)
+        self.assertIn("publication_outcomes", self.asset_js)
         self.assertNotIn("asArray((data || {}).recent_reviews);", self.asset_js)
 
     def test_diagnostics_card_defaults_to_collapsed_details(self):

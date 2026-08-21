@@ -97,6 +97,17 @@ from chanlun.position_book import (
     load_position_book,
     position_book_error_snapshot,
 )
+from chanlun.recommendation_ledger import (
+    DEFAULT_LEDGER_PATH,
+    build_recommendation_entries,
+    pending_ledger_path,
+    prepare_recommendation_history,
+)
+from chanlun.strategy_review import (
+    build_strategy_scorecards,
+    load_review_market_context_from_store,
+    persist_review_benchmark_kline,
+)
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.trend_continuation import (
     build_trend_continuation_pool,
@@ -1102,12 +1113,25 @@ def build_market_temperature(
     }
 
 
-def fetch_market_indices(report_date=None, index_codes=None):
+def fetch_market_indices(
+    report_date=None,
+    index_codes=None,
+    *,
+    include_review_benchmark=False,
+):
     """拉取主要市场指数行情"""
     index_codes = index_codes or MARKET_INDICES
     indices = {}
+    review_benchmark = None
     for name, code in index_codes.items():
-        kline = fetch_verified_index_kline(code, count=3, required_date=report_date)
+        count = (
+            DAY_LOOKBACK
+            if include_review_benchmark and code == "000300"
+            else 3
+        )
+        kline = fetch_verified_index_kline(
+            code, count=count, required_date=report_date
+        )
         prev = float(kline["closes"][-2])
         curr = float(kline["closes"][-1])
         chg_pct = (curr - prev) / prev * 100 if prev > 0 else 0
@@ -1117,6 +1141,10 @@ def fetch_market_indices(report_date=None, index_codes=None):
             "date": str(kline["dates"][-1]).split(" ")[0],
             "source": kline.get("source", ""),
         }
+        if include_review_benchmark and code == "000300":
+            review_benchmark = kline
+    if include_review_benchmark:
+        return indices, review_benchmark
     return indices
 
 
@@ -2231,8 +2259,16 @@ def main(debug=False, preview=False, generated_at=None):
     # 市场指数
     print("  获取市场指数 ...")
     market_data_status = "verified"
+    verified_review_benchmark = None
     try:
-        market_indices = fetch_market_indices(report_date=today)
+        market_result = fetch_market_indices(
+            report_date=today,
+            include_review_benchmark=not debug and not preview,
+        )
+        if not debug and not preview:
+            market_indices, verified_review_benchmark = market_result
+        else:
+            market_indices = market_result
     except MarketDataUnavailable as e:
         if not preview:
             raise
@@ -2653,6 +2689,152 @@ def main(debug=False, preview=False, generated_at=None):
         public_holding_risks,
         details_published=allow_holding_identifiers,
     )
+    strategy_inputs = [
+        {
+            "strategy_name": "daily_pure",
+            "display_name": "日线纯净策略",
+            "strategy_version": "",
+            "source_pool": "picks_pure",
+            "entry_mode": "delay1_open",
+            "intended_horizon": None,
+            "publication_status": "published",
+            "user_action_from_decision": True,
+            "items": pure_scored,
+        },
+        {
+            "strategy_name": "daily_fusion",
+            "display_name": "日线融合策略",
+            "strategy_version": "",
+            "source_pool": "picks_fusion",
+            "entry_mode": "delay1_open",
+            "intended_horizon": None,
+            "publication_status": "published",
+            "user_action_from_decision": True,
+            "items": fusion_scored,
+        },
+        {
+            "strategy_name": "observation_gate",
+            "display_name": "观察池门控",
+            "strategy_version": "",
+            "source_pool": "observation_watchlist",
+            "entry_mode": "delay1_open",
+            "intended_horizon": None,
+            "publication_status": "internal",
+            "user_action": "watch",
+            "items": observation_watchlist,
+        },
+        {
+            "strategy_name": "next_day_boom",
+            "display_name": "次日大涨策略",
+            "strategy_version": "",
+            "source_pool": "next_day_boom",
+            "entry_mode": "delay1_open",
+            "intended_horizon": 1,
+            "publication_status": "published",
+            "user_action_from_decision": True,
+            "published_decision_code": "recommend",
+            "items": next_day_boom.get("candidates", []),
+        },
+        {
+            "strategy_name": "luojie_pool",
+            "display_name": "罗杰主题策略",
+            "strategy_version": "",
+            "source_pool": "luojie_pool",
+            "entry_mode": "delay1_open",
+            "intended_horizon": None,
+            "publication_status": "published",
+            "user_action": "watch",
+            "items": luojie_pool.get("candidates", []),
+        },
+        {
+            "strategy_name": "h4_t3",
+            "display_name": "H4 T+3 策略",
+            "strategy_version": h4_t3_pool.get("strategy_version", ""),
+            "source_pool": "h4_t3_pool",
+            "entry_mode": "delay1_open",
+            "intended_horizon": 3,
+            "publication_status": "published",
+            "user_action_from_decision": True,
+            "published_decision_code": "recommend",
+            "items": h4_t3_pool.get("candidates", []),
+        },
+    ]
+    recommendation_entries = build_recommendation_entries(
+        today,
+        time_metadata.get("generated_at"),
+        strategy_inputs,
+        policy_version=("decision-v1" if decision_engine else ""),
+        config_revision=data_quality.get("runtime_policy", {}),
+        code_version=(
+            os.environ.get("GITHUB_SHA")
+            or os.environ.get("CHANLUN_CODE_VERSION")
+            or "unknown"
+        ),
+    )
+    try:
+        historical_entries, ledger_diagnostics = (
+            prepare_recommendation_history(
+                DEFAULT_LEDGER_PATH,
+                pending_ledger_path(today),
+                recommendation_entries,
+                publication_eligible=bool(
+                    not debug
+                    and not preview
+                    and data_quality.get("is_official") is True
+                ),
+            )
+        )
+    except (OSError, TypeError, ValueError) as exc:
+        historical_entries = list(recommendation_entries)
+        ledger_diagnostics = {
+            "status": "error",
+            "today_entries": len(recommendation_entries),
+            "evaluation_entries": len(historical_entries),
+            "error_code": "{}".format(type(exc).__name__),
+        }
+    benchmark_ingest_diagnostics = {
+        "status": "withheld",
+        "reason": "unofficial_or_benchmark_missing",
+    }
+    if (
+        verified_review_benchmark is not None
+        and not debug
+        and not preview
+        and data_quality.get("is_official") is True
+    ):
+        try:
+            benchmark_ingest_diagnostics = (
+                persist_review_benchmark_kline(
+                    MARKET_HISTORY_DB_PATH,
+                    verified_review_benchmark,
+                )
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            benchmark_ingest_diagnostics = {
+                "status": "error",
+                "error_code": "{}".format(type(exc).__name__),
+            }
+    (
+        review_klines,
+        review_trading_calendar,
+        review_benchmark,
+        strategy_review_diagnostics,
+    ) = load_review_market_context_from_store(
+            MARKET_HISTORY_DB_PATH,
+            historical_entries,
+            as_of=today,
+    )
+    strategy_scorecards = build_strategy_scorecards(
+        historical_entries,
+        review_klines,
+        trading_calendar=review_trading_calendar,
+        benchmark_kline=review_benchmark,
+    )
+    diagnostics["recommendation_ledger"] = ledger_diagnostics
+    diagnostics["strategy_review_benchmark_ingest"] = (
+        benchmark_ingest_diagnostics
+    )
+    diagnostics["strategy_review"] = strategy_review_diagnostics
     report_data = {
         "date": today,
         "market": market_indices,
@@ -2673,6 +2855,8 @@ def main(debug=False, preview=False, generated_at=None):
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,
         "holding_risks": public_holding_risks,
+        "recommendation_ledger": recommendation_entries,
+        "strategy_scorecards": strategy_scorecards,
         "data_quality": data_quality,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,

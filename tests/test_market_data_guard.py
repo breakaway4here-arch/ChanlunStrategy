@@ -1022,6 +1022,23 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(result["上证指数"]["change_pct"], -2.26)
         self.assertEqual(result["上证指数"]["source"], "eastmoney")
 
+    def test_market_indices_can_return_long_hs300_history_for_review(self):
+        dates = ["2026-06-{:02d}".format(day) for day in range(1, 21)]
+        history = _kline(dates, [4000.0 + day for day in range(20)])
+
+        with patch.object(
+            run, "fetch_verified_index_kline", return_value=history
+        ) as fetcher:
+            indices, benchmark = run.fetch_market_indices(
+                report_date=dates[-1],
+                index_codes={"沪深300": "000300"},
+                include_review_benchmark=True,
+            )
+
+        self.assertEqual(indices["沪深300"]["date"], dates[-1])
+        self.assertIs(benchmark, history)
+        self.assertEqual(fetcher.call_args[1]["count"], run.DAY_LOOKBACK)
+
     def test_long_index_analysis_uses_tencent_plain_history_when_qfq_is_blocked(self):
         history = _kline([f"2026-01-{i:02d}" for i in range(1, 21)] + ["2026-06-26"], list(range(1, 22)))
         with patch.object(data_fetcher, "_fetch_daily_kline_remote", return_value=None), \
@@ -1253,6 +1270,20 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         git_add = script.find("git add \\")
         self.assertGreater(last_validator, 0)
         self.assertGreater(git_add, last_validator)
+
+    def test_daily_run_finalizes_recommendation_ledger_only_after_validation(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        validator = script.rfind(
+            '/usr/bin/python3 scripts/validate_today_report.py "$TODAY"'
+        )
+        finalizer = script.rfind(
+            '/usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"'
+        )
+        git_add = script.find("git add \\")
+        self.assertGreater(finalizer, validator)
+        self.assertLess(finalizer, git_add)
 
 
 class TestReportContractGuard(unittest.TestCase):

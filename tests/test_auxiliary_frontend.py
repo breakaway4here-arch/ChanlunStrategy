@@ -112,6 +112,12 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
             tablet,
         )
 
+    def test_strategy_attribution_drilldown_stacks_on_mobile(self):
+        mobile = CSS[CSS.rindex("@media (max-width: 760px)"):]
+        self.assertIn(".strategy-attribution-meta", mobile)
+        self.assertIn(".strategy-sample-row", mobile)
+        self.assertIn("grid-template-columns: 1fr", mobile)
+
     def test_holding_risk_has_no_placeholder_action(self):
         start = JS.index("function renderHoldingRiskSection")
         end = JS.index("function renderStrategyScorecards", start)
@@ -137,6 +143,17 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         renderer = JS[start:end]
         self.assertIn("strategy_scorecards", renderer)
         self.assertIn("representative_samples", renderer)
+        for field in (
+            "gate_outcomes",
+            "matured_by_horizon",
+            "recommendation_id",
+            "reason_summary",
+            "rec_date",
+            "entry_date",
+        ):
+            self.assertIn(field, renderer)
+        self.assertIn("推荐 / 观察 / 拒绝", renderer)
+        self.assertIn("推荐原因", renderer)
         self.assertNotIn("recent_reviews", renderer)
 
 

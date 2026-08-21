@@ -121,6 +121,7 @@ main() {
 
     if is_today_output_ready; then
         if /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
+            /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
             if ! publish_ready_report; then
                 exit 1
             fi
@@ -147,6 +148,7 @@ main() {
                 echo "正式日报校验失败，保留本地产物但不提交，等待下一次收盘后增量补跑"
                 exit 1
             fi
+            /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
             if ! publish_ready_report; then
                 exit 1
             fi

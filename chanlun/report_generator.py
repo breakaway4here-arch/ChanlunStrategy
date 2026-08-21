@@ -1271,6 +1271,10 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "holding_risks": _serialize_holding_risks(
             report_data.get("holding_risks", [])
         ),
+        "recommendation_ledger": report_data.get(
+            "recommendation_ledger", []
+        ),
+        "strategy_scorecards": report_data.get("strategy_scorecards", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
@@ -1280,12 +1284,6 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
         "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
         "h4_t3_pool": _serialize_h4_t3_pool(report_data.get("h4_t3_pool", {})),
-        "recent_reviews": build_recent_reviews(
-            date_str,
-            output_dir or os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), OUTPUT_DIR
-            )
-        ),
     }
     daily_data["workspace"] = build_workspace(daily_data)
     _backfill_workspace_scores(daily_data)
@@ -1494,6 +1492,10 @@ def update_data_json(report_data, output_dir=None):
         "holding_risks": _serialize_holding_risks(
             report_data.get("holding_risks", [])
         ),
+        "recommendation_ledger": report_data.get(
+            "recommendation_ledger", []
+        ),
+        "strategy_scorecards": report_data.get("strategy_scorecards", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),

@@ -139,7 +139,7 @@
 
 ### 5.5 策略验证
 
-默认 cohort 只包含当时 `decision_code=recommend` 的记录；observe/reject 单独作为门控效果展示。主屏按策略展示：
+默认 cohort 同时要求当时 `decision_code=recommend`、`publication_status=published`、`user_action=recommendation`；内部观察池即使门控为 recommend 也不计入策略收益。observe/reject 与 watch/none 分开作为门控和发布效果展示。主屏按策略展示：
 
 - 成熟样本数与样本不足状态
 - T+1 / T+3 / T+5 胜率
@@ -167,7 +167,7 @@
 }
 ```
 
-收益统计必须先锁定可执行口径：前复权、入场时点、固定 horizon、停牌/涨跌停不可成交、成熟样本、右删失、重复 episode 和跨策略归因。
+收益统计必须先锁定可执行口径：前复权、权威交易日历、入场时点、显式 horizon、推荐/入场/目标日终局性、停牌/涨停不可成交、成熟样本、逐期限基准日期对齐、右删失、重复 episode 和跨策略归因。个股缺 K 线不得把下一根 K 线顺延成目标交易日；日报验收通过前只能形成 provisional batch，不能进入永久账本。
 
 ## 6. 数据合同
 

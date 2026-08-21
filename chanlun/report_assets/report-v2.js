@@ -2462,13 +2462,30 @@
     });
   }
 
-  function renderStrategyReturn(label, value) {
+  function renderStrategyReturn(label, value, medianValue, excessValue, winRate, excursion) {
     var number = safeNumber(value, null);
+    var medianNumber = safeNumber(medianValue, null);
+    var excessNumber = safeNumber(excessValue, null);
+    var winRateNumber = safeNumber(winRate, null);
+    var mae = safeNumber((excursion || {}).mae, null);
+    var mfe = safeNumber((excursion || {}).mfe, null);
     return ''
       + '<span class="strategy-return">'
-      + '  <small>' + escapeHtml(label) + '</small>'
+      + '  <small>' + escapeHtml(label + ' 均值') + '</small>'
       + '  <strong class="' + (number !== null && number >= 0 ? 'is-up' : (number !== null ? 'is-down' : '')) + '">' + escapeHtml(number === null ? '--' : formatPct(number, true)) + '</strong>'
+      + '  <em>中位 ' + escapeHtml(medianNumber === null ? '--' : formatPct(medianNumber, true)) + '</em>'
+      + '  <em>超额 ' + escapeHtml(excessNumber === null ? '--' : formatPct(excessNumber, true)) + '</em>'
+      + '  <em>上涨率 ' + escapeHtml(winRateNumber === null ? '--' : formatPct(winRateNumber)) + '</em>'
+      + '  <em>MAE / MFE ' + escapeHtml((mae === null ? '--' : formatPct(mae, true)) + ' / ' + (mfe === null ? '--' : formatPct(mfe, true))) + '</em>'
       + '</span>';
+  }
+
+  function renderStrategySampleReturns(sample) {
+    var returns = (sample || {}).returns || {};
+    return ['t1', 't3', 't5'].map(function (key) {
+      var value = safeNumber(returns[key], null);
+      return key.toUpperCase().replace('T', 'T+') + ' ' + (value === null ? '--' : formatPct(value, true));
+    }).join(' · ');
   }
 
   function renderStrategyScorecards(data) {
@@ -2477,33 +2494,64 @@
     var body = rows.length ? rows.map(function (item) {
       var rec = item || {};
       var returns = rec.returns || rec.horizons || {};
+      var medianReturns = rec.median_returns || {};
+      var excessReturns = rec.excess_returns || {};
+      var winRates = rec.win_rates || {};
+      var excursions = rec.excursions || {};
+      var gateOutcomes = rec.gate_outcomes || {};
+      var maturedByHorizon = rec.matured_by_horizon || {};
       var samples = asArray(rec.representative_samples).slice(0, 3);
       var sampleHtml = samples.length ? samples.map(function (sample) {
         return ''
-          + '<li><span>' + escapeHtml(sample.name || sample.code || '--') + '</span>'
-          + '<strong>' + escapeHtml(sample.outcome_label || formatPct(sample.return_pct, true)) + '</strong></li>';
+          + '<li class="strategy-sample-row">'
+          + '  <div><span>' + escapeHtml(sample.name || sample.code || '--') + '</span><small>'
+          + escapeHtml((sample.rec_date || '--') + ' 推荐 · ' + (sample.entry_date || '--') + ' 入场') + '</small></div>'
+          + '  <div><strong>' + escapeHtml(sample.outcome_label || renderStrategySampleReturns(sample)) + '</strong><small>' + escapeHtml(renderStrategySampleReturns(sample)) + '</small><small>推荐原因：' + escapeHtml(sample.reason_summary || '理由快照未知') + '</small></div>'
+          + '  <code>' + escapeHtml(sample.recommendation_id || '--') + '</code>'
+          + '</li>';
       }).join('') : '<li><span>暂无已到期样本</span><strong>--</strong></li>';
+      var gateSummary = '推荐 / 观察 / 拒绝：'
+        + formatNumber(gateOutcomes.recommend, 0) + ' / '
+        + formatNumber(gateOutcomes.observe, 0) + ' / '
+        + formatNumber(gateOutcomes.reject, 0);
+      var maturitySummary = '成熟样本 T+1 / T+3 / T+5：'
+        + formatNumber(maturedByHorizon.t1, 0) + ' / '
+        + formatNumber(maturedByHorizon.t3, 0) + ' / '
+        + formatNumber(maturedByHorizon.t5, 0);
+      var publicationOutcomes = rec.publication_outcomes || {};
+      var publicationSummary = '对用户生效 推荐 / 观察：'
+        + formatNumber(publicationOutcomes.recommendation, 0) + ' / '
+        + formatNumber(publicationOutcomes.watch, 0);
+      var hasPrimaryHorizon = [1, 3, 5].indexOf(Number(rec.intended_horizon)) !== -1;
+      var sampleSize = safeNumber(rec.sample_size, 0);
+      var sampleStatus = sampleSize < 20 ? '样本积累中 ' + formatNumber(sampleSize, 0) + '/20' : '样本量可参考';
       return ''
         + '<details class="strategy-scorecard">'
         + '  <summary>'
         + '    <span><strong>' + escapeHtml(rec.name || rec.strategy || '未命名策略') + '</strong><small>' + escapeHtml(rec.version || '版本未知') + '</small></span>'
-        + '    <span><strong>' + escapeHtml(formatNumber(rec.sample_size, 0)) + '</strong><small>已到期样本</small></span>'
-        + '    <span><strong>' + escapeHtml(rec.win_rate == null ? '--' : formatPct(rec.win_rate)) + '</strong><small>上涨率</small></span>'
+        + '    <span><strong>' + escapeHtml(formatNumber(rec.sample_size, 0)) + '</strong><small>' + escapeHtml(hasPrimaryHorizon ? '主周期成熟样本' : '可评估回合') + '</small></span>'
+        + '    <span><strong>' + escapeHtml(rec.win_rate == null ? '--' : formatPct(rec.win_rate)) + '</strong><small>' + escapeHtml(hasPrimaryHorizon ? '主周期上涨率' : '主周期未声明') + '</small></span>'
         + '  </summary>'
         + '  <div class="strategy-returns">'
-        + renderStrategyReturn('T+1', returns.t1)
-        + renderStrategyReturn('T+3', returns.t3)
-        + renderStrategyReturn('T+5', returns.t5)
+        + renderStrategyReturn('T+1', returns.t1, medianReturns.t1, excessReturns.t1, winRates.t1, { mae: (excursions.mae || {}).t1, mfe: (excursions.mfe || {}).t1 })
+        + renderStrategyReturn('T+3', returns.t3, medianReturns.t3, excessReturns.t3, winRates.t3, { mae: (excursions.mae || {}).t3, mfe: (excursions.mfe || {}).t3 })
+        + renderStrategyReturn('T+5', returns.t5, medianReturns.t5, excessReturns.t5, winRates.t5, { mae: (excursions.mae || {}).t5, mfe: (excursions.mfe || {}).t5 })
         + '  </div>'
+        + '  <div class="strategy-attribution-meta"><span>' + escapeHtml(sampleStatus) + '</span><span>' + escapeHtml(gateSummary) + '</span><span>' + escapeHtml(publicationSummary) + '</span><span>' + escapeHtml(maturitySummary) + '</span></div>'
         + '  <ul class="strategy-samples">' + sampleHtml + '</ul>'
         + '</details>';
     }).join('') : '<div class="decision-empty">策略归因账本尚无已到期样本；旧的无归因翻页记录不再作为结论。</div>';
+    var reviewDiagnostics = (((data || {}).diagnostics || {}).strategy_review || {});
+    var benchmarkReady = normalizeString(reviewDiagnostics.benchmark_status) === 'ok';
+    var benchmarkNote = benchmarkReady
+      ? '<div class="strategy-benchmark-status is-ok">沪深300基准已对齐，超额收益可用。</div>'
+      : '<div class="strategy-benchmark-status is-warning">沪深300基准历史暂不可用，超额收益显示 --，绝不以 0 代替。</div>';
     return renderDecisionCard({
       title: '策略记分牌',
-      subtitle: '按策略与版本归因，默认只看已到期样本和代表案例',
+      subtitle: '按已记录策略与版本归因，未知明确标注；仅统计实际对用户生效、可执行且已到期的推荐',
       badge: { text: rows.length ? rows.length + '个策略' : '待积累', tone: rows.length ? 'info' : 'neutral' },
       className: 'strategy-scorecards-card',
-      bodyHtml: body,
+      bodyHtml: benchmarkNote + body,
     });
   }
 

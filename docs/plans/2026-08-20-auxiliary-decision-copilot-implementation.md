@@ -17,6 +17,8 @@
 - Create: `chanlun/auxiliary_decision.py`
 - Modify: `chanlun/data_fetcher.py`
 - Modify: `run.py`
+- Modify: `daily_run.sh`
+- Create: `scripts/finalize_recommendation_ledger.py`
 - Modify: `chanlun/report_generator.py`
 - Test: `tests/test_data_fetcher.py`
 - Test: `tests/test_auxiliary_decision.py`
@@ -328,15 +330,15 @@ Expected: FAIL because the ledger does not exist.
 
 **Step 3: Implement ledger creation and persistence**
 
-Write ledger entries at report generation time. Do not infer precise strategy versions for old snapshots; mark them `legacy_inferred` or `unknown`.
+Build a provisional batch at report generation time, but only for official non-preview runs. Finalize it into immutable history after `validate_today_report.py` succeeds; debug, preview and failed validation must never claim the day's stable IDs. Do not infer precise strategy versions, entry modes or intended horizons; mark them `unknown`.
 
 **Step 4: Lock return-experiment semantics in failing tests**
 
-Cover adjusted prices, executable entry, horizon maturity, suspended/limit-locked states, benchmark alignment, right censoring, episode dedupe and cross-strategy attribution.
+Cover adjusted prices, explicit finality, an authoritative trading calendar, executable entry, per-horizon maturity, suspended/limit-up-locked states, benchmark-date alignment, right censoring, episode dedupe and cross-strategy attribution. A missing stock bar must not shift D+1 forward.
 
 **Step 5: Implement deterministic scorecards**
 
-Expose recommend cohorts separately from observe/reject gate outcomes. Show T+1/T+3/T+5 together unless a strategy declares its intended horizon.
+Expose only actually published user recommendations as the performance cohort. Internal observation gates and published watch/none actions remain separate from returns even if an internal decision is `recommend`. Show T+1/T+3/T+5 together unless a strategy declares its intended horizon, and include mean, median, win rate, excess return, MAE/MFE and an explicit low-sample state.
 
 **Step 6: Replace unbounded recent reviews in the UI**
 
