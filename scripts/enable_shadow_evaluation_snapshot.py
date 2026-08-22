@@ -7,12 +7,16 @@ artifact when a non-shadow report field changes.
 """
 
 import argparse
+import fcntl
+import hashlib
 import json
 import os
 import re
 import shutil
 import sys
 import tempfile
+import uuid
+from contextlib import contextmanager
 from datetime import date
 from pathlib import Path
 
@@ -43,6 +47,9 @@ PUBLIC_TARGETS = (
 _BOOTSTRAP_PATTERN = re.compile(
     r"window\.CHANLUN_BOOTSTRAP\s*=\s*(\{[\s\S]*?\});"
 )
+JOURNAL_SCHEMA_VERSION = 1
+LOCK_PATH_ENV = "CHANLUN_DOCS_PUBLISH_LOCK_PATH"
+DEFAULT_LOCK_PATH = ROOT_DIR / ".cache" / "chanlun" / "docs-publish.lock"
 
 
 class AtomicPublishRollbackError(RuntimeError):
@@ -65,6 +72,57 @@ class AtomicPublishRollbackError(RuntimeError):
 def _read_json(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+def _sha256_file(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _fsync_file(path):
+    with open(path, "rb") as handle:
+        os.fsync(handle.fileno())
+
+
+def _fsync_directory(path):
+    descriptor = os.open(os.fspath(path), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def docs_publish_lock_path(docs_dir):
+    configured = os.environ.get(LOCK_PATH_ENV)
+    if configured:
+        return Path(configured).resolve()
+    docs_dir = Path(docs_dir).resolve()
+    if docs_dir == (ROOT_DIR / "docs").resolve():
+        return DEFAULT_LOCK_PATH.resolve()
+    return (docs_dir.parent / ".chanlun-docs-publish.lock").resolve()
+
+
+def transaction_journal_path(docs_dir):
+    return (
+        Path(docs_dir).resolve().parent
+        / ".chanlun-shadow-snapshot-transaction.json"
+    )
+
+
+@contextmanager
+def _exclusive_docs_publish_lock(docs_dir):
+    lock_path = docs_publish_lock_path(docs_dir)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        yield lock_path
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
 
 
 def _read_bootstrap_envelope(path):
@@ -189,6 +247,20 @@ def _validate_source_report(report, report_date, started_at):
     if deployment_day <= report_day:
         raise ValueError("started_at must be after the historical report date")
 
+    data_quality = report.get("data_quality")
+    if not isinstance(data_quality, dict):
+        raise ValueError("data_quality is missing")
+    if str(data_quality.get("report_date") or "") != report_date:
+        raise ValueError("data_quality report date mismatch")
+    if data_quality.get("is_official") is not True:
+        raise ValueError("shadow snapshot requires official data_quality")
+    if data_quality.get("bar_state") != "closed":
+        raise ValueError("shadow snapshot requires a closed market bar")
+    if data_quality.get("sources_trusted") is not True:
+        raise ValueError("shadow snapshot requires trusted sources")
+    if data_quality.get("market_status") != "verified":
+        raise ValueError("shadow snapshot requires verified market status")
+
     h4 = report.get("h4_t3_pool")
     if not isinstance(h4, dict):
         raise ValueError("h4_t3_pool is missing")
@@ -244,16 +316,39 @@ def _validate_staged_docs(
     if manifest != original_manifest:
         raise RuntimeError("report manifest changed during shadow rebuild")
 
-    js = (staged_docs / "assets" / "report-v2.js").read_text(
-        encoding="utf-8"
-    )
-    css = (staged_docs / "assets" / "report-v2.css").read_text(
-        encoding="utf-8"
-    )
+    js_path = staged_docs / "assets" / "report-v2.js"
+    css_path = staged_docs / "assets" / "report-v2.css"
+    js = js_path.read_text(encoding="utf-8")
+    css = css_path.read_text(encoding="utf-8")
     if "function renderShadowEvaluations" not in js:
         raise RuntimeError("shadow renderer missing from public JavaScript")
     if ".shadow-card" not in css:
         raise RuntimeError("shadow styles missing from public CSS")
+    source_assets = ROOT_DIR / "chanlun" / "report_assets"
+    for staged, source in (
+        (js_path, source_assets / "report-v2.js"),
+        (css_path, source_assets / "report-v2.css"),
+    ):
+        if _sha256_file(staged) != _sha256_file(source):
+            raise RuntimeError(
+                "asset whitelist mismatch: {}".format(staged.name)
+            )
+
+    asset_version = _report_asset_version()
+    for name, relative, prefix in (
+        ("inline", "index.html", ""),
+        ("archive", "{}/index.html".format(report_date), "../"),
+    ):
+        html_path = staged_docs / relative
+        bootstrap = _read_bootstrap_envelope(html_path)
+        expected_html = _build_report_v2_html(
+            report_date,
+            _escape_inline_json(bootstrap),
+            asset_prefix=prefix,
+            asset_version=asset_version,
+        )
+        if html_path.read_text(encoding="utf-8") != expected_html:
+            raise RuntimeError("HTML whitelist mismatch: {}".format(name))
     return planes
 
 
@@ -316,68 +411,231 @@ def _rebuild_staged_public_artifacts(
             handle.write(html)
 
 
-def _atomic_replace_targets(staged_docs, docs_dir, report_date):
-    relative_targets = [
+def _relative_public_targets(report_date):
+    return [
         value.format(report_date=report_date) for value in PUBLIC_TARGETS
     ]
-    prepared = []
-    replaced = []
 
-    def fsync_file(path):
-        with open(path, "rb") as handle:
+
+def _public_target_hashes(docs_dir, report_date):
+    hashes = {}
+    for relative in _relative_public_targets(report_date):
+        target = Path(docs_dir) / relative
+        if not target.is_file():
+            raise FileNotFoundError(
+                "public artifact is missing: {}".format(relative)
+            )
+        hashes[relative] = _sha256_file(target)
+    return hashes
+
+
+def _write_transaction_journal(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=".{}-".format(path.name),
+        suffix=".journal-next",
+        dir=os.fspath(path.parent),
+    )
+    temporary = Path(temporary)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.flush()
             os.fsync(handle.fileno())
-
-    def fsync_directory(path):
-        descriptor = os.open(os.fspath(path), os.O_RDONLY)
+        os.replace(os.fspath(temporary), os.fspath(path))
+        _fsync_file(path)
+        _fsync_directory(path.parent)
+    except BaseException:
         try:
-            os.fsync(descriptor)
-        finally:
             os.close(descriptor)
-
-    def copied_temporary(source, target, suffix):
-        descriptor, temporary = tempfile.mkstemp(
-            prefix=".{}-".format(target.name),
-            suffix=suffix,
-            dir=os.fspath(target.parent),
-        )
-        os.close(descriptor)
-        temporary = Path(temporary)
+        except OSError:
+            pass
         try:
-            shutil.copy2(source, temporary)
-            fsync_file(temporary)
-            return temporary
-        except BaseException:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _remove_transaction_journal(path):
+    path.unlink()
+    _fsync_directory(path.parent)
+
+
+def _resolve_journal_artifact(docs_dir, relative, suffix=None):
+    if not isinstance(relative, str) or not relative or Path(relative).is_absolute():
+        raise ValueError("transaction journal contains an invalid path")
+    docs_dir = Path(docs_dir).resolve()
+    resolved = (docs_dir / relative).resolve()
+    try:
+        resolved.relative_to(docs_dir)
+    except ValueError as exc:
+        raise ValueError("transaction journal path escapes docs") from exc
+    if suffix and not resolved.name.endswith(suffix):
+        raise ValueError("transaction journal artifact suffix mismatch")
+    return resolved
+
+
+def _cleanup_transaction_artifacts(items, docs_dir):
+    errors = []
+    directories = set()
+    for item in items:
+        for key, suffix in (
+            ("next", ".shadow-next"),
+            ("backup", ".shadow-backup"),
+        ):
+            relative = item.get(key)
+            if not relative:
+                continue
             try:
-                temporary.unlink()
-            except OSError:
+                path = _resolve_journal_artifact(
+                    docs_dir, relative, suffix=suffix
+                )
+                directories.add(path.parent)
+                path.unlink()
+            except FileNotFoundError:
                 pass
-            raise
-
-    def cleanup_prepared(preserve_backup_ids=None):
-        errors = []
-        directories = set()
-        preserve_backup_ids = preserve_backup_ids or set()
-        for item in prepared:
-            directories.add(item["target"].parent)
-            for key in ("next", "backup"):
-                if key == "backup" and id(item) in preserve_backup_ids:
-                    continue
-                path = item.get(key)
-                if path is None:
-                    continue
-                try:
-                    path.unlink()
-                except FileNotFoundError:
-                    pass
-                except OSError as exc:
-                    errors.append(exc)
-        for directory in directories:
-            try:
-                fsync_directory(directory)
-            except OSError as exc:
+            except BaseException as exc:
                 errors.append(exc)
-        return errors
+    for directory in directories:
+        try:
+            _fsync_directory(directory)
+        except OSError as exc:
+            errors.append(exc)
+    return errors
 
+
+def _recover_incomplete_transaction(docs_dir):
+    """Recover or finish one durable docs publication transaction."""
+
+    docs_dir = Path(docs_dir).resolve()
+    journal_path = transaction_journal_path(docs_dir)
+    if not journal_path.exists():
+        return False
+    journal = _read_json(journal_path)
+    if not isinstance(journal, dict) or journal.get("schema_version") != JOURNAL_SCHEMA_VERSION:
+        raise ValueError("unsupported shadow publication journal")
+    report_date = str(journal.get("report_date") or "")
+    _parse_date(report_date, "journal report_date")
+    items = journal.get("items")
+    if not isinstance(items, list):
+        raise ValueError("transaction journal items are missing")
+    expected_targets = _relative_public_targets(report_date)
+    if [item.get("target") for item in items if isinstance(item, dict)] != expected_targets:
+        raise ValueError("transaction journal target whitelist mismatch")
+    status = journal.get("status")
+    if status not in {"prepared", "publishing", "committed"}:
+        raise ValueError("transaction journal status is invalid")
+
+    recovery_errors = []
+    if status == "committed":
+        for item in items:
+            try:
+                target = _resolve_journal_artifact(docs_dir, item["target"])
+                if _sha256_file(target) != item.get("staged_sha256"):
+                    raise RuntimeError(
+                        "committed transaction target digest mismatch: {}".format(
+                            item["target"]
+                        )
+                    )
+            except BaseException as exc:
+                recovery_errors.append(exc)
+    else:
+        for item in reversed(items):
+            try:
+                target = _resolve_journal_artifact(docs_dir, item["target"])
+                current_sha = _sha256_file(target)
+                original_sha = item.get("original_sha256")
+                staged_sha = item.get("staged_sha256")
+                if current_sha == original_sha:
+                    continue
+                if current_sha != staged_sha:
+                    raise RuntimeError(
+                        "transaction target has an unknown digest: {}".format(
+                            item["target"]
+                        )
+                    )
+                backup = _resolve_journal_artifact(
+                    docs_dir, item["backup"], suffix=".shadow-backup"
+                )
+                if _sha256_file(backup) != original_sha:
+                    raise RuntimeError(
+                        "transaction backup digest mismatch: {}".format(
+                            item["target"]
+                        )
+                    )
+                os.replace(os.fspath(backup), os.fspath(target))
+                _fsync_file(target)
+                _fsync_directory(target.parent)
+            except BaseException as exc:
+                recovery_errors.append(exc)
+        if not recovery_errors:
+            try:
+                restored = _public_target_hashes(docs_dir, report_date)
+                expected = {
+                    item["target"]: item["original_sha256"] for item in items
+                }
+                if restored != expected:
+                    raise RuntimeError(
+                        "transaction rollback did not restore all targets"
+                    )
+            except BaseException as exc:
+                recovery_errors.append(exc)
+
+    if recovery_errors:
+        raise AtomicPublishRollbackError(
+            RuntimeError("persistent transaction recovery failed"),
+            recovery_errors,
+        )
+    cleanup_errors = _cleanup_transaction_artifacts(items, docs_dir)
+    if cleanup_errors:
+        raise AtomicPublishRollbackError(
+            RuntimeError("persistent transaction cleanup failed"),
+            cleanup_errors,
+        )
+    _remove_transaction_journal(journal_path)
+    return True
+
+
+def _copy_fsynced_temporary(source, target, suffix):
+    descriptor, temporary = tempfile.mkstemp(
+        prefix=".{}-".format(target.name),
+        suffix=suffix,
+        dir=os.fspath(target.parent),
+    )
+    os.close(descriptor)
+    temporary = Path(temporary)
+    try:
+        shutil.copy2(source, temporary)
+        _fsync_file(temporary)
+        return temporary
+    except BaseException:
+        try:
+            temporary.unlink()
+        except OSError:
+            pass
+        raise
+
+
+def _atomic_replace_targets(
+    staged_docs,
+    docs_dir,
+    report_date,
+    expected_original_hashes=None,
+):
+    docs_dir = Path(docs_dir).resolve()
+    staged_docs = Path(staged_docs).resolve()
+    relative_targets = _relative_public_targets(report_date)
+    actual_original_hashes = _public_target_hashes(docs_dir, report_date)
+    if expected_original_hashes is None:
+        expected_original_hashes = actual_original_hashes
+    if actual_original_hashes != expected_original_hashes:
+        raise RuntimeError("public artifact changed during staging")
+    journal_path = transaction_journal_path(docs_dir)
+    if journal_path.exists():
+        raise RuntimeError("unfinished publication journal was not recovered")
+
+    prepared = []
     try:
         for relative in relative_targets:
             source = staged_docs / relative
@@ -386,59 +644,67 @@ def _atomic_replace_targets(staged_docs, docs_dir, report_date):
                 raise FileNotFoundError(
                     "staged public artifact is missing: {}".format(relative)
                 )
-            target.parent.mkdir(parents=True, exist_ok=True)
-            if not target.is_file():
-                raise FileNotFoundError(
-                    "public artifact is missing: {}".format(relative)
-                )
-            item = {"target": target, "next": None, "backup": None}
-            prepared.append(item)
-            item["backup"] = copied_temporary(
+            item = {
+                "target": relative,
+                "backup": None,
+                "next": None,
+                "original_sha256": expected_original_hashes[relative],
+                "staged_sha256": _sha256_file(source),
+            }
+            backup = _copy_fsynced_temporary(
                 target, target, ".shadow-backup"
             )
-            item["next"] = copied_temporary(
+            item["backup"] = os.fspath(backup.relative_to(docs_dir))
+            prepared.append(item)
+            next_path = _copy_fsynced_temporary(
                 source, target, ".shadow-next"
             )
+            item["next"] = os.fspath(next_path.relative_to(docs_dir))
 
-        for directory in {item["target"].parent for item in prepared}:
-            fsync_directory(directory)
+        for directory in {
+            (docs_dir / item["target"]).parent for item in prepared
+        }:
+            _fsync_directory(directory)
+
+        journal = {
+            "schema_version": JOURNAL_SCHEMA_VERSION,
+            "transaction_id": uuid.uuid4().hex,
+            "report_date": report_date,
+            "status": "prepared",
+            "items": prepared,
+        }
+        _write_transaction_journal(journal_path, journal)
+        journal["status"] = "publishing"
+        _write_transaction_journal(journal_path, journal)
 
         for item in prepared:
-            os.replace(
-                os.fspath(item["next"]), os.fspath(item["target"])
+            next_path = _resolve_journal_artifact(
+                docs_dir, item["next"], suffix=".shadow-next"
             )
-            replaced.append(item)
-            fsync_file(item["target"])
-            fsync_directory(item["target"].parent)
+            target = _resolve_journal_artifact(docs_dir, item["target"])
+            os.replace(os.fspath(next_path), os.fspath(target))
+            _fsync_file(target)
+            _fsync_directory(target.parent)
+
+        journal["status"] = "committed"
+        _write_transaction_journal(journal_path, journal)
+        _recover_incomplete_transaction(docs_dir)
     except BaseException as original_error:
         recovery_errors = []
-        failed_rollback_ids = set()
-        for item in reversed(replaced):
+        if journal_path.exists():
             try:
-                os.replace(
-                    os.fspath(item["backup"]),
-                    os.fspath(item["target"]),
-                )
-                item["backup"] = None
-                fsync_file(item["target"])
-                fsync_directory(item["target"].parent)
+                _recover_incomplete_transaction(docs_dir)
             except BaseException as exc:
                 recovery_errors.append(exc)
-                if item.get("backup") is not None:
-                    failed_rollback_ids.add(id(item))
-        recovery_errors.extend(cleanup_prepared(failed_rollback_ids))
+        else:
+            recovery_errors.extend(
+                _cleanup_transaction_artifacts(prepared, docs_dir)
+            )
         if recovery_errors:
             raise AtomicPublishRollbackError(
                 original_error, recovery_errors
             ) from original_error
         raise
-
-    cleanup_errors = cleanup_prepared()
-    if cleanup_errors:
-        raise AtomicPublishRollbackError(
-            RuntimeError("published but temporary cleanup failed"),
-            cleanup_errors,
-        )
     return relative_targets
 
 
@@ -447,10 +713,26 @@ def enable_shadow_evaluation_snapshot(
 ):
     """Enable the first empty OOT shadow snapshot and rebuild public docs."""
 
+    _parse_date(report_date, "report_date")
+    _parse_date(started_at, "started_at")
     docs_dir = Path(docs_dir).resolve()
+    docs_dir.parent.mkdir(parents=True, exist_ok=True)
+    with _exclusive_docs_publish_lock(docs_dir):
+        _recover_incomplete_transaction(docs_dir)
+        return _enable_shadow_evaluation_snapshot_locked(
+            docs_dir=docs_dir,
+            report_date=report_date,
+            started_at=started_at,
+        )
+
+
+def _enable_shadow_evaluation_snapshot_locked(
+    *, docs_dir, report_date, started_at
+):
     daily_path = docs_dir / "data" / "{}.json".format(report_date)
     if not daily_path.is_file():
         raise ValueError("report date mismatch: missing {}".format(report_date))
+    initial_target_hashes = _public_target_hashes(docs_dir, report_date)
 
     report = _read_json(daily_path)
     _validate_source_report(report, report_date, started_at)
@@ -483,7 +765,6 @@ def enable_shadow_evaluation_snapshot(
         ),
     }
 
-    docs_dir.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(
         prefix="shadow_snapshot_stage_", dir=os.fspath(docs_dir.parent)
     ) as temporary_root:
@@ -505,7 +786,10 @@ def enable_shadow_evaluation_snapshot(
             original_manifest,
         )
         updated_files = _atomic_replace_targets(
-            staged_docs, docs_dir, report_date
+            staged_docs,
+            docs_dir,
+            report_date,
+            expected_original_hashes=initial_target_hashes,
         )
 
     return {

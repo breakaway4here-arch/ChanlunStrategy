@@ -1166,6 +1166,9 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
     def test_validator_failure_stops_script_before_any_git_command(self):
         source_script = Path("daily_run.sh").read_text(encoding="utf-8")
+        lock_wrapper = Path(
+            "scripts/run_with_docs_publish_lock.py"
+        ).read_text(encoding="utf-8")
         fixed_timestamp = datetime(
             2026, 6, 30, 12, 0, tzinfo=timezone(timedelta(hours=8))
         ).timestamp()
@@ -1181,6 +1184,9 @@ class TestDailyRunScriptGuard(unittest.TestCase):
             os.utime(root / "docs" / "index.html", (fixed_timestamp, fixed_timestamp))
 
             (root / "scripts").mkdir()
+            (root / "scripts" / "run_with_docs_publish_lock.py").write_text(
+                lock_wrapper, encoding="utf-8"
+            )
             (root / "scripts" / "validate_today_report.py").write_text(
                 "import os\n"
                 "with open(os.environ['VALIDATOR_LOG'], 'a', encoding='utf-8') as f:\n"

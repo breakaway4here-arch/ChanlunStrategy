@@ -4,8 +4,15 @@
 
 set -e
 
-source ~/.zshrc 2>/dev/null || true
 SCRIPT_DIR="${0:A:h}"
+if [ "${CHANLUN_DOCS_PUBLISH_LOCK_HELD:-0}" != "1" ]; then
+    : ${CHANLUN_DOCS_PUBLISH_LOCK_PATH:="${SCRIPT_DIR}/.cache/chanlun/docs-publish.lock"}
+    export CHANLUN_DOCS_PUBLISH_LOCK_PATH
+    exec /usr/bin/python3 "${SCRIPT_DIR}/scripts/run_with_docs_publish_lock.py" \
+        --lock-path "$CHANLUN_DOCS_PUBLISH_LOCK_PATH" -- /bin/zsh "$0" "$@"
+fi
+
+source ~/.zshrc 2>/dev/null || true
 cd "$SCRIPT_DIR"
 
 : ${CHANLUN_MARKET_DATA_MODE:=sqlite}

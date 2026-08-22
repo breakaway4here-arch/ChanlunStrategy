@@ -5,7 +5,10 @@ import json
 import os
 import re
 import shutil
+import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -103,6 +106,7 @@ def _report_fixture():
             "is_trading_day": True,
             "is_official": True,
             "sources_trusted": True,
+            "market_status": "verified",
             "stock_pool_source": "fixture",
         },
         "h4_t3_pool": {
@@ -348,7 +352,10 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
                 )
                 shutil.copytree(self.docs, case_docs)
                 shutil.copytree(self.docs, staged_docs)
-                targets = [case_docs / relative for relative in relative_targets]
+                targets = [
+                    (case_docs / relative).resolve()
+                    for relative in relative_targets
+                ]
                 original_hashes = {
                     os.fspath(path): _file_sha(path) for path in targets
                 }
@@ -410,6 +417,286 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
                     or path.name.endswith(".shadow-backup")
                 ]
                 self.assertEqual(leftovers, [])
+
+    def test_hard_exit_is_recovered_on_rerun_without_mixed_artifacts(self):
+        expected_docs = Path(self.tmpdir) / "hard-exit-expected" / "docs"
+        case_docs = Path(self.tmpdir) / "hard-exit-case" / "docs"
+        expected_docs.parent.mkdir()
+        case_docs.parent.mkdir()
+        shutil.copytree(self.docs, expected_docs)
+        shutil.copytree(self.docs, case_docs)
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=expected_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+        relative_targets = [
+            value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
+        ]
+        expected_hashes = {
+            relative: _file_sha(expected_docs / relative)
+            for relative in relative_targets
+        }
+        child_code = r"""
+import os
+import sys
+from pathlib import Path
+from scripts import enable_shadow_evaluation_snapshot as snapshot
+
+docs = Path(sys.argv[1]).resolve()
+real_replace = snapshot.os.replace
+state = {"attempt": 0}
+
+def hard_exit_after_third_publish(source, destination):
+    result = real_replace(source, destination)
+    source_path = Path(source)
+    destination_path = Path(destination)
+    if (
+        source_path.name.endswith(".shadow-next")
+        and docs in destination_path.parents
+    ):
+        current = state["attempt"]
+        state["attempt"] += 1
+        if current == 2:
+            os._exit(91)
+    return result
+
+snapshot.os.replace = hard_exit_after_third_publish
+snapshot.enable_shadow_evaluation_snapshot(
+    docs_dir=docs,
+    report_date="2026-08-21",
+    started_at="2026-08-22",
+)
+"""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [
+            os.fspath(Path(__file__).resolve().parents[1]),
+            env.get("PYTHONPATH", ""),
+        ]))
+        crashed = subprocess.run(
+            [sys.executable, "-c", child_code, os.fspath(case_docs)],
+            cwd=os.fspath(Path(__file__).resolve().parents[1]),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(crashed.returncode, 91, crashed.stderr)
+        journal = snapshot.transaction_journal_path(case_docs)
+        self.assertTrue(journal.is_file())
+
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=case_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+
+        self.assertEqual(
+            {
+                relative: _file_sha(case_docs / relative)
+                for relative in relative_targets
+            },
+            expected_hashes,
+        )
+        leftovers = [
+            path
+            for path in case_docs.parent.rglob("*")
+            if path.name.endswith(".shadow-next")
+            or path.name.endswith(".shadow-backup")
+            or path == journal
+        ]
+        self.assertEqual(leftovers, [])
+
+    def test_concurrent_public_drift_is_not_overwritten(self):
+        case_docs = Path(self.tmpdir) / "concurrent-drift" / "docs"
+        case_docs.parent.mkdir()
+        shutil.copytree(self.docs, case_docs)
+        target = case_docs / "index.html"
+        other_targets = [
+            case_docs / value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
+            if value != "index.html"
+        ]
+        other_hashes = {
+            os.fspath(path): _file_sha(path) for path in other_targets
+        }
+        real_validate = snapshot._validate_staged_docs
+
+        def drift_after_validation(*args, **kwargs):
+            result = real_validate(*args, **kwargs)
+            target.write_bytes(target.read_bytes() + b"\nexternal drift\n")
+            return result
+
+        with mock.patch.object(
+            snapshot,
+            "_validate_staged_docs",
+            side_effect=drift_after_validation,
+        ):
+            with self.assertRaisesRegex(
+                RuntimeError, "public artifact changed during staging"
+            ):
+                snapshot.enable_shadow_evaluation_snapshot(
+                    docs_dir=case_docs,
+                    report_date=REPORT_DATE,
+                    started_at=STARTED_AT,
+                )
+
+        self.assertTrue(target.read_bytes().endswith(b"external drift\n"))
+        self.assertEqual(
+            {
+                os.fspath(path): _file_sha(path) for path in other_targets
+            },
+            other_hashes,
+        )
+
+    def test_rejects_unofficial_open_or_untrusted_snapshot(self):
+        violations = (
+            ("is_official", False, "official"),
+            ("bar_state", "open", "closed"),
+            ("sources_trusted", False, "trusted"),
+            ("market_status", "stale", "verified"),
+        )
+        for index, (field, value, message) in enumerate(violations):
+            with self.subTest(field=field):
+                case_docs = Path(self.tmpdir) / "quality-{}".format(index) / "docs"
+                case_docs.parent.mkdir()
+                shutil.copytree(self.docs, case_docs)
+                daily_path = case_docs / "data" / f"{REPORT_DATE}.json"
+                report = _read_json(daily_path)
+                report["data_quality"][field] = value
+                daily_path.write_text(
+                    json.dumps(report, ensure_ascii=False, indent=2),
+                    encoding="utf-8",
+                )
+                with self.assertRaisesRegex(ValueError, message):
+                    snapshot.enable_shadow_evaluation_snapshot(
+                        docs_dir=case_docs,
+                        report_date=REPORT_DATE,
+                        started_at=STARTED_AT,
+                    )
+
+    def test_report_date_is_validated_before_path_resolution(self):
+        with self.assertRaisesRegex(ValueError, "report_date must be YYYY-MM-DD"):
+            snapshot.enable_shadow_evaluation_snapshot(
+                docs_dir=self.docs,
+                report_date="../2026-08-21",
+                started_at=STARTED_AT,
+            )
+
+    def test_tampered_html_or_asset_is_rejected_before_publish(self):
+        real_rebuild = snapshot._rebuild_staged_public_artifacts
+        cases = (
+            (
+                "asset",
+                lambda staged: (staged / "assets" / "report-v2.js").write_bytes(
+                    (staged / "assets" / "report-v2.js").read_bytes()
+                    + b"\nwindow.evil = true;\n"
+                ),
+                "asset whitelist mismatch",
+            ),
+            (
+                "html",
+                lambda staged: (staged / "index.html").write_text(
+                    (staged / "index.html").read_text(encoding="utf-8")
+                    .replace(
+                        "</head>",
+                        '<script src="https://evil.invalid/x.js"></script></head>',
+                    ),
+                    encoding="utf-8",
+                ),
+                "HTML whitelist mismatch",
+            ),
+        )
+        for index, (name, tamper, expected_error) in enumerate(cases):
+            with self.subTest(name=name):
+                case_docs = Path(self.tmpdir) / "tamper-{}".format(index) / "docs"
+                case_docs.parent.mkdir()
+                shutil.copytree(self.docs, case_docs)
+
+                def tampering_rebuild(*args, **kwargs):
+                    result = real_rebuild(*args, **kwargs)
+                    tamper(Path(args[0]))
+                    return result
+
+                with mock.patch.object(
+                    snapshot,
+                    "_rebuild_staged_public_artifacts",
+                    side_effect=tampering_rebuild,
+                ):
+                    with self.assertRaisesRegex(RuntimeError, expected_error):
+                        snapshot.enable_shadow_evaluation_snapshot(
+                            docs_dir=case_docs,
+                            report_date=REPORT_DATE,
+                            started_at=STARTED_AT,
+                        )
+
+
+class DocsPublishLockTest(unittest.TestCase):
+    def test_daily_run_uses_the_same_lock_wrapper_before_normal_work(self):
+        root = Path(__file__).resolve().parents[1]
+        daily = (root / "daily_run.sh").read_text(encoding="utf-8")
+        wrapper = root / "scripts" / "run_with_docs_publish_lock.py"
+        self.assertTrue(wrapper.is_file())
+        self.assertIn("CHANLUN_DOCS_PUBLISH_LOCK_HELD", daily)
+        self.assertIn("CHANLUN_DOCS_PUBLISH_LOCK_PATH", daily)
+        self.assertIn("scripts/run_with_docs_publish_lock.py", daily)
+        self.assertLess(
+            daily.index("scripts/run_with_docs_publish_lock.py"),
+            daily.index("source ~/.zshrc"),
+        )
+
+    def test_lock_wrapper_blocks_until_the_shared_lock_is_released(self):
+        root = Path(__file__).resolve().parents[1]
+        wrapper = root / "scripts" / "run_with_docs_publish_lock.py"
+        with tempfile.TemporaryDirectory(prefix="docs_publish_lock_") as tmp:
+            lock_path = Path(tmp) / "publish.lock"
+            marker = Path(tmp) / "ran"
+            holder_code = (
+                "import fcntl,sys; "
+                "f=open(sys.argv[1],'a+'); "
+                "fcntl.flock(f.fileno(),fcntl.LOCK_EX); "
+                "print('ready',flush=True); sys.stdin.readline()"
+            )
+            holder = subprocess.Popen(
+                [sys.executable, "-c", holder_code, os.fspath(lock_path)],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.addCleanup(lambda: holder.kill() if holder.poll() is None else None)
+            self.assertEqual(holder.stdout.readline().strip(), "ready")
+            command = (
+                "from pathlib import Path; "
+                "Path({!r}).write_text('ran',encoding='utf-8')"
+            ).format(os.fspath(marker))
+            wrapped = subprocess.Popen(
+                [
+                    sys.executable,
+                    os.fspath(wrapper),
+                    "--lock-path",
+                    os.fspath(lock_path),
+                    "--",
+                    sys.executable,
+                    "-c",
+                    command,
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.addCleanup(lambda: wrapped.kill() if wrapped.poll() is None else None)
+            time.sleep(0.2)
+            self.assertIsNone(wrapped.poll())
+            self.assertFalse(marker.exists())
+            holder.stdin.write("\n")
+            holder.stdin.flush()
+            holder.communicate(timeout=5)
+            stdout, stderr = wrapped.communicate(timeout=5)
+            self.assertEqual(wrapped.returncode, 0, stdout + stderr)
+            self.assertEqual(marker.read_text(encoding="utf-8"), "ran")
 
 
 if __name__ == "__main__":
