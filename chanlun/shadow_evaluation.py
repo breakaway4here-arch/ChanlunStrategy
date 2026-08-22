@@ -16,6 +16,11 @@ import math
 from collections.abc import Mapping
 from typing import Any, Dict, Iterable, List, Optional
 
+try:  # NumPy is present in the research runtime but keep this module optional.
+    import numpy as np
+except ImportError:  # pragma: no cover - exercised only in minimal runtimes
+    np = None
+
 
 SHADOW_MODE = "shadow"
 IMMEDIATE_CLOSE = "immediate_close"
@@ -27,14 +32,27 @@ ALLOWED_HORIZONS = frozenset({1, 3, 5})
 _EXPERIMENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 
-def _json_safe_value(value: Any) -> Any:
-    """Validate and copy a JSON-safe value without coercion.
+def json_native_projection(value: Any) -> Any:
+    """Project supported research values to strict native JSON values.
 
-    Coercing arbitrary keys or scalars (for example, ``1`` to ``"1"`` or an
-    object to ``repr(object)``) can hide production changes and even create key
-    collisions.  The digest therefore accepts only native JSON containers and
-    finite native scalar types.
+    NumPy arrays/scalars are the one explicit compatibility exception because
+    real ``picks_fusion`` rows carry them.  They are converted through
+    ``tolist``/``item`` and then validated recursively.  Everything else is
+    accepted only when it is already a native JSON container or finite scalar;
+    arbitrary values are rejected rather than coerced.
     """
+
+    if np is not None:
+        if isinstance(value, np.ndarray):
+            try:
+                return json_native_projection(value.tolist())
+            except Exception as exc:
+                raise ValueError("production output contains an invalid NumPy array") from exc
+        if isinstance(value, np.generic):
+            try:
+                return json_native_projection(value.item())
+            except Exception as exc:
+                raise ValueError("production output contains an invalid NumPy scalar") from exc
 
     if value is None or type(value) in (str, bool, int):
         return value
@@ -43,13 +61,13 @@ def _json_safe_value(value: Any) -> Any:
             raise ValueError("production output contains a non-finite float")
         return value
     if type(value) is list:
-        return [_json_safe_value(item) for item in value]
+        return [json_native_projection(item) for item in value]
     if type(value) is dict:
         normalised = {}
         for key, item in value.items():
             if type(key) is not str:
                 raise ValueError("production output object keys must be strings")
-            normalised[key] = _json_safe_value(item)
+            normalised[key] = json_native_projection(item)
         return normalised
     raise ValueError("production output contains a non-JSON-safe value")
 
@@ -62,7 +80,7 @@ def production_digest(production_output: Any) -> str:
     function is pure and never mutates ``production_output``.
     """
 
-    canonical = _json_safe_value(production_output)
+    canonical = json_native_projection(production_output)
     encoded = json.dumps(
         canonical,
         ensure_ascii=False,
@@ -213,13 +231,34 @@ def _result_row(spec: Mapping[str, Any], result: Any) -> Dict[str, Any]:
     return row
 
 
+_ERROR_METADATA_KEYS = (
+    "experiment_id",
+    "version",
+    "upstream_pool",
+    "source_pool",
+    "intended_horizon",
+    "entry_mode",
+)
+
+
+def _is_safe_error_scalar(value: Any) -> bool:
+    if value is None or type(value) in (str, bool, int):
+        return True
+    return type(value) is float and math.isfinite(value)
+
+
 def _error_row(spec: Any, exc: BaseException) -> Dict[str, Any]:
     if isinstance(spec, Mapping):
-        row = {
-            key: copy.deepcopy(value)
-            for key, value in spec.items()
-            if key != "builder"
-        }
+        # Do not deepcopy arbitrary metadata here: malformed specs may carry
+        # objects whose deepcopy raises and must still become an isolated row.
+        row = {}
+        for key in _ERROR_METADATA_KEYS:
+            try:
+                value = spec.get(key)
+            except Exception:
+                continue
+            if _is_safe_error_scalar(value):
+                row[key] = value
     else:
         row = {"experiment_id": spec} if isinstance(spec, str) else {}
     row.update(
@@ -249,7 +288,11 @@ def run_shadow_evaluations(
     forced to ``False``.
     """
 
-    before_sha = production_digest(production_output)
+    projected_production = json_native_projection(production_output)
+    # Project the raw object at each guard edge.  This keeps the official
+    # ndarray-backed rows untouched while ensuring both digests use the same
+    # native JSON contract.
+    before_sha = production_digest(projected_production)
     raw_experiments = _coerce_experiments(experiments)
     rows: List[Dict[str, Any]] = []
 
@@ -259,13 +302,13 @@ def run_shadow_evaluations(
             # Deep-copy independently for every experiment.  This prevents a
             # mutating experiment from contaminating a later experiment's
             # view, in addition to protecting the official object.
-            shadow_input = copy.deepcopy(production_output)
+            shadow_input = copy.deepcopy(projected_production)
             result = spec["builder"](shadow_input)
             rows.append(_result_row(spec, result))
         except Exception as exc:  # isolate one diagnostic from the rest
             rows.append(_error_row(raw_spec, exc))
 
-    after_sha = production_digest(production_output)
+    after_sha = production_digest(json_native_projection(production_output))
     unchanged = before_sha == after_sha
     return {
         "schema_version": 1,
@@ -279,7 +322,7 @@ def run_shadow_evaluations(
         },
         "production_reference": {
             "pool": "picks_fusion",
-            "today_count": _candidate_count(production_output),
+            "today_count": _candidate_count(projected_production),
             "comparison_eligible": False,
         },
         "experiments": rows,
@@ -289,6 +332,7 @@ def run_shadow_evaluations(
 __all__ = [
     "clear_experiments",
     "get_experiment",
+    "json_native_projection",
     "list_experiments",
     "production_digest",
     "register_experiment",

@@ -1,5 +1,7 @@
 import unittest
 
+import numpy as np
+
 import chanlun.shadow_evaluation as shadow_evaluation
 
 from chanlun.shadow_evaluation import (
@@ -307,6 +309,82 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             with self.subTest(value=repr(value)):
                 with self.assertRaises(ValueError):
                     production_digest(value)
+
+    def test_numpy_pool_is_projected_for_shadow_without_mutating_official_arrays(self):
+        raw_pool = {
+            "picks_fusion": [
+                {
+                    "code": "600001",
+                    "closes": np.array([10.0, 10.5]),
+                    "score": np.float64(8.5),
+                    "volume": np.int64(100),
+                }
+            ]
+        }
+        original_closes = raw_pool["picks_fusion"][0]["closes"].copy()
+        captured = []
+
+        def mutating_builder(candidates):
+            captured.append(candidates)
+            candidates["picks_fusion"][0]["closes"].append(99.0)
+            return {"count": 1}
+
+        register_experiment(
+            {
+                "experiment_id": "numpy-v1",
+                "version": "v1",
+                "upstream_pool": "picks_fusion",
+                "source_pool": "picks_fusion",
+                "intended_horizon": 3,
+                "entry_mode": "immediate_close",
+                "builder": mutating_builder,
+            }
+        )
+
+        result = run_shadow_evaluations(raw_pool)
+
+        self.assertEqual(result["experiments"][0]["status"], "available")
+        projected_pick = captured[0]["picks_fusion"][0]
+        self.assertIsInstance(projected_pick["closes"], list)
+        self.assertIsInstance(projected_pick["score"], float)
+        self.assertIsInstance(projected_pick["volume"], int)
+        self.assertTrue(np.array_equal(raw_pool["picks_fusion"][0]["closes"], original_closes))
+        self.assertEqual(result["production_guard"]["unchanged"], True)
+
+    def test_error_row_drops_uncopyable_metadata_and_keeps_other_experiments_running(self):
+        class Uncopyable:
+            def __deepcopy__(self, memo):
+                raise RuntimeError("metadata must not be copied")
+
+        invalid = {
+            "experiment_id": "bad-metadata-v1",
+            "version": "v1",
+            "upstream_pool": "picks_fusion",
+            "source_pool": "picks_fusion",
+            "intended_horizon": 3,
+            "entry_mode": "delay1_open",
+            "builder": lambda candidates: candidates,
+            "metadata": Uncopyable(),
+        }
+        healthy = {
+            "experiment_id": "healthy-v1",
+            "version": "v1",
+            "upstream_pool": "picks_fusion",
+            "source_pool": "picks_fusion",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "builder": lambda candidates: {"count": len(candidates)},
+        }
+
+        result = run_shadow_evaluations(
+            [{"code": "600001"}],
+            experiments=[invalid, healthy],
+        )
+        rows = {row["experiment_id"]: row for row in result["experiments"]}
+
+        self.assertEqual(rows["bad-metadata-v1"]["status"], "unavailable")
+        self.assertNotIn("metadata", rows["bad-metadata-v1"])
+        self.assertEqual(rows["healthy-v1"]["status"], "available")
 
 
 if __name__ == "__main__":
