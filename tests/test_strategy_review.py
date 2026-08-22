@@ -203,10 +203,72 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
         self.assertIsNone(outcome["mfe"]["t3"])
         self.assertIsNone(outcome["mae"]["t3"])
 
+    def test_immediate_close_treats_suspended_target_and_path_as_unavailable(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        kline = _kline(
+            volumes=[1000, 0, 1000, 1000, 1000, 1000]
+        )
+
+        outcome = _evaluate(
+            entry=entry,
+            kline=kline,
+            contribution=contribution,
+            trading_calendar=kline["dates"],
+        )
+
+        self.assertEqual(outcome["maturity"]["t1"], "unavailable")
+        self.assertIsNone(outcome["returns"]["t1"])
+        self.assertIsNotNone(outcome["returns"]["t3"])
+        self.assertIsNone(outcome["mfe"]["t3"])
+        self.assertIsNone(outcome["mae"]["t3"])
+
+    def test_delay1_open_keeps_legacy_return_when_later_target_volume_is_zero(self):
+        kline = _kline(
+            volumes=[1000, 1000, 1000, 0, 1000, 1000]
+        )
+
+        outcome = _evaluate(kline=kline, trading_calendar=kline["dates"])
+
+        self.assertEqual(outcome["maturity"]["t3"], "mature")
+        self.assertIsNotNone(outcome["returns"]["t3"])
+        self.assertIsNotNone(outcome["mfe"]["t3"])
+        self.assertIsNotNone(outcome["mae"]["t3"])
+
+    def test_immediate_close_fails_closed_when_frozen_close_or_adjustment_differs(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        entry["reference_close"] = 101.0
+        entry["reference_adjustment"] = "qfq"
+
+        close_mismatch = _evaluate(
+            entry=entry,
+            contribution=contribution,
+        )
+        entry["reference_close"] = 100.0
+        entry["reference_adjustment"] = "none"
+        adjustment_mismatch = _evaluate(
+            entry=entry,
+            contribution=contribution,
+        )
+
+        self.assertEqual(close_mismatch["status"], "reference_close_mismatch")
+        self.assertEqual(
+            close_mismatch["returns"],
+            {"t1": None, "t3": None, "t5": None},
+        )
+        self.assertEqual(
+            adjustment_mismatch["status"],
+            "reference_adjustment_mismatch",
+        )
+
     def test_immediate_close_benchmark_uses_same_signal_close_and_target_dates(self):
         entry = _entry()
         contribution = entry["strategy_contributions"][0]
         contribution["entry_mode"] = "immediate_close"
+        entry["reference_adjustment"] = "qfq"
         benchmark = _kline(
             opens=[200, 200, 202, 204, 206, 208],
             closes=[200, 202, 204, 206, 208, 210],

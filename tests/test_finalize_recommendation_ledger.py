@@ -23,6 +23,7 @@ class FinalizeRecommendationLedgerTests(unittest.TestCase):
             "code": "300308",
         }
         shadow = {
+            "schema_version": "1",
             "shadow_evaluation_id": "shadow:one",
             "evaluation_role": "shadow_candidate",
             "publication_effect": False,
@@ -39,6 +40,7 @@ class FinalizeRecommendationLedgerTests(unittest.TestCase):
             "reference_close": 100.0,
             "reference_date": "2026-08-20",
             "reference_is_final": True,
+            "reference_adjustment": "qfq",
             "reason_snapshot": {},
         }
         with tempfile.TemporaryDirectory() as tmpdir:

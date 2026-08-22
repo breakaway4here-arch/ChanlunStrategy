@@ -38,6 +38,7 @@ DEFAULT_SHADOW_PENDING_DIR = os.path.join(
     BASE_DIR, ".cache", "chanlun", "shadow_evaluation_pending"
 )
 SHADOW_LEDGER_SCHEMA_VERSION = "1"
+EXPECTED_REFERENCE_ADJUSTMENT = "qfq"
 
 
 # The registry is deliberately process-local.  It is a definition registry,
@@ -520,9 +521,15 @@ def build_shadow_evaluation_entries(
                 reference_is_final,
                 reference_proven,
             ) = _reference_close_proof(candidate, resolved_date)
+            reference_adjustment = str(
+                candidate.get("reference_adjustment")
+                or candidate.get("adjustment")
+                or EXPECTED_REFERENCE_ADJUSTMENT
+            ).strip()
             evaluation_eligible = bool(
                 valid_contract
                 and reference_proven
+                and reference_adjustment == EXPECTED_REFERENCE_ADJUSTMENT
                 and candidate.get("evaluation_eligible") is not False
             )
             entries.append({
@@ -547,6 +554,7 @@ def build_shadow_evaluation_entries(
                 "reference_close": reference_close,
                 "reference_date": reference_date,
                 "reference_is_final": reference_is_final,
+                "reference_adjustment": reference_adjustment,
                 "reason_snapshot": _shadow_reason_snapshot(candidate),
                 "research_tier": experiment.get("research_tier"),
             })
@@ -563,7 +571,7 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
     shadow_id = str(entry.get("shadow_evaluation_id") or "")
     if not shadow_id.startswith("shadow:"):
         raise ValueError("invalid shadow evaluation id{}".format(location))
-    if entry.get("recommendation_id") or "cohort_eligible" in entry:
+    if "recommendation_id" in entry or "cohort_eligible" in entry:
         raise ValueError("formal recommendation fields forbidden in shadow ledger{}".format(location))
     if (
         entry.get("evaluation_role") != "shadow_candidate"
@@ -572,6 +580,8 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
         raise ValueError("invalid shadow isolation fields{}".format(location))
     if not isinstance(entry.get("evaluation_eligible"), bool):
         raise ValueError("invalid shadow eligibility field{}".format(location))
+    if entry.get("schema_version") != SHADOW_LEDGER_SCHEMA_VERSION:
+        raise ValueError("invalid shadow schema version{}".format(location))
     required_strings = (
         "report_date",
         "generated_at",
@@ -599,6 +609,8 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
         raise ValueError("invalid shadow evaluation rule{}".format(location))
     if not isinstance(entry.get("reason_snapshot"), dict):
         raise ValueError("invalid shadow reason snapshot{}".format(location))
+    if entry.get("reference_adjustment") != EXPECTED_REFERENCE_ADJUSTMENT:
+        raise ValueError("invalid shadow reference adjustment{}".format(location))
     if entry["evaluation_eligible"] is True:
         reference_close = _positive_close(entry.get("reference_close"))
         report_date = entry["report_date"].strip()
@@ -619,6 +631,7 @@ def load_shadow_evaluation_entries(path: Any = None) -> List[Dict[str, Any]]:
         return []
     entries = []
     with open(resolved, "r", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_SH)
         for line_number, line in enumerate(handle, start=1):
             text = line.strip()
             if not text:
@@ -645,12 +658,27 @@ def append_shadow_evaluation_entries(
 
     resolved = os.fspath(path or DEFAULT_SHADOW_LEDGER_PATH)
     materialized = [_validate_shadow_entry(entry) for entry in entries or []]
+    incoming_by_id: Dict[str, str] = {}
+    for entry in materialized:
+        shadow_id = entry["shadow_evaluation_id"]
+        canonical = json.dumps(
+            entry,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        existing_canonical = incoming_by_id.get(shadow_id)
+        if existing_canonical is not None and existing_canonical != canonical:
+            raise ValueError(
+                "conflicting_shadow_evaluation_id: {}".format(shadow_id)
+            )
+        incoming_by_id[shadow_id] = canonical
     parent = os.path.dirname(os.path.abspath(resolved))
     os.makedirs(parent, exist_ok=True)
     with open(resolved, "a+", encoding="utf-8") as handle:
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
         handle.seek(0)
-        known_ids = set()
+        known_by_id: Dict[str, str] = {}
         for line_number, line in enumerate(handle, start=1):
             text = line.strip()
             if not text:
@@ -666,13 +694,32 @@ def append_shadow_evaluation_entries(
             validated = _validate_shadow_entry(
                 existing, line_number=line_number
             )
-            known_ids.add(validated["shadow_evaluation_id"])
+            shadow_id = validated["shadow_evaluation_id"]
+            canonical = json.dumps(
+                validated,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            known_canonical = known_by_id.get(shadow_id)
+            if known_canonical is not None and known_canonical != canonical:
+                raise ValueError(
+                    "conflicting_shadow_evaluation_id: {}".format(shadow_id)
+                )
+            known_by_id[shadow_id] = canonical
         new_entries = []
         for entry in materialized:
             shadow_id = entry["shadow_evaluation_id"]
-            if shadow_id in known_ids:
+            canonical = incoming_by_id[shadow_id]
+            if shadow_id in known_by_id:
+                if known_by_id[shadow_id] != canonical:
+                    raise ValueError(
+                        "conflicting_shadow_evaluation_id: {}".format(
+                            shadow_id
+                        )
+                    )
                 continue
-            known_ids.add(shadow_id)
+            known_by_id[shadow_id] = canonical
             new_entries.append(entry)
         if not new_entries:
             return 0
@@ -813,13 +860,23 @@ def build_shadow_scorecards(
         key = (
             str(entry.get("experiment_id") or ""),
             str(entry.get("version") or ""),
+            str(entry.get("upstream_pool") or ""),
+            str(entry.get("source_pool") or ""),
             horizon,
+            str(entry.get("entry_mode") or ""),
         )
-        if key[0] and key[1]:
+        if all((key[0], key[1], key[2], key[3], key[5])):
             grouped[key].append(entry)
 
     cards = []
-    for (experiment_id, version, horizon), rows in sorted(grouped.items()):
+    for (
+        experiment_id,
+        version,
+        upstream_pool,
+        source_pool,
+        horizon,
+        entry_mode,
+    ), rows in sorted(grouped.items()):
         horizon_key = "t{}".format(horizon)
         evaluated = []
         statuses: Dict[str, int] = defaultdict(int)
@@ -849,6 +906,11 @@ def build_shadow_scorecards(
             for _entry, outcome in evaluated
             if outcome["mae"].get(horizon_key) is not None
         ]
+        excursion_sample_size = sum(
+            outcome["mfe"].get(horizon_key) is not None
+            and outcome["mae"].get(horizon_key) is not None
+            for _entry, outcome in evaluated
+        )
         mature_rows = [
             entry for entry, outcome in evaluated
             if outcome["returns"].get(horizon_key) is not None
@@ -877,11 +939,12 @@ def build_shadow_scorecards(
             "display_name": str(first.get("display_name") or experiment_id),
             "strategy_version": version,
             "version": version,
-            "upstream_pool": first.get("upstream_pool"),
-            "source_pool": first.get("source_pool"),
+            "upstream_pool": upstream_pool,
+            "source_pool": source_pool,
             "intended_horizon": horizon,
-            "entry_mode": IMMEDIATE_CLOSE,
+            "entry_mode": entry_mode,
             "sample_size": sample_size,
+            "excursion_sample_size": excursion_sample_size,
             "active_dates": active_dates,
             "active_months": active_months,
             "mean_close_return": mean(close_returns) if close_returns else None,
@@ -914,6 +977,7 @@ def build_shadow_scorecards(
 __all__ = [
     "DEFAULT_SHADOW_LEDGER_PATH",
     "DEFAULT_SHADOW_PENDING_DIR",
+    "EXPECTED_REFERENCE_ADJUSTMENT",
     "append_shadow_evaluation_entries",
     "build_shadow_evaluation_entries",
     "build_shadow_scorecards",

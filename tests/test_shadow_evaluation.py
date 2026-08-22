@@ -75,6 +75,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertEqual(entry["reference_close"], 100.0)
         self.assertEqual(entry["reference_date"], "2026-08-20")
         self.assertIs(entry["reference_is_final"], True)
+        self.assertEqual(entry["reference_adjustment"], "qfq")
         self.assertIn("best_buy_point", entry["reason_snapshot"])
 
     def test_shadow_entry_uses_report_date_final_close_not_latest_or_stale_close(self):
@@ -135,6 +136,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
 
     def test_shadow_pending_is_separate_idempotent_and_only_finalized_explicitly(self):
         entry = {
+            "schema_version": "1",
             "shadow_evaluation_id": "shadow:one",
             "evaluation_role": "shadow_candidate",
             "publication_effect": False,
@@ -151,6 +153,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "reference_close": 100.0,
             "reference_date": "2026-08-20",
             "reference_is_final": True,
+            "reference_adjustment": "qfq",
             "reason_snapshot": {},
         }
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -173,6 +176,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
 
     def test_eligible_shadow_persistence_rejects_incomplete_evaluation_contract(self):
         incomplete = {
+            "schema_version": "1",
             "shadow_evaluation_id": "shadow:incomplete",
             "evaluation_role": "shadow_candidate",
             "publication_effect": False,
@@ -189,6 +193,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
 
     def test_all_persisted_shadow_rows_require_complete_identity_and_experiment_contract(self):
         valid = {
+            "schema_version": "1",
             "shadow_evaluation_id": "shadow:valid",
             "evaluation_role": "shadow_candidate",
             "publication_effect": False,
@@ -205,6 +210,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "reference_close": None,
             "reference_date": "",
             "reference_is_final": False,
+            "reference_adjustment": "qfq",
             "reason_snapshot": {},
         }
         invalid_rows = []
@@ -236,6 +242,9 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         invalid_rows.append(dict(valid, intended_horizon=True))
         invalid_rows.append(dict(valid, entry_mode="delay1_open"))
         invalid_rows.append(dict(valid, reason_snapshot=[]))
+        invalid_rows.append(dict(valid, schema_version="2"))
+        invalid_rows.append(dict(valid, recommendation_id=""))
+        invalid_rows.append(dict(valid, reference_adjustment="none"))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             for index, row in enumerate(invalid_rows):
@@ -252,8 +261,54 @@ class ShadowEvaluationContractTests(unittest.TestCase):
                 1,
             )
 
+    def test_shadow_append_rejects_same_id_with_different_canonical_content(self):
+        base = {
+            "schema_version": "1",
+            "shadow_evaluation_id": "shadow:conflict",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "code": "300308",
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_close": 100.0,
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
+            "reference_adjustment": "qfq",
+            "reason_snapshot": {},
+        }
+        conflict = dict(base, reference_close=101.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            same_batch = Path(tmpdir) / "same-batch.jsonl"
+            existing = Path(tmpdir) / "existing.jsonl"
+
+            self.assertEqual(
+                append_shadow_evaluation_entries(same_batch, [base, dict(base)]),
+                1,
+            )
+            with self.assertRaisesRegex(
+                ValueError, "conflicting_shadow_evaluation_id"
+            ):
+                append_shadow_evaluation_entries(
+                    Path(tmpdir) / "conflicting-batch.jsonl",
+                    [base, conflict],
+                )
+            self.assertEqual(append_shadow_evaluation_entries(existing, [base]), 1)
+            with self.assertRaisesRegex(
+                ValueError, "conflicting_shadow_evaluation_id"
+            ):
+                append_shadow_evaluation_entries(existing, [conflict])
+            self.assertEqual(load_shadow_evaluation_entries(existing), [base])
+
     def test_shadow_scorecard_uses_only_evaluation_eligible_rows_and_primary_horizon(self):
         base = {
+            "schema_version": "1",
             "evaluation_role": "shadow_candidate",
             "publication_effect": False,
             "evaluation_eligible": True,
@@ -268,6 +323,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "reason_snapshot": {"best_buy_point": {"type": "三买"}},
             "reference_date": "2026-08-20",
             "reference_is_final": True,
+            "reference_adjustment": "qfq",
         }
         first = dict(base, shadow_evaluation_id="shadow:first",
                      report_date="2026-08-20", code="300308",
@@ -318,12 +374,71 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertAlmostEqual(card["mean_mfe"], 11.0)
         self.assertAlmostEqual(card["mean_mae"], -4.0)
         self.assertAlmostEqual(card["worst_close_return"], 10.0)
+        self.assertEqual(card["excursion_sample_size"], 1)
         self.assertFalse(card["promotion_eligible"])
         self.assertTrue(card["hard_gate_reasons"])
         self.assertEqual(
             card["representative_samples"][0]["shadow_evaluation_id"],
             "shadow:first",
         )
+
+    def test_shadow_scorecards_never_merge_same_version_across_source_pools(self):
+        base = {
+            "schema_version": "1",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "experiment_id": "pool-boundary-v1",
+            "version": "v1",
+            "display_name": "池边界影子",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 1,
+            "entry_mode": "immediate_close",
+            "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "reference_close": 100.0,
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
+            "reference_adjustment": "qfq",
+            "reason_snapshot": {},
+        }
+        first = dict(
+            base,
+            shadow_evaluation_id="shadow:pool-a",
+            source_pool="pool_a",
+            code="300308",
+            name="上涨样本",
+        )
+        second = dict(
+            base,
+            shadow_evaluation_id="shadow:pool-b",
+            source_pool="pool_b",
+            code="300001",
+            name="下跌样本",
+        )
+        dates = ["2026-08-20", "2026-08-21"]
+        common = {
+            "dates": dates,
+            "opens": [100, 100],
+            "highs": [101, 111],
+            "lows": [99, 89],
+            "volumes": [1000, 1000],
+            "is_final": [True, True],
+            "adjustment": "qfq",
+        }
+        up = dict(common, closes=[100, 110])
+        down = dict(common, closes=[100, 90])
+
+        cards = build_shadow_scorecards(
+            [first, second],
+            {"300308": up, "300001": down},
+            trading_calendar=dates,
+        )
+
+        self.assertEqual(len(cards), 2)
+        by_pool = {card["source_pool"]: card for card in cards}
+        self.assertAlmostEqual(by_pool["pool_a"]["mean_close_return"], 10.0)
+        self.assertAlmostEqual(by_pool["pool_b"]["mean_close_return"], -10.0)
 
     def test_production_digest_is_stable_for_mapping_order(self):
         first = {

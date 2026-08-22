@@ -338,6 +338,7 @@ def _evaluate_without_benchmark(
     *,
     contribution=None,
     trading_calendar=None,
+    validate_reference=True,
 ):
     outcome = _empty_outcome(entry, "market_data_missing")
     normalized, status = _validated_kline(kline, expected_adjustment)
@@ -405,6 +406,25 @@ def _evaluate_without_benchmark(
     if entry_price is None or entry_price <= 0:
         outcome["status"] = "market_data_invalid"
         return outcome
+    if mode == "immediate_close" and validate_reference:
+        reference_adjustment = str(
+            entry.get("reference_adjustment") or expected_adjustment
+        ).strip()
+        if reference_adjustment != expected_adjustment:
+            outcome["status"] = "reference_adjustment_mismatch"
+            return outcome
+        reference_close = _finite(entry.get("reference_close"))
+        if reference_close is None or reference_close <= 0:
+            outcome["status"] = "reference_close_missing"
+            return outcome
+        if not math.isclose(
+            entry_price,
+            reference_close,
+            rel_tol=1e-9,
+            abs_tol=1e-8,
+        ):
+            outcome["status"] = "reference_close_mismatch"
+            return outcome
     if mode == "delay1_open":
         previous_close = normalized["closes"][report_index]
         one_price = (
@@ -453,6 +473,14 @@ def _evaluate_without_benchmark(
             mae[key] = None
             mfe[key] = None
             continue
+        if mode == "immediate_close":
+            target_volume = normalized["volumes"][endpoint]
+            if target_volume is None or target_volume <= 0:
+                maturity[key] = "unavailable"
+                returns[key] = None
+                mae[key] = None
+                mfe[key] = None
+                continue
         maturity[key] = "mature"
         returns[key] = (
             (normalized["closes"][endpoint] - entry_price)
@@ -475,6 +503,12 @@ def _evaluate_without_benchmark(
             and normalized["is_final"][date_index[trade_date]]
         ]
         complete_path = len(path_indexes) == len(path_dates)
+        if mode == "immediate_close" and complete_path:
+            complete_path = all(
+                normalized["volumes"][index] is not None
+                and normalized["volumes"][index] > 0
+                for index in path_indexes
+            )
         mae[key] = (
             (min(normalized["lows"][index] for index in path_indexes)
              - entry_price) / entry_price * 100.0
@@ -527,6 +561,7 @@ def evaluate_recommendation_entry(
         expected_adjustment,
         contribution=contribution,
         trading_calendar=trading_calendar,
+        validate_reference=False,
     )
     if (
         benchmark.get("status") not in {"evaluated", "partial"}
