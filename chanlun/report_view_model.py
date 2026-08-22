@@ -40,7 +40,7 @@ SOURCE_LABELS = {
     "acceleration": "加速",
     "luojie": "罗姐池",
     "confirming": "等确认",
-    "baseline": "基准",
+    "baseline": "基础候选",
 }
 
 SOURCE_POOLS = {
@@ -113,8 +113,8 @@ VIEW_META = {
         "description": "仅展示有真实行业归属与完整交易证据的观察标的，非正式推荐；同一行业最多两只。",
     },
     "baseline": {
-        "label": "基准",
-        "description": "纯净缠论结构参考池，不参与Top10。",
+        "label": "基础候选",
+        "description": "原始缠论结构候选 / 各策略共同上游全集；各策略独立筛选，不参与看点 Top10。",
     },
 }
 

@@ -699,15 +699,27 @@ def build_strategy_scorecards(
                 continue
             strategy = str(contribution.get("strategy_name") or "unknown")
             version = str(contribution.get("strategy_version") or "unknown")
-            key = (strategy, version)
+            entry_mode = str(
+                contribution.get("entry_mode") or "unknown"
+            ).strip() or "unknown"
+            intended_horizon = contribution.get("intended_horizon")
+            if (
+                isinstance(intended_horizon, bool)
+                or intended_horizon not in HORIZONS
+            ):
+                intended_horizon = None
+            else:
+                intended_horizon = int(intended_horizon)
+            key = (strategy, version, entry_mode, intended_horizon)
             card = cards.setdefault(key, {
                 "strategy": strategy,
                 "version": version,
+                "entry_mode": entry_mode,
+                "intended_horizon": intended_horizon,
                 "display_names": Counter(),
                 "attribution_statuses": Counter(),
                 "gate_outcomes": Counter(),
                 "publication_outcomes": Counter(),
-                "intended_horizons": set(),
             })
             card["display_names"][
                 str(contribution.get("display_name") or strategy)
@@ -724,10 +736,6 @@ def build_strategy_scorecards(
                 contribution.get("user_action") or "unknown"
             )
             card["publication_outcomes"][user_action] += 1
-            if contribution.get("intended_horizon") in HORIZONS:
-                card["intended_horizons"].add(
-                    int(contribution["intended_horizon"])
-                )
             if contribution.get("cohort_eligible") is True:
                 recommend_rows[key].append({
                     "entry": entry,
@@ -735,10 +743,17 @@ def build_strategy_scorecards(
                 })
 
     result = []
-    for key in sorted(cards):
+    for key in sorted(
+        cards,
+        key=lambda value: (
+            value[0],
+            value[1],
+            value[2],
+            -1 if value[3] is None else value[3],
+        ),
+    ):
         card = cards[key]
-        intended = sorted(card["intended_horizons"])
-        primary_horizon = intended[0] if len(intended) == 1 else None
+        primary_horizon = card["intended_horizon"]
         primary_key = (
             "t{}".format(primary_horizon) if primary_horizon else None
         )
@@ -863,6 +878,7 @@ def build_strategy_scorecards(
             "strategy": card["strategy"],
             "name": display_name,
             "version": card["version"],
+            "entry_mode": card["entry_mode"],
             "attribution_status": attribution_status,
             "attribution_status_counts": attribution_status_counts,
             "intended_horizon": primary_horizon,

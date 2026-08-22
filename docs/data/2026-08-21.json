@@ -114889,11 +114889,11 @@
     ]
   },
   "decision_brief": {
-    "status": "ok",
-    "model": "deepseek-v4-pro",
-    "prompt_version": "decision-brief-v3",
+    "status": "rules_only",
+    "model": "",
+    "prompt_version": "decision-brief-v4",
     "schema_version": "1",
-    "generated_at": "2026-08-21T15:01:02+08:00",
+    "generated_at": "2026-08-21T15:06:50+08:00",
     "evidence_registry": [
       {
         "evidence_ref": "event:2026-08-21:18d2b4559f62",
@@ -115372,46 +115372,162 @@
         "sector_links": [],
         "stock_links": [],
         "watchlist_impacts": [],
-        "rule_summary": "光伏出现风险事件，等待风险释放与结构修复。",
-        "llm_summary": "风险事件出现，暂无板块资金和重点池个股证据，等待风险释放与结构修复。",
+        "risk_reasons": [
+          {
+            "reason_code": "negative_sector_impact",
+            "title": "光伏负向影响",
+            "detail": "中概股涨跌互现，光伏板块承压，新能源车或受提振",
+            "severity": "high",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:9b71c1e384b2"
+            ],
+            "affected_codes": []
+          },
+          {
+            "reason_code": "negative_stock_impact",
+            "title": "光伏个股负向影响",
+            "detail": "晶科能源：美股收跌超5%，拖累A股光伏",
+            "severity": "high",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:9b71c1e384b2"
+            ],
+            "affected_codes": [
+              "688223"
+            ]
+          },
+          {
+            "reason_code": "negative_stock_impact",
+            "title": "光伏个股负向影响",
+            "detail": "阿特斯：美股收跌超5%，拖累A股光伏",
+            "severity": "high",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:9b71c1e384b2"
+            ],
+            "affected_codes": [
+              "688472"
+            ]
+          }
+        ],
+        "rule_summary": "光伏存在风险：中概股涨跌互现，光伏板块承压，新能源车或受提振。",
+        "llm_summary": "",
         "next_trigger": [
-          "风险事件影响消退",
-          "出现板块资金回流或个股结构修复信号"
+          "光伏风险继续扩散或相关结构进一步走弱"
         ],
         "invalidation": [
-          "风险事件快速消化且板块资金转为流入",
-          "重点池个股出现止跌反转结构"
+          "光伏风险证据减弱且结构止跌"
         ],
-        "llm_stage": "risk",
-        "llm_confidence": "high",
-        "llm_stock_mentions": []
+        "confirmation_conditions": [
+          "光伏风险继续扩散或相关结构进一步走弱"
+        ],
+        "invalidation_conditions": [
+          "光伏风险证据减弱且结构止跌"
+        ]
       },
       {
-        "thesis_id": "thesis:2026-08-21:b0c8f32e00ef",
-        "theme": "AI算力",
+        "thesis_id": "thesis:2026-08-21:be366b3a3423",
+        "theme": "创新药",
         "direction": "negative",
         "stage": "risk",
         "confidence": "medium",
         "rule_score": 52.0,
         "evidence_refs": [
-          "event:2026-08-21:1d005f1ffe48",
-          "watch-fact:2026-08-21:300308",
-          "watch-fact:2026-08-21:688041",
-          "watch-fact:2026-08-21:688525"
+          "event:2026-08-21:1d005f1ffe48"
         ],
         "sector_links": [],
-        "stock_links": [
+        "stock_links": [],
+        "watchlist_impacts": [],
+        "risk_reasons": [
           {
-            "code": "300308",
-            "name": "中际旭创",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:300308"
+            "reason_code": "negative_sector_impact",
+            "title": "创新药负向影响",
+            "detail": "创业板指反弹涨1.43%，贵金属、锂矿、CPO活跃，农业创新药走弱",
+            "severity": "medium",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:1d005f1ffe48"
+            ],
+            "affected_codes": []
           },
           {
-            "code": "688041",
-            "name": "海光信息",
+            "reason_code": "negative_stock_impact",
+            "title": "创新药个股负向影响",
+            "detail": "哈药股份：创新药概念跌停",
+            "severity": "medium",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:1d005f1ffe48"
+            ],
+            "affected_codes": [
+              "600664"
+            ]
+          },
+          {
+            "reason_code": "negative_stock_impact",
+            "title": "创新药个股负向影响",
+            "detail": "哈三联：创新药概念跌停",
+            "severity": "medium",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-08-21:1d005f1ffe48"
+            ],
+            "affected_codes": [
+              "002900"
+            ]
+          }
+        ],
+        "rule_summary": "创新药存在风险：创业板指反弹涨1.43%，贵金属、锂矿、CPO活跃，农业创新药走弱。",
+        "llm_summary": "",
+        "next_trigger": [
+          "创新药风险继续扩散或相关结构进一步走弱"
+        ],
+        "invalidation": [
+          "创新药风险证据减弱且结构止跌"
+        ],
+        "confirmation_conditions": [
+          "创新药风险继续扩散或相关结构进一步走弱"
+        ],
+        "invalidation_conditions": [
+          "创新药风险证据减弱且结构止跌"
+        ]
+      },
+      {
+        "thesis_id": "thesis:2026-08-21:b363e78153c0",
+        "theme": "半导体",
+        "direction": "positive",
+        "stage": "confirmed",
+        "confidence": "high",
+        "rule_score": 111.0,
+        "evidence_refs": [
+          "event:2026-08-21:18d2b4559f62",
+          "limit-theme:2026-08-21:dcc56252e4af",
+          "watch-fact:2026-08-21:300139",
+          "watch-fact:2026-08-21:688525",
+          "event:2026-08-21:2ebd88a1e0ef",
+          "event:2026-08-21:3d024aa20195",
+          "event:2026-08-21:11988f1ee7d5"
+        ],
+        "sector_links": [
+          {
+            "name": "半导体",
+            "link_type": "limit_up_theme",
+            "evidence_ref": "limit-theme:2026-08-21:dcc56252e4af"
+          }
+        ],
+        "stock_links": [
+          {
+            "code": "300139",
+            "name": "晓程科技",
             "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:688041"
+            "evidence_ref": "watch-fact:2026-08-21:300139"
           },
           {
             "code": "688525",
@@ -115421,111 +115537,23 @@
           }
         ],
         "watchlist_impacts": [
-          "300308",
-          "688041",
+          "300139",
           "688525"
         ],
-        "rule_summary": "AI算力出现风险事件，等待风险释放与结构修复。",
-        "llm_summary": "风险事件出现，重点池个股均处等待确认状态，暂无板块资金确认，等待风险释放与结构修复。",
+        "risk_reasons": [],
+        "rule_summary": "半导体出现催化，需由资金、涨停梯队与重点股共同确认。",
+        "llm_summary": "",
         "next_trigger": [
-          "风险事件消化",
-          "重点池个股出现中枢结构",
-          "国产算力或存储方向出现积极催化"
+          "半导体资金与涨停梯队继续共振"
         ],
         "invalidation": [
-          "风险事件继续恶化",
-          "重点池个股跌破近期低点",
-          "板块资金持续流出"
+          "半导体资金转弱或重点股结构失效"
         ],
-        "llm_stage": "risk",
-        "llm_confidence": "medium",
-        "llm_stock_mentions": [
-          {
-            "code": "300308",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:300308"
-          },
-          {
-            "code": "688041",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:688041"
-          },
-          {
-            "code": "688525",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:688525"
-          }
-        ]
-      },
-      {
-        "thesis_id": "thesis:2026-08-21:9471f24345c9",
-        "theme": "光模块",
-        "direction": "negative",
-        "stage": "risk",
-        "confidence": "medium",
-        "rule_score": 52.0,
-        "evidence_refs": [
-          "event:2026-08-21:1d005f1ffe48",
-          "sector:2026-08-21:6e0632adcd0d",
-          "limit-theme:2026-08-21:a26ec5c43e68",
-          "watch-fact:2026-08-21:002281",
-          "watch-fact:2026-08-21:300308"
+        "confirmation_conditions": [
+          "半导体资金与涨停梯队继续共振"
         ],
-        "sector_links": [
-          {
-            "name": "通信设备",
-            "link_type": "sector_flow",
-            "evidence_ref": "sector:2026-08-21:6e0632adcd0d"
-          },
-          {
-            "name": "通信设备",
-            "link_type": "limit_up_theme",
-            "evidence_ref": "limit-theme:2026-08-21:a26ec5c43e68"
-          }
-        ],
-        "stock_links": [
-          {
-            "code": "002281",
-            "name": "光迅科技",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:002281"
-          },
-          {
-            "code": "300308",
-            "name": "中际旭创",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:300308"
-          }
-        ],
-        "watchlist_impacts": [
-          "002281",
-          "300308"
-        ],
-        "rule_summary": "光模块出现风险事件，等待风险释放与结构修复。",
-        "llm_summary": "风险事件出现，通信设备板块存在资金流入和涨停梯队，但重点池个股仍处等待确认状态，需观察结构修复。",
-        "next_trigger": [
-          "风险事件消化",
-          "通信设备板块资金转为持续流入",
-          "重点池个股突破近期整理区间"
-        ],
-        "invalidation": [
-          "通信设备板块资金转为流出",
-          "重点池个股跌破近期低点",
-          "风险事件进一步发酵"
-        ],
-        "llm_stage": "risk",
-        "llm_confidence": "medium",
-        "llm_stock_mentions": [
-          {
-            "code": "002281",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:002281"
-          },
-          {
-            "code": "300308",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-08-21:300308"
-          }
+        "invalidation_conditions": [
+          "半导体资金转弱或重点股结构失效"
         ]
       }
     ],
@@ -115648,45 +115676,6 @@
         "arbitration_reason": "rule_and_llm_consistent",
         "model": "deepseek-v4-pro",
         "prompt_version": "event-impact-v1",
-        "schema_version": "1"
-      },
-      {
-        "record_type": "direction",
-        "event_ref": "",
-        "thesis_id": "thesis:2026-08-21:59b5295e0211",
-        "rule_score": 82.0,
-        "rule_result": "negative",
-        "llm_result": "negative",
-        "arbitration_result": "negative",
-        "arbitration_reason": "llm_explanation_accepted_rule_gate_kept",
-        "model": "deepseek-v4-pro",
-        "prompt_version": "decision-brief-v3",
-        "schema_version": "1"
-      },
-      {
-        "record_type": "direction",
-        "event_ref": "",
-        "thesis_id": "thesis:2026-08-21:b0c8f32e00ef",
-        "rule_score": 52.0,
-        "rule_result": "negative",
-        "llm_result": "negative",
-        "arbitration_result": "negative",
-        "arbitration_reason": "llm_explanation_accepted_rule_gate_kept",
-        "model": "deepseek-v4-pro",
-        "prompt_version": "decision-brief-v3",
-        "schema_version": "1"
-      },
-      {
-        "record_type": "direction",
-        "event_ref": "",
-        "thesis_id": "thesis:2026-08-21:9471f24345c9",
-        "rule_score": 52.0,
-        "rule_result": "negative",
-        "llm_result": "negative",
-        "arbitration_result": "negative",
-        "arbitration_reason": "llm_explanation_accepted_rule_gate_kept",
-        "model": "deepseek-v4-pro",
-        "prompt_version": "decision-brief-v3",
         "schema_version": "1"
       }
     ],
@@ -341115,8 +341104,8 @@
     "started_at": "2026-08-22",
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "ba3407dd6cb85d45ecf52308efb775ff17c843b550418290aea57ebdb98176a9",
-      "after_sha256": "ba3407dd6cb85d45ecf52308efb775ff17c843b550418290aea57ebdb98176a9"
+      "before_sha256": "ae7d19e65037dc825cb1df8255dfa100ed521f6153ec357419a1310c88082b2c",
+      "after_sha256": "ae7d19e65037dc825cb1df8255dfa100ed521f6153ec357419a1310c88082b2c"
     },
     "production_reference": {
       "pool": "picks_fusion",
@@ -341127,8 +341116,8 @@
     },
     "experiments": [
       {
-        "experiment_id": "h4-t3-close-review-v1",
-        "display_name": "H4 T+3 收盘价影子回看",
+        "experiment_id": "h4-t3-pure-upstream-close-review-v1",
+        "display_name": "H4 T+3 · picks_pure 上游收盘价影子回看",
         "version": "h4_t3_k30_tail_safe_v1",
         "strategy_version": "h4_t3_k30_tail_safe_v1",
         "upstream_pool": "picks_pure",

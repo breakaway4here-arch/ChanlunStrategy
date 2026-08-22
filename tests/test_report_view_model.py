@@ -147,6 +147,11 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["counts"]["growth_quality"], 0)
         self.assertEqual(workspace["view_meta"]["highlights"]["label"], "看点 Top10")
         self.assertEqual(workspace["view_meta"]["growth_quality"]["label"], "高弹性观察 Top10")
+        self.assertEqual(workspace["view_meta"]["baseline"]["label"], "基础候选")
+        self.assertIn(
+            "共同上游全集",
+            workspace["view_meta"]["baseline"]["description"],
+        )
         self.assertIn("source_counts", workspace["diagnostics"])
         self.assertEqual(workspace["diagnostics"]["highlights"]["baseline_included"], False)
         self.assertIn("growth_quality_overlap", workspace["diagnostics"])

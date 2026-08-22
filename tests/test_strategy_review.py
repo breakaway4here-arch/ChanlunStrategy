@@ -718,6 +718,37 @@ class StrategyScorecardTests(unittest.TestCase):
             second["attribution_status_counts"],
         )
 
+    def test_scorecards_separate_entry_mode_and_intended_horizon(self):
+        close_entry = _entry(intended_horizon=3)
+        close_contribution = close_entry["strategy_contributions"][0]
+        close_contribution["entry_mode"] = "immediate_close"
+        open_entry = copy.deepcopy(close_entry)
+        open_entry["report_date"] = "2026-08-21"
+        open_entry["recommendation_id"] = "rec:delay1-open"
+        open_contribution = open_entry["strategy_contributions"][0]
+        open_contribution["entry_mode"] = "delay1_open"
+        open_contribution["intended_horizon"] = 1
+
+        cards = build_strategy_scorecards(
+            [close_entry, open_entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+
+        identities = {
+            (
+                card["strategy"],
+                card["version"],
+                card["entry_mode"],
+                card["intended_horizon"],
+            )
+            for card in cards
+        }
+        self.assertEqual(identities, {
+            ("daily_pure", "pure-v1", "immediate_close", 3),
+            ("daily_pure", "pure-v1", "delay1_open", 1),
+        })
+
 
 if __name__ == "__main__":
     unittest.main()

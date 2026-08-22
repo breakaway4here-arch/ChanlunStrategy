@@ -35,7 +35,8 @@ from chanlun.report_generator import (  # noqa: E402
 from chanlun.shadow_evaluation import production_digest  # noqa: E402
 
 
-EXPERIMENT_ID = "h4-t3-close-review-v1"
+EXPERIMENT_ID = "h4-t3-pure-upstream-close-review-v1"
+EXPERIMENT_NAME = "H4 T+3 · picks_pure 上游收盘价影子回看"
 PUBLIC_TARGETS = (
     "index.html",
     "data.json",
@@ -206,7 +207,7 @@ def _empty_shadow_contract(report, started_at):
         },
         "experiments": [{
             "experiment_id": EXPERIMENT_ID,
-            "display_name": "H4 T+3 收盘价影子回看",
+            "display_name": EXPERIMENT_NAME,
             "version": STRATEGY_VERSION,
             "strategy_version": STRATEGY_VERSION,
             "upstream_pool": "picks_pure",

@@ -1098,9 +1098,9 @@ def _resolve_report_close_proof(
 def _build_h4_shadow_result(
     production_snapshot: Mapping[str, Any], report_date: str
 ) -> Dict[str, Any]:
-    """Copy the already-built H4 pool; never rerun or rerank its strategy."""
+    """Rebuild H4 from the shadow-only ``picks_pure`` upstream."""
 
-    from .h4_t3_pool import STRATEGY_VERSION
+    from .h4_t3_pool import STRATEGY_VERSION, build_h4_t3_pool
 
     pool = production_snapshot.get("h4_t3_pool")
     if not isinstance(pool, Mapping):
@@ -1113,14 +1113,38 @@ def _build_h4_shadow_result(
         raise ValueError("h4_t3_pool production status is not ok")
     if str(pool.get("strategy_version") or "") != STRATEGY_VERSION:
         raise ValueError("h4_t3_pool strategy version mismatch")
-    candidates = pool.get("candidates")
+    pure_candidates = production_snapshot.get("picks_pure")
+    if not isinstance(pure_candidates, list):
+        raise ValueError("picks_pure is unavailable")
+    pure_codes = {
+        str(candidate.get("code") or "").strip()
+        for candidate in pure_candidates
+        if isinstance(candidate, Mapping)
+    }
+    rebuilt = build_h4_t3_pool(
+        pure_candidates,
+        report_date,
+        upstream_pool="picks_pure",
+    )
+    if not isinstance(rebuilt, Mapping) or rebuilt.get("status") != "ok":
+        raise ValueError("picks_pure H4 rebuild is unavailable")
+    diagnostics = rebuilt.get("diagnostics")
+    if (
+        not isinstance(diagnostics, Mapping)
+        or diagnostics.get("upstream_pool") != "picks_pure"
+    ):
+        raise ValueError("picks_pure H4 upstream diagnostics are invalid")
+    candidates = rebuilt.get("candidates")
     if not isinstance(candidates, list):
-        raise ValueError("h4_t3_pool candidates are unavailable")
+        raise ValueError("picks_pure H4 candidates are unavailable")
     result = []
     for raw_candidate in candidates:
         if not isinstance(raw_candidate, Mapping):
-            raise ValueError("h4_t3_pool candidate is invalid")
+            raise ValueError("picks_pure H4 candidate is invalid")
         candidate = json_native_projection(raw_candidate)
+        code = str(candidate.get("code") or "").strip()
+        if not code or code not in pure_codes:
+            raise ValueError("shadow H4 candidate is outside picks_pure")
         reference_close, reference_is_final = _resolve_report_close_proof(
             candidate, report_date
         )
@@ -1129,7 +1153,10 @@ def _build_h4_shadow_result(
         candidate["reference_is_final"] = reference_is_final
         candidate["reference_adjustment"] = EXPECTED_REFERENCE_ADJUSTMENT
         result.append(candidate)
-    return {"candidates": result}
+    return {
+        "diagnostics": json_native_projection(diagnostics),
+        "candidates": result,
+    }
 
 
 def _unavailable_daily_payload(
@@ -1406,8 +1433,8 @@ def build_daily_shadow_evaluations(
         from .h4_t3_pool import STRATEGY_VERSION
 
         experiment_spec = {
-            "experiment_id": "h4-t3-close-review-v1",
-            "display_name": "H4 T+3 收盘价影子回看",
+            "experiment_id": "h4-t3-pure-upstream-close-review-v1",
+            "display_name": "H4 T+3 · picks_pure 上游收盘价影子回看",
             "version": STRATEGY_VERSION,
             "upstream_pool": "picks_pure",
             "source_pool": "h4_t3_pool",

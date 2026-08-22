@@ -168,6 +168,10 @@ _THEME_LINK_TERMS = {
     "房地产": ["房地产", "地产", "楼市"],
     "黄金": ["黄金", "贵金属", "金价"],
 }
+_AI_CONTEXT_TERMS = (
+    "人工智能", "算力", "大模型", "模型", "芯片", "服务器", "数据中心",
+    "gpu", "训练", "推理", "智能体", "云计算", "ai应用",
+)
 
 
 def _stable_evidence_ref(kind, report_date, *parts):
@@ -313,12 +317,10 @@ def _arbitrate_event(event, event_ref):
     }
 
 
-def _event_direction(event, theme=None):
-    if str(event.get("event_category") or "") == "risk":
-        return "negative"
+def _event_theme_polarity(event, theme=None):
     impact = event.get("impact") if isinstance(event.get("impact"), dict) else {}
     if not _valid_event_impact(impact):
-        return "neutral"
+        return False, False
     positive_sectors = _safe_text_list(impact.get("positive_sectors"))
     negative_sectors = _safe_text_list(impact.get("negative_sectors"))
     if theme:
@@ -331,6 +333,16 @@ def _event_direction(event, theme=None):
     else:
         positive = bool(positive_sectors)
         negative = bool(negative_sectors)
+    return positive, negative
+
+
+def _event_direction(event, theme=None):
+    if (
+        str(event.get("event_category") or "") == "risk"
+        and not _is_market_recap(event)
+    ):
+        return "negative"
+    positive, negative = _event_theme_polarity(event, theme)
     if positive and negative:
         return "mixed"
     if negative:
@@ -338,6 +350,99 @@ def _event_direction(event, theme=None):
     if positive:
         return "positive"
     return "neutral"
+
+
+def _risk_severity(event):
+    score = _safe_number(event.get("impact_score"))
+    if score >= 55:
+        return "high"
+    if score >= 35:
+        return "medium"
+    return "low"
+
+
+def _event_risk_reasons(theme, event, event_ref, direction):
+    if direction not in {"negative", "mixed"}:
+        return []
+
+    reasons = []
+    impact = event.get("impact") if isinstance(event.get("impact"), dict) else {}
+    _positive, negative = _event_theme_polarity(event, theme)
+    if negative:
+        headline = str(impact.get("headline") or "").strip()
+        detail = headline or str(event.get("title") or "").strip()
+        if not detail:
+            detail = "{}被结构化事件影响判断为负向".format(theme)
+        reasons.append({
+            "reason_code": "negative_sector_impact",
+            "title": "{}负向影响".format(theme),
+            "detail": detail,
+            "severity": _risk_severity(event),
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [event_ref],
+            "affected_codes": [],
+        })
+
+    if (
+        str(event.get("event_category") or "") == "risk"
+        and not _is_market_recap(event)
+    ):
+        detail = str(event.get("title") or "").strip()
+        if detail:
+            reasons.append({
+                "reason_code": "hard_risk_event",
+                "title": "硬风险事件",
+                "detail": detail,
+                "severity": _risk_severity(event),
+                "source_type": "event_rule",
+                "verification_status": "verified",
+                "evidence_refs": [event_ref],
+                "affected_codes": [],
+            })
+
+    event_themes = _safe_text_list(event.get("affected_themes"))
+    negative_stocks = (
+        impact.get("negative_stocks")
+        if isinstance(impact.get("negative_stocks"), list)
+        else []
+    )
+    for stock in negative_stocks:
+        if not isinstance(stock, dict):
+            continue
+        code = str(stock.get("code") or "").strip()
+        name = str(stock.get("name") or "").strip()
+        stock_reason = str(stock.get("reason") or "").strip()
+        if not stock_reason or not (
+            len(event_themes) == 1
+            or _theme_matches(theme, name, stock_reason)
+        ):
+            continue
+        reasons.append({
+            "reason_code": "negative_stock_impact",
+            "title": "{}个股负向影响".format(theme),
+            "detail": "{}：{}".format(name or code or "关联个股", stock_reason),
+            "severity": _risk_severity(event),
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [event_ref],
+            "affected_codes": [code] if _valid_stock_code(code) else [],
+        })
+
+    unique = []
+    seen = set()
+    for reason in reasons:
+        key = (
+            reason["reason_code"],
+            reason["detail"],
+            tuple(reason["evidence_refs"]),
+            tuple(reason["affected_codes"]),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(reason)
+    return unique
 
 
 def _theme_terms(theme):
@@ -349,7 +454,24 @@ def _theme_terms(theme):
 
 def _theme_matches(theme, *texts):
     haystack = " ".join(str(text or "").lower() for text in texts)
-    return any(term and term in haystack for term in _theme_terms(theme))
+    for term in _theme_terms(theme):
+        if not term:
+            continue
+        if re.fullmatch(r"[a-z0-9][a-z0-9.\-]*", term):
+            if not re.search(
+                r"(?<![a-z0-9]){}(?![a-z0-9])".format(re.escape(term)),
+                haystack,
+                flags=re.IGNORECASE,
+            ):
+                continue
+            if term == "ai" and not any(
+                context in haystack for context in _AI_CONTEXT_TERMS
+            ):
+                continue
+            return True
+        elif term in haystack:
+            return True
+    return False
 
 
 def _valid_stock_code(value):
@@ -637,10 +759,13 @@ def _base_direction_rows(
                 "sector_links": [],
                 "stock_links": [],
                 "watchlist_impacts": [],
+                "risk_reasons": [],
                 "rule_summary": "",
                 "llm_summary": "",
                 "next_trigger": [],
                 "invalidation": [],
+                "confirmation_conditions": [],
+                "invalidation_conditions": [],
                 "_market_confirmed": False,
             })
             row["rule_score"] = max(
@@ -690,6 +815,10 @@ def _base_direction_rows(
                         str(link["evidence_ref"])
                     )
 
+            row["risk_reasons"].extend(
+                _event_risk_reasons(theme, event, event_ref, direction)
+            )
+
             if direction == "negative":
                 row["stage"] = "risk"
             elif row["_market_confirmed"]:
@@ -713,23 +842,63 @@ def _base_direction_rows(
             ): link
             for link in row["sector_links"]
         }.values())
+        risk_reasons = []
+        seen_risk_reasons = set()
+        for reason in row["risk_reasons"]:
+            key = (
+                reason["reason_code"],
+                reason["detail"],
+                tuple(reason["evidence_refs"]),
+                tuple(reason["affected_codes"]),
+            )
+            if key in seen_risk_reasons:
+                continue
+            seen_risk_reasons.add(key)
+            risk_reasons.append(reason)
+        row["risk_reasons"] = risk_reasons
         watch_codes = []
         for link in row["stock_links"]:
             if link["link_type"] == "watchlist_intersection":
                 watch_codes.append(link["code"])
         row["watchlist_impacts"] = list(dict.fromkeys(watch_codes))
         if row["direction"] == "negative":
-            row["rule_summary"] = "{}出现风险事件，等待风险释放与结构修复。".format(
-                row["theme"]
-            )
-            row["next_trigger"] = ["{}风险证据减弱且结构止跌".format(row["theme"])]
-            row["invalidation"] = ["{}风险继续扩散".format(row["theme"])]
+            if row["risk_reasons"]:
+                row["rule_summary"] = "{}存在风险：{}。".format(
+                    row["theme"],
+                    row["risk_reasons"][0]["detail"].rstrip("。"),
+                )
+                row["confirmation_conditions"] = [
+                    "{}风险继续扩散或相关结构进一步走弱".format(row["theme"])
+                ]
+                row["invalidation_conditions"] = [
+                    "{}风险证据减弱且结构止跌".format(row["theme"])
+                ]
+            else:
+                row["stage"] = "monitor"
+                row["confidence"] = "low"
+                row["rule_summary"] = "{}存在负向线索，但缺少可追溯风险原因。".format(
+                    row["theme"]
+                )
+                row["confirmation_conditions"] = [
+                    "{}补充可追溯风险证据".format(row["theme"])
+                ]
+                row["invalidation_conditions"] = [
+                    "{}负向线索被证伪".format(row["theme"])
+                ]
+            row["next_trigger"] = list(row["confirmation_conditions"])
+            row["invalidation"] = list(row["invalidation_conditions"])
         else:
             row["rule_summary"] = "{}出现催化，需由资金、涨停梯队与重点股共同确认。".format(
                 row["theme"]
             )
-            row["next_trigger"] = ["{}资金与涨停梯队继续共振".format(row["theme"])]
-            row["invalidation"] = ["{}资金转弱或重点股结构失效".format(row["theme"])]
+            row["confirmation_conditions"] = [
+                "{}资金与涨停梯队继续共振".format(row["theme"])
+            ]
+            row["invalidation_conditions"] = [
+                "{}资金转弱或重点股结构失效".format(row["theme"])
+            ]
+            row["next_trigger"] = list(row["confirmation_conditions"])
+            row["invalidation"] = list(row["invalidation_conditions"])
         rows.append(row)
 
     stage_rank = {"risk": 4, "confirmed": 3, "developing": 2, "monitor": 1}
@@ -767,6 +936,7 @@ def _llm_packet(report_date, registry, directions):
                 "watchlist_codes": row["watchlist_impacts"],
                 "sector_links": row["sector_links"],
                 "stock_links": row["stock_links"],
+                "risk_reasons": row["risk_reasons"],
                 "rule_summary": row["rule_summary"],
             }
             for row in directions
@@ -1122,10 +1292,6 @@ def _merge_llm_directions(directions, llm_payload, arbitration):
         row["llm_stage"] = llm_row["stage"]
         row["llm_confidence"] = llm_row["confidence"]
         row["llm_stock_mentions"] = llm_row["stock_mentions"]
-        if llm_row["next_trigger"]:
-            row["next_trigger"] = llm_row["next_trigger"]
-        if llm_row["invalidation"]:
-            row["invalidation"] = llm_row["invalidation"]
         arbitration.append({
             "record_type": "direction",
             "event_ref": "",
@@ -1184,7 +1350,7 @@ def build_decision_brief(
     )[:max(0, int(max_theses))]
     status = "rules_only"
     model = ""
-    prompt_version = "decision-brief-v3"
+    prompt_version = "decision-brief-v4"
     schema_version = "1"
     llm_error = ""
     if llm_analyzer is not None and directions:

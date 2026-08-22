@@ -141,7 +141,11 @@ from chanlun.universe_builder import (
 
 def _build_daily_h4_t3_pool(fusion_candidates, trade_date):
     """Build H4 from the same real fusion candidates published by the daily run."""
-    return build_h4_t3_pool(fusion_candidates, trade_date)
+    return build_h4_t3_pool(
+        fusion_candidates,
+        trade_date,
+        upstream_pool="picks_fusion",
+    )
 
 
 # ============================================================
@@ -2666,6 +2670,7 @@ def main(debug=False, preview=False, generated_at=None):
             "observation": observation_watchlist,
             "next_day_boom": next_day_boom.get("candidates", []),
             "luojie": luojie_pool.get("candidates", []),
+            "h4_t3_pool": h4_t3_pool.get("candidates", []),
         },
         acquisition=personal_watchlist_acquisition,
     )
@@ -2722,9 +2727,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "daily_pure",
             "display_name": "日线纯净策略",
-            "strategy_version": "",
+            "strategy_version": "daily-pure-close-v1",
             "source_pool": "picks_pure",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
             "user_action_from_decision": True,
@@ -2733,9 +2738,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "daily_fusion",
             "display_name": "日线融合策略",
-            "strategy_version": "",
+            "strategy_version": "daily-fusion-close-v1",
             "source_pool": "picks_fusion",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
             "user_action_from_decision": True,
@@ -2744,9 +2749,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "observation_gate",
             "display_name": "观察池门控",
-            "strategy_version": "",
+            "strategy_version": "observation-gate-close-v1",
             "source_pool": "observation_watchlist",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "internal",
             "user_action": "watch",
@@ -2755,9 +2760,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "next_day_boom",
             "display_name": "次日大涨策略",
-            "strategy_version": "",
+            "strategy_version": "next-day-boom-close-v1",
             "source_pool": "next_day_boom",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": 1,
             "publication_status": "published",
             "user_action_from_decision": True,
@@ -2767,9 +2772,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "luojie_pool",
             "display_name": "罗杰主题策略",
-            "strategy_version": "",
+            "strategy_version": "luojie-close-v1",
             "source_pool": "luojie_pool",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
             "user_action": "watch",
@@ -2780,7 +2785,7 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "H4 T+3 策略",
             "strategy_version": h4_t3_pool.get("strategy_version", ""),
             "source_pool": "h4_t3_pool",
-            "entry_mode": "delay1_open",
+            "entry_mode": "immediate_close",
             "intended_horizon": 3,
             "publication_status": "published",
             "user_action_from_decision": True,

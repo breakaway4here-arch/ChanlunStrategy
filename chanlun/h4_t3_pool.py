@@ -391,10 +391,18 @@ def _fit_predictor(rows, current_date):
     return predict, mature
 
 
-def build_h4_t3_pool(picks_fusion, trade_date, model_path=None):
+def build_h4_t3_pool(
+    picks_fusion,
+    trade_date,
+    model_path=None,
+    upstream_pool="picks_fusion",
+):
     _canonical_date(trade_date, "trade_date")
     if not isinstance(picks_fusion, list):
         raise H4T3PoolError("picks_fusion is invalid")
+    if not isinstance(upstream_pool, str) or not upstream_pool.strip():
+        raise H4T3PoolError("upstream_pool is invalid")
+    upstream_pool = upstream_pool.strip()
     model = load_model(model_path)
     predict, mature = _fit_predictor(model["training_rows"], trade_date)
     microstate = [row for row in picks_fusion if is_continuation_microstate(row)]
@@ -447,6 +455,9 @@ def build_h4_t3_pool(picks_fusion, trade_date, model_path=None):
             if eligible else "今日没有候选通过H4 T+3全部门槛。"
         ),
         "diagnostics": {
+            "upstream_pool": upstream_pool,
+            "upstream_count": len(picks_fusion),
+            # Compatibility alias retained for existing report consumers.
             "fusion_count": len(picks_fusion),
             "microstate_count": len(microstate),
             "eligible_count": len(eligible),

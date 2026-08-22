@@ -140,6 +140,21 @@ class H4T3PoolTests(unittest.TestCase):
         self.assertEqual([], pool["candidates"])
         self.assertEqual(1, pool["diagnostics"]["base_return_rejected_count"])
 
+    def test_diagnostics_record_explicit_upstream_and_keep_legacy_count(self):
+        model_path = self._model_path(return_pct=6.0)
+        candidates = [_candidate()]
+
+        pool = build_h4_t3_pool(
+            candidates,
+            "2026-08-20",
+            model_path=model_path,
+            upstream_pool="picks_pure",
+        )
+
+        self.assertEqual("picks_pure", pool["diagnostics"]["upstream_pool"])
+        self.assertEqual(1, pool["diagnostics"]["upstream_count"])
+        self.assertEqual(1, pool["diagnostics"]["fusion_count"])
+
     def test_missing_or_invalid_model_fails_instead_of_becoming_empty(self):
         missing = Path(tempfile.gettempdir()) / "missing-h4-t3-model.json"
         self._unlink(missing)
@@ -212,7 +227,11 @@ class H4T3PoolTests(unittest.TestCase):
             actual = _build_daily_h4_t3_pool(candidates, "2026-08-20")
 
         self.assertIs(expected, actual)
-        builder.assert_called_once_with(candidates, "2026-08-20")
+        builder.assert_called_once_with(
+            candidates,
+            "2026-08-20",
+            upstream_pool="picks_fusion",
+        )
 
     def test_incremental_backfill_preserves_existing_daily_pools(self):
         from scripts.backfill_h4_t3_pool import backfill_h4_t3_pool

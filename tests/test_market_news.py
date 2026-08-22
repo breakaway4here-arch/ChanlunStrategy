@@ -118,7 +118,7 @@ class TestLocalCodexProvider(unittest.TestCase):
         result = market_news.analyze_decision_brief_facts(packet)
 
         self.assertEqual(result["model"], "gpt-test")
-        self.assertEqual(result["prompt_version"], "decision-brief-v3")
+        self.assertEqual(result["prompt_version"], "decision-brief-v4")
         self.assertEqual(mock_codex.call_count, 1)
         self.assertIn("directions", mock_codex.call_args[0][1])
 
@@ -370,6 +370,10 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
             _DECISION_BRIEF_SYSTEM_PROMPT,
         )
 
+    def test_prompt_preserves_deterministic_risk_reasons_and_conditions(self):
+        self.assertIn("risk_reasons", _DECISION_BRIEF_SYSTEM_PROMPT)
+        self.assertIn("风险确认与解除条件由代码保留", _DECISION_BRIEF_SYSTEM_PROMPT)
+
     @patch("chanlun.market_news._call_llm_with_retry")
     @patch("chanlun.market_news._LLM_PROVIDER", "deepseek")
     @patch("chanlun.market_news._DS_API_KEY", "configured")
@@ -415,7 +419,7 @@ class TestDecisionBriefLlmProvider(unittest.TestCase):
         result = analyze_decision_brief_facts(packet)
 
         self.assertEqual(result["model"], "deepseek-test")
-        self.assertEqual(result["prompt_version"], "decision-brief-v3")
+        self.assertEqual(result["prompt_version"], "decision-brief-v4")
         self.assertEqual(result["schema_version"], "1")
         messages = mock_call.call_args[0][0]
         self.assertIn("event:2026-08-20:abc", messages[1]["content"])
@@ -560,6 +564,37 @@ class TestClassifyEventCategory(unittest.TestCase):
         events = [{"title": "大模型算力需求爆发"}]
         result = classify_event_category(events[0])
         self.assertIn("AI算力", result)
+
+    def test_english_acronyms_do_not_match_inside_company_names(self):
+        event = {
+            "title": "Maravai EyePoint Avril Amrabat Acpoa Megpure Ahbmx波动"
+        }
+
+        result = classify_event_category(event)
+
+        self.assertNotIn("AI算力", result)
+        self.assertNotIn("消费电子", result)
+        self.assertNotIn("光模块", result)
+        self.assertNotIn("半导体", result)
+
+    def test_standalone_ai_requires_compute_context(self):
+        event = {"title": "Tempus AI上涨，EyePoint与Maravai波动"}
+
+        result = classify_event_category(event)
+
+        self.assertNotIn("AI算力", result)
+
+    def test_bounded_acronyms_with_real_context_still_match(self):
+        event = {
+            "title": "AI算力与GPU、HBM需求增长，CPO和AR显示同步扩张"
+        }
+
+        result = classify_event_category(event)
+
+        self.assertIn("AI算力", result)
+        self.assertIn("半导体", result)
+        self.assertIn("光模块", result)
+        self.assertIn("消费电子", result)
 
     def test_robot_match(self):
         events = [{"title": "人形机器人量产加速", "content": "减速器需求大增"}]

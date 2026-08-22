@@ -137,8 +137,12 @@ def _event(
             "no_impact": no_impact,
             "headline": "对A股无明显影响" if no_impact else title,
             "analysis": [] if no_impact else ["事件催化需要盘面继续确认"],
-            "positive_sectors": [] if no_impact else [theme],
-            "negative_sectors": [theme] if category == "risk" else [],
+            "positive_sectors": (
+                [] if no_impact or category == "risk" else [theme]
+            ),
+            "negative_sectors": (
+                [theme] if category == "risk" and not no_impact else []
+            ),
             "positive_stocks": positive_stocks or [],
             "negative_stocks": [],
         },
@@ -326,6 +330,10 @@ class DecisionBriefTests(unittest.TestCase):
         self.assertEqual(brief["model"], "fake-model")
         self.assertIn("海外催化", brief["theses"][0]["llm_summary"])
         self.assertEqual(
+            brief["theses"][0]["next_trigger"],
+            brief["theses"][0]["confirmation_conditions"],
+        )
+        self.assertNotEqual(
             brief["theses"][0]["next_trigger"], ["通信涨停梯队继续扩散"]
         )
 
@@ -676,6 +684,131 @@ class DecisionBriefTests(unittest.TestCase):
             "event_llm_no_impact_conflicts_with_hard_risk",
         )
 
+    def test_hard_risk_cannot_be_flipped_by_positive_model_sector(self):
+        risk = _event(
+            "半导体公司被立案调查",
+            "半导体",
+            category="risk",
+            score=50,
+        )
+        risk["impact"]["positive_sectors"] = ["半导体"]
+        risk["impact"]["negative_sectors"] = []
+
+        brief = self._brief([risk])
+        thesis = brief["theses"][0]
+
+        self.assertEqual(thesis["direction"], "negative")
+        self.assertEqual(thesis["stage"], "risk")
+        self.assertTrue(any(
+            reason["reason_code"] == "hard_risk_event"
+            for reason in thesis["risk_reasons"]
+        ))
+
+    def test_mixed_market_recap_uses_theme_level_direction(self):
+        recap = _event(
+            "收评：CPO活跃，创新药走弱",
+            "光模块",
+            category="risk",
+            score=52,
+        )
+        recap["affected_themes"] = ["光模块", "创新药", "AI算力"]
+        recap["impact"]["headline"] = "CPO走强，创新药承压"
+        recap["impact"]["analysis"] = [
+            "CPO获得资金关注",
+            "创新药出现跌停样本",
+        ]
+        recap["impact"]["positive_sectors"] = ["CPO"]
+        recap["impact"]["negative_sectors"] = ["创新药"]
+
+        brief = self._brief([recap])
+        by_theme = {thesis["theme"]: thesis for thesis in brief["theses"]}
+
+        self.assertEqual(by_theme["光模块"]["direction"], "positive")
+        self.assertEqual(by_theme["创新药"]["direction"], "negative")
+        self.assertNotIn("AI算力", by_theme)
+
+    def test_hard_risk_has_deterministic_evidence_bound_reason(self):
+        risk = _event(
+            "半导体公司被立案调查",
+            "半导体",
+            category="risk",
+            score=50,
+            no_impact=True,
+        )
+
+        brief = self._brief([risk])
+        thesis = brief["theses"][0]
+        reason = thesis["risk_reasons"][0]
+
+        self.assertEqual(reason["reason_code"], "hard_risk_event")
+        self.assertEqual(reason["detail"], "半导体公司被立案调查")
+        self.assertEqual(reason["source_type"], "event_rule")
+        self.assertEqual(reason["verification_status"], "verified")
+        self.assertEqual(reason["evidence_refs"], thesis["evidence_refs"][:1])
+
+    def test_positive_thesis_always_has_empty_risk_reasons(self):
+        brief = self._brief([_event("光通信需求上行", "光模块")])
+
+        self.assertEqual(brief["theses"][0]["direction"], "positive")
+        self.assertEqual(brief["theses"][0]["risk_reasons"], [])
+
+    def test_negative_without_valid_reason_cannot_be_risk_stage(self):
+        event = _event(
+            "",
+            "半导体",
+            category="risk",
+            score=50,
+            no_impact=True,
+        )
+
+        brief = self._brief([event])
+        thesis = brief["theses"][0]
+
+        self.assertEqual(thesis["direction"], "negative")
+        self.assertEqual(thesis["risk_reasons"], [])
+        self.assertEqual(thesis["stage"], "monitor")
+
+    def test_negative_rule_conditions_cannot_be_overwritten_by_llm(self):
+        risk = _event(
+            "半导体公司被立案调查",
+            "半导体",
+            category="risk",
+            score=50,
+            no_impact=True,
+        )
+
+        def analyzer(packet):
+            row = packet["directions"][0]
+            self.assertTrue(row["risk_reasons"])
+            return {
+                "model": "fake-model",
+                "prompt_version": "decision-brief-risk-test",
+                "schema_version": "1",
+                "theses": [{
+                    "theme": row["theme"],
+                    "direction": row["direction"],
+                    "stage": row["stage"],
+                    "confidence": row["confidence"],
+                    "evidence_refs": row["evidence_refs"],
+                    "watchlist_codes": row["watchlist_codes"],
+                    "stock_mentions": [],
+                    "summary": "立案风险需要继续跟踪。",
+                    "next_trigger": ["模型声称风险已经解除"],
+                    "invalidation": ["模型声称风险继续扩散"],
+                }],
+            }
+
+        brief = self._brief([risk], analyzer, known_stock_map={})
+        thesis = brief["theses"][0]
+
+        self.assertEqual(brief["status"], "ok")
+        self.assertEqual(thesis["next_trigger"], thesis["confirmation_conditions"])
+        self.assertEqual(thesis["invalidation"], thesis["invalidation_conditions"])
+        self.assertTrue(any("风险继续扩散" in item for item in thesis["next_trigger"]))
+        self.assertTrue(any("风险证据减弱" in item for item in thesis["invalidation"]))
+        self.assertNotIn("模型声称风险已经解除", thesis["next_trigger"])
+        self.assertNotIn("模型声称风险继续扩散", thesis["invalidation"])
+
     def test_event_llm_unavailable_does_not_default_to_positive_direction(self):
         event = _event("产业信息尚待语义判断", "半导体", score=40)
         event["impact"] = {
@@ -709,6 +842,25 @@ class DecisionBriefTests(unittest.TestCase):
                 for link in by_theme["光模块"]["sector_links"]
             )
         )
+
+    def test_company_name_substring_cannot_confirm_ai_theme(self):
+        event = _event("AI算力产业信息", "AI算力", score=40)
+
+        brief = self._brief(
+            [event],
+            sector_flow=[{
+                "name": "Maravai Lifesciences",
+                "flow": 20.0,
+                "change_pct": 2.0,
+            }],
+        )
+        thesis = brief["theses"][0]
+
+        self.assertEqual(thesis["stage"], "developing")
+        self.assertFalse(any(
+            link["name"] == "Maravai Lifesciences"
+            for link in thesis["sector_links"]
+        ))
 
     def test_stale_watchlist_config_is_not_current_fact_intersection(self):
         watchlist = _watchlist()

@@ -30,8 +30,53 @@ def _candidate(index):
             "source": "market_history_db",
             "is_final": True,
         },
-        "decision_engine_v1": {"decision_code": "recommend"},
+        "decision_engine_v1": {
+            "decision_code": "recommend",
+            "total_score": 70,
+            "sentiment": {"score": 20},
+            "structure": {"score": 30},
+            "position": {"score": 20},
+            "risk_reasons": [],
+        },
         "reason": "formal reason {}".format(index),
+        "score": 90.0 - index,
+        "source_channel": "trend_continuation",
+        "change_pct": 4.2,
+        "volume_ratio": 1.8,
+        "market_regime": "strong",
+        "ma_bullish": True,
+        "position_absolute_percentile": 60.0,
+        "position_distance_pct": 1.0,
+        "best_buy_point": {
+            "strength": "强",
+            "change_pct": 4.2,
+            "volume_ratio": 1.8,
+            "confirmations": [],
+            "startup_signals": [],
+        },
+        "gf_dma_health": {
+            "alignment": "bullish",
+            "extension_level": "overheated",
+            "fomo_risk": "medium",
+            "pullback_health": "healthy",
+            "trend_stage": "uptrend",
+            "data_quality": "sufficient",
+            "score": 85.0,
+            "distance_pct": {
+                "vs_ma20": 8.0,
+                "vs_ma50": 12.0,
+                "vs_ma100": 20.0,
+            },
+            "risk_flags": [],
+            "positive_flags": ["趋势向上"],
+        },
+        "fusion_admission": {"passed": True},
+        "buy_points": [],
+        "buy_points_30min": [],
+        "blocked_buy_points": [],
+        "reference_buy_points": [],
+        "pivots": {},
+        "trailing_targets": [],
     }
 
 
@@ -39,7 +84,7 @@ def _formal_report(candidate_count=7):
     h4_candidates = [_candidate(index) for index in range(candidate_count)]
     return {
         "date": "2026-08-22",
-        "picks_pure": [{"code": "000001", "reason": "pure"}],
+        "picks_pure": copy.deepcopy(h4_candidates),
         "picks_fusion": [{"code": "000002", "reason": "fusion"}],
         "startup_watchlist": [{"code": "000003"}],
         "observation_watchlist": [{"code": "000004"}],
@@ -353,8 +398,36 @@ class DailyShadowIntegrationTests(unittest.TestCase):
                 "strategy_scorecards",
             )
         })
-        self.assertTrue(shadow_ids)
+        pure_codes = {
+            row["code"] for row in shadow["picks_pure"]
+            if isinstance(row, dict) and row.get("code")
+        }
+        shadow_codes = {
+            row["code"]
+            for experiment in shadow["shadow_evaluations"]["experiments"]
+            for row in experiment.get("today", {}).get("candidates", [])
+        }
+        self.assertTrue(shadow_codes.issubset(pure_codes))
         self.assertTrue(all(value not in formal_consumers for value in shadow_ids))
+
+    def test_new_formal_research_cohort_is_versioned_and_uses_signal_close(self):
+        report = self._capture_real_main_report("off")
+        entries = report["recommendation_ledger"]
+        contributions = [
+            contribution
+            for entry in entries
+            for contribution in entry.get("strategy_contributions", [])
+        ]
+
+        self.assertTrue(contributions)
+        self.assertTrue(all(
+            contribution.get("entry_mode") == "immediate_close"
+            for contribution in contributions
+        ))
+        self.assertTrue(all(
+            contribution.get("strategy_version") not in {None, "", "unknown"}
+            for contribution in contributions
+        ))
 
     def test_shadow_integrates_only_h4_all_candidates_and_preserves_formal_snapshot(self):
         report = _formal_report(candidate_count=7)
@@ -383,8 +456,14 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertFalse(payload["affects_production"])
         self.assertEqual(len(payload["experiments"]), 1)
         experiment = payload["experiments"][0]
-        self.assertEqual(experiment["experiment_id"], "h4-t3-close-review-v1")
-        self.assertEqual(experiment["display_name"], "H4 T+3 收盘价影子回看")
+        self.assertEqual(
+            experiment["experiment_id"],
+            "h4-t3-pure-upstream-close-review-v1",
+        )
+        self.assertEqual(
+            experiment["display_name"],
+            "H4 T+3 · picks_pure 上游收盘价影子回看",
+        )
         self.assertEqual(experiment["version"], STRATEGY_VERSION)
         self.assertEqual(experiment["upstream_pool"], "picks_pure")
         self.assertEqual(experiment["source_pool"], "h4_t3_pool")
@@ -395,7 +474,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertEqual(len(candidates), 7)
         self.assertEqual(
             [row["code"] for row in candidates],
-            [row["code"] for row in before["h4_t3_pool"]["candidates"]],
+            [row["code"] for row in before["picks_pure"]],
         )
         self.assertTrue(all(row["reference_is_final"] for row in candidates))
         self.assertTrue(all(row["reference_adjustment"] == "qfq" for row in candidates))
@@ -408,6 +487,58 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             payload["pending"].get("batch_sha256"),
             shadow_evaluation.shadow_batch_digest(payload["today_entries"]),
         )
+
+    def test_shadow_h4_rebuilds_from_pure_and_rejects_formal_pool_decoy(self):
+        report = _formal_report(candidate_count=1)
+        pure_candidate = report["picks_pure"][0]
+        report["h4_t3_pool"]["candidates"] = [
+            {**copy.deepcopy(pure_candidate), "code": "699999"}
+        ]
+        rebuilt = {
+            "status": "ok",
+            "diagnostics": {
+                "upstream_pool": "picks_pure",
+                "upstream_count": 1,
+                "fusion_count": 1,
+            },
+            "candidates": [copy.deepcopy(pure_candidate)],
+        }
+
+        with mock.patch(
+            "chanlun.h4_t3_pool.build_h4_t3_pool",
+            return_value=rebuilt,
+        ) as builder:
+            result = shadow_evaluation._build_h4_shadow_result(
+                report,
+                "2026-08-22",
+            )
+
+        builder.assert_called_once_with(
+            report["picks_pure"],
+            "2026-08-22",
+            upstream_pool="picks_pure",
+        )
+        self.assertEqual(
+            [row["code"] for row in result["candidates"]],
+            [pure_candidate["code"]],
+        )
+        self.assertNotIn("699999", [row["code"] for row in result["candidates"]])
+
+    def test_shadow_h4_fails_closed_when_builder_returns_non_pure_candidate(self):
+        report = _formal_report(candidate_count=1)
+        leaked = copy.deepcopy(report["picks_pure"][0])
+        leaked["code"] = "699999"
+        rebuilt = {
+            "status": "ok",
+            "diagnostics": {"upstream_pool": "picks_pure"},
+            "candidates": [leaked],
+        }
+
+        with mock.patch(
+            "chanlun.h4_t3_pool.build_h4_t3_pool",
+            return_value=rebuilt,
+        ), self.assertRaisesRegex(ValueError, "outside picks_pure"):
+            shadow_evaluation._build_h4_shadow_result(report, "2026-08-22")
 
     def test_same_day_retry_returns_the_actual_reused_staged_batch(self):
         report = _formal_report(candidate_count=1)
@@ -848,6 +979,17 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             self.assertLess(source.index(formal_token), shadow_index)
         self.assertLess(report_index, shadow_index)
         self.assertLess(shadow_index, generate_index)
+
+    def test_watchlist_intersections_include_h4_strategy_pool(self):
+        source = Path("run.py").read_text(encoding="utf-8")
+        start = source.index("personal_watchlist_facts = build_watchlist_fact_index(")
+        end = source.index(")\n    personal_watchlist_snapshot", start)
+        call = source[start:end]
+
+        self.assertIn(
+            '"h4_t3_pool": h4_t3_pool.get("candidates", [])',
+            call,
+        )
 
 
 if __name__ == "__main__":

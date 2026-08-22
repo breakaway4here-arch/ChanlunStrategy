@@ -197,6 +197,14 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
         )
         self.assertRegex(before_digest, r"^[0-9a-f]{64}$")
 
+        self.assertEqual(
+            experiment["experiment_id"],
+            "h4-t3-pure-upstream-close-review-v1",
+        )
+        self.assertEqual(
+            experiment["display_name"],
+            "H4 T+3 · picks_pure 上游收盘价影子回看",
+        )
         self.assertEqual(experiment["version"], STRATEGY_VERSION)
         self.assertEqual(experiment["upstream_pool"], "picks_pure")
         self.assertEqual(experiment["source_pool"], "h4_t3_pool")
