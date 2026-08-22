@@ -410,6 +410,99 @@ def _make_minimal_report_data():
 
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
 
+    def test_shadow_evaluation_contract_is_preserved_in_daily_inline_archive_and_aggregate(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_shadow_report_contract_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        shadow_contract = {
+            "schema_version": 1,
+            "mode": "shadow",
+            "affects_production": False,
+            "status": "collecting",
+            "started_at": "2026-08-22T00:00:00+08:00",
+            "production_guard": {
+                "unchanged": True,
+                "before_sha256": "a" * 64,
+                "after_sha256": "a" * 64,
+            },
+            "production_reference": {
+                "pool": "picks_fusion",
+                "today_count": 4,
+                "comparison_eligible": False,
+                "reason": "正式主推仅作隔离参考",
+            },
+            "experiments": [{
+                "experiment_id": "h4-t3-close-review-v1",
+                "display_name": "H4 T+3 收盘价影子回看",
+                "version": "h4-v1",
+                "upstream_pool": "picks_pure",
+                "source_pool": "h4_t3_pool",
+                "intended_horizon": 3,
+                "entry_mode": "immediate_close",
+                "status": "available",
+                "affects_production": False,
+                "today": {
+                    "candidates": [
+                        {"code": "300001", "name": "候选一"},
+                        {"code": "300002", "name": "候选二"},
+                        {"code": "300003", "name": "候选三"},
+                        {"code": "300004", "name": "候选四"},
+                    ]
+                },
+                "sample_size": 1,
+                "hard_gate_reasons": ["mature_samples_below_100"],
+            }],
+            "scorecards": [{
+                "experiment_id": "h4-t3-close-review-v1",
+                "sample_size": 1,
+                "active_dates": 1,
+                "active_months": 1,
+                "mean_close_return": 6.5,
+                "median_close_return": 6.5,
+                "up_rate": 100.0,
+                "hit_rate_ge_5": 100.0,
+                "mean_mfe": 10.0,
+                "mean_mae": -2.0,
+                "worst_close_return": 6.5,
+                "excursion_sample_size": 1,
+                "representative_samples": [{
+                    "shadow_evaluation_id": "shadow:sample-one",
+                    "code": "300001",
+                }],
+            }],
+            "today_entries": [{
+                "shadow_evaluation_id": "shadow:today-one",
+                "code": "300001",
+                "evaluation_role": "shadow_candidate",
+                "publication_effect": False,
+            }],
+            "pending": {
+                "status": "staged",
+                "batch": "2026-05-26.json",
+                "batch_sha256": "b" * 64,
+                "entries": 1,
+                "finalized": False,
+            },
+        }
+        report_data["shadow_evaluations"] = shadow_contract
+
+        generate_report(report_data, output_dir=tmpdir)
+        update_data_json(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "data", "2026-05-26.json"), encoding="utf-8") as handle:
+            daily = json.load(handle)["shadow_evaluations"]
+        with open(os.path.join(tmpdir, "data.json"), encoding="utf-8") as handle:
+            aggregate = json.load(handle)["reports"]["2026-05-26"]["shadow_evaluations"]
+        with open(os.path.join(tmpdir, "index.html"), encoding="utf-8") as handle:
+            inline = _extract_bootstrap(handle.read())["inlineReportData"]["shadow_evaluations"]
+        with open(os.path.join(tmpdir, "2026-05-26", "index.html"), encoding="utf-8") as handle:
+            archive = _extract_bootstrap(handle.read())["inlineReportData"]["shadow_evaluations"]
+
+        for payload in (daily, aggregate, inline, archive):
+            self.assertEqual(payload, shadow_contract)
+            self.assertEqual(payload["pending"]["batch_sha256"], "b" * 64)
+            self.assertEqual(len(payload["experiments"][0]["today"]["candidates"]), 4)
+
     def test_debug_report_cannot_write_production_watchlist(self):
         tmpdir = tempfile.mkdtemp(prefix="test_debug_watchlist_url_")
         self.addCleanup(shutil.rmtree, tmpdir)

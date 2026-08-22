@@ -17,6 +17,7 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
             "function renderPersonalWatchlist",
             "function renderHoldingRiskSection",
             "function renderStrategyScorecards",
+            "function renderShadowEvaluations",
         ):
             self.assertIn(helper, JS)
 
@@ -31,6 +32,7 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
             "renderLimitUpEcologyCard(data)",
             "renderHoldingRiskSection(data)",
             "renderStrategyScorecards(data)",
+            "renderShadowEvaluations(data)",
         ):
             self.assertIn(call, primary)
         self.assertNotIn("renderSellSignalsCard(data)", primary)
@@ -199,6 +201,91 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         self.assertIn("推荐 / 观察 / 拒绝", renderer)
         self.assertIn("推荐原因", renderer)
         self.assertNotIn("recent_reviews", renderer)
+
+    def test_shadow_evaluation_card_contract_and_render_order(self):
+        start = JS.index("function renderShadowEvaluations")
+        end = JS.index("function renderDiagnosticsCard", start)
+        renderer = JS[start:end]
+        primary_start = JS.index("function renderAuxiliaryCenter")
+        primary_end = JS.index("function openMobileDetailDrawer", primary_start)
+        primary = JS[primary_start:primary_end]
+
+        self.assertLess(
+            primary.index("renderStrategyScorecards(data)"),
+            primary.index("renderShadowEvaluations(data)"),
+        )
+        self.assertLess(
+            primary.index("renderShadowEvaluations(data)"),
+            primary.index("renderDiagnosticsCard(data)"),
+        )
+        for text in (
+            "影子评测",
+            "影子评测中",
+            "不影响正式主推",
+            "不是推荐",
+            "样本进度",
+            "尚未晋级原因",
+            "等待首个收盘样本",
+            "影子模式已关闭",
+            "影子评测暂不可用",
+            "正式主推不受影响",
+            "信号日收盘",
+        ):
+            self.assertIn(text, renderer)
+        for field in (
+            "production_guard",
+            "before_sha256",
+            "after_sha256",
+            "experiments",
+            "scorecards",
+            "today_entries",
+            "today",
+            "candidates",
+            "sample_size",
+            "active_dates",
+            "active_months",
+            "mean_close_return",
+            "median_close_return",
+            "up_rate",
+            "hit_rate_ge_5",
+            "mean_mfe",
+            "mean_mae",
+            "worst_close_return",
+            "excursion_sample_size",
+            "representative_samples",
+            "hard_gate_reasons",
+            "upstream_pool",
+            "source_pool",
+            "intended_horizon",
+            "entry_mode",
+        ):
+            self.assertIn(field, renderer)
+        self.assertIn("picks_pure", renderer)
+        self.assertIn("原始缠论结构候选（基准）", renderer)
+        self.assertIn("h4_t3_pool", renderer)
+        self.assertIn("H4 T+3 策略池", renderer)
+        self.assertIn("status === 'collecting'", renderer)
+        self.assertNotIn(".slice(", renderer)
+        self.assertIn("escapeHtml", renderer)
+
+    def test_shadow_card_uses_swiss_audit_styles_and_390px_layout(self):
+        for selector in (
+            ".shadow-card",
+            ".shadow-guard-rail",
+            ".shadow-metric-grid",
+            ".shadow-candidate-row",
+        ):
+            self.assertIn(selector, CSS)
+        shadow_start = CSS.index("/* Shadow evaluation: Swiss audit card */")
+        responsive_start = CSS.index("@media (max-width: 390px)", shadow_start)
+        shadow_styles = CSS[shadow_start:responsive_start]
+        responsive = CSS[responsive_start:]
+        self.assertIn("#FFFFFF", shadow_styles)
+        self.assertIn("#002FA7", shadow_styles)
+        self.assertIn("1px", shadow_styles)
+        self.assertNotIn("gradient", shadow_styles)
+        self.assertIn(".shadow-metric-grid", responsive)
+        self.assertIn("grid-template-columns: 1fr", responsive)
 
 
 if __name__ == "__main__":

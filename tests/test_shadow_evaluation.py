@@ -27,6 +27,44 @@ from chanlun.shadow_evaluation import (
 
 
 class ShadowEvaluationContractTests(unittest.TestCase):
+
+    def test_report_projection_preserves_pending_digest_and_every_shadow_candidate(self):
+        from chanlun import report_generator
+
+        candidates = [
+            {"code": "{:06d}".format(300000 + index), "name": "candidate-{}".format(index)}
+            for index in range(7)
+        ]
+        payload = {
+            "mode": "shadow",
+            "affects_production": False,
+            "status": "collecting",
+            "started_at": "2026-08-22T00:00:00+08:00",
+            "production_guard": {
+                "unchanged": True,
+                "before_sha256": "a" * 64,
+                "after_sha256": "a" * 64,
+            },
+            "experiments": [{
+                "experiment_id": "h4-t3-close-review-v1",
+                "today": {"candidates": candidates},
+            }],
+            "scorecards": [],
+            "today_entries": [],
+            "pending": {"batch_sha256": "b" * 64},
+        }
+
+        projected = report_generator._serialize_shadow_evaluations(payload)
+
+        self.assertEqual(projected, payload)
+        self.assertIsNot(projected, payload)
+        self.assertIsNot(projected["experiments"], payload["experiments"])
+        self.assertEqual(
+            [row["code"] for row in projected["experiments"][0]["today"]["candidates"]],
+            [row["code"] for row in candidates],
+        )
+        self.assertEqual(projected["pending"]["batch_sha256"], "b" * 64)
+
     def setUp(self):
         clear_experiments()
 

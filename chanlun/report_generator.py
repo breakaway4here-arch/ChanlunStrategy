@@ -779,6 +779,28 @@ def _serialize_h4_t3_pool(data):
     }
 
 
+def _serialize_shadow_evaluations(data):
+    """Return an isolated, complete JSON-native shadow evaluation contract.
+
+    The shadow pending batch digest is part of the publication/finalization
+    handshake, so this serializer deliberately performs no field selection or
+    list truncation.  Invalid non-mapping inputs remain visibly unavailable to
+    the frontend as an empty contract instead of being presented as data.
+    """
+    if not isinstance(data, Mapping):
+        return {}
+    encoded = json.dumps(
+        data,
+        ensure_ascii=False,
+        cls=NpEncoder,
+        allow_nan=False,
+    )
+    projected = json.loads(encoded)
+    if not isinstance(projected, dict):
+        raise ValueError("shadow evaluation contract must serialize to an object")
+    return projected
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -1276,6 +1298,9 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             "recommendation_ledger", []
         ),
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
+        "shadow_evaluations": _serialize_shadow_evaluations(
+            report_data.get("shadow_evaluations", {})
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
@@ -1507,6 +1532,9 @@ def update_data_json(report_data, output_dir=None):
             "recommendation_ledger", []
         ),
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
+        "shadow_evaluations": _serialize_shadow_evaluations(
+            report_data.get("shadow_evaluations", {})
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
