@@ -44,7 +44,9 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "today": {"candidates": [{
                 "code": "300308",
                 "name": "中际旭创",
+                "dates": ["2026-08-19", "2026-08-20"],
                 "closes": [99, 100],
+                "is_final": [True, True],
                 "best_buy_point": {"type": "三买", "reason": "回踩确认"},
                 "decision_engine_v1": {"decision_code": "recommend"},
             }]},
@@ -71,7 +73,65 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertEqual(entry["intended_horizon"], 1)
         self.assertEqual(entry["entry_mode"], "immediate_close")
         self.assertEqual(entry["reference_close"], 100.0)
+        self.assertEqual(entry["reference_date"], "2026-08-20")
+        self.assertIs(entry["reference_is_final"], True)
         self.assertIn("best_buy_point", entry["reason_snapshot"])
+
+    def test_shadow_entry_uses_report_date_final_close_not_latest_or_stale_close(self):
+        experiment = {
+            "experiment_id": "close-proof-v1",
+            "version": "v1",
+            "upstream_pool": "picks_pure",
+            "source_pool": "h4_t3_pool",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "status": "available",
+            "today": {"candidates": [
+                {
+                    "code": "300308",
+                    "dates": ["2026-08-20", "2026-08-21"],
+                    "closes": [100, 999],
+                    "is_final": [True, True],
+                },
+                {
+                    "code": "300001",
+                    "dates": ["2026-08-19"],
+                    "closes": [88],
+                    "is_final": [True],
+                },
+                {
+                    "code": "600000",
+                    "dates": ["2026-08-20"],
+                    "closes": [77],
+                    "is_final": [False],
+                },
+                {
+                    "code": "600001",
+                    "reference_close": 66,
+                    "reference_date": "2026-08-20",
+                    "reference_is_final": True,
+                },
+                {
+                    "code": "600002",
+                    "reference_close": 55,
+                    "reference_date": "2026-08-19",
+                    "reference_is_final": True,
+                },
+            ]},
+        }
+
+        entries = build_shadow_evaluation_entries(
+            "2026-08-20", "2026-08-20T15:10:00+08:00", [experiment]
+        )
+        by_code = {entry["code"]: entry for entry in entries}
+
+        self.assertEqual(by_code["300308"]["reference_close"], 100.0)
+        self.assertTrue(by_code["300308"]["evaluation_eligible"])
+        self.assertFalse(by_code["300001"]["evaluation_eligible"])
+        self.assertFalse(by_code["600000"]["evaluation_eligible"])
+        self.assertEqual(by_code["600001"]["reference_close"], 66.0)
+        self.assertTrue(by_code["600001"]["evaluation_eligible"])
+        self.assertFalse(by_code["600002"]["evaluation_eligible"])
 
     def test_shadow_pending_is_separate_idempotent_and_only_finalized_explicitly(self):
         entry = {
@@ -80,7 +140,18 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "publication_effect": False,
             "evaluation_eligible": True,
             "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
             "code": "300308",
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_close": 100.0,
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
+            "reason_snapshot": {},
         }
         with tempfile.TemporaryDirectory() as tmpdir:
             pending_dir = Path(tmpdir) / "shadow-pending"
@@ -100,6 +171,22 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             self.assertEqual(append_shadow_evaluation_entries(ledger, [entry]), 0)
             self.assertEqual(load_shadow_evaluation_entries(ledger), [entry])
 
+    def test_eligible_shadow_persistence_rejects_incomplete_evaluation_contract(self):
+        incomplete = {
+            "shadow_evaluation_id": "shadow:incomplete",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "report_date": "2026-08-20",
+            "code": "300308",
+        }
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            with self.assertRaises(ValueError):
+                stage_shadow_evaluation_entries(
+                    Path(tmpdir) / "pending.json", [incomplete]
+                )
+
     def test_shadow_scorecard_uses_only_evaluation_eligible_rows_and_primary_horizon(self):
         base = {
             "evaluation_role": "shadow_candidate",
@@ -114,6 +201,8 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             "entry_mode": "immediate_close",
             "generated_at": "2026-08-20T15:10:00+08:00",
             "reason_snapshot": {"best_buy_point": {"type": "三买"}},
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
         }
         first = dict(base, shadow_evaluation_id="shadow:first",
                      report_date="2026-08-20", code="300308",
@@ -122,6 +211,15 @@ class ShadowEvaluationContractTests(unittest.TestCase):
                        report_date="2026-08-20", code="300001",
                        name="特锐德", reference_close=100.0,
                        evaluation_eligible=False, cohort_eligible=True)
+        immature = dict(
+            base,
+            shadow_evaluation_id="shadow:immature",
+            report_date="2026-09-01",
+            reference_date="2026-09-01",
+            code="600000",
+            name="浦发银行",
+            reference_close=10.0,
+        )
         dates = [
             "2026-08-20", "2026-08-21", "2026-08-24",
             "2026-08-25", "2026-08-26", "2026-08-27",
@@ -138,7 +236,7 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         }
 
         cards = build_shadow_scorecards(
-            [first, ignored],
+            [first, ignored, immature],
             {"300308": kline, "300001": kline},
             trading_calendar=dates,
         )

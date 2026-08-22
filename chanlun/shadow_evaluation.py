@@ -19,7 +19,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
 from statistics import mean, median
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 try:  # NumPy is present in the research runtime but keep this module optional.
     import numpy as np
@@ -370,15 +370,8 @@ def _valid_stock_code(value: Any) -> bool:
     return len(code) == 6 and code.isdigit()
 
 
-def _latest_positive_close(candidate: Mapping[str, Any]) -> Optional[float]:
-    explicit = candidate.get("reference_close")
-    values = candidate.get("closes")
-    raw = explicit
-    if raw is None:
-        try:
-            raw = values[-1] if values is not None and len(values) else None
-        except (IndexError, TypeError):
-            raw = None
+def _positive_close(value: Any) -> Optional[float]:
+    raw = value
     if raw is None or isinstance(raw, bool):
         return None
     try:
@@ -386,6 +379,47 @@ def _latest_positive_close(candidate: Mapping[str, Any]) -> Optional[float]:
     except (TypeError, ValueError):
         return None
     return close if math.isfinite(close) and close > 0 else None
+
+
+def _reference_close_proof(
+    candidate: Mapping[str, Any],
+    report_date: str,
+) -> Tuple[Optional[float], str, bool, bool]:
+    """Resolve a close together with evidence that it is the final signal bar."""
+
+    dates = candidate.get("dates")
+    closes = candidate.get("closes")
+    finals = candidate.get("is_final")
+    if (
+        isinstance(dates, list)
+        and isinstance(closes, list)
+        and isinstance(finals, list)
+    ):
+        if len(dates) == len(closes) == len(finals):
+            normalized_dates = [
+                str(value or "").split(" ", 1)[0] for value in dates
+            ]
+            matches = [
+                index for index, value in enumerate(normalized_dates)
+                if value == report_date
+            ]
+            if len(matches) == 1:
+                index = matches[0]
+                close = _positive_close(closes[index])
+                is_final = finals[index] is True
+                return close, report_date, is_final, bool(
+                    close is not None and is_final
+                )
+
+    explicit_close = _positive_close(candidate.get("reference_close"))
+    explicit_date = str(candidate.get("reference_date") or "").split(" ", 1)[0]
+    explicit_final = candidate.get("reference_is_final") is True
+    proven = bool(
+        explicit_close is not None
+        and explicit_date == report_date
+        and explicit_final
+    )
+    return explicit_close, explicit_date, explicit_final, proven
 
 
 def _shadow_reason_snapshot(candidate: Mapping[str, Any]) -> Dict[str, Any]:
@@ -480,10 +514,15 @@ def build_shadow_evaluation_entries(
             if shadow_id in seen_ids:
                 continue
             seen_ids.add(shadow_id)
-            reference_close = _latest_positive_close(candidate)
+            (
+                reference_close,
+                reference_date,
+                reference_is_final,
+                reference_proven,
+            ) = _reference_close_proof(candidate, resolved_date)
             evaluation_eligible = bool(
                 valid_contract
-                and reference_close is not None
+                and reference_proven
                 and candidate.get("evaluation_eligible") is not False
             )
             entries.append({
@@ -506,6 +545,8 @@ def build_shadow_evaluation_entries(
                 "intended_horizon": horizon,
                 "entry_mode": entry_mode,
                 "reference_close": reference_close,
+                "reference_date": reference_date,
+                "reference_is_final": reference_is_final,
                 "reason_snapshot": _shadow_reason_snapshot(candidate),
                 "research_tier": experiment.get("research_tier"),
             })
@@ -529,6 +570,47 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
         or entry.get("publication_effect") is not False
     ):
         raise ValueError("invalid shadow isolation fields{}".format(location))
+    if not isinstance(entry.get("evaluation_eligible"), bool):
+        raise ValueError("invalid shadow eligibility field{}".format(location))
+    if entry["evaluation_eligible"] is True:
+        required_strings = (
+            "experiment_id",
+            "version",
+            "source_pool",
+            "upstream_pool",
+        )
+        if any(
+            not isinstance(entry.get(key), str)
+            or not entry.get(key).strip()
+            for key in required_strings
+        ):
+            raise ValueError(
+                "incomplete eligible shadow contract{}".format(location)
+            )
+        horizon = entry.get("intended_horizon")
+        if (
+            isinstance(horizon, bool)
+            or not isinstance(horizon, int)
+            or horizon not in ALLOWED_HORIZONS
+            or entry.get("entry_mode") != IMMEDIATE_CLOSE
+        ):
+            raise ValueError(
+                "invalid eligible shadow evaluation rule{}".format(location)
+            )
+        reference_close = _positive_close(entry.get("reference_close"))
+        report_date = str(entry.get("report_date") or "").strip()
+        if (
+            reference_close is None
+            or str(entry.get("reference_date") or "").strip() != report_date
+            or entry.get("reference_is_final") is not True
+        ):
+            raise ValueError(
+                "unproven eligible shadow reference close{}".format(location)
+            )
+        if not isinstance(entry.get("reason_snapshot"), dict):
+            raise ValueError(
+                "invalid eligible shadow reason snapshot{}".format(location)
+            )
     return json_native_projection(entry)
 
 
@@ -768,8 +850,12 @@ def build_shadow_scorecards(
             for _entry, outcome in evaluated
             if outcome["mae"].get(horizon_key) is not None
         ]
+        mature_rows = [
+            entry for entry, outcome in evaluated
+            if outcome["returns"].get(horizon_key) is not None
+        ]
         active_date_values = {
-            str(row.get("report_date") or "") for row in rows
+            str(row.get("report_date") or "") for row in mature_rows
             if row.get("report_date")
         }
         active_month_values = {

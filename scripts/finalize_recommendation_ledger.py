@@ -54,14 +54,24 @@ def finalize_for_date(
             "shadow_appended_entries": 0,
         })
     else:
-        shadow_appended = finalize_staged_shadow_evaluation_entries(
-            shadow_staged_path,
-            shadow_ledger_path or DEFAULT_SHADOW_LEDGER_PATH,
-        )
-        result.update({
-            "shadow_status": "finalized",
-            "shadow_appended_entries": shadow_appended,
-        })
+        try:
+            shadow_appended = finalize_staged_shadow_evaluation_entries(
+                shadow_staged_path,
+                shadow_ledger_path or DEFAULT_SHADOW_LEDGER_PATH,
+            )
+        except (OSError, TypeError, ValueError) as exc:
+            result.update({
+                "shadow_status": "unavailable",
+                "shadow_appended_entries": 0,
+                "shadow_error": "{}: {}".format(
+                    type(exc).__name__, str(exc)[:160]
+                ),
+            })
+        else:
+            result.update({
+                "shadow_status": "finalized",
+                "shadow_appended_entries": shadow_appended,
+            })
     return result
 
 
