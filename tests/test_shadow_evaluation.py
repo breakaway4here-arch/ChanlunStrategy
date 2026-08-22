@@ -1,5 +1,6 @@
 import json
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -173,6 +174,72 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             )
             self.assertEqual(append_shadow_evaluation_entries(ledger, [entry]), 0)
             self.assertEqual(load_shadow_evaluation_entries(ledger), [entry])
+
+    def test_same_day_shadow_pending_rejects_conflicting_double_trigger(self):
+        base = {
+            "schema_version": "1",
+            "shadow_evaluation_id": "shadow:one",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "code": "300308",
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_close": 100.0,
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
+            "reference_adjustment": "qfq",
+            "reason_snapshot": {},
+        }
+        conflict = dict(base, reference_close=101.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending = Path(tmpdir) / "2026-08-20.json"
+            barrier = threading.Barrier(2)
+            outcomes = []
+
+            def stage(row):
+                barrier.wait()
+                try:
+                    stage_shadow_evaluation_entries(pending, [row])
+                    outcomes.append("ok")
+                except ValueError as exc:
+                    outcomes.append(str(exc))
+
+            first = threading.Thread(target=stage, args=(base,))
+            second = threading.Thread(target=stage, args=(conflict,))
+            first.start()
+            second.start()
+            first.join()
+            second.join()
+
+            self.assertEqual(outcomes.count("ok"), 1)
+            self.assertEqual(
+                sum("conflicting_shadow_pending_batch" in row for row in outcomes),
+                1,
+            )
+            staged = shadow_evaluation.load_staged_shadow_evaluation_entries(pending)
+            self.assertIn(staged, ([base], [conflict]))
+
+    def test_shadow_scorecard_skips_invalid_manual_rows_before_evaluation(self):
+        invalid = {
+            "shadow_evaluation_id": "shadow:manual",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "experiment_id": "manual",
+            "version": "v1",
+            "upstream_pool": "picks_pure",
+            "source_pool": "h4_t3_pool",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+        }
+        self.assertEqual(build_shadow_scorecards([invalid], {}), [])
 
     def test_eligible_shadow_persistence_rejects_incomplete_evaluation_contract(self):
         incomplete = {

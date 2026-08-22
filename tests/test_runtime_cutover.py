@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -106,9 +109,38 @@ class RuntimeCutoverTest(unittest.TestCase):
     def test_defaults_and_daily_runner_publish_new_strategy(self):
         self.assertEqual("sqlite", config.MARKET_HISTORY_CUTOVER_MODE)
         self.assertEqual("active", config.RECALL_STRATEGY_MODE)
+        self.assertEqual("shadow", config.STOCK_SELECTION_SHADOW_MODE)
+        self.assertEqual(
+            "shadow", config._resolve_stock_selection_shadow_mode("shadow")
+        )
+        self.assertEqual("off", config._resolve_stock_selection_shadow_mode("off"))
+        for invalid in ("active", "legacy", "", None):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    config._resolve_stock_selection_shadow_mode(invalid)
         script = Path("daily_run.sh").read_text(encoding="utf-8")
         self.assertIn("CHANLUN_MARKET_DATA_MODE:=sqlite", script)
         self.assertIn("CHANLUN_RECALL_STRATEGY_MODE:=active", script)
+        self.assertIn(
+            "CHANLUN_STOCK_SELECTION_SHADOW_MODE:=shadow", script
+        )
+        self.assertIn("export CHANLUN_STOCK_SELECTION_SHADOW_MODE", script)
+
+    def test_active_shadow_selection_mode_is_rejected_during_config_import(self):
+        environment = dict(os.environ)
+        environment["CHANLUN_STOCK_SELECTION_SHADOW_MODE"] = "active"
+        completed = subprocess.run(
+            [sys.executable, "-c", "import config"],
+            cwd=str(Path.cwd()),
+            env=environment,
+            text=True,
+            capture_output=True,
+        )
+        self.assertNotEqual(completed.returncode, 0)
+        self.assertIn(
+            "CHANLUN_STOCK_SELECTION_SHADOW_MODE must be off or shadow",
+            completed.stderr,
+        )
 
     def test_active_universe_quality_uses_the_actual_published_pool(self):
         quality = {

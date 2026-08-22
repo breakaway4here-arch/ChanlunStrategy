@@ -15,6 +15,8 @@ import hashlib
 import json
 import math
 import os
+import tempfile
+import threading
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
@@ -39,6 +41,10 @@ DEFAULT_SHADOW_PENDING_DIR = os.path.join(
 )
 SHADOW_LEDGER_SCHEMA_VERSION = "1"
 EXPECTED_REFERENCE_ADJUSTMENT = "qfq"
+SHADOW_STARTED_AT = "2026-08-22"
+
+
+_SHADOW_PENDING_THREAD_LOCK = threading.Lock()
 
 
 # The registry is deliberately process-local.  It is a definition registry,
@@ -168,9 +174,19 @@ def _normalise_spec(spec: Any) -> Dict[str, Any]:
         "entry_mode": entry_mode,
         "builder": builder,
     }
-    for key in ("display_name", "description", "research_tier"):
+    for key in (
+        "display_name",
+        "description",
+        "research_tier",
+        "reference_adjustment",
+    ):
         if key in raw:
             normalised[key] = copy.deepcopy(raw[key])
+    if (
+        "reference_adjustment" in normalised
+        and normalised["reference_adjustment"] != EXPECTED_REFERENCE_ADJUSTMENT
+    ):
+        raise ValueError("reference_adjustment must be qfq")
     return normalised
 
 
@@ -760,17 +776,46 @@ def stage_shadow_evaluation_entries(
     materialized = [_validate_shadow_entry(entry) for entry in entries or []]
     parent = os.path.dirname(os.path.abspath(resolved))
     os.makedirs(parent, exist_ok=True)
-    temporary = "{}.tmp.{}".format(resolved, os.getpid())
-    with open(temporary, "w", encoding="utf-8") as handle:
-        json.dump(
-            materialized,
-            handle,
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        handle.write("\n")
-    os.replace(temporary, resolved)
+    incoming = json.dumps(
+        materialized,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    lock_path = "{}.lock".format(resolved)
+    temporary = None
+    with _SHADOW_PENDING_THREAD_LOCK:
+        with open(lock_path, "a+", encoding="utf-8") as lock_handle:
+            fcntl.flock(lock_handle.fileno(), fcntl.LOCK_EX)
+            if os.path.exists(resolved):
+                existing = load_staged_shadow_evaluation_entries(resolved)
+                existing_canonical = json.dumps(
+                    existing,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                )
+                if existing_canonical != incoming:
+                    raise ValueError("conflicting_shadow_pending_batch")
+                return len(materialized)
+            try:
+                with tempfile.NamedTemporaryFile(
+                    mode="w",
+                    encoding="utf-8",
+                    dir=parent,
+                    prefix="{}.tmp.".format(os.path.basename(resolved)),
+                    delete=False,
+                ) as handle:
+                    temporary = handle.name
+                    handle.write(incoming)
+                    handle.write("\n")
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, resolved)
+                temporary = None
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
     return len(materialized)
 
 
@@ -841,7 +886,9 @@ def build_shadow_scorecards(
 
     grouped: Dict[Any, List[Dict[str, Any]]] = defaultdict(list)
     for entry in entries or []:
-        if not isinstance(entry, dict):
+        try:
+            entry = _validate_shadow_entry(entry)
+        except (TypeError, ValueError):
             continue
         if (
             entry.get("evaluation_role") != "shadow_candidate"
@@ -974,6 +1021,389 @@ def build_shadow_scorecards(
     return cards
 
 
+_FORMAL_GUARD_FIELDS = (
+    "date",
+    "picks_pure",
+    "picks_fusion",
+    "startup_watchlist",
+    "observation_watchlist",
+    "next_day_boom",
+    "luojie_pool",
+    "h4_t3_pool",
+    "recommendation_ledger",
+    "strategy_scorecards",
+)
+
+
+def _build_shadow_guard_snapshot(report_data: Any) -> Dict[str, Any]:
+    """Project the complete formal boundary consumed before report output."""
+
+    if not isinstance(report_data, Mapping):
+        raise ValueError("formal report data must be a mapping")
+    snapshot = {
+        key: report_data.get(key)
+        for key in _FORMAL_GUARD_FIELDS
+    }
+    diagnostics = report_data.get("diagnostics")
+    data_quality = report_data.get("data_quality")
+    snapshot["diagnostics"] = {
+        "candidate_funnel": (
+            diagnostics.get("candidate_funnel")
+            if isinstance(diagnostics, Mapping) else None
+        )
+    }
+    snapshot["data_quality"] = {
+        "runtime_policy": (
+            data_quality.get("runtime_policy")
+            if isinstance(data_quality, Mapping) else None
+        )
+    }
+    return json_native_projection(snapshot)
+
+
+def _resolve_report_close_proof(
+    candidate: Mapping[str, Any], report_date: str
+) -> Tuple[Optional[float], bool]:
+    dates = candidate.get("dates")
+    closes = candidate.get("closes")
+    if not isinstance(dates, list) or not isinstance(closes, list):
+        return None, False
+    normalized_dates = [str(value or "").split(" ", 1)[0] for value in dates]
+    matches = [
+        index for index, value in enumerate(normalized_dates)
+        if value == report_date
+    ]
+    if len(dates) != len(closes) or len(matches) != 1:
+        return None, False
+    index = matches[0]
+    close = _positive_close(closes[index])
+    finals = candidate.get("is_final")
+    if isinstance(finals, list) and len(finals) == len(dates):
+        return close, bool(close is not None and finals[index] is True)
+    status = candidate.get("data_status")
+    proven = bool(
+        isinstance(status, Mapping)
+        and normalized_dates[-1] == report_date
+        and str(status.get("latest_date") or "").split(" ", 1)[0]
+        == report_date
+        and status.get("is_final") is True
+        and str(status.get("daily") or "") == "verified"
+    )
+    return close, bool(close is not None and proven)
+
+
+def _build_h4_shadow_result(
+    production_snapshot: Mapping[str, Any], report_date: str
+) -> Dict[str, Any]:
+    """Copy the already-built H4 pool; never rerun or rerank its strategy."""
+
+    from .h4_t3_pool import STRATEGY_VERSION
+
+    pool = production_snapshot.get("h4_t3_pool")
+    if not isinstance(pool, Mapping):
+        raise ValueError("h4_t3_pool is unavailable")
+    if str(pool.get("strategy_version") or "") != STRATEGY_VERSION:
+        raise ValueError("h4_t3_pool strategy version mismatch")
+    candidates = pool.get("candidates")
+    if not isinstance(candidates, list):
+        raise ValueError("h4_t3_pool candidates are unavailable")
+    result = []
+    for raw_candidate in candidates:
+        if not isinstance(raw_candidate, Mapping):
+            raise ValueError("h4_t3_pool candidate is invalid")
+        candidate = json_native_projection(raw_candidate)
+        reference_close, reference_is_final = _resolve_report_close_proof(
+            candidate, report_date
+        )
+        candidate["reference_close"] = reference_close
+        candidate["reference_date"] = report_date if reference_close else ""
+        candidate["reference_is_final"] = reference_is_final
+        candidate["reference_adjustment"] = EXPECTED_REFERENCE_ADJUSTMENT
+        result.append(candidate)
+    return {"candidates": result}
+
+
+def _unavailable_daily_payload(
+    error: BaseException,
+    *,
+    before_sha: str = "",
+    after_sha: str = "",
+    guard_unchanged: bool = False,
+) -> Dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "mode": SHADOW_MODE,
+        "affects_production": False,
+        "status": "unavailable",
+        "started_at": SHADOW_STARTED_AT,
+        "production_guard": {
+            "unchanged": bool(guard_unchanged),
+            "before_sha256": before_sha,
+            "after_sha256": after_sha,
+        },
+        "production_reference": {
+            "pool": "picks_fusion",
+            "today_count": 0,
+            "intended_horizon": None,
+            "comparison_eligible": False,
+            "reason": "影子异常不影响正式主推",
+        },
+        "experiments": [],
+        "scorecards": [],
+        "today_entries": [],
+        "error": str(error) or error.__class__.__name__,
+        "error_type": error.__class__.__name__,
+    }
+
+
+def _merge_shadow_history(
+    historical: Iterable[Any], today_entries: Iterable[Any]
+) -> List[Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    canonical_by_id: Dict[str, str] = {}
+    for raw in list(historical or []) + list(today_entries or []):
+        entry = _validate_shadow_entry(raw)
+        shadow_id = entry["shadow_evaluation_id"]
+        canonical = json.dumps(
+            entry,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if (
+            shadow_id in canonical_by_id
+            and canonical_by_id[shadow_id] != canonical
+        ):
+            raise ValueError(
+                "conflicting_shadow_evaluation_id: {}".format(shadow_id)
+            )
+        canonical_by_id[shadow_id] = canonical
+        merged[shadow_id] = entry
+    return [merged[key] for key in sorted(merged)]
+
+
+def _attach_shadow_scorecards(
+    experiments: List[Dict[str, Any]],
+    scorecards: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    by_identity = {
+        (
+            card.get("experiment_id"),
+            card.get("version"),
+            card.get("source_pool"),
+            card.get("intended_horizon"),
+        ): card
+        for card in scorecards
+        if isinstance(card, Mapping)
+    }
+    rows = []
+    empty_metrics = {
+        "sample_size": 0,
+        "excursion_sample_size": 0,
+        "active_dates": 0,
+        "active_months": 0,
+        "mean_close_return": None,
+        "median_close_return": None,
+        "up_rate": None,
+        "hit_rate_ge_5": None,
+        "mean_mfe": None,
+        "mean_mae": None,
+        "worst_close_return": None,
+        "comparison_status": "collecting",
+        "promotion_eligible": False,
+        "hard_gate_reasons": [
+            "mature_samples_below_100",
+            "active_dates_below_20",
+            "active_months_below_2",
+            "shadow_mode_never_auto_promotes",
+        ],
+        "representative_samples": [],
+    }
+    for experiment in experiments:
+        row = copy.deepcopy(experiment)
+        # The public daily contract has one canonical candidate location.
+        # Runner aliases are useful internally but would triple report size.
+        row.pop("result", None)
+        row.pop("output", None)
+        identity = (
+            row.get("experiment_id"),
+            row.get("version"),
+            row.get("source_pool"),
+            row.get("intended_horizon"),
+        )
+        card = by_identity.get(identity)
+        metrics = card if card is not None else empty_metrics
+        for key, value in metrics.items():
+            if key not in {
+                "experiment_id",
+                "display_name",
+                "strategy_version",
+                "version",
+                "upstream_pool",
+                "source_pool",
+                "intended_horizon",
+                "entry_mode",
+            }:
+                row[key] = copy.deepcopy(value)
+        rows.append(row)
+    return rows
+
+
+def build_daily_shadow_evaluations(
+    report_data: Mapping[str, Any],
+    *,
+    mode: str,
+    generated_at: Any,
+    publication_eligible: bool,
+    ledger_path: Any = None,
+    pending_dir: Any = None,
+    db_path: Any = None,
+    review_context_loader: Any = None,
+) -> Dict[str, Any]:
+    """Build one fail-closed daily shadow payload without mutating production."""
+
+    if mode == "off":
+        return {
+            "schema_version": 1,
+            "mode": "off",
+            "affects_production": False,
+            "status": "disabled",
+            "started_at": SHADOW_STARTED_AT,
+            "production_guard": {"unchanged": True},
+            "experiments": [],
+            "scorecards": [],
+            "today_entries": [],
+        }
+    if mode != SHADOW_MODE:
+        raise ValueError("stock selection shadow mode must be off or shadow")
+
+    before_sha = ""
+    try:
+        formal_snapshot = _build_shadow_guard_snapshot(report_data)
+        before_sha = production_digest(formal_snapshot)
+        report_date = str(formal_snapshot.get("date") or "").strip()
+        if not report_date:
+            raise ValueError("formal report date is required")
+        from .h4_t3_pool import STRATEGY_VERSION
+
+        experiment_spec = {
+            "experiment_id": "h4-t3-close-review-v1",
+            "display_name": "H4 T+3 收盘价影子回看",
+            "version": STRATEGY_VERSION,
+            "upstream_pool": "picks_pure",
+            "source_pool": "h4_t3_pool",
+            "intended_horizon": 3,
+            "entry_mode": IMMEDIATE_CLOSE,
+            "reference_adjustment": EXPECTED_REFERENCE_ADJUSTMENT,
+            "research_tier": "oot_shadow",
+            "builder": lambda snapshot: _build_h4_shadow_result(
+                snapshot, report_date
+            ),
+        }
+        payload = run_shadow_evaluations(
+            copy.deepcopy(formal_snapshot), [experiment_spec]
+        )
+        if not isinstance(payload, dict):
+            raise ValueError("shadow runner returned an invalid payload")
+        runner_guard = payload.get("production_guard")
+        if (
+            not isinstance(runner_guard, Mapping)
+            or runner_guard.get("unchanged") is not True
+            or payload.get("status") == "production_guard_failed"
+        ):
+            raise RuntimeError("production_guard_failed")
+        experiments = payload.get("experiments")
+        if not isinstance(experiments, list) or any(
+            not isinstance(row, Mapping) or row.get("status") != "available"
+            for row in experiments
+        ):
+            raise RuntimeError("shadow_builder_unavailable")
+
+        today_entries = build_shadow_evaluation_entries(
+            report_date, generated_at, experiments
+        )
+        historical_entries = load_shadow_evaluation_entries(
+            ledger_path or DEFAULT_SHADOW_LEDGER_PATH
+        )
+        evaluation_entries = _merge_shadow_history(
+            historical_entries, today_entries
+        )
+        if review_context_loader is None:
+            from .strategy_review import load_review_market_context_from_store
+
+            review_context_loader = load_review_market_context_from_store
+        review_klines, review_calendar, review_benchmark, review_diagnostics = (
+            review_context_loader(
+                db_path,
+                evaluation_entries,
+                as_of=report_date,
+            )
+        )
+        scorecards = build_shadow_scorecards(
+            evaluation_entries,
+            review_klines,
+            trading_calendar=review_calendar,
+            benchmark_kline=review_benchmark,
+            expected_adjustment=EXPECTED_REFERENCE_ADJUSTMENT,
+        )
+        after_sha = production_digest(_build_shadow_guard_snapshot(report_data))
+        if before_sha != after_sha:
+            raise RuntimeError("production_guard_failed")
+
+        payload["started_at"] = SHADOW_STARTED_AT
+        payload["production_guard"] = {
+            "unchanged": True,
+            "before_sha256": before_sha,
+            "after_sha256": after_sha,
+        }
+        production_reference = payload.setdefault("production_reference", {})
+        production_reference.update({
+            "pool": "picks_fusion",
+            "today_count": len(formal_snapshot.get("picks_fusion") or []),
+            "intended_horizon": None,
+            "comparison_eligible": False,
+            "reason": "现网主推未声明统一主周期，只作数量与隔离参考",
+        })
+        payload["experiments"] = _attach_shadow_scorecards(
+            experiments, scorecards
+        )
+        payload["scorecards"] = scorecards
+        payload["today_entries"] = today_entries
+        payload["review_diagnostics"] = review_diagnostics
+        payload["pending"] = {
+            "status": "withheld",
+            "reason": "unofficial_or_preview",
+            "entries": 0,
+        }
+        if publication_eligible:
+            staged_path = shadow_pending_ledger_path(
+                report_date, pending_dir=pending_dir
+            )
+            staged_count = stage_shadow_evaluation_entries(
+                staged_path, today_entries
+            )
+            payload["pending"] = {
+                "status": "staged",
+                "batch": os.path.basename(staged_path),
+                "entries": staged_count,
+                "finalized": False,
+            }
+        return payload
+    except Exception as exc:
+        try:
+            after_sha = production_digest(
+                _build_shadow_guard_snapshot(report_data)
+            )
+        except Exception:
+            after_sha = ""
+        return _unavailable_daily_payload(
+            exc,
+            before_sha=before_sha,
+            after_sha=after_sha,
+            guard_unchanged=bool(before_sha and before_sha == after_sha),
+        )
+
+
 __all__ = [
     "DEFAULT_SHADOW_LEDGER_PATH",
     "DEFAULT_SHADOW_PENDING_DIR",
@@ -981,6 +1411,7 @@ __all__ = [
     "append_shadow_evaluation_entries",
     "build_shadow_evaluation_entries",
     "build_shadow_scorecards",
+    "build_daily_shadow_evaluations",
     "clear_experiments",
     "finalize_staged_shadow_evaluation_entries",
     "get_experiment",

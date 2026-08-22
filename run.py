@@ -49,6 +49,7 @@ from config import (
     FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
     FULL_A_MIN_ELIGIBLE_COUNT,
     MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
+    STOCK_SELECTION_SHADOW_MODE,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
@@ -118,6 +119,7 @@ from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.h4_t3_pool import build_h4_t3_pool
+from chanlun.shadow_evaluation import build_daily_shadow_evaluations
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.industry_metadata import hydrate_industry_metadata
@@ -1594,6 +1596,7 @@ def main(debug=False, preview=False, generated_at=None):
     data_quality["runtime_policy"] = {
         "market_history_cutover_mode": MARKET_HISTORY_CUTOVER_MODE,
         "recall_strategy_mode": RECALL_STRATEGY_MODE,
+        "stock_selection_shadow_mode": STOCK_SELECTION_SHADOW_MODE,
         "decision_semantics": "v2_missing_position_is_observe",
     }
     if not debug and RECALL_STRATEGY_MODE != "legacy":
@@ -2891,6 +2894,18 @@ def main(debug=False, preview=False, generated_at=None):
         "luojie_pool": luojie_pool,
         "h4_t3_pool": h4_t3_pool,
     }
+
+    report_data["shadow_evaluations"] = build_daily_shadow_evaluations(
+        report_data,
+        mode=STOCK_SELECTION_SHADOW_MODE,
+        generated_at=time_metadata.get("generated_at"),
+        publication_eligible=bool(
+            not debug
+            and not preview
+            and data_quality.get("is_official") is True
+        ),
+        db_path=MARKET_HISTORY_DB_PATH,
+    )
 
     # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
     generate_report(report_data, output_dir)

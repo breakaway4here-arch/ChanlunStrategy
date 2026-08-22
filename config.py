@@ -165,6 +165,21 @@ if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
     raise ValueError(
         "CHANLUN_RECALL_STRATEGY_MODE must be legacy, shadow or active"
     )
+
+
+def _resolve_stock_selection_shadow_mode(value):
+    if not isinstance(value, str) or value.strip().lower() not in {
+        "off", "shadow"
+    }:
+        raise ValueError(
+            "CHANLUN_STOCK_SELECTION_SHADOW_MODE must be off or shadow"
+        )
+    return value.strip().lower()
+
+
+STOCK_SELECTION_SHADOW_MODE = _resolve_stock_selection_shadow_mode(
+    os.environ.get("CHANLUN_STOCK_SELECTION_SHADOW_MODE", "shadow")
+)
 ENABLE_FULL_A_UNIVERSE = True
 FULL_A_LOW_QUOTA = 350
 FULL_A_TREND_QUOTA = 350
