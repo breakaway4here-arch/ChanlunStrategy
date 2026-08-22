@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
 from typing import Any, Dict, Iterable, List, Optional
 
 try:  # NumPy is present in the research runtime but keep this module optional.
@@ -35,11 +36,13 @@ _EXPERIMENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
 def json_native_projection(value: Any) -> Any:
     """Project supported research values to strict native JSON values.
 
-    NumPy arrays/scalars are the one explicit compatibility exception because
-    real ``picks_fusion`` rows carry them.  They are converted through
-    ``tolist``/``item`` and then validated recursively.  Everything else is
-    accepted only when it is already a native JSON container or finite scalar;
-    arbitrary values are rejected rather than coerced.
+    NumPy arrays/scalars and standard-library dataclass instances are the
+    explicit compatibility exceptions because real ``picks_fusion`` rows carry
+    them.  NumPy values are converted through ``tolist``/``item``; dataclasses
+    are traversed by their declared fields.  Tuples are represented as JSON
+    lists.  All projected values are then validated recursively.  Everything
+    else is accepted only when it is already a native JSON container or finite
+    scalar; arbitrary values are rejected rather than coerced.
     """
 
     if np is not None:
@@ -54,6 +57,20 @@ def json_native_projection(value: Any) -> Any:
             except Exception as exc:
                 raise ValueError("production output contains an invalid NumPy scalar") from exc
 
+    # ``dataclasses.asdict`` performs a recursive deepcopy and can therefore
+    # execute user-defined ``__deepcopy__`` hooks.  Walk only declared fields
+    # so the projection remains explicit and fail-closed.
+    if is_dataclass(value):
+        if isinstance(value, type):
+            raise ValueError("production output contains a non-JSON-safe value")
+        try:
+            return {
+                field.name: json_native_projection(getattr(value, field.name))
+                for field in fields(value)
+            }
+        except Exception as exc:
+            raise ValueError("production output contains an invalid dataclass") from exc
+
     if value is None or type(value) in (str, bool, int):
         return value
     if type(value) is float:
@@ -61,6 +78,8 @@ def json_native_projection(value: Any) -> Any:
             raise ValueError("production output contains a non-finite float")
         return value
     if type(value) is list:
+        return [json_native_projection(item) for item in value]
+    if type(value) is tuple:
         return [json_native_projection(item) for item in value]
     if type(value) is dict:
         normalised = {}

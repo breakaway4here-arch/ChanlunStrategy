@@ -3,6 +3,7 @@ import unittest
 import numpy as np
 
 import chanlun.shadow_evaluation as shadow_evaluation
+from chanlun.engine_types import Fractal, Segment, Stroke
 
 from chanlun.shadow_evaluation import (
     clear_experiments,
@@ -300,7 +301,6 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         unsupported_values = (
             {"value": object()},
             {"value": b"bytes"},
-            {"value": ("tuple",)},
             {"value": {"set-item"}},
             {"value": float("nan")},
             {"value": float("inf")},
@@ -385,6 +385,72 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertEqual(rows["bad-metadata-v1"]["status"], "unavailable")
         self.assertNotIn("metadata", rows["bad-metadata-v1"])
         self.assertEqual(rows["healthy-v1"]["status"], "available")
+
+    def test_engine_dataclasses_and_tuples_are_projected_without_mutating_official_rows(self):
+        fractal = Fractal(type="bottom", index=1, price=10.0, klines=[1, 2, 3])
+        stroke = Stroke(
+            start_idx=1,
+            end_idx=3,
+            start_price=10.0,
+            end_price=11.0,
+            direction="up",
+            start_fractal=fractal,
+            end_fractal=None,
+        )
+        segment = Segment(
+            strokes=[stroke],
+            start_idx=1,
+            end_idx=3,
+            direction="up",
+            high=11.0,
+            low=9.5,
+        )
+        raw_pool = {
+            "picks_fusion": [
+                {
+                    "code": "600001",
+                    "fractals": [fractal],
+                    "strokes": (stroke,),
+                    "segments": [segment],
+                    "divergence": ("bottom", 0.4),
+                    "closes": np.array([10.0, 10.5]),
+                }
+            ]
+        }
+        captured = []
+
+        def builder(candidates):
+            captured.append(candidates)
+            candidates["picks_fusion"][0]["fractals"][0]["price"] = 99.0
+            candidates["picks_fusion"][0]["divergence"].append("shadow-only")
+            return {"count": 1}
+
+        register_experiment(
+            {
+                "experiment_id": "engine-types-v1",
+                "version": "v1",
+                "upstream_pool": "picks_fusion",
+                "source_pool": "picks_fusion",
+                "intended_horizon": 3,
+                "entry_mode": "immediate_close",
+                "builder": builder,
+            }
+        )
+
+        result = run_shadow_evaluations(raw_pool)
+
+        self.assertEqual(result["experiments"][0]["status"], "available")
+        projected_pick = captured[0]["picks_fusion"][0]
+        self.assertIsInstance(projected_pick["fractals"][0], dict)
+        self.assertIsInstance(projected_pick["strokes"], list)
+        self.assertIsInstance(projected_pick["strokes"][0], dict)
+        self.assertIsInstance(projected_pick["segments"][0], dict)
+        self.assertIsInstance(projected_pick["divergence"], list)
+        self.assertIsInstance(projected_pick["closes"], list)
+        self.assertEqual(fractal.price, 10.0)
+        self.assertEqual(fractal.klines, [1, 2, 3])
+        self.assertEqual(raw_pool["picks_fusion"][0]["divergence"], ("bottom", 0.4))
+        self.assertEqual(result["production_guard"]["unchanged"], True)
 
 
 if __name__ == "__main__":
