@@ -37,9 +37,17 @@ def _formal_report(candidate_count=7):
         "next_day_boom": {"candidates": [{"code": "000005"}]},
         "luojie_pool": {"candidates": [{"code": "000006"}]},
         "h4_t3_pool": {
+            "production_attested": True,
+            "mode": "production",
+            "status": "ok",
             "strategy_version": STRATEGY_VERSION,
             "candidates": h4_candidates,
         },
+        "decision_brief": {
+            "summary": "正式决策摘要",
+            "directions": [{"name": "人工智能", "risk": "拥挤"}],
+        },
+        "holding_risks": [{"code": "000001", "risk": "跌破保护位"}],
         "recommendation_ledger": [{"recommendation_id": "formal:one"}],
         "strategy_scorecards": [{"strategy_name": "formal"}],
         "diagnostics": {
@@ -189,6 +197,61 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertEqual(payload["status"], "unavailable")
         self.assertEqual(payload["experiments"], [])
         stage.assert_not_called()
+
+    def test_h4_shadow_requires_full_production_attestation_before_staging(self):
+        invalid_pools = []
+        for key, value in (
+            ("production_attested", None),
+            ("production_attested", False),
+            ("mode", "shadow"),
+            ("status", "unavailable"),
+        ):
+            report = _formal_report()
+            if value is None:
+                report["h4_t3_pool"].pop(key)
+            else:
+                report["h4_t3_pool"][key] = value
+            invalid_pools.append((key, value, report))
+
+        for key, value, report in invalid_pools:
+            with self.subTest(key=key, value=value), mock.patch.object(
+                shadow_evaluation, "stage_shadow_evaluation_entries"
+            ) as stage:
+                payload = shadow_evaluation.build_daily_shadow_evaluations(
+                    report,
+                    mode="shadow",
+                    generated_at="2026-08-22T15:10:00+08:00",
+                    publication_eligible=True,
+                    review_context_loader=_empty_review_context,
+                )
+            self.assertEqual(payload["status"], "unavailable")
+            self.assertEqual(payload["experiments"], [])
+            stage.assert_not_called()
+
+    def test_decision_and_holding_outputs_are_inside_formal_guard(self):
+        report = _formal_report()
+        original_guard = shadow_evaluation.production_digest(
+            shadow_evaluation._build_shadow_guard_snapshot(report)
+        )
+        report["decision_brief"]["summary"] = "被篡改的决策摘要"
+        self.assertNotEqual(
+            original_guard,
+            shadow_evaluation.production_digest(
+                shadow_evaluation._build_shadow_guard_snapshot(report)
+            ),
+        )
+
+        report = _formal_report()
+        original_guard = shadow_evaluation.production_digest(
+            shadow_evaluation._build_shadow_guard_snapshot(report)
+        )
+        report["holding_risks"][0]["risk"] = "被篡改的持仓风险"
+        self.assertNotEqual(
+            original_guard,
+            shadow_evaluation.production_digest(
+                shadow_evaluation._build_shadow_guard_snapshot(report)
+            ),
+        )
 
     def test_builder_receives_copy_and_projection_failure_is_unavailable(self):
         report = _formal_report()

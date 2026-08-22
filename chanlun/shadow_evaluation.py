@@ -1032,6 +1032,8 @@ _FORMAL_GUARD_FIELDS = (
     "h4_t3_pool",
     "recommendation_ledger",
     "strategy_scorecards",
+    "decision_brief",
+    "holding_risks",
 )
 
 
@@ -1102,6 +1104,12 @@ def _build_h4_shadow_result(
     pool = production_snapshot.get("h4_t3_pool")
     if not isinstance(pool, Mapping):
         raise ValueError("h4_t3_pool is unavailable")
+    if pool.get("production_attested") is not True:
+        raise ValueError("h4_t3_pool production attestation is missing")
+    if str(pool.get("mode") or "") != "production":
+        raise ValueError("h4_t3_pool is not in production mode")
+    if str(pool.get("status") or "") != "ok":
+        raise ValueError("h4_t3_pool production status is not ok")
     if str(pool.get("strategy_version") or "") != STRATEGY_VERSION:
         raise ValueError("h4_t3_pool strategy version mismatch")
     candidates = pool.get("candidates")
