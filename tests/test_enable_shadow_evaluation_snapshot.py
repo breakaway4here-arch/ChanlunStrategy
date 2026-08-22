@@ -63,6 +63,22 @@ def _file_sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def _publication_residue(root, journal=None):
+    residue = []
+    for path in Path(root).rglob("*"):
+        name = path.name
+        if (
+            name.startswith("shadow_snapshot_stage_")
+            or name.startswith(".chanlun-shadow-stage-")
+            or name.endswith(".shadow-next")
+            or name.endswith(".shadow-backup")
+            or name.endswith(".journal-next")
+            or (journal is not None and path == journal)
+        ):
+            residue.append(path)
+    return residue
+
+
 def _report_fixture():
     return {
         "date": REPORT_DATE,
@@ -420,7 +436,131 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
 
     def test_hard_exit_is_recovered_on_rerun_without_mixed_artifacts(self):
         expected_docs = Path(self.tmpdir) / "hard-exit-expected" / "docs"
-        case_docs = Path(self.tmpdir) / "hard-exit-case" / "docs"
+        expected_docs.parent.mkdir()
+        shutil.copytree(self.docs, expected_docs)
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=expected_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+        relative_targets = [
+            value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
+        ]
+        expected_hashes = {
+            relative: _file_sha(expected_docs / relative)
+            for relative in relative_targets
+        }
+        child_code = r"""
+import os
+import sys
+from pathlib import Path
+from scripts import enable_shadow_evaluation_snapshot as snapshot
+
+docs = Path(sys.argv[1]).resolve()
+exit_index = int(sys.argv[2])
+real_replace = snapshot.os.replace
+state = {"attempt": 0}
+
+def hard_exit_after_selected_publish(source, destination):
+    result = real_replace(source, destination)
+    source_path = Path(source)
+    destination_path = Path(destination)
+    if (
+        source_path.name.endswith(".shadow-next")
+        and docs in destination_path.parents
+    ):
+        current = state["attempt"]
+        state["attempt"] += 1
+        if current == exit_index:
+            os._exit(91)
+    return result
+
+snapshot.os.replace = hard_exit_after_selected_publish
+snapshot.enable_shadow_evaluation_snapshot(
+    docs_dir=docs,
+    report_date="2026-08-21",
+    started_at="2026-08-22",
+)
+"""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [
+            os.fspath(Path(__file__).resolve().parents[1]),
+            env.get("PYTHONPATH", ""),
+        ]))
+        for exit_index in range(len(relative_targets)):
+            with self.subTest(exit_index=exit_index):
+                case_docs = (
+                    Path(self.tmpdir)
+                    / "hard-exit-case-{}".format(exit_index)
+                    / "docs"
+                )
+                case_docs.parent.mkdir()
+                shutil.copytree(self.docs, case_docs)
+                crashed = subprocess.run(
+                    [
+                        sys.executable,
+                        "-c",
+                        child_code,
+                        os.fspath(case_docs),
+                        str(exit_index),
+                    ],
+                    cwd=os.fspath(Path(__file__).resolve().parents[1]),
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(crashed.returncode, 91, crashed.stderr)
+                journal = snapshot.transaction_journal_path(case_docs)
+                self.assertTrue(journal.is_file())
+                crashed_residue = _publication_residue(
+                    case_docs.parent, journal=journal
+                )
+                self.assertTrue(
+                    any(
+                        path.name.startswith(".chanlun-shadow-stage-")
+                        for path in crashed_residue
+                    )
+                )
+                self.assertTrue(
+                    any(
+                        path.name.endswith(".shadow-backup")
+                        for path in crashed_residue
+                    )
+                )
+                if exit_index < len(relative_targets) - 1:
+                    self.assertTrue(
+                        any(
+                            path.name.endswith(".shadow-next")
+                            for path in crashed_residue
+                        )
+                    )
+
+                snapshot.enable_shadow_evaluation_snapshot(
+                    docs_dir=case_docs,
+                    report_date=REPORT_DATE,
+                    started_at=STARTED_AT,
+                )
+
+                self.assertEqual(
+                    {
+                        relative: _file_sha(case_docs / relative)
+                        for relative in relative_targets
+                    },
+                    expected_hashes,
+                )
+                self.assertEqual(
+                    _publication_residue(
+                        case_docs.parent, journal=journal
+                    ),
+                    [],
+                )
+
+    def test_hard_exit_before_journal_is_cleaned_on_rerun(self):
+        expected_docs = Path(self.tmpdir) / "pre-journal-expected" / "docs"
+        case_docs = Path(self.tmpdir) / "pre-journal-case" / "docs"
         expected_docs.parent.mkdir()
         case_docs.parent.mkdir()
         shutil.copytree(self.docs, expected_docs)
@@ -446,23 +586,14 @@ from scripts import enable_shadow_evaluation_snapshot as snapshot
 
 docs = Path(sys.argv[1]).resolve()
 real_replace = snapshot.os.replace
-state = {"attempt": 0}
+journal = snapshot.transaction_journal_path(docs)
 
-def hard_exit_after_third_publish(source, destination):
-    result = real_replace(source, destination)
-    source_path = Path(source)
-    destination_path = Path(destination)
-    if (
-        source_path.name.endswith(".shadow-next")
-        and docs in destination_path.parents
-    ):
-        current = state["attempt"]
-        state["attempt"] += 1
-        if current == 2:
-            os._exit(91)
-    return result
+def hard_exit_before_journal(source, destination):
+    if Path(destination).resolve() == journal.resolve():
+        os._exit(92)
+    return real_replace(source, destination)
 
-snapshot.os.replace = hard_exit_after_third_publish
+snapshot.os.replace = hard_exit_before_journal
 snapshot.enable_shadow_evaluation_snapshot(
     docs_dir=docs,
     report_date="2026-08-21",
@@ -483,9 +614,57 @@ snapshot.enable_shadow_evaluation_snapshot(
             text=True,
             check=False,
         )
-        self.assertEqual(crashed.returncode, 91, crashed.stderr)
+        self.assertEqual(crashed.returncode, 92, crashed.stderr)
         journal = snapshot.transaction_journal_path(case_docs)
-        self.assertTrue(journal.is_file())
+        self.assertFalse(journal.exists())
+        crashed_residue = _publication_residue(case_docs.parent)
+        self.assertTrue(crashed_residue)
+        self.assertTrue(
+            any(
+                path.name.startswith(".chanlun-shadow-stage-")
+                for path in crashed_residue
+            )
+        )
+        self.assertTrue(
+            any(
+                path.name.endswith(".shadow-backup")
+                for path in crashed_residue
+            )
+        )
+        self.assertTrue(
+            any(
+                path.name.endswith(".shadow-next")
+                for path in crashed_residue
+            )
+        )
+        self.assertTrue(
+            any(
+                path.name.endswith(".journal-next")
+                for path in crashed_residue
+            )
+        )
+        legacy_owned_stage = (
+            case_docs.parent / "shadow_snapshot_stage_deadbeef"
+        )
+        legacy_owned_stage.mkdir()
+        shutil.copytree(self.docs, legacy_owned_stage / "docs")
+        decoy_file = case_docs / ".index.html-user-notes.shadow-backup"
+        decoy_file.write_text("preserve me", encoding="utf-8")
+        decoy_legacy_stage = (
+            case_docs.parent / "shadow_snapshot_stage_usernotes"
+        )
+        decoy_legacy_stage.mkdir()
+        (decoy_legacy_stage / "note.txt").write_text(
+            "preserve me", encoding="utf-8"
+        )
+        decoy_controlled_stage = (
+            case_docs.parent
+            / ".chanlun-shadow-stage-00000000000000000000000000000000"
+        )
+        decoy_controlled_stage.mkdir()
+        (decoy_controlled_stage / "note.txt").write_text(
+            "preserve me", encoding="utf-8"
+        )
 
         snapshot.enable_shadow_evaluation_snapshot(
             docs_dir=case_docs,
@@ -500,14 +679,112 @@ snapshot.enable_shadow_evaluation_snapshot(
             },
             expected_hashes,
         )
-        leftovers = [
-            path
-            for path in case_docs.parent.rglob("*")
-            if path.name.endswith(".shadow-next")
-            or path.name.endswith(".shadow-backup")
-            or path == journal
+        self.assertEqual(decoy_file.read_text(encoding="utf-8"), "preserve me")
+        self.assertFalse(legacy_owned_stage.exists())
+        self.assertTrue(decoy_legacy_stage.is_dir())
+        self.assertTrue(decoy_controlled_stage.is_dir())
+        residue = _publication_residue(case_docs.parent, journal=journal)
+        preserved = {
+            decoy_file,
+            decoy_legacy_stage,
+            decoy_controlled_stage,
+        }
+        self.assertEqual(
+            [
+                path
+                for path in residue
+                if path not in preserved
+                and not any(parent in path.parents for parent in preserved)
+            ],
+            [],
+        )
+
+    def test_hard_exit_during_second_journal_write_is_recovered(self):
+        expected_docs = Path(self.tmpdir) / "journal-two-expected" / "docs"
+        case_docs = Path(self.tmpdir) / "journal-two-case" / "docs"
+        expected_docs.parent.mkdir()
+        case_docs.parent.mkdir()
+        shutil.copytree(self.docs, expected_docs)
+        shutil.copytree(self.docs, case_docs)
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=expected_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+        relative_targets = [
+            value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
         ]
-        self.assertEqual(leftovers, [])
+        expected_hashes = {
+            relative: _file_sha(expected_docs / relative)
+            for relative in relative_targets
+        }
+        child_code = r"""
+import os
+import sys
+from pathlib import Path
+from scripts import enable_shadow_evaluation_snapshot as snapshot
+
+docs = Path(sys.argv[1]).resolve()
+journal = snapshot.transaction_journal_path(docs)
+real_replace = snapshot.os.replace
+state = {"journal_attempt": 0}
+
+def hard_exit_during_second_journal_write(source, destination):
+    if Path(destination).resolve() == journal.resolve():
+        current = state["journal_attempt"]
+        state["journal_attempt"] += 1
+        if current == 1:
+            os._exit(93)
+    return real_replace(source, destination)
+
+snapshot.os.replace = hard_exit_during_second_journal_write
+snapshot.enable_shadow_evaluation_snapshot(
+    docs_dir=docs,
+    report_date="2026-08-21",
+    started_at="2026-08-22",
+)
+"""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [
+            os.fspath(Path(__file__).resolve().parents[1]),
+            env.get("PYTHONPATH", ""),
+        ]))
+        crashed = subprocess.run(
+            [sys.executable, "-c", child_code, os.fspath(case_docs)],
+            cwd=os.fspath(Path(__file__).resolve().parents[1]),
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(crashed.returncode, 93, crashed.stderr)
+        journal = snapshot.transaction_journal_path(case_docs)
+        self.assertTrue(journal.is_file())
+        crashed_residue = _publication_residue(
+            case_docs.parent, journal=journal
+        )
+        self.assertTrue(
+            any(path.name.endswith(".journal-next") for path in crashed_residue)
+        )
+
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=case_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+
+        self.assertEqual(
+            {
+                relative: _file_sha(case_docs / relative)
+                for relative in relative_targets
+            },
+            expected_hashes,
+        )
+        self.assertEqual(
+            _publication_residue(case_docs.parent, journal=journal), []
+        )
 
     def test_concurrent_public_drift_is_not_overwritten(self):
         case_docs = Path(self.tmpdir) / "concurrent-drift" / "docs"
