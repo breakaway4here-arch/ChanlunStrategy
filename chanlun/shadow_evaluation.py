@@ -12,6 +12,7 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import math
 from collections.abc import Mapping
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -26,32 +27,31 @@ ALLOWED_HORIZONS = frozenset({1, 3, 5})
 _EXPERIMENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
 
 
-def _canonical_value(value: Any) -> Any:
-    """Return a JSON-safe, deterministic representation of ``value``.
+def _json_safe_value(value: Any) -> Any:
+    """Validate and copy a JSON-safe value without coercion.
 
-    Production rows are normally JSON values already.  The small amount of
-    defensive handling here keeps the digest deterministic for tuples, sets,
-    and mapping implementations without mutating the caller's object.
+    Coercing arbitrary keys or scalars (for example, ``1`` to ``"1"`` or an
+    object to ``repr(object)``) can hide production changes and even create key
+    collisions.  The digest therefore accepts only native JSON containers and
+    finite native scalar types.
     """
 
-    if isinstance(value, Mapping):
-        # JSON object keys are strings.  Sorting the rendered key avoids a
-        # TypeError when a malformed diagnostic payload contains mixed keys.
-        return {
-            str(key): _canonical_value(item)
-            for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))
-        }
-    if isinstance(value, (list, tuple)):
-        # List order is production-significant (ranking/order of picks).
-        return [_canonical_value(item) for item in value]
-    if isinstance(value, (set, frozenset)):
-        rendered = [_canonical_value(item) for item in value]
-        return sorted(rendered, key=lambda item: json.dumps(item, ensure_ascii=False, sort_keys=True))
-    if value is None or isinstance(value, (str, int, float, bool)):
+    if value is None or type(value) in (str, bool, int):
         return value
-    # This is only a defensive fallback for callers passing a custom scalar;
-    # repr is preferable to object identity because it does not mutate state.
-    return repr(value)
+    if type(value) is float:
+        if not math.isfinite(value):
+            raise ValueError("production output contains a non-finite float")
+        return value
+    if type(value) is list:
+        return [_json_safe_value(item) for item in value]
+    if type(value) is dict:
+        normalised = {}
+        for key, item in value.items():
+            if type(key) is not str:
+                raise ValueError("production output object keys must be strings")
+            normalised[key] = _json_safe_value(item)
+        return normalised
+    raise ValueError("production output contains a non-JSON-safe value")
 
 
 def production_digest(production_output: Any) -> str:
@@ -62,7 +62,7 @@ def production_digest(production_output: Any) -> str:
     ``production_output``.
     """
 
-    canonical = _canonical_value(production_output)
+    canonical = _json_safe_value(production_output)
     encoded = json.dumps(
         canonical,
         ensure_ascii=False,
@@ -154,29 +154,24 @@ def get_experiment(experiment_id: str) -> Dict[str, Any]:
         raise KeyError(f"unknown shadow experiment: {experiment_id}") from exc
 
 
-def _coerce_experiments(experiments: Any) -> List[Dict[str, Any]]:
+def _coerce_experiments(experiments: Any) -> List[Any]:
     if experiments is None:
-        return [get_experiment(key) for key in list_experiments()]
+        return list(list_experiments())
     if isinstance(experiments, str):
-        return [get_experiment(experiments)]
+        return [experiments]
     if isinstance(experiments, Mapping):
-        # A single spec is the least surprising interpretation for a mapping
-        # containing a builder; a mapping of IDs is also accepted.
-        if "builder" in experiments:
-            return [_normalise_spec(experiments)]
-        return [_normalise_spec(value) for value in experiments.values()]
+        # A mapping is allowed only as one inline spec.  In particular, do not
+        # interpret ``{"id": spec}`` as a registry: that form is ambiguous and
+        # otherwise lets invalid items fail before the per-experiment guard.
+        if "experiment_id" not in experiments:
+            raise ValueError("experiment collections must be a sequence of specs or registered IDs")
+        return [experiments]
 
     try:
         items = list(experiments)
     except TypeError as exc:
         raise ValueError("experiments must be an iterable of specs") from exc
-    result: List[Dict[str, Any]] = []
-    for item in items:
-        if isinstance(item, str):
-            result.append(get_experiment(item))
-        else:
-            result.append(_normalise_spec(item))
-    return result
+    return items
 
 
 def _candidate_count(production_output: Any) -> int:
@@ -218,12 +213,15 @@ def _result_row(spec: Mapping[str, Any], result: Any) -> Dict[str, Any]:
     return row
 
 
-def _error_row(spec: Mapping[str, Any], exc: BaseException) -> Dict[str, Any]:
-    row = {
-        key: copy.deepcopy(value)
-        for key, value in spec.items()
-        if key != "builder"
-    }
+def _error_row(spec: Any, exc: BaseException) -> Dict[str, Any]:
+    if isinstance(spec, Mapping):
+        row = {
+            key: copy.deepcopy(value)
+            for key, value in spec.items()
+            if key != "builder"
+        }
+    else:
+        row = {"experiment_id": spec} if isinstance(spec, str) else {}
     row.update(
         {
             "mode": SHADOW_MODE,
@@ -252,11 +250,12 @@ def run_shadow_evaluations(
     """
 
     before_sha = production_digest(production_output)
-    specs = _coerce_experiments(experiments)
+    raw_experiments = _coerce_experiments(experiments)
     rows: List[Dict[str, Any]] = []
 
-    for spec in specs:
+    for raw_spec in raw_experiments:
         try:
+            spec = get_experiment(raw_spec) if isinstance(raw_spec, str) else _normalise_spec(raw_spec)
             # Deep-copy independently for every experiment.  This prevents a
             # mutating experiment from contaminating a later experiment's
             # view, in addition to protecting the official object.
@@ -264,7 +263,7 @@ def run_shadow_evaluations(
             result = spec["builder"](shadow_input)
             rows.append(_result_row(spec, result))
         except Exception as exc:  # isolate one diagnostic from the rest
-            rows.append(_error_row(spec, exc))
+            rows.append(_error_row(raw_spec, exc))
 
     after_sha = production_digest(production_output)
     unchanged = before_sha == after_sha

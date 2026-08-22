@@ -230,6 +230,84 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertEqual(get_experiment("candidate")["version"], "v1")
         self.assertNotIn("metadata", get_experiment("candidate"))
 
+    def test_mapping_of_experiment_ids_is_rejected_fail_closed(self):
+        spec = {
+            "experiment_id": "candidate",
+            "version": "v1",
+            "upstream_pool": "picks_fusion",
+            "source_pool": "picks_fusion",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "builder": lambda candidates: candidates,
+        }
+
+        with self.assertRaises(ValueError):
+            run_shadow_evaluations(
+                [{"code": "600001"}],
+                experiments={"candidate": spec},
+            )
+
+    def test_invalid_inline_spec_isolated_from_other_experiments(self):
+        valid = {
+            "experiment_id": "healthy-v1",
+            "version": "v1",
+            "upstream_pool": "picks_fusion",
+            "source_pool": "picks_fusion",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "builder": lambda candidates: {"count": len(candidates)},
+        }
+        invalid = dict(valid)
+        invalid["experiment_id"] = "invalid-v1"
+        invalid.pop("version")
+
+        result = run_shadow_evaluations(
+            [{"code": "600001"}],
+            experiments=[invalid, valid],
+        )
+        rows = {row["experiment_id"]: row for row in result["experiments"]}
+
+        self.assertEqual(rows["invalid-v1"]["status"], "unavailable")
+        self.assertIn("version", rows["invalid-v1"]["error"])
+        self.assertEqual(rows["healthy-v1"]["status"], "available")
+
+    def test_top_level_inline_spec_validation_isolated_as_one_error_row(self):
+        result = run_shadow_evaluations(
+            [{"code": "600001"}],
+            experiments={
+                "experiment_id": "invalid-v1",
+                "version": "v1",
+                "upstream_pool": "picks_fusion",
+                "source_pool": "picks_fusion",
+                "intended_horizon": 3,
+                "entry_mode": "immediate_close",
+            },
+        )
+
+        self.assertEqual(len(result["experiments"]), 1)
+        self.assertEqual(result["experiments"][0]["experiment_id"], "invalid-v1")
+        self.assertEqual(result["experiments"][0]["status"], "unavailable")
+
+    def test_production_digest_rejects_non_string_keys_and_key_collisions(self):
+        with self.assertRaises(ValueError):
+            production_digest({1: "numeric key"})
+        with self.assertRaises(ValueError):
+            production_digest({1: "numeric", "1": "string"})
+
+    def test_production_digest_rejects_non_json_safe_values(self):
+        unsupported_values = (
+            {"value": object()},
+            {"value": b"bytes"},
+            {"value": ("tuple",)},
+            {"value": {"set-item"}},
+            {"value": float("nan")},
+            {"value": float("inf")},
+        )
+        for value in unsupported_values:
+            with self.subTest(value=repr(value)):
+                with self.assertRaises(ValueError):
+                    production_digest(value)
+
 
 if __name__ == "__main__":
     unittest.main()
