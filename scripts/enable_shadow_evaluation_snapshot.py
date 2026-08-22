@@ -52,6 +52,7 @@ LOCK_PATH_ENV = "CHANLUN_DOCS_PUBLISH_LOCK_PATH"
 DEFAULT_LOCK_PATH = ROOT_DIR / ".cache" / "chanlun" / "docs-publish.lock"
 CONTROLLED_STAGE_PREFIX = ".chanlun-shadow-stage-"
 STAGE_OWNER_FILE = ".chanlun-shadow-stage-owner.json"
+STAGE_OWNER_NEXT_SUFFIX = ".marker-next"
 _TRANSACTION_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
 _TEMP_NONCE_PATTERN = r"[a-z0-9_]{8}"
 _CONTROLLED_STAGE_PATTERN = re.compile(
@@ -467,18 +468,7 @@ def _is_owned_public_temp(path, target, suffix, transaction_id=None):
     return True
 
 
-def _legacy_stage_is_owned(candidate):
-    if not _LEGACY_STAGE_PATTERN.fullmatch(candidate.name):
-        return False
-    if candidate.is_symlink() or not candidate.is_dir():
-        return False
-    try:
-        entries = list(candidate.iterdir())
-    except OSError:
-        return False
-    if len(entries) != 1 or entries[0].name != "docs":
-        return False
-    staged_docs = entries[0]
+def _stage_docs_has_fingerprint(staged_docs):
     if staged_docs.is_symlink() or not staged_docs.is_dir():
         return False
     fingerprints = (
@@ -495,6 +485,47 @@ def _legacy_stage_is_owned(candidate):
     )
 
 
+def _legacy_stage_is_owned(candidate):
+    if not _LEGACY_STAGE_PATTERN.fullmatch(candidate.name):
+        return False
+    if candidate.is_symlink() or not candidate.is_dir():
+        return False
+    try:
+        entries = list(candidate.iterdir())
+    except OSError:
+        return False
+    if len(entries) != 1 or entries[0].name != "docs":
+        return False
+    return _stage_docs_has_fingerprint(entries[0])
+
+
+def _stage_owner_payload(docs_dir, transaction_id):
+    return {
+        "schema_version": JOURNAL_SCHEMA_VERSION,
+        "transaction_id": _validate_transaction_id(transaction_id),
+        "docs_dir": os.fspath(Path(docs_dir).resolve()),
+    }
+
+
+def _stage_owner_bytes(docs_dir, transaction_id):
+    return json.dumps(
+        _stage_owner_payload(docs_dir, transaction_id),
+        ensure_ascii=False,
+        indent=2,
+    ).encode("utf-8")
+
+
+def _partial_owner_marker_is_owned(path, expected):
+    path = Path(path)
+    if path.is_symlink() or not path.is_file():
+        return False
+    try:
+        content = path.read_bytes()
+    except OSError:
+        return False
+    return len(content) <= len(expected) and expected.startswith(content)
+
+
 def _controlled_stage_is_owned(candidate, docs_dir):
     match = _CONTROLLED_STAGE_PATTERN.fullmatch(candidate.name)
     if not match or candidate.is_symlink() or not candidate.is_dir():
@@ -505,26 +536,95 @@ def _controlled_stage_is_owned(candidate, docs_dir):
         return False
     if not entries:
         return True
-    allowed = {STAGE_OWNER_FILE, "docs"}
+    transaction_id = match.group(1)
+    owner_next_name = "{}-{}{}".format(
+        STAGE_OWNER_FILE,
+        transaction_id,
+        STAGE_OWNER_NEXT_SUFFIX,
+    )
+    allowed = {STAGE_OWNER_FILE, owner_next_name, "docs"}
     if any(entry.name not in allowed for entry in entries):
         return False
     owner = candidate / STAGE_OWNER_FILE
-    if owner.is_symlink() or not owner.is_file():
-        return False
-    try:
-        payload = _read_json(owner)
-    except (OSError, ValueError, json.JSONDecodeError):
-        return False
-    if payload != {
-        "schema_version": JOURNAL_SCHEMA_VERSION,
-        "transaction_id": match.group(1),
-        "docs_dir": os.fspath(Path(docs_dir).resolve()),
-    }:
-        return False
+    owner_next = candidate / owner_next_name
     staged_docs = candidate / "docs"
-    return not staged_docs.exists() or (
-        staged_docs.is_dir() and not staged_docs.is_symlink()
+    if staged_docs.exists() and (
+        staged_docs.is_symlink() or not staged_docs.is_dir()
+    ):
+        return False
+    expected_payload = _stage_owner_payload(docs_dir, transaction_id)
+    expected_bytes = _stage_owner_bytes(docs_dir, transaction_id)
+    if owner.is_symlink() or (owner.exists() and not owner.is_file()):
+        return False
+    if owner_next.is_symlink():
+        return False
+    if owner_next.exists() and (
+        not owner_next.is_file()
+        or not _partial_owner_marker_is_owned(owner_next, expected_bytes)
+    ):
+        return False
+    if owner.exists():
+        try:
+            payload = _read_json(owner)
+        except (OSError, ValueError, json.JSONDecodeError):
+            payload = None
+        if payload == expected_payload:
+            return True
+        if not staged_docs.exists():
+            return _partial_owner_marker_is_owned(owner, expected_bytes)
+        return False
+    if owner_next.exists() and not staged_docs.exists():
+        return True
+    if staged_docs.exists() and not owner_next.exists():
+        return _stage_docs_has_fingerprint(staged_docs)
+    return False
+
+
+def _remove_controlled_stage_root(
+    stage_root, docs_dir, *, assume_owned=False
+):
+    stage_root = Path(stage_root)
+    docs_dir = Path(docs_dir).resolve()
+    match = _CONTROLLED_STAGE_PATTERN.fullmatch(stage_root.name)
+    if (
+        not match
+        or stage_root.parent.resolve() != docs_dir.parent
+        or stage_root.is_symlink()
+        or not stage_root.is_dir()
+    ):
+        raise ValueError("invalid controlled shadow stage path")
+    if not assume_owned and not _controlled_stage_is_owned(
+        stage_root, docs_dir
+    ):
+        raise ValueError("shadow stage ownership mismatch")
+
+    staged_docs = stage_root / "docs"
+    if staged_docs.exists():
+        if staged_docs.is_symlink() or not staged_docs.is_dir():
+            raise ValueError("invalid controlled shadow stage docs")
+        shutil.rmtree(staged_docs)
+        _fsync_directory(stage_root)
+
+    transaction_id = match.group(1)
+    owner_next = stage_root / "{}-{}{}".format(
+        STAGE_OWNER_FILE,
+        transaction_id,
+        STAGE_OWNER_NEXT_SUFFIX,
     )
+    if owner_next.exists():
+        if owner_next.is_symlink() or not owner_next.is_file():
+            raise ValueError("invalid shadow stage owner temporary")
+        owner_next.unlink()
+        _fsync_directory(stage_root)
+
+    owner = stage_root / STAGE_OWNER_FILE
+    if owner.exists():
+        if owner.is_symlink() or not owner.is_file():
+            raise ValueError("invalid shadow stage owner")
+        owner.unlink()
+        _fsync_directory(stage_root)
+    stage_root.rmdir()
+    _fsync_directory(stage_root.parent)
 
 
 def _create_controlled_stage_root(docs_dir, transaction_id):
@@ -535,24 +635,29 @@ def _create_controlled_stage_root(docs_dir, transaction_id):
     )
     stage_root.mkdir(mode=0o700)
     owner = stage_root / STAGE_OWNER_FILE
+    owner_next = stage_root / "{}-{}{}".format(
+        STAGE_OWNER_FILE,
+        transaction_id,
+        STAGE_OWNER_NEXT_SUFFIX,
+    )
     try:
-        with open(owner, "x", encoding="utf-8") as handle:
-            json.dump(
-                {
-                    "schema_version": JOURNAL_SCHEMA_VERSION,
-                    "transaction_id": transaction_id,
-                    "docs_dir": os.fspath(docs_dir),
-                },
-                handle,
-                ensure_ascii=False,
-                indent=2,
-            )
+        _fsync_directory(stage_root.parent)
+        with open(owner_next, "xb") as handle:
+            handle.write(_stage_owner_bytes(docs_dir, transaction_id))
             handle.flush()
             os.fsync(handle.fileno())
         _fsync_directory(stage_root)
+        os.replace(os.fspath(owner_next), os.fspath(owner))
+        _fsync_file(owner)
+        _fsync_directory(stage_root)
         _fsync_directory(stage_root.parent)
     except BaseException:
-        shutil.rmtree(stage_root, ignore_errors=True)
+        try:
+            _remove_controlled_stage_root(
+                stage_root, docs_dir, assume_owned=True
+            )
+        except BaseException:
+            pass
         raise
     return stage_root
 
@@ -564,14 +669,13 @@ def _cleanup_stale_publication_artifacts(docs_dir, report_date):
     errors = []
     changed_directories = set()
     for candidate in docs_dir.parent.iterdir():
-        owned = _controlled_stage_is_owned(candidate, docs_dir)
-        if not owned:
-            owned = _legacy_stage_is_owned(candidate)
-        if not owned:
-            continue
         try:
-            shutil.rmtree(candidate)
-            changed_directories.add(candidate.parent)
+            if _controlled_stage_is_owned(candidate, docs_dir):
+                _remove_controlled_stage_root(candidate, docs_dir)
+                continue
+            if _legacy_stage_is_owned(candidate):
+                shutil.rmtree(candidate)
+                changed_directories.add(candidate.parent)
         except OSError as exc:
             errors.append(exc)
 
@@ -1051,8 +1155,9 @@ def _enable_shadow_evaluation_snapshot_locked(
         )
     finally:
         if stage_root.exists():
-            shutil.rmtree(stage_root)
-            _fsync_directory(stage_root.parent)
+            _remove_controlled_stage_root(
+                stage_root, docs_dir, assume_owned=True
+            )
 
     return {
         "status": "enabled_empty",

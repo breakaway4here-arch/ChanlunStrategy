@@ -665,6 +665,14 @@ snapshot.enable_shadow_evaluation_snapshot(
         (decoy_controlled_stage / "note.txt").write_text(
             "preserve me", encoding="utf-8"
         )
+        decoy_owner_stage = (
+            case_docs.parent
+            / ".chanlun-shadow-stage-99999999999999999999999999999999"
+        )
+        decoy_owner_stage.mkdir()
+        (decoy_owner_stage / snapshot.STAGE_OWNER_FILE).write_text(
+            '{"user": true}', encoding="utf-8"
+        )
 
         snapshot.enable_shadow_evaluation_snapshot(
             docs_dir=case_docs,
@@ -683,11 +691,13 @@ snapshot.enable_shadow_evaluation_snapshot(
         self.assertFalse(legacy_owned_stage.exists())
         self.assertTrue(decoy_legacy_stage.is_dir())
         self.assertTrue(decoy_controlled_stage.is_dir())
+        self.assertTrue(decoy_owner_stage.is_dir())
         residue = _publication_residue(case_docs.parent, journal=journal)
         preserved = {
             decoy_file,
             decoy_legacy_stage,
             decoy_controlled_stage,
+            decoy_owner_stage,
         }
         self.assertEqual(
             [
@@ -785,6 +795,170 @@ snapshot.enable_shadow_evaluation_snapshot(
         self.assertEqual(
             _publication_residue(case_docs.parent, journal=journal), []
         )
+
+    def test_stage_owner_crash_windows_are_cleaned_on_rerun(self):
+        expected_docs = Path(self.tmpdir) / "stage-owner-expected" / "docs"
+        expected_docs.parent.mkdir()
+        shutil.copytree(self.docs, expected_docs)
+        snapshot.enable_shadow_evaluation_snapshot(
+            docs_dir=expected_docs,
+            report_date=REPORT_DATE,
+            started_at=STARTED_AT,
+        )
+        relative_targets = [
+            value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
+        ]
+        expected_hashes = {
+            relative: _file_sha(expected_docs / relative)
+            for relative in relative_targets
+        }
+        child_code = r"""
+import os
+import shutil
+import sys
+from pathlib import Path
+from scripts import enable_shadow_evaluation_snapshot as snapshot
+
+docs = Path(sys.argv[1]).resolve()
+mode = sys.argv[2]
+if mode == "partial_owner":
+    transaction_id = "1" * 32
+    stage = docs.parent / (
+        snapshot.CONTROLLED_STAGE_PREFIX + transaction_id
+    )
+    stage.mkdir()
+    owner = stage / snapshot.STAGE_OWNER_FILE
+    with open(owner, "wb") as handle:
+        handle.write(b"{")
+        handle.flush()
+        os.fsync(handle.fileno())
+    descriptor = os.open(os.fspath(stage), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os._exit(94)
+
+if mode == "partial_owner_next":
+    transaction_id = "3" * 32
+    stage = docs.parent / (
+        snapshot.CONTROLLED_STAGE_PREFIX + transaction_id
+    )
+    stage.mkdir()
+    owner_next = stage / (
+        snapshot.STAGE_OWNER_FILE
+        + "-"
+        + transaction_id
+        + snapshot.STAGE_OWNER_NEXT_SUFFIX
+    )
+    with open(owner_next, "wb") as handle:
+        handle.write(b"{")
+        handle.flush()
+        os.fsync(handle.fileno())
+    descriptor = os.open(os.fspath(stage), os.O_RDONLY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os._exit(98)
+
+if mode == "owner_rename":
+    real_replace = snapshot.os.replace
+    def exit_after_owner_rename(source, destination):
+        result = real_replace(source, destination)
+        if Path(destination).name == snapshot.STAGE_OWNER_FILE:
+            os._exit(95)
+        return result
+    snapshot.os.replace = exit_after_owner_rename
+
+if mode == "cleanup_owner":
+    real_unlink = snapshot.os.unlink
+    real_path_unlink = Path.unlink
+    def exit_after_owner_unlink(path, *args, **kwargs):
+        result = real_unlink(path, *args, **kwargs)
+        if Path(path).name == snapshot.STAGE_OWNER_FILE:
+            stage = Path(path).resolve().parent
+            if (stage / "docs").exists():
+                os._exit(97)
+            os._exit(96)
+        return result
+    def exit_after_path_owner_unlink(path, *args, **kwargs):
+        result = real_path_unlink(path, *args, **kwargs)
+        if path.name == snapshot.STAGE_OWNER_FILE:
+            if (path.parent / "docs").exists():
+                os._exit(97)
+            os._exit(96)
+        return result
+    snapshot.os.unlink = exit_after_owner_unlink
+    Path.unlink = exit_after_path_owner_unlink
+
+if mode == "ownerless_docs":
+    transaction_id = "2" * 32
+    stage = docs.parent / (
+        snapshot.CONTROLLED_STAGE_PREFIX + transaction_id
+    )
+    stage.mkdir()
+    shutil.copytree(docs, stage / "docs")
+    os._exit(97)
+
+snapshot.enable_shadow_evaluation_snapshot(
+    docs_dir=docs,
+    report_date="2026-08-21",
+    started_at="2026-08-22",
+)
+"""
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(filter(None, [
+            os.fspath(Path(__file__).resolve().parents[1]),
+            env.get("PYTHONPATH", ""),
+        ]))
+        cases = (
+            ("partial_owner", 94),
+            ("partial_owner_next", 98),
+            ("owner_rename", 95),
+            ("cleanup_owner", 96),
+            ("ownerless_docs", 97),
+        )
+        for mode, returncode in cases:
+            with self.subTest(mode=mode):
+                case_docs = (
+                    Path(self.tmpdir) / "stage-owner-{}".format(mode) / "docs"
+                )
+                case_docs.parent.mkdir()
+                shutil.copytree(self.docs, case_docs)
+                crashed = subprocess.run(
+                    [sys.executable, "-c", child_code, os.fspath(case_docs), mode],
+                    cwd=os.fspath(Path(__file__).resolve().parents[1]),
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(crashed.returncode, returncode, crashed.stderr)
+                self.assertTrue(_publication_residue(case_docs.parent))
+
+                snapshot.enable_shadow_evaluation_snapshot(
+                    docs_dir=case_docs,
+                    report_date=REPORT_DATE,
+                    started_at=STARTED_AT,
+                )
+
+                self.assertEqual(
+                    {
+                        relative: _file_sha(case_docs / relative)
+                        for relative in relative_targets
+                    },
+                    expected_hashes,
+                )
+                journal = snapshot.transaction_journal_path(case_docs)
+                self.assertEqual(
+                    _publication_residue(
+                        case_docs.parent, journal=journal
+                    ),
+                    [],
+                )
 
     def test_concurrent_public_drift_is_not_overwritten(self):
         case_docs = Path(self.tmpdir) / "concurrent-drift" / "docs"
