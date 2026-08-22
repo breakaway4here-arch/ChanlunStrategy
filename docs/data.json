@@ -487709,6 +487709,79 @@
             }
           }
         ]
+      },
+      "shadow_evaluations": {
+        "schema_version": 1,
+        "mode": "shadow",
+        "affects_production": false,
+        "status": "collecting",
+        "started_at": "2026-08-22",
+        "production_guard": {
+          "unchanged": true,
+          "before_sha256": "ba3407dd6cb85d45ecf52308efb775ff17c843b550418290aea57ebdb98176a9",
+          "after_sha256": "ba3407dd6cb85d45ecf52308efb775ff17c843b550418290aea57ebdb98176a9"
+        },
+        "production_reference": {
+          "pool": "picks_fusion",
+          "today_count": 79,
+          "intended_horizon": null,
+          "comparison_eligible": false,
+          "reason": "现网主推未声明统一主周期，只作数量与隔离参考"
+        },
+        "experiments": [
+          {
+            "experiment_id": "h4-t3-close-review-v1",
+            "display_name": "H4 T+3 收盘价影子回看",
+            "version": "h4_t3_k30_tail_safe_v1",
+            "strategy_version": "h4_t3_k30_tail_safe_v1",
+            "upstream_pool": "picks_pure",
+            "source_pool": "h4_t3_pool",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_adjustment": "qfq",
+            "research_tier": "oot_shadow",
+            "mode": "shadow",
+            "status": "available",
+            "evaluation_role": "shadow_candidate",
+            "affects_production": false,
+            "promotion_eligible": false,
+            "sample_size": 0,
+            "excursion_sample_size": 0,
+            "active_dates": 0,
+            "active_months": 0,
+            "mean_close_return": null,
+            "median_close_return": null,
+            "up_rate": null,
+            "hit_rate_ge_5": null,
+            "mean_mfe": null,
+            "mean_mae": null,
+            "worst_close_return": null,
+            "comparison_status": "collecting",
+            "hard_gate_reasons": [
+              "mature_samples_below_100",
+              "active_dates_below_20",
+              "active_months_below_2",
+              "shadow_mode_never_auto_promotes"
+            ],
+            "evaluation_statuses": {},
+            "representative_samples": [],
+            "today": {
+              "candidates": []
+            }
+          }
+        ],
+        "scorecards": [],
+        "today_entries": [],
+        "review_diagnostics": {
+          "status": "waiting_for_first_post_deployment_close",
+          "historical_backfill": false
+        },
+        "pending": {
+          "status": "withheld",
+          "reason": "awaiting_first_post_deployment_close",
+          "entries": 0,
+          "finalized": false
+        }
       }
     }
   }
