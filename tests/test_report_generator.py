@@ -15,6 +15,7 @@ from chanlun.report_generator import (
     build_chart_window, build_chart_annotations, build_startup_watch_chart_annotations,
     _safe_list, NpEncoder, generate_report, build_recent_reviews, write_data_manifest,
     update_data_json, _backfill_workspace_scores, _serialize_picks_light,
+    _serialize_shadow_evaluations,
 )
 from scripts.validate_today_report import validate_manifest_contract
 from config import (
@@ -409,6 +410,132 @@ def _make_minimal_report_data():
 
 
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
+
+    def test_shadow_serialization_failure_degrades_without_blocking_formal_report(self):
+        expected = {
+            "schema_version": 1,
+            "mode": "shadow",
+            "affects_production": False,
+            "status": "unavailable",
+            "production_guard": {
+                "unchanged": False,
+                "before_sha256": "",
+                "after_sha256": "",
+            },
+            "experiments": [],
+            "scorecards": [],
+            "today_entries": [],
+            "pending": {
+                "status": "withheld",
+                "reason": "serialization_failed",
+                "entries": 0,
+                "finalized": False,
+            },
+        }
+        for poison in (object(), float("nan"), float("inf")):
+            with self.subTest(poison=repr(poison)):
+                self.assertEqual(
+                    _serialize_shadow_evaluations({
+                        "mode": "shadow",
+                        "scorecards": [{"poison": poison}],
+                    }),
+                    expected,
+                )
+
+        tmpdir = tempfile.mkdtemp(prefix="test_shadow_serialization_failure_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["shadow_evaluations"] = {
+            "mode": "shadow",
+            "pending": {"poison": object()},
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "data", "2026-05-26.json"), encoding="utf-8") as handle:
+            payload = json.load(handle)
+        self.assertEqual(payload["shadow_evaluations"], expected)
+        self.assertEqual(payload["date"], "2026-05-26")
+
+    def test_shadow_public_candidates_are_full_count_but_strictly_whitelisted(self):
+        candidates = []
+        for index in range(7):
+            candidates.append({
+                "code": "{:06d}".format(300000 + index),
+                "name": "候选{}".format(index),
+                "reference_close": 10.0 + index,
+                "reference_date": "2026-05-26",
+                "reference_is_final": True,
+                "reference_adjustment": "qfq",
+                "evaluation_eligible": True,
+                "evaluation_ineligible_reasons": [],
+                "sector": "AI",
+                "source_channel": "low_position",
+                "best_buy_point": {
+                    "type": "三买",
+                    "price": 10.0,
+                    "reason": "回踩确认",
+                    "context": object(),
+                },
+                "decision_engine_v1": {
+                    "decision_code": "recommend",
+                    "reason": "结构确认",
+                    "runtime": object(),
+                },
+                "closes": [1.0] * 500,
+                "opens": [1.0] * 500,
+                "highs": [1.0] * 500,
+                "lows": [1.0] * 500,
+                "volumes": [1000] * 500,
+                "macd_hist": [0.0] * 500,
+                "fractals": [object()],
+                "strokes": [object()],
+                "segments": [object()],
+            })
+        today_entries = [{"shadow_evaluation_id": "shadow:one", "code": "300000"}]
+        pending = {"status": "staged", "batch_sha256": "b" * 64, "entries": 1}
+        payload = {
+            "schema_version": 1,
+            "mode": "shadow",
+            "affects_production": False,
+            "status": "collecting",
+            "production_guard": {
+                "unchanged": True,
+                "before_sha256": "a" * 64,
+                "after_sha256": "a" * 64,
+            },
+            "experiments": [{
+                "experiment_id": "h4-t3-close-review-v1",
+                "display_name": "H4 T+3 收盘价影子回看",
+                "version": "h4-v1",
+                "upstream_pool": "picks_pure",
+                "source_pool": "h4_t3_pool",
+                "intended_horizon": 3,
+                "entry_mode": "immediate_close",
+                "status": "available",
+                "affects_production": False,
+                "promotion_eligible": False,
+                "today": {"candidates": candidates},
+            }],
+            "scorecards": [],
+            "today_entries": today_entries,
+            "pending": pending,
+        }
+
+        projected = _serialize_shadow_evaluations(payload)
+
+        public_candidates = projected["experiments"][0]["today"]["candidates"]
+        self.assertEqual(len(public_candidates), len(candidates))
+        self.assertEqual(projected["today_entries"], today_entries)
+        self.assertEqual(projected["pending"], pending)
+        banned = {
+            "closes", "opens", "highs", "lows", "volumes", "macd_hist",
+            "fractals", "strokes", "segments",
+        }
+        for row in public_candidates:
+            self.assertFalse(banned.intersection(row))
+            self.assertNotIn("context", row["best_buy_point"])
+            self.assertNotIn("runtime", row["decision_engine_v1"])
 
     def test_shadow_evaluation_contract_is_preserved_in_daily_inline_archive_and_aggregate(self):
         tmpdir = tempfile.mkdtemp(prefix="test_shadow_report_contract_")

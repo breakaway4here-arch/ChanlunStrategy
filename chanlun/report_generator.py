@@ -779,26 +779,195 @@ def _serialize_h4_t3_pool(data):
     }
 
 
-def _serialize_shadow_evaluations(data):
-    """Return an isolated, complete JSON-native shadow evaluation contract.
+_SHADOW_TOP_LEVEL_PUBLIC_FIELDS = (
+    "schema_version",
+    "mode",
+    "affects_production",
+    "status",
+    "started_at",
+    "production_guard",
+    "production_reference",
+    "scorecards",
+    "today_entries",
+    "review_diagnostics",
+    "pending",
+    "error",
+    "error_type",
+)
+_SHADOW_EXPERIMENT_PUBLIC_FIELDS = (
+    "experiment_id",
+    "display_name",
+    "version",
+    "strategy_version",
+    "upstream_pool",
+    "source_pool",
+    "intended_horizon",
+    "entry_mode",
+    "reference_adjustment",
+    "research_tier",
+    "mode",
+    "status",
+    "evaluation_role",
+    "affects_production",
+    "promotion_eligible",
+    "sample_size",
+    "excursion_sample_size",
+    "active_dates",
+    "active_months",
+    "mean_close_return",
+    "median_close_return",
+    "up_rate",
+    "hit_rate_ge_5",
+    "mean_mfe",
+    "mean_mae",
+    "worst_close_return",
+    "comparison_status",
+    "hard_gate_reasons",
+    "evaluation_statuses",
+    "representative_samples",
+    "error",
+    "error_type",
+)
+_SHADOW_CANDIDATE_PUBLIC_FIELDS = (
+    "code",
+    "name",
+    "reference_close",
+    "reference_date",
+    "reference_is_final",
+    "reference_adjustment",
+    "evaluation_eligible",
+    "evaluation_ineligible_reasons",
+    "sector",
+    "industry",
+    "source_channel",
+    "rank",
+    "action",
+    "reason",
+    "score",
+    "opportunity_score",
+    "watch_score",
+    "trend_type",
+)
+_SHADOW_BUY_POINT_PUBLIC_FIELDS = (
+    "type",
+    "tier",
+    "price",
+    "reason",
+    "strength",
+    "source_type",
+    "confirmed_by",
+    "seed_type",
+    "seed_reason",
+)
+_SHADOW_DECISION_PUBLIC_FIELDS = (
+    "decision_code",
+    "action",
+    "risk_level",
+    "position_size",
+    "reason",
+    "summary",
+    "confidence",
+    "score",
+)
 
-    The shadow pending batch digest is part of the publication/finalization
-    handshake, so this serializer deliberately performs no field selection or
-    list truncation.  Invalid non-mapping inputs remain visibly unavailable to
-    the frontend as an empty contract instead of being presented as data.
-    """
-    if not isinstance(data, Mapping):
+
+def _shadow_serialization_unavailable():
+    return {
+        "schema_version": 1,
+        "mode": "shadow",
+        "affects_production": False,
+        "status": "unavailable",
+        "production_guard": {
+            "unchanged": False,
+            "before_sha256": "",
+            "after_sha256": "",
+        },
+        "experiments": [],
+        "scorecards": [],
+        "today_entries": [],
+        "pending": {
+            "status": "withheld",
+            "reason": "serialization_failed",
+            "entries": 0,
+            "finalized": False,
+        },
+    }
+
+
+def _public_shadow_summary(value, fields):
+    if not isinstance(value, Mapping):
         return {}
-    encoded = json.dumps(
-        data,
-        ensure_ascii=False,
-        cls=NpEncoder,
-        allow_nan=False,
-    )
-    projected = json.loads(encoded)
-    if not isinstance(projected, dict):
-        raise ValueError("shadow evaluation contract must serialize to an object")
-    return projected
+    return {key: value[key] for key in fields if key in value}
+
+
+def _public_shadow_candidate(value):
+    if not isinstance(value, Mapping):
+        return {}
+    row = _public_shadow_summary(value, _SHADOW_CANDIDATE_PUBLIC_FIELDS)
+    if "best_buy_point" in value:
+        row["best_buy_point"] = _public_shadow_summary(
+            value.get("best_buy_point"),
+            _SHADOW_BUY_POINT_PUBLIC_FIELDS,
+        )
+    if "decision_engine_v1" in value:
+        row["decision_engine_v1"] = _public_shadow_summary(
+            value.get("decision_engine_v1"),
+            _SHADOW_DECISION_PUBLIC_FIELDS,
+        )
+    return row
+
+
+def _public_shadow_experiment(value):
+    if not isinstance(value, Mapping):
+        return {}
+    row = _public_shadow_summary(value, _SHADOW_EXPERIMENT_PUBLIC_FIELDS)
+    today = value.get("today")
+    if isinstance(today, Mapping):
+        candidates = today.get("candidates")
+        row["today"] = {
+            "candidates": [
+                _public_shadow_candidate(candidate)
+                for candidate in candidates
+            ] if isinstance(candidates, list) else [],
+        }
+    return row
+
+
+def _serialize_shadow_evaluations(data):
+    """Project the public shadow contract and fail closed on every error.
+
+    Pending rows and their digest remain complete for finalization.  Candidate
+    display rows keep their cardinality but exclude K-line arrays and runtime
+    ChanLun structures before JSON projection.
+    """
+    try:
+        if not isinstance(data, Mapping):
+            raise TypeError("shadow evaluation contract must be a mapping")
+        projected = {
+            key: data[key]
+            for key in _SHADOW_TOP_LEVEL_PUBLIC_FIELDS
+            if key in data
+        }
+        experiments = data.get("experiments")
+        if "experiments" in data:
+            projected["experiments"] = [
+                _public_shadow_experiment(experiment)
+                for experiment in experiments
+            ] if isinstance(experiments, list) else []
+        encoded = json.dumps(
+            projected,
+            ensure_ascii=False,
+            cls=NpEncoder,
+            allow_nan=False,
+        )
+        native = json.loads(encoded)
+        if not isinstance(native, dict):
+            raise ValueError(
+                "shadow evaluation contract must serialize to an object"
+            )
+        return native
+    except Exception:
+        return _shadow_serialization_unavailable()
 
 
 def _serialize_picks_light(picks):

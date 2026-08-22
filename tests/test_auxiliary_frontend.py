@@ -1,6 +1,7 @@
 """Contract tests for the scan-first auxiliary decision cockpit."""
 
 import pathlib
+import subprocess
 import unittest
 
 
@@ -276,6 +277,10 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
             "不可自动晋级",
             "晋级边界异常",
             "上线后样本 / 前瞻影子",
+            "平均期间最高收益（MFE）",
+            "平均期间最低收益（MAE）",
+            "canonical_kline_invalid",
+            "canonical_report_volume_invalid",
         ):
             self.assertIn(text, renderer)
         self.assertIn("comparison_status", renderer)
@@ -283,6 +288,8 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         self.assertIn("promotion_eligible", renderer)
         self.assertNotIn(".slice(", renderer)
         self.assertIn("escapeHtml", renderer)
+        self.assertIn('<h4>', renderer)
+        self.assertIn('<h5>', renderer)
 
     def test_shadow_card_uses_swiss_audit_styles_and_390px_layout(self):
         for selector in (
@@ -303,6 +310,149 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         self.assertNotIn("gradient", shadow_styles)
         self.assertIn(".shadow-metric-grid", responsive)
         self.assertIn("grid-template-columns: 1fr", responsive)
+        self.assertIn("content-visibility: auto", shadow_styles)
+
+    def test_shadow_renderer_runtime_fail_closes_and_escapes_untrusted_contracts(self):
+        script = r"""
+const fs = require('fs');
+const vm = require('vm');
+global.window = { location: { pathname: '' } };
+global.document = {
+  readyState: 'loading',
+  addEventListener: function () {},
+  getElementById: function () { return null; }
+};
+let source = fs.readFileSync('chanlun/report_assets/report-v2.js', 'utf8');
+const marker = '\n})();';
+const at = source.lastIndexOf(marker);
+if (at < 0) throw new Error('IIFE marker missing');
+source = source.slice(0, at)
+  + '\n globalThis.__shadowTest = { render: renderShadowEvaluations };'
+  + source.slice(at);
+vm.runInThisContext(source, { filename: 'report-v2.js' });
+const render = globalThis.__shadowTest.render;
+const sha = 'a'.repeat(64);
+function fixture() {
+  return { shadow_evaluations: {
+    schema_version: 1,
+    mode: 'shadow',
+    affects_production: false,
+    status: 'collecting',
+    production_guard: {
+      unchanged: true,
+      before_sha256: sha,
+      after_sha256: sha
+    },
+    production_reference: { pool: 'picks_fusion', today_count: 1 },
+    experiments: [{
+      experiment_id: 'h4-t3-close-review-v1',
+      display_name: '<img src=x onerror=alert(1)>'.repeat(40),
+      version: 'v1',
+      upstream_pool: 'picks_pure',
+      source_pool: 'h4_t3_pool',
+      intended_horizon: 3,
+      entry_mode: 'immediate_close',
+      status: 'available',
+      affects_production: false,
+      promotion_eligible: false,
+      comparison_status: 'collecting',
+      research_tier: 'oot_shadow',
+      sample_size: 0,
+      active_dates: 0,
+      active_months: 0,
+      hard_gate_reasons: ['mature_samples_below_100'],
+      representative_samples: [],
+      today: { candidates: [{
+        code: '300001',
+        name: '<script>alert(7)</script>',
+        reference_close: 10,
+        evaluation_eligible: true
+      }] }
+    }],
+    scorecards: [],
+    today_entries: [],
+    pending: { status: 'withheld', entries: 0 }
+  } };
+}
+function clone(value) { return JSON.parse(JSON.stringify(value)); }
+function assert(value, message) { if (!value) throw new Error(message); }
+
+const good = render(fixture());
+assert(good.includes('正式输出保护通过'), 'valid guard not shown');
+assert(good.includes('影子评测中'), 'valid collecting state missing');
+assert(!good.includes('<script>alert(7)</script>'), 'candidate XSS not escaped');
+assert(good.includes('&lt;script&gt;alert(7)&lt;&#47;script&gt;'), 'escaped candidate absent');
+assert(!good.includes('<img src=x onerror=alert(1)>'), 'long title XSS not escaped');
+
+const mismatch = fixture();
+mismatch.shadow_evaluations.production_guard.after_sha256 = 'b'.repeat(64);
+const mismatchHtml = render(mismatch);
+assert(mismatchHtml.includes('影子评测暂不可用'), 'digest mismatch not failed closed');
+assert(!mismatchHtml.includes('正式输出保护通过'), 'digest mismatch claims guard pass');
+assert(!mismatchHtml.includes('不影响正式主推'), 'digest mismatch claims isolation');
+assert(!mismatchHtml.includes('300001'), 'digest mismatch leaked candidate');
+
+const unknownSchema = fixture();
+unknownSchema.shadow_evaluations.schema_version = 2;
+const schemaHtml = render(unknownSchema);
+assert(schemaHtml.includes('影子评测暂不可用'), 'unknown schema not failed closed');
+assert(!schemaHtml.includes('300001'), 'unknown schema leaked candidate');
+
+const topEscalated = fixture();
+topEscalated.shadow_evaluations.affects_production = true;
+const topEscalatedHtml = render(topEscalated);
+assert(topEscalatedHtml.includes('影子评测暂不可用'), 'top escalation not failed closed');
+assert(!topEscalatedHtml.includes('不影响正式主推'), 'top escalation claims isolation');
+assert(!topEscalatedHtml.includes('300001'), 'top escalation leaked candidate');
+
+const topIsolationMissing = fixture();
+delete topIsolationMissing.shadow_evaluations.affects_production;
+const topIsolationMissingHtml = render(topIsolationMissing);
+assert(topIsolationMissingHtml.includes('影子评测暂不可用'), 'missing top isolation not failed closed');
+assert(!topIsolationMissingHtml.includes('300001'), 'missing top isolation leaked candidate');
+
+const unauthorized = fixture();
+unauthorized.shadow_evaluations.experiments[0].affects_production = true;
+const unauthorizedHtml = render(unauthorized);
+assert(unauthorizedHtml.includes('实验合同异常'), 'experiment escalation not warned');
+assert(!unauthorizedHtml.includes('300001'), 'experiment escalation leaked candidate');
+
+const wrongEntry = fixture();
+wrongEntry.shadow_evaluations.experiments[0].entry_mode = 'delay1_open';
+const wrongEntryHtml = render(wrongEntry);
+assert(wrongEntryHtml.includes('实验合同异常'), 'wrong entry mode not warned');
+assert(!wrongEntryHtml.includes('300001'), 'wrong entry mode leaked candidate');
+
+const promotable = fixture();
+promotable.shadow_evaluations.experiments[0].promotion_eligible = true;
+const promotableHtml = render(promotable);
+assert(promotableHtml.includes('晋级边界异常'), 'promotable experiment not warned');
+assert(!promotableHtml.includes('300001'), 'promotable experiment leaked candidate');
+
+const wrongScorecardIdentity = fixture();
+wrongScorecardIdentity.shadow_evaluations.scorecards = [{
+  experiment_id: 'h4-t3-close-review-v1',
+  version: 'v1',
+  upstream_pool: 'picks_pure',
+  source_pool: 'h4_t3_pool',
+  intended_horizon: '3',
+  entry_mode: 'immediate_close',
+  promotion_eligible: false,
+  sample_size: 999,
+  mean_close_return: 999
+}];
+const wrongScorecardHtml = render(wrongScorecardIdentity);
+assert(!wrongScorecardHtml.includes('+999.00%'), 'wrong scorecard identity was bound');
+"""
+        completed = subprocess.run(
+            ["node", "-e", script],
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            timeout=10,
+        )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
 if __name__ == "__main__":

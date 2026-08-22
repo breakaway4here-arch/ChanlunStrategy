@@ -2894,8 +2894,10 @@
       candidate_reference_unproven: '信号日收盘价尚未证明',
       canonical_kline_missing: '权威行情尚未到位',
       canonical_adjustment_mismatch: '行情复权口径不一致',
+      canonical_kline_invalid: '权威行情结构无效',
       canonical_report_date_missing: '行情缺少信号日收盘',
       canonical_report_bar_not_final: '信号日 K 线尚未收盘确认',
+      canonical_report_volume_invalid: '信号日成交量无效',
       canonical_reference_close_mismatch: '候选收盘价与权威行情不一致',
     };
     var comparisonStatusLabels = {
@@ -2909,14 +2911,24 @@
       historical_shadow: '历史样本 / 回放影子',
     };
 
+    function shadowIdentityPart(value) {
+      return typeof value + ':' + normalizeString(value);
+    }
+
     function shadowIdentity(item) {
       var row = item || {};
       return [
-        normalizeString(row.experiment_id),
-        normalizeString(row.version || row.strategy_version),
-        normalizeString(row.source_pool),
-        normalizeString(row.intended_horizon),
+        shadowIdentityPart(row.experiment_id),
+        shadowIdentityPart(row.version),
+        shadowIdentityPart(row.upstream_pool),
+        shadowIdentityPart(row.source_pool),
+        shadowIdentityPart(row.intended_horizon),
+        shadowIdentityPart(row.entry_mode),
       ].join('|');
+    }
+
+    function shadowRequiredString(value) {
+      return typeof value === 'string' && value.trim().length > 0;
     }
 
     function shadowPoolLabel(value) {
@@ -2994,10 +3006,20 @@
     scorecards.forEach(function (item) {
       scorecardByIdentity[shadowIdentity(item)] = item;
     });
-    var isolated = hasContract && shadow.affects_production === false;
+    var schemaValid = hasContract && shadow.schema_version === 1;
+    var isolated = schemaValid && shadow.affects_production === false;
+    var beforeSha = normalizeString(guard.before_sha256);
+    var afterSha = normalizeString(guard.after_sha256);
+    var digestPattern = /^[0-9a-f]{64}$/i;
+    var guardValid = isolated
+      && shadow.mode === 'shadow'
+      && (shadow.status === 'collecting' || shadow.status === 'partial')
+      && guard.unchanged === true
+      && digestPattern.test(beforeSha)
+      && digestPattern.test(afterSha)
+      && beforeSha === afterSha;
     var disabled = isolated && (mode === 'off' || status === 'disabled');
-    var collecting = isolated && !disabled && mode === 'shadow'
-      && status === 'collecting' && guard.unchanged === true;
+    var collecting = isolated && guardValid;
     var unavailable = !isolated || (!disabled && !collecting);
     var statusText = collecting ? '影子评测中' : (disabled ? '影子模式已关闭' : '影子评测暂不可用');
     var statusTone = collecting ? 'info' : (disabled ? 'neutral' : 'warning');
@@ -3007,12 +3029,14 @@
       body = '<div class="shadow-state"><strong>影子模式已关闭</strong><span>未采集新的影子样本；正式主推不受影响。</span></div>';
     } else if (unavailable) {
       var unavailableReason = normalizeString(shadow.error);
-      if (!isolated && hasContract) {
+      if (!schemaValid && hasContract) {
+        unavailableReason = '影子合同 schema_version 不受支持';
+      } else if (!isolated && hasContract) {
         unavailableReason = '隔离声明缺失或不合法（affects_production 必须显式为 false）';
-      } else if (!unavailableReason && hasContract && guard.unchanged !== true) {
-        unavailableReason = '正式输出保护未通过（'
-          + shadowShortSha(guard.before_sha256) + ' → '
-          + shadowShortSha(guard.after_sha256) + '）';
+      } else if (!unavailableReason && !guardValid) {
+        unavailableReason = '影子合同或正式输出摘要未通过严格校验（'
+          + shadowShortSha(beforeSha) + ' → '
+          + shadowShortSha(afterSha) + '）';
       }
       body = ''
         + '<div class="shadow-state is-warning"><strong>影子评测暂不可用</strong>'
@@ -3033,9 +3057,9 @@
       body += experiments.length ? experiments.map(function (experiment) {
         var rec = experiment || {};
         var metrics = scorecardByIdentity[shadowIdentity(rec)] || rec;
-        var experimentStatus = normalizeString(rec.status);
-        var horizon = safeNumber(rec.intended_horizon, null);
-        var entryMode = normalizeString(rec.entry_mode);
+        var experimentStatus = rec.status;
+        var horizon = rec.intended_horizon;
+        var entryMode = rec.entry_mode;
         var sampleSize = safeNumber(metrics.sample_size, 0);
         var activeDates = safeNumber(metrics.active_dates, 0);
         var activeMonths = safeNumber(metrics.active_months, 0);
@@ -3043,21 +3067,35 @@
         var hardReasons = asArray(metrics.hard_gate_reasons);
         var comparisonLabel = shadowComparisonLabel(metrics.comparison_status);
         var researchTierLabel = shadowResearchTierLabel(metrics.research_tier || rec.research_tier);
-        var promotionIsolated = metrics.promotion_eligible === false;
-        var promotionLabel = promotionIsolated ? '不可自动晋级' : '晋级边界异常';
+        var promotionBoundaryValid = rec.promotion_eligible === false
+          && metrics.promotion_eligible === false;
+        var horizonValid = Number.isInteger(horizon) && [1, 3, 5].indexOf(horizon) !== -1;
+        var identityValid = shadowRequiredString(rec.experiment_id)
+          && shadowRequiredString(rec.version)
+          && shadowRequiredString(rec.upstream_pool)
+          && shadowRequiredString(rec.source_pool);
+        var experimentContractValid = experimentStatus === 'available'
+          && rec.affects_production === false
+          && promotionBoundaryValid
+          && entryMode === 'immediate_close'
+          && horizonValid
+          && identityValid;
+        var promotionLabel = promotionBoundaryValid ? '不可自动晋级' : '晋级边界异常';
         var reasonHtml = hardReasons.length
           ? hardReasons.map(function (reason) {
               return '<li>' + escapeHtml(shadowGateLabel(reason)) + '</li>';
             }).join('')
           : '<li>尚未记录晋级门槛</li>';
-        var experimentTrusted = experimentStatus === 'available' && promotionIsolated;
+        var experimentTrusted = experimentContractValid;
         var experimentWarning = '';
         if (experimentStatus !== 'available') {
           experimentWarning = ''
             + '<div class="shadow-state is-warning"><strong>单项实验暂不可用</strong><span>'
             + escapeHtml(rec.error || '实验输出未生成') + '；正式主推不受影响。</span></div>';
-        } else if (!promotionIsolated) {
+        } else if (!promotionBoundaryValid) {
           experimentWarning = '<div class="shadow-state is-warning"><strong>晋级边界异常</strong><span>promotion_eligible 必须显式为 false；研究指标与候选已隐藏。</span></div>';
+        } else if (!experimentContractValid) {
+          experimentWarning = '<div class="shadow-state is-warning"><strong>实验合同异常</strong><span>实验身份、隔离、周期或入场口径未通过校验；研究指标与候选已隐藏。</span></div>';
         }
         var experimentResearch = experimentTrusted ? ''
           + '  <div class="shadow-progress"><strong>样本进度</strong><span>' + escapeHtml(formatNumber(sampleSize, 0) + '/100 成熟样本 · ' + formatNumber(activeDates, 0) + '/20 活跃日 · ' + formatNumber(activeMonths, 0) + '/2 月') + '</span></div>'
@@ -3068,26 +3106,26 @@
           + renderShadowMetric('中位收盘收益', formatPct(metrics.median_close_return, true), '')
           + renderShadowMetric('上涨率', formatPct(metrics.up_rate), '')
           + renderShadowMetric('收益 ≥5%', formatPct(metrics.hit_rate_ge_5), '')
-          + renderShadowMetric('平均 MFE', formatPct(metrics.mean_mfe, true), '')
-          + renderShadowMetric('平均 MAE', formatPct(metrics.mean_mae, true), '')
+          + renderShadowMetric('平均期间最高收益（MFE）', formatPct(metrics.mean_mfe, true), '')
+          + renderShadowMetric('平均期间最低收益（MAE）', formatPct(metrics.mean_mae, true), '')
           + renderShadowMetric('最差收盘收益', formatPct(metrics.worst_close_return, true), '')
           + renderShadowMetric('盘中轨迹样本', formatNumber(excursionSize, 0), '')
           + '  </div>'
-          + '  <section class="shadow-subsection"><h4>尚未晋级原因</h4><ul class="shadow-gate-list">' + reasonHtml + '</ul></section>'
-          + '  <section class="shadow-subsection"><h4>代表样本</h4>' + renderShadowSamples(metrics) + '</section>'
-          + '  <section class="shadow-subsection"><h4>今日影子候选</h4>' + renderShadowCandidates(rec) + '</section>'
+          + '  <section class="shadow-subsection"><h5>尚未晋级原因</h5><ul class="shadow-gate-list">' + reasonHtml + '</ul></section>'
+          + '  <section class="shadow-subsection"><h5>代表样本</h5>' + renderShadowSamples(metrics) + '</section>'
+          + '  <section class="shadow-subsection"><h5>今日影子候选</h5>' + renderShadowCandidates(rec) + '</section>'
           : experimentWarning;
         return ''
           + '<article class="shadow-experiment">'
           + '  <header class="shadow-experiment-head">'
-          + '    <div><strong>' + escapeHtml(rec.display_name || rec.experiment_id || '未命名影子实验') + '</strong><small>' + escapeHtml((rec.version || rec.strategy_version || '版本未知') + ' · ' + (rec.experiment_id || '--')) + '</small></div>'
-          + '    <div class="shadow-contract-tags"><span>' + escapeHtml(horizon === null ? '周期未声明' : 'T+' + formatNumber(horizon, 0)) + '</span><span>' + escapeHtml(entryMode === 'immediate_close' ? '入场 = 信号日收盘' : '入场口径未声明') + '</span></div>'
+          + '    <div><h4>' + escapeHtml(rec.display_name || rec.experiment_id || '未命名影子实验') + '</h4><small>' + escapeHtml((rec.version || rec.strategy_version || '版本未知') + ' · ' + (rec.experiment_id || '--')) + '</small></div>'
+          + '    <div class="shadow-contract-tags"><span>' + escapeHtml(horizonValid ? 'T+' + formatNumber(horizon, 0) : '周期合同异常') + '</span><span>' + escapeHtml(entryMode === 'immediate_close' ? '入场 = 信号日收盘' : '入场口径异常') + '</span></div>'
           + '  </header>'
           + '  <div class="shadow-pool-map"><span>共同上游：' + escapeHtml(shadowPoolLabel(rec.upstream_pool)) + '</span><span>策略来源：' + escapeHtml(shadowPoolLabel(rec.source_pool)) + '</span></div>'
           + '  <div class="shadow-conclusion-grid">'
           + '    <div><small>当前结论</small><strong>' + escapeHtml(comparisonLabel) + '</strong></div>'
           + '    <div><small>研究层级</small><strong>' + escapeHtml(researchTierLabel) + '</strong></div>'
-          + '    <div class="' + (promotionIsolated ? 'is-safe' : 'is-warning') + '"><small>晋级边界</small><strong>' + escapeHtml(promotionLabel) + '</strong></div>'
+          + '    <div class="' + (promotionBoundaryValid ? 'is-safe' : 'is-warning') + '"><small>晋级边界</small><strong>' + escapeHtml(promotionLabel) + '</strong></div>'
           + '  </div>'
           + experimentResearch
           + '</article>';
