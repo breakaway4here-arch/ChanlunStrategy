@@ -187,6 +187,71 @@ class ShadowEvaluationContractTests(unittest.TestCase):
                     Path(tmpdir) / "pending.json", [incomplete]
                 )
 
+    def test_all_persisted_shadow_rows_require_complete_identity_and_experiment_contract(self):
+        valid = {
+            "shadow_evaluation_id": "shadow:valid",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": False,
+            "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "code": "300308",
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_close": None,
+            "reference_date": "",
+            "reference_is_final": False,
+            "reason_snapshot": {},
+        }
+        invalid_rows = []
+        for key in (
+            "experiment_id",
+            "version",
+            "source_pool",
+            "upstream_pool",
+        ):
+            row = dict(valid)
+            row[key] = ""
+            invalid_rows.append(row)
+        for key in ("code", "report_date", "generated_at"):
+            row = dict(
+                valid,
+                evaluation_eligible=True,
+                reference_close=100.0,
+                reference_date="2026-08-20",
+                reference_is_final=True,
+            )
+            row[key] = ""
+            if key == "report_date":
+                row["reference_date"] = ""
+            invalid_rows.append(row)
+        non_bool = dict(valid)
+        non_bool["evaluation_eligible"] = 1
+        invalid_rows.append(non_bool)
+        invalid_rows.append(dict(valid, intended_horizon=2))
+        invalid_rows.append(dict(valid, intended_horizon=True))
+        invalid_rows.append(dict(valid, entry_mode="delay1_open"))
+        invalid_rows.append(dict(valid, reason_snapshot=[]))
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            for index, row in enumerate(invalid_rows):
+                with self.subTest(index=index, row=row):
+                    with self.assertRaises(ValueError):
+                        stage_shadow_evaluation_entries(
+                            Path(tmpdir) / "{}.json".format(index), [row]
+                        )
+
+            self.assertEqual(
+                stage_shadow_evaluation_entries(
+                    Path(tmpdir) / "valid.json", [valid]
+                ),
+                1,
+            )
+
     def test_shadow_scorecard_uses_only_evaluation_eligible_rows_and_primary_horizon(self):
         base = {
             "evaluation_role": "shadow_candidate",

@@ -572,33 +572,36 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
         raise ValueError("invalid shadow isolation fields{}".format(location))
     if not isinstance(entry.get("evaluation_eligible"), bool):
         raise ValueError("invalid shadow eligibility field{}".format(location))
+    required_strings = (
+        "report_date",
+        "generated_at",
+        "experiment_id",
+        "version",
+        "source_pool",
+        "upstream_pool",
+    )
+    if any(
+        not isinstance(entry.get(key), str)
+        or not entry.get(key).strip()
+        for key in required_strings
+    ):
+        raise ValueError("incomplete shadow contract{}".format(location))
+    code = entry.get("code")
+    if not isinstance(code, str) or not _valid_stock_code(code):
+        raise ValueError("invalid shadow stock code{}".format(location))
+    horizon = entry.get("intended_horizon")
+    if (
+        isinstance(horizon, bool)
+        or not isinstance(horizon, int)
+        or horizon not in ALLOWED_HORIZONS
+        or entry.get("entry_mode") != IMMEDIATE_CLOSE
+    ):
+        raise ValueError("invalid shadow evaluation rule{}".format(location))
+    if not isinstance(entry.get("reason_snapshot"), dict):
+        raise ValueError("invalid shadow reason snapshot{}".format(location))
     if entry["evaluation_eligible"] is True:
-        required_strings = (
-            "experiment_id",
-            "version",
-            "source_pool",
-            "upstream_pool",
-        )
-        if any(
-            not isinstance(entry.get(key), str)
-            or not entry.get(key).strip()
-            for key in required_strings
-        ):
-            raise ValueError(
-                "incomplete eligible shadow contract{}".format(location)
-            )
-        horizon = entry.get("intended_horizon")
-        if (
-            isinstance(horizon, bool)
-            or not isinstance(horizon, int)
-            or horizon not in ALLOWED_HORIZONS
-            or entry.get("entry_mode") != IMMEDIATE_CLOSE
-        ):
-            raise ValueError(
-                "invalid eligible shadow evaluation rule{}".format(location)
-            )
         reference_close = _positive_close(entry.get("reference_close"))
-        report_date = str(entry.get("report_date") or "").strip()
+        report_date = entry["report_date"].strip()
         if (
             reference_close is None
             or str(entry.get("reference_date") or "").strip() != report_date
@@ -606,10 +609,6 @@ def _validate_shadow_entry(entry: Any, *, line_number: Optional[int] = None) -> 
         ):
             raise ValueError(
                 "unproven eligible shadow reference close{}".format(location)
-            )
-        if not isinstance(entry.get("reason_snapshot"), dict):
-            raise ValueError(
-                "invalid eligible shadow reason snapshot{}".format(location)
             )
     return json_native_projection(entry)
 
