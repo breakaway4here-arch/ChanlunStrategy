@@ -331,6 +331,86 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
         self.assertEqual(_file_sha(daily_path), original_daily_sha)
         self.assertEqual(_file_sha(index_path), original_index_sha)
 
+    def test_each_target_replace_failure_rolls_back_every_public_artifact(self):
+        relative_targets = [
+            value.format(report_date=REPORT_DATE)
+            for value in snapshot.PUBLIC_TARGETS
+        ]
+        real_replace = snapshot.os.replace
+
+        for fail_index in range(len(relative_targets)):
+            with self.subTest(fail_index=fail_index):
+                case_docs = Path(self.tmpdir) / "atomic-case-{}".format(
+                    fail_index
+                )
+                staged_docs = Path(self.tmpdir) / "atomic-stage-{}".format(
+                    fail_index
+                )
+                shutil.copytree(self.docs, case_docs)
+                shutil.copytree(self.docs, staged_docs)
+                targets = [case_docs / relative for relative in relative_targets]
+                original_hashes = {
+                    os.fspath(path): _file_sha(path) for path in targets
+                }
+                for relative in relative_targets:
+                    staged_path = staged_docs / relative
+                    staged_path.write_bytes(
+                        staged_path.read_bytes()
+                        + "\nshadow replacement {}\n".format(
+                            fail_index
+                        ).encode("utf-8")
+                    )
+
+                state = {"attempt": 0, "failed": False}
+
+                def fail_one_target_once(source, destination):
+                    source_path = Path(source)
+                    destination_path = Path(destination)
+                    is_next_publish = (
+                        source_path.name.endswith(".shadow-next")
+                        and destination_path in targets
+                    )
+                    if is_next_publish:
+                        current = state["attempt"]
+                        state["attempt"] += 1
+                        if current == fail_index and not state["failed"]:
+                            state["failed"] = True
+                            raise OSError(
+                                "injected replace failure {}".format(
+                                    fail_index
+                                )
+                            )
+                    return real_replace(source, destination)
+
+                with mock.patch.object(
+                    snapshot.os,
+                    "replace",
+                    side_effect=fail_one_target_once,
+                ):
+                    with self.assertRaisesRegex(
+                        OSError,
+                        "injected replace failure {}".format(fail_index),
+                    ):
+                        snapshot._atomic_replace_targets(
+                            staged_docs, case_docs, REPORT_DATE
+                        )
+
+                self.assertTrue(state["failed"])
+                self.assertEqual(
+                    {
+                        os.fspath(path): _file_sha(path)
+                        for path in targets
+                    },
+                    original_hashes,
+                )
+                leftovers = [
+                    path
+                    for path in case_docs.rglob("*")
+                    if path.name.endswith(".shadow-next")
+                    or path.name.endswith(".shadow-backup")
+                ]
+                self.assertEqual(leftovers, [])
+
 
 if __name__ == "__main__":
     unittest.main()

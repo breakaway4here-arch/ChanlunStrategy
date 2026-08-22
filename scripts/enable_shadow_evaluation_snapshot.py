@@ -45,6 +45,23 @@ _BOOTSTRAP_PATTERN = re.compile(
 )
 
 
+class AtomicPublishRollbackError(RuntimeError):
+    """A publish failed and one or more rollback/cleanup actions also failed."""
+
+    def __init__(self, original_error, recovery_errors):
+        self.original_error = original_error
+        self.recovery_errors = tuple(recovery_errors)
+        details = "; ".join(
+            "{}: {}".format(type(error).__name__, error)
+            for error in self.recovery_errors
+        )
+        super().__init__(
+            "atomic publish failed ({}: {}); recovery errors: {}".format(
+                type(original_error).__name__, original_error, details
+            )
+        )
+
+
 def _read_json(path):
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -304,6 +321,63 @@ def _atomic_replace_targets(staged_docs, docs_dir, report_date):
         value.format(report_date=report_date) for value in PUBLIC_TARGETS
     ]
     prepared = []
+    replaced = []
+
+    def fsync_file(path):
+        with open(path, "rb") as handle:
+            os.fsync(handle.fileno())
+
+    def fsync_directory(path):
+        descriptor = os.open(os.fspath(path), os.O_RDONLY)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+
+    def copied_temporary(source, target, suffix):
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=".{}-".format(target.name),
+            suffix=suffix,
+            dir=os.fspath(target.parent),
+        )
+        os.close(descriptor)
+        temporary = Path(temporary)
+        try:
+            shutil.copy2(source, temporary)
+            fsync_file(temporary)
+            return temporary
+        except BaseException:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+            raise
+
+    def cleanup_prepared(preserve_backup_ids=None):
+        errors = []
+        directories = set()
+        preserve_backup_ids = preserve_backup_ids or set()
+        for item in prepared:
+            directories.add(item["target"].parent)
+            for key in ("next", "backup"):
+                if key == "backup" and id(item) in preserve_backup_ids:
+                    continue
+                path = item.get(key)
+                if path is None:
+                    continue
+                try:
+                    path.unlink()
+                except FileNotFoundError:
+                    pass
+                except OSError as exc:
+                    errors.append(exc)
+        for directory in directories:
+            try:
+                fsync_directory(directory)
+            except OSError as exc:
+                errors.append(exc)
+        return errors
+
     try:
         for relative in relative_targets:
             source = staged_docs / relative
@@ -313,24 +387,58 @@ def _atomic_replace_targets(staged_docs, docs_dir, report_date):
                     "staged public artifact is missing: {}".format(relative)
                 )
             target.parent.mkdir(parents=True, exist_ok=True)
-            fd, temporary = tempfile.mkstemp(
-                prefix=".{}-".format(target.name),
-                suffix=".shadow-next",
-                dir=os.fspath(target.parent),
+            if not target.is_file():
+                raise FileNotFoundError(
+                    "public artifact is missing: {}".format(relative)
+                )
+            item = {"target": target, "next": None, "backup": None}
+            prepared.append(item)
+            item["backup"] = copied_temporary(
+                target, target, ".shadow-backup"
             )
-            os.close(fd)
-            shutil.copy2(source, temporary)
-            prepared.append((Path(temporary), target))
+            item["next"] = copied_temporary(
+                source, target, ".shadow-next"
+            )
 
-        for temporary, target in prepared:
-            os.replace(os.fspath(temporary), os.fspath(target))
-        prepared = []
-    finally:
-        for temporary, _target in prepared:
+        for directory in {item["target"].parent for item in prepared}:
+            fsync_directory(directory)
+
+        for item in prepared:
+            os.replace(
+                os.fspath(item["next"]), os.fspath(item["target"])
+            )
+            replaced.append(item)
+            fsync_file(item["target"])
+            fsync_directory(item["target"].parent)
+    except BaseException as original_error:
+        recovery_errors = []
+        failed_rollback_ids = set()
+        for item in reversed(replaced):
             try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
+                os.replace(
+                    os.fspath(item["backup"]),
+                    os.fspath(item["target"]),
+                )
+                item["backup"] = None
+                fsync_file(item["target"])
+                fsync_directory(item["target"].parent)
+            except BaseException as exc:
+                recovery_errors.append(exc)
+                if item.get("backup") is not None:
+                    failed_rollback_ids.add(id(item))
+        recovery_errors.extend(cleanup_prepared(failed_rollback_ids))
+        if recovery_errors:
+            raise AtomicPublishRollbackError(
+                original_error, recovery_errors
+            ) from original_error
+        raise
+
+    cleanup_errors = cleanup_prepared()
+    if cleanup_errors:
+        raise AtomicPublishRollbackError(
+            RuntimeError("published but temporary cleanup failed"),
+            cleanup_errors,
+        )
     return relative_targets
 
 
