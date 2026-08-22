@@ -226,6 +226,43 @@ class ShadowEvaluationContractTests(unittest.TestCase):
             staged = shadow_evaluation.load_staged_shadow_evaluation_entries(pending)
             self.assertIn(staged, ([base], [conflict]))
 
+    def test_same_day_retry_reuses_pending_when_only_generated_at_changes(self):
+        base = {
+            "schema_version": "1",
+            "shadow_evaluation_id": "shadow:retry",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "report_date": "2026-08-20",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "code": "300308",
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "reference_close": 100.0,
+            "reference_date": "2026-08-20",
+            "reference_is_final": True,
+            "reference_adjustment": "qfq",
+            "reason_snapshot": {},
+        }
+        retry = dict(base, generated_at="2026-08-20T15:20:00+08:00")
+        conflict = dict(retry, reference_close=101.0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending = Path(tmpdir) / "2026-08-20.json"
+            self.assertEqual(stage_shadow_evaluation_entries(pending, [base]), 1)
+            self.assertEqual(stage_shadow_evaluation_entries(pending, [retry]), 1)
+            self.assertEqual(
+                shadow_evaluation.load_staged_shadow_evaluation_entries(pending),
+                [base],
+            )
+            with self.assertRaisesRegex(
+                ValueError, "conflicting_shadow_pending_batch"
+            ):
+                stage_shadow_evaluation_entries(pending, [conflict])
+
     def test_shadow_scorecard_skips_invalid_manual_rows_before_evaluation(self):
         invalid = {
             "shadow_evaluation_id": "shadow:manual",

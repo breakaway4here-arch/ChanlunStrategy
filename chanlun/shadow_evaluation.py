@@ -777,6 +777,12 @@ def stage_shadow_evaluation_entries(
     parent = os.path.dirname(os.path.abspath(resolved))
     os.makedirs(parent, exist_ok=True)
     incoming = json.dumps(
+        _stable_pending_batch(materialized),
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    serialized_materialized = json.dumps(
         materialized,
         ensure_ascii=False,
         sort_keys=True,
@@ -790,7 +796,7 @@ def stage_shadow_evaluation_entries(
             if os.path.exists(resolved):
                 existing = load_staged_shadow_evaluation_entries(resolved)
                 existing_canonical = json.dumps(
-                    existing,
+                    _stable_pending_batch(existing),
                     ensure_ascii=False,
                     sort_keys=True,
                     separators=(",", ":"),
@@ -807,7 +813,7 @@ def stage_shadow_evaluation_entries(
                     delete=False,
                 ) as handle:
                     temporary = handle.name
-                    handle.write(incoming)
+                    handle.write(serialized_materialized)
                     handle.write("\n")
                     handle.flush()
                     os.fsync(handle.fileno())
@@ -817,6 +823,20 @@ def stage_shadow_evaluation_entries(
                 if temporary and os.path.exists(temporary):
                     os.unlink(temporary)
     return len(materialized)
+
+
+def _stable_pending_batch(
+    entries: Iterable[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    """Remove retry-only metadata before comparing one report-date batch."""
+
+    stable = []
+    for entry in entries or []:
+        row = copy.deepcopy(dict(entry))
+        row.pop("generated_at", None)
+        stable.append(row)
+    stable.sort(key=lambda row: str(row.get("shadow_evaluation_id") or ""))
+    return stable
 
 
 def load_staged_shadow_evaluation_entries(path: Any) -> List[Dict[str, Any]]:
@@ -1021,44 +1041,15 @@ def build_shadow_scorecards(
     return cards
 
 
-_FORMAL_GUARD_FIELDS = (
-    "date",
-    "picks_pure",
-    "picks_fusion",
-    "startup_watchlist",
-    "observation_watchlist",
-    "next_day_boom",
-    "luojie_pool",
-    "h4_t3_pool",
-    "recommendation_ledger",
-    "strategy_scorecards",
-    "decision_brief",
-    "holding_risks",
-)
-
-
 def _build_shadow_guard_snapshot(report_data: Any) -> Dict[str, Any]:
-    """Project the complete formal boundary consumed before report output."""
+    """Project every formal report field, excluding only the shadow result."""
 
     if not isinstance(report_data, Mapping):
         raise ValueError("formal report data must be a mapping")
     snapshot = {
-        key: report_data.get(key)
-        for key in _FORMAL_GUARD_FIELDS
-    }
-    diagnostics = report_data.get("diagnostics")
-    data_quality = report_data.get("data_quality")
-    snapshot["diagnostics"] = {
-        "candidate_funnel": (
-            diagnostics.get("candidate_funnel")
-            if isinstance(diagnostics, Mapping) else None
-        )
-    }
-    snapshot["data_quality"] = {
-        "runtime_policy": (
-            data_quality.get("runtime_policy")
-            if isinstance(data_quality, Mapping) else None
-        )
+        key: value
+        for key, value in report_data.items()
+        if key != "shadow_evaluations"
     }
     return json_native_projection(snapshot)
 
@@ -1173,7 +1164,7 @@ def _merge_shadow_history(
         entry = _validate_shadow_entry(raw)
         shadow_id = entry["shadow_evaluation_id"]
         canonical = json.dumps(
-            entry,
+            _stable_pending_batch([entry])[0],
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
@@ -1186,8 +1177,118 @@ def _merge_shadow_history(
                 "conflicting_shadow_evaluation_id: {}".format(shadow_id)
             )
         canonical_by_id[shadow_id] = canonical
-        merged[shadow_id] = entry
+        if shadow_id not in merged:
+            # Immutable history (or the first staged fact) remains the
+            # authoritative runtime-metadata version on same-day retries.
+            merged[shadow_id] = entry
     return [merged[key] for key in sorted(merged)]
+
+
+def _canonical_entry_evidence(
+    entry: Mapping[str, Any],
+    kline: Any,
+) -> Dict[str, Any]:
+    """Require canonical qfq final-bar evidence for a stageable entry."""
+
+    row = copy.deepcopy(dict(entry))
+    reasons = []
+    if row.get("evaluation_eligible") is not True:
+        reasons.append("candidate_reference_unproven")
+    if not isinstance(kline, Mapping):
+        reasons.append("canonical_kline_missing")
+    elif str(kline.get("adjustment") or "") != EXPECTED_REFERENCE_ADJUSTMENT:
+        reasons.append("canonical_adjustment_mismatch")
+    else:
+        dates = kline.get("dates")
+        closes = kline.get("closes")
+        volumes = kline.get("volumes")
+        finals = kline.get("is_final")
+        if not all(
+            isinstance(values, list)
+            for values in (dates, closes, volumes, finals)
+        ) or not (len(dates) == len(closes) == len(volumes) == len(finals)):
+            reasons.append("canonical_kline_invalid")
+        else:
+            report_date = str(row.get("report_date") or "")
+            normalized_dates = [
+                str(value or "").split(" ", 1)[0] for value in dates
+            ]
+            matches = [
+                index for index, value in enumerate(normalized_dates)
+                if value == report_date
+            ]
+            if len(matches) != 1:
+                reasons.append("canonical_report_date_missing")
+            else:
+                index = matches[0]
+                canonical_close = _positive_close(closes[index])
+                frozen_close = _positive_close(row.get("reference_close"))
+                if finals[index] is not True:
+                    reasons.append("canonical_report_bar_not_final")
+                canonical_volume = _positive_close(volumes[index])
+                if canonical_volume is None:
+                    reasons.append("canonical_report_volume_invalid")
+                if (
+                    canonical_close is None
+                    or frozen_close is None
+                    or not math.isclose(
+                        canonical_close,
+                        frozen_close,
+                        rel_tol=1e-9,
+                        abs_tol=1e-8,
+                    )
+                ):
+                    reasons.append("canonical_reference_close_mismatch")
+    row["evaluation_eligible"] = not reasons
+    row["evaluation_ineligible_reasons"] = reasons
+    return _validate_shadow_entry(row)
+
+
+def _validate_today_entries_with_market_context(
+    entries: Iterable[Mapping[str, Any]],
+    kline_by_code: Mapping[str, Any],
+) -> List[Dict[str, Any]]:
+    resolved = kline_by_code if isinstance(kline_by_code, Mapping) else {}
+    return [
+        _canonical_entry_evidence(
+            entry,
+            resolved.get(str(entry.get("code") or "")),
+        )
+        for entry in entries or []
+    ]
+
+
+def _annotate_experiment_eligibility(
+    experiments: Iterable[Mapping[str, Any]],
+    entries: Iterable[Mapping[str, Any]],
+) -> List[Dict[str, Any]]:
+    by_identity = {
+        (entry.get("experiment_id"), entry.get("code")): entry
+        for entry in entries or []
+    }
+    annotated = []
+    for experiment in experiments or []:
+        row = copy.deepcopy(dict(experiment))
+        today = row.get("today")
+        if isinstance(today, Mapping) and isinstance(today.get("candidates"), list):
+            candidates = []
+            for candidate in today["candidates"]:
+                item = copy.deepcopy(candidate)
+                if isinstance(item, dict):
+                    entry = by_identity.get(
+                        (row.get("experiment_id"), item.get("code"))
+                    )
+                    if entry is not None:
+                        item["evaluation_eligible"] = entry.get(
+                            "evaluation_eligible"
+                        ) is True
+                        item["evaluation_ineligible_reasons"] = copy.deepcopy(
+                            entry.get("evaluation_ineligible_reasons") or []
+                        )
+                candidates.append(item)
+            row["today"] = dict(today, candidates=candidates)
+        annotated.append(row)
+    return annotated
 
 
 def _attach_shadow_scorecards(
@@ -1321,21 +1422,22 @@ def build_daily_shadow_evaluations(
         ):
             raise RuntimeError("production_guard_failed")
         experiments = payload.get("experiments")
-        if not isinstance(experiments, list) or any(
-            not isinstance(row, Mapping) or row.get("status") != "available"
-            for row in experiments
-        ):
+        if not isinstance(experiments, list):
+            raise RuntimeError("shadow_builder_unavailable")
+        available_experiments = [
+            row for row in experiments
+            if isinstance(row, Mapping) and row.get("status") == "available"
+        ]
+        if not available_experiments:
             raise RuntimeError("shadow_builder_unavailable")
 
         today_entries = build_shadow_evaluation_entries(
-            report_date, generated_at, experiments
+            report_date, generated_at, available_experiments
         )
         historical_entries = load_shadow_evaluation_entries(
             ledger_path or DEFAULT_SHADOW_LEDGER_PATH
         )
-        evaluation_entries = _merge_shadow_history(
-            historical_entries, today_entries
-        )
+        context_entries = list(historical_entries) + list(today_entries)
         if review_context_loader is None:
             from .strategy_review import load_review_market_context_from_store
 
@@ -1343,9 +1445,15 @@ def build_daily_shadow_evaluations(
         review_klines, review_calendar, review_benchmark, review_diagnostics = (
             review_context_loader(
                 db_path,
-                evaluation_entries,
+                context_entries,
                 as_of=report_date,
             )
+        )
+        today_entries = _validate_today_entries_with_market_context(
+            today_entries, review_klines
+        )
+        evaluation_entries = _merge_shadow_history(
+            historical_entries, today_entries
         )
         scorecards = build_shadow_scorecards(
             evaluation_entries,
@@ -1373,7 +1481,8 @@ def build_daily_shadow_evaluations(
             "reason": "现网主推未声明统一主周期，只作数量与隔离参考",
         })
         payload["experiments"] = _attach_shadow_scorecards(
-            experiments, scorecards
+            _annotate_experiment_eligibility(experiments, today_entries),
+            scorecards,
         )
         payload["scorecards"] = scorecards
         payload["today_entries"] = today_entries
@@ -1387,13 +1496,19 @@ def build_daily_shadow_evaluations(
             staged_path = shadow_pending_ledger_path(
                 report_date, pending_dir=pending_dir
             )
-            staged_count = stage_shadow_evaluation_entries(
-                staged_path, today_entries
+            stage_shadow_evaluation_entries(
+                staged_path,
+                [
+                    entry for entry in today_entries
+                    if entry.get("evaluation_eligible") is True
+                ],
             )
+            staged_entries = load_staged_shadow_evaluation_entries(staged_path)
+            payload["today_entries"] = staged_entries
             payload["pending"] = {
                 "status": "staged",
                 "batch": os.path.basename(staged_path),
-                "entries": staged_count,
+                "entries": len(staged_entries),
                 "finalized": False,
             }
         return payload

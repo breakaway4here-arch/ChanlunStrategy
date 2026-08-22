@@ -2793,7 +2793,14 @@ def main(debug=False, preview=False, generated_at=None):
         time_metadata.get("generated_at"),
         strategy_inputs,
         policy_version=("decision-v1" if decision_engine else ""),
-        config_revision=data_quality.get("runtime_policy", {}),
+        # The shadow switch is runtime-only metadata.  Keeping it out of the
+        # immutable formal ledger prevents off/shadow runs from forking the
+        # production cohort identity or attribution revision.
+        config_revision={
+            key: value
+            for key, value in data_quality.get("runtime_policy", {}).items()
+            if key != "stock_selection_shadow_mode"
+        },
         code_version=(
             os.environ.get("GITHUB_SHA")
             or os.environ.get("CHANLUN_CODE_VERSION")
