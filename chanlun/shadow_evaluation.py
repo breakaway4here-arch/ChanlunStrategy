@@ -24,7 +24,6 @@ ALLOWED_HORIZONS = frozenset({1, 3, 5})
 # The registry is deliberately process-local.  It is a definition registry,
 # not a ledger, and therefore has no persistence or production side effects.
 _EXPERIMENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
-EXPERIMENT_REGISTRY = _EXPERIMENT_REGISTRY
 
 
 def _canonical_value(value: Any) -> Any:
@@ -74,43 +73,34 @@ def production_digest(production_output: Any) -> str:
     return hashlib.sha256(encoded).hexdigest()
 
 
-def _first_non_empty(spec: Mapping[str, Any], *keys: str) -> Optional[Any]:
-    for key in keys:
-        value = spec.get(key)
-        if value is not None and value != "":
-            return value
-    return None
-
-
-def _normalise_spec(spec: Any, experiment_id: Optional[str] = None) -> Dict[str, Any]:
+def _normalise_spec(spec: Any) -> Dict[str, Any]:
     """Validate and normalise a public experiment definition."""
 
     if not isinstance(spec, Mapping):
         raise ValueError("experiment spec must be a mapping")
 
     raw = dict(spec)
-    resolved_id = experiment_id or _first_non_empty(raw, "experiment_id", "id", "name")
-    version = _first_non_empty(raw, "version", "strategy_version")
-    source_pool = _first_non_empty(raw, "source_pool", "pool", "upstream_pool")
-    upstream_pool = _first_non_empty(raw, "upstream_pool", "source_pool", "pool")
+    resolved_id = raw.get("experiment_id")
+    version = raw.get("version")
+    source_pool = raw.get("source_pool")
+    upstream_pool = raw.get("upstream_pool")
     intended_horizon = raw.get("intended_horizon")
     entry_mode = raw.get("entry_mode")
-    builder = raw.get("builder", raw.get("build"))
+    builder = raw.get("builder")
 
-    if resolved_id is None:
-        if version and source_pool and isinstance(intended_horizon, int) and not isinstance(intended_horizon, bool):
-            resolved_id = f"{source_pool}:{version}:t{intended_horizon}"
-        else:
-            raise ValueError("experiment_id is required when it cannot be derived")
     if not isinstance(resolved_id, str) or not resolved_id.strip():
         raise ValueError("experiment_id must be a non-empty string")
     if not isinstance(version, str) or not version.strip():
         raise ValueError("version is required")
     if not isinstance(source_pool, str) or not source_pool.strip():
-        raise ValueError("source_pool or upstream_pool is required")
+        raise ValueError("source_pool is required")
     if not isinstance(upstream_pool, str) or not upstream_pool.strip():
-        raise ValueError("upstream_pool or source_pool is required")
-    if isinstance(intended_horizon, bool) or intended_horizon not in ALLOWED_HORIZONS:
+        raise ValueError("upstream_pool is required")
+    if (
+        isinstance(intended_horizon, bool)
+        or not isinstance(intended_horizon, int)
+        or intended_horizon not in ALLOWED_HORIZONS
+    ):
         raise ValueError("intended_horizon must be one of 1, 3, or 5")
     if entry_mode != IMMEDIATE_CLOSE:
         raise ValueError("entry_mode must be immediate_close")
@@ -134,48 +124,13 @@ def _normalise_spec(spec: Any, experiment_id: Optional[str] = None) -> Dict[str,
     return normalised
 
 
-def register_experiment(
-    spec: Any = None,
-    maybe_spec: Optional[Mapping[str, Any]] = None,
-    **kwargs: Any,
-) -> Dict[str, Any]:
-    """Validate and register one shadow experiment.
+def register_experiment(spec: Mapping[str, Any]) -> Dict[str, Any]:
+    """Validate and register one explicit shadow experiment definition."""
 
-    The preferred call form is ``register_experiment({...})``.  A name plus a
-    mapping (``register_experiment("id", {...})``) and keyword fields are
-    accepted as small conveniences for callers building a registry in code.
-    """
-
-    if isinstance(spec, str):
-        raw: Dict[str, Any] = dict(maybe_spec or {})
-        raw["experiment_id"] = spec
-        raw.update(kwargs)
-    elif spec is None:
-        raw = dict(kwargs)
-    elif isinstance(spec, Mapping):
-        raw = dict(spec)
-        raw.update(kwargs)
-    else:
-        raise ValueError("experiment spec must be a mapping")
-
-    normalised = _normalise_spec(raw)
+    normalised = _normalise_spec(spec)
     key = normalised["experiment_id"]
     _EXPERIMENT_REGISTRY[key] = normalised
     return copy.deepcopy(normalised)
-
-
-def register_shadow_experiment(
-    spec: Any = None,
-    maybe_spec: Optional[Mapping[str, Any]] = None,
-    **kwargs: Any,
-) -> Dict[str, Any]:
-    """Alias with an explicit shadow-oriented name."""
-
-    return register_experiment(spec, maybe_spec, **kwargs)
-
-
-def unregister_experiment(experiment_id: str) -> None:
-    _EXPERIMENT_REGISTRY.pop(experiment_id, None)
 
 
 def clear_experiments() -> None:
@@ -207,10 +162,9 @@ def _coerce_experiments(experiments: Any) -> List[Dict[str, Any]]:
     if isinstance(experiments, Mapping):
         # A single spec is the least surprising interpretation for a mapping
         # containing a builder; a mapping of IDs is also accepted.
-        if "builder" in experiments or "build" in experiments:
+        if "builder" in experiments:
             return [_normalise_spec(experiments)]
-        values = list(experiments.values())
-        return [_normalise_spec(value, experiment_id=str(key)) for key, value in experiments.items()] if values else []
+        return [_normalise_spec(value) for value in experiments.values()]
 
     try:
         items = list(experiments)
@@ -334,16 +288,10 @@ def run_shadow_evaluations(
 
 
 __all__ = [
-    "ALLOWED_HORIZONS",
-    "EXPERIMENT_REGISTRY",
-    "IMMEDIATE_CLOSE",
-    "SHADOW_MODE",
     "clear_experiments",
     "get_experiment",
     "list_experiments",
     "production_digest",
     "register_experiment",
-    "register_shadow_experiment",
     "run_shadow_evaluations",
-    "unregister_experiment",
 ]
