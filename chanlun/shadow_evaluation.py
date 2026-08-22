@@ -839,6 +839,16 @@ def _stable_pending_batch(
     return stable
 
 
+def shadow_batch_digest(entries: Iterable[Any]) -> str:
+    """Digest the complete canonical staged batch, including runtime facts."""
+
+    materialized = [_validate_shadow_entry(entry) for entry in entries or []]
+    materialized.sort(
+        key=lambda row: str(row.get("shadow_evaluation_id") or "")
+    )
+    return production_digest(materialized)
+
+
 def load_staged_shadow_evaluation_entries(path: Any) -> List[Dict[str, Any]]:
     resolved = os.fspath(path)
     if not os.path.exists(resolved):
@@ -1508,6 +1518,7 @@ def build_daily_shadow_evaluations(
             payload["pending"] = {
                 "status": "staged",
                 "batch": os.path.basename(staged_path),
+                "batch_sha256": shadow_batch_digest(staged_entries),
                 "entries": len(staged_entries),
                 "finalized": False,
             }
@@ -1545,6 +1556,7 @@ __all__ = [
     "production_digest",
     "register_experiment",
     "run_shadow_evaluations",
+    "shadow_batch_digest",
     "shadow_pending_ledger_path",
     "stage_shadow_evaluation_entries",
 ]

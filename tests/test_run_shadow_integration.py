@@ -1,5 +1,6 @@
 import copy
 import io
+import json
 import tempfile
 import unittest
 from contextlib import ExitStack, redirect_stdout
@@ -12,6 +13,8 @@ import chanlun.shadow_evaluation as shadow_evaluation
 import chanlun.strategy_review as strategy_review
 import run
 from chanlun.h4_t3_pool import STRATEGY_VERSION
+from chanlun.shadow_evaluation import load_shadow_evaluation_entries
+from scripts.finalize_recommendation_ledger import finalize_for_date
 
 
 def _candidate(index):
@@ -401,6 +404,10 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         formal_text = repr(before)
         self.assertTrue(shadow_ids)
         self.assertTrue(all(shadow_id not in formal_text for shadow_id in shadow_ids))
+        self.assertEqual(
+            payload["pending"].get("batch_sha256"),
+            shadow_evaluation.shadow_batch_digest(payload["today_entries"]),
+        )
 
     def test_same_day_retry_returns_the_actual_reused_staged_batch(self):
         report = _formal_report(candidate_count=1)
@@ -434,6 +441,75 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             second["today_entries"][0]["generated_at"],
             "2026-08-22T15:10:00+08:00",
         )
+        self.assertEqual(
+            second["pending"].get("batch_sha256"),
+            shadow_evaluation.shadow_batch_digest(first["today_entries"]),
+        )
+
+    def test_unavailable_retry_report_cannot_finalize_the_old_qfq_pending(self):
+        report = _formal_report(candidate_count=1)
+
+        def raw_context(_db_path, entries, *, as_of=None):
+            entry = entries[-1]
+            close = entry["reference_close"]
+            return {
+                entry["code"]: {
+                    "dates": [as_of],
+                    "opens": [close],
+                    "closes": [close],
+                    "highs": [close],
+                    "lows": [close],
+                    "volumes": [1000],
+                    "is_final": [True],
+                    "adjustment": "raw",
+                }
+            }, [as_of], None, {"status": "ok"}
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            common = {
+                "mode": "shadow",
+                "publication_eligible": True,
+                "ledger_path": root / "shadow.jsonl",
+                "pending_dir": root / "shadow-pending",
+                "db_path": root / "market.sqlite",
+            }
+            first = shadow_evaluation.build_daily_shadow_evaluations(
+                report,
+                generated_at="2026-08-22T15:10:00+08:00",
+                review_context_loader=_canonical_review_context,
+                **common,
+            )
+            second = shadow_evaluation.build_daily_shadow_evaluations(
+                report,
+                generated_at="2026-08-22T15:20:00+08:00",
+                review_context_loader=raw_context,
+                **common,
+            )
+            report_path = root / "2026-08-22.json"
+            current_report = copy.deepcopy(report)
+            current_report["shadow_evaluations"] = second
+            report_path.write_text(
+                json.dumps(current_report, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            result = finalize_for_date(
+                "2026-08-22",
+                recommendation_pending_dir=root / "formal-pending",
+                recommendation_ledger_path=root / "formal.jsonl",
+                shadow_pending_dir=common["pending_dir"],
+                shadow_ledger_path=common["ledger_path"],
+                report_path=report_path,
+            )
+
+            self.assertEqual(first["status"], "collecting")
+            self.assertEqual(second["status"], "unavailable")
+            self.assertIn(result["shadow_status"], {"withheld", "unavailable"})
+            self.assertEqual(result["shadow_appended_entries"], 0)
+            self.assertEqual(
+                load_shadow_evaluation_entries(common["ledger_path"]), []
+            )
 
     def test_canonical_kline_evidence_controls_eligibility_and_staging(self):
         def context(kind):
