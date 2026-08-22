@@ -57,9 +57,9 @@ def _json_safe_value(value: Any) -> Any:
 def production_digest(production_output: Any) -> str:
     """Calculate the canonical SHA-256 digest of a production output.
 
-    Mapping insertion order and equivalent tuple/list nesting do not affect
-    the digest, while list order does.  The function is pure and never mutates
-    ``production_output``.
+    Dictionary insertion order does not affect the digest, while list order
+    does.  Unsupported values are rejected instead of being coerced.  The
+    function is pure and never mutates ``production_output``.
     """
 
     canonical = _json_safe_value(production_output)
