@@ -112,6 +112,120 @@ def _evaluate(entry=None, kline=None, **kwargs):
 
 
 class StrategyReviewEvaluationTests(unittest.TestCase):
+    def test_immediate_close_uses_signal_close_and_future_only_excursions(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        kline = _kline(
+            opens=[100, 101, 103, 104, 106, 108],
+            closes=[100, 105, 98, 110, 107, 112],
+            # The signal-day extremes must not leak into MFE/MAE.
+            highs=[150, 106, 104, 111, 109, 113],
+            lows=[50, 99, 96, 97, 105, 106],
+        )
+
+        outcome = _evaluate(
+            entry=entry,
+            kline=kline,
+            contribution=contribution,
+            trading_calendar=kline["dates"],
+        )
+
+        self.assertEqual(outcome["status"], "evaluated")
+        self.assertEqual(outcome["entry_date"], "2026-08-20")
+        self.assertEqual(outcome["entry_price"], 100.0)
+        self.assertEqual(outcome["target_dates"], {
+            "t1": "2026-08-21",
+            "t3": "2026-08-25",
+            "t5": "2026-08-27",
+        })
+        self.assertAlmostEqual(outcome["returns"]["t1"], 5.0)
+        self.assertAlmostEqual(outcome["returns"]["t3"], 10.0)
+        self.assertAlmostEqual(outcome["returns"]["t5"], 12.0)
+        self.assertAlmostEqual(outcome["mfe"]["t1"], 6.0)
+        self.assertAlmostEqual(outcome["mae"]["t1"], -1.0)
+        self.assertAlmostEqual(outcome["mfe"]["t3"], 11.0)
+        self.assertAlmostEqual(outcome["mae"]["t3"], -4.0)
+
+    def test_immediate_close_preserves_suspension_and_final_bar_gates(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        calendar = _kline()["dates"]
+        suspended = _kline(
+            dates=[calendar[0], calendar[2], calendar[3], calendar[4], calendar[5]],
+            opens=[100, 103, 104, 106, 108],
+            closes=[100, 104, 105, 108, 110],
+            highs=[101, 105, 106, 109, 111],
+            lows=[99, 102, 103, 105, 107],
+        )
+        nonfinal = _kline(is_final=[True, False, True, True, True, True])
+
+        suspended_outcome = _evaluate(
+            entry=entry,
+            kline=suspended,
+            contribution=contribution,
+            trading_calendar=calendar,
+        )
+        nonfinal_outcome = _evaluate(
+            entry=entry,
+            kline=nonfinal,
+            contribution=contribution,
+            trading_calendar=calendar,
+        )
+
+        self.assertEqual(suspended_outcome["maturity"]["t1"], "unavailable")
+        self.assertIsNone(suspended_outcome["returns"]["t1"])
+        self.assertEqual(nonfinal_outcome["maturity"]["t1"], "right_censored")
+        self.assertIsNone(nonfinal_outcome["returns"]["t1"])
+
+    def test_immediate_close_does_not_compute_excursions_across_missing_path_bar(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        calendar = _kline()["dates"]
+        kline = _kline(
+            dates=[calendar[0], calendar[1], calendar[3], calendar[4], calendar[5]],
+            opens=[100, 101, 104, 106, 108],
+            closes=[100, 105, 110, 107, 112],
+            highs=[150, 106, 111, 109, 113],
+            lows=[50, 99, 97, 105, 106],
+        )
+
+        outcome = _evaluate(
+            entry=entry,
+            kline=kline,
+            contribution=contribution,
+            trading_calendar=calendar,
+        )
+
+        self.assertAlmostEqual(outcome["returns"]["t3"], 10.0)
+        self.assertIsNone(outcome["mfe"]["t3"])
+        self.assertIsNone(outcome["mae"]["t3"])
+
+    def test_immediate_close_benchmark_uses_same_signal_close_and_target_dates(self):
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        benchmark = _kline(
+            opens=[200, 200, 202, 204, 206, 208],
+            closes=[200, 202, 204, 206, 208, 210],
+            highs=[201, 203, 205, 207, 209, 211],
+            lows=[199, 199, 201, 203, 205, 207],
+        )
+
+        outcome = _evaluate(
+            entry=entry,
+            contribution=contribution,
+            benchmark_kline=benchmark,
+        )
+
+        self.assertEqual(outcome["benchmark_status"], "aligned")
+        self.assertAlmostEqual(
+            outcome["excess_returns"]["t1"],
+            outcome["returns"]["t1"] - 1.0,
+        )
+
     def test_uses_next_open_and_reports_t1_t3_t5_after_maturity(self):
         outcome = _evaluate()
 

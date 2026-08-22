@@ -1,4 +1,7 @@
+import json
+import tempfile
 import unittest
+from pathlib import Path
 
 import numpy as np
 
@@ -6,12 +9,19 @@ import chanlun.shadow_evaluation as shadow_evaluation
 from chanlun.engine_types import Fractal, Segment, Stroke
 
 from chanlun.shadow_evaluation import (
+    append_shadow_evaluation_entries,
+    build_shadow_evaluation_entries,
+    build_shadow_scorecards,
     clear_experiments,
+    finalize_staged_shadow_evaluation_entries,
     get_experiment,
     list_experiments,
+    load_shadow_evaluation_entries,
     production_digest,
     register_experiment,
     run_shadow_evaluations,
+    shadow_pending_ledger_path,
+    stage_shadow_evaluation_entries,
 )
 
 
@@ -21,6 +31,136 @@ class ShadowEvaluationContractTests(unittest.TestCase):
 
     def tearDown(self):
         clear_experiments()
+
+    def test_shadow_entries_have_independent_identity_and_never_join_formal_cohort(self):
+        experiments = [{
+            "experiment_id": "boom-close-v1",
+            "version": "v1",
+            "upstream_pool": "picks_pure",
+            "source_pool": "next_day_boom_pool",
+            "intended_horizon": 1,
+            "entry_mode": "immediate_close",
+            "status": "available",
+            "today": {"candidates": [{
+                "code": "300308",
+                "name": "中际旭创",
+                "closes": [99, 100],
+                "best_buy_point": {"type": "三买", "reason": "回踩确认"},
+                "decision_engine_v1": {"decision_code": "recommend"},
+            }]},
+        }]
+
+        entries = build_shadow_evaluation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            experiments,
+        )
+
+        self.assertEqual(len(entries), 1)
+        entry = entries[0]
+        self.assertTrue(entry["shadow_evaluation_id"].startswith("shadow:"))
+        self.assertNotIn("recommendation_id", entry)
+        self.assertNotIn("cohort_eligible", entry)
+        self.assertEqual(entry["evaluation_role"], "shadow_candidate")
+        self.assertFalse(entry["publication_effect"])
+        self.assertTrue(entry["evaluation_eligible"])
+        self.assertEqual(entry["experiment_id"], "boom-close-v1")
+        self.assertEqual(entry["version"], "v1")
+        self.assertEqual(entry["source_pool"], "next_day_boom_pool")
+        self.assertEqual(entry["upstream_pool"], "picks_pure")
+        self.assertEqual(entry["intended_horizon"], 1)
+        self.assertEqual(entry["entry_mode"], "immediate_close")
+        self.assertEqual(entry["reference_close"], 100.0)
+        self.assertIn("best_buy_point", entry["reason_snapshot"])
+
+    def test_shadow_pending_is_separate_idempotent_and_only_finalized_explicitly(self):
+        entry = {
+            "shadow_evaluation_id": "shadow:one",
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "report_date": "2026-08-20",
+            "code": "300308",
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pending_dir = Path(tmpdir) / "shadow-pending"
+            pending = shadow_pending_ledger_path(
+                "2026-08-20", pending_dir=pending_dir
+            )
+            ledger = Path(tmpdir) / "shadow-ledger.jsonl"
+
+            self.assertEqual(stage_shadow_evaluation_entries(pending, [entry]), 1)
+            self.assertFalse(ledger.exists())
+            self.assertEqual(
+                finalize_staged_shadow_evaluation_entries(pending, ledger), 1
+            )
+            self.assertEqual(
+                finalize_staged_shadow_evaluation_entries(pending, ledger), 0
+            )
+            self.assertEqual(append_shadow_evaluation_entries(ledger, [entry]), 0)
+            self.assertEqual(load_shadow_evaluation_entries(ledger), [entry])
+
+    def test_shadow_scorecard_uses_only_evaluation_eligible_rows_and_primary_horizon(self):
+        base = {
+            "evaluation_role": "shadow_candidate",
+            "publication_effect": False,
+            "evaluation_eligible": True,
+            "experiment_id": "h4-close-v1",
+            "version": "v1",
+            "display_name": "H4 收盘影子",
+            "source_pool": "h4_t3_pool",
+            "upstream_pool": "picks_pure",
+            "intended_horizon": 3,
+            "entry_mode": "immediate_close",
+            "generated_at": "2026-08-20T15:10:00+08:00",
+            "reason_snapshot": {"best_buy_point": {"type": "三买"}},
+        }
+        first = dict(base, shadow_evaluation_id="shadow:first",
+                     report_date="2026-08-20", code="300308",
+                     name="中际旭创", reference_close=100.0)
+        ignored = dict(base, shadow_evaluation_id="shadow:ignored",
+                       report_date="2026-08-20", code="300001",
+                       name="特锐德", reference_close=100.0,
+                       evaluation_eligible=False, cohort_eligible=True)
+        dates = [
+            "2026-08-20", "2026-08-21", "2026-08-24",
+            "2026-08-25", "2026-08-26", "2026-08-27",
+        ]
+        kline = {
+            "dates": dates,
+            "opens": [100, 101, 103, 104, 106, 108],
+            "closes": [100, 105, 98, 110, 107, 112],
+            "highs": [150, 106, 104, 111, 109, 113],
+            "lows": [50, 99, 96, 97, 105, 106],
+            "volumes": [1000] * 6,
+            "is_final": [True] * 6,
+            "adjustment": "qfq",
+        }
+
+        cards = build_shadow_scorecards(
+            [first, ignored],
+            {"300308": kline, "300001": kline},
+            trading_calendar=dates,
+        )
+
+        self.assertEqual(len(cards), 1)
+        card = cards[0]
+        self.assertEqual(card["sample_size"], 1)
+        self.assertEqual(card["active_dates"], 1)
+        self.assertEqual(card["active_months"], 1)
+        self.assertAlmostEqual(card["mean_close_return"], 10.0)
+        self.assertAlmostEqual(card["median_close_return"], 10.0)
+        self.assertAlmostEqual(card["up_rate"], 100.0)
+        self.assertAlmostEqual(card["hit_rate_ge_5"], 100.0)
+        self.assertAlmostEqual(card["mean_mfe"], 11.0)
+        self.assertAlmostEqual(card["mean_mae"], -4.0)
+        self.assertAlmostEqual(card["worst_close_return"], 10.0)
+        self.assertFalse(card["promotion_eligible"])
+        self.assertTrue(card["hard_gate_reasons"])
+        self.assertEqual(
+            card["representative_samples"][0]["shadow_evaluation_id"],
+            "shadow:first",
+        )
 
     def test_production_digest_is_stable_for_mapping_order(self):
         first = {

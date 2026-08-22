@@ -369,10 +369,14 @@ def _evaluate_without_benchmark(
     if mode == "unknown":
         outcome["status"] = "entry_mode_unknown"
         return outcome
-    if mode != "delay1_open":
+    if mode not in {"delay1_open", "immediate_close"}:
         outcome["status"] = "unsupported_entry_mode"
         return outcome
-    entry_calendar_index = report_calendar_index + 1
+    entry_calendar_index = (
+        report_calendar_index + 1
+        if mode == "delay1_open"
+        else report_calendar_index
+    )
     if entry_calendar_index >= len(calendar):
         outcome["status"] = "right_censored"
         outcome["maturity"] = {
@@ -393,24 +397,29 @@ def _evaluate_without_benchmark(
     if entry_volume is None or entry_volume <= 0:
         outcome["status"] = "suspended_entry"
         return outcome
-    entry_price = normalized["opens"][entry_index]
+    entry_price = (
+        normalized["opens"][entry_index]
+        if mode == "delay1_open"
+        else normalized["closes"][entry_index]
+    )
     if entry_price is None or entry_price <= 0:
         outcome["status"] = "market_data_invalid"
         return outcome
-    previous_close = normalized["closes"][report_index]
-    one_price = (
-        normalized["opens"][entry_index]
-        == normalized["closes"][entry_index]
-        == normalized["highs"][entry_index]
-        == normalized["lows"][entry_index]
-    )
-    locked_move = (
-        entry_price / previous_close - 1.0 >= 0.048
-        if previous_close and previous_close > 0 else False
-    )
-    if one_price and locked_move:
-        outcome["status"] = "limit_locked_entry"
-        return outcome
+    if mode == "delay1_open":
+        previous_close = normalized["closes"][report_index]
+        one_price = (
+            normalized["opens"][entry_index]
+            == normalized["closes"][entry_index]
+            == normalized["highs"][entry_index]
+            == normalized["lows"][entry_index]
+        )
+        locked_move = (
+            entry_price / previous_close - 1.0 >= 0.048
+            if previous_close and previous_close > 0 else False
+        )
+        if one_price and locked_move:
+            outcome["status"] = "limit_locked_entry"
+            return outcome
 
     outcome["entry_date"] = entry_date
     outcome["entry_price"] = entry_price
@@ -449,23 +458,34 @@ def _evaluate_without_benchmark(
             (normalized["closes"][endpoint] - entry_price)
             / entry_price * 100.0
         )
+        # The immediate-close research contract starts its excursion window
+        # at D+1.  In particular, a signal-day intraday high/low can never
+        # inflate MFE or MAE.  The legacy next-open contract still starts at
+        # its entry day, preserving the existing output byte-for-byte.
+        path_start = (
+            report_calendar_index + 1
+            if mode == "immediate_close"
+            else entry_calendar_index
+        )
+        path_dates = calendar[path_start:target_calendar_index + 1]
         path_indexes = [
             date_index[trade_date]
-            for trade_date in calendar[
-                entry_calendar_index:target_calendar_index + 1
-            ]
+            for trade_date in path_dates
             if trade_date in date_index
             and normalized["is_final"][date_index[trade_date]]
         ]
+        complete_path = len(path_indexes) == len(path_dates)
         mae[key] = (
             (min(normalized["lows"][index] for index in path_indexes)
              - entry_price) / entry_price * 100.0
-            if path_indexes else None
+            if path_indexes and (mode != "immediate_close" or complete_path)
+            else None
         )
         mfe[key] = (
             (max(normalized["highs"][index] for index in path_indexes)
              - entry_price) / entry_price * 100.0
-            if path_indexes else None
+            if path_indexes and (mode != "immediate_close" or complete_path)
+            else None
         )
     outcome["target_dates"] = target_dates
     outcome["returns"] = returns
@@ -490,7 +510,7 @@ def evaluate_recommendation_entry(
     benchmark_kline=None,
     expected_adjustment=EXPECTED_ADJUSTMENT,
 ):
-    """Evaluate one record with executable T+1-open entry and censoring."""
+    """Evaluate one record under next-open or signal-close research rules."""
     entry = entry if isinstance(entry, dict) else {}
     outcome = _evaluate_without_benchmark(
         entry,
