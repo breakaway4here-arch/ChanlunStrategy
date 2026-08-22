@@ -264,7 +264,23 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         self.assertIn("原始缠论结构候选（基准）", renderer)
         self.assertIn("h4_t3_pool", renderer)
         self.assertIn("H4 T+3 策略池", renderer)
+        self.assertIn("shadow.affects_production === false", renderer)
+        self.assertIn("var disabled = isolated", renderer)
+        self.assertIn("var collecting = isolated", renderer)
+        self.assertIn("var unavailable = !isolated", renderer)
         self.assertIn("status === 'collecting'", renderer)
+        self.assertIn("metrics.promotion_eligible === false", renderer)
+        for text in (
+            "当前结论",
+            "研究层级",
+            "不可自动晋级",
+            "晋级边界异常",
+            "上线后样本 / 前瞻影子",
+        ):
+            self.assertIn(text, renderer)
+        self.assertIn("comparison_status", renderer)
+        self.assertIn("research_tier", renderer)
+        self.assertIn("promotion_eligible", renderer)
         self.assertNotIn(".slice(", renderer)
         self.assertIn("escapeHtml", renderer)
 
@@ -272,6 +288,7 @@ class TestAuxiliaryCockpitContract(unittest.TestCase):
         for selector in (
             ".shadow-card",
             ".shadow-guard-rail",
+            ".shadow-conclusion-grid",
             ".shadow-metric-grid",
             ".shadow-candidate-row",
         ):

@@ -2898,6 +2898,16 @@
       canonical_report_bar_not_final: '信号日 K 线尚未收盘确认',
       canonical_reference_close_mismatch: '候选收盘价与权威行情不一致',
     };
+    var comparisonStatusLabels = {
+      collecting: '样本积累中',
+      ready_for_manual_comparison: '可进入人工比较',
+      insufficient: '样本不足',
+      unavailable: '暂不可比较',
+    };
+    var researchTierLabels = {
+      oot_shadow: '上线后样本 / 前瞻影子',
+      historical_shadow: '历史样本 / 回放影子',
+    };
 
     function shadowIdentity(item) {
       var row = item || {};
@@ -2917,6 +2927,16 @@
     function shadowGateLabel(value) {
       var key = normalizeString(value);
       return hardGateLabels[key] || key || '原因未记录';
+    }
+
+    function shadowComparisonLabel(value) {
+      var key = normalizeString(value);
+      return comparisonStatusLabels[key] || key || '结论状态未声明';
+    }
+
+    function shadowResearchTierLabel(value) {
+      var key = normalizeString(value);
+      return researchTierLabels[key] || key || '研究层级未声明';
     }
 
     function shadowShortSha(value) {
@@ -2974,10 +2994,11 @@
     scorecards.forEach(function (item) {
       scorecardByIdentity[shadowIdentity(item)] = item;
     });
-    var disabled = mode === 'off' || status === 'disabled';
-    var collecting = hasContract && !disabled && mode === 'shadow'
+    var isolated = hasContract && shadow.affects_production === false;
+    var disabled = isolated && (mode === 'off' || status === 'disabled');
+    var collecting = isolated && !disabled && mode === 'shadow'
       && status === 'collecting' && guard.unchanged === true;
-    var unavailable = !disabled && !collecting;
+    var unavailable = !isolated || (!disabled && !collecting);
     var statusText = collecting ? '影子评测中' : (disabled ? '影子模式已关闭' : '影子评测暂不可用');
     var statusTone = collecting ? 'info' : (disabled ? 'neutral' : 'warning');
     var body = '';
@@ -2986,14 +3007,16 @@
       body = '<div class="shadow-state"><strong>影子模式已关闭</strong><span>未采集新的影子样本；正式主推不受影响。</span></div>';
     } else if (unavailable) {
       var unavailableReason = normalizeString(shadow.error);
-      if (!unavailableReason && hasContract && guard.unchanged !== true) {
+      if (!isolated && hasContract) {
+        unavailableReason = '隔离声明缺失或不合法（affects_production 必须显式为 false）';
+      } else if (!unavailableReason && hasContract && guard.unchanged !== true) {
         unavailableReason = '正式输出保护未通过（'
           + shadowShortSha(guard.before_sha256) + ' → '
           + shadowShortSha(guard.after_sha256) + '）';
       }
       body = ''
         + '<div class="shadow-state is-warning"><strong>影子评测暂不可用</strong>'
-        + '<span>' + escapeHtml(unavailableReason || '影子合同未生成') + '；正式主推不受影响。</span></div>';
+        + '<span>' + escapeHtml(unavailableReason || '影子合同未生成') + '；研究结论已隐藏。</span></div>';
     } else {
       var guardOk = guard.unchanged === true;
       var guardLabel = guardOk ? '正式输出保护通过' : '正式输出保护未通过';
@@ -3018,22 +3041,25 @@
         var activeMonths = safeNumber(metrics.active_months, 0);
         var excursionSize = safeNumber(metrics.excursion_sample_size, 0);
         var hardReasons = asArray(metrics.hard_gate_reasons);
+        var comparisonLabel = shadowComparisonLabel(metrics.comparison_status);
+        var researchTierLabel = shadowResearchTierLabel(metrics.research_tier || rec.research_tier);
+        var promotionIsolated = metrics.promotion_eligible === false;
+        var promotionLabel = promotionIsolated ? '不可自动晋级' : '晋级边界异常';
         var reasonHtml = hardReasons.length
           ? hardReasons.map(function (reason) {
               return '<li>' + escapeHtml(shadowGateLabel(reason)) + '</li>';
             }).join('')
           : '<li>尚未记录晋级门槛</li>';
-        var experimentWarning = experimentStatus === 'available' ? '' : ''
-          + '<div class="shadow-state is-warning"><strong>单项实验暂不可用</strong><span>'
-          + escapeHtml(rec.error || '实验输出未生成') + '；正式主推不受影响。</span></div>';
-        return ''
-          + '<article class="shadow-experiment">'
-          + '  <header class="shadow-experiment-head">'
-          + '    <div><strong>' + escapeHtml(rec.display_name || rec.experiment_id || '未命名影子实验') + '</strong><small>' + escapeHtml((rec.version || rec.strategy_version || '版本未知') + ' · ' + (rec.experiment_id || '--')) + '</small></div>'
-          + '    <div class="shadow-contract-tags"><span>' + escapeHtml(horizon === null ? '周期未声明' : 'T+' + formatNumber(horizon, 0)) + '</span><span>' + escapeHtml(entryMode === 'immediate_close' ? '入场 = 信号日收盘' : '入场口径未声明') + '</span></div>'
-          + '  </header>'
-          + '  <div class="shadow-pool-map"><span>共同上游：' + escapeHtml(shadowPoolLabel(rec.upstream_pool)) + '</span><span>策略来源：' + escapeHtml(shadowPoolLabel(rec.source_pool)) + '</span></div>'
-          + experimentWarning
+        var experimentTrusted = experimentStatus === 'available' && promotionIsolated;
+        var experimentWarning = '';
+        if (experimentStatus !== 'available') {
+          experimentWarning = ''
+            + '<div class="shadow-state is-warning"><strong>单项实验暂不可用</strong><span>'
+            + escapeHtml(rec.error || '实验输出未生成') + '；正式主推不受影响。</span></div>';
+        } else if (!promotionIsolated) {
+          experimentWarning = '<div class="shadow-state is-warning"><strong>晋级边界异常</strong><span>promotion_eligible 必须显式为 false；研究指标与候选已隐藏。</span></div>';
+        }
+        var experimentResearch = experimentTrusted ? ''
           + '  <div class="shadow-progress"><strong>样本进度</strong><span>' + escapeHtml(formatNumber(sampleSize, 0) + '/100 成熟样本 · ' + formatNumber(activeDates, 0) + '/20 活跃日 · ' + formatNumber(activeMonths, 0) + '/2 月') + '</span></div>'
           + '  <div class="shadow-metric-grid">'
           + renderShadowMetric('成熟样本', formatNumber(sampleSize, 0), '')
@@ -3050,13 +3076,29 @@
           + '  <section class="shadow-subsection"><h4>尚未晋级原因</h4><ul class="shadow-gate-list">' + reasonHtml + '</ul></section>'
           + '  <section class="shadow-subsection"><h4>代表样本</h4>' + renderShadowSamples(metrics) + '</section>'
           + '  <section class="shadow-subsection"><h4>今日影子候选</h4>' + renderShadowCandidates(rec) + '</section>'
+          : experimentWarning;
+        return ''
+          + '<article class="shadow-experiment">'
+          + '  <header class="shadow-experiment-head">'
+          + '    <div><strong>' + escapeHtml(rec.display_name || rec.experiment_id || '未命名影子实验') + '</strong><small>' + escapeHtml((rec.version || rec.strategy_version || '版本未知') + ' · ' + (rec.experiment_id || '--')) + '</small></div>'
+          + '    <div class="shadow-contract-tags"><span>' + escapeHtml(horizon === null ? '周期未声明' : 'T+' + formatNumber(horizon, 0)) + '</span><span>' + escapeHtml(entryMode === 'immediate_close' ? '入场 = 信号日收盘' : '入场口径未声明') + '</span></div>'
+          + '  </header>'
+          + '  <div class="shadow-pool-map"><span>共同上游：' + escapeHtml(shadowPoolLabel(rec.upstream_pool)) + '</span><span>策略来源：' + escapeHtml(shadowPoolLabel(rec.source_pool)) + '</span></div>'
+          + '  <div class="shadow-conclusion-grid">'
+          + '    <div><small>当前结论</small><strong>' + escapeHtml(comparisonLabel) + '</strong></div>'
+          + '    <div><small>研究层级</small><strong>' + escapeHtml(researchTierLabel) + '</strong></div>'
+          + '    <div class="' + (promotionIsolated ? 'is-safe' : 'is-warning') + '"><small>晋级边界</small><strong>' + escapeHtml(promotionLabel) + '</strong></div>'
+          + '  </div>'
+          + experimentResearch
           + '</article>';
       }).join('') : '<div class="shadow-state"><strong>等待首个收盘样本</strong><span>影子评测已启用，当前没有可展示的实验；正式主推不受影响。</span></div>';
     }
 
     return renderDecisionCard({
       title: '影子评测',
-      subtitle: '收盘价研究区：独立记录候选、收益与盘中最高/最低轨迹，不改变正式选股结果',
+      subtitle: isolated
+        ? '收盘价研究区：独立记录候选、收益与盘中最高/最低轨迹，不改变正式选股结果'
+        : '影子合同未通过隔离校验，不展示研究结论',
       badge: { text: statusText, tone: statusTone },
       className: 'shadow-card',
       bodyHtml: body,
