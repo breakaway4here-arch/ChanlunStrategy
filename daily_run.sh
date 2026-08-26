@@ -120,6 +120,17 @@ push_pending_commits() {
     push_with_proxy_fallback
 }
 
+finalize_review_snapshot() {
+    local market_db_path
+
+    market_db_path="${CHANLUN_MARKET_HISTORY_DB_PATH:-${SCRIPT_DIR}/.cache/chanlun/market_history.sqlite}"
+    /usr/bin/python3 scripts/repair_strategy_scorecard_snapshot.py \
+        --report-date "$TODAY" \
+        --docs-dir "${SCRIPT_DIR}/docs" \
+        --ledger-path "${SCRIPT_DIR}/.cache/chanlun/recommendation_ledger.jsonl" \
+        --market-db-path "$market_db_path"
+}
+
 main() {
     local run_status
 
@@ -134,15 +145,26 @@ main() {
 
     if is_today_output_ready; then
         if /usr/bin/python3 scripts/validate_today_report.py "$TODAY"; then
-            /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
-            if ! publish_ready_report; then
-                exit 1
+            if /usr/bin/python3 scripts/validate_today_report.py \
+                --needs-sublevel-retry "$TODAY"; then
+                RETRY_MISSING_ONLY=1
+                echo "正式策略已校验，但分钟级研究输入仍缺失，进入 15:20 增量补跑"
+            else
+                /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
+                if ! finalize_review_snapshot; then
+                    echo "账本已固化，但页面回看/固化状态回写失败，停止发布"
+                    exit 1
+                fi
+                if ! publish_ready_report; then
+                    exit 1
+                fi
+                echo "今日产物已存在且行情与选股输入校验通过，跳过补跑"
+                exit 0
             fi
-            echo "今日产物已存在且行情校验通过，跳过补跑"
-            exit 0
+        else
+            RETRY_MISSING_ONLY=1
+            echo "今日产物行情或选股输入校验失败，进入缺失数据增量补跑"
         fi
-        RETRY_MISSING_ONLY=1
-        echo "今日产物行情校验失败，进入缺失数据增量补跑"
     fi
 
     export CHANLUN_DAILY_RETRY_MISSING_ONLY=$RETRY_MISSING_ONLY
@@ -162,6 +184,10 @@ main() {
                 exit 1
             fi
             /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
+            if ! finalize_review_snapshot; then
+                echo "账本已固化，但页面回看/固化状态回写失败，停止发布"
+                exit 1
+            fi
             if ! publish_ready_report; then
                 exit 1
             fi

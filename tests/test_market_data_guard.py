@@ -11,7 +11,12 @@ import numpy as np
 import run
 from chanlun import data_fetcher
 from chanlun.kline_cache import write_cached_records
-from scripts.validate_today_report import validate_report_contract
+from chanlun.report_view_model import build_workspace
+from scripts.validate_today_report import (
+    main as validate_report_main,
+    needs_sublevel_retry,
+    validate_report_contract,
+)
 
 
 def _kline(dates, closes):
@@ -31,10 +36,26 @@ def _official_empty_report():
         "date": "2026-06-30",
         "picks_fusion": [],
         "picks_pure": [],
-        "next_day_boom": {"candidates": []},
-        "luojie_pool": {"candidates": []},
+        "next_day_boom": {
+            "mode": "disabled", "status": "disabled",
+            "reason": "测试日未启用", "candidates": [],
+        },
+        "luojie_pool": {
+            "mode": "disabled", "status": "disabled",
+            "reason": "测试日未启用", "candidates": [],
+        },
         "startup_watchlist": [],
         "workspace": {"views": {"highlights": [], "main": [], "baseline": []}},
+        "selection_input_health": {
+            "schema_version": 1,
+            "status": "verified",
+            "formal": {
+                "status": "verified",
+                "formal_actions_allowed": True,
+                "invalid_count": 0,
+            },
+            "sublevels": {},
+        },
         "data_quality": {
             "report_date": "2026-06-30",
             "generated_at": "2026-06-30T15:05:00+08:00",
@@ -85,6 +106,126 @@ def _complete_sector_fetch(rows_by_code):
 
 
 class TestMarketDataGuard(unittest.TestCase):
+
+    def test_independent_strategy_output_is_restricted_to_picks_pure_upstream(self):
+        rows = [
+            {"code": "600000", "strategy_score": 90},
+            {"code": "600001", "strategy_score": 99},
+            {"code": "600002", "strategy_score": 80},
+        ]
+        upstream = [{"code": "600000"}, {"code": "600002"}]
+
+        kept, diagnostics = run._restrict_to_common_upstream(rows, upstream)
+
+        self.assertEqual(["600000", "600002"], [row["code"] for row in kept])
+        self.assertEqual(3, diagnostics["input_count"])
+        self.assertEqual(2, diagnostics["kept_count"])
+        self.assertEqual(["600001"], diagnostics["excluded_codes"])
+        self.assertEqual("picks_pure", diagnostics["upstream_pool"])
+
+    def test_sublevel_input_health_separates_verified_partial_and_unavailable(self):
+        requested = [
+            {"code": "600000"}, {"code": "600001"}
+        ]
+        evidence = {
+            "interval": "15m", "status": "verified",
+            "latest_date": "2026-08-26", "is_final": True,
+            "stale": False,
+        }
+
+        verified = run._build_sublevel_input_health(
+            "15m", requested,
+            [
+                {"code": "600000", "input_evidence": evidence},
+                {"code": "600001", "input_evidence": evidence},
+            ],
+            "2026-08-26",
+        )
+        partial = run._build_sublevel_input_health(
+            "15m", requested,
+            [{"code": "600000", "input_evidence": evidence}],
+            "2026-08-26",
+        )
+        unavailable = run._build_sublevel_input_health(
+            "15m", requested, [], "2026-08-26"
+        )
+
+        self.assertEqual(verified["status"], "verified")
+        self.assertEqual(partial["status"], "partial")
+        self.assertEqual(partial["verified_count"], 1)
+        self.assertEqual(partial["missing_codes"], ["600001"])
+        self.assertEqual(unavailable["status"], "unavailable")
+        self.assertTrue(unavailable["blocks_strategy_output"])
+
+    def test_formal_dependency_health_rejects_unverified_30min_candidate(self):
+        valid = {
+            "code": "600000", "signal_tier": "candidate",
+            "strategy_input_evidence": {
+                "interval": "30m", "status": "verified",
+                "latest_date": "2026-08-26", "is_final": True,
+                "stale": False,
+            },
+        }
+        stale = {
+            "code": "600001", "signal_tier": "candidate",
+            "strategy_input_evidence": {
+                "interval": "30m", "status": "stale_cache",
+                "latest_date": "2026-08-21", "is_final": False,
+                "stale": True,
+            },
+        }
+
+        healthy = run._build_formal_input_health(
+            [valid], "2026-08-26"
+        )
+        blocked = run._build_formal_input_health(
+            [valid, stale], "2026-08-26"
+        )
+
+        self.assertTrue(healthy["formal_actions_allowed"])
+        self.assertFalse(blocked["formal_actions_allowed"])
+        self.assertEqual(blocked["status"], "unavailable")
+        self.assertEqual(blocked["invalid_codes"], ["600001"])
+
+    def test_selection_health_is_independent_by_formal_strategy(self):
+        fusion = {
+            "status": "unavailable",
+            "formal_actions_allowed": False,
+            "invalid_codes": ["300697"],
+            "blocking_reason": "strategy_input_stale_or_unverified",
+        }
+        h4 = {
+            "status": "verified",
+            "formal_actions_allowed": True,
+            "invalid_codes": [],
+            "blocking_reason": "",
+        }
+        luojie = {
+            "status": "unavailable",
+            "formal_actions_allowed": False,
+            "invalid_codes": ["600001"],
+            "blocking_reason": "strategy_input_stale_or_unverified",
+        }
+
+        health = run._build_selection_input_health(
+            "2026-08-26",
+            daily_fusion=fusion,
+            h4_t3=h4,
+            luojie_pool=luojie,
+            sublevels={"15m": {"status": "unavailable"}, "30m": {"status": "unavailable"}},
+        )
+
+        self.assertEqual(2, health["schema_version"])
+        self.assertFalse(
+            health["by_strategy"]["daily_fusion"]["formal_actions_allowed"]
+        )
+        self.assertTrue(
+            health["by_strategy"]["h4_t3"]["formal_actions_allowed"]
+        )
+        self.assertEqual("partial", health["formal"]["status"])
+        self.assertTrue(health["formal"]["formal_actions_allowed"])
+        self.assertFalse(health["formal"]["all_formal_actions_allowed"])
+        self.assertEqual(["daily_fusion"], health["formal"]["blocked_strategies"])
 
     def test_partial_industry_hydration_is_visible_in_data_quality_warnings(self):
         quality = {"warnings": []}
@@ -1294,6 +1435,112 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
 class TestReportContractGuard(unittest.TestCase):
 
+    def test_validator_cli_uses_explicit_docs_directory(self):
+        with tempfile.TemporaryDirectory() as root:
+            docs_dir = Path(root) / "docs"
+            (docs_dir / "data").mkdir(parents=True)
+
+            result = validate_report_main([
+                "--docs-dir", str(docs_dir), "2026-08-26"
+            ])
+
+        self.assertEqual(1, result)
+
+    def test_sublevel_retry_only_targets_research_input_gaps(self):
+        report = _official_empty_report()
+        report["selection_input_health"]["status"] = "partial"
+        report["selection_input_health"]["sublevels"] = {
+            "15m": {"status": "unavailable"},
+            "30m": {"status": "verified"},
+        }
+        self.assertTrue(needs_sublevel_retry(report))
+        report["selection_input_health"]["formal"]["formal_actions_allowed"] = False
+        self.assertFalse(needs_sublevel_retry(report))
+
+    def test_validate_official_rejects_missing_or_blocked_selection_input_health(self):
+        missing = _official_empty_report()
+        missing.pop("selection_input_health")
+        self.assertTrue(any(
+            "selection_input_health" in error
+            for error in validate_report_contract(missing, require_official=True)
+        ))
+
+        blocked = _official_empty_report()
+        blocked["selection_input_health"]["status"] = "unavailable"
+        blocked["selection_input_health"]["formal"] = {
+            "status": "unavailable",
+            "formal_actions_allowed": False,
+            "invalid_count": 1,
+            "invalid_codes": ["600000"],
+        }
+        self.assertTrue(any(
+            "formal strategy input" in error
+            for error in validate_report_contract(blocked, require_official=True)
+        ))
+
+    def test_validate_official_allows_only_registered_fail_closed_incident_correction(self):
+        report = _official_empty_report()
+        report["date"] = "2026-08-26"
+        report["data_quality"].update({
+            "report_date": "2026-08-26",
+            "generated_at": "2026-08-26T15:20:00+08:00",
+            "as_of": "2026-08-26T15:20:00+08:00",
+        })
+        report["picks_fusion"] = [{
+            "code": "300697",
+            "name": "电工合金",
+            "score": 88,
+            "change_pct": 1.2,
+            "current_price": 18.2,
+            "action": "可上车",
+            "action_reason": "旧快照动作",
+            "decision_engine_v1": {"decision_code": "recommend"},
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-08-26",
+                "stale": False,
+                "is_final": True,
+            },
+        }]
+        report["selection_input_health"] = {
+            "schema_version": 1,
+            "status": "unavailable",
+            "formal": {
+                "status": "unavailable",
+                "formal_actions_allowed": False,
+                "invalid_count": 1,
+                "invalid_codes": ["300697"],
+                "blocking_reason": "strategy_input_stale_or_unverified",
+            },
+            "sublevels": {"30m": {"status": "unavailable"}},
+            "incident_ids": [
+                "sublevel-input-stale-2026-08-26-fusion-300697"
+            ],
+        }
+        report["workspace"] = build_workspace(report)
+
+        errors = validate_report_contract(report, require_official=True)
+
+        self.assertFalse(any(
+            "formal strategy input" in error for error in errors
+        ), errors)
+        self.assertFalse(any(
+            "main view missing" in error for error in errors
+        ), errors)
+        self.assertEqual([], report["workspace"]["views"]["main"])
+        self.assertEqual(
+            "仅观察",
+            report["workspace"]["views"]["highlights"][0]["page_action"],
+        )
+
+        report["selection_input_health"]["incident_ids"] = ["invented"]
+        self.assertTrue(any(
+            "formal strategy input" in error
+            for error in validate_report_contract(
+                report, require_official=True
+            )
+        ))
+
     def test_validate_report_contract_reports_workspace_stale_row_once(self):
         report = _official_empty_report()
         report["workspace"]["views"]["highlights"] = [{
@@ -1610,6 +1857,15 @@ class TestReportContractGuard(unittest.TestCase):
         }
 
         self.assertEqual(validate_report_contract(report), [])
+        errors = validate_report_contract(report, require_official=True)
+        for pool_name in (
+            "picks_fusion", "picks_pure", "next_day_boom",
+            "luojie_pool", "startup_watchlist",
+        ):
+            self.assertTrue(
+                any(pool_name in error and "contract" in error for error in errors),
+                (pool_name, errors),
+            )
 
     def test_validate_report_contract_rejects_official_stale_data_quality(self):
         report = {

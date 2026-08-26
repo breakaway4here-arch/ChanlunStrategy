@@ -489,9 +489,15 @@ def _serialize_startup_watchlist(watchlist):
         if closes_arr and len(closes_arr) > 0:
             curr_price = float(closes_arr[-1])
         else:
-            curr_price = 0
-        ref_price = w.get("reference_price") or w.get("close", 0)
-        dist_pct = round((curr_price - ref_price) / ref_price * 100, 2) if ref_price and ref_price > 0 else None
+            curr_price = w.get("current_price")
+        ref_price = w.get("reference_price")
+        if ref_price is None:
+            ref_price = w.get("close")
+        dist_pct = (
+            round((curr_price - ref_price) / ref_price * 100, 2)
+            if curr_price is not None and ref_price and ref_price > 0
+            else None
+        )
 
         # 图表窗口切片（最近50根K线）
         n_orig = len(raw_dates)
@@ -556,7 +562,7 @@ def _serialize_startup_watchlist(watchlist):
             "startup_index": w.get("startup_index"),
             "startup_date": w.get("startup_date", ""),
             "startup_age_days": w.get("startup_age_days"),
-            "change_pct": w.get("change_pct", 0),
+            "change_pct": w.get("change_pct"),
             "volume_ratio": w.get("volume_ratio", 0),
             "decision_engine_v1": w.get("decision_engine_v1"),
             "close": ref_price,
@@ -638,13 +644,9 @@ def _serialize_next_day_boom(data):
         change_pct = c.get("change_pct")
         if change_pct is None:
             change_pct = _compute_pick_change_pct(c)  # fallback from closes
-            if change_pct is None:
-                change_pct = 0
         current_price = c.get("current_price")
         if current_price is None:
             current_price = closes[-1] if closes else c.get("close")
-        if current_price is None:
-            current_price = 0
 
         candidates.append({
             "rank": c.get("rank"),
@@ -695,18 +697,17 @@ def _serialize_luojie_pool(data):
         change_pct = c.get("change_pct")
         if change_pct is None:
             change_pct = _compute_pick_change_pct(c)  # fallback from closes
-            if change_pct is None:
-                change_pct = 0
         current_price = c.get("current_price")
         if current_price is None:
-            current_price = closes[-1] if closes else c.get("close")
-        if current_price is None:
-            current_price = 0
+            current_price = closes[-1] if closes else None
         distance_life_pct = c.get("distance_life_pct")
         if distance_life_pct is None:
             life_line = c.get("life_line")
-            if life_line:
-                distance_life_pct = round((current_price - life_line) / life_line * 100, 2)
+            signal_close = c.get("signal_15m_close")
+            if life_line and signal_close is not None:
+                distance_life_pct = round(
+                    (signal_close - life_line) / life_line * 100, 2
+                )
 
         candidates.append({
             "rank": c.get("rank"),
@@ -722,18 +723,25 @@ def _serialize_luojie_pool(data):
             "tier": c.get("tier", ""),
             "score": c.get("score", 0),
             "decision_engine_v1": c.get("decision_engine_v1"),
-            "close": c.get("close", 0),
-            "life_line": c.get("life_line", 0),
-            "ma13": c.get("ma13", 0),
-            "ma77": c.get("ma77", 0),
+            "close": c.get("close"),
+            "signal_15m_close": c.get("signal_15m_close"),
+            "strategy_input_evidence": c.get(
+                "strategy_input_evidence", {}
+            ),
+            "reference_close_evidence": c.get(
+                "reference_close_evidence", {}
+            ),
+            "life_line": c.get("life_line"),
+            "ma13": c.get("ma13"),
+            "ma77": c.get("ma77"),
             "distance_life_pct": distance_life_pct,
-            "distance_ma77_pct": c.get("distance_ma77_pct", 0),
+            "distance_ma77_pct": c.get("distance_ma77_pct"),
             "macd_status": c.get("macd_status", ""),
             "macd_above_zero": c.get("macd_above_zero", False),
             "buy_point_type": c.get("buy_point_type", "-"),
             "pivot_status": c.get("pivot_status", ""),
-            "risk_line": c.get("risk_line", 0),
-            "reduce_line": c.get("reduce_line", 0),
+            "risk_line": c.get("risk_line"),
+            "reduce_line": c.get("reduce_line"),
             "change_pct": change_pct,
             "current_price": current_price,
             "reason": c.get("reason", ""),
@@ -1301,7 +1309,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>缠论选股日报 — {date_str}</title>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
-<script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
+<script defer src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
 </head>
 <body>
@@ -1501,6 +1509,9 @@ def build_full_daily_projection(report_data, include_shadow=True):
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
+        "selection_input_health": report_data.get(
+            "selection_input_health", {}
+        ),
         "startup_watchlist": _serialize_startup_watchlist(
             report_data.get("startup_watchlist", [])
         ),
@@ -1517,6 +1528,18 @@ def build_full_daily_projection(report_data, include_shadow=True):
             report_data.get("h4_t3_pool", {})
         ),
     }
+    for optional_pool in (
+        "picks_pure",
+        "picks_fusion",
+        "startup_watchlist",
+        "observation_watchlist",
+        "next_day_boom",
+        "luojie_pool",
+        "h4_t3_pool",
+        "selection_input_health",
+    ):
+        if optional_pool not in report_data:
+            daily_data.pop(optional_pool, None)
     if include_shadow:
         daily_data["shadow_evaluations"] = _serialize_shadow_evaluations(
             report_data.get("shadow_evaluations", {})
@@ -1560,6 +1583,9 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
+        "selection_input_health": report_data.get(
+            "selection_input_health", {}
+        ),
         "next_day_boom": _serialize_next_day_boom(
             report_data.get("next_day_boom", {})
         ),
@@ -1567,6 +1593,15 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
             report_data.get("luojie_pool", {})
         ),
     }
+    for optional_pool in (
+        "picks_pure",
+        "picks_fusion",
+        "next_day_boom",
+        "luojie_pool",
+        "selection_input_health",
+    ):
+        if optional_pool not in report_data:
+            day_entry.pop(optional_pool, None)
     if include_shadow:
         day_entry["shadow_evaluations"] = _serialize_shadow_evaluations(
             report_data.get("shadow_evaluations", {})

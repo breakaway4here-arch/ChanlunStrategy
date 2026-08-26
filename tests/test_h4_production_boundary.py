@@ -39,6 +39,16 @@ class TestH4ProductionBoundary(unittest.TestCase):
         ]
         workspace = build_workspace(
             {
+                "picks_pure": candidates,
+                "selection_input_health": {
+                    "schema_version": 2,
+                    "by_strategy": {
+                        "h4_t3": {
+                            "status": "verified",
+                            "formal_actions_allowed": True,
+                        }
+                    },
+                },
                 "h4_t3_pool": {
                     "status": "ok",
                     "mode": "production",
@@ -66,10 +76,28 @@ class TestH4ProductionBoundary(unittest.TestCase):
             },
             "best_buy_point": {},
         }
-        baseline = build_workspace({"picks_fusion": [candidate]})
+        healthy = {
+            "schema_version": 2,
+            "by_strategy": {
+                "daily_fusion": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+                "h4_t3": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+            },
+        }
+        baseline = build_workspace({
+            "picks_fusion": [candidate],
+            "selection_input_health": healthy,
+        })
         with_h4 = build_workspace(
             {
+                "picks_pure": [candidate],
                 "picks_fusion": [candidate],
+                "selection_input_health": healthy,
                 "h4_t3_pool": {
                     "status": "ok",
                     "mode": "production",

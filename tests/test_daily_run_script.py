@@ -37,6 +37,14 @@ class TestDailyRunScript(unittest.TestCase):
         ready_block = self.script[ready_check:generation_start]
 
         self.assertIn("publish_ready_report", ready_block)
+        self.assertIn("--needs-sublevel-retry", ready_block)
+        self.assertIn("分钟级研究输入仍缺失", ready_block)
+
+    def test_main_runs_only_after_all_called_functions_are_defined(self):
+        self.assertGreater(
+            self.script.rfind('main "$@"'),
+            self.script.index("publish_ready_report() {"),
+        )
 
     def test_automatic_sync_is_fast_forward_only(self):
         self.assertIn("sync_with_remote() {", self.script)
@@ -49,6 +57,20 @@ class TestDailyRunScript(unittest.TestCase):
         self.assertIn("merge --ff-only", sync_body)
         self.assertNotIn("reset --hard", sync_body)
         self.assertNotIn("pull --rebase", sync_body)
+
+    def test_finalized_ledger_status_is_rebuilt_into_public_snapshot(self):
+        self.assertIn("finalize_review_snapshot() {", self.script)
+        self.assertIn(
+            "scripts/repair_strategy_scorecard_snapshot.py",
+            self.script,
+        )
+        finalizer = self.script.rfind(
+            '/usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"'
+        )
+        repair = self.script.rfind("if ! finalize_review_snapshot; then")
+        publish = self.script.rfind("if ! publish_ready_report; then")
+        self.assertLess(finalizer, repair)
+        self.assertLess(repair, publish)
 
 
 if __name__ == "__main__":

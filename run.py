@@ -105,6 +105,7 @@ from chanlun.recommendation_ledger import (
     prepare_recommendation_history,
 )
 from chanlun.strategy_review import (
+    build_strategy_run_manifest,
     build_strategy_scorecards,
     load_review_market_context_from_store,
     persist_review_benchmark_kline,
@@ -139,13 +140,238 @@ from chanlun.universe_builder import (
 )
 
 
-def _build_daily_h4_t3_pool(fusion_candidates, trade_date):
-    """Build H4 from the same real fusion candidates published by the daily run."""
+def _build_daily_h4_t3_pool(pure_candidates, trade_date):
+    """Build H4 from the shared picks_pure upstream; H4 keeps its own gates."""
     return build_h4_t3_pool(
-        fusion_candidates,
+        pure_candidates,
         trade_date,
-        upstream_pool="picks_fusion",
+        upstream_pool="picks_pure",
     )
+
+
+def _candidate_code(item):
+    if isinstance(item, dict):
+        return str(item.get("code") or "").strip()
+    return str(getattr(item, "code", "") or "").strip()
+
+
+def _restrict_to_common_upstream(items, upstream_candidates):
+    """Keep strategy-specific ordering while enforcing picks_pure membership."""
+    upstream_codes = {
+        _candidate_code(item) for item in (upstream_candidates or [])
+        if _candidate_code(item)
+    }
+    rows = list(items or [])
+    kept = [item for item in rows if _candidate_code(item) in upstream_codes]
+    excluded_codes = sorted({
+        _candidate_code(item) for item in rows
+        if _candidate_code(item) and _candidate_code(item) not in upstream_codes
+    })
+    return kept, {
+        "upstream_pool": "picks_pure",
+        "upstream_count": len(upstream_codes),
+        "input_count": len(rows),
+        "kept_count": len(kept),
+        "excluded_count": len(rows) - len(kept),
+        "excluded_codes": excluded_codes,
+    }
+
+
+def _verified_strategy_input(evidence, interval, report_date):
+    value = evidence if isinstance(evidence, dict) else {}
+    return bool(
+        value.get("interval") == interval
+        and value.get("status") == "verified"
+        and value.get("stale") is False
+        and value.get("is_final") is True
+        and str(value.get("latest_date") or "") == str(report_date)
+    )
+
+
+def _build_sublevel_input_health(interval, requested, rows, report_date):
+    requested_codes = sorted({
+        str(item.get("code") or "")
+        for item in (requested or [])
+        if isinstance(item, dict) and item.get("code")
+    })
+    verified_codes = sorted({
+        str(item.get("code") or "")
+        for item in (rows or [])
+        if isinstance(item, dict)
+        and item.get("code")
+        and _verified_strategy_input(
+            item.get("input_evidence"), interval, report_date
+        )
+    })
+    missing_codes = sorted(set(requested_codes) - set(verified_codes))
+    if not requested_codes:
+        status = "not_required"
+    elif not verified_codes:
+        status = "unavailable"
+    elif missing_codes:
+        status = "partial"
+    else:
+        status = "verified"
+    return {
+        "interval": interval,
+        "required_date": str(report_date),
+        "status": status,
+        "requested_count": len(requested_codes),
+        "verified_count": len(verified_codes),
+        "missing_count": len(missing_codes),
+        "verified_codes": verified_codes,
+        "missing_codes": missing_codes,
+        "blocks_strategy_output": bool(
+            requested_codes and status == "unavailable"
+        ),
+    }
+
+
+def _candidate_strategy_input(item):
+    if not isinstance(item, dict):
+        return {}
+    direct = item.get("strategy_input_evidence")
+    if isinstance(direct, dict):
+        return direct
+    result = item.get("result_30min")
+    value = getattr(result, "strategy_input_evidence", {})
+    return value if isinstance(value, dict) else {}
+
+
+def _depends_on_30min(item):
+    if not isinstance(item, dict):
+        return False
+    if str(item.get("signal_tier") or "") == "candidate":
+        return True
+    text = " ".join([
+        str(item.get("confirmed_by") or ""),
+        " ".join(str(value) for value in item.get("confirmations") or []),
+    ])
+    return "30min" in text or "30分钟" in text
+
+
+def _build_formal_input_health(items, report_date):
+    dependent = [
+        item for item in (items or []) if _depends_on_30min(item)
+    ]
+    invalid_codes = sorted({
+        str(item.get("code") or "")
+        for item in dependent
+        if not _verified_strategy_input(
+            _candidate_strategy_input(item), "30m", report_date
+        )
+    })
+    return {
+        "status": "unavailable" if invalid_codes else "verified",
+        "required_date": str(report_date),
+        "dependent_candidate_count": len(dependent),
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+        "formal_actions_allowed": not invalid_codes,
+        "blocking_reason": (
+            "strategy_input_stale_or_unverified"
+            if invalid_codes else ""
+        ),
+    }
+
+
+def _build_h4_input_health(h4_pool, report_date):
+    value = h4_pool if isinstance(h4_pool, dict) else {}
+    diagnostics = value.get("diagnostics")
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    attested = bool(
+        value.get("status") == "ok"
+        and value.get("mode") == "production"
+        and value.get("production_attested") is True
+        and diagnostics.get("upstream_pool") == "picks_pure"
+    )
+    return {
+        "status": "verified" if attested else "unavailable",
+        "required_date": str(report_date),
+        "dependent_candidate_count": int(diagnostics.get("upstream_count") or 0),
+        "invalid_count": 0 if attested else 1,
+        "invalid_codes": [],
+        "formal_actions_allowed": attested,
+        "blocking_reason": "" if attested else "strategy_run_unattested",
+    }
+
+
+def _build_research_input_health(sublevel_health):
+    value = sublevel_health if isinstance(sublevel_health, dict) else {}
+    status = str(value.get("status") or "unavailable")
+    usable = status in {"verified", "not_required"}
+    return {
+        "status": "verified" if usable else status,
+        "required_date": str(value.get("required_date") or ""),
+        "invalid_count": int(value.get("missing_count") or 0),
+        "invalid_codes": list(value.get("missing_codes") or []),
+        "formal_actions_allowed": False,
+        "research_output_trusted": usable,
+        "blocking_reason": (
+            "" if usable else "strategy_input_stale_or_unverified"
+        ),
+    }
+
+
+def _build_selection_input_health(
+    report_date,
+    *,
+    daily_fusion,
+    h4_t3,
+    luojie_pool,
+    sublevels,
+):
+    by_strategy = {
+        "daily_fusion": dict(daily_fusion or {}),
+        "h4_t3": dict(h4_t3 or {}),
+        "luojie_pool": dict(luojie_pool or {}),
+    }
+    formal_names = ("daily_fusion", "h4_t3")
+    allowed = [
+        name for name in formal_names
+        if by_strategy[name].get("formal_actions_allowed") is True
+    ]
+    blocked = [name for name in formal_names if name not in allowed]
+    formal_status = (
+        "verified" if not blocked
+        else ("unavailable" if not allowed else "partial")
+    )
+    invalid_codes = sorted({
+        str(code)
+        for name in formal_names
+        for code in by_strategy[name].get("invalid_codes") or []
+        if str(code)
+    })
+    formal = {
+        "status": formal_status,
+        "required_date": str(report_date),
+        "formal_actions_allowed": bool(allowed),
+        "all_formal_actions_allowed": not blocked,
+        "allowed_strategies": allowed,
+        "blocked_strategies": blocked,
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+        "blocking_reason": (
+            "strategy_input_stale_or_unverified" if blocked else ""
+        ),
+    }
+    sublevel_values = dict(sublevels or {})
+    research_degraded = any(
+        str((value or {}).get("status") or "") in {"partial", "unavailable"}
+        for value in sublevel_values.values()
+        if isinstance(value, dict)
+    )
+    status = formal_status
+    if status == "verified" and research_degraded:
+        status = "partial"
+    return {
+        "schema_version": 2,
+        "required_date": str(report_date),
+        "status": status,
+        "formal": formal,
+        "by_strategy": by_strategy,
+        "sublevels": sublevel_values,
+    }
 
 
 # ============================================================
@@ -1777,7 +2003,7 @@ def main(debug=False, preview=False, generated_at=None):
         fusion_diag = {}
 
     # ================================================================
-    # Phase 4.5: Strong startup scan (independent of structure pool)
+    # Phase 4.5: Strong startup scan (independent rules on picks_pure upstream)
     # ================================================================
     print("=" * 60)
     print("Phase 4.5: Strong startup scan")
@@ -1828,15 +2054,20 @@ def main(debug=False, preview=False, generated_at=None):
 
         return merged
 
+    common_structure_results, startup_upstream_diag = (
+        _restrict_to_common_upstream(chan_results, pure_pool)
+    )
     startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
-        chan_results, sector_stocks)
+        common_structure_results, sector_stocks)
+    startup_diag["common_upstream"] = startup_upstream_diag
     startup_seeds = [_attach_sector_metadata(s) for s in startup_seeds]
     startup_seeds = [_attach_liquidity(s) for s in startup_seeds]
     startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
     startup_watchlist = [_attach_liquidity(w) for w in startup_watchlist]
     trend_seeds, trend_watchlist, trend_diag = build_trend_continuation_pool(
-        chan_results, sector_stocks
+        common_structure_results, sector_stocks
     )
+    trend_diag["common_upstream"] = startup_upstream_diag
     trend_seeds = [_attach_liquidity(_attach_sector_metadata(s)) for s in trend_seeds]
     trend_watchlist = [
         _attach_liquidity(_attach_sector_metadata(w)) for w in trend_watchlist
@@ -1877,9 +2108,19 @@ def main(debug=False, preview=False, generated_at=None):
     print("Phase 4.6: 罗姐池")
     print("=" * 60)
 
-    luojie_theme_stocks = prefilter_luojie_theme_candidates(stocks_with_kline)
+    common_structure_stocks, luojie_upstream_diag = (
+        _restrict_to_common_upstream(stocks_with_kline, pure_pool)
+    )
+    luojie_theme_stocks = prefilter_luojie_theme_candidates(
+        common_structure_stocks
+    )
     print(f"  国家队硬方向主题预筛: {len(luojie_theme_stocks)} 只")
-    min15_data_list = collect_15min_data(luojie_theme_stocks)
+    min15_data_list = collect_15min_data(
+        luojie_theme_stocks, required_date=today
+    )
+    min15_input_health = _build_sublevel_input_health(
+        "15m", luojie_theme_stocks, min15_data_list, today
+    )
     chan_results_15min = []
     if min15_data_list:
         seed_map = {s["code"]: s for s in luojie_theme_stocks}
@@ -1893,8 +2134,31 @@ def main(debug=False, preview=False, generated_at=None):
                 highs=kline["highs"], lows=kline["lows"],
                 closes=kline["closes"], volumes=kline["volumes"],
             )
+            setattr(
+                result,
+                "strategy_input_evidence",
+                dict(d.get("input_evidence") or {}),
+            )
             chan_results_15min.append(result)
     luojie_pool = build_luojie_pool(luojie_theme_stocks, chan_results_15min)
+    luojie_pool.setdefault("diagnostics", {})["common_upstream"] = (
+        luojie_upstream_diag
+    )
+    luojie_pool["input_health"] = min15_input_health
+    if min15_input_health["status"] in {"partial", "unavailable"}:
+        luojie_pool["status"] = min15_input_health["status"]
+        luojie_pool["mode"] = (
+            "partial"
+            if min15_input_health["status"] == "partial"
+            else "enabled"
+        )
+        luojie_pool["reason"] = (
+            "15分钟策略输入未全部达到当日收盘核验要求，今日停止展示与评分"
+        )
+        luojie_pool["diagnostics"]["withheld_candidates"] = len(
+            luojie_pool.get("candidates", [])
+        )
+        luojie_pool["candidates"] = []
     print(f"  罗姐池: 主题={luojie_pool.get('diagnostics', {}).get('theme_candidates', 0)} "
           f"15min={luojie_pool.get('diagnostics', {}).get('with_15min', 0)} "
           f"入池={len(luojie_pool.get('candidates', []))}")
@@ -1917,6 +2181,8 @@ def main(debug=False, preview=False, generated_at=None):
     trend_upgrade_diag = {}
     trend_additional_watchlist = []
     all_target_codes = set()
+    all_targets = []
+    min30_data_list = []
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
@@ -1936,7 +2202,9 @@ def main(debug=False, preview=False, generated_at=None):
         print(f"  结构池并集: {len(all_target_codes)} 只 "
               f"(含低位启动: {len(startup_seed_codes)}, "
               f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
-        min30_data_list = collect_30min_data(all_targets)
+        min30_data_list = collect_30min_data(
+            all_targets, required_date=today
+        )
 
         if not min30_data_list:
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结构池结果")
@@ -1993,6 +2261,11 @@ def main(debug=False, preview=False, generated_at=None):
                     dates=kline["dates"], opens=kline["opens"],
                     highs=kline["highs"], lows=kline["lows"],
                     closes=kline["closes"], volumes=kline["volumes"],
+                )
+                setattr(
+                    result,
+                    "strategy_input_evidence",
+                    dict(d.get("input_evidence") or {}),
                 )
                 chan_results_30min.append(result)
 
@@ -2167,7 +2440,9 @@ def main(debug=False, preview=False, generated_at=None):
         fusion_codes = {s["code"] for s in fusion_pool}
         all_target_codes = pure_codes | fusion_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
-        min30_data_list = collect_30min_data(all_targets)
+        min30_data_list = collect_30min_data(
+            all_targets, required_date=today
+        )
 
         if not min30_data_list:
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结果")
@@ -2184,6 +2459,11 @@ def main(debug=False, preview=False, generated_at=None):
                     dates=kline["dates"], opens=kline["opens"],
                     highs=kline["highs"], lows=kline["lows"],
                     closes=kline["closes"], volumes=kline["volumes"],
+                )
+                setattr(
+                    result,
+                    "strategy_input_evidence",
+                    dict(d.get("input_evidence") or {}),
                 )
                 chan_results_30min.append(result)
             print("[纯净版 30min确认]")
@@ -2206,6 +2486,10 @@ def main(debug=False, preview=False, generated_at=None):
             _attach_liquidity(_attach_sector_metadata(item))
             for item in trend_additional_watchlist
         )
+
+    min30_input_health = _build_sublevel_input_health(
+        "30m", all_targets, min30_data_list, today
+    )
 
     # ================================================================
     # Phase 6: Score + generate report
@@ -2266,6 +2550,31 @@ def main(debug=False, preview=False, generated_at=None):
             legacy_codes,
         )
     )
+    fusion_scored, fusion_upstream_diag = _restrict_to_common_upstream(
+        fusion_scored, pure_scored
+    )
+    startup_watchlist, startup_final_upstream_diag = (
+        _restrict_to_common_upstream(startup_watchlist, pure_scored)
+    )
+    trend_watchlist, trend_final_upstream_diag = (
+        _restrict_to_common_upstream(trend_watchlist, pure_scored)
+    )
+    observation_watchlist = startup_watchlist + trend_watchlist
+    luojie_candidates, luojie_final_upstream_diag = (
+        _restrict_to_common_upstream(
+            luojie_pool.get("candidates", []), pure_scored
+        )
+    )
+    luojie_pool["candidates"] = luojie_candidates
+    luojie_pool.setdefault("diagnostics", {})[
+        "final_common_upstream"
+    ] = luojie_final_upstream_diag
+    common_upstream_diagnostics = {
+        "picks_fusion": fusion_upstream_diag,
+        "startup_watchlist": startup_final_upstream_diag,
+        "trend_watchlist": trend_final_upstream_diag,
+        "luojie_pool": luojie_final_upstream_diag,
+    }
     if RECALL_STRATEGY_MODE != "active":
         print(
             "  召回影子模式: potential pure={} fusion={}, "
@@ -2404,7 +2713,24 @@ def main(debug=False, preview=False, generated_at=None):
         _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
 
-    h4_t3_pool = _build_daily_h4_t3_pool(fusion_scored, today)
+    h4_t3_pool = _build_daily_h4_t3_pool(pure_scored, today)
+    daily_fusion_input_health = _build_formal_input_health(
+        fusion_scored, today
+    )
+    h4_input_health = _build_h4_input_health(h4_t3_pool, today)
+    luojie_input_health = _build_research_input_health(
+        min15_input_health
+    )
+    selection_input_health = _build_selection_input_health(
+        today,
+        daily_fusion=daily_fusion_input_health,
+        h4_t3=h4_input_health,
+        luojie_pool=luojie_input_health,
+        sublevels={
+            "15m": min15_input_health,
+            "30m": min30_input_health,
+        },
+    )
     print(
         "  H4 T+3: 微状态{}只，过门{}只".format(
             h4_t3_pool["diagnostics"]["microstate_count"],
@@ -2566,6 +2892,8 @@ def main(debug=False, preview=False, generated_at=None):
             "with_annotations": picks_with_annotations,
         },
         "data_quality": data_quality,
+        "selection_input_health": selection_input_health,
+        "common_upstream": common_upstream_diagnostics,
         "strong_startup": {
             "daily_scan": startup_diag,
             "upgrade": startup_upgrade_diag,
@@ -2729,6 +3057,8 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "日线纯净策略",
             "strategy_version": "daily-pure-close-v1",
             "source_pool": "picks_pure",
+            "evaluation_role": "baseline",
+            "publication_surface": "baseline_candidates",
             "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
@@ -2740,17 +3070,25 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "日线融合策略",
             "strategy_version": "daily-fusion-close-v1",
             "source_pool": "picks_fusion",
+            "evaluation_role": "formal",
+            "publication_surface": "formal_recommendation",
             "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
             "user_action_from_decision": True,
-            "items": fusion_scored,
+            "items": (
+                fusion_scored
+                if daily_fusion_input_health["formal_actions_allowed"]
+                else []
+            ),
         },
         {
             "strategy_name": "observation_gate",
             "display_name": "观察池门控",
             "strategy_version": "observation-gate-close-v1",
             "source_pool": "observation_watchlist",
+            "evaluation_role": "diagnostic",
+            "publication_surface": "gate_diagnostics",
             "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "internal",
@@ -2762,6 +3100,8 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "次日大涨策略",
             "strategy_version": "next-day-boom-close-v1",
             "source_pool": "next_day_boom",
+            "evaluation_role": "research",
+            "publication_surface": "research_review",
             "entry_mode": "immediate_close",
             "intended_horizon": 1,
             "publication_status": "published",
@@ -2771,9 +3111,11 @@ def main(debug=False, preview=False, generated_at=None):
         },
         {
             "strategy_name": "luojie_pool",
-            "display_name": "罗杰主题策略",
+            "display_name": "罗姐主题策略",
             "strategy_version": "luojie-close-v1",
             "source_pool": "luojie_pool",
+            "evaluation_role": "research",
+            "publication_surface": "research_review",
             "entry_mode": "immediate_close",
             "intended_horizon": None,
             "publication_status": "published",
@@ -2785,12 +3127,18 @@ def main(debug=False, preview=False, generated_at=None):
             "display_name": "H4 T+3 策略",
             "strategy_version": h4_t3_pool.get("strategy_version", ""),
             "source_pool": "h4_t3_pool",
+            "evaluation_role": "formal",
+            "publication_surface": "formal_recommendation",
             "entry_mode": "immediate_close",
             "intended_horizon": 3,
             "publication_status": "published",
             "user_action_from_decision": True,
             "published_decision_code": "recommend",
-            "items": h4_t3_pool.get("candidates", []),
+            "items": (
+                h4_t3_pool.get("candidates", [])
+                if h4_input_health["formal_actions_allowed"]
+                else []
+            ),
         },
     ]
     recommendation_entries = build_recommendation_entries(
@@ -2865,11 +3213,22 @@ def main(debug=False, preview=False, generated_at=None):
             historical_entries,
             as_of=today,
     )
+    strategy_run_manifest = build_strategy_run_manifest({
+        "date": today,
+        "picks_pure": pure_scored,
+        "picks_fusion": fusion_scored,
+        "observation_watchlist": observation_watchlist,
+        "next_day_boom": next_day_boom,
+        "luojie_pool": luojie_pool,
+        "h4_t3_pool": h4_t3_pool,
+        "selection_input_health": selection_input_health,
+    })
     strategy_scorecards = build_strategy_scorecards(
         historical_entries,
         review_klines,
         trading_calendar=review_trading_calendar,
         benchmark_kline=review_benchmark,
+        run_manifest=strategy_run_manifest,
     )
     diagnostics["recommendation_ledger"] = ledger_diagnostics
     diagnostics["strategy_review_benchmark_ingest"] = (
@@ -2899,6 +3258,7 @@ def main(debug=False, preview=False, generated_at=None):
         "recommendation_ledger": recommendation_entries,
         "strategy_scorecards": strategy_scorecards,
         "data_quality": data_quality,
+        "selection_input_health": selection_input_health,
         "diagnostics": diagnostics,
         "startup_watchlist": startup_watchlist,
         "observation_watchlist": observation_watchlist,
@@ -2915,6 +3275,7 @@ def main(debug=False, preview=False, generated_at=None):
             not debug
             and not preview
             and data_quality.get("is_official") is True
+            and daily_fusion_input_health["formal_actions_allowed"]
         ),
         db_path=MARKET_HISTORY_DB_PATH,
     )

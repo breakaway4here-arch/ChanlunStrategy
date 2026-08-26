@@ -81,6 +81,46 @@ class TestBuildLuojiePool(unittest.TestCase):
         self.assertEqual(candidate["sector_strength_label"], "资金流入TOP5")
         self.assertEqual(candidate["data_status"]["daily"], "verified")
 
+    def test_candidate_separates_15min_signal_from_daily_reference_close(self):
+        result = _result()
+        result.strategy_input_evidence = {
+            "interval": "15m",
+            "status": "verified",
+            "latest_date": "2026-08-26",
+            "latest_ts": "2026-08-26 15:00:00",
+            "is_final": True,
+            "stale": False,
+        }
+        daily_dates = ["2026-08-25", "2026-08-26"]
+        daily_closes = np.array([20.0, 21.0])
+        pool = build_luojie_pool(
+            stocks=[{
+                "code": "600001", "name": "测试通信", "sector": "通信设备",
+                "dates": daily_dates,
+                "closes": daily_closes,
+                "data_status": {
+                    "daily": "verified", "latest_date": "2026-08-26",
+                    "is_final": True, "stale": False,
+                },
+            }],
+            min15_results=[result],
+        )
+
+        candidate = pool["candidates"][0]
+        self.assertEqual(candidate["signal_15m_close"], result.closes[-1])
+        self.assertEqual(candidate["current_price"], 21.0)
+        self.assertEqual(candidate["dates"], daily_dates)
+        self.assertEqual(candidate["closes"], [20.0, 21.0])
+        self.assertEqual(candidate["change_pct"], 5.0)
+        self.assertEqual(
+            candidate["strategy_input_evidence"]["latest_date"],
+            "2026-08-26",
+        )
+        self.assertEqual(
+            candidate["reference_close_evidence"]["source"],
+            "daily_final_close",
+        )
+
     def test_drops_stock_when_macd_double_lines_not_above_zero(self):
         closes = _rising_array()
         result = _result(

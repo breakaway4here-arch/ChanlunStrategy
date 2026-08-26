@@ -126,9 +126,11 @@ class KLineRepository:
                 parsed.date() == current.date()
                 and current.time() >= datetime.strptime("15:00", "%H:%M").time()
             )
-        return int(
-            parsed + timedelta(minutes=_INTERVAL_MINUTES[interval]) <= current
-        )
+        # Eastmoney/Sina minute K-line timestamps identify the bar's end,
+        # unlike an exchange event stream where timestamps identify the
+        # interval start.  Waiting another full interval kept the 15:00 close
+        # permanently marked preview in the 15:05 official run.
+        return int(parsed <= current)
 
     @staticmethod
     def _optional_nonnegative(values: Sequence[Any], index: int) -> float:

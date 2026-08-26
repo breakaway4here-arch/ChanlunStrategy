@@ -18,7 +18,9 @@ class ReportSentimentLayoutTests(unittest.TestCase):
         self.assertIn(
             ".market-temperature-card,\n"
             ".sector-flow-card,\n"
-            ".decision-directions-card {\n"
+            ".decision-directions-card,\n"
+            ".strategy-scorecards-card,\n"
+            ".decision-card.shadow-card {\n"
             "  grid-column: span 4;",
             self.asset_css,
         )
@@ -42,7 +44,9 @@ class ReportSentimentLayoutTests(unittest.TestCase):
             ".market-temperature-card,\n"
             "  .sector-flow-card,\n"
             "  .decision-directions-card,\n"
-            "  .personal-watchlist-card {\n"
+            "  .personal-watchlist-card,\n"
+            "  .strategy-scorecards-card,\n"
+            "  .decision-card.shadow-card {\n"
             "    grid-column: span 2;",
             tablet_css,
         )

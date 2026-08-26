@@ -20,7 +20,13 @@ def _item(code="300308", decision_code="recommend"):
     return {
         "code": code,
         "name": "中际旭创" if code == "300308" else "测试股",
+        "dates": ["2026-08-19", "2026-08-20"],
         "closes": [180.0, 188.0],
+        "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-08-20",
+            "is_final": True,
+        },
         "best_buy_point": {
             "type": "三买",
             "price": 186.0,
@@ -70,6 +76,7 @@ class RecommendationLedgerTests(unittest.TestCase):
         )
 
         self.assertEqual(entries[0]["reference_close"], 188.0)
+        self.assertEqual(entries[0]["reference_close_source"], "closes[-1]")
         self.assertEqual(
             entries[0]["strategy_contributions"][0]["reason_snapshot"]
             ["best_buy_point"]["price"],
@@ -175,6 +182,115 @@ class RecommendationLedgerTests(unittest.TestCase):
         self.assertEqual(contribution["publication_status"], "internal")
         self.assertEqual(contribution["user_action"], "watch")
         self.assertFalse(contribution["cohort_eligible"])
+        self.assertEqual(contribution["evaluation_role"], "diagnostic")
+        self.assertFalse(contribution["evaluation_eligible"])
+        self.assertEqual(contribution["eligibility_reason"], "diagnostic_only")
+        self.assertEqual(contribution["publication_surface"], "gate_diagnostics")
+
+    def test_strategy_roles_are_frozen_and_only_formal_can_enter_cohort(self):
+        strategies = [
+            _strategy("daily_fusion", "fusion-v1", [_item("300308")]),
+            _strategy("daily_pure", "pure-v1", [_item("300139")]),
+            _strategy(
+                "next_day_boom", "boom-v1", [_item("688041")],
+                intended_horizon=1,
+                published_decision_code="recommend",
+            ),
+            _strategy(
+                "luojie_pool", "luojie-v1", [_item("600001")],
+                user_action="watch",
+                user_action_from_decision=False,
+            ),
+            _strategy(
+                "observation_gate", "gate-v1", [_item("000001")],
+                publication_status="internal",
+                user_action="watch",
+                user_action_from_decision=False,
+            ),
+        ]
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            strategies,
+        )
+        contributions = {
+            row["strategy_name"]: row
+            for entry in entries
+            for row in entry["strategy_contributions"]
+        }
+
+        self.assertEqual(contributions["daily_fusion"]["evaluation_role"], "formal")
+        self.assertEqual(contributions["daily_pure"]["evaluation_role"], "baseline")
+        self.assertEqual(contributions["next_day_boom"]["evaluation_role"], "research")
+        self.assertEqual(contributions["luojie_pool"]["evaluation_role"], "research")
+        self.assertEqual(contributions["observation_gate"]["evaluation_role"], "diagnostic")
+        self.assertTrue(contributions["daily_fusion"]["cohort_eligible"])
+        self.assertFalse(contributions["daily_pure"]["cohort_eligible"])
+        self.assertFalse(contributions["next_day_boom"]["cohort_eligible"])
+        self.assertFalse(contributions["luojie_pool"]["cohort_eligible"])
+        self.assertFalse(contributions["observation_gate"]["cohort_eligible"])
+        self.assertTrue(contributions["daily_pure"]["evaluation_eligible"])
+        self.assertTrue(contributions["next_day_boom"]["evaluation_eligible"])
+        self.assertTrue(contributions["luojie_pool"]["evaluation_eligible"])
+        self.assertFalse(contributions["observation_gate"]["evaluation_eligible"])
+        self.assertEqual(
+            contributions["daily_fusion"]["publication_surface"],
+            "formal_recommendation",
+        )
+        self.assertEqual(
+            contributions["daily_pure"]["publication_surface"],
+            "baseline_candidates",
+        )
+        self.assertEqual(
+            contributions["next_day_boom"]["publication_surface"],
+            "research_review",
+        )
+        self.assertEqual(
+            contributions["observation_gate"]["publication_surface"],
+            "gate_diagnostics",
+        )
+
+    def test_registered_strategy_role_cannot_be_promoted_by_input(self):
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [
+                _strategy(
+                    "daily_pure", "pure-v1", [_item("300139")],
+                    evaluation_role="formal",
+                    publication_surface="formal_recommendation",
+                ),
+                _strategy(
+                    "observation_gate", "gate-v1", [_item("000001")],
+                    evaluation_role="formal",
+                    publication_surface="formal_recommendation",
+                ),
+            ],
+        )
+        by_strategy = {
+            row["strategy_name"]: row
+            for entry in entries
+            for row in entry["strategy_contributions"]
+        }
+
+        self.assertEqual(by_strategy["daily_pure"]["evaluation_role"], "unknown")
+        self.assertEqual(
+            by_strategy["daily_pure"]["publication_surface"],
+            "technical_detail",
+        )
+        self.assertFalse(by_strategy["daily_pure"]["cohort_eligible"])
+        self.assertFalse(by_strategy["daily_pure"]["evaluation_eligible"])
+        self.assertEqual(
+            by_strategy["daily_pure"]["eligibility_reason"],
+            "unknown_evaluation_role",
+        )
+        self.assertEqual(
+            by_strategy["observation_gate"]["evaluation_role"],
+            "unknown",
+        )
+        self.assertFalse(by_strategy["observation_gate"]["cohort_eligible"])
+        self.assertFalse(by_strategy["observation_gate"]["evaluation_eligible"])
 
     def test_missing_entry_mode_is_unknown_not_delay1_open(self):
         strategy = _strategy("legacy_pool", "", [_item()])
@@ -236,8 +352,131 @@ class RecommendationLedgerTests(unittest.TestCase):
         }
         self.assertEqual(by_code["300308"]["user_action"], "watch")
         self.assertFalse(by_code["300308"]["cohort_eligible"])
+        self.assertTrue(by_code["300308"]["evaluation_eligible"])
         self.assertEqual(by_code["300139"]["user_action"], "recommendation")
-        self.assertTrue(by_code["300139"]["cohort_eligible"])
+        self.assertFalse(by_code["300139"]["cohort_eligible"])
+        self.assertTrue(by_code["300139"]["evaluation_eligible"])
+
+    def test_top_level_close_is_only_a_verified_final_fallback(self):
+        verified = _item()
+        verified.pop("closes")
+        verified["close"] = 191.5
+        verified["data_status"] = {
+            "daily": "verified",
+            "is_final": True,
+            "latest_date": "2026-08-20",
+        }
+        stale = _item("300139")
+        stale.pop("closes")
+        stale["close"] = 199.5
+        stale["data_status"] = {
+            "daily": "verified",
+            "is_final": True,
+            "latest_date": "2026-08-19",
+        }
+        unverified = _item("688041")
+        unverified.pop("closes")
+        unverified["close"] = 201.5
+        unverified["data_status"] = {
+            "daily": "estimated",
+            "is_final": True,
+            "latest_date": "2026-08-20",
+        }
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_fusion", "fusion-v1", [verified, stale, unverified])],
+        )
+        by_code = {entry["code"]: entry for entry in entries}
+        self.assertEqual(by_code["300308"]["reference_close"], 191.5)
+        self.assertEqual(
+            by_code["300308"]["reference_close_source"],
+            "top_level_close",
+        )
+        self.assertIsNone(by_code["300139"]["reference_close"])
+        self.assertEqual(by_code["300139"]["reference_close_source"], "missing")
+        self.assertIsNone(by_code["688041"]["reference_close"])
+        self.assertEqual(by_code["688041"]["reference_close_source"], "missing")
+
+    def test_closes_reference_requires_signal_date_and_verified_final_status(self):
+        valid = _item("300308")
+        stale_date = _item("300139")
+        stale_date["dates"][-1] = "2026-08-19"
+        nonfinal = _item("688041")
+        nonfinal["data_status"]["is_final"] = False
+        unverified = _item("000001")
+        unverified["data_status"]["daily"] = "estimated"
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [_strategy("daily_fusion", "fusion-v1", [
+                valid, stale_date, nonfinal, unverified,
+            ])],
+        )
+        by_code = {entry["code"]: entry for entry in entries}
+        self.assertEqual(by_code["300308"]["reference_close"], 188.0)
+        self.assertIsNone(by_code["300139"]["reference_close"])
+        self.assertIsNone(by_code["688041"]["reference_close"])
+        self.assertIsNone(by_code["000001"]["reference_close"])
+
+    def test_explicit_invalid_or_conflicting_role_is_not_legacy_corrected(self):
+        invalid = _strategy(
+            "daily_pure", "pure-v1", [_item("300139")],
+            evaluation_role="unknown",
+        )
+        conflict = _strategy(
+            "daily_pure", "pure-v1", [_item("688041")],
+            evaluation_role="formal",
+        )
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [invalid, conflict],
+        )
+        by_code = {entry["code"]: entry for entry in entries}
+        for code in ("300139", "688041"):
+            contribution = by_code[code]["strategy_contributions"][0]
+            self.assertEqual(contribution["evaluation_role"], "unknown")
+            self.assertFalse(contribution["evaluation_eligible"])
+
+    def test_invalid_role_fails_closed_and_surface_cannot_cross_role(self):
+        invalid = _strategy(
+            "daily_fusion",
+            "fusion-v1",
+            [_item()],
+            evaluation_role="not-a-role",
+            publication_surface="formal_recommendation",
+        )
+        mismatched = _strategy(
+            "daily_pure",
+            "pure-v1",
+            [_item("300139")],
+            evaluation_role="baseline",
+            publication_surface="formal_recommendation",
+        )
+
+        entries = build_recommendation_entries(
+            "2026-08-20",
+            "2026-08-20T15:10:00+08:00",
+            [invalid, mismatched],
+        )
+        by_strategy = {
+            row["strategy_name"]: row
+            for entry in entries
+            for row in entry["strategy_contributions"]
+        }
+        self.assertEqual(by_strategy["daily_fusion"]["evaluation_role"], "unknown")
+        self.assertEqual(
+            by_strategy["daily_fusion"]["publication_surface"],
+            "technical_detail",
+        )
+        self.assertFalse(by_strategy["daily_fusion"]["evaluation_eligible"])
+        self.assertEqual(
+            by_strategy["daily_pure"]["publication_surface"],
+            "baseline_candidates",
+        )
 
     def test_append_is_idempotent_and_never_rewrites_existing_reason(self):
         with tempfile.TemporaryDirectory() as tmpdir:

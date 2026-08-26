@@ -6,6 +6,8 @@ from pathlib import Path
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.recommendation_ledger import build_recommendation_entries
 from chanlun.strategy_review import (
+    _card_evaluation_status,
+    build_strategy_run_manifest,
     build_strategy_scorecards,
     evaluate_recommendation_entry,
     load_review_klines_from_store,
@@ -72,7 +74,13 @@ def _entry(
             "items": [{
                 "code": code,
                 "name": "中际旭创",
+                "dates": [report_date],
                 "closes": [99, 100],
+                "data_status": {
+                    "daily": "verified",
+                    "latest_date": report_date,
+                    "is_final": True,
+                },
                 "best_buy_point": {"type": "三买", "reason": "回踩确认"},
                 "decision_engine_v1": {
                     "version": "1",
@@ -444,6 +452,332 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
 
 
 class StrategyScorecardTests(unittest.TestCase):
+    def test_explicit_input_incident_excludes_sample_without_rewriting_ledger(self):
+        valid = _entry(
+            report_date="2026-08-20",
+            code="300308",
+            strategies=[("daily_fusion", "fusion-v2", "recommend")],
+        )
+        invalid = _entry(
+            report_date="2026-08-21",
+            code="300139",
+            strategies=[("daily_fusion", "fusion-v2", "recommend")],
+        )
+        for entry in (valid, invalid):
+            entry["reference_close"] = 100.0
+            entry["reference_adjustment"] = "qfq"
+            entry["strategy_contributions"][0]["entry_mode"] = "immediate_close"
+
+        card = build_strategy_scorecards(
+            [valid, invalid],
+            {"300308": _kline(), "300139": _kline()},
+            trading_calendar=_kline()["dates"],
+            sample_exclusions=[{
+                "incident_id": "test-stale-30m",
+                "report_dates": ["2026-08-21"],
+                "strategy_names": ["daily_fusion"],
+                "source_pools": ["daily_fusion"],
+                "codes": ["300139"],
+                "reason": "strategy_input_stale_or_unverified",
+            }],
+        )["formal"][0]
+
+        self.assertEqual(card["signal_count"], 2)
+        self.assertEqual(card["eligible_signal_count"], 1)
+        self.assertEqual(card["excluded_signal_count"], 1)
+        self.assertEqual(card["episode_count"], 1)
+        self.assertEqual(card["sample_exclusions"], [{
+            "incident_id": "test-stale-30m",
+            "reason": "strategy_input_stale_or_unverified",
+            "count": 1,
+        }])
+
+    def test_all_eligible_samples_excluded_by_input_incident_is_data_unavailable(self):
+        entry = _entry(
+            report_date="2026-08-21",
+            code="300139",
+            strategies=[("daily_fusion", "fusion-v2", "recommend")],
+        )
+        entry["reference_close"] = 100.0
+        entry["reference_adjustment"] = "qfq"
+        entry["strategy_contributions"][0]["entry_mode"] = "immediate_close"
+
+        card = build_strategy_scorecards(
+            [entry],
+            {"300139": _kline()},
+            trading_calendar=_kline()["dates"],
+            sample_exclusions=[{
+                "incident_id": "test-stale-30m",
+                "report_dates": ["2026-08-21"],
+                "strategy_names": ["daily_fusion"],
+                "source_pools": ["daily_fusion"],
+                "codes": ["300139"],
+                "reason": "strategy_input_stale_or_unverified",
+            }],
+        )["formal"][0]
+
+        self.assertEqual(0, card["eligible_signal_count"])
+        self.assertEqual(1, card["excluded_signal_count"])
+        self.assertEqual("data_unavailable", card["evaluation_status"])
+
+    def test_v2_sections_keep_pool_roles_and_source_pool_identity(self):
+        entries = [
+            _entry(
+                code="300308",
+                strategies=[("daily_fusion", "fusion-v2", "recommend")],
+            ),
+            _entry(
+                code="300139",
+                strategies=[("daily_pure", "pure-v1", "recommend")],
+            ),
+            _entry(
+                code="688041",
+                strategies=[("next_day_boom", "boom-v1", "observe")],
+                intended_horizon=1,
+            ),
+            _entry(
+                code="600001",
+                strategies=[("observation_gate", "gate-v1", "recommend")],
+            ),
+        ]
+
+        scorecards = build_strategy_scorecards(
+            entries,
+            {entry["code"]: _kline() for entry in entries},
+            trading_calendar=_kline()["dates"],
+        )
+
+        self.assertEqual(scorecards["schema_version"], 2)
+        self.assertEqual(
+            scorecards["thresholds"],
+            {"mature_samples": 100, "active_dates": 20, "calendar_months": 2},
+        )
+        self.assertEqual(
+            {row["evaluation_role"] for row in scorecards["formal"]},
+            {"formal"},
+        )
+        self.assertEqual(
+            {row["evaluation_role"] for row in scorecards["baselines"]},
+            {"baseline"},
+        )
+        self.assertEqual(
+            {row["evaluation_role"] for row in scorecards["research"]},
+            {"research"},
+        )
+        self.assertEqual(
+            {row["evaluation_role"] for row in scorecards["gates"]},
+            {"diagnostic"},
+        )
+        for section in ("formal", "baselines", "research"):
+            for card in scorecards[section]:
+                self.assertIn("source_pool", card)
+                self.assertIn("signal_count", card)
+                self.assertIn("eligible_signal_count", card)
+                self.assertIn("episode_count", card)
+                self.assertIn("maturity_by_horizon", card)
+                self.assertIn("metrics_by_horizon", card)
+
+    def test_v2_horizon_metrics_disclose_maturity_and_independent_denominators(self):
+        entry = _entry(intended_horizon=None)
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        entry["reference_close"] = 100.0
+        entry["reference_adjustment"] = "qfq"
+        scorecards = build_strategy_scorecards(
+            [entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+        card = scorecards["baselines"][0]
+
+        self.assertIsNone(card["intended_horizon"])
+        self.assertIsNone(card["overall_verdict"])
+        self.assertEqual(card["signal_count"], 1)
+        self.assertEqual(card["eligible_signal_count"], 1)
+        self.assertEqual(card["episode_count"], 1)
+        for horizon in ("t1", "t3", "t5"):
+            maturity = card["maturity_by_horizon"][horizon]
+            self.assertEqual(set(maturity), {"mature", "waiting", "unavailable"})
+            metrics = card["metrics_by_horizon"][horizon]
+            for field in (
+                "n", "mean", "median", "excess_mean", "win_rate",
+                "hit_rate_ge_5", "period_high", "period_low",
+                "period_high_n", "period_low_n",
+            ):
+                self.assertIn(field, metrics)
+        self.assertEqual(card["metrics_by_horizon"]["t1"]["n"], 1)
+
+    def test_legacy_roles_are_corrected_and_unknown_rows_fail_closed(self):
+        known = _entry(
+            strategies=[("daily_pure", "pure-v1", "recommend")]
+        )
+        unknown = _entry(
+            code="300139",
+            strategies=[("renamed_strategy", "v9", "recommend")],
+        )
+        for row in known["strategy_contributions"] + unknown["strategy_contributions"]:
+            for field in (
+                "evaluation_role", "publication_surface",
+                "evaluation_eligible", "eligibility_reason",
+            ):
+                row.pop(field, None)
+
+        scorecards = build_strategy_scorecards(
+            [known, unknown],
+            {"300308": _kline(), "300139": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+
+        self.assertEqual(len(scorecards["baselines"]), 1)
+        self.assertEqual(
+            scorecards["baselines"][0]["classification_status"],
+            "legacy_corrected",
+        )
+        self.assertFalse(scorecards["formal"])
+        self.assertTrue(scorecards["classification_failures"])
+        self.assertEqual(
+            scorecards["classification_failures"][0]["strategy"],
+            "renamed_strategy",
+        )
+
+    def test_research_reference_close_gap_withholds_partial_metrics(self):
+        entry = _entry(
+            strategies=[("luojie_pool", "luojie-v1", "observe")],
+            intended_horizon=None,
+        )
+        contribution = entry["strategy_contributions"][0]
+        contribution["entry_mode"] = "immediate_close"
+        entry["reference_close"] = None
+        entry["reference_close_source"] = "missing"
+        entry["reference_adjustment"] = "qfq"
+
+        scorecards = build_strategy_scorecards(
+            [entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+        card = scorecards["research"][0]
+
+        self.assertFalse(card["metrics_publishable"])
+        self.assertIn("reference_close_missing", card["metrics_blocking_reasons"])
+        self.assertNotIn("market_data_unavailable", card["metrics_blocking_reasons"])
+        self.assertTrue(all(
+            metric["n"] == 0
+            for metric in card["metrics_by_horizon"].values()
+        ))
+        self.assertEqual(card["returns"], {"t1": None, "t3": None, "t5": None})
+        self.assertEqual(card["median_returns"], {"t1": None, "t3": None, "t5": None})
+        self.assertEqual(card["excess_returns"], {"t1": None, "t3": None, "t5": None})
+        self.assertEqual(card["win_rates"], {"t1": None, "t3": None, "t5": None})
+        self.assertEqual(card["excursions"], {
+            "mae": {"t1": None, "t3": None, "t5": None},
+            "mfe": {"t1": None, "t3": None, "t5": None},
+        })
+        self.assertEqual(card["representative_samples"], [])
+
+    def test_explicit_invalid_or_conflicting_role_is_classification_failure(self):
+        invalid = _entry(
+            strategies=[("daily_pure", "pure-v1", "recommend")],
+        )
+        invalid["strategy_contributions"][0]["evaluation_role"] = "unknown"
+        conflict = _entry(
+            code="300139",
+            strategies=[("daily_pure", "pure-v1", "recommend")],
+        )
+        conflict["strategy_contributions"][0]["evaluation_role"] = "formal"
+
+        scorecards = build_strategy_scorecards(
+            [invalid, conflict],
+            {"300308": _kline(), "300139": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+
+        self.assertFalse(scorecards["baselines"])
+        self.assertFalse(scorecards["formal"])
+        reasons = {row["reason"] for row in scorecards["classification_failures"]}
+        self.assertIn("evaluation_role_invalid", reasons)
+        self.assertIn("evaluation_role_conflict", reasons)
+
+    def test_formal_candidates_without_eligible_recommendations_are_normal_empty(self):
+        entry = _entry(
+            strategies=[("daily_fusion", "fusion-v2", "observe")],
+        )
+        card = build_strategy_scorecards(
+            [entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )["formal"][0]
+
+        self.assertEqual(card["signal_count"], 1)
+        self.assertEqual(card["eligible_signal_count"], 0)
+        self.assertEqual(card["evaluation_status"], "no_formal_recommendations")
+
+    def test_gate_status_is_independent_from_return_readiness(self):
+        entry = _entry(
+            strategies=[("observation_gate", "gate-v1", "observe")],
+        )
+        card = build_strategy_scorecards(
+            [entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )["gates"][0]
+
+        self.assertEqual(card["evaluation_status"], "running")
+        self.assertEqual(card["gate_status"], "running")
+
+    def test_readiness_uses_intended_horizon_and_exposes_each_horizon(self):
+        maturity = {
+            "t1": {"mature": 100, "waiting": 0, "unavailable": 0},
+            "t3": {"mature": 0, "waiting": 100, "unavailable": 0},
+            "t5": {"mature": 0, "waiting": 100, "unavailable": 0},
+        }
+        status_t3 = _card_evaluation_status(
+            role="research",
+            signal_count=100,
+            eligible_signal_count=100,
+            maturity=maturity,
+            metrics_publishable=True,
+            metrics_blocking_reasons=[],
+            active_dates=20,
+            active_months=2,
+            intended_horizon=3,
+        )
+        status_unspecified = _card_evaluation_status(
+            role="baseline",
+            signal_count=100,
+            eligible_signal_count=100,
+            maturity=maturity,
+            metrics_publishable=True,
+            metrics_blocking_reasons=[],
+            active_dates=20,
+            active_months=2,
+            intended_horizon=None,
+        )
+
+        self.assertEqual(status_t3, "waiting_for_maturity")
+        self.assertNotEqual(status_unspecified, "ready_for_manual_comparison")
+
+    def test_gate_section_only_contains_decision_and_user_action_counts(self):
+        entry = _entry(
+            strategies=[("observation_gate", "gate-v1", "recommend")]
+        )
+        scorecards = build_strategy_scorecards(
+            [entry],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )
+        card = scorecards["gates"][0]
+
+        self.assertIn("gate_outcomes", card)
+        self.assertIn("publication_outcomes", card)
+        for forbidden in (
+            "returns", "win_rate", "sample_size", "metrics_by_horizon",
+        ):
+            self.assertNotIn(forbidden, card)
+        self.assertEqual(card["ledger_active_dates"], 1)
+        self.assertEqual(card["ledger_date_start"], "2026-08-20")
+        self.assertEqual(card["ledger_date_end"], "2026-08-20")
+
     def test_verified_benchmark_history_is_persisted_for_runtime_review(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             db_path = Path(tmpdir) / "market-history.sqlite"
@@ -537,16 +871,29 @@ class StrategyScorecardTests(unittest.TestCase):
             {"300308": _kline(), "300139": _kline()},
             trading_calendar=_kline()["dates"],
         )
-        by_name = {card["strategy"]: card for card in cards}
+        by_name = {
+            card["strategy"]: card
+            for section in ("formal", "baselines", "research")
+            for card in cards[section]
+        }
 
-        self.assertEqual(by_name["daily_pure"]["sample_size"], 1)
+        self.assertEqual(by_name["daily_pure"]["sample_size"], 2)
         self.assertEqual(by_name["daily_fusion"]["sample_size"], 1)
+        self.assertEqual(
+            by_name["daily_pure"]["evaluation_contract_signal_count"], 2
+        )
+        self.assertEqual(
+            by_name["daily_pure"]["non_evaluation_signal_count"], 0
+        )
         self.assertEqual(by_name["daily_pure"]["gate_outcomes"]["observe"], 1)
         self.assertEqual(by_name["daily_pure"]["gate_outcomes"]["recommend"], 1)
         self.assertIn("median_returns", by_name["daily_pure"])
         self.assertIn("excess_returns", by_name["daily_pure"])
         self.assertIn("mae", by_name["daily_pure"]["excursions"])
         self.assertIsNotNone(by_name["daily_pure"]["win_rates"]["t1"])
+        self.assertEqual(by_name["daily_pure"]["ledger_active_dates"], 1)
+        self.assertEqual(by_name["daily_pure"]["ledger_date_start"], "2026-08-20")
+        self.assertEqual(by_name["daily_pure"]["ledger_date_end"], "2026-08-20")
 
     def test_consecutive_recommendations_are_deduped_into_one_episode(self):
         first = _entry("2026-08-20")
@@ -568,8 +915,8 @@ class StrategyScorecardTests(unittest.TestCase):
             trading_calendar=kline["dates"],
         )
 
-        self.assertEqual(cards[0]["episode_count"], 1)
-        self.assertEqual(cards[0]["sample_size"], 1)
+        self.assertEqual(cards["baselines"][0]["episode_count"], 1)
+        self.assertEqual(cards["baselines"][0]["sample_size"], 1)
 
     def test_trading_day_gap_starts_a_new_episode_even_without_other_ledger_rows(self):
         first = _entry("2026-08-20")
@@ -591,7 +938,7 @@ class StrategyScorecardTests(unittest.TestCase):
             trading_calendar=kline["dates"],
         )
 
-        self.assertEqual(cards[0]["episode_count"], 2)
+        self.assertEqual(cards["baselines"][0]["episode_count"], 2)
 
     def test_representative_samples_are_bounded_and_attributed(self):
         entries = [
@@ -602,7 +949,7 @@ class StrategyScorecardTests(unittest.TestCase):
 
         card = build_strategy_scorecards(
             entries, klines, trading_calendar=_kline()["dates"]
-        )[0]
+        )["baselines"][0]
 
         self.assertLessEqual(len(card["representative_samples"]), 3)
         sample = card["representative_samples"][0]
@@ -649,7 +996,7 @@ class StrategyScorecardTests(unittest.TestCase):
         card = build_strategy_scorecards(
             [entry], {"300308": kline},
             trading_calendar=kline["dates"],
-        )[0]
+        )["research"][0]
 
         self.assertEqual(card["intended_horizon"], 1)
         self.assertEqual(card["sample_size"], 1)
@@ -661,7 +1008,9 @@ class StrategyScorecardTests(unittest.TestCase):
         )
 
     def test_internal_observation_gate_never_enters_recommendation_cohort(self):
-        entry = _entry()
+        entry = _entry(
+            strategies=[("observation_gate", "gate-v1", "recommend")]
+        )
         contribution = entry["strategy_contributions"][0]
         contribution["publication_status"] = "internal"
         contribution["user_action"] = "watch"
@@ -671,10 +1020,10 @@ class StrategyScorecardTests(unittest.TestCase):
             [entry],
             {"300308": _kline()},
             trading_calendar=_kline()["dates"],
-        )[0]
+        )["gates"][0]
 
-        self.assertEqual(card["episode_count"], 0)
-        self.assertEqual(card["sample_size"], 0)
+        self.assertEqual(card["signal_count"], 1)
+        self.assertNotIn("sample_size", card)
         self.assertEqual(card["gate_outcomes"]["recommend"], 1)
         self.assertEqual(card["publication_outcomes"]["watch"], 1)
 
@@ -685,7 +1034,7 @@ class StrategyScorecardTests(unittest.TestCase):
             [entry],
             {"300308": _kline()},
             trading_calendar=_kline()["dates"],
-        )[0]
+        )["baselines"][0]
 
         self.assertIsNone(card["intended_horizon"])
         self.assertIsNone(card["win_rate"])
@@ -704,12 +1053,12 @@ class StrategyScorecardTests(unittest.TestCase):
             [verified, unknown],
             {"300308": _kline()},
             trading_calendar=_kline()["dates"],
-        )[0]
+        )["baselines"][0]
         second = build_strategy_scorecards(
             [unknown, verified],
             {"300308": _kline()},
             trading_calendar=_kline()["dates"],
-        )[0]
+        )["baselines"][0]
 
         self.assertEqual(first["attribution_status"], "mixed")
         self.assertEqual(first["attribution_status"], second["attribution_status"])
@@ -742,12 +1091,288 @@ class StrategyScorecardTests(unittest.TestCase):
                 card["entry_mode"],
                 card["intended_horizon"],
             )
-            for card in cards
+            for card in cards["baselines"]
         }
         self.assertEqual(identities, {
             ("daily_pure", "pure-v1", "immediate_close", 3),
             ("daily_pure", "pure-v1", "delay1_open", 1),
         })
+
+    def test_run_manifest_keeps_zero_signal_and_disabled_strategies_visible(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "selection_input_health": {
+                "schema_version": 2,
+                "formal": {"formal_actions_allowed": True},
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "luojie_pool": {"status": "verified"},
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [],
+            "observation_watchlist": [],
+            "next_day_boom": {
+                "mode": "disabled",
+                "reason": "市场条件未触发",
+                "candidates": [],
+            },
+            "luojie_pool": {"mode": "enabled", "candidates": []},
+            "h4_t3_pool": {
+                "mode": "production",
+                "status": "ok",
+                "production_attested": True,
+                "strategy_version": "h4_t3_k30_tail_safe_v1",
+                "candidates": [],
+            },
+        })
+
+        cards = build_strategy_scorecards(
+            [], {}, trading_calendar=[], run_manifest=manifest
+        )
+        formal = {card["strategy"]: card for card in cards["formal"]}
+        research = {card["strategy"]: card for card in cards["research"]}
+
+        self.assertEqual(formal["h4_t3"]["evaluation_status"], "no_signals")
+        self.assertEqual(formal["h4_t3"]["latest_run_status"], "verified_empty")
+        self.assertEqual(formal["h4_t3"]["signal_count"], 0)
+        self.assertEqual(
+            research["next_day_boom"]["evaluation_status"], "disabled"
+        )
+        self.assertEqual(
+            research["next_day_boom"]["latest_run_reason"],
+            "市场条件未触发",
+        )
+        self.assertEqual(cards["gates"][0]["evaluation_status"], "normal_empty")
+
+    def test_fusion_input_incident_does_not_block_healthy_h4_empty_run(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "selection_input_health": {
+                "schema_version": 2,
+                "formal": {
+                    "status": "partial",
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": False,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "luojie_pool": {"status": "verified"},
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [{"code": "300697"}],
+            "observation_watchlist": [],
+            "next_day_boom": {"mode": "disabled", "candidates": []},
+            "luojie_pool": {"mode": "enabled", "candidates": []},
+            "h4_t3_pool": {
+                "mode": "production",
+                "status": "ok",
+                "production_attested": True,
+                "strategy_version": "h4_t3_k30_tail_safe_v1",
+                "candidates": [],
+            },
+        })
+
+        by_strategy = {row["strategy"]: row for row in manifest}
+        self.assertEqual("unavailable", by_strategy["daily_fusion"]["run_status"])
+        self.assertEqual("verified_empty", by_strategy["h4_t3"]["run_status"])
+
+        cards = build_strategy_scorecards(
+            [], {}, trading_calendar=[], run_manifest=manifest
+        )
+        formal = {card["strategy"]: card for card in cards["formal"]}
+        self.assertEqual("data_unavailable", formal["daily_fusion"]["evaluation_status"])
+        self.assertEqual(
+            ["strategy_input_stale_or_unverified"],
+            formal["daily_fusion"]["metrics_blocking_reasons"],
+        )
+        self.assertEqual("no_signals", formal["h4_t3"]["evaluation_status"])
+
+    def test_h4_upstream_contract_mismatch_has_its_own_scorecard_blocker(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "selection_input_health": {
+                "schema_version": 2,
+                "formal": {
+                    "status": "partial",
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": False,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "h4_t3": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                        "blocking_reason": "strategy_upstream_contract_mismatch",
+                    },
+                    "luojie_pool": {"status": "verified"},
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [],
+            "observation_watchlist": [],
+            "next_day_boom": {"mode": "disabled", "candidates": []},
+            "luojie_pool": {"mode": "enabled", "candidates": []},
+            "h4_t3_pool": {
+                "mode": "production",
+                "status": "ok",
+                "production_attested": True,
+                "strategy_version": "h4_t3_k30_tail_safe_v1",
+                "candidates": [],
+            },
+        })
+
+        cards = build_strategy_scorecards(
+            [], {}, trading_calendar=[], run_manifest=manifest
+        )
+        h4 = next(row for row in cards["formal"] if row["strategy"] == "h4_t3")
+        self.assertEqual("data_unavailable", h4["evaluation_status"])
+        self.assertEqual(
+            ["strategy_upstream_contract_mismatch"],
+            h4["metrics_blocking_reasons"],
+        )
+
+    def test_run_manifest_attaches_latest_state_to_historical_card(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "verified",
+                "formal": {
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": True,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "luojie_pool": {"status": "verified"},
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [],
+            "observation_watchlist": [],
+            "next_day_boom": {"mode": "enabled", "candidates": []},
+            "luojie_pool": {"mode": "enabled", "candidates": []},
+            "h4_t3_pool": {
+                "mode": "production", "status": "error",
+                "production_attested": False, "reason": "生产证明失败",
+                "strategy_version": "h4_t3_k30_tail_safe_v1",
+                "candidates": [],
+            },
+        })
+        pure_manifest = next(
+            item for item in manifest if item["strategy"] == "daily_pure"
+        )
+        pure_manifest["version"] = "pure-v1"
+        pure_manifest["source_pool"] = "daily_pure"
+        pure_manifest["entry_mode"] = "delay1_open"
+        pure_manifest["intended_horizon"] = 3
+        entry = _entry()
+        contribution = entry["strategy_contributions"][0]
+        contribution.pop("evaluation_role", None)
+        contribution.pop("publication_surface", None)
+        contribution.pop("evaluation_eligible", None)
+        contribution.pop("eligibility_reason", None)
+
+        card = build_strategy_scorecards(
+            [entry], {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+            run_manifest=manifest,
+        )["baselines"][0]
+
+        self.assertEqual(card["latest_run_status"], "verified_empty")
+        self.assertEqual(card["latest_signal_count"], 0)
+        self.assertEqual(card["latest_report_date"], "2026-08-26")
+        self.assertEqual(card["evidence_tier"], "legacy_inferred")
+
+    def test_run_manifest_never_treats_invalid_pool_shapes_as_zero_signal(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "picks_pure": {"bad": "shape"},
+            "picks_fusion": None,
+            "observation_watchlist": "bad",
+            "next_day_boom": {"mode": "enabled", "candidates": None},
+            "luojie_pool": {"mode": "enabled"},
+            "h4_t3_pool": {
+                "mode": "production",
+                "status": "ok",
+                "production_attested": True,
+            },
+        })
+
+        states = {item["strategy"]: item for item in manifest}
+        for strategy in (
+            "daily_pure", "daily_fusion", "observation_gate",
+            "next_day_boom", "luojie_pool", "h4_t3",
+        ):
+            self.assertEqual(states[strategy]["run_status"], "unavailable")
+            self.assertNotIn("运行正常", states[strategy]["reason"])
+
+    def test_formal_manifest_separates_fusion_candidates_from_published_recommendations(self):
+        manifest = build_strategy_run_manifest({
+            "date": "2026-08-26",
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "verified",
+                "formal": {
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": True,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "luojie_pool": {"status": "verified"},
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [
+                {"decision_engine_v1": {"decision_code": "recommend"}},
+                {"decision_engine_v1": {"decision_code": "observe"}},
+                {"decision_engine_v1": {"decision_code": "reject"}},
+            ],
+            "observation_watchlist": [],
+            "next_day_boom": {"mode": "disabled", "candidates": []},
+            "luojie_pool": {"mode": "enabled", "candidates": []},
+            "h4_t3_pool": {
+                "mode": "production", "status": "ok",
+                "production_attested": True, "candidates": [],
+            },
+        })
+        fusion = next(
+            item for item in manifest if item["strategy"] == "daily_fusion"
+        )
+        self.assertEqual(fusion["source_candidate_count"], 3)
+        self.assertEqual(fusion["published_count"], 1)
 
 
 if __name__ == "__main__":

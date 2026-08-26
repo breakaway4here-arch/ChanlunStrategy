@@ -218,7 +218,7 @@ class H4T3PoolTests(unittest.TestCase):
         self.assertEqual(1, model["training_rows"][0]["record_index"])
         self.assertEqual(FEATURE_DIMENSION, len(model["training_rows"][0]["vector"]))
 
-    def test_daily_runner_hook_uses_real_fusion_candidates(self):
+    def test_daily_runner_hook_uses_common_pure_upstream_candidates(self):
         from run import _build_daily_h4_t3_pool
 
         candidates = [_candidate("000001")]
@@ -230,7 +230,7 @@ class H4T3PoolTests(unittest.TestCase):
         builder.assert_called_once_with(
             candidates,
             "2026-08-20",
-            upstream_pool="picks_fusion",
+            upstream_pool="picks_pure",
         )
 
     def test_incremental_backfill_preserves_existing_daily_pools(self):

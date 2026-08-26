@@ -235,7 +235,11 @@ class DailyShadowIntegrationTests(unittest.TestCase):
                 "mode": "production",
                 "status": "ok",
                 "strategy_version": STRATEGY_VERSION,
-                "diagnostics": {"microstate_count": len(rows), "eligible_count": len(rows)},
+                "diagnostics": {
+                    "microstate_count": len(rows),
+                    "eligible_count": len(rows),
+                    "upstream_pool": "picks_pure",
+                },
                 "candidates": copy.deepcopy(rows),
             }
 
@@ -432,6 +436,64 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             contribution.get("strategy_version") not in {None, "", "unknown"}
             for contribution in contributions
         ))
+
+    def test_real_main_freezes_scorecard_roles_without_changing_formal_ids(self):
+        report = self._capture_real_main_report("off")
+        contributions = [
+            contribution
+            for entry in report["recommendation_ledger"]
+            for contribution in entry.get("strategy_contributions", [])
+        ]
+        by_strategy = {
+            contribution["strategy_name"]: contribution
+            for contribution in contributions
+        }
+
+        self.assertEqual(by_strategy["daily_pure"]["evaluation_role"], "baseline")
+        self.assertEqual(by_strategy["daily_fusion"]["evaluation_role"], "formal")
+        self.assertEqual(by_strategy["next_day_boom"]["evaluation_role"], "research")
+        self.assertEqual(by_strategy["h4_t3"]["evaluation_role"], "formal")
+        self.assertFalse(by_strategy["daily_pure"]["cohort_eligible"])
+        self.assertTrue(by_strategy["daily_pure"]["evaluation_eligible"])
+        self.assertTrue(by_strategy["daily_fusion"]["cohort_eligible"])
+        self.assertTrue(by_strategy["daily_fusion"]["evaluation_eligible"])
+        self.assertFalse(by_strategy["next_day_boom"]["cohort_eligible"])
+        self.assertTrue(by_strategy["next_day_boom"]["evaluation_eligible"])
+        self.assertEqual(
+            by_strategy["daily_pure"]["publication_surface"],
+            "baseline_candidates",
+        )
+        self.assertTrue(all(
+            entry.get("reference_close_source") == "closes[-1]"
+            for entry in report["recommendation_ledger"]
+        ))
+
+    def test_real_main_publishes_selection_input_health_contract(self):
+        report = self._capture_real_main_report("off")
+        health = report["selection_input_health"]
+
+        self.assertEqual(health["required_date"], "2026-08-22")
+        self.assertEqual(health["sublevels"]["15m"]["status"], "not_required")
+        self.assertEqual(health["sublevels"]["30m"]["status"], "unavailable")
+        self.assertTrue(health["formal"]["formal_actions_allowed"])
+        self.assertEqual(health["status"], "partial")
+
+    def test_real_main_requests_report_date_for_all_sublevel_inputs(self):
+        source = Path(run.__file__).read_text(encoding="utf-8")
+        self.assertIn(
+            "collect_15min_data(\n"
+            "        luojie_theme_stocks, required_date=today\n"
+            "    )",
+            source,
+        )
+        self.assertGreaterEqual(
+            source.count(
+                "collect_30min_data(\n"
+                "            all_targets, required_date=today\n"
+                "        )"
+            ),
+            2,
+        )
 
     def test_shadow_integrates_only_h4_all_candidates_and_preserves_formal_snapshot(self):
         report = _formal_report(candidate_count=7)

@@ -111,8 +111,28 @@ def _report_data(overrides=None):
         "picks_fusion": [],
         "picks_pure": [],
         "next_day_boom": {"mode": "enabled", "candidates": []},
-        "luojie_pool": {"candidates": []},
+        "luojie_pool": {"mode": "enabled", "candidates": []},
         "startup_watchlist": [],
+        "selection_input_health": {
+            "schema_version": 2,
+            "status": "verified",
+            "formal": {
+                "status": "verified",
+                "formal_actions_allowed": True,
+                "all_formal_actions_allowed": True,
+            },
+            "by_strategy": {
+                "daily_fusion": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+                "h4_t3": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+                "luojie_pool": {"status": "verified"},
+            },
+        },
     }
     if overrides:
         base.update(overrides)
@@ -127,8 +147,9 @@ class TestReportViewModel(unittest.TestCase):
                 "picks_fusion": [_fusion_pick()],
                 "picks_pure": [_baseline_pick()],
                 "next_day_boom": {"mode": "enabled", "candidates": [_acceleration_pick()]},
-                "luojie_pool": {"candidates": [_luojie_pick()]},
+                "luojie_pool": {"mode": "enabled", "candidates": [_luojie_pick()]},
                 "startup_watchlist": [_confirming_pick()],
+                "observation_watchlist": [_confirming_pick()],
             }
         )
 
@@ -137,7 +158,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(workspace["default_view"], "main")
         self.assertEqual(
             workspace["view_order"],
-            ["highlights", "main", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
+            ["main", "highlights", "observation_top5", "acceleration", "luojie", "confirming", "growth_quality", "baseline"],
         )
         self.assertEqual(set(workspace["views"]), set(workspace["view_order"]))
         self.assertEqual(workspace["counts"]["main"], 1)
@@ -158,6 +179,333 @@ class TestReportViewModel(unittest.TestCase):
         self.assertIn("overlap_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("highlights_codes", workspace["diagnostics"]["growth_quality_overlap"])
         self.assertIn("growth_quality_codes", workspace["diagnostics"]["growth_quality_overlap"])
+
+    def test_view_meta_explains_role_source_action_and_real_empty_states(self):
+        report_data = _report_data(
+            {
+                "picks_fusion": [_fusion_pick()],
+                "picks_pure": [_baseline_pick()],
+                "h4_t3_pool": {
+                    "mode": "production",
+                    "status": "ok",
+                    "production_attested": True,
+                    "reason": "今日没有候选通过H4 T+3全部门槛。",
+                    "candidates": [],
+                },
+                "next_day_boom": {
+                    "mode": "disabled",
+                    "reason": "上证涨幅未超过1%，次日大涨模式关闭",
+                    "candidates": [],
+                },
+                "luojie_pool": {
+                    "mode": "enabled",
+                    "reason": "今日没有候选通过罗姐池门槛。",
+                    "candidates": [],
+                },
+            }
+        )
+
+        workspace = build_workspace(report_data)
+
+        for view_name in workspace["view_order"]:
+            meta = workspace["view_meta"][view_name]
+            self.assertIn("role", meta)
+            self.assertIn("source_pool", meta)
+            self.assertIn("action_semantics", meta)
+            self.assertEqual(set(meta["availability"]), {"state", "reason"})
+
+        self.assertEqual(workspace["view_meta"]["main"]["role"], "formal")
+        self.assertEqual(workspace["view_meta"]["main"]["source_pool"], "picks_fusion")
+        self.assertEqual(
+            workspace["view_meta"]["main"]["action_semantics"],
+            "formal",
+        )
+        self.assertEqual(workspace["view_meta"]["h4_t3"]["role"], "formal")
+        self.assertEqual(workspace["view_meta"]["baseline"]["role"], "baseline")
+        self.assertEqual(
+            workspace["view_meta"]["h4_t3"]["availability"],
+            {
+                "state": "verified_empty",
+                "reason": "今日没有候选通过H4 T+3全部门槛。",
+            },
+        )
+        self.assertEqual(
+            workspace["view_meta"]["acceleration"]["availability"],
+            {
+                "state": "disabled",
+                "reason": "上证涨幅未超过1%，次日大涨模式关闭",
+            },
+        )
+
+    def test_invalid_h4_contract_stays_visible_but_unavailable(self):
+        workspace = build_workspace(
+            _report_data(
+                {
+                    "h4_t3_pool": {
+                        "mode": "production",
+                        "status": "error",
+                        "production_attested": True,
+                        "reason": "生产证明校验失败",
+                        "candidates": [_fusion_pick(code="600088")],
+                    }
+                }
+            )
+        )
+
+        self.assertIn("h4_t3", workspace["view_order"])
+        self.assertEqual([], workspace["views"]["h4_t3"])
+        self.assertEqual(
+            "unavailable",
+            workspace["view_meta"]["h4_t3"]["availability"]["state"],
+        )
+        self.assertEqual(
+            "生产证明校验失败",
+            workspace["view_meta"]["h4_t3"]["availability"]["reason"],
+        )
+
+    def test_disabled_luojie_contract_cannot_leak_candidates(self):
+        workspace = build_workspace(
+            _report_data({
+                "luojie_pool": {
+                    "mode": "disabled",
+                    "reason": "今日未启用",
+                    "candidates": [_luojie_pick(code="600089")],
+                }
+            })
+        )
+        self.assertEqual([], workspace["views"]["luojie"])
+        self.assertEqual(
+            "disabled",
+            workspace["view_meta"]["luojie"]["availability"]["state"],
+        )
+
+    def test_invalid_pool_shapes_are_unavailable_not_verified_empty(self):
+        workspace = build_workspace({
+            "picks_fusion": {"bad": "shape"},
+            "picks_pure": None,
+            "observation_watchlist": {"bad": "shape"},
+            "startup_watchlist": None,
+            "next_day_boom": {"mode": "enabled", "candidates": None},
+            "luojie_pool": {"mode": "enabled", "candidates": None},
+            "h4_t3_pool": {
+                "mode": "production", "status": "ok",
+                "production_attested": True,
+            },
+        })
+
+        for view in (
+            "main", "baseline", "observation_top5", "acceleration",
+            "luojie", "confirming", "h4_t3",
+        ):
+            self.assertEqual(
+                workspace["view_meta"][view]["availability"]["state"],
+                "unavailable",
+                view,
+            )
+            self.assertNotIn(
+                "运行正常",
+                workspace["view_meta"][view]["availability"]["reason"],
+            )
+
+    def test_enabled_pool_with_error_status_is_unavailable(self):
+        workspace = build_workspace(
+            _report_data({
+                "luojie_pool": {
+                    "mode": "enabled",
+                    "status": "error",
+                    "reason": "15分钟输入过期",
+                    "candidates": [],
+                }
+            })
+        )
+
+        self.assertEqual([], workspace["views"]["luojie"])
+        self.assertEqual(
+            "unavailable",
+            workspace["view_meta"]["luojie"]["availability"]["state"],
+        )
+        self.assertEqual(
+            "15分钟输入过期",
+            workspace["view_meta"]["luojie"]["availability"]["reason"],
+        )
+
+    def test_missing_pool_contract_is_unavailable_not_verified_empty(self):
+        workspace = build_workspace({"startup_watchlist": []})
+
+        self.assertEqual(
+            workspace["view_meta"]["main"]["availability"]["state"],
+            "unavailable",
+        )
+        self.assertEqual(
+            workspace["view_meta"]["baseline"]["availability"]["state"],
+            "unavailable",
+        )
+
+    def test_formal_input_health_suppresses_only_the_affected_strategy(self):
+        report_data = _report_data({
+            "picks_fusion": [_fusion_pick()],
+            "h4_t3_pool": {
+                "mode": "production",
+                "status": "ok",
+                "production_attested": True,
+                "candidates": [_fusion_pick(code="600002")],
+            },
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "partial",
+                "formal": {
+                    "status": "partial",
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": False,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                        "blocking_reason": "strategy_input_stale_or_unverified",
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                        "blocking_reason": "",
+                    },
+                },
+            },
+        })
+
+        workspace = build_workspace(report_data)
+
+        self.assertEqual([], workspace["views"]["main"])
+        self.assertEqual(["600002"], [
+            row["code"] for row in workspace["views"]["h4_t3"]
+        ])
+        self.assertEqual(
+            "unavailable",
+            workspace["view_meta"]["main"]["availability"]["state"],
+        )
+        self.assertEqual(
+            "available",
+            workspace["view_meta"]["h4_t3"]["availability"]["state"],
+        )
+        self.assertTrue(workspace["views"]["highlights"])
+        self.assertEqual(
+            "仅观察", workspace["views"]["highlights"][0]["page_action"]
+        )
+
+    def test_formal_health_flag_cannot_override_unavailable_status(self):
+        report_data = _report_data({
+            "picks_fusion": [_fusion_pick()],
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "partial",
+                "formal": {
+                    "status": "partial",
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": False,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": True,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                },
+            },
+        })
+
+        workspace = build_workspace(report_data)
+
+        self.assertEqual([], workspace["views"]["main"])
+        self.assertEqual(
+            "unavailable",
+            workspace["view_meta"]["main"]["availability"]["state"],
+        )
+
+    def test_incident_affected_research_rows_are_marked_review_only(self):
+        report_data = _report_data({
+            "picks_fusion": [_fusion_pick(code="300697")],
+            "luojie_pool": {
+                "mode": "enabled",
+                "status": "ok",
+                "candidates": [_luojie_pick(code="600003")],
+            },
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "partial",
+                "formal": {
+                    "status": "partial",
+                    "formal_actions_allowed": True,
+                    "all_formal_actions_allowed": False,
+                },
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                        "invalid_codes": ["300697"],
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                    },
+                    "luojie_pool": {
+                        "status": "unavailable",
+                        "invalid_codes": [],
+                    },
+                },
+                "incident_ids": ["fusion-300697", "luojie-15m"],
+            },
+        })
+
+        workspace = build_workspace(report_data)
+
+        self.assertEqual("partial", workspace["view_meta"]["highlights"]["availability"]["state"])
+        self.assertEqual("partial", workspace["view_meta"]["luojie"]["availability"]["state"])
+        affected = {
+            row["code"]: row
+            for row in workspace["views"]["highlights"]
+        }
+        self.assertTrue(affected["300697"]["incident_review_only"])
+        self.assertTrue(affected["600003"]["incident_review_only"])
+        self.assertIn("仅供事故复盘", affected["300697"]["page_action_reason"])
+        self.assertTrue(any(
+            badge["label"] == "策略输入过期·仅复盘"
+            for badge in affected["600003"]["data_badges"]
+        ))
+
+    def test_observation_top5_does_not_silently_fallback_to_startup_pool(self):
+        workspace = build_workspace({
+            "observation_watchlist": [],
+            "startup_watchlist": [_confirming_pick()],
+        })
+
+        self.assertEqual([], workspace["views"]["observation_top5"])
+        self.assertEqual(
+            "verified_empty",
+            workspace["view_meta"]["observation_top5"]["availability"]["state"],
+        )
+
+    def test_workspace_preserves_final_close_evidence_and_page_action_contract(self):
+        pick = _fusion_pick()
+        pick["data_status"] = {
+            "daily": "verified",
+            "latest_date": "2026-08-26",
+            "source": "tencent",
+            "bars": 100,
+            "stale": False,
+            "is_final": True,
+        }
+
+        workspace = build_workspace(_report_data({"picks_fusion": [pick]}))
+        formal = workspace["views"]["main"][0]
+        research = workspace["views"]["highlights"][0]
+
+        self.assertIs(formal["data_status"]["is_final"], True)
+        self.assertEqual("可上车", formal["page_action"])
+        self.assertEqual("仅观察", research["page_action"])
+        self.assertNotEqual(formal["strategy_action"], research["page_action"])
 
     def test_observation_top5_enforces_sector_and_failure_reason_caps(self):
         rows = []
@@ -354,7 +702,7 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(len(highlights), 1)
         item = highlights[0]
         self.assertEqual(item["sources"], ["main", "acceleration"])
-        self.assertEqual(item["source_labels"], ["主推", "加速"])
+        self.assertEqual(item["source_labels"], ["融合候选", "加速"])
         self.assertEqual(item["resonance_label"], "共振·进攻")
         self.assertEqual(item["ref"]["pool"], "picks_fusion")
         self.assertIn("source:main", item["rank_trace"])
@@ -476,8 +824,56 @@ class TestReportViewModel(unittest.TestCase):
         tags = {(tag["type"], tag["label"]) for tag in item["info_tags"]}
 
         self.assertIn(("sector", "测试板块"), tags)
-        self.assertIn(("source", "主推"), tags)
+        self.assertIn(("source", "正式主推"), tags)
         self.assertIn(("signal", "底背驰候选"), tags)
+
+    def test_item_contract_separates_formal_action_from_scoring_decision(self):
+        recommend = _fusion_pick(code="600071", name="正式推荐")
+        observe = _fusion_pick(
+            code="600072",
+            name="融合观察",
+            decision_engine_v1={"decision_code": "observe", "decision": "观察"},
+        )
+        observe["ret20"] = 12.0
+
+        workspace = build_workspace(_report_data({"picks_fusion": [recommend, observe]}))
+        main_item = workspace["views"]["main"][0]
+        highlight_recommend = next(
+            row for row in workspace["views"]["highlights"] if row["code"] == "600071"
+        )
+        highlight_observe = next(
+            row for row in workspace["views"]["highlights"] if row["code"] == "600072"
+        )
+        growth_observe = workspace["views"]["growth_quality"][0]
+
+        self.assertEqual(main_item["source_labels"], ["正式主推"])
+        self.assertEqual(main_item["effective_action"], main_item["action"])
+        self.assertEqual(main_item["action_semantics"], "formal")
+        self.assertEqual(main_item["scoring_decision"]["decision_code"], "recommend")
+        self.assertEqual(main_item["scoring_decision"]["decision"], "推荐")
+        self.assertTrue(main_item["is_formal_recommendation"])
+
+        for item in (highlight_recommend, highlight_observe, growth_observe):
+            self.assertIn("融合候选", item["source_labels"])
+            self.assertNotIn("主推", item["source_labels"])
+            self.assertEqual(item["effective_action"], "仅观察")
+            self.assertEqual(item["action_semantics"], "watch_only")
+            self.assertFalse(item["is_formal_recommendation"])
+
+        self.assertEqual(
+            highlight_recommend["scoring_decision"]["decision_code"], "recommend"
+        )
+        self.assertEqual(highlight_observe["scoring_decision"]["decision_code"], "observe")
+        self.assertEqual(highlight_observe["scoring_decision"]["decision"], "观察")
+
+        self.assertTrue(
+            all(
+                not item["is_formal_recommendation"]
+                for view_name, items in workspace["views"].items()
+                if view_name not in {"main", "h4_t3"}
+                for item in items
+            )
+        )
 
     def test_workspace_item_preserves_observe_decision_payload_in_highlights(self):
         decision = {
@@ -503,7 +899,9 @@ class TestReportViewModel(unittest.TestCase):
             distance=0.5,
         )
 
-        workspace = build_workspace({"picks_fusion": [with_decision, higher_rank]})
+        workspace = build_workspace(_report_data({
+            "picks_fusion": [with_decision, higher_rank]
+        }))
         main_rows = workspace["views"]["main"]
         highlight_rows = workspace["views"]["highlights"]
 
@@ -555,7 +953,9 @@ class TestReportViewModel(unittest.TestCase):
 
         items = {
             item["code"]: item
-            for item in build_workspace({"picks_fusion": rows})["views"]["main"]
+            for item in build_workspace(_report_data({
+                "picks_fusion": rows
+            }))["views"]["main"]
         }
 
         self.assertEqual(list(items), ["600050"])
@@ -584,7 +984,7 @@ class TestReportViewModel(unittest.TestCase):
             )
         )
 
-        workspace = build_workspace({"picks_fusion": rows})
+        workspace = build_workspace(_report_data({"picks_fusion": rows}))
 
         self.assertEqual(len(workspace["views"]["main"]), 12)
         self.assertTrue(
@@ -862,7 +1262,7 @@ class TestReportViewModel(unittest.TestCase):
         report_data = _report_data(
             {
                 "next_day_boom": {"mode": "enabled", "candidates": [_acceleration_pick(code="600020")]},
-                "luojie_pool": {"candidates": [_luojie_pick(code="600021")]},
+                "luojie_pool": {"mode": "enabled", "candidates": [_luojie_pick(code="600021")]},
                 "startup_watchlist": [_confirming_pick(code="600022")],
             }
         )
@@ -878,7 +1278,7 @@ class TestReportViewModel(unittest.TestCase):
             {
                 "picks_fusion": [_fusion_pick()],
                 "next_day_boom": {"mode": "enabled", "candidates": [_acceleration_pick()]},
-                "luojie_pool": {"candidates": [_luojie_pick()]},
+                "luojie_pool": {"mode": "enabled", "candidates": [_luojie_pick()]},
                 "startup_watchlist": [_confirming_pick()],
                 "picks_pure": [_baseline_pick()],
             }

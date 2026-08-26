@@ -14,12 +14,55 @@ import tempfile
 from datetime import datetime, timezone
 
 from chanlun.report_view_model import build_workspace
+from chanlun.strategy_review import load_strategy_sample_exclusions
 
 
 VIEW_NAMES = (
-    "main", "highlights", "observation_top5", "acceleration", "luojie",
+    "main", "h4_t3", "highlights", "observation_top5", "acceleration", "luojie",
     "confirming", "growth_quality", "baseline",
 )
+
+_FORMAL_STRATEGY_BY_VIEW = {
+    "main": "daily_fusion",
+    "h4_t3": "h4_t3",
+}
+
+
+def _registered_incident_codes(report_date, view_name):
+    strategy_name = _FORMAL_STRATEGY_BY_VIEW.get(view_name)
+    if not strategy_name:
+        return set()
+    excluded = set()
+    for rule in load_strategy_sample_exclusions():
+        dates = {str(value) for value in rule.get("report_dates") or []}
+        strategies = {
+            str(value) for value in rule.get("strategy_names") or []
+        }
+        if report_date not in dates or strategy_name not in strategies:
+            continue
+        codes = {str(value) for value in rule.get("codes") or []}
+        if codes:
+            excluded.update(codes)
+        else:
+            excluded.add("*")
+    return excluded
+
+
+def _formal_view_allowed(report, view_name):
+    strategy_name = _FORMAL_STRATEGY_BY_VIEW.get(view_name)
+    if not strategy_name or not isinstance(report, dict):
+        return True
+    health = report.get("selection_input_health")
+    if not isinstance(health, dict) or health.get("schema_version") != 2:
+        return False
+    by_strategy = health.get("by_strategy")
+    by_strategy = by_strategy if isinstance(by_strategy, dict) else {}
+    strategy_health = by_strategy.get(strategy_name)
+    return bool(
+        isinstance(strategy_health, dict)
+        and strategy_health.get("status") == "verified"
+        and strategy_health.get("formal_actions_allowed") is True
+    )
 
 
 def _as_text(value):
@@ -103,13 +146,33 @@ def _read_report(path, date_meta=None):
         report = json.load(handle)
     source_views = _source_views(report)
     views = {}
+    incident_excluded_counts = {}
+    formal_input_blocked_counts = {}
+    report_date = _as_text(report.get("date"))
     for view in VIEW_NAMES:
         rows = []
-        for position, item in enumerate(source_views.get(view, []), start=1):
+        source_rows = source_views.get(view, [])
+        source_rows = source_rows if isinstance(source_rows, list) else []
+        if view in _FORMAL_STRATEGY_BY_VIEW and not _formal_view_allowed(
+            report, view
+        ):
+            views[view] = []
+            if source_rows:
+                formal_input_blocked_counts[view] = len(source_rows)
+            continue
+        excluded_codes = _registered_incident_codes(report_date, view)
+        excluded_count = 0
+        for position, item in enumerate(source_rows, start=1):
+            item_code = _as_text(item.get("code")) if isinstance(item, dict) else ""
+            if "*" in excluded_codes or item_code in excluded_codes:
+                excluded_count += 1
+                continue
             row = _view_row(item, position)
             if row is not None:
                 rows.append(row)
         views[view] = rows
+        if excluded_count:
+            incident_excluded_counts[view] = excluded_count
     market = report.get("market") if isinstance(report, dict) else {}
     benchmark = market.get("沪深300") if isinstance(market, dict) else {}
     benchmark = benchmark if isinstance(benchmark, dict) else {}
@@ -122,6 +185,16 @@ def _read_report(path, date_meta=None):
     is_trading_day = data_quality.get("is_trading_day")
     if not isinstance(is_trading_day, bool):
         is_trading_day = date_meta.get("is_trading_day") is not False
+    quality = {
+        "is_official": bool(is_official),
+        "is_trading_day": bool(is_trading_day),
+        "missing_daily_count": int(_as_number(data_quality.get("missing_daily_count")) or 0),
+        "stale_stock_count": int(_as_number(data_quality.get("stale_stock_count")) or 0),
+        "status": "official" if is_official else "quality_warning",
+        "incident_excluded_counts": incident_excluded_counts,
+    }
+    if formal_input_blocked_counts:
+        quality["formal_input_blocked_counts"] = formal_input_blocked_counts
     return {
         "benchmark": {
             "code": "000300",
@@ -129,13 +202,7 @@ def _read_report(path, date_meta=None):
             "close": _as_number(benchmark.get("close")),
         },
         "views": views,
-        "quality": {
-            "is_official": bool(is_official),
-            "is_trading_day": bool(is_trading_day),
-            "missing_daily_count": int(_as_number(data_quality.get("missing_daily_count")) or 0),
-            "stale_stock_count": int(_as_number(data_quality.get("stale_stock_count")) or 0),
-            "status": "official" if is_official else "quality_warning",
-        },
+        "quality": quality,
     }
 
 

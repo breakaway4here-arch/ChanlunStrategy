@@ -205,6 +205,62 @@ def _build_candidate(stock, min15, themes):
         bars_since_break=bars_since_break,
     )
 
+    daily = stock.get("klines")
+    daily = daily if isinstance(daily, dict) else stock
+    raw_daily_dates = daily.get("dates")
+    raw_daily_closes = daily.get("closes")
+    daily_dates = (
+        list(raw_daily_dates) if raw_daily_dates is not None else []
+    )
+    daily_closes = [
+        float(value)
+        for value in (
+            list(raw_daily_closes)
+            if raw_daily_closes is not None else []
+        )
+    ]
+    pair_len = min(len(daily_dates), len(daily_closes))
+    if pair_len:
+        daily_dates = daily_dates[-pair_len:]
+        daily_closes = daily_closes[-pair_len:]
+    daily_status = stock.get("data_status")
+    daily_status = daily_status if isinstance(daily_status, dict) else {}
+    input_evidence = getattr(min15, "strategy_input_evidence", {})
+    input_evidence = (
+        dict(input_evidence) if isinstance(input_evidence, dict) else {}
+    )
+    daily_latest_date = (
+        str(daily_dates[-1]).split(" ", 1)[0] if daily_dates else ""
+    )
+    input_latest_date = str(input_evidence.get("latest_date") or "")
+    daily_verified = bool(
+        daily_closes
+        and daily_status.get("daily") == "verified"
+        and daily_status.get("is_final") is True
+        and daily_status.get("stale") is False
+        and daily_latest_date
+        and daily_latest_date
+        == str(daily_status.get("latest_date") or "").split(" ", 1)[0]
+        and (not input_latest_date or daily_latest_date == input_latest_date)
+    )
+    daily_close = daily_closes[-1] if daily_verified else None
+    daily_change = None
+    if daily_verified and len(daily_closes) >= 2 and daily_closes[-2] != 0:
+        daily_change = round(
+            (daily_closes[-1] - daily_closes[-2])
+            / daily_closes[-2] * 100.0,
+            2,
+        )
+    reference_close_evidence = (
+        {
+            "source": "daily_final_close",
+            "date": daily_latest_date,
+            "is_final": True,
+            "status": "verified",
+        }
+        if daily_close is not None else {}
+    )
+
     return {
         "code": stock.get("code", ""),
         "name": stock.get("name", ""),
@@ -214,11 +270,20 @@ def _build_candidate(stock, min15, themes):
         "sector_flow": stock.get("sector_flow"),
         "sector_strength_label": stock.get("sector_strength_label", ""),
         "data_status": stock.get("data_status", {}),
+        "strategy_input_evidence": input_evidence,
+        "reference_close_evidence": reference_close_evidence,
         "theme_labels": _theme_labels(themes),
         "themes": themes,
         "tier": tier,
         "score": score,
         "close": round(latest_close, 2),
+        "signal_15m_close": round(latest_close, 2),
+        "current_price": (
+            round(daily_close, 2) if daily_close is not None else None
+        ),
+        "change_pct": daily_change,
+        "dates": daily_dates,
+        "closes": daily_closes,
         "life_line": round(latest_life, 2),
         "ma13": round(latest_ma13, 2),
         "ma77": round(latest_ma77, 2),

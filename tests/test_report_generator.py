@@ -385,6 +385,26 @@ def _make_minimal_report_data():
         "chanlun_structure": {},
         "picks_pure": [],
         "picks_fusion": [],
+        "selection_input_health": {
+            "schema_version": 2,
+            "status": "verified",
+            "formal": {
+                "status": "verified",
+                "formal_actions_allowed": True,
+                "all_formal_actions_allowed": True,
+            },
+            "by_strategy": {
+                "daily_fusion": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+                "h4_t3": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                },
+                "luojie_pool": {"status": "verified"},
+            },
+        },
         "sector_flow": [],
         "sector_outflow": [],
         "limit_up_pool": [],
@@ -411,6 +431,28 @@ def _make_minimal_report_data():
 
 
 class TestFormalReportProjection(unittest.TestCase):
+
+    def test_projection_preserves_pool_presence_and_selection_input_health(self):
+        report_data = _make_minimal_report_data()
+        report_data.pop("picks_fusion")
+        report_data["selection_input_health"] = {
+            "schema_version": 1,
+            "status": "verified",
+            "formal": {"status": "verified", "formal_actions_allowed": True},
+            "sublevels": {},
+        }
+
+        daily = report_generator.build_full_daily_projection(report_data)
+
+        self.assertNotIn("picks_fusion", daily)
+        self.assertEqual(
+            report_data["selection_input_health"],
+            daily["selection_input_health"],
+        )
+        self.assertEqual(
+            "unavailable",
+            daily["workspace"]["view_meta"]["main"]["availability"]["state"],
+        )
 
     def test_full_daily_projector_is_the_exact_writer_payload(self):
         report_data = _make_minimal_report_data()
@@ -942,20 +984,28 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
                 "reason_snapshot": {"best_buy_point": {"type": "三买"}},
             }],
         }]
-        report_data["strategy_scorecards"] = [{
-            "strategy": "daily_fusion",
-            "name": "融合策略",
-            "version": "fusion-v1",
-            "sample_size": 3,
-            "returns": {"t1": 1.0, "t3": 2.0, "t5": 3.0},
-            "win_rate": 66.7,
-            "representative_samples": [{
-                "recommendation_id": "rec:stable-id",
-                "name": "中际旭创",
-                "return_pct": 2.0,
-                "reason_summary": "推荐 · 三买",
+        report_data["strategy_scorecards"] = {
+            "schema_version": 2,
+            "thresholds": {
+                "mature_samples": 100,
+                "active_dates": 20,
+                "calendar_months": 2,
+            },
+            "formal": [{
+                "strategy": "daily_fusion",
+                "name": "融合策略",
+                "version": "fusion-v1",
+                "metrics_by_horizon": {
+                    "t1": {"n": 3, "mean": 1.0},
+                    "t3": {"n": 2, "mean": 2.0},
+                    "t5": {"n": 1, "mean": 3.0},
+                },
             }],
-        }]
+            "baselines": [],
+            "research": [],
+            "gates": [],
+            "classification_failures": [],
+        }
 
         generate_report(report_data, output_dir=tmpdir)
 
@@ -970,9 +1020,10 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "rec:stable-id",
         )
         self.assertEqual(
-            payload["strategy_scorecards"][0]["strategy"],
+            payload["strategy_scorecards"]["formal"][0]["strategy"],
             "daily_fusion",
         )
+        self.assertEqual(payload["strategy_scorecards"]["schema_version"], 2)
         self.assertNotIn("recent_reviews", payload)
 
 
@@ -1390,6 +1441,22 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         result = _serialize_startup_watchlist([items])
         sw = result[0]
         self.assertEqual(sw["closes"], [])
+
+    def test_missing_watch_price_evidence_stays_null(self):
+        item = {
+            "code": "600099",
+            "name": "缺行情观察样本",
+            "dates": [],
+            "closes": [],
+        }
+
+        serialized = _serialize_startup_watchlist([item])[0]
+
+        self.assertIsNone(serialized["change_pct"])
+        self.assertIsNone(serialized["current_price"])
+        self.assertIsNone(serialized["reference_price"])
+        self.assertIsNone(serialized["close"])
+        self.assertIsNone(serialized["distance_from_reference_pct"])
 
     def test_annotations_has_marklines(self):
         items = self._make_watch_item()
@@ -2000,7 +2067,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             self.assertIn(helper, self.asset_js)
 
     def test_auxiliary_center_modules(self):
-        module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险', '策略记分牌', '数据诊断']
+        module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险', '策略收益回看（记分牌）', '数据诊断']
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
         self.assertNotIn("title: '卖出提醒'", self.asset_js)
@@ -2009,19 +2076,22 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_strategy_reviews_use_attributed_scorecards(self):
         self.assertIn("strategy_scorecards", self.asset_js)
         self.assertIn("representative_samples", self.asset_js)
-        self.assertIn("renderStrategyReturn('T+1'", self.asset_js)
-        self.assertIn("renderStrategyReturn('T+3'", self.asset_js)
-        self.assertIn("renderStrategyReturn('T+5'", self.asset_js)
-        self.assertIn("median_returns", self.asset_js)
-        self.assertIn("excess_returns", self.asset_js)
-        self.assertIn("MAE / MFE", self.asset_js)
-        self.assertIn("上涨率", self.asset_js)
-        self.assertIn("样本积累中", self.asset_js)
-        self.assertIn("T+1'", self.asset_js)
-        self.assertIn("label + ' 均值'", self.asset_js)
+        self.assertIn("renderStrategyHorizon('t1'", self.asset_js)
+        self.assertIn("renderStrategyHorizon('t3'", self.asset_js)
+        self.assertIn("renderStrategyHorizon('t5'", self.asset_js)
+        self.assertIn("metrics_by_horizon", self.asset_js)
+        self.assertIn("期间最高", self.asset_js)
+        self.assertIn("期间最低", self.asset_js)
+        self.assertIn("≥5%命中", self.asset_js)
+        self.assertIn("等待到期", self.asset_js)
+        self.assertIn("T+1 / T+3 / T+5", self.asset_js)
+        self.assertIn("正式推荐收益", self.asset_js)
+        self.assertIn("基础候选基线", self.asset_js)
+        self.assertIn("研究策略回看", self.asset_js)
+        self.assertIn("门控运行诊断", self.asset_js)
         self.assertIn("benchmark_status", self.asset_js)
         self.assertIn("超额收益显示 --", self.asset_js)
-        self.assertIn("主周期未声明", self.asset_js)
+        self.assertIn("未声明单一主周期", self.asset_js)
         self.assertIn("publication_outcomes", self.asset_js)
         self.assertNotIn("asArray((data || {}).recent_reviews);", self.asset_js)
 
@@ -2078,7 +2148,14 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
 
     def test_candidate_rows_surface_decision_badge(self):
         self.assertIn("function renderDecisionBadge", self.asset_js)
-        self.assertIn("tagHtml += renderDecisionBadge(decision);", self.asset_js)
+        self.assertIn("function renderCandidateDecisionBadge", self.asset_js)
+        self.assertIn(
+            "tagHtml += renderCandidateDecisionBadge(item, item.scoring_decision || decision);",
+            self.asset_js,
+        )
+        self.assertIn("事故前原始判定·仅追溯", self.asset_js)
+        self.assertIn("页面动作：", self.asset_js)
+        self.assertIn("规则判定：", self.asset_js)
         self.assertIn("decision-badge-score", self.asset_js)
 
     def test_detail_has_decision_engine_section(self):
@@ -2121,7 +2198,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
 
     def test_details_prefers_opportunity_score_before_watch_score(self):
         start = self.asset_js.find("function buildDetailsSection(item, raw) {")
-        end = self.asset_js.find("function buildChartPlaceholder()", start)
+        end = self.asset_js.find("function getDecisionEngineSummary(item, raw)", start)
         self.assertGreater(start, -1)
         self.assertGreater(end, start)
         fn = self.asset_js[start:end]
@@ -2201,6 +2278,14 @@ class TestLayoutRefresh(unittest.TestCase):
 
 class TestNextDayBoomRendering(unittest.TestCase):
 
+    def test_missing_price_evidence_stays_null(self):
+        candidate = _serialize_next_day_boom(
+            {"mode": "enabled", "candidates": [{"code": "600099"}]}
+        )["candidates"][0]
+
+        self.assertIsNone(candidate["change_pct"])
+        self.assertIsNone(candidate["current_price"])
+
     @classmethod
     def setUpClass(cls):
         cls.tmpdir = tempfile.mkdtemp(prefix="test_next_day_boom_")
@@ -2278,6 +2363,45 @@ class TestNextDayBoomRendering(unittest.TestCase):
 
 
 class TestLuojiePoolRendering(unittest.TestCase):
+
+    def test_missing_price_evidence_stays_null(self):
+        candidate = _serialize_luojie_pool(
+            {
+                "mode": "enabled",
+                "candidates": [{"code": "600098", "life_line": 10.0}],
+            }
+        )["candidates"][0]
+
+        self.assertIsNone(candidate["change_pct"])
+        self.assertIsNone(candidate["current_price"])
+        self.assertIsNone(candidate["distance_life_pct"])
+        for field in (
+            "close", "ma13", "ma77", "distance_ma77_pct",
+            "risk_line", "reduce_line",
+        ):
+            self.assertIsNone(candidate[field])
+
+    def test_15min_signal_close_is_not_rendered_as_daily_current_price(self):
+        candidate = _serialize_luojie_pool({
+            "mode": "enabled",
+            "candidates": [{
+                "code": "600098",
+                "close": 20.0,
+                "signal_15m_close": 20.0,
+                "strategy_input_evidence": {
+                    "interval": "15m", "status": "verified",
+                    "latest_date": "2026-08-26", "is_final": True,
+                },
+                "life_line": 19.0,
+            }],
+        })["candidates"][0]
+
+        self.assertIsNone(candidate["current_price"])
+        self.assertIsNone(candidate["change_pct"])
+        self.assertEqual(candidate["signal_15m_close"], 20.0)
+        self.assertEqual(
+            candidate["strategy_input_evidence"]["interval"], "15m"
+        )
 
     @classmethod
     def setUpClass(cls):

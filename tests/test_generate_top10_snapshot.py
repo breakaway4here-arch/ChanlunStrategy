@@ -26,8 +26,14 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
             "date": report_date,
             "picks_fusion": [],
             "picks_pure": [],
-            "next_day_boom": {"candidates": []},
-            "luojie_pool": {"candidates": []},
+            "next_day_boom": {
+                "mode": "disabled", "status": "disabled",
+                "reason": "测试日未启用", "candidates": [],
+            },
+            "luojie_pool": {
+                "mode": "disabled", "status": "disabled",
+                "reason": "测试日未启用", "candidates": [],
+            },
             "startup_watchlist": [],
             "data_quality": {
                 "report_date": report_date,
@@ -42,6 +48,16 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                 "fallback_used": False,
                 "stale_stock_count": 0,
                 "missing_daily_count": 0,
+            },
+            "selection_input_health": {
+                "schema_version": 1,
+                "status": "verified",
+                "formal": {
+                    "status": "verified",
+                    "formal_actions_allowed": True,
+                    "invalid_count": 0,
+                },
+                "sublevels": {},
             },
             "workspace": {
                 "views": {
@@ -199,8 +215,10 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
 
         item = payload["items"][0]
         for field in (
-            "rank", "view_rank", "code", "name", "score", "action",
-            "action_reason", "reason", "source", "change_pct", "current_price",
+            "rank", "view_rank", "code", "name", "score",
+            "strategy_action", "strategy_action_reason",
+            "page_action", "page_action_reason", "action_semantics",
+            "reason", "source", "change_pct", "current_price",
         ):
             self.assertIn(field, item)
 
@@ -208,7 +226,9 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
         self.assertEqual(item["source"], "highlights")
         self.assertEqual(item["rank"], 1)
         self.assertEqual(item["view_rank"], 1)
-        self.assertEqual(item["action_reason"], "测试动作原因")
+        self.assertEqual(item["strategy_action"], "可上车")
+        self.assertEqual(item["page_action"], "仅观察")
+        self.assertEqual(item["page_action_reason"], "测试入选原因")
         self.assertEqual(item["reason"], "测试入选原因")
 
     def test_top10_reason_uses_primary_reason_from_real_workspace(self) -> None:
@@ -237,7 +257,19 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                 "change_pct": 1.0,
             },
         }
-        workspace = build_workspace({"picks_fusion": [raw_pick]})
+        workspace = build_workspace({
+            "picks_fusion": [raw_pick],
+            "selection_input_health": {
+                "schema_version": 2,
+                "status": "verified",
+                "formal": {"status": "verified", "formal_actions_allowed": True},
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified", "formal_actions_allowed": True,
+                    }
+                },
+            },
+        })
         highlights = workspace["views"]["highlights"]
         self.assertEqual(highlights[0]["primary_reason"], "真实工作区入选理由")
         self.assertIn("data_status", highlights[0])
@@ -266,7 +298,8 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
 
         self.assertEqual(payload["items"][0]["reason"], "真实工作区入选理由")
         self.assertEqual(
-            payload["items"][0]["action_reason"], highlights[0]["action_reason"]
+            payload["items"][0]["strategy_action_reason"],
+            highlights[0]["action_reason"],
         )
 
     def test_real_workspace_propagates_nonverified_status_and_publish_gate_rejects_it(self) -> None:
@@ -293,7 +326,23 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
                         "change_pct": 1.0,
                     },
                 }
-                workspace = build_workspace({"picks_fusion": [raw_pick]})
+                workspace = build_workspace({
+                    "picks_fusion": [raw_pick],
+                    "selection_input_health": {
+                        "schema_version": 2,
+                        "status": "verified",
+                        "formal": {
+                            "status": "verified",
+                            "formal_actions_allowed": True,
+                        },
+                        "by_strategy": {
+                            "daily_fusion": {
+                                "status": "verified",
+                                "formal_actions_allowed": True,
+                            }
+                        },
+                    },
+                })
                 for view_name in ("main", "highlights"):
                     self.assertIn("data_status", workspace["views"][view_name][0])
                     self.assertEqual(
@@ -369,7 +418,8 @@ class GenerateTop10SnapshotTests(unittest.TestCase):
 
         payload = build_snapshot_payload("job-no-decision-guess", data_dir)
 
-        self.assertEqual(payload["items"][0]["action"], "")
+        self.assertEqual(payload["items"][0]["strategy_action"], "")
+        self.assertEqual(payload["items"][0]["page_action"], "仅观察")
 
     def test_missing_workspace_highlights_does_not_fallback_to_raw_sources(self) -> None:
         data_dir = self.make_fixture() / "docs" / "data"

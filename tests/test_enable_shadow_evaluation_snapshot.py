@@ -442,6 +442,35 @@ class EnableShadowEvaluationSnapshotTest(unittest.TestCase):
                 ]
                 self.assertEqual(leftovers, [])
 
+    def test_optional_comparison_target_joins_same_atomic_transaction(self):
+        case_docs = Path(self.tmpdir) / "atomic-extra-case"
+        staged_docs = Path(self.tmpdir) / "atomic-extra-stage"
+        shutil.copytree(self.docs, case_docs)
+        shutil.copytree(self.docs, staged_docs)
+        relative = "data/comparison-index.json"
+        (case_docs / relative).write_text("old comparison", encoding="utf-8")
+        (staged_docs / relative).write_text("new comparison", encoding="utf-8")
+
+        original_hashes = snapshot._public_target_hashes(
+            case_docs,
+            REPORT_DATE,
+            extra_targets=(relative,),
+        )
+        updated = snapshot._atomic_replace_targets(
+            staged_docs,
+            case_docs,
+            REPORT_DATE,
+            expected_original_hashes=original_hashes,
+            extra_targets=(relative,),
+        )
+
+        self.assertIn(relative, updated)
+        self.assertEqual(
+            "new comparison",
+            (case_docs / relative).read_text(encoding="utf-8"),
+        )
+        self.assertEqual([], _publication_residue(case_docs))
+
     def test_hard_exit_is_recovered_on_rerun_without_mixed_artifacts(self):
         expected_docs = Path(self.tmpdir) / "hard-exit-expected" / "docs"
         expected_docs.parent.mkdir()

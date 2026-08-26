@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "incidents": [
+    {
+      "incident_id": "sublevel-input-stale-2026-08-24-26-luojie",
+      "report_dates": ["2026-08-24", "2026-08-25", "2026-08-26"],
+      "strategy_names": ["luojie_pool"],
+      "source_pools": ["luojie_pool"],
+      "reason": "strategy_input_stale_or_unverified",
+      "evidence": "15m strategy input was not verified final for the report date"
+    },
+    {
+      "incident_id": "sublevel-input-stale-2026-08-25-fusion-300473",
+      "report_dates": ["2026-08-25"],
+      "strategy_names": ["daily_fusion"],
+      "source_pools": ["picks_fusion"],
+      "codes": ["300473"],
+      "reason": "strategy_input_stale_or_unverified",
+      "evidence": "300473 30m confirmation was stale and not final for 2026-08-25"
+    },
+    {
+      "incident_id": "sublevel-input-stale-2026-08-26-fusion-300697",
+      "report_dates": ["2026-08-26"],
+      "strategy_names": ["daily_fusion"],
+      "source_pools": ["picks_fusion"],
+      "codes": ["300697"],
+      "reason": "strategy_input_stale_or_unverified",
+      "evidence": "300697 30m confirmation was stale and not final for 2026-08-26"
+    },
+    {
+      "incident_id": "upstream-contract-2026-08-26-h4-picks-fusion",
+      "report_dates": ["2026-08-26"],
+      "strategy_names": ["h4_t3"],
+      "source_pools": ["h4_t3_pool"],
+      "reason": "strategy_upstream_contract_mismatch",
+      "evidence": "The historical H4 run used picks_fusion before picks_pure became the required common upstream"
+    }
+  ]
+}

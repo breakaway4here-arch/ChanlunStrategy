@@ -1,5 +1,6 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -42,6 +43,29 @@ def _payload(dates, final=True, source="remote"):
 
 
 class KLineRepositoryTests(unittest.TestCase):
+
+    def test_minute_provider_timestamp_is_treated_as_bar_end_time(self):
+        cn_tz = timezone(timedelta(hours=8))
+        now = datetime(2026, 8, 26, 15, 5, tzinfo=cn_tz)
+
+        self.assertEqual(
+            KLineRepository._infer_final(
+                "15m", "2026-08-26 15:00:00", now
+            ),
+            1,
+        )
+        self.assertEqual(
+            KLineRepository._infer_final(
+                "30m", "2026-08-26 15:00:00", now
+            ),
+            1,
+        )
+        self.assertEqual(
+            KLineRepository._infer_final(
+                "15m", "2026-08-26 15:15:00", now
+            ),
+            0,
+        )
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.db_path = Path(self.tmp.name) / "market.sqlite"
@@ -377,6 +401,70 @@ class KLineRepositoryTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 3)
         repository.get_many.assert_called_once()
+
+    def test_sublevel_batches_require_same_day_verified_final_input(self):
+        def kline(interval, latest, final, bars):
+            dates = [
+                "2026-08-{:02d} 14:{:02d}:00".format(
+                    1 + index // 60, index % 60
+                )
+                for index in range(bars - 1)
+            ] + [latest]
+            payload = _payload(dates)
+            payload["source"] = "market_history_db"
+            payload["_data_status"] = {
+                "daily": "verified" if final else "preview",
+                "latest_date": latest.split(" ", 1)[0],
+                "source": "market_history_db",
+                "bars": bars,
+                "stale": False,
+                "is_final": final,
+            }
+            return payload
+
+        for interval, fetcher, bars in (
+            ("15m", data_fetcher.batch_fetch_15min_klines, 180),
+            ("30m", data_fetcher.batch_fetch_30min_klines, 40),
+        ):
+            with self.subTest(interval=interval):
+                repository = MagicMock()
+                repository.get_many.return_value = {
+                    "600000": KLineResult(
+                        kline(interval, "2026-08-26 15:00:00", True, bars),
+                        "verified", "market_history_db", False,
+                    ),
+                    "600001": KLineResult(
+                        kline(interval, "2026-08-25 15:00:00", True, bars),
+                        "stale_cache", "market_history_db", True,
+                    ),
+                    "600002": KLineResult(
+                        kline(interval, "2026-08-26 15:00:00", False, bars),
+                        "preview", "market_history_db", False,
+                    ),
+                }
+                previous = data_fetcher._KLINE_REPOSITORY
+                try:
+                    data_fetcher._KLINE_REPOSITORY = repository
+                    rows = fetcher(
+                        [
+                            {"code": code, "name": code}
+                            for code in ("600000", "600001", "600002")
+                        ],
+                        required_date="2026-08-26",
+                    )
+                finally:
+                    data_fetcher._KLINE_REPOSITORY = previous
+
+                self.assertEqual([row["code"] for row in rows], ["600000"])
+                self.assertEqual(
+                    rows[0]["input_evidence"]["latest_date"],
+                    "2026-08-26",
+                )
+                self.assertTrue(rows[0]["input_evidence"]["is_final"])
+                self.assertEqual(
+                    repository.get_many.call_args[1]["required_date"],
+                    "2026-08-26",
+                )
 
 
 if __name__ == "__main__":

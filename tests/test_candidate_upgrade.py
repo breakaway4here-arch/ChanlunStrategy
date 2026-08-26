@@ -40,6 +40,13 @@ def make_min30_result(code, medium_confirm=True):
     r.fractals = []
     r.macd_dif = None
     r.macd_dea = None
+    r.strategy_input_evidence = {
+        "interval": "30m",
+        "status": "verified",
+        "latest_date": "2026-01-01",
+        "is_final": True,
+        "stale": False,
+    }
     if medium_confirm:
         # key_level OK + EMA5 reclaim → 中
         r.lows = np.array([10.2, 10.1, 10.0, 10.05, 10.08, 10.12, 10.2, 10.3], dtype=float)
@@ -79,6 +86,10 @@ class TestCandidateUpgrade(unittest.TestCase):
         self.assertEqual(bp["source_type"], "swing底背驰参考")
         self.assertEqual(bp.get("seed_type"), "swing底背驰候选种子")
         self.assertEqual(bp.get("seed_reason"), "接近20日低点")
+        self.assertEqual(
+            recommended[0]["strategy_input_evidence"],
+            min30_results[0].strategy_input_evidence,
+        )
         self.assertEqual(diag["candidate_upgraded"], 1)
 
     def test_swing_seed_without_30min_confirmation_is_not_recommended(self):

@@ -540747,378 +540747,1087 @@
           ]
         }
       ],
-      "strategy_scorecards": [
-        {
-          "strategy": "daily_fusion",
-          "name": "日线融合策略",
-          "version": "daily-fusion-close-v1",
-          "entry_mode": "immediate_close",
-          "attribution_status": "verified",
-          "attribution_status_counts": {
-            "verified": 278
-          },
-          "intended_horizon": null,
-          "episode_count": 2,
-          "evaluable_episode_count": 1,
-          "sample_size": 1,
-          "matured_by_horizon": {
-            "t1": 1,
-            "t3": 0,
-            "t5": 0
-          },
-          "returns": {
-            "t1": 3.578690524603484,
-            "t3": null,
-            "t5": null
-          },
-          "median_returns": {
-            "t1": 3.578690524603484,
-            "t3": null,
-            "t5": null
-          },
-          "excess_returns": {
-            "t1": 2.7272022874872914,
-            "t3": null,
-            "t5": null
-          },
-          "median_excess_returns": {
-            "t1": 2.7272022874872914,
-            "t3": null,
-            "t5": null
-          },
-          "excursions": {
-            "mae": {
-              "t1": -1.748678324522164,
-              "t3": null,
-              "t5": null
-            },
-            "mfe": {
-              "t1": 4.717364782431875,
-              "t3": null,
-              "t5": null
-            }
-          },
-          "win_rates": {
-            "t1": 100.0,
-            "t3": null,
-            "t5": null
-          },
-          "win_rate": null,
-          "gate_outcomes": {
-            "reject": 152,
-            "observe": 124,
-            "recommend": 2
-          },
-          "publication_outcomes": {
-            "none": 152,
-            "watch": 124,
-            "recommendation": 2
-          },
-          "evaluation_statuses": {
-            "partial": 1,
-            "right_censored": 1
-          },
-          "representative_samples": [
-            {
-              "recommendation_id": "rec:106ffdb8d078b34a",
-              "rec_date": "2026-08-25",
-              "code": "300473",
-              "name": "德尔股份",
-              "strategy": "daily_fusion",
-              "strategy_version": "daily-fusion-close-v1",
-              "return_pct": null,
-              "returns": {
-                "t1": 3.578690524603484,
-                "t3": null,
-                "t5": null
-              },
-              "excess_returns": {
-                "t1": 2.7272022874872914,
-                "t3": null,
-                "t5": null
-              },
-              "outcome_label": "主周期未声明",
-              "reason_summary": "推荐 · 强势启动候选 · 处于60日低位区间；放量2.4倍；站上MA5/MA10；突破20日平台",
-              "entry_date": "2026-08-25",
-              "entry_price": 24.54583295913786
-            }
-          ]
+      "strategy_scorecards": {
+        "schema_version": 2,
+        "thresholds": {
+          "mature_samples": 100,
+          "active_dates": 20,
+          "calendar_months": 2
         },
-        {
-          "strategy": "daily_pure",
-          "name": "日线纯净策略",
-          "version": "daily-pure-close-v1",
-          "entry_mode": "immediate_close",
-          "attribution_status": "verified",
-          "attribution_status_counts": {
-            "verified": 408
-          },
-          "intended_horizon": null,
-          "episode_count": 92,
-          "evaluable_episode_count": 39,
-          "sample_size": 39,
-          "matured_by_horizon": {
-            "t1": 39,
-            "t3": 0,
-            "t5": 0
-          },
-          "returns": {
-            "t1": -0.682237847100877,
-            "t3": null,
-            "t5": null
-          },
-          "median_returns": {
-            "t1": -1.0791366906474804,
-            "t3": null,
-            "t5": null
-          },
-          "excess_returns": {
-            "t1": -1.5337260842170695,
-            "t3": null,
-            "t5": null
-          },
-          "median_excess_returns": {
-            "t1": -1.930624927763673,
-            "t3": null,
-            "t5": null
-          },
-          "excursions": {
-            "mae": {
-              "t1": -2.835967733596212,
-              "t3": null,
-              "t5": null
+        "formal": [
+          {
+            "evaluation_role": "formal",
+            "publication_surface": "formal_recommendation",
+            "strategy": "daily_fusion",
+            "name": "日线融合策略",
+            "version": "daily-fusion-close-v1",
+            "source_pool": "picks_fusion",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "classification_status": "legacy_corrected",
+            "classification_status_counts": {
+              "legacy_corrected": 278
             },
-            "mfe": {
-              "t1": 2.0789735082980076,
-              "t3": null,
-              "t5": null
-            }
-          },
-          "win_rates": {
-            "t1": 30.76923076923077,
-            "t3": null,
-            "t5": null
-          },
-          "win_rate": null,
-          "gate_outcomes": {
-            "observe": 218,
-            "reject": 96,
-            "recommend": 94
-          },
-          "publication_outcomes": {
-            "watch": 218,
-            "none": 96,
-            "recommendation": 94
-          },
-          "evaluation_statuses": {
-            "partial": 39,
-            "right_censored": 53
-          },
-          "representative_samples": [
-            {
-              "recommendation_id": "rec:fddf3cd98373e9d1",
-              "rec_date": "2026-08-25",
-              "code": "000530",
-              "name": "冰山冷热",
-              "strategy": "daily_pure",
-              "strategy_version": "daily-pure-close-v1",
-              "return_pct": null,
-              "returns": {
-                "t1": -0.5802707930367553,
-                "t3": null,
-                "t5": null
+            "signal_count": 278,
+            "evaluation_contract_signal_count": 2,
+            "non_evaluation_signal_count": 276,
+            "eligible_signal_count": 0,
+            "excluded_signal_count": 2,
+            "ledger_active_dates": 3,
+            "ledger_date_start": "2026-08-24",
+            "ledger_date_end": "2026-08-26",
+            "sample_exclusions": [
+              {
+                "incident_id": "sublevel-input-stale-2026-08-25-fusion-300473",
+                "reason": "strategy_input_stale_or_unverified",
+                "count": 1
               },
-              "excess_returns": {
-                "t1": -1.431759030152948,
-                "t3": null,
-                "t5": null
-              },
-              "outcome_label": "主周期未声明",
-              "reason_summary": "推荐 · 强势启动候选 · 处于60日低位区间；放量2.3倍；站上MA5/MA10；突破20日平台",
-              "entry_date": "2026-08-25",
-              "entry_price": 5.17
+              {
+                "incident_id": "sublevel-input-stale-2026-08-26-fusion-300697",
+                "reason": "strategy_input_stale_or_unverified",
+                "count": 1
+              }
+            ],
+            "gate_outcomes": {
+              "reject": 152,
+              "observe": 124,
+              "recommend": 2
             },
-            {
-              "recommendation_id": "rec:eaf3116836df34f7",
-              "rec_date": "2026-08-25",
-              "code": "300579",
-              "name": "数字认证",
-              "strategy": "daily_pure",
-              "strategy_version": "daily-pure-close-v1",
-              "return_pct": null,
-              "returns": {
-                "t1": -2.2116218560277523,
-                "t3": null,
-                "t5": null
-              },
-              "excess_returns": {
-                "t1": -3.063110093143945,
-                "t3": null,
-                "t5": null
-              },
-              "outcome_label": "主周期未声明",
-              "reason_summary": "推荐 · 强势启动候选 · 处于120日低位区间；放量4.0倍；站上MA5/MA10；涨幅7.3%",
-              "entry_date": "2026-08-25",
-              "entry_price": 22.778902916848068
+            "publication_outcomes": {
+              "none": 152,
+              "watch": 124,
+              "recommendation": 2
             },
-            {
-              "recommendation_id": "rec:e39822cd39719acd",
-              "rec_date": "2026-08-25",
-              "code": "600637",
-              "name": "东方明珠",
-              "strategy": "daily_pure",
-              "strategy_version": "daily-pure-close-v1",
-              "return_pct": null,
-              "returns": {
-                "t1": 0.0,
-                "t3": null,
-                "t5": null
+            "attribution_status_counts": {
+              "verified": 278
+            },
+            "attribution_status": "verified",
+            "evidence_tier": "legacy_inferred",
+            "latest_run_status": "unavailable",
+            "latest_run_reason": "策略输入状态缺失、过期或未核验，正式动作已封闭",
+            "latest_run_blocking_reason": "strategy_input_stale_or_unverified",
+            "latest_signal_count": 0,
+            "latest_source_candidate_count": 89,
+            "latest_published_count": 0,
+            "latest_report_date": "2026-08-26",
+            "active_dates": 0,
+            "active_months": 0,
+            "episode_count": 0,
+            "evaluable_episode_count": 0,
+            "sample_size": null,
+            "matured_by_horizon": {
+              "t1": 0,
+              "t3": 0,
+              "t5": 0
+            },
+            "maturity_by_horizon": {
+              "t1": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
               },
-              "excess_returns": {
-                "t1": -0.8514882371161926,
-                "t3": null,
-                "t5": null
+              "t3": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
               },
-              "outcome_label": "主周期未声明",
-              "reason_summary": "推荐 · 强势启动候选 · 处于60日低位区间；放量2.1倍；站上MA5/MA10；涨幅4.4%",
-              "entry_date": "2026-08-25",
-              "entry_price": 8.5029304029304
-            }
-          ]
-        },
-        {
-          "strategy": "luojie_pool",
-          "name": "罗杰主题策略",
-          "version": "luojie-close-v1",
-          "entry_mode": "immediate_close",
-          "attribution_status": "verified",
-          "attribution_status_counts": {
-            "verified": 90
-          },
-          "intended_horizon": null,
-          "episode_count": 0,
-          "evaluable_episode_count": 0,
-          "sample_size": 0,
-          "matured_by_horizon": {
-            "t1": 0,
-            "t3": 0,
-            "t5": 0
-          },
-          "returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "median_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "excess_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "median_excess_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "excursions": {
-            "mae": {
+              "t5": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              }
+            },
+            "horizon_readiness": {
+              "t1": "data_unavailable",
+              "t3": "data_unavailable",
+              "t5": "data_unavailable"
+            },
+            "metrics_by_horizon": {
+              "t1": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t3": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t5": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              }
+            },
+            "metrics_publishable": false,
+            "metrics_blocking_reasons": [
+              "strategy_input_stale_or_unverified"
+            ],
+            "evaluation_status": "data_unavailable",
+            "evaluation_statuses": {},
+            "overall_verdict": null,
+            "returns": {
               "t1": null,
               "t3": null,
               "t5": null
             },
-            "mfe": {
-              "t1": null,
-              "t3": null,
-              "t5": null
-            }
-          },
-          "win_rates": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "win_rate": null,
-          "gate_outcomes": {
-            "observe": 90
-          },
-          "publication_outcomes": {
-            "watch": 90
-          },
-          "evaluation_statuses": {},
-          "representative_samples": []
-        },
-        {
-          "strategy": "observation_gate",
-          "name": "观察池门控",
-          "version": "observation-gate-close-v1",
-          "entry_mode": "immediate_close",
-          "attribution_status": "verified",
-          "attribution_status_counts": {
-            "verified": 695
-          },
-          "intended_horizon": null,
-          "episode_count": 0,
-          "evaluable_episode_count": 0,
-          "sample_size": 0,
-          "matured_by_horizon": {
-            "t1": 0,
-            "t3": 0,
-            "t5": 0
-          },
-          "returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "median_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "excess_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "median_excess_returns": {
-            "t1": null,
-            "t3": null,
-            "t5": null
-          },
-          "excursions": {
-            "mae": {
+            "median_returns": {
               "t1": null,
               "t3": null,
               "t5": null
             },
-            "mfe": {
+            "excess_returns": {
               "t1": null,
               "t3": null,
               "t5": null
-            }
+            },
+            "median_excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excursions": {
+              "mae": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              },
+              "mfe": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              }
+            },
+            "win_rates": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "win_rate": null,
+            "representative_samples": []
           },
-          "win_rates": {
-            "t1": null,
-            "t3": null,
-            "t5": null
+          {
+            "evaluation_role": "formal",
+            "publication_surface": "formal_recommendation",
+            "strategy": "h4_t3",
+            "name": "H4 T+3 策略",
+            "version": "h4_t3_k30_tail_safe_v1",
+            "source_pool": "h4_t3_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "classification_status": "run_manifest",
+            "classification_status_counts": {},
+            "signal_count": 0,
+            "evaluation_contract_signal_count": 0,
+            "non_evaluation_signal_count": 0,
+            "eligible_signal_count": 0,
+            "excluded_signal_count": 0,
+            "ledger_active_dates": 0,
+            "ledger_date_start": "",
+            "ledger_date_end": "",
+            "sample_exclusions": [],
+            "gate_outcomes": {},
+            "publication_outcomes": {},
+            "attribution_status_counts": {},
+            "attribution_status": "run_manifest",
+            "evidence_tier": "run_manifest",
+            "latest_run_status": "unavailable",
+            "latest_run_reason": "共同上游合同不匹配，策略结果仅供追溯并停止评分",
+            "latest_run_blocking_reason": "strategy_upstream_contract_mismatch",
+            "latest_signal_count": 0,
+            "latest_source_candidate_count": 0,
+            "latest_published_count": 0,
+            "latest_report_date": "2026-08-26",
+            "active_dates": 0,
+            "active_months": 0,
+            "episode_count": 0,
+            "evaluable_episode_count": 0,
+            "sample_size": 0,
+            "matured_by_horizon": {
+              "t1": 0,
+              "t3": 0,
+              "t5": 0
+            },
+            "maturity_by_horizon": {
+              "t1": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t3": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t5": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              }
+            },
+            "horizon_readiness": {
+              "t1": "data_unavailable",
+              "t3": "data_unavailable",
+              "t5": "data_unavailable"
+            },
+            "metrics_by_horizon": {
+              "t1": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t3": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t5": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              }
+            },
+            "metrics_publishable": false,
+            "metrics_blocking_reasons": [
+              "strategy_upstream_contract_mismatch"
+            ],
+            "evaluation_status": "data_unavailable",
+            "evaluation_statuses": {},
+            "overall_verdict": null,
+            "returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excursions": {
+              "mae": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              },
+              "mfe": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              }
+            },
+            "win_rates": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "win_rate": null,
+            "representative_samples": []
+          }
+        ],
+        "baselines": [
+          {
+            "evaluation_role": "baseline",
+            "publication_surface": "baseline_candidates",
+            "strategy": "daily_pure",
+            "name": "日线纯净策略",
+            "version": "daily-pure-close-v1",
+            "source_pool": "picks_pure",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "classification_status": "legacy_corrected",
+            "classification_status_counts": {
+              "legacy_corrected": 408
+            },
+            "signal_count": 408,
+            "evaluation_contract_signal_count": 408,
+            "non_evaluation_signal_count": 0,
+            "eligible_signal_count": 408,
+            "excluded_signal_count": 0,
+            "ledger_active_dates": 3,
+            "ledger_date_start": "2026-08-24",
+            "ledger_date_end": "2026-08-26",
+            "sample_exclusions": [],
+            "gate_outcomes": {
+              "observe": 218,
+              "reject": 96,
+              "recommend": 94
+            },
+            "publication_outcomes": {
+              "watch": 218,
+              "none": 96,
+              "recommendation": 94
+            },
+            "attribution_status_counts": {
+              "verified": 408
+            },
+            "attribution_status": "verified",
+            "evidence_tier": "legacy_inferred",
+            "latest_run_status": "ran",
+            "latest_run_reason": "策略已运行并产生信号",
+            "latest_run_blocking_reason": "",
+            "latest_signal_count": 136,
+            "latest_source_candidate_count": 136,
+            "latest_published_count": null,
+            "latest_report_date": "2026-08-26",
+            "active_dates": 3,
+            "active_months": 1,
+            "episode_count": 346,
+            "evaluable_episode_count": 237,
+            "sample_size": null,
+            "matured_by_horizon": {
+              "t1": 237,
+              "t3": 0,
+              "t5": 0
+            },
+            "maturity_by_horizon": {
+              "t1": {
+                "mature": 237,
+                "waiting": 109,
+                "unavailable": 0
+              },
+              "t3": {
+                "mature": 0,
+                "waiting": 346,
+                "unavailable": 0
+              },
+              "t5": {
+                "mature": 0,
+                "waiting": 346,
+                "unavailable": 0
+              }
+            },
+            "horizon_readiness": {
+              "t1": "collecting",
+              "t3": "waiting_for_maturity",
+              "t5": "waiting_for_maturity"
+            },
+            "metrics_by_horizon": {
+              "t1": {
+                "n": 237,
+                "mean": -0.0363294487883305,
+                "median": -0.20964360587002892,
+                "excess_mean": -0.19956196618070296,
+                "excess_n": 237,
+                "win_rate": 43.88185654008439,
+                "win_rate_n": 237,
+                "hit_rate_ge_5": 7.59493670886076,
+                "hit_rate_ge_5_n": 237,
+                "period_high": 2.2561042287093453,
+                "period_high_n": 237,
+                "period_low": -3.010395172647358,
+                "period_low_n": 237,
+                "mean_return": -0.0363294487883305,
+                "median_return": -0.20964360587002892,
+                "mean_excess_return": -0.19956196618070296,
+                "mean_mfe": 2.2561042287093453,
+                "mean_mae": -3.010395172647358,
+                "mfe_n": 237,
+                "mae_n": 237
+              },
+              "t3": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t5": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              }
+            },
+            "metrics_publishable": true,
+            "metrics_blocking_reasons": [],
+            "evaluation_status": "collecting",
+            "evaluation_statuses": {
+              "right_censored": 109,
+              "partial": 237
+            },
+            "overall_verdict": null,
+            "returns": {
+              "t1": -0.0363294487883305,
+              "t3": null,
+              "t5": null
+            },
+            "median_returns": {
+              "t1": -0.20964360587002892,
+              "t3": null,
+              "t5": null
+            },
+            "excess_returns": {
+              "t1": -0.19956196618070296,
+              "t3": null,
+              "t5": null
+            },
+            "median_excess_returns": {
+              "t1": -0.46262827076511714,
+              "t3": null,
+              "t5": null
+            },
+            "excursions": {
+              "mae": {
+                "t1": -3.010395172647358,
+                "t3": null,
+                "t5": null
+              },
+              "mfe": {
+                "t1": 2.2561042287093453,
+                "t3": null,
+                "t5": null
+              }
+            },
+            "win_rates": {
+              "t1": 43.88185654008439,
+              "t3": null,
+              "t5": null
+            },
+            "win_rate": null,
+            "representative_samples": [
+              {
+                "recommendation_id": "rec:fddf3cd98373e9d1",
+                "rec_date": "2026-08-25",
+                "code": "000530",
+                "name": "冰山冷热",
+                "strategy": "daily_pure",
+                "strategy_version": "daily-pure-close-v1",
+                "source_pool": "picks_pure",
+                "return_pct": null,
+                "returns": {
+                  "t1": -0.5802707930367553,
+                  "t3": null,
+                  "t5": null
+                },
+                "excess_returns": {
+                  "t1": -1.431759030152948,
+                  "t3": null,
+                  "t5": null
+                },
+                "outcome_label": "逐周期结果",
+                "reason_summary": "推荐 · 强势启动候选 · 处于60日低位区间；放量2.3倍；站上MA5/MA10；突破20日平台",
+                "entry_date": "2026-08-25",
+                "entry_price": 5.17
+              },
+              {
+                "recommendation_id": "rec:fb79feeae9ab8452",
+                "rec_date": "2026-08-25",
+                "code": "601969",
+                "name": "海南矿业",
+                "strategy": "daily_pure",
+                "strategy_version": "daily-pure-close-v1",
+                "source_pool": "picks_pure",
+                "return_pct": null,
+                "returns": {
+                  "t1": 2.120890774125141,
+                  "t3": null,
+                  "t5": null
+                },
+                "excess_returns": {
+                  "t1": 1.2694025370089483,
+                  "t3": null,
+                  "t5": null
+                },
+                "outcome_label": "逐周期结果",
+                "reason_summary": "观察 · 强势启动候选 · 处于120日低位区间；放量1.6倍；站上MA5/MA10",
+                "entry_date": "2026-08-25",
+                "entry_price": 9.574758771929824
+              },
+              {
+                "recommendation_id": "rec:f8c19a3f436d574b",
+                "rec_date": "2026-08-25",
+                "code": "600368",
+                "name": "五洲交通",
+                "strategy": "daily_pure",
+                "strategy_version": "daily-pure-close-v1",
+                "source_pool": "picks_pure",
+                "return_pct": null,
+                "returns": {
+                  "t1": 3.381642512077309,
+                  "t3": null,
+                  "t5": null
+                },
+                "excess_returns": {
+                  "t1": 2.530154274961116,
+                  "t3": null,
+                  "t5": null
+                },
+                "outcome_label": "逐周期结果",
+                "reason_summary": "不推荐（高位风险） · 强势启动候选 · 启动前接近20日低点；放量2.1倍；站上MA5/MA10",
+                "entry_date": "2026-08-25",
+                "entry_price": 4.14
+              }
+            ]
+          }
+        ],
+        "research": [
+          {
+            "evaluation_role": "research",
+            "publication_surface": "research_review",
+            "strategy": "luojie_pool",
+            "name": "罗杰主题策略",
+            "version": "luojie-close-v1",
+            "source_pool": "luojie_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "classification_status": "legacy_corrected",
+            "classification_status_counts": {
+              "legacy_corrected": 90
+            },
+            "signal_count": 90,
+            "evaluation_contract_signal_count": 90,
+            "non_evaluation_signal_count": 0,
+            "eligible_signal_count": 0,
+            "excluded_signal_count": 90,
+            "ledger_active_dates": 3,
+            "ledger_date_start": "2026-08-24",
+            "ledger_date_end": "2026-08-26",
+            "sample_exclusions": [
+              {
+                "incident_id": "sublevel-input-stale-2026-08-24-26-luojie",
+                "reason": "strategy_input_stale_or_unverified",
+                "count": 90
+              }
+            ],
+            "gate_outcomes": {
+              "observe": 90
+            },
+            "publication_outcomes": {
+              "watch": 90
+            },
+            "attribution_status_counts": {
+              "verified": 90
+            },
+            "attribution_status": "verified",
+            "evidence_tier": "legacy_inferred",
+            "latest_run_status": "unavailable",
+            "latest_run_reason": "策略输入过期或未核验，候选仅供事故复盘并停止评分",
+            "latest_run_blocking_reason": "strategy_input_stale_or_unverified",
+            "latest_signal_count": 0,
+            "latest_source_candidate_count": 0,
+            "latest_published_count": null,
+            "latest_report_date": "2026-08-26",
+            "active_dates": 0,
+            "active_months": 0,
+            "episode_count": 0,
+            "evaluable_episode_count": 0,
+            "sample_size": null,
+            "matured_by_horizon": {
+              "t1": 0,
+              "t3": 0,
+              "t5": 0
+            },
+            "maturity_by_horizon": {
+              "t1": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t3": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t5": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              }
+            },
+            "horizon_readiness": {
+              "t1": "data_unavailable",
+              "t3": "data_unavailable",
+              "t5": "data_unavailable"
+            },
+            "metrics_by_horizon": {
+              "t1": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t3": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t5": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              }
+            },
+            "metrics_publishable": false,
+            "metrics_blocking_reasons": [
+              "strategy_input_stale_or_unverified"
+            ],
+            "evaluation_status": "data_unavailable",
+            "evaluation_statuses": {},
+            "overall_verdict": null,
+            "returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excursions": {
+              "mae": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              },
+              "mfe": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              }
+            },
+            "win_rates": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "win_rate": null,
+            "representative_samples": []
           },
-          "win_rate": null,
-          "gate_outcomes": {
-            "observe": 310,
-            "reject": 203,
-            "recommend": 182
-          },
-          "publication_outcomes": {
-            "watch": 695
-          },
-          "evaluation_statuses": {},
-          "representative_samples": []
-        }
-      ],
+          {
+            "evaluation_role": "research",
+            "publication_surface": "research_review",
+            "strategy": "next_day_boom",
+            "name": "次日大涨策略",
+            "version": "next-day-boom-close-v1",
+            "source_pool": "next_day_boom",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 1,
+            "classification_status": "run_manifest",
+            "classification_status_counts": {},
+            "signal_count": 0,
+            "evaluation_contract_signal_count": 0,
+            "non_evaluation_signal_count": 0,
+            "eligible_signal_count": 0,
+            "excluded_signal_count": 0,
+            "ledger_active_dates": 0,
+            "ledger_date_start": "",
+            "ledger_date_end": "",
+            "sample_exclusions": [],
+            "gate_outcomes": {},
+            "publication_outcomes": {},
+            "attribution_status_counts": {},
+            "attribution_status": "run_manifest",
+            "evidence_tier": "run_manifest",
+            "latest_run_status": "disabled",
+            "latest_run_reason": "上证涨幅未超过1%，次日大涨模式关闭",
+            "latest_run_blocking_reason": "",
+            "latest_signal_count": 0,
+            "latest_source_candidate_count": 0,
+            "latest_published_count": null,
+            "latest_report_date": "2026-08-26",
+            "active_dates": 0,
+            "active_months": 0,
+            "episode_count": 0,
+            "evaluable_episode_count": 0,
+            "sample_size": 0,
+            "matured_by_horizon": {
+              "t1": 0,
+              "t3": 0,
+              "t5": 0
+            },
+            "maturity_by_horizon": {
+              "t1": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t3": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              },
+              "t5": {
+                "mature": 0,
+                "waiting": 0,
+                "unavailable": 0
+              }
+            },
+            "horizon_readiness": {
+              "t1": "data_unavailable",
+              "t3": "data_unavailable",
+              "t5": "data_unavailable"
+            },
+            "metrics_by_horizon": {
+              "t1": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t3": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              },
+              "t5": {
+                "n": 0,
+                "mean": null,
+                "median": null,
+                "excess_mean": null,
+                "excess_n": 0,
+                "win_rate": null,
+                "win_rate_n": 0,
+                "hit_rate_ge_5": null,
+                "hit_rate_ge_5_n": 0,
+                "period_high": null,
+                "period_high_n": 0,
+                "period_low": null,
+                "period_low_n": 0,
+                "mean_return": null,
+                "median_return": null,
+                "mean_excess_return": null,
+                "mean_mfe": null,
+                "mean_mae": null,
+                "mfe_n": 0,
+                "mae_n": 0
+              }
+            },
+            "metrics_publishable": false,
+            "metrics_blocking_reasons": [
+              "no_signals"
+            ],
+            "evaluation_status": "disabled",
+            "evaluation_statuses": {},
+            "overall_verdict": null,
+            "returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "median_excess_returns": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "excursions": {
+              "mae": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              },
+              "mfe": {
+                "t1": null,
+                "t3": null,
+                "t5": null
+              }
+            },
+            "win_rates": {
+              "t1": null,
+              "t3": null,
+              "t5": null
+            },
+            "win_rate": null,
+            "representative_samples": []
+          }
+        ],
+        "gates": [
+          {
+            "evaluation_role": "diagnostic",
+            "publication_surface": "gate_diagnostics",
+            "strategy": "observation_gate",
+            "name": "观察池门控",
+            "version": "observation-gate-close-v1",
+            "source_pool": "observation_watchlist",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "classification_status": "legacy_corrected",
+            "classification_status_counts": {
+              "legacy_corrected": 695
+            },
+            "signal_count": 695,
+            "evaluation_contract_signal_count": 0,
+            "non_evaluation_signal_count": 695,
+            "eligible_signal_count": 0,
+            "excluded_signal_count": 0,
+            "ledger_active_dates": 3,
+            "ledger_date_start": "2026-08-24",
+            "ledger_date_end": "2026-08-26",
+            "sample_exclusions": [],
+            "gate_outcomes": {
+              "observe": 310,
+              "reject": 203,
+              "recommend": 182
+            },
+            "publication_outcomes": {
+              "watch": 695
+            },
+            "attribution_status_counts": {
+              "verified": 695
+            },
+            "attribution_status": "verified",
+            "evidence_tier": "legacy_inferred",
+            "latest_run_status": "ran",
+            "latest_run_reason": "策略已运行并产生信号",
+            "latest_run_blocking_reason": "",
+            "latest_signal_count": 321,
+            "latest_source_candidate_count": 321,
+            "latest_published_count": null,
+            "latest_report_date": "2026-08-26",
+            "evaluation_status": "running",
+            "gate_status": "running",
+            "evaluation_statuses": {}
+          }
+        ],
+        "classification_failures": []
+      },
       "diagnostics": {
         "daily_scan": {
           "total": 975,
@@ -542320,11 +543029,14 @@
           "publication_status": "none"
         },
         "recommendation_ledger": {
-          "status": "pending_report_validation",
+          "status": "finalized",
+          "report_date": "2026-08-26",
           "today_entries": 318,
-          "staged_entries": 318,
-          "finalized_entries": 560,
-          "evaluation_entries": 878
+          "finalized_today_entries": 318,
+          "missing_today_entries": 0,
+          "finalized_entries": 878,
+          "evaluation_entries": 878,
+          "evidence": "immutable_ledger_membership"
         },
         "strategy_review_benchmark_ingest": {
           "status": "ok",
@@ -543011,7 +543723,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 42.59,
             "reduce_line": 43.15,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 43.75,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -543212,7 +543924,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 5.57,
             "reduce_line": 5.66,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 5.75,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -543417,7 +544129,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 6.31,
             "reduce_line": 6.35,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 6.47,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -543621,7 +544333,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 38.7,
             "reduce_line": 39.77,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 40.68,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -543825,7 +544537,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 15.76,
             "reduce_line": 16.04,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 16.2,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -544029,7 +544741,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 10.19,
             "reduce_line": 10.29,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 10.74,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -544229,7 +544941,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 7.98,
             "reduce_line": 8.15,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 8.29,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -544429,7 +545141,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 19.31,
             "reduce_line": 19.83,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 20.02,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -544629,7 +545341,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 14.61,
             "reduce_line": 14.65,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 14.96,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -544833,7 +545545,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 8.62,
             "reduce_line": 8.68,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 8.86,
             "reason": "国家队硬方向: 六网/城市地下管网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -545034,7 +545746,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 26.45,
             "reduce_line": 26.89,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 27.33,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -545235,7 +545947,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 10.05,
             "reduce_line": 10.4,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 10.61,
             "reason": "国家队硬方向: 六网/新一代通信网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -545440,7 +546152,7 @@
             "pivot_status": "围绕生命线形成中枢",
             "risk_line": 17.87,
             "reduce_line": 17.72,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 17.84,
             "reason": "国家队硬方向: 数字货币/金融IT；买点候选；13/77多头；13/77金叉保持；回踩77线不破；围绕生命线形成中枢",
             "dates": [],
@@ -545641,7 +546353,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 8.91,
             "reduce_line": 8.89,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 9.0,
             "reason": "国家队硬方向: 六网/物流网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -545841,7 +546553,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 35.88,
             "reduce_line": 36.17,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 37.45,
             "reason": "国家队硬方向: 六网/新型电网；买点候选；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -546046,7 +546758,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 5.79,
             "reduce_line": 5.93,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 6.06,
             "reason": "国家队硬方向: 六网/新型电网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -546242,7 +546954,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 6.55,
             "reduce_line": 6.63,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 6.66,
             "reason": "国家队硬方向: 质量层/龙头市占率高；买点候选；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -546442,7 +547154,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 3.49,
             "reduce_line": 3.57,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 3.75,
             "reason": "国家队硬方向: 六网/城市地下管网；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -546649,7 +547361,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 329.83,
             "reduce_line": 346.54,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 365.99,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -546852,7 +547564,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 335.56,
             "reduce_line": 341.21,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 356.5,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -547058,7 +547770,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 47.87,
             "reduce_line": 50.8,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 51.28,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -547264,7 +547976,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 44.02,
             "reduce_line": 47.66,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 49.4,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -547470,7 +548182,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 426.72,
             "reduce_line": 457.78,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 463.65,
             "reason": "国家队硬方向: 赛道层/芯片；买点候选；13/77多头；13/77金叉保持；回踩77线不破；踩生命线向上",
             "dates": [],
@@ -547676,7 +548388,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 21.57,
             "reduce_line": 22.64,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 23.68,
             "reason": "国家队硬方向: 六网/城市地下管网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -547882,7 +548594,7 @@
             "pivot_status": "围绕生命线形成中枢",
             "risk_line": 19.89,
             "reduce_line": 21.11,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 21.95,
             "reason": "国家队硬方向: 六网/新型电网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；围绕生命线形成中枢",
             "dates": [],
@@ -548088,7 +548800,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 11.0,
             "reduce_line": 11.35,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 11.9,
             "reason": "国家队硬方向: 六网/新型电网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -548291,7 +549003,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 3.66,
             "reduce_line": 3.81,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 3.89,
             "reason": "国家队硬方向: 六网/新型电网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -548493,7 +549205,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 10.4,
             "reduce_line": 10.75,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 11.07,
             "reason": "国家队硬方向: 六网/城市地下管网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -548696,7 +549408,7 @@
             "pivot_status": "未形成中枢",
             "risk_line": 11.38,
             "reduce_line": 12.25,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 12.65,
             "reason": "国家队硬方向: 六网/新型电网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
             "dates": [],
@@ -548895,7 +549607,7 @@
             "pivot_status": "中枢跌破生命线",
             "risk_line": 11.75,
             "reduce_line": 12.84,
-            "change_pct": 0,
+            "change_pct": null,
             "current_price": 14.94,
             "reason": "国家队硬方向: 六网/城市地下管网；生命线观察；13/77多头；13/77金叉保持；踩生命线向上；中枢跌破生命线",
             "dates": [],
@@ -549091,8 +549803,8 @@
         },
         "production_guard": {
           "unchanged": true,
-          "before_sha256": "474ea9340ef6071cbd4cd491ba7c8a9c0521386e590a9dba4c0eaa22e094ae0b",
-          "after_sha256": "474ea9340ef6071cbd4cd491ba7c8a9c0521386e590a9dba4c0eaa22e094ae0b"
+          "before_sha256": "8bb85b87b46d560e51b7f74dcc1524ebb6b0ed671537cb44993faa82176ea54c",
+          "after_sha256": "8bb85b87b46d560e51b7f74dcc1524ebb6b0ed671537cb44993faa82176ea54c"
         },
         "production_reference": {
           "pool": "picks_fusion",
@@ -549194,6 +549906,108 @@
               "candidates": []
             }
           }
+        ]
+      },
+      "selection_input_health": {
+        "schema_version": 2,
+        "required_date": "2026-08-26",
+        "status": "unavailable",
+        "formal": {
+          "status": "unavailable",
+          "required_date": "2026-08-26",
+          "formal_actions_allowed": false,
+          "all_formal_actions_allowed": false,
+          "allowed_strategies": [],
+          "blocked_strategies": [
+            "daily_fusion",
+            "h4_t3"
+          ],
+          "invalid_count": 1,
+          "invalid_codes": [
+            "300697"
+          ],
+          "blocking_reason": "strategy_input_stale_or_unverified"
+        },
+        "by_strategy": {
+          "daily_fusion": {
+            "status": "unavailable",
+            "required_date": "2026-08-26",
+            "dependent_candidate_count": 1,
+            "invalid_count": 1,
+            "invalid_codes": [
+              "300697"
+            ],
+            "formal_actions_allowed": false,
+            "blocking_reason": "strategy_input_stale_or_unverified"
+          },
+          "h4_t3": {
+            "status": "unavailable",
+            "required_date": "2026-08-26",
+            "dependent_candidate_count": 0,
+            "invalid_count": 1,
+            "invalid_codes": [],
+            "formal_actions_allowed": false,
+            "blocking_reason": "strategy_upstream_contract_mismatch"
+          },
+          "luojie_pool": {
+            "status": "unavailable",
+            "required_date": "2026-08-26",
+            "invalid_count": 30,
+            "invalid_codes": [
+              "000533",
+              "001283",
+              "002259",
+              "002358",
+              "002465",
+              "300483",
+              "300561",
+              "300670",
+              "300919",
+              "301081",
+              "301487",
+              "301587",
+              "301609",
+              "600110",
+              "600590",
+              "600630",
+              "600973",
+              "601298",
+              "601615",
+              "601616",
+              "603061",
+              "603318",
+              "603906",
+              "605169",
+              "688037",
+              "688286",
+              "688601",
+              "688729",
+              "688766",
+              "688772"
+            ],
+            "formal_actions_allowed": false,
+            "research_output_trusted": false,
+            "blocking_reason": "strategy_input_stale_or_unverified"
+          }
+        },
+        "sublevels": {
+          "15m": {
+            "interval": "15m",
+            "required_date": "2026-08-26",
+            "status": "unavailable",
+            "blocking_reason": "strategy_input_stale_or_unverified"
+          },
+          "30m": {
+            "interval": "30m",
+            "required_date": "2026-08-26",
+            "status": "unavailable",
+            "blocking_reason": "strategy_input_stale_or_unverified"
+          }
+        },
+        "incident_ids": [
+          "sublevel-input-stale-2026-08-24-26-luojie",
+          "sublevel-input-stale-2026-08-26-fusion-300697",
+          "upstream-contract-2026-08-26-h4-picks-fusion"
         ]
       }
     }

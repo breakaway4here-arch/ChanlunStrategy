@@ -156,6 +156,11 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
         out["signal_tier"] = best_bp.get("tier", "formal")
         if min30_result is not None:
             out["result_30min"] = min30_result
+            evidence = getattr(
+                min30_result, "strategy_input_evidence", {}
+            )
+            if isinstance(evidence, dict):
+                out["strategy_input_evidence"] = dict(evidence)
             out["buy_points_30min"] = min30_result.buy_points or []
             if best_bp.get("tier") == "candidate":
                 out["resonance"] = {

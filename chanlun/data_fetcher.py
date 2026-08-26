@@ -1661,7 +1661,54 @@ def batch_fetch_daily_klines(
     return results
 
 
-def batch_fetch_30min_klines(stocks, max_workers=8):
+def _sublevel_input_evidence(interval, kline, repository_result=None):
+    payload = kline if isinstance(kline, dict) else {}
+    status = payload.get("_data_status")
+    status = status if isinstance(status, dict) else {}
+    dates = payload.get("dates")
+    try:
+        latest_ts = str(dates[-1]) if dates is not None and len(dates) else ""
+    except (TypeError, IndexError):
+        latest_ts = ""
+    repository_status = (
+        str(repository_result.status or "")
+        if repository_result is not None else str(status.get("daily") or "")
+    )
+    repository_stale = (
+        bool(repository_result.stale)
+        if repository_result is not None else bool(status.get("stale", True))
+    )
+    return {
+        "interval": interval,
+        "status": repository_status,
+        "latest_date": str(status.get("latest_date") or "").split(" ", 1)[0],
+        "latest_ts": latest_ts,
+        "source": str(status.get("source") or payload.get("source") or ""),
+        "bars": int(
+            status.get("bars")
+            or (len(dates) if dates is not None else 0)
+        ),
+        "stale": repository_stale,
+        "is_final": status.get("is_final") is True,
+    }
+
+
+def _verified_sublevel_input(evidence, required_date, min_bars):
+    if not required_date:
+        return True
+    value = evidence if isinstance(evidence, dict) else {}
+    return bool(
+        value.get("status") == "verified"
+        and value.get("stale") is False
+        and value.get("is_final") is True
+        and value.get("latest_date") == str(required_date)
+        and str(value.get("latest_ts") or "").split(" ", 1)[0]
+        == str(required_date)
+        and int(value.get("bars") or 0) >= int(min_bars)
+    )
+
+
+def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
     """
     并发批量获取30分钟K线。
     """
@@ -1675,18 +1722,35 @@ def batch_fetch_30min_klines(stocks, max_workers=8):
             "30m",
             [stock["code"] for stock in stocks],
             count=80,
+            required_date=required_date,
             force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
         )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = (
-            repository_results[code].kline
-            if repository_results is not None
-            else fetch_30min_kline(code)
+        repository_result = (
+            repository_results[code]
+            if repository_results is not None else None
         )
-        if klines and len(klines.get("closes", [])) >= 40:
-            return {"code": code, "name": stock.get("name", ""), "klines": klines}
+        klines = (
+            repository_result.kline
+            if repository_results is not None
+            else fetch_30min_kline(code, required_date=required_date)
+        )
+        evidence = _sublevel_input_evidence(
+            "30m", klines, repository_result
+        )
+        if (
+            klines
+            and len(klines.get("closes", [])) >= 40
+            and _verified_sublevel_input(evidence, required_date, 40)
+        ):
+            return {
+                "code": code,
+                "name": stock.get("name", ""),
+                "klines": klines,
+                "input_evidence": evidence,
+            }
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -1698,7 +1762,7 @@ def batch_fetch_30min_klines(stocks, max_workers=8):
     return results
 
 
-def batch_fetch_15min_klines(stocks, max_workers=8):
+def batch_fetch_15min_klines(stocks, max_workers=8, required_date=None):
     """
     并发批量获取15分钟K线。
     """
@@ -1712,18 +1776,35 @@ def batch_fetch_15min_klines(stocks, max_workers=8):
             "15m",
             [stock["code"] for stock in stocks],
             count=MIN15_LOOKBACK_BARS,
+            required_date=required_date,
             force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
         )
 
     def _fetch_one(stock):
         code = stock["code"]
-        klines = (
-            repository_results[code].kline
-            if repository_results is not None
-            else fetch_15min_kline(code)
+        repository_result = (
+            repository_results[code]
+            if repository_results is not None else None
         )
-        if klines and len(klines.get("closes", [])) >= 180:
-            return {"code": code, "name": stock.get("name", ""), "klines": klines}
+        klines = (
+            repository_result.kline
+            if repository_results is not None
+            else fetch_15min_kline(code, required_date=required_date)
+        )
+        evidence = _sublevel_input_evidence(
+            "15m", klines, repository_result
+        )
+        if (
+            klines
+            and len(klines.get("closes", [])) >= 180
+            and _verified_sublevel_input(evidence, required_date, 180)
+        ):
+            return {
+                "code": code,
+                "name": stock.get("name", ""),
+                "klines": klines,
+                "input_evidence": evidence,
+            }
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -2049,7 +2130,7 @@ def collect_daily_data(
     }
 
 
-def collect_30min_data(target_stocks):
+def collect_30min_data(target_stocks, required_date=None):
     """
     为目标池股票拉取30分钟K线。
     """
@@ -2057,12 +2138,14 @@ def collect_30min_data(target_stocks):
         return []
     print(f"  批量获取30分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
-    results = batch_fetch_30min_klines(target_stocks)
+    results = batch_fetch_30min_klines(
+        target_stocks, required_date=required_date
+    )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
 
 
-def collect_15min_data(target_stocks):
+def collect_15min_data(target_stocks, required_date=None):
     """
     为目标池股票拉取15分钟K线。
     """
@@ -2070,7 +2153,9 @@ def collect_15min_data(target_stocks):
         return []
     print(f"  批量获取15分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
-    results = batch_fetch_15min_klines(target_stocks)
+    results = batch_fetch_15min_klines(
+        target_stocks, required_date=required_date
+    )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
 

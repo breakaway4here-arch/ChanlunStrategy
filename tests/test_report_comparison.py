@@ -7,7 +7,10 @@ import tempfile
 import unittest
 
 from chanlun.report_comparison import build_comparison_index
-from scripts.validate_today_report import validate_comparison_contract
+from scripts.validate_today_report import (
+    validate_comparison_contract,
+    validate_comparison_formal_alignment,
+)
 
 
 class ReportComparisonIndexTest(unittest.TestCase):
@@ -22,6 +25,19 @@ class ReportComparisonIndexTest(unittest.TestCase):
                     "stale_stock_count": 3 if not official else 0,
                 },
                 "market": {"沪深300": {"close": 4000 + int(date[-2:])}},
+                "selection_input_health": {
+                    "schema_version": 2,
+                    "by_strategy": {
+                        "daily_fusion": {
+                            "status": "verified",
+                            "formal_actions_allowed": True,
+                        },
+                        "h4_t3": {
+                            "status": "verified",
+                            "formal_actions_allowed": True,
+                        },
+                    },
+                },
                 "workspace": {"views": {
                     "main": [{
                         "code": "600001", "name": "示例股", "sector": "测试行业",
@@ -29,6 +45,7 @@ class ReportComparisonIndexTest(unittest.TestCase):
                         "decision_engine_v1": {"decision": "观察", "decision_code": "observe"},
                     }],
                     "highlights": [{"code": "000002", "name": "看点股", "industry": "看点行业", "view_rank": 1}],
+                    "h4_t3": [],
                 }},
             }, handle, ensure_ascii=False)
         return official
@@ -107,6 +124,7 @@ class ReportComparisonIndexTest(unittest.TestCase):
                 "rank": 2, "decision": "观察", "decision_code": "observe",
             }])
             self.assertEqual(report["views"]["highlights"][0]["rank"], 1)
+            self.assertEqual(report["views"]["h4_t3"], [])
             self.assertEqual(report["views"]["baseline"], [])
             self.assertEqual(index["reports"]["2026-01-28"]["quality"], {
                 "is_official": False,
@@ -114,6 +132,7 @@ class ReportComparisonIndexTest(unittest.TestCase):
                 "missing_daily_count": 7,
                 "stale_stock_count": 3,
                 "status": "quality_warning",
+                "incident_excluded_counts": {},
             })
 
             self.assertEqual(
@@ -165,3 +184,84 @@ class ReportComparisonIndexTest(unittest.TestCase):
 
             self.assertEqual(index["dates"], [date])
             self.assertEqual(index["reports"][date]["views"]["baseline"][0]["code"], "600001")
+
+    def test_registered_formal_incident_is_excluded_and_h4_is_indexed(self):
+        with tempfile.TemporaryDirectory() as root:
+            data_dir = os.path.join(root, "data")
+            os.mkdir(data_dir)
+            date = "2026-08-25"
+            self._write_report(data_dir, date)
+            report_path = os.path.join(data_dir, date + ".json")
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+            report["workspace"]["views"]["main"] = [{
+                "code": "300473", "name": "事故样本", "view_rank": 1,
+            }]
+            report["workspace"]["views"]["h4_t3"] = [{
+                "code": "600001", "name": "H4样本", "view_rank": 1,
+            }]
+            with open(report_path, "w", encoding="utf-8") as handle:
+                json.dump(report, handle, ensure_ascii=False)
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as handle:
+                json.dump({
+                    "dates": [date],
+                    "date_meta": {date: {"is_trading_day": True, "is_official": True}},
+                }, handle)
+            db_path = os.path.join(root, "market.sqlite")
+            self._create_db(db_path)
+
+            index = build_comparison_index(data_dir, db_path)
+
+            snapshot = index["reports"][date]
+            self.assertEqual([], snapshot["views"]["main"])
+            self.assertEqual(["600001"], [
+                row["code"] for row in snapshot["views"]["h4_t3"]
+            ])
+            self.assertEqual(
+                {"main": 1}, snapshot["quality"]["incident_excluded_counts"]
+            )
+            self.assertEqual(
+                [],
+                validate_comparison_formal_alignment(
+                    {
+                        "workspace": {"views": {
+                            "main": [],
+                            "h4_t3": [{"code": "600001"}],
+                        }}
+                    },
+                    index,
+                    date,
+                ),
+            )
+
+    def test_missing_formal_health_is_excluded_from_comparison(self):
+        with tempfile.TemporaryDirectory() as root:
+            data_dir = os.path.join(root, "data")
+            os.mkdir(data_dir)
+            date = "2026-08-21"
+            self._write_report(data_dir, date)
+            report_path = os.path.join(data_dir, date + ".json")
+            with open(report_path, "r", encoding="utf-8") as handle:
+                report = json.load(handle)
+            report.pop("selection_input_health")
+            with open(report_path, "w", encoding="utf-8") as handle:
+                json.dump(report, handle, ensure_ascii=False)
+            with open(os.path.join(data_dir, "index.json"), "w", encoding="utf-8") as handle:
+                json.dump({
+                    "dates": [date],
+                    "date_meta": {date: {
+                        "is_trading_day": True,
+                        "is_official": True,
+                    }},
+                }, handle)
+            db_path = os.path.join(root, "market.sqlite")
+            self._create_db(db_path)
+
+            index = build_comparison_index(data_dir, db_path)
+
+            snapshot = index["reports"][date]
+            self.assertEqual([], snapshot["views"]["main"])
+            self.assertEqual(
+                {"main": 1},
+                snapshot["quality"]["formal_input_blocked_counts"],
+            )

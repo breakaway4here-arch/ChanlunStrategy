@@ -120,14 +120,29 @@ def _build_item(row: Mapping[str, Any], rank: int, source: str) -> dict[str, Any
     if not code:
         raise ValueError("candidate missing code")
 
+    strategy_action = _safe_str(
+        row.get("strategy_action") or row.get("action")
+    )
+    strategy_reason = _safe_str(
+        row.get("strategy_action_reason") or row.get("action_reason")
+    )
+    page_reason = (
+        _safe_str(row.get("page_action_reason"))
+        or _safe_str(row.get("primary_reason"))
+        or _safe_str(row.get("reason"))
+        or "研究观察榜排序靠前；不构成正式动作。"
+    )
     return {
         "rank": rank,
         "view_rank": row.get("view_rank"),
         "code": code,
         "name": _safe_str(row.get("name")),
         "score": _resolve_score(row),
-        "action": _safe_str(row.get("action")),
-        "action_reason": _safe_str(row.get("action_reason")),
+        "strategy_action": strategy_action,
+        "strategy_action_reason": strategy_reason,
+        "page_action": "仅观察",
+        "page_action_reason": page_reason,
+        "action_semantics": "watch_only",
         "reason": _safe_str(row.get("primary_reason")) or _safe_str(row.get("reason")),
         "source": source,
         "change_pct": _resolve_change_pct(row),

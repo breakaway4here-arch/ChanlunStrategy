@@ -14,6 +14,7 @@ import math
 from typing import Any, Dict, Iterable, List, Mapping
 
 from chanlun.scoring_engine import compute_opportunity_score
+from chanlun.pool_contract import resolve_list_pool, resolve_nested_strategy_pool
 from config import (
     OBSERVATION_MAX_PER_REASON,
     OBSERVATION_MAX_PER_SECTOR,
@@ -24,8 +25,8 @@ ViewOrder = List[str]
 
 
 VIEW_ORDER: ViewOrder = [
-    "highlights",
     "main",
+    "highlights",
     "observation_top5",
     "acceleration",
     "luojie",
@@ -35,7 +36,10 @@ VIEW_ORDER: ViewOrder = [
 ]
 
 SOURCE_LABELS = {
-    "main": "主推",
+    # ``main`` is the internal source key for every picks_fusion row.  Only the
+    # main view promotes a row to a formal recommendation; other views must not
+    # inherit a misleading "主推" label from the shared source key.
+    "main": "融合候选",
     "h4_t3": "H4 T+3",
     "acceleration": "加速",
     "luojie": "罗姐池",
@@ -80,41 +84,68 @@ VIEW_META = {
         "label": "看点 Top10",
         "short_label": "看点",
         "description": "跨池混合优先观察榜，不等于全部可立即买入。",
+        "role": "research",
+        "source_pool": "picks_fusion + next_day_boom + luojie_pool + startup_watchlist",
+        "action_semantics": "watch_only",
     },
     "main": {
-        "label": "主推",
-        "description": "融合推荐池，可执行优先。",
+        "label": "正式主推",
+        "description": "融合候选中通过正式推荐门槛的结果。",
+        "role": "formal",
+        "source_pool": "picks_fusion",
+        "action_semantics": "formal",
     },
     "h4_t3": {
         "label": "H4 T+3",
         "short_label": "H4 T+3",
         "description": "H4 T+3 生产池；全部过门候选按现有统一分排序。",
+        "role": "formal",
+        "source_pool": "h4_t3_pool",
+        "action_semantics": "formal",
     },
     "observation_top5": {
         "label": "观察 Top5",
         "short_label": "观察",
         "description": "近失样本观察榜，不计入主推荐，不代表可立即买入。",
+        "role": "research",
+        "source_pool": "observation_watchlist",
+        "action_semantics": "watch_only",
     },
     "acceleration": {
         "label": "加速",
         "description": "强市场下的情绪加速榜。",
+        "role": "research",
+        "source_pool": "next_day_boom",
+        "action_semantics": "watch_only",
     },
     "luojie": {
         "label": "罗姐池",
         "description": "硬方向 + 15min生命线观察，不等同于主推。",
+        "role": "research",
+        "source_pool": "luojie_pool",
+        "action_semantics": "watch_only",
     },
     "confirming": {
         "label": "等确认",
         "description": "日线已有启动线索，但等待确认。",
+        "role": "research",
+        "source_pool": "startup_watchlist",
+        "action_semantics": "watch_only",
     },
     "growth_quality": {
         "label": "高弹性观察 Top10",
         "short_label": "高弹性观察",
         "description": "仅展示有真实行业归属与完整交易证据的观察标的，非正式推荐；同一行业最多两只。",
+        "role": "research",
+        "source_pool": "picks_fusion + next_day_boom + luojie_pool + startup_watchlist",
+        "action_semantics": "watch_only",
     },
     "baseline": {
         "label": "基础候选",
         "description": "原始缠论结构候选 / 各策略共同上游全集；各策略独立筛选，不参与看点 Top10。",
+        "role": "baseline",
+        "source_pool": "picks_pure",
+        "action_semantics": "upstream_only",
     },
 }
 
@@ -899,6 +930,7 @@ _COMPACT_DATA_STATUS_FIELDS = (
     "source",
     "bars",
     "stale",
+    "is_final",
 )
 
 
@@ -1063,6 +1095,29 @@ def _normalize_pool_items(raw_items: Iterable[Mapping[str, Any]], source: str) -
     return by_code
 
 
+def _strategy_input_health(
+    report_data: Mapping[str, Any], strategy_name: str
+) -> dict[str, Any]:
+    selection = _to_dict(report_data.get("selection_input_health"))
+    by_strategy = _to_dict(selection.get("by_strategy"))
+    specific = _to_dict(by_strategy.get(strategy_name))
+    if specific:
+        return specific
+    if strategy_name in {"daily_fusion", "h4_t3"}:
+        return _to_dict(selection.get("formal"))
+    return {}
+
+
+def _formal_strategy_input_trusted(
+    report_data: Mapping[str, Any], strategy_name: str
+) -> bool:
+    health = _strategy_input_health(report_data, strategy_name)
+    return bool(
+        health.get("formal_actions_allowed") is True
+        and _safe_str(health.get("status")) == "verified"
+    )
+
+
 def _collect_views(
     report_data: Mapping[str, Any],
 ) -> dict[str, dict[str, Mapping[str, Any]]]:
@@ -1075,47 +1130,309 @@ def _collect_views(
         "baseline": {},
     }
 
+    fusion_state = resolve_list_pool(report_data, "picks_fusion")
     views["main_all"] = _normalize_pool_items(
-        _get_list(report_data.get("picks_fusion")), "main"
+        fusion_state["candidates"], "main"
     )
     views["main"] = {
         code: raw
         for code, raw in views["main_all"].items()
         if _decision_code_from_raw(raw) == "recommend"
     }
+    if not _formal_strategy_input_trusted(report_data, "daily_fusion"):
+        views["main"] = {}
 
     h4_t3 = _to_dict(report_data.get("h4_t3_pool"))
-    if (
-        h4_t3.get("production_attested") is True
-        and _safe_str(h4_t3.get("mode")) == "production"
-        and _safe_str(h4_t3.get("status")) == "ok"
-    ):
+    h4_state = resolve_nested_strategy_pool(
+        report_data, "h4_t3_pool", formal_h4=True
+    )
+    if h4_state["state"] in {"ran", "verified_empty"}:
         views["h4_t3"] = _normalize_pool_items(
-            _get_list(h4_t3.get("candidates")), "h4_t3"
+            h4_state["candidates"], "h4_t3"
         )
+    elif _safe_str(h4_t3.get("mode")) == "production":
+        # A declared production run remains visible when its evidence is
+        # partial/invalid, so the availability block can explain the failure.
+        # Missing pools and development-only shadow payloads never acquire a
+        # formal production tab.
+        views["h4_t3"] = {}
+    if (
+        not _formal_strategy_input_trusted(report_data, "h4_t3")
+        and "h4_t3" in views
+    ):
+        views["h4_t3"] = {}
 
-    next_day_boom = _to_dict(report_data.get("next_day_boom"))
-    boom_mode = _safe_str(next_day_boom.get("mode"))
-    if boom_mode == "enabled":
+    boom_state = resolve_nested_strategy_pool(report_data, "next_day_boom")
+    if boom_state["state"] in {"ran", "verified_empty"}:
         views["acceleration"] = _normalize_pool_items(
-            _get_list(next_day_boom.get("candidates")),
+            boom_state["candidates"],
             "acceleration",
         )
     else:
         views["acceleration"] = {}
 
-    luojie = _to_dict(report_data.get("luojie_pool"))
+    luojie_state = resolve_nested_strategy_pool(report_data, "luojie_pool")
     views["luojie"] = _normalize_pool_items(
-        _get_list(luojie.get("candidates")), "luojie"
-    )
+        luojie_state["candidates"], "luojie"
+    ) if luojie_state["state"] in {"ran", "verified_empty"} else {}
 
+    confirming_state = resolve_list_pool(report_data, "startup_watchlist")
     views["confirming"] = _normalize_pool_items(
-        _get_list(report_data.get("startup_watchlist")), "confirming"
+        confirming_state["candidates"], "confirming"
     )
+    baseline_state = resolve_list_pool(report_data, "picks_pure")
     views["baseline"] = _normalize_pool_items(
-        _get_list(report_data.get("picks_pure")), "baseline"
+        baseline_state["candidates"], "baseline"
     )
     return views
+
+
+def _availability(state: str, reason: str) -> dict[str, str]:
+    return {"state": state, "reason": reason}
+
+
+def _present_source_label(source: str, view_name: str) -> str:
+    if source == "main" and view_name == "main":
+        return "正式主推"
+    return _safe_str(SOURCE_LABELS.get(source))
+
+
+def _row_has_untrusted_strategy_input(
+    report_data: Mapping[str, Any], row: Mapping[str, Any]
+) -> bool:
+    sources = set(row.get("sources") or [])
+    code = _safe_str(row.get("code"))
+    fusion = _strategy_input_health(report_data, "daily_fusion")
+    fusion_invalid = {
+        _safe_str(value) for value in fusion.get("invalid_codes") or []
+    }
+    if "main" in sources and code and code in fusion_invalid:
+        return True
+    luojie = _strategy_input_health(report_data, "luojie_pool")
+    if "luojie" in sources and luojie and luojie.get("status") != "verified":
+        invalid_codes = {
+            _safe_str(value) for value in luojie.get("invalid_codes") or []
+        }
+        return not invalid_codes or code in invalid_codes
+    return False
+
+
+def _apply_view_item_contract(
+    view_name: str,
+    rows: Iterable[dict[str, Any]],
+    report_data: Mapping[str, Any],
+) -> None:
+    """Attach presentation semantics without changing pool/ranking behavior."""
+    action_semantics = _safe_str(VIEW_META[view_name].get("action_semantics"))
+    for row in rows:
+        incident_review_only = _row_has_untrusted_strategy_input(
+            report_data, row
+        )
+        if incident_review_only:
+            row["incident_review_only"] = True
+            row["strategy_input_incident_ids"] = list(
+                _to_dict(report_data.get("selection_input_health")).get(
+                    "incident_ids"
+                ) or []
+            )
+            badges = list(row.get("data_badges") or [])
+            badges.append({
+                "type": "risk",
+                "label": "策略输入过期·仅复盘",
+            })
+            row["data_badges"] = badges
+        sources = list(row.get("sources") or [])
+        row["source_labels"] = [
+            label
+            for label in (_present_source_label(source, view_name) for source in sources)
+            if label
+        ]
+
+        preferred_source = sources[0] if sources else ""
+        presented_source = _present_source_label(preferred_source, view_name)
+        info_tags = []
+        for raw_tag in row.get("info_tags") or []:
+            tag = dict(raw_tag)
+            if tag.get("type") == "source" and presented_source:
+                tag["label"] = presented_source
+            info_tags.append(tag)
+        row["info_tags"] = info_tags
+
+        row["strategy_action"] = row.get("action")
+        row["strategy_action_reason"] = row.get("action_reason")
+        if action_semantics == "watch_only":
+            page_action = "仅观察"
+            page_reason = (
+                "策略输入过期或未核验，已排除正式动作和评分；本行仅供事故复盘。"
+                if incident_review_only
+                else (
+                    _safe_str(row.get("primary_reason"))
+                    or _safe_str(_to_dict(row.get("rank_trace")).get("selected_reason"))
+                    or "研究观察榜排序靠前；不构成正式动作。"
+                )
+            )
+        elif action_semantics == "upstream_only":
+            page_action = "仅作为上游候选"
+            page_reason = (
+                _safe_str(row.get("primary_reason"))
+                or "原始缠论结构候选；等待各独立策略继续筛选。"
+            )
+        else:
+            page_action = row.get("action")
+            page_reason = row.get("action_reason")
+        row["page_action"] = page_action
+        row["page_action_reason"] = page_reason
+        row["effective_action"] = page_action
+        row["action_semantics"] = action_semantics
+        # Freeze a renderable copy: the page needs the Chinese decision label
+        # and score, not only the recommend/observe machine code.
+        row["scoring_decision"] = dict(_to_dict(row.get("decision_engine_v1")))
+        row["is_formal_recommendation"] = (
+            action_semantics == "formal" and not incident_review_only
+        )
+
+
+def _row_availability(
+    rows: Iterable[Mapping[str, Any]],
+    *,
+    available_reason: str,
+    empty_reason: str,
+) -> dict[str, str]:
+    if any(True for _ in rows):
+        return _availability("available", available_reason)
+    return _availability("verified_empty", empty_reason)
+
+
+def _build_view_availability(
+    view_name: str,
+    report_data: Mapping[str, Any],
+    rows: list[Mapping[str, Any]],
+) -> dict[str, str]:
+    strategy_name = {
+        "main": "daily_fusion",
+        "h4_t3": "h4_t3",
+    }.get(view_name)
+    if strategy_name and not _formal_strategy_input_trusted(
+        report_data, strategy_name
+    ):
+        return _availability(
+            "unavailable",
+            "策略输入状态缺失、过期或未核验，正式动作已封闭；历史动作仅供追溯。",
+        )
+    if view_name in {"highlights", "growth_quality"}:
+        if any(row.get("incident_review_only") is True for row in rows):
+            return _availability(
+                "partial",
+                "榜单含策略输入过期的事故样本；相关行仅供复盘，已排除正式动作和评分。",
+            )
+        upstream_states = {
+            "picks_fusion": resolve_list_pool(report_data, "picks_fusion"),
+            "next_day_boom": resolve_nested_strategy_pool(
+                report_data, "next_day_boom"
+            ),
+            "luojie_pool": resolve_nested_strategy_pool(
+                report_data, "luojie_pool"
+            ),
+            "startup_watchlist": resolve_list_pool(
+                report_data, "startup_watchlist"
+            ),
+        }
+        unavailable = [
+            key for key, state in upstream_states.items()
+            if state["state"] in {"unavailable", "partial"}
+        ]
+        if len(unavailable) == len(upstream_states):
+            return _availability("unavailable", "混合观察榜的上游数据未提供。")
+        if unavailable:
+            return _availability(
+                "partial", f"部分上游数据不可用：{'、'.join(unavailable)}。"
+            )
+        return _row_availability(
+            rows,
+            available_reason="混合观察榜已生成。",
+            empty_reason="上游数据完整，本视图没有符合条件的观察标的。",
+        )
+
+    if view_name == "main":
+        state = resolve_list_pool(report_data, "picks_fusion")
+        if state["state"] == "unavailable":
+            return _availability("unavailable", state["reason"])
+        return _row_availability(
+            rows,
+            available_reason="正式推荐结果已生成。",
+            empty_reason="picks_fusion 已校验，但没有候选通过正式推荐门槛。",
+        )
+
+    if view_name == "h4_t3":
+        state = resolve_nested_strategy_pool(
+            report_data, "h4_t3_pool", formal_h4=True
+        )
+        if state["state"] in {"partial", "unavailable"}:
+            return _availability(state["state"], state["reason"])
+        return _row_availability(
+            rows,
+            available_reason=state["reason"] or "H4 T+3 生产结果已生成。",
+            empty_reason=state["reason"] or "H4 T+3 生产运行正常，今日没有过门候选。",
+        )
+
+    if view_name in {"acceleration", "luojie"}:
+        pool_key = "next_day_boom" if view_name == "acceleration" else "luojie_pool"
+        display_name = "加速池" if view_name == "acceleration" else "罗姐池"
+        state = resolve_nested_strategy_pool(report_data, pool_key)
+        if view_name == "luojie":
+            luojie_health = _strategy_input_health(
+                report_data, "luojie_pool"
+            )
+            if luojie_health and luojie_health.get("status") != "verified":
+                return _availability(
+                    "partial",
+                    "15分钟策略输入过期或未核验；候选仅作为事故样本复盘，已排除正式动作和评分。",
+                )
+        if state["state"] in {"disabled", "partial", "unavailable"}:
+            return _availability(state["state"], state["reason"])
+        return _row_availability(
+            rows,
+            available_reason=state["reason"] or f"{display_name}结果已生成。",
+            empty_reason=state["reason"] or f"{display_name}运行正常，今日没有过门候选。",
+        )
+
+    if view_name == "observation_top5":
+        state = resolve_list_pool(report_data, "observation_watchlist")
+        if state["state"] == "unavailable":
+            return _availability("unavailable", state["reason"])
+        return _row_availability(
+            rows,
+            available_reason="观察 Top5 已生成。",
+            empty_reason="观察池已校验，今日没有符合条件的标的。",
+        )
+
+    pool_key = "startup_watchlist" if view_name == "confirming" else "picks_pure"
+    display_name = "等确认池" if view_name == "confirming" else "基础候选池"
+    state = resolve_list_pool(report_data, pool_key)
+    if state["state"] == "unavailable":
+        return _availability("unavailable", state["reason"])
+    return _row_availability(
+        rows,
+        available_reason=f"{display_name}结果已生成。",
+        empty_reason=f"{display_name}已校验，今日没有候选。",
+    )
+
+
+def _build_view_meta(
+    view_order: Iterable[str],
+    report_data: Mapping[str, Any],
+    view_items: Mapping[str, list[Mapping[str, Any]]],
+) -> dict[str, dict[str, Any]]:
+    result: dict[str, dict[str, Any]] = {}
+    for name in view_order:
+        meta = dict(VIEW_META[name])
+        meta["availability"] = _build_view_availability(
+            name,
+            report_data,
+            list(view_items.get(name) or []),
+        )
+        result[name] = meta
+    return result
 
 
 def _build_view_items(
@@ -1256,8 +1573,6 @@ def _build_observation_top5(
     data_quality: Mapping[str, Any] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     raw_items = _get_list(report_data.get("observation_watchlist"))
-    if not raw_items:
-        raw_items = _get_list(report_data.get("startup_watchlist"))
     normalized = _normalize_pool_items(raw_items, "confirming")
     ranked = []
     for code, raw in normalized.items():
@@ -1368,6 +1683,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
             rows.sort(key=lambda row: (-row["opportunity_score"], row["code"]))
         for rank, row in enumerate(rows, start=1):
             row["view_rank"] = rank
+        _apply_view_item_contract(name, rows, data)
 
     counts = {
         view: len(items)
@@ -1415,7 +1731,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
     return {
         "default_view": "main",
         "view_order": view_order,
-        "view_meta": {name: dict(VIEW_META[name]) for name in view_order},
+        "view_meta": _build_view_meta(view_order, data, view_items),
         "views": view_items,
         "counts": counts,
         "diagnostics": diagnostics,

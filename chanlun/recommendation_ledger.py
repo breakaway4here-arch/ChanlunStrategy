@@ -25,6 +25,28 @@ LEDGER_SCHEMA_VERSION = "1"
 VALID_DECISIONS = {"recommend", "observe", "reject"}
 VALID_PUBLICATION_STATUSES = {"published", "internal", "unknown"}
 VALID_USER_ACTIONS = {"recommendation", "watch", "none", "unknown"}
+VALID_EVALUATION_ROLES = {"formal", "baseline", "research", "diagnostic"}
+VALID_PUBLICATION_SURFACES = {
+    "formal_recommendation",
+    "baseline_candidates",
+    "research_review",
+    "gate_diagnostics",
+    "technical_detail",
+}
+_STRATEGY_EVALUATION_ROLES = {
+    "daily_fusion": "formal",
+    "h4_t3": "formal",
+    "daily_pure": "baseline",
+    "next_day_boom": "research",
+    "luojie_pool": "research",
+    "observation_gate": "diagnostic",
+}
+_ROLE_PUBLICATION_SURFACES = {
+    "formal": "formal_recommendation",
+    "baseline": "baseline_candidates",
+    "research": "research_review",
+    "diagnostic": "gate_diagnostics",
+}
 
 
 def _json_safe(value):
@@ -72,15 +94,133 @@ def _valid_code(value):
     return len(code) == 6 and code.isdigit()
 
 
-def _latest_close(item):
-    values = item.get("closes") if isinstance(item, dict) else None
+def _latest_close(item, report_date=None):
+    close, _source = _resolve_reference_close(item, report_date=report_date)
+    return close
+
+
+def _positive_close(value):
+    if value is None or isinstance(value, bool):
+        return None
     try:
-        if values is None or len(values) == 0:
-            return None
-        number = float(values[-1])
-    except (TypeError, ValueError, IndexError):
+        number = float(value)
+    except (TypeError, ValueError):
         return None
     return number if math.isfinite(number) and number > 0 else None
+
+
+def _resolve_reference_close(item, *, report_date=None):
+    """Resolve the signal close without accepting unverified top-level prices."""
+    if not isinstance(item, dict):
+        return None, "missing"
+    values = item.get("closes")
+    has_close_series = False
+    try:
+        if values is not None and len(values) > 0:
+            has_close_series = True
+            close = _positive_close(values[-1])
+            dates = item.get("dates")
+            dates = list(dates) if dates is not None else []
+            latest_date = (
+                str(dates[-1]).split(" ", 1)[0]
+                if dates else ""
+            )
+            status = item.get("data_status")
+            status = status if isinstance(status, dict) else {}
+            status_latest_date = str(
+                status.get("latest_date") or ""
+            ).split(" ", 1)[0]
+            status_valid = (
+                str(status.get("daily") or "").strip().lower()
+                == "verified"
+                and status.get("is_final") is True
+                and (
+                    not status_latest_date
+                    or status_latest_date == str(report_date or "").strip()
+                )
+            )
+            if (
+                close is not None
+                and latest_date == str(report_date or "").strip()
+                and status_valid
+            ):
+                return close, "closes[-1]"
+    except (TypeError, ValueError, IndexError):
+        has_close_series = True
+
+    # If a close series was supplied but failed its signal-day evidence gate,
+    # do not silently replace it with a different top-level price.  That
+    # would hide a stale or internally inconsistent source snapshot.
+    if has_close_series:
+        return None, "missing"
+
+    status = item.get("data_status")
+    if isinstance(status, dict) and (
+        str(status.get("daily") or "").strip().lower() == "verified"
+        and status.get("is_final") is True
+        and str(status.get("latest_date") or "").split(" ", 1)[0]
+        == str(report_date or "").strip()
+    ):
+        close = _positive_close(item.get("close"))
+        if close is not None:
+            return close, "top_level_close"
+    return None, "missing"
+
+
+def _evaluation_metadata(strategy, name):
+    """Normalize the role/surface contract for a new ledger contribution."""
+    role_field_present = "evaluation_role" in strategy
+    requested_role = str(strategy.get("evaluation_role") or "").strip().lower()
+    registered_role = _STRATEGY_EVALUATION_ROLES.get(name)
+    if role_field_present:
+        if requested_role not in VALID_EVALUATION_ROLES:
+            role = "unknown"
+        elif registered_role and requested_role != registered_role:
+            role = "unknown"
+        else:
+            role = requested_role
+    elif registered_role:
+        role = registered_role
+    else:
+        role = "unknown"
+    requested_surface = str(
+        strategy.get("publication_surface") or ""
+    ).strip().lower()
+    surface = requested_surface if requested_surface in VALID_PUBLICATION_SURFACES else (
+        _ROLE_PUBLICATION_SURFACES.get(role, "technical_detail")
+    )
+    if role in _ROLE_PUBLICATION_SURFACES:
+        # Do not let a malformed or cross-role surface silently redefine the
+        # page contract.  The role is the source of truth for the surface.
+        surface = _ROLE_PUBLICATION_SURFACES[role]
+    else:
+        surface = "technical_detail"
+    return role, surface
+
+
+def _evaluation_eligibility(
+    role,
+    *,
+    cohort_eligible,
+    publication_status,
+    user_action,
+    decision_code,
+):
+    if role == "diagnostic":
+        return False, "diagnostic_only"
+    if role in {"baseline", "research"}:
+        return True, "{}_candidate".format(role)
+    if role != "formal":
+        return False, "unknown_evaluation_role"
+    if cohort_eligible:
+        return True, "formal_recommendation"
+    if publication_status != "published":
+        return False, "not_published"
+    if user_action != "recommendation":
+        return False, "user_action_not_recommendation"
+    if decision_code != "recommend":
+        return False, "decision_not_recommend"
+    return False, "formal_cohort_ineligible"
 
 
 def _decision_snapshot(item):
@@ -151,10 +291,19 @@ def _contribution(report_date, code, item, strategy):
         ).strip().lower()
     if user_action not in VALID_USER_ACTIONS:
         user_action = "unknown"
+    evaluation_role, publication_surface = _evaluation_metadata(strategy, name)
     cohort_eligible = bool(
-        publication_status == "published"
+        evaluation_role == "formal"
+        and publication_status == "published"
         and user_action == "recommendation"
         and decision_code == "recommend"
+    )
+    evaluation_eligible, eligibility_reason = _evaluation_eligibility(
+        evaluation_role,
+        cohort_eligible=cohort_eligible,
+        publication_status=publication_status,
+        user_action=user_action,
+        decision_code=decision_code,
     )
     return {
         "contribution_id": "contrib:{}".format(_stable_hash(
@@ -173,6 +322,10 @@ def _contribution(report_date, code, item, strategy):
         "publication_status": publication_status,
         "user_action": user_action,
         "cohort_eligible": cohort_eligible,
+        "evaluation_role": evaluation_role,
+        "publication_surface": publication_surface,
+        "evaluation_eligible": evaluation_eligible,
+        "eligibility_reason": eligibility_reason,
         "attribution_status": attribution_status,
         "reason_snapshot": _decision_snapshot(item),
     }
@@ -215,6 +368,10 @@ def build_recommendation_entries(
             if contribution_id in seen_contributions:
                 continue
             seen_contributions.add(contribution_id)
+            reference_close, reference_close_source = _resolve_reference_close(
+                item,
+                report_date=report_date,
+            )
             entry = by_code.setdefault(code, {
                 "schema_version": LEDGER_SCHEMA_VERSION,
                 "recommendation_id": "rec:{}".format(_stable_hash(
@@ -224,7 +381,8 @@ def build_recommendation_entries(
                 "generated_at": generated_at,
                 "code": code,
                 "name": str(item.get("name") or code),
-                "reference_close": _latest_close(item),
+                "reference_close": reference_close,
+                "reference_close_source": reference_close_source,
                 "policy_version": str(policy_version or "unknown"),
                 "config_revision": _revision(config_revision),
                 "code_version": str(code_version or "unknown"),
@@ -233,7 +391,8 @@ def build_recommendation_entries(
             if entry["name"] == code and item.get("name"):
                 entry["name"] = str(item["name"])
             if entry["reference_close"] is None:
-                entry["reference_close"] = _latest_close(item)
+                entry["reference_close"] = reference_close
+                entry["reference_close_source"] = reference_close_source
             entry["strategy_contributions"].append(contribution)
 
     entries = []

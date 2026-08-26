@@ -68,9 +68,11 @@ class ReportComparisonFrontendTests(unittest.TestCase):
         self.assertIn("当前价获取失败", self.js)
         self.assertIn("row.missingReason", self.js)
 
-    def test_all_views_summary_and_complete_statistics_are_present(self):
-        self.assertIn("全部榜单（去重）", self.js)
-        self.assertIn("dedupeComparisonRows", self.js)
+    def test_only_formal_strategies_are_compared_with_complete_statistics(self):
+        self.assertIn("function isComparablePerformanceView", self.js)
+        self.assertIn("view === 'main' || view === 'h4_t3'", self.js)
+        self.assertNotIn("全部榜单（去重）", self.js)
+        self.assertNotIn("dedupeComparisonRows", self.js)
         for label in ("实际平均涨跌", "中位数", "上涨率", "最大涨幅", "最大跌幅", "有效", "缺失"):
             self.assertIn(label, self.js)
         self.assertIn("指数数据缺失", self.js)
@@ -92,10 +94,9 @@ class ReportComparisonFrontendTests(unittest.TestCase):
         self.assertIn("(?:\\/index\\.html)?$", self.js)
         self.assertIn("isArchiveReportPath(window.location && window.location.pathname)", self.js)
         self.assertIn("isArchiveReportPath(window.location.pathname)", self.js)
-        self.assertIn("昨日榜单表现", self.js)
+        self.assertIn("历史正式策略盘中追踪", self.js)
         self.assertIn("进入完整比对", self.js)
         self.assertIn("comparisonSummaryRefresh", self.js)
-        self.assertIn("全部榜单（去重）", self.js)
         self.assertIn("尚未刷新当前行情", self.js)
         self.assertIn(".report-comparison-summary", self.css)
 

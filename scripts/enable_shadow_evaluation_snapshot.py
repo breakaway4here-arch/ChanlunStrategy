@@ -45,6 +45,9 @@ PUBLIC_TARGETS = (
     "assets/report-v2.js",
     "assets/report-v2.css",
 )
+OPTIONAL_PUBLIC_TARGETS = (
+    "data/comparison-index.json",
+)
 _BOOTSTRAP_PATTERN = re.compile(
     r"window\.CHANLUN_BOOTSTRAP\s*=\s*(\{[\s\S]*?\});"
 )
@@ -430,10 +433,16 @@ def _rebuild_staged_public_artifacts(
             handle.write(html)
 
 
-def _relative_public_targets(report_date):
-    return [
+def _relative_public_targets(report_date, extra_targets=()):
+    targets = [
         value.format(report_date=report_date) for value in PUBLIC_TARGETS
     ]
+    extras = [str(value) for value in (extra_targets or ())]
+    if len(extras) != len(set(extras)):
+        raise ValueError("duplicate optional public target")
+    if any(value not in OPTIONAL_PUBLIC_TARGETS for value in extras):
+        raise ValueError("optional public target is not allowed")
+    return targets + extras
 
 
 def _owned_public_temp_pattern(target_name, suffix):
@@ -680,7 +689,10 @@ def _cleanup_stale_publication_artifacts(docs_dir, report_date):
         except OSError as exc:
             errors.append(exc)
 
-    for relative in _relative_public_targets(report_date):
+    for relative in _relative_public_targets(
+        report_date,
+        OPTIONAL_PUBLIC_TARGETS,
+    ):
         target = docs_dir / relative
         try:
             siblings = list(target.parent.iterdir())
@@ -733,9 +745,9 @@ def _cleanup_stale_publication_artifacts(docs_dir, report_date):
         )
 
 
-def _public_target_hashes(docs_dir, report_date):
+def _public_target_hashes(docs_dir, report_date, extra_targets=()):
     hashes = {}
-    for relative in _relative_public_targets(report_date):
+    for relative in _relative_public_targets(report_date, extra_targets):
         target = Path(docs_dir) / relative
         if not target.is_file():
             raise FileNotFoundError(
@@ -864,7 +876,8 @@ def _recover_incomplete_transaction(docs_dir):
     items = journal.get("items")
     if not isinstance(items, list):
         raise ValueError("transaction journal items are missing")
-    expected_targets = _relative_public_targets(report_date)
+    extra_targets = tuple(journal.get("extra_targets") or ())
+    expected_targets = _relative_public_targets(report_date, extra_targets)
     if [item.get("target") for item in items if isinstance(item, dict)] != expected_targets:
         raise ValueError("transaction journal target whitelist mismatch")
     transaction_id = _validate_transaction_id(journal.get("transaction_id"))
@@ -917,7 +930,11 @@ def _recover_incomplete_transaction(docs_dir):
                 recovery_errors.append(exc)
         if not recovery_errors:
             try:
-                restored = _public_target_hashes(docs_dir, report_date)
+                restored = _public_target_hashes(
+                    docs_dir,
+                    report_date,
+                    extra_targets=extra_targets,
+                )
                 expected = {
                     item["target"]: item["original_sha256"] for item in items
                 }
@@ -972,14 +989,19 @@ def _atomic_replace_targets(
     report_date,
     expected_original_hashes=None,
     transaction_id=None,
+    extra_targets=(),
 ):
     docs_dir = Path(docs_dir).resolve()
     staged_docs = Path(staged_docs).resolve()
     transaction_id = _validate_transaction_id(
         transaction_id or uuid.uuid4().hex
     )
-    relative_targets = _relative_public_targets(report_date)
-    actual_original_hashes = _public_target_hashes(docs_dir, report_date)
+    relative_targets = _relative_public_targets(report_date, extra_targets)
+    actual_original_hashes = _public_target_hashes(
+        docs_dir,
+        report_date,
+        extra_targets=extra_targets,
+    )
     if expected_original_hashes is None:
         expected_original_hashes = actual_original_hashes
     if actual_original_hashes != expected_original_hashes:
@@ -1029,6 +1051,7 @@ def _atomic_replace_targets(
             "schema_version": JOURNAL_SCHEMA_VERSION,
             "transaction_id": transaction_id,
             "report_date": report_date,
+            "extra_targets": list(extra_targets or ()),
             "status": "prepared",
             "items": prepared,
         }
