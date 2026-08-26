@@ -182,3 +182,19 @@
 - 不同入场口径、周期和版本不混算。
 - 数据告警不能显示为“正常”；持仓空状态不能无声消失。
 - 全量自动化测试通过，远端 `main`、Pages 原始 JSON、桌面与移动页面均完成验收。
+
+## 7. 2026-08-26 运行时事故补充与新增发布门禁
+
+2026-08-24、2026-08-25 的正式日报均成功发布，但影子评测在实验构建前因 raw `report_data` 中的 NumPy 运行时值失败。两日没有实验行、没有冻结 cohort、没有 pending 批次，因此只能记为 `data_gap`，不得事后以当前代码倒推并冒充 OOT 样本。
+
+这次事故说明，原有“代码、冻结快照、Pages 资源和页面 DOM 均通过”的上线结论只证明静态发布面可用，不能证明后续正式交易日的动态采集链路可持续运行。以后影子功能的“上线完成”必须同时通过以下门禁：
+
+1. writer 与 production guard 使用同一个 full daily / aggregate light 公开投影，禁止 guard 再对整份 raw 对象定义第二套正式输出。
+2. 策略 builder 只接收版本化最小输入；生产态 fixture 必须覆盖 NumPy、NaN、datetime、bytes、object array 和未发布瞬态字段。
+3. 部署后首个正式交易日必须看到 `collection_health=ok|partial`、experiment available、before/after SHA 相同、pending staged；零候选也必须形成合法空批次。
+4. finalizer 只有在采集健康、日报批次摘要与本地 pending 摘要全部一致时才允许 append。
+5. 页面必须分别展示采集健康、T+1/T+3/T+5 到期状态、人工比较准备度；不能再把“采集失败”和“收益尚未到期”都写成“暂不可用”。
+6. 发布验收至少包含两个时间点：部署当日的采集验收，以及后续首个 T+1/T+3 状态推进验收。首个到期样本不代表策略成熟。
+7. “上线完成”的表述必须写清验收范围。只有静态快照通过时，应标记为“发布面已上线、动态采集待首个正式交易日验证”。
+
+完整复盘见 `docs/reviews/2026-08-26-shadow-evaluation-runtime-incident-review.md`。

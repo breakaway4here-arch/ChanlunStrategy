@@ -71,8 +71,22 @@ def _write_report(path, shadow_payload):
 
 def _eligible_shadow_report(entries, *, digest=None, status="collecting"):
     return {
+        "schema_version": 1,
         "mode": "shadow",
+        "affects_production": False,
         "status": status,
+        "data_gap": False,
+        "collection_health": {
+            "status": "partial" if status == "partial" else "ok",
+            "candidate_count": len(entries),
+            "eligible_count": len(entries),
+            "staged_count": len(entries),
+        },
+        "production_guard": {
+            "unchanged": True,
+            "before_sha256": "a" * 64,
+            "after_sha256": "a" * 64,
+        },
         "today_entries": entries,
         "pending": {
             "status": "staged",
@@ -220,6 +234,147 @@ class FinalizeRecommendationLedgerTests(unittest.TestCase):
                 )
 
                 self.assertIn(result["shadow_status"], {"withheld", "unavailable"})
+                self.assertEqual(result["shadow_appended_entries"], 0)
+                self.assertFalse(shadow_ledger.exists())
+
+    def test_collection_failure_never_finalizes_a_digest_valid_shadow_batch(self):
+        shadow = _shadow_entry()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            shadow_pending_dir = root / "shadow-pending"
+            shadow_ledger = root / "shadow.jsonl"
+            report_path = root / "report.json"
+            stage_shadow_evaluation_entries(
+                shadow_pending_ledger_path(
+                    "2026-08-20", shadow_pending_dir
+                ),
+                [shadow],
+            )
+            payload = _eligible_shadow_report([shadow])
+            payload["data_gap"] = True
+            payload["collection_health"] = {
+                "status": "collection_failed",
+                "failure_stage": "shadow_input_projection",
+                "error_code": "unsupported_type",
+                "candidate_count": 0,
+                "eligible_count": 0,
+                "staged_count": 0,
+            }
+            _write_report(report_path, payload)
+
+            result = finalize_for_date(
+                "2026-08-20",
+                recommendation_pending_dir=root / "formal-pending",
+                recommendation_ledger_path=root / "formal.jsonl",
+                shadow_pending_dir=shadow_pending_dir,
+                shadow_ledger_path=shadow_ledger,
+                report_path=report_path,
+            )
+
+            self.assertEqual(result["shadow_status"], "unavailable")
+            self.assertEqual(
+                result["shadow_reason"], "shadow_collection_failed"
+            )
+            self.assertEqual(result["shadow_appended_entries"], 0)
+            self.assertFalse(shadow_ledger.exists())
+
+    def test_missing_or_malformed_data_gap_never_authorizes_shadow_batch(self):
+        shadow = _shadow_entry()
+        cases = {
+            "missing": object(),
+            "null": None,
+            "string_false": "false",
+            "integer_zero": 0,
+        }
+        for name, data_gap in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                shadow_pending_dir = root / "shadow-pending"
+                shadow_ledger = root / "shadow.jsonl"
+                report_path = root / "report.json"
+                stage_shadow_evaluation_entries(
+                    shadow_pending_ledger_path(
+                        "2026-08-20", shadow_pending_dir
+                    ),
+                    [shadow],
+                )
+                payload = _eligible_shadow_report([shadow])
+                if name == "missing":
+                    payload.pop("data_gap")
+                else:
+                    payload["data_gap"] = data_gap
+                _write_report(report_path, payload)
+
+                result = finalize_for_date(
+                    "2026-08-20",
+                    recommendation_pending_dir=root / "formal-pending",
+                    recommendation_ledger_path=root / "formal.jsonl",
+                    shadow_pending_dir=shadow_pending_dir,
+                    shadow_ledger_path=shadow_ledger,
+                    report_path=report_path,
+                )
+
+                self.assertEqual(result["shadow_status"], "withheld")
+                self.assertEqual(
+                    result["shadow_reason"], "shadow_data_gap_invalid"
+                )
+                self.assertEqual(result["shadow_appended_entries"], 0)
+                self.assertFalse(shadow_ledger.exists())
+
+    def test_invalid_shadow_contract_or_formal_guard_never_authorizes_batch(self):
+        shadow = _shadow_entry()
+        cases = {
+            "unsupported_schema": {"schema_version": 2},
+            "production_effect": {"affects_production": True},
+            "isolation_missing": {"affects_production": None},
+            "guard_changed": {
+                "production_guard": {
+                    "unchanged": False,
+                    "before_sha256": "a" * 64,
+                    "after_sha256": "b" * 64,
+                }
+            },
+            "guard_digest_mismatch": {
+                "production_guard": {
+                    "unchanged": True,
+                    "before_sha256": "a" * 64,
+                    "after_sha256": "b" * 64,
+                }
+            },
+            "guard_digest_invalid": {
+                "production_guard": {
+                    "unchanged": True,
+                    "before_sha256": "short",
+                    "after_sha256": "short",
+                }
+            },
+        }
+        for name, updates in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmpdir:
+                root = Path(tmpdir)
+                shadow_pending_dir = root / "shadow-pending"
+                shadow_ledger = root / "shadow.jsonl"
+                report_path = root / "report.json"
+                stage_shadow_evaluation_entries(
+                    shadow_pending_ledger_path(
+                        "2026-08-20", shadow_pending_dir
+                    ),
+                    [shadow],
+                )
+                payload = _eligible_shadow_report([shadow])
+                payload.update(updates)
+                _write_report(report_path, payload)
+
+                result = finalize_for_date(
+                    "2026-08-20",
+                    recommendation_pending_dir=root / "formal-pending",
+                    recommendation_ledger_path=root / "formal.jsonl",
+                    shadow_pending_dir=shadow_pending_dir,
+                    shadow_ledger_path=shadow_ledger,
+                    report_path=report_path,
+                )
+
+                self.assertEqual(result["shadow_status"], "withheld")
                 self.assertEqual(result["shadow_appended_entries"], 0)
                 self.assertFalse(shadow_ledger.exists())
 

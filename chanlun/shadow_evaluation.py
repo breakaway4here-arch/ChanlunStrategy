@@ -20,6 +20,7 @@ import threading
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import fields, is_dataclass
+from datetime import date, datetime
 from statistics import mean, median
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
@@ -50,6 +51,15 @@ _SHADOW_PENDING_THREAD_LOCK = threading.Lock()
 # The registry is deliberately process-local.  It is a definition registry,
 # not a ledger, and therefore has no persistence or production side effects.
 _EXPERIMENT_REGISTRY: Dict[str, Dict[str, Any]] = {}
+
+
+class ShadowInputProjectionError(ValueError):
+    """Path-aware error for the explicit shadow strategy input contract."""
+
+    def __init__(self, path: str, code: str):
+        self.path = path
+        self.code = code
+        super().__init__("{} at {}".format(code, path))
 
 
 def json_native_projection(value: Any) -> Any:
@@ -900,6 +910,104 @@ def _shadow_sample_rows(outcomes: List[Dict[str, Any]], horizon_key: str) -> Lis
     return selected
 
 
+def _empty_outcome_maturity() -> Dict[str, Dict[str, int]]:
+    return {
+        "t{}".format(horizon): {
+            "mature": 0,
+            "right_censored": 0,
+            "unavailable": 0,
+        }
+        for horizon in sorted(ALLOWED_HORIZONS)
+    }
+
+
+def _build_comparison_readiness(
+    sample_size: int,
+    active_dates: int,
+    active_months: int,
+) -> Dict[str, Any]:
+    thresholds = {
+        "mature_samples": 100,
+        "active_dates": 20,
+        "active_months": 2,
+    }
+    counts = {
+        "mature_samples": max(0, int(sample_size or 0)),
+        "active_dates": max(0, int(active_dates or 0)),
+        "active_months": max(0, int(active_months or 0)),
+    }
+    reasons = []
+    if counts["mature_samples"] < thresholds["mature_samples"]:
+        reasons.append("mature_samples_below_100")
+    if counts["active_dates"] < thresholds["active_dates"]:
+        reasons.append("active_dates_below_20")
+    if counts["active_months"] < thresholds["active_months"]:
+        reasons.append("active_months_below_2")
+    if not reasons:
+        status = "ready_for_manual_review"
+    elif counts["mature_samples"] >= 30 or counts["active_dates"] >= 10:
+        status = "maturing"
+    else:
+        status = "insufficient"
+    return {
+        "status": status,
+        "counts": counts,
+        "thresholds": thresholds,
+        "reasons": reasons + ["shadow_mode_never_auto_promotes"],
+        "promotion_eligible": False,
+    }
+
+
+def _aggregate_outcome_maturity(
+    scorecards: Iterable[Mapping[str, Any]],
+) -> Dict[str, Dict[str, int]]:
+    aggregate = _empty_outcome_maturity()
+    for card in scorecards or []:
+        maturity = card.get("outcome_maturity")
+        if not isinstance(maturity, Mapping):
+            continue
+        for horizon_key, statuses in aggregate.items():
+            values = maturity.get(horizon_key)
+            if not isinstance(values, Mapping):
+                continue
+            for status in statuses:
+                value = values.get(status)
+                if isinstance(value, int) and not isinstance(value, bool):
+                    statuses[status] += max(0, value)
+    return aggregate
+
+
+def _top_level_comparison_readiness(
+    scorecards: Iterable[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    cards = [card for card in scorecards or [] if isinstance(card, Mapping)]
+    if not cards:
+        return _build_comparison_readiness(0, 0, 0)
+    ranks = {
+        "insufficient": 0,
+        "maturing": 1,
+        "ready_for_manual_review": 2,
+    }
+    selected = max(
+        cards,
+        key=lambda card: (
+            ranks.get(
+                ((card.get("comparison_readiness") or {}).get("status")), -1
+            ),
+            int(card.get("sample_size") or 0),
+            int(card.get("active_dates") or 0),
+            int(card.get("active_months") or 0),
+        ),
+    )
+    readiness = copy.deepcopy(
+        selected.get("comparison_readiness")
+        or _build_comparison_readiness(0, 0, 0)
+    )
+    readiness["scope"] = "best_experiment"
+    readiness["experiment_id"] = str(selected.get("experiment_id") or "")
+    return readiness
+
+
 def build_shadow_scorecards(
     entries: Iterable[Any],
     kline_by_code: Mapping[str, Any],
@@ -957,6 +1065,7 @@ def build_shadow_scorecards(
         horizon_key = "t{}".format(horizon)
         evaluated = []
         statuses: Dict[str, int] = defaultdict(int)
+        outcome_maturity = _empty_outcome_maturity()
         for entry in rows:
             outcome = evaluate_recommendation_entry(
                 entry,
@@ -968,6 +1077,19 @@ def build_shadow_scorecards(
             )
             evaluated.append((entry, outcome))
             statuses[outcome["status"]] += 1
+            maturity = outcome.get("maturity")
+            for maturity_key, counts in outcome_maturity.items():
+                value = (
+                    maturity.get(maturity_key)
+                    if isinstance(maturity, Mapping)
+                    else None
+                )
+                normalized = (
+                    value
+                    if value in ("mature", "right_censored", "unavailable")
+                    else "unavailable"
+                )
+                counts[normalized] += 1
         close_returns = [
             outcome["returns"][horizon_key]
             for _entry, outcome in evaluated
@@ -1002,14 +1124,10 @@ def build_shadow_scorecards(
         sample_size = len(close_returns)
         active_dates = len(active_date_values)
         active_months = len(active_month_values)
-        hard_gate_reasons = []
-        if sample_size < 100:
-            hard_gate_reasons.append("mature_samples_below_100")
-        if active_dates < 20:
-            hard_gate_reasons.append("active_dates_below_20")
-        if active_months < 2:
-            hard_gate_reasons.append("active_months_below_2")
-        hard_gate_reasons.append("shadow_mode_never_auto_promotes")
+        comparison_readiness = _build_comparison_readiness(
+            sample_size, active_dates, active_months
+        )
+        hard_gate_reasons = list(comparison_readiness["reasons"])
         first = rows[0]
         cards.append({
             "experiment_id": experiment_id,
@@ -1040,7 +1158,13 @@ def build_shadow_scorecards(
             "mean_mae": mean(maes) if maes else None,
             "worst_close_return": min(close_returns) if close_returns else None,
             "research_tier": first.get("research_tier"),
-            "comparison_status": "collecting",
+            "comparison_status": (
+                "ready_for_manual_comparison"
+                if comparison_readiness["status"] == "ready_for_manual_review"
+                else "collecting"
+            ),
+            "comparison_readiness": comparison_readiness,
+            "outcome_maturity": outcome_maturity,
             "promotion_eligible": False,
             "hard_gate_reasons": hard_gate_reasons,
             "evaluation_statuses": dict(statuses),
@@ -1052,16 +1176,307 @@ def build_shadow_scorecards(
 
 
 def _build_shadow_guard_snapshot(report_data: Any) -> Dict[str, Any]:
-    """Project every formal report field, excluding only the shadow result."""
+    """Project the exact non-shadow payloads written to public report surfaces."""
 
     if not isinstance(report_data, Mapping):
         raise ValueError("formal report data must be a mapping")
-    snapshot = {
-        key: value
-        for key, value in report_data.items()
-        if key != "shadow_evaluations"
+    from .report_generator import build_formal_output_projection
+
+    return build_formal_output_projection(report_data)
+
+
+_H4_SIMPLE_FEATURE_FIELDS = (
+    "score",
+    "change_pct",
+    "volume_ratio",
+    "amount",
+    "money20",
+    "market_cap",
+    "float_market_cap",
+    "circulating_market_cap",
+    "position_absolute_percentile",
+    "position_distance_pct",
+    "source_channel",
+    "category",
+    "market_regime",
+    "ma_bullish",
+)
+_H4_DISPLAY_FIELDS = (
+    "code",
+    "name",
+    "sector",
+    "industry",
+    "rank",
+    "action",
+    "reason",
+    "opportunity_score",
+    "watch_score",
+    "trend_type",
+)
+_H4_DECISION_FIELDS = (
+    "decision_code",
+    "total_score",
+    "action",
+    "risk_level",
+    "position_size",
+    "reason",
+    "summary",
+    "confidence",
+    "score",
+)
+_H4_HEALTH_FIELDS = (
+    "score",
+    "alignment",
+    "extension_level",
+    "fomo_risk",
+    "pullback_health",
+    "trend_stage",
+    "data_quality",
+)
+_H4_BUY_POINT_FIELDS = (
+    "type",
+    "tier",
+    "price",
+    "reason",
+    "strength",
+    "source_type",
+    "confirmed_by",
+    "seed_type",
+    "seed_reason",
+    "change_pct",
+    "volume_ratio",
+    "signal_age_days",
+    "confirm_age_days",
+    "startup_age_days",
+)
+_H4_COUNT_LIST_FIELDS = (
+    "buy_points",
+    "buy_points_30min",
+    "blocked_buy_points",
+    "reference_buy_points",
+    "trailing_targets",
+)
+
+
+def _shadow_input_projection(value: Any, path: str) -> Any:
+    """Project a selected strategy input while preserving its JSON path."""
+
+    if np is not None:
+        if isinstance(value, np.ndarray):
+            return _shadow_input_projection(value.tolist(), path)
+        if isinstance(value, np.generic):
+            return _shadow_input_projection(value.item(), path)
+    if value is None or type(value) in (str, bool, int):
+        return value
+    if type(value) is float:
+        return value if math.isfinite(value) else None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    if type(value) in (list, tuple):
+        return [
+            _shadow_input_projection(item, "{}[{}]".format(path, index))
+            for index, item in enumerate(value)
+        ]
+    if isinstance(value, Mapping):
+        projected = {}
+        for key, item in value.items():
+            if type(key) is not str:
+                raise ShadowInputProjectionError(path, "non_string_key")
+            projected[key] = _shadow_input_projection(
+                item, "{}.{}".format(path, key)
+            )
+        return projected
+    raise ShadowInputProjectionError(path, "unsupported_value")
+
+
+def _shadow_input_mapping(value: Any, path: str, fields_to_keep) -> Dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ShadowInputProjectionError(path, "expected_mapping")
+    return {
+        key: _shadow_input_projection(value[key], "{}.{}".format(path, key))
+        for key in fields_to_keep
+        if key in value
     }
-    return json_native_projection(snapshot)
+
+
+def _shadow_input_count_list(value: Any, path: str) -> List[Any]:
+    if value is None:
+        return []
+    if np is not None and isinstance(value, np.ndarray):
+        return [None] * len(value)
+    if type(value) in (list, tuple):
+        return [None] * len(value)
+    raise ShadowInputProjectionError(path, "expected_sequence")
+
+
+def _build_h4_shadow_candidate_input(
+    raw_candidate: Any, index: int
+) -> Dict[str, Any]:
+    path = "$.picks_pure[{}]".format(index)
+    if not isinstance(raw_candidate, Mapping):
+        raise ShadowInputProjectionError(path, "expected_mapping")
+    raw_features = raw_candidate.get("features")
+    source = raw_features if isinstance(raw_features, Mapping) else raw_candidate
+    source_path = (
+        "{}.features".format(path)
+        if isinstance(raw_features, Mapping)
+        else path
+    )
+    projected_features = {
+        key: _shadow_input_projection(
+            source[key], "{}.{}".format(source_path, key)
+        )
+        for key in _H4_SIMPLE_FEATURE_FIELDS
+        if key in source
+    }
+    for key in ("dates", "closes", "volumes", "is_final"):
+        if key in source:
+            projected_features[key] = _shadow_input_projection(
+                source[key], "{}.{}".format(source_path, key)
+            )
+    projected_features["decision_engine_v1"] = _shadow_input_mapping(
+        source.get("decision_engine_v1"),
+        "{}.decision_engine_v1".format(source_path),
+        _H4_DECISION_FIELDS,
+    )
+    decision = source.get("decision_engine_v1")
+    if isinstance(decision, Mapping):
+        for key in ("sentiment", "structure", "position"):
+            if key in decision:
+                projected_features["decision_engine_v1"][key] = (
+                    _shadow_input_mapping(
+                        decision.get(key),
+                        "{}.decision_engine_v1.{}".format(source_path, key),
+                        ("score",),
+                    )
+                )
+        if "risk_reasons" in decision:
+            projected_features["decision_engine_v1"]["risk_reasons"] = (
+                _shadow_input_count_list(
+                    decision.get("risk_reasons"),
+                    "{}.decision_engine_v1.risk_reasons".format(source_path),
+                )
+            )
+    health = source.get("gf_dma_health")
+    projected_features["gf_dma_health"] = _shadow_input_mapping(
+        health,
+        "{}.gf_dma_health".format(source_path),
+        _H4_HEALTH_FIELDS,
+    )
+    if isinstance(health, Mapping):
+        for key in ("distance_pct",):
+            if key in health:
+                projected_features["gf_dma_health"][key] = _shadow_input_mapping(
+                    health.get(key),
+                    "{}.gf_dma_health.{}".format(source_path, key),
+                    ("vs_ma20", "vs_ma50", "vs_ma100", "vs_ma200"),
+                )
+        for key in ("risk_flags", "positive_flags"):
+            if key in health:
+                projected_features["gf_dma_health"][key] = (
+                    _shadow_input_count_list(
+                        health.get(key),
+                        "{}.gf_dma_health.{}".format(source_path, key),
+                    )
+                )
+    best = source.get("best_buy_point")
+    if "best_buy_point" in source:
+        projected_features["best_buy_point"] = (
+            None
+            if best is None
+            else _shadow_input_mapping(
+                best,
+                "{}.best_buy_point".format(source_path),
+                _H4_BUY_POINT_FIELDS,
+            )
+        )
+    if isinstance(best, Mapping):
+        for key in ("confirmations", "startup_signals"):
+            if key in best:
+                projected_features["best_buy_point"][key] = (
+                    _shadow_input_count_list(
+                        best.get(key),
+                        "{}.best_buy_point.{}".format(source_path, key),
+                    )
+                )
+    projected_features["fusion_admission"] = _shadow_input_mapping(
+        source.get("fusion_admission"),
+        "{}.fusion_admission".format(source_path),
+        ("passed",),
+    )
+    for key in _H4_COUNT_LIST_FIELDS:
+        if key in source:
+            projected_features[key] = _shadow_input_count_list(
+                source.get(key), "{}.{}".format(source_path, key)
+            )
+    pivots = source.get("pivots")
+    if "pivots" not in source:
+        pass
+    elif pivots is None:
+        projected_features["pivots"] = None
+    elif isinstance(pivots, Mapping):
+        projected_features["pivots"] = _shadow_input_mapping(
+            pivots, "{}.pivots".format(source_path), ("count",)
+        )
+    elif type(pivots) in (list, tuple) or (
+        np is not None and isinstance(pivots, np.ndarray)
+    ):
+        projected_features["pivots"] = _shadow_input_count_list(
+            pivots, "{}.pivots".format(source_path)
+        )
+    else:
+        raise ShadowInputProjectionError(
+            "{}.pivots".format(source_path), "expected_mapping_or_sequence"
+        )
+    projected = {}
+    for key in _H4_DISPLAY_FIELDS:
+        if key in raw_candidate or key in source:
+            from_raw = key in raw_candidate
+            projected[key] = _shadow_input_projection(
+                raw_candidate.get(key, source.get(key)),
+                "{}.{}".format(path if from_raw else source_path, key),
+            )
+    if "data_status" in raw_candidate or "data_status" in source:
+        data_status_from_raw = "data_status" in raw_candidate
+        projected["data_status"] = _shadow_input_mapping(
+            raw_candidate.get("data_status", source.get("data_status")),
+            "{}.data_status".format(
+                path if data_status_from_raw else source_path
+            ),
+            ("daily", "latest_date", "source", "is_final"),
+        )
+    if isinstance(raw_features, Mapping):
+        projected["features"] = projected_features
+        for key in ("dates", "closes", "is_final"):
+            if key in projected_features:
+                projected[key] = projected_features[key]
+    else:
+        projected.update(projected_features)
+    return projected
+
+
+def _build_h4_shadow_input(report_data: Mapping[str, Any]) -> Dict[str, Any]:
+    report_date = _shadow_input_projection(report_data.get("date"), "$.date")
+    picks_pure = report_data.get("picks_pure")
+    if not isinstance(picks_pure, list):
+        raise ShadowInputProjectionError("$.picks_pure", "expected_list")
+    pool = _shadow_input_mapping(
+        report_data.get("h4_t3_pool"),
+        "$.h4_t3_pool",
+        ("production_attested", "mode", "status", "strategy_version"),
+    )
+    return {
+        "date": report_date,
+        "picks_pure": [
+            _build_h4_shadow_candidate_input(candidate, index)
+            for index, candidate in enumerate(picks_pure)
+        ],
+        "h4_t3_pool": pool,
+    }
 
 
 def _resolve_report_close_proof(
@@ -1165,13 +1580,26 @@ def _unavailable_daily_payload(
     before_sha: str = "",
     after_sha: str = "",
     guard_unchanged: bool = False,
+    failure_stage: str = "unknown",
 ) -> Dict[str, Any]:
+    error_code = getattr(error, "code", error.__class__.__name__)
     return {
         "schema_version": 1,
         "mode": SHADOW_MODE,
         "affects_production": False,
         "status": "unavailable",
+        "data_gap": True,
         "started_at": SHADOW_STARTED_AT,
+        "collection_health": {
+            "status": "collection_failed",
+            "failure_stage": failure_stage,
+            "error_code": error_code,
+            "candidate_count": 0,
+            "eligible_count": 0,
+            "staged_count": 0,
+        },
+        "outcome_maturity": _empty_outcome_maturity(),
+        "comparison_readiness": _build_comparison_readiness(0, 0, 0),
         "production_guard": {
             "unchanged": bool(guard_unchanged),
             "before_sha256": before_sha,
@@ -1189,6 +1617,8 @@ def _unavailable_daily_payload(
         "today_entries": [],
         "error": str(error) or error.__class__.__name__,
         "error_type": error.__class__.__name__,
+        "error_code": error_code,
+        "failure_stage": failure_stage,
     }
 
 
@@ -1356,6 +1786,8 @@ def _attach_shadow_scorecards(
         "mean_mae": None,
         "worst_close_return": None,
         "comparison_status": "collecting",
+        "comparison_readiness": _build_comparison_readiness(0, 0, 0),
+        "outcome_maturity": _empty_outcome_maturity(),
         "promotion_eligible": False,
         "hard_gate_reasons": [
             "mature_samples_below_100",
@@ -1414,7 +1846,18 @@ def build_daily_shadow_evaluations(
             "mode": "off",
             "affects_production": False,
             "status": "disabled",
+            "data_gap": False,
             "started_at": SHADOW_STARTED_AT,
+            "collection_health": {
+                "status": "disabled",
+                "failure_stage": "",
+                "error_code": "",
+                "candidate_count": 0,
+                "eligible_count": 0,
+                "staged_count": 0,
+            },
+            "outcome_maturity": _empty_outcome_maturity(),
+            "comparison_readiness": _build_comparison_readiness(0, 0, 0),
             "production_guard": {"unchanged": True},
             "experiments": [],
             "scorecards": [],
@@ -1424,14 +1867,19 @@ def build_daily_shadow_evaluations(
         raise ValueError("stock selection shadow mode must be off or shadow")
 
     before_sha = ""
+    failure_stage = "formal_projection_before"
     try:
         formal_snapshot = _build_shadow_guard_snapshot(report_data)
         before_sha = production_digest(formal_snapshot)
-        report_date = str(formal_snapshot.get("date") or "").strip()
+        report_date = str(
+            (formal_snapshot.get("daily") or {}).get("date") or ""
+        ).strip()
         if not report_date:
             raise ValueError("formal report date is required")
         from .h4_t3_pool import STRATEGY_VERSION
 
+        failure_stage = "shadow_input_projection"
+        shadow_input = _build_h4_shadow_input(report_data)
         experiment_spec = {
             "experiment_id": "h4-t3-pure-upstream-close-review-v1",
             "display_name": "H4 T+3 · picks_pure 上游收盘价影子回看",
@@ -1446,9 +1894,8 @@ def build_daily_shadow_evaluations(
                 snapshot, report_date
             ),
         }
-        payload = run_shadow_evaluations(
-            copy.deepcopy(formal_snapshot), [experiment_spec]
-        )
+        failure_stage = "shadow_runner"
+        payload = run_shadow_evaluations(copy.deepcopy(shadow_input), [experiment_spec])
         if not isinstance(payload, dict):
             raise ValueError("shadow runner returned an invalid payload")
         runner_guard = payload.get("production_guard")
@@ -1468,9 +1915,11 @@ def build_daily_shadow_evaluations(
         if not available_experiments:
             raise RuntimeError("shadow_builder_unavailable")
 
+        failure_stage = "entry_freeze"
         today_entries = build_shadow_evaluation_entries(
             report_date, generated_at, available_experiments
         )
+        failure_stage = "history_load"
         historical_entries = load_shadow_evaluation_entries(
             ledger_path or DEFAULT_SHADOW_LEDGER_PATH
         )
@@ -1479,6 +1928,7 @@ def build_daily_shadow_evaluations(
             from .strategy_review import load_review_market_context_from_store
 
             review_context_loader = load_review_market_context_from_store
+        failure_stage = "review_context"
         review_klines, review_calendar, review_benchmark, review_diagnostics = (
             review_context_loader(
                 db_path,
@@ -1486,12 +1936,14 @@ def build_daily_shadow_evaluations(
                 as_of=report_date,
             )
         )
+        failure_stage = "entry_validation"
         today_entries = _validate_today_entries_with_market_context(
             today_entries, review_klines
         )
         evaluation_entries = _merge_shadow_history(
             historical_entries, today_entries
         )
+        failure_stage = "scorecard"
         scorecards = build_shadow_scorecards(
             evaluation_entries,
             review_klines,
@@ -1499,6 +1951,7 @@ def build_daily_shadow_evaluations(
             benchmark_kline=review_benchmark,
             expected_adjustment=EXPECTED_REFERENCE_ADJUSTMENT,
         )
+        failure_stage = "formal_projection_after"
         after_sha = production_digest(_build_shadow_guard_snapshot(report_data))
         if before_sha != after_sha:
             raise RuntimeError("production_guard_failed")
@@ -1512,7 +1965,9 @@ def build_daily_shadow_evaluations(
         production_reference = payload.setdefault("production_reference", {})
         production_reference.update({
             "pool": "picks_fusion",
-            "today_count": len(formal_snapshot.get("picks_fusion") or []),
+            "today_count": len(
+                (formal_snapshot.get("daily") or {}).get("picks_fusion") or []
+            ),
             "intended_horizon": None,
             "comparison_eligible": False,
             "reason": "现网主推未声明统一主周期，只作数量与隔离参考",
@@ -1524,12 +1979,43 @@ def build_daily_shadow_evaluations(
         payload["scorecards"] = scorecards
         payload["today_entries"] = today_entries
         payload["review_diagnostics"] = review_diagnostics
+        candidate_count = sum(
+            len((row.get("today") or {}).get("candidates") or [])
+            for row in available_experiments
+            if isinstance(row, Mapping)
+        )
+        eligible_count = sum(
+            entry.get("evaluation_eligible") is True
+            for entry in today_entries
+        )
+        unavailable_count = sum(
+            isinstance(row, Mapping) and row.get("status") != "available"
+            for row in experiments
+        )
+        payload["data_gap"] = False
+        payload["collection_health"] = {
+            "status": (
+                "partial"
+                if unavailable_count or eligible_count < candidate_count
+                else "ok"
+            ),
+            "failure_stage": "",
+            "error_code": "",
+            "candidate_count": candidate_count,
+            "eligible_count": eligible_count,
+            "staged_count": 0,
+        }
+        payload["outcome_maturity"] = _aggregate_outcome_maturity(scorecards)
+        payload["comparison_readiness"] = _top_level_comparison_readiness(
+            scorecards
+        )
         payload["pending"] = {
             "status": "withheld",
             "reason": "unofficial_or_preview",
             "entries": 0,
         }
         if publication_eligible:
+            failure_stage = "staging"
             staged_path = shadow_pending_ledger_path(
                 report_date, pending_dir=pending_dir
             )
@@ -1549,6 +2035,7 @@ def build_daily_shadow_evaluations(
                 "entries": len(staged_entries),
                 "finalized": False,
             }
+            payload["collection_health"]["staged_count"] = len(staged_entries)
         return payload
     except Exception as exc:
         try:
@@ -1562,6 +2049,7 @@ def build_daily_shadow_evaluations(
             before_sha=before_sha,
             after_sha=after_sha,
             guard_unchanged=bool(before_sha and before_sha == after_sha),
+            failure_stage=failure_stage,
         )
 
 

@@ -520,9 +520,30 @@ class ShadowEvaluationContractTests(unittest.TestCase):
         self.assertFalse(card["promotion_eligible"])
         self.assertTrue(card["hard_gate_reasons"])
         self.assertEqual(
+            card["outcome_maturity"],
+            {
+                "t1": {"mature": 1, "right_censored": 0, "unavailable": 1},
+                "t3": {"mature": 1, "right_censored": 0, "unavailable": 1},
+                "t5": {"mature": 1, "right_censored": 0, "unavailable": 1},
+            },
+        )
+        self.assertEqual(
+            card["comparison_readiness"]["status"], "insufficient"
+        )
+        self.assertEqual(
             card["representative_samples"][0]["shadow_evaluation_id"],
             "shadow:first",
         )
+
+    def test_comparison_readiness_separates_insufficient_maturing_and_ready(self):
+        insufficient = shadow_evaluation._build_comparison_readiness(1, 1, 1)
+        maturing = shadow_evaluation._build_comparison_readiness(30, 10, 1)
+        ready = shadow_evaluation._build_comparison_readiness(100, 20, 2)
+
+        self.assertEqual(insufficient["status"], "insufficient")
+        self.assertEqual(maturing["status"], "maturing")
+        self.assertEqual(ready["status"], "ready_for_manual_review")
+        self.assertFalse(ready["promotion_eligible"])
 
     def test_shadow_scorecards_never_merge_same_version_across_source_pools(self):
         base = {

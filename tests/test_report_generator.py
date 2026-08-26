@@ -9,6 +9,7 @@ import unittest
 from unittest import mock
 import numpy as np
 
+import chanlun.report_generator as report_generator
 from chanlun.report_generator import (
     _serialize_picks, _serialize_bp, _serialize_startup_watchlist,
     _serialize_next_day_boom, _serialize_luojie_pool,
@@ -409,6 +410,60 @@ def _make_minimal_report_data():
     }
 
 
+class TestFormalReportProjection(unittest.TestCase):
+
+    def test_full_daily_projector_is_the_exact_writer_payload(self):
+        report_data = _make_minimal_report_data()
+        report_data["decision_brief"] = {"summary": "保持正式输出"}
+        report_data["shadow_evaluations"] = {"status": "collecting"}
+        expected = report_generator.build_full_daily_projection(report_data)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generate_report(report_data, output_dir=tmpdir)
+            with open(
+                os.path.join(tmpdir, "data", "2026-05-26.json"),
+                encoding="utf-8",
+            ) as handle:
+                written = json.load(handle)
+
+        self.assertEqual(written, expected)
+
+    def test_aggregate_projector_is_the_exact_writer_payload(self):
+        report_data = _make_minimal_report_data()
+        report_data["decision_brief"] = {"summary": "保持聚合输出"}
+        report_data["shadow_evaluations"] = {"status": "collecting"}
+        expected = report_generator.build_aggregate_day_projection(report_data)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            update_data_json(report_data, output_dir=tmpdir)
+            with open(os.path.join(tmpdir, "data.json"), encoding="utf-8") as handle:
+                written = json.load(handle)["reports"]["2026-05-26"]
+
+        self.assertEqual(written, expected)
+
+    def test_formal_projection_ignores_unpublished_runtime_fields(self):
+        report_data = _make_minimal_report_data()
+        before = report_generator.build_formal_output_projection(report_data)
+
+        report_data["runtime_only"] = {
+            "array": np.array([1.0, np.nan]),
+            "opaque": object(),
+        }
+        after = report_generator.build_formal_output_projection(report_data)
+
+        self.assertEqual(after, before)
+
+    def test_formal_projection_changes_when_published_field_changes(self):
+        report_data = _make_minimal_report_data()
+        report_data["decision_brief"] = {"summary": "原始摘要"}
+        before = report_generator.build_formal_output_projection(report_data)
+
+        report_data["decision_brief"]["summary"] = "变更后的正式摘要"
+        after = report_generator.build_formal_output_projection(report_data)
+
+        self.assertNotEqual(after, before)
+
+
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
 
     def test_shadow_serialization_failure_degrades_without_blocking_formal_report(self):
@@ -417,6 +472,26 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "mode": "shadow",
             "affects_production": False,
             "status": "unavailable",
+            "data_gap": True,
+            "collection_health": {
+                "status": "collection_failed",
+                "failure_stage": "serialization",
+                "error_code": "serialization_failed",
+                "candidate_count": 0,
+                "eligible_count": 0,
+                "staged_count": 0,
+            },
+            "outcome_maturity": {
+                "t1": {"mature": 0, "right_censored": 0, "unavailable": 0},
+                "t3": {"mature": 0, "right_censored": 0, "unavailable": 0},
+                "t5": {"mature": 0, "right_censored": 0, "unavailable": 0},
+            },
+            "comparison_readiness": {
+                "status": "insufficient",
+                "promotion_eligible": False,
+            },
+            "failure_stage": "serialization",
+            "error_code": "serialization_failed",
             "production_guard": {
                 "unchanged": False,
                 "before_sha256": "",
@@ -546,7 +621,25 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "mode": "shadow",
             "affects_production": False,
             "status": "collecting",
+            "data_gap": False,
             "started_at": "2026-08-22T00:00:00+08:00",
+            "collection_health": {
+                "status": "ok",
+                "failure_stage": "",
+                "error_code": "",
+                "candidate_count": 4,
+                "eligible_count": 1,
+                "staged_count": 1,
+            },
+            "outcome_maturity": {
+                "t1": {"mature": 1, "right_censored": 0, "unavailable": 0},
+                "t3": {"mature": 0, "right_censored": 1, "unavailable": 0},
+                "t5": {"mature": 0, "right_censored": 1, "unavailable": 0},
+            },
+            "comparison_readiness": {
+                "status": "insufficient",
+                "promotion_eligible": False,
+            },
             "production_guard": {
                 "unchanged": True,
                 "before_sha256": "a" * 64,
@@ -577,6 +670,15 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
                     ]
                 },
                 "sample_size": 1,
+                "outcome_maturity": {
+                    "t1": {"mature": 1, "right_censored": 0, "unavailable": 0},
+                    "t3": {"mature": 0, "right_censored": 1, "unavailable": 0},
+                    "t5": {"mature": 0, "right_censored": 1, "unavailable": 0},
+                },
+                "comparison_readiness": {
+                    "status": "insufficient",
+                    "promotion_eligible": False,
+                },
                 "hard_gate_reasons": ["mature_samples_below_100"],
             }],
             "scorecards": [{

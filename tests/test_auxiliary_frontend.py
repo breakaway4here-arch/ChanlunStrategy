@@ -191,7 +191,7 @@ assert(globalThis.__auxTest.description('baseline').includes('共同上游全集
         start = CSS.index(".shadow-guard-rail {")
         end = CSS.index("}", start)
         rule = CSS[start:end]
-        self.assertIn("repeat(5, minmax(0, 1fr))", rule)
+        self.assertIn("repeat(6, minmax(0, 1fr))", rule)
 
     def test_directions_are_capped_and_watchlist_is_not_truncated(self):
         self.assertIn("decisionBrief.theses).slice(0, 3)", JS)
@@ -559,6 +559,10 @@ assert(html.includes('入场口径：未知'), 'unknown entry mode was not expli
             "source_pool",
             "intended_horizon",
             "entry_mode",
+            "collection_health",
+            "outcome_maturity",
+            "comparison_readiness",
+            "data_gap",
         ):
             self.assertIn(field, renderer)
         self.assertIn("picks_pure", renderer)
@@ -584,6 +588,11 @@ assert(html.includes('入场口径：未知'), 'unknown entry mode was not expli
             "平均期间最低收益（MAE）",
             "canonical_kline_invalid",
             "canonical_report_volume_invalid",
+            "影子采集失败",
+            "本日形成数据缺口",
+            "采集成功，今日",
+            "T+3 已到期",
+            "可进入人工验收",
         ):
             self.assertIn(text, renderer)
         self.assertIn("comparison_status", renderer)
@@ -610,6 +619,10 @@ assert(html.includes('入场口径：未知'), 'unknown entry mode was not expli
         self.assertIn("#FFFFFF", shadow_styles)
         self.assertIn("#002FA7", shadow_styles)
         self.assertIn("1px", shadow_styles)
+        self.assertIn(
+            "grid-template-columns: repeat(6, minmax(0, 1fr));",
+            shadow_styles,
+        )
         self.assertNotIn("gradient", shadow_styles)
         self.assertIn(".shadow-metric-grid", responsive)
         self.assertIn("grid-template-columns: 1fr", responsive)
@@ -643,6 +656,22 @@ function fixture() {
     mode: 'shadow',
     affects_production: false,
     status: 'collecting',
+    data_gap: false,
+    collection_health: {
+      status: 'ok',
+      candidate_count: 1,
+      eligible_count: 1,
+      staged_count: 0
+    },
+    outcome_maturity: {
+      t1: { mature: 0, right_censored: 1, unavailable: 0 },
+      t3: { mature: 0, right_censored: 1, unavailable: 0 },
+      t5: { mature: 0, right_censored: 1, unavailable: 0 }
+    },
+    comparison_readiness: {
+      status: 'insufficient',
+      promotion_eligible: false
+    },
     production_guard: {
       unchanged: true,
       before_sha256: sha,
@@ -661,6 +690,15 @@ function fixture() {
       affects_production: false,
       promotion_eligible: false,
       comparison_status: 'collecting',
+      outcome_maturity: {
+        t1: { mature: 0, right_censored: 1, unavailable: 0 },
+        t3: { mature: 0, right_censored: 1, unavailable: 0 },
+        t5: { mature: 0, right_censored: 1, unavailable: 0 }
+      },
+      comparison_readiness: {
+        status: 'insufficient',
+        promotion_eligible: false
+      },
       research_tier: 'oot_shadow',
       sample_size: 0,
       active_dates: 0,
@@ -685,6 +723,10 @@ function assert(value, message) { if (!value) throw new Error(message); }
 const good = render(fixture());
 assert(good.includes('正式输出保护通过'), 'valid guard not shown');
 assert(good.includes('影子评测中'), 'valid collecting state missing');
+assert(good.includes('采集成功，今日 1 只'), 'collection health missing');
+assert(good.includes('T+3 已到期'), 'T+3 maturity missing');
+assert(good.includes('等待 1'), 'right-censored maturity missing');
+assert(good.includes('样本不足'), 'comparison readiness missing');
 assert(good.includes('融合候选全集'), 'fusion candidate pool label missing');
 assert(good.includes('页面主推'), 'published main count label missing');
 assert(good.includes('2 只'), 'published main count missing');
@@ -692,6 +734,31 @@ assert(good.includes('原始缠论结构候选 &#47; 共同上游全集'), 'shar
 assert(!good.includes('<script>alert(7)</script>'), 'candidate XSS not escaped');
 assert(good.includes('&lt;script&gt;alert(7)&lt;&#47;script&gt;'), 'escaped candidate absent');
 assert(!good.includes('<img src=x onerror=alert(1)>'), 'long title XSS not escaped');
+
+const healthyZero = fixture();
+healthyZero.shadow_evaluations.collection_health.candidate_count = 0;
+healthyZero.shadow_evaluations.collection_health.eligible_count = 0;
+healthyZero.shadow_evaluations.experiments[0].today.candidates = [];
+const healthyZeroHtml = render(healthyZero);
+assert(healthyZeroHtml.includes('采集成功，今日 0 只'), 'healthy zero cohort hidden');
+assert(!healthyZeroHtml.includes('影子评测暂不可用'), 'healthy zero marked unavailable');
+
+const collectionFailed = fixture();
+collectionFailed.shadow_evaluations.status = 'unavailable';
+collectionFailed.shadow_evaluations.data_gap = true;
+collectionFailed.shadow_evaluations.collection_health = {
+  status: 'collection_failed',
+  failure_stage: 'shadow_input_projection',
+  error_code: 'unsupported_type',
+  candidate_count: 0,
+  eligible_count: 0,
+  staged_count: 0
+};
+collectionFailed.shadow_evaluations.error = 'unsupported_type at $.picks_pure[0].amount';
+const collectionFailedHtml = render(collectionFailed);
+assert(collectionFailedHtml.includes('影子采集失败'), 'collection failure not explicit');
+assert(collectionFailedHtml.includes('本日形成数据缺口'), 'data gap not explicit');
+assert(collectionFailedHtml.includes('shadow_input_projection'), 'failure stage hidden');
 
 const mismatch = fixture();
 mismatch.shadow_evaluations.production_guard.after_sha256 = 'b'.repeat(64);

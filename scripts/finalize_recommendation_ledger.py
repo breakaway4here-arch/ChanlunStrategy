@@ -4,6 +4,7 @@
 import argparse
 import json
 import os
+import re
 import sys
 from collections.abc import Mapping
 
@@ -41,8 +42,63 @@ def _shadow_report_authorization(report_date, report_path=None):
     shadow = report.get("shadow_evaluations")
     if not isinstance(shadow, Mapping):
         return {"status": "withheld", "reason": "shadow_report_missing"}
+    if type(shadow.get("schema_version")) is not int or (
+        shadow.get("schema_version") != 1
+    ):
+        return {"status": "withheld", "reason": "shadow_schema_unsupported"}
+    if shadow.get("affects_production") is not False:
+        return {"status": "withheld", "reason": "shadow_isolation_invalid"}
     if shadow.get("mode") != "shadow":
         return {"status": "withheld", "reason": "shadow_mode_not_enabled"}
+    production_guard = shadow.get("production_guard")
+    before_sha = (
+        production_guard.get("before_sha256")
+        if isinstance(production_guard, Mapping)
+        else None
+    )
+    after_sha = (
+        production_guard.get("after_sha256")
+        if isinstance(production_guard, Mapping)
+        else None
+    )
+    digest_pattern = re.compile(r"^[0-9a-f]{64}$", re.IGNORECASE)
+    if (
+        not isinstance(production_guard, Mapping)
+        or production_guard.get("unchanged") is not True
+        or not isinstance(before_sha, str)
+        or not isinstance(after_sha, str)
+        or digest_pattern.fullmatch(before_sha) is None
+        or digest_pattern.fullmatch(after_sha) is None
+        or before_sha != after_sha
+    ):
+        return {
+            "status": "withheld",
+            "reason": "shadow_production_guard_invalid",
+        }
+    collection_health = shadow.get("collection_health")
+    if not isinstance(collection_health, Mapping):
+        return {
+            "status": "withheld",
+            "reason": "shadow_collection_health_missing",
+        }
+    collection_status = str(
+        collection_health.get("status") or ""
+    ).strip()
+    if collection_status == "collection_failed" or shadow.get("data_gap") is True:
+        return {
+            "status": "unavailable",
+            "reason": "shadow_collection_failed",
+        }
+    if shadow.get("data_gap") is not False:
+        return {
+            "status": "withheld",
+            "reason": "shadow_data_gap_invalid",
+        }
+    if collection_status not in {"ok", "partial"}:
+        return {
+            "status": "withheld",
+            "reason": "shadow_collection_not_healthy",
+        }
     shadow_status = str(shadow.get("status") or "").strip()
     if shadow_status == "unavailable":
         return {"status": "unavailable", "reason": "shadow_report_unavailable"}

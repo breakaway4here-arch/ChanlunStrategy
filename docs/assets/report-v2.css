@@ -3136,7 +3136,7 @@ body {
 
 .shadow-guard-rail {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   border-bottom: 1px solid #CBD5E1;
   background: #F7F7F8;
 }

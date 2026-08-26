@@ -3026,6 +3026,9 @@
     var todayEntries = asArray(shadow.today_entries);
     var pending = shadow.pending || {};
     var startedAt = normalizeString(shadow.started_at);
+    var collectionHealth = shadow.collection_health || {};
+    var outcomeMaturity = shadow.outcome_maturity || {};
+    var comparisonReadiness = shadow.comparison_readiness || {};
     var poolLabels = {
       picks_pure: 'picks_pure → 原始缠论结构候选 / 共同上游全集',
       picks_fusion: 'picks_fusion → 融合候选全集',
@@ -3050,6 +3053,8 @@
     var comparisonStatusLabels = {
       collecting: '样本积累中',
       ready_for_manual_comparison: '可进入人工比较',
+      ready_for_manual_review: '可进入人工验收',
+      maturing: '样本成长中',
       insufficient: '样本不足',
       unavailable: '暂不可比较',
     };
@@ -3111,6 +3116,31 @@
         + '</div>';
     }
 
+    function renderShadowMaturity(maturity) {
+      var value = maturity && typeof maturity === 'object' ? maturity : {};
+      var horizons = [
+        { key: 't1', label: 'T+1 已到期' },
+        { key: 't3', label: 'T+3 已到期' },
+        { key: 't5', label: 'T+5 已到期' },
+      ];
+      return '<div class="shadow-metric-grid shadow-maturity-grid">'
+        + horizons.map(function (horizon) {
+          var counts = value[horizon.key] || {};
+          var mature = safeNumber(counts.mature, 0);
+          var waiting = safeNumber(counts.right_censored, 0);
+          var unavailableCount = safeNumber(counts.unavailable, 0);
+          return ''
+            + '<div class="shadow-metric">'
+            + '  <small>' + escapeHtml(horizon.label) + '</small>'
+            + '  <strong>' + escapeHtml(formatNumber(mature, 0)) + '</strong>'
+            + '  <small>等待 ' + escapeHtml(formatNumber(waiting, 0))
+            + ' · 不可用 ' + escapeHtml(formatNumber(unavailableCount, 0))
+            + '</small>'
+            + '</div>';
+        }).join('')
+        + '</div>';
+    }
+
     function renderShadowSamples(metrics) {
       var samples = asArray((metrics || {}).representative_samples);
       if (!samples.length) {
@@ -3167,13 +3197,32 @@
       && beforeSha === afterSha;
     var disabled = isolated && (mode === 'off' || status === 'disabled');
     var collecting = isolated && guardValid;
+    var collectionStatus = normalizeString(collectionHealth.status);
+    var collectionFailed = isolated && (
+      collectionStatus === 'collection_failed'
+      || shadow.data_gap === true
+      || (status === 'unavailable' && shadow.data_gap !== false)
+    );
     var unavailable = !isolated || (!disabled && !collecting);
-    var statusText = collecting ? '影子评测中' : (disabled ? '影子模式已关闭' : '影子评测暂不可用');
-    var statusTone = collecting ? 'info' : (disabled ? 'neutral' : 'warning');
+    var statusText = collectionFailed
+      ? '影子采集失败'
+      : (collecting ? '影子评测中' : (disabled ? '影子模式已关闭' : '影子评测暂不可用'));
+    var statusTone = collectionFailed
+      ? 'warning'
+      : (collecting ? 'info' : (disabled ? 'neutral' : 'warning'));
     var body = '';
 
     if (disabled) {
       body = '<div class="shadow-state"><strong>影子模式已关闭</strong><span>未采集新的影子样本；正式主推不受影响。</span></div>';
+    } else if (collectionFailed) {
+      var failureStage = normalizeString(collectionHealth.failure_stage || shadow.failure_stage) || 'unknown';
+      var errorCode = normalizeString(collectionHealth.error_code || shadow.error_code) || 'unknown';
+      var collectionError = normalizeString(shadow.error) || '影子采集链路未完成';
+      body = ''
+        + '<div class="shadow-state is-warning"><strong>影子采集失败</strong>'
+        + '<span>本日形成数据缺口，不纳入 OOT 样本；正式主推不受影响。失败阶段：'
+        + escapeHtml(failureStage) + '；错误码：' + escapeHtml(errorCode)
+        + '；' + escapeHtml(collectionError) + '</span></div>';
     } else if (unavailable) {
       var unavailableReason = normalizeString(shadow.error);
       if (!schemaValid && hasContract) {
@@ -3199,6 +3248,18 @@
         ? mainView.length
         : safeNumber((workspace.counts || {}).main, null);
       var pendingCount = safeNumber(pending.entries, todayEntries.length);
+      var candidateCount = safeNumber(collectionHealth.candidate_count, null);
+      var eligibleCount = safeNumber(collectionHealth.eligible_count, null);
+      var stagedCount = safeNumber(collectionHealth.staged_count, pendingCount);
+      var collectionLabel = collectionStatus === 'partial'
+        ? '采集部分成功，今日 ' + formatNumber(candidateCount === null ? 0 : candidateCount, 0) + ' 只'
+        : (collectionStatus === 'ok'
+          ? '采集成功，今日 ' + formatNumber(candidateCount === null ? 0 : candidateCount, 0) + ' 只'
+          : '旧版合同：采集状态未细分');
+      var collectionDetail = collectionStatus === 'ok' || collectionStatus === 'partial'
+        ? '有效 ' + formatNumber(eligibleCount === null ? 0 : eligibleCount, 0)
+          + ' · 暂存 ' + formatNumber(stagedCount, 0)
+        : '以正式摘要保护结果兼容展示';
       body += ''
         + '<div class="shadow-guard-rail' + (guardOk ? ' is-ok' : ' is-warning') + '">'
         + '  <div><strong>' + escapeHtml(guardLabel) + '</strong><small>不影响正式主推</small></div>'
@@ -3206,6 +3267,7 @@
         + '  <div><span>正式参考</span><strong>' + escapeHtml(shadowPoolLabel(productionReference.pool)) + '</strong><small>' + escapeHtml(formalCount === null ? '数量未记录' : formatNumber(formalCount, 0) + ' 只') + '</small></div>'
         + '  <div><span>页面主推</span><strong>' + escapeHtml(pageMainCount === null ? '数量未记录' : formatNumber(pageMainCount, 0) + ' 只') + '</strong><small>workspace.views.main</small></div>'
         + '  <div><span>影子批次</span><strong>' + escapeHtml(formatNumber(pendingCount, 0) + ' 条') + '</strong><small>' + escapeHtml(startedAt || '启动时间未记录') + '</small></div>'
+        + '  <div><span>采集健康</span><strong>' + escapeHtml(collectionLabel) + '</strong><small>' + escapeHtml(collectionDetail) + '</small></div>'
         + '</div>';
 
       body += experiments.length ? experiments.map(function (experiment) {
@@ -3219,7 +3281,9 @@
         var activeMonths = safeNumber(metrics.active_months, 0);
         var excursionSize = safeNumber(metrics.excursion_sample_size, 0);
         var hardReasons = asArray(metrics.hard_gate_reasons);
-        var comparisonLabel = shadowComparisonLabel(metrics.comparison_status);
+        var maturity = metrics.outcome_maturity || outcomeMaturity;
+        var readiness = metrics.comparison_readiness || comparisonReadiness;
+        var comparisonLabel = shadowComparisonLabel(readiness.status || metrics.comparison_status);
         var researchTierLabel = shadowResearchTierLabel(metrics.research_tier || rec.research_tier);
         var promotionBoundaryValid = rec.promotion_eligible === false
           && metrics.promotion_eligible === false;
@@ -3253,6 +3317,7 @@
         }
         var experimentResearch = experimentTrusted ? ''
           + '  <div class="shadow-progress"><strong>样本进度</strong><span>' + escapeHtml(formatNumber(sampleSize, 0) + '/100 成熟样本 · ' + formatNumber(activeDates, 0) + '/20 活跃日 · ' + formatNumber(activeMonths, 0) + '/2 月') + '</span></div>'
+          + renderShadowMaturity(maturity)
           + '  <div class="shadow-metric-grid">'
           + renderShadowMetric('成熟样本', formatNumber(sampleSize, 0), '')
           + renderShadowMetric('活跃日 / 月', formatNumber(activeDates, 0) + ' / ' + formatNumber(activeMonths, 0), '')

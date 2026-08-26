@@ -784,7 +784,11 @@ _SHADOW_TOP_LEVEL_PUBLIC_FIELDS = (
     "mode",
     "affects_production",
     "status",
+    "data_gap",
     "started_at",
+    "collection_health",
+    "outcome_maturity",
+    "comparison_readiness",
     "production_guard",
     "production_reference",
     "scorecards",
@@ -793,6 +797,8 @@ _SHADOW_TOP_LEVEL_PUBLIC_FIELDS = (
     "pending",
     "error",
     "error_type",
+    "error_code",
+    "failure_stage",
 )
 _SHADOW_EXPERIMENT_PUBLIC_FIELDS = (
     "experiment_id",
@@ -822,6 +828,8 @@ _SHADOW_EXPERIMENT_PUBLIC_FIELDS = (
     "mean_mae",
     "worst_close_return",
     "comparison_status",
+    "comparison_readiness",
+    "outcome_maturity",
     "hard_gate_reasons",
     "evaluation_statuses",
     "representative_samples",
@@ -877,6 +885,26 @@ def _shadow_serialization_unavailable():
         "mode": "shadow",
         "affects_production": False,
         "status": "unavailable",
+        "data_gap": True,
+        "collection_health": {
+            "status": "collection_failed",
+            "failure_stage": "serialization",
+            "error_code": "serialization_failed",
+            "candidate_count": 0,
+            "eligible_count": 0,
+            "staged_count": 0,
+        },
+        "outcome_maturity": {
+            "t1": {"mature": 0, "right_censored": 0, "unavailable": 0},
+            "t3": {"mature": 0, "right_censored": 0, "unavailable": 0},
+            "t5": {"mature": 0, "right_censored": 0, "unavailable": 0},
+        },
+        "comparison_readiness": {
+            "status": "insufficient",
+            "promotion_eligible": False,
+        },
+        "failure_stage": "serialization",
+        "error_code": "serialization_failed",
         "production_guard": {
             "unchanged": False,
             "before_sha256": "",
@@ -1430,18 +1458,20 @@ def build_recent_reviews(date_str, output_dir):
 # ============================================================
 # HTML 页面生成
 # ============================================================
-def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
-    """Generate report with the v2 shell and external assets."""
-    date_str = report_data.get("date", datetime.now().strftime("%Y-%m-%d"))
+def _native_public_projection(value):
+    """Return the strict native JSON value that public writers persist."""
+    return json.loads(json.dumps(
+        value,
+        ensure_ascii=False,
+        cls=NpEncoder,
+        allow_nan=False,
+    ))
 
-    access_key_hash = ""
-    if ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY:
-        access_key_hash = hashlib.sha256(
-            (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
-        ).hexdigest()
 
+def build_full_daily_projection(report_data, include_shadow=True):
+    """Build the sole full daily payload used by guards and public writers."""
     daily_data = {
-        "date": date_str,
+        "date": report_data.get("date", datetime.now().strftime("%Y-%m-%d")),
         "market": report_data.get("market", {}),
         "chanlun_structure": report_data.get("chanlun_structure", {}),
         "picks_pure": _serialize_picks(report_data.get("picks_pure", [])),
@@ -1459,7 +1489,9 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "market_temperature": report_data.get("market_temperature", {}),
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
-        "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
+        "sell_signals": _serialize_sell_signals(
+            report_data.get("sell_signals", [])
+        ),
         "holding_risks": _serialize_holding_risks(
             report_data.get("holding_risks", [])
         ),
@@ -1467,21 +1499,105 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             "recommendation_ledger", []
         ),
         "strategy_scorecards": report_data.get("strategy_scorecards", []),
-        "shadow_evaluations": _serialize_shadow_evaluations(
-            report_data.get("shadow_evaluations", {})
-        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
-        "startup_watchlist": _serialize_startup_watchlist(report_data.get("startup_watchlist", [])),
+        "startup_watchlist": _serialize_startup_watchlist(
+            report_data.get("startup_watchlist", [])
+        ),
         "observation_watchlist": _serialize_startup_watchlist(
             report_data.get("observation_watchlist", [])
         ),
-        "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
-        "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
-        "h4_t3_pool": _serialize_h4_t3_pool(report_data.get("h4_t3_pool", {})),
+        "next_day_boom": _serialize_next_day_boom(
+            report_data.get("next_day_boom", {})
+        ),
+        "luojie_pool": _serialize_luojie_pool(
+            report_data.get("luojie_pool", {})
+        ),
+        "h4_t3_pool": _serialize_h4_t3_pool(
+            report_data.get("h4_t3_pool", {})
+        ),
     }
+    if include_shadow:
+        daily_data["shadow_evaluations"] = _serialize_shadow_evaluations(
+            report_data.get("shadow_evaluations", {})
+        )
     daily_data["workspace"] = build_workspace(daily_data)
     _backfill_workspace_scores(daily_data)
+    return _native_public_projection(daily_data)
+
+
+def build_aggregate_day_projection(report_data, include_shadow=True):
+    """Build the sole lightweight aggregate entry used by data.json."""
+    day_entry = {
+        "market": report_data.get("market", {}),
+        "chanlun_structure": report_data.get("chanlun_structure", {}),
+        "picks_pure": _serialize_picks_light(report_data.get("picks_pure", [])),
+        "picks_fusion": _serialize_picks_light(
+            report_data.get("picks_fusion", [])
+        ),
+        "sector_flow": report_data.get("sector_flow", []),
+        "sector_outflow": report_data.get("sector_outflow", []),
+        "limit_up_pool": report_data.get("limit_up_pool", []),
+        "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
+        "personal_watchlist": report_data.get("personal_watchlist", {}),
+        "decision_brief": report_data.get("decision_brief", {}),
+        "market_sentiment": report_data.get("market_sentiment", {}),
+        "market_sentiment_history": report_data.get(
+            "market_sentiment_history", []
+        ),
+        "market_temperature": report_data.get("market_temperature", {}),
+        "events": report_data.get("events", []),
+        "forecast": report_data.get("forecast", {}),
+        "sell_signals": _serialize_sell_signals(
+            report_data.get("sell_signals", [])
+        ),
+        "holding_risks": _serialize_holding_risks(
+            report_data.get("holding_risks", [])
+        ),
+        "recommendation_ledger": report_data.get(
+            "recommendation_ledger", []
+        ),
+        "strategy_scorecards": report_data.get("strategy_scorecards", []),
+        "diagnostics": report_data.get("diagnostics", {}),
+        "data_quality": report_data.get("data_quality", {}),
+        "next_day_boom": _serialize_next_day_boom(
+            report_data.get("next_day_boom", {})
+        ),
+        "luojie_pool": _serialize_luojie_pool(
+            report_data.get("luojie_pool", {})
+        ),
+    }
+    if include_shadow:
+        day_entry["shadow_evaluations"] = _serialize_shadow_evaluations(
+            report_data.get("shadow_evaluations", {})
+        )
+    day_entry["workspace"] = build_workspace(day_entry)
+    _backfill_workspace_scores(day_entry)
+    day_entry.pop("workspace", None)
+    return _native_public_projection(day_entry)
+
+
+def build_formal_output_projection(report_data):
+    """Build every non-shadow public data surface protected by the guard."""
+    return {
+        "daily": build_full_daily_projection(report_data, include_shadow=False),
+        "aggregate": build_aggregate_day_projection(
+            report_data, include_shadow=False
+        ),
+    }
+
+
+def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
+    """Generate report with the v2 shell and external assets."""
+    date_str = report_data.get("date", datetime.now().strftime("%Y-%m-%d"))
+
+    access_key_hash = ""
+    if ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY:
+        access_key_hash = hashlib.sha256(
+            (FULL_ACCESS_KEY + FULL_ACCESS_KEY_SALT).encode()
+        ).hexdigest()
+
+    daily_data = build_full_daily_projection(report_data)
 
     top10_api_base = os.environ.get(
         "CHANLUN_TOP10_API_BASE", DEFAULT_TOP10_API_BASE
@@ -1675,43 +1791,7 @@ def update_data_json(report_data, output_dir=None):
     date_str = report_data["date"]
 
     # 写入当日（picks 去掉图表数组，data.json 只存轻量索引）
-    day_entry = {
-        "market": report_data.get("market", {}),
-        "chanlun_structure": report_data.get("chanlun_structure", {}),
-        "picks_pure": _serialize_picks_light(report_data.get("picks_pure", [])),
-        "picks_fusion": _serialize_picks_light(report_data.get("picks_fusion", [])),
-        "sector_flow": report_data.get("sector_flow", []),
-        "sector_outflow": report_data.get("sector_outflow", []),
-        "limit_up_pool": report_data.get("limit_up_pool", []),
-        "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
-        "personal_watchlist": report_data.get("personal_watchlist", {}),
-        "decision_brief": report_data.get("decision_brief", {}),
-        "market_sentiment": report_data.get("market_sentiment", {}),
-        "market_sentiment_history": report_data.get(
-            "market_sentiment_history", []
-        ),
-        "market_temperature": report_data.get("market_temperature", {}),
-        "events": report_data.get("events", []),
-        "forecast": report_data.get("forecast", {}),
-        "sell_signals": _serialize_sell_signals(report_data.get("sell_signals", [])),
-        "holding_risks": _serialize_holding_risks(
-            report_data.get("holding_risks", [])
-        ),
-        "recommendation_ledger": report_data.get(
-            "recommendation_ledger", []
-        ),
-        "strategy_scorecards": report_data.get("strategy_scorecards", []),
-        "shadow_evaluations": _serialize_shadow_evaluations(
-            report_data.get("shadow_evaluations", {})
-        ),
-        "diagnostics": report_data.get("diagnostics", {}),
-        "data_quality": report_data.get("data_quality", {}),
-        "next_day_boom": _serialize_next_day_boom(report_data.get("next_day_boom", {})),
-        "luojie_pool": _serialize_luojie_pool(report_data.get("luojie_pool", {})),
-    }
-    day_entry["workspace"] = build_workspace(day_entry)
-    _backfill_workspace_scores(day_entry)
-    day_entry.pop("workspace", None)
+    day_entry = build_aggregate_day_projection(report_data)
     existing["reports"][date_str] = day_entry
 
     # 更新日期列表

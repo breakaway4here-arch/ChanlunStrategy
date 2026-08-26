@@ -4,11 +4,15 @@ import json
 import tempfile
 import unittest
 from contextlib import ExitStack, redirect_stdout
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+import numpy as np
+
+import chanlun.h4_t3_pool as h4_t3_pool
+import chanlun.report_generator as report_generator
 import chanlun.shadow_evaluation as shadow_evaluation
 import chanlun.strategy_review as strategy_review
 import run
@@ -101,7 +105,7 @@ def _formal_report(candidate_count=7):
             "summary": "正式决策摘要",
             "directions": [{"name": "人工智能", "risk": "拥挤"}],
         },
-        "holding_risks": [{"code": "000001", "risk": "跌破保护位"}],
+        "holding_risks": [{"code": "000001", "reason": "跌破保护位"}],
         "recommendation_ledger": [{"recommendation_id": "formal:one"}],
         "strategy_scorecards": [{"strategy_name": "formal"}],
         "diagnostics": {
@@ -826,7 +830,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             shadow_evaluation._build_shadow_guard_snapshot(report)
         )
         report["future_formal_output"]["value"] = 2
-        self.assertNotEqual(
+        self.assertEqual(
             original_guard,
             shadow_evaluation.production_digest(
                 shadow_evaluation._build_shadow_guard_snapshot(report)
@@ -901,7 +905,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         original_guard = shadow_evaluation.production_digest(
             shadow_evaluation._build_shadow_guard_snapshot(report)
         )
-        report["holding_risks"][0]["risk"] = "被篡改的持仓风险"
+        report["holding_risks"][0]["reason"] = "被篡改的持仓风险"
         self.assertNotEqual(
             original_guard,
             shadow_evaluation.production_digest(
@@ -909,7 +913,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             ),
         )
 
-    def test_builder_receives_copy_and_projection_failure_is_unavailable(self):
+    def test_builder_receives_copy_and_unpublished_runtime_fields_are_ignored(self):
         report = _formal_report()
         before = copy.deepcopy(report)
 
@@ -954,15 +958,170 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertEqual(report, before)
         self.assertEqual(payload["status"], "collecting")
 
-        report["diagnostics"]["candidate_funnel"]["bad"] = object()
+        report["runtime_only"] = {
+            "array": np.array([1.0, np.nan]),
+            "datetime_array": np.array(
+                [datetime(2026, 8, 22, 15, 0)], dtype=object
+            ),
+            "date": date(2026, 8, 22),
+            "bytes": b"runtime",
+            "opaque": object(),
+        }
+        report["picks_pure"][0]["unused_runtime"] = object()
         payload = shadow_evaluation.build_daily_shadow_evaluations(
             report,
             mode="shadow",
             generated_at="2026-08-22T15:10:00+08:00",
             publication_eligible=False,
+            review_context_loader=_empty_review_context,
         )
+        self.assertEqual(payload["status"], "collecting")
+        self.assertTrue(payload["production_guard"]["unchanged"])
+        self.assertEqual(payload["experiments"][0]["status"], "available")
+
+    def test_invalid_required_h4_field_reports_stage_and_json_path(self):
+        report = _formal_report(candidate_count=1)
+        report["picks_pure"][0]["amount"] = object()
+
+        with mock.patch.object(
+            shadow_evaluation, "stage_shadow_evaluation_entries"
+        ) as stage:
+            payload = shadow_evaluation.build_daily_shadow_evaluations(
+                report,
+                mode="shadow",
+                generated_at="2026-08-22T15:10:00+08:00",
+                publication_eligible=True,
+                review_context_loader=_empty_review_context,
+            )
+
         self.assertEqual(payload["status"], "unavailable")
-        self.assertEqual(payload["experiments"], [])
+        self.assertTrue(payload["data_gap"])
+        self.assertEqual(
+            payload["collection_health"]["status"], "collection_failed"
+        )
+        self.assertEqual(payload["failure_stage"], "shadow_input_projection")
+        self.assertIn(
+            "$.picks_pure[0].amount",
+            payload["error"],
+        )
+        stage.assert_not_called()
+
+    def test_nested_h4_feature_failure_reports_the_actual_json_path(self):
+        report = _formal_report(candidate_count=1)
+        flat = report["picks_pure"][0]
+        report["picks_pure"][0] = {
+            "code": flat["code"],
+            "name": flat["name"],
+            "features": dict(flat, amount=object()),
+        }
+
+        payload = shadow_evaluation.build_daily_shadow_evaluations(
+            report,
+            mode="shadow",
+            generated_at="2026-08-22T15:10:00+08:00",
+            publication_eligible=False,
+            review_context_loader=_empty_review_context,
+        )
+
+        self.assertEqual(payload["status"], "unavailable")
+        self.assertEqual(payload["failure_stage"], "shadow_input_projection")
+        self.assertIn("$.picks_pure[0].features.amount", payload["error"])
+
+    def test_minimal_h4_projection_preserves_missing_feature_semantics(self):
+        absent = _candidate(0)
+        absent.pop("best_buy_point", None)
+        absent.pop("pivots", None)
+        explicit_none = dict(_candidate(1), best_buy_point=None, pivots=None)
+
+        for raw in (_candidate(2), absent, explicit_none):
+            with self.subTest(code=raw["code"]):
+                projected = shadow_evaluation._build_h4_shadow_candidate_input(
+                    raw, 0
+                )
+                np.testing.assert_array_equal(
+                    h4_t3_pool.build_tail_feature_vector(projected),
+                    h4_t3_pool.build_tail_feature_vector(raw),
+                )
+
+    def test_successful_zero_candidate_day_is_healthy_and_stages_empty_batch(self):
+        report = _formal_report(candidate_count=0)
+        with tempfile.TemporaryDirectory() as tmpdir:
+            payload = shadow_evaluation.build_daily_shadow_evaluations(
+                report,
+                mode="shadow",
+                generated_at="2026-08-22T15:10:00+08:00",
+                publication_eligible=True,
+                ledger_path=Path(tmpdir) / "ledger.jsonl",
+                pending_dir=Path(tmpdir) / "pending",
+                review_context_loader=_empty_review_context,
+            )
+
+        self.assertEqual(payload["status"], "collecting")
+        self.assertFalse(payload["data_gap"])
+        self.assertEqual(payload["collection_health"]["status"], "ok")
+        self.assertEqual(payload["collection_health"]["candidate_count"], 0)
+        self.assertEqual(payload["collection_health"]["staged_count"], 0)
+        self.assertEqual(payload["pending"]["status"], "staged")
+        self.assertEqual(payload["pending"]["entries"], 0)
+        self.assertEqual(
+            payload["outcome_maturity"]["t3"]["mature"], 0
+        )
+        self.assertEqual(
+            payload["comparison_readiness"]["status"], "insufficient"
+        )
+
+    def test_production_like_off_shadow_acceptance_preserves_formal_projection(self):
+        report = _formal_report(candidate_count=0)
+        report["runtime_only"] = {
+            "array": np.array([1.0, np.nan]),
+            "datetime_array": np.array(
+                [datetime(2026, 8, 22, 15, 0)], dtype=object
+            ),
+            "date": date(2026, 8, 22),
+            "bytes": b"runtime",
+            "opaque": object(),
+        }
+        formal_before = report_generator.build_formal_output_projection(report)
+
+        off_payload = shadow_evaluation.build_daily_shadow_evaluations(
+            report,
+            mode="off",
+            generated_at="2026-08-22T15:10:00+08:00",
+            publication_eligible=True,
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            shadow_payload = shadow_evaluation.build_daily_shadow_evaluations(
+                report,
+                mode="shadow",
+                generated_at="2026-08-22T15:10:00+08:00",
+                publication_eligible=True,
+                ledger_path=Path(tmpdir) / "ledger.jsonl",
+                pending_dir=Path(tmpdir) / "pending",
+                review_context_loader=_empty_review_context,
+            )
+            pending_path = shadow_evaluation.shadow_pending_ledger_path(
+                "2026-08-22", pending_dir=Path(tmpdir) / "pending"
+            )
+            staged = shadow_evaluation.load_staged_shadow_evaluation_entries(
+                pending_path
+            )
+
+        self.assertEqual(off_payload["status"], "disabled")
+        self.assertEqual(
+            report_generator.build_formal_output_projection(report),
+            formal_before,
+        )
+        self.assertEqual(shadow_payload["status"], "collecting")
+        self.assertEqual(
+            shadow_payload["collection_health"]["status"], "ok"
+        )
+        self.assertEqual(shadow_payload["experiments"][0]["status"], "available")
+        self.assertEqual(shadow_payload["pending"]["status"], "staged")
+        self.assertEqual(staged, [])
+        guard = shadow_payload["production_guard"]
+        self.assertTrue(guard["unchanged"])
+        self.assertEqual(guard["before_sha256"], guard["after_sha256"])
+        self.assertEqual(len(guard["before_sha256"]), 64)
 
     def test_run_hook_is_after_formal_report_and_before_report_generation(self):
         source = Path("run.py").read_text(encoding="utf-8")
