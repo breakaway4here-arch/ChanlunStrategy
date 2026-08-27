@@ -11,6 +11,7 @@ import hashlib
 import json
 import os
 import shutil
+import copy
 from collections.abc import Mapping
 from datetime import datetime, timedelta
 
@@ -53,6 +54,9 @@ CHART_MIN_BARS = 50
 CHART_MAX_EXTENDED = 120
 REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js")
 DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
+DEFAULT_PRECLOSE_API_BASE = (
+    "https://chanlun-preclose-worker.breakaway4here.workers.dev"
+)
 
 
 def build_chart_window(pick):
@@ -313,6 +317,264 @@ def _sanitize_buy_point_for_report(bp):
     return item
 
 
+_FORMAL_DECISION_SOURCE_FIELDS = (
+    "formal_decision_contract",
+    "intended_horizon",
+    "position_band",
+    "reference_price",
+    "invalidation_price",
+    "pressure_price",
+    "horizon_states",
+    "policy_version",
+    "strategy_version",
+    "evidence_refs",
+)
+
+_STANCE_VALUES = {
+    "support", "reserve", "oppose", "insufficient_sample",
+}
+_AI_RESEARCH_ASSESSMENTS = {
+    "support", "risk_notice", "insufficient_evidence",
+}
+_AI_RESEARCH_ALLOWED_FIELDS = {
+    "assessment", "summary", "risk_notice", "model_version", "as_of",
+    "evidence_refs",
+}
+
+
+def _project_formal_decision_source_fields(source):
+    """Keep absent declarations absent instead of serializing fake nulls."""
+    return {
+        field: source[field]
+        for field in _FORMAL_DECISION_SOURCE_FIELDS
+        if field in source and source[field] is not None
+    }
+
+
+def _research_text(value):
+    return str(value or "").strip()
+
+
+def _research_evidence_refs(value):
+    if not isinstance(value, (list, tuple)):
+        return []
+    result = []
+    for ref in value:
+        text = _research_text(ref)
+        if text and text not in result:
+            result.append(text)
+    return result
+
+
+def _research_horizon(value):
+    if isinstance(value, bool):
+        return ""
+    if isinstance(value, int) and value > 0:
+        return "T+{}".format(value)
+    text = _research_text(value).upper().replace(" ", "")
+    if text.startswith("T+") and text[2:].isdigit() and int(text[2:]) > 0:
+        return "T+{}".format(int(text[2:]))
+    return ""
+
+
+def _project_strategy_stances(value):
+    rows = value if isinstance(value, (list, tuple)) else []
+    projected = []
+    for raw in rows:
+        if not isinstance(raw, Mapping):
+            continue
+        strategy = _research_text(
+            raw.get("strategy") or raw.get("display_name")
+            or raw.get("strategy_name")
+        )
+        if not strategy:
+            continue
+        stance = _research_text(raw.get("stance")).lower()
+        if stance not in _STANCE_VALUES:
+            stance = "insufficient_sample"
+        item = {
+            "strategy": strategy,
+            "stance": stance,
+            "reason": _research_text(raw.get("reason")),
+            "evidence_refs": _research_evidence_refs(
+                raw.get("evidence_refs")
+            ),
+        }
+        strategy_id = _research_text(
+            raw.get("strategy_id") or raw.get("strategy_name")
+        )
+        horizon = _research_horizon(raw.get("intended_horizon"))
+        version = _research_text(
+            raw.get("version") or raw.get("strategy_version")
+        )
+        source_pool = _research_text(raw.get("source_pool"))
+        if strategy_id:
+            item["strategy_id"] = strategy_id
+        if horizon:
+            item["intended_horizon"] = horizon
+        if version:
+            item["version"] = version
+        if source_pool:
+            item["source_pool"] = source_pool
+        projected.append(item)
+    return projected
+
+
+def _project_ai_research(value):
+    if not isinstance(value, Mapping):
+        return {}, {"status": "missing", "rejected_fields": []}
+    assessment = _research_text(value.get("assessment")).lower()
+    invalid_assessment = assessment not in _AI_RESEARCH_ASSESSMENTS
+    if invalid_assessment:
+        assessment = "insufficient_evidence"
+    summary = _research_text(value.get("summary") or value.get("risk_notice"))
+    contract = {
+        "assessment": assessment,
+        "summary": summary,
+        "evidence_refs": _research_evidence_refs(value.get("evidence_refs")),
+    }
+    for field in ("model_version", "as_of"):
+        text = _research_text(value.get(field))
+        if text:
+            contract[field] = text
+    rejected_fields = sorted(
+        str(field) for field in value
+        if field not in _AI_RESEARCH_ALLOWED_FIELDS
+    )
+    diagnostics = {
+        "status": (
+            "accepted_with_rejections"
+            if rejected_fields or invalid_assessment else "accepted"
+        ),
+        "rejected_fields": rejected_fields,
+    }
+    if invalid_assessment:
+        diagnostics["invalid_assessment"] = _research_text(
+            value.get("assessment")
+        )
+    return contract, diagnostics
+
+
+def _project_candidate_research_fields(source):
+    projected = {}
+    if "strategy_stances" in source:
+        projected["strategy_stances"] = _project_strategy_stances(
+            source.get("strategy_stances")
+        )
+    ai_source = source.get("ai_research")
+    if not isinstance(ai_source, Mapping):
+        ai_source = source.get("ai_analysis")
+    if isinstance(ai_source, Mapping):
+        ai_research, diagnostics = _project_ai_research(ai_source)
+        projected["ai_research"] = ai_research
+        projected["ai_research_diagnostics"] = diagnostics
+    return projected
+
+
+def _ledger_stance(contribution):
+    row = contribution if isinstance(contribution, Mapping) else {}
+    if _research_text(row.get("strategy_name")) == "daily_fusion":
+        return None
+    verified = (
+        _research_text(row.get("attribution_status")) == "verified"
+        and _research_text(row.get("version_status") or "verified")
+        == "verified"
+    )
+    decision_code = _research_text(row.get("decision_code")).lower()
+    user_action = _research_text(row.get("user_action")).lower()
+    if not verified:
+        stance = "insufficient_sample"
+    elif decision_code == "reject" or user_action in {"reject", "rejected"}:
+        stance = "oppose"
+    elif decision_code == "recommend" or user_action in {
+        "recommend", "recommendation", "buy",
+    }:
+        stance = "support"
+    else:
+        stance = "reserve"
+    eligibility_reason = _research_text(row.get("eligibility_reason"))
+    reason = _research_text(row.get("reason")) or {
+        "baseline_candidate": "共同上游候选，未形成独立正式动作",
+        "research_candidate": "研究候选支持，但不改变正式动作",
+        "user_action_not_recommendation": "该策略未形成推荐动作",
+    }.get(
+        eligibility_reason,
+        _research_text(row.get("decision_label")) or "账本已记录该策略立场",
+    )
+    projected = _project_strategy_stances([{
+        "strategy": (
+            row.get("display_name") or row.get("strategy_name")
+        ),
+        "strategy_id": row.get("strategy_name"),
+        "stance": stance,
+        "reason": reason,
+        "intended_horizon": row.get("intended_horizon"),
+        "version": row.get("strategy_version"),
+        "source_pool": row.get("source_pool"),
+        "evidence_refs": [row.get("contribution_id")],
+    }])
+    return projected[0] if projected else None
+
+
+def _strategy_disagreement_summary(stances):
+    counts = {key: 0 for key in (
+        "support", "reserve", "oppose", "insufficient_sample"
+    )}
+    for stance in stances:
+        value = _research_text(stance.get("stance"))
+        if value in counts:
+            counts[value] += 1
+    return {"counts": counts, "total": sum(counts.values())}
+
+
+def _attach_strategy_research_contracts(daily_data):
+    workspace = daily_data.get("workspace")
+    workspace = workspace if isinstance(workspace, dict) else {}
+    views = workspace.get("views")
+    views = views if isinstance(views, dict) else {}
+    main_rows = views.get("main") if isinstance(views.get("main"), list) else []
+    picks_by_code = {
+        _research_text(pick.get("code")): pick
+        for pick in daily_data.get("picks_fusion") or []
+        if isinstance(pick, dict) and _research_text(pick.get("code"))
+    }
+    ledger_by_code = {
+        _research_text(entry.get("code")): entry
+        for entry in daily_data.get("recommendation_ledger") or []
+        if isinstance(entry, dict) and _research_text(entry.get("code"))
+    }
+    for row in main_rows:
+        code = _research_text(row.get("code"))
+        raw = picks_by_code.get(code) or {}
+        ledger = ledger_by_code.get(code) or {}
+        stances = []
+        for contribution in ledger.get("strategy_contributions") or []:
+            stance = _ledger_stance(contribution)
+            if stance:
+                stances.append(stance)
+        seen = {
+            _research_text(stance.get("strategy_id") or stance.get("strategy"))
+            for stance in stances
+        }
+        for stance in _project_strategy_stances(raw.get("strategy_stances")):
+            identity = _research_text(
+                stance.get("strategy_id") or stance.get("strategy")
+            )
+            if identity in seen:
+                continue
+            seen.add(identity)
+            stances.append(stance)
+        row["strategy_stances"] = stances
+        row["strategy_disagreement_summary"] = (
+            _strategy_disagreement_summary(stances)
+        )
+        if isinstance(raw.get("ai_research"), Mapping):
+            row["ai_research"] = dict(raw["ai_research"])
+            row["ai_research_diagnostics"] = dict(
+                raw.get("ai_research_diagnostics") or {}
+            )
+
+
 def _serialize_picks(picks):
     """将 picks 列表转为 JSON-safe 格式，使用动态图表窗口"""
     result = []
@@ -397,6 +659,8 @@ def _serialize_picks(picks):
             "gf_dma_health": p.get("gf_dma_health", {}),
             "score": p.get("score", 0),
             "decision_engine_v1": p.get("decision_engine_v1"),
+            **_project_formal_decision_source_fields(p),
+            **_project_candidate_research_fields(p),
             "position_distance_pct": p.get("position_distance_pct"),
             "position_reference_price": p.get("position_reference_price"),
             "position_reference_type": p.get("position_reference_type", ""),
@@ -1007,6 +1271,92 @@ def _serialize_shadow_evaluations(data):
         return _shadow_serialization_unavailable()
 
 
+def _serialize_strategy_scorecards(data):
+    """Keep progress public while failing closed on immature conclusions."""
+    if not isinstance(data, Mapping):
+        return copy.deepcopy(data)
+    projected = copy.deepcopy(dict(data))
+    if projected.get("schema_version") != 2:
+        return projected
+    for forbidden in ("rankings", "leaderboard", "return_rankings"):
+        projected.pop(forbidden, None)
+    horizons = ("t1", "t3", "t5")
+    conclusion_fields = (
+        "returns",
+        "median_returns",
+        "excess_returns",
+        "median_excess_returns",
+        "win_rates",
+    )
+    forbidden_metric_fields = {
+        "composite_score", "overall_score", "rank", "ranking",
+        "cumulative_return", "total_return",
+    }
+    for section in ("formal", "baselines", "research"):
+        rows = projected.get(section)
+        if not isinstance(rows, list):
+            projected[section] = []
+            continue
+        safe_rows = []
+        for value in rows:
+            if not isinstance(value, Mapping):
+                continue
+            row = copy.deepcopy(dict(value))
+            readiness = row.get("horizon_readiness")
+            readiness = readiness if isinstance(readiness, Mapping) else {}
+            source_metrics = row.get("metrics_by_horizon")
+            source_metrics = (
+                source_metrics if isinstance(source_metrics, Mapping) else {}
+            )
+            safe_metrics = {}
+            for key in horizons:
+                metric = source_metrics.get(key)
+                ready = (
+                    readiness.get(key) == "ready_for_manual_comparison"
+                )
+                if ready and isinstance(metric, Mapping):
+                    safe_metrics[key] = {
+                        field: copy.deepcopy(metric_value)
+                        for field, metric_value in metric.items()
+                        if field not in forbidden_metric_fields
+                    }
+                else:
+                    safe_metrics[key] = {}
+            row["metrics_by_horizon"] = safe_metrics
+            for field in conclusion_fields:
+                source = row.get(field)
+                source = source if isinstance(source, Mapping) else {}
+                row[field] = {
+                    key: (
+                        copy.deepcopy(source.get(key))
+                        if readiness.get(key)
+                        == "ready_for_manual_comparison"
+                        else None
+                    )
+                    for key in horizons
+                }
+            primary = row.get("intended_horizon")
+            primary_key = (
+                "t{}".format(primary) if primary in (1, 3, 5) else None
+            )
+            primary_ready = (
+                primary_key is not None
+                and readiness.get(primary_key)
+                == "ready_for_manual_comparison"
+            )
+            if not primary_ready:
+                row["win_rate"] = None
+                row["representative_samples"] = []
+            for forbidden in (
+                "cumulative_return", "total_return", "return_rank",
+                "ranking", "composite_score", "overall_score",
+            ):
+                row.pop(forbidden, None)
+            safe_rows.append(row)
+        projected[section] = safe_rows
+    return projected
+
+
 def _serialize_picks_light(picks):
     """轻量版序列化，不含图表数组（用于 data.json 聚合）"""
     result = []
@@ -1035,6 +1385,8 @@ def _serialize_picks_light(picks):
             "money20": p.get("money20"),
             "industry": p.get("industry", ""),
             "decision_engine_v1": p.get("decision_engine_v1"),
+            **_project_formal_decision_source_fields(p),
+            **_project_candidate_research_fields(p),
             "position_distance_pct": p.get("position_distance_pct"),
             "position_reference_price": p.get("position_reference_price"),
             "position_reference_type": p.get("position_reference_type", ""),
@@ -1486,6 +1838,7 @@ def build_full_daily_projection(report_data, include_shadow=True):
         "picks_pure": _serialize_picks(report_data.get("picks_pure", [])),
         "picks_fusion": _serialize_picks(report_data.get("picks_fusion", [])),
         "sector_flow": report_data.get("sector_flow", []),
+        "sector_heat": report_data.get("sector_heat", {}),
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
@@ -1507,7 +1860,9 @@ def build_full_daily_projection(report_data, include_shadow=True):
         "recommendation_ledger": report_data.get(
             "recommendation_ledger", []
         ),
-        "strategy_scorecards": report_data.get("strategy_scorecards", []),
+        "strategy_scorecards": _serialize_strategy_scorecards(
+            report_data.get("strategy_scorecards", [])
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "selection_input_health": report_data.get(
@@ -1545,7 +1900,11 @@ def build_full_daily_projection(report_data, include_shadow=True):
         daily_data["shadow_evaluations"] = _serialize_shadow_evaluations(
             report_data.get("shadow_evaluations", {})
         )
+        for shadow_field in ("psy12", "psy12_shadow"):
+            if shadow_field in report_data:
+                daily_data[shadow_field] = report_data[shadow_field]
     daily_data["workspace"] = build_workspace(daily_data)
+    _attach_strategy_research_contracts(daily_data)
     _backfill_workspace_scores(daily_data)
     return _native_public_projection(daily_data)
 
@@ -1560,6 +1919,7 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
             report_data.get("picks_fusion", [])
         ),
         "sector_flow": report_data.get("sector_flow", []),
+        "sector_heat": report_data.get("sector_heat", {}),
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
@@ -1581,7 +1941,9 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
         "recommendation_ledger": report_data.get(
             "recommendation_ledger", []
         ),
-        "strategy_scorecards": report_data.get("strategy_scorecards", []),
+        "strategy_scorecards": _serialize_strategy_scorecards(
+            report_data.get("strategy_scorecards", [])
+        ),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "selection_input_health": report_data.get(
@@ -1607,6 +1969,9 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
         day_entry["shadow_evaluations"] = _serialize_shadow_evaluations(
             report_data.get("shadow_evaluations", {})
         )
+        for shadow_field in ("psy12", "psy12_shadow"):
+            if shadow_field in report_data:
+                day_entry[shadow_field] = report_data[shadow_field]
     day_entry["workspace"] = build_workspace(day_entry)
     _backfill_workspace_scores(day_entry)
     day_entry.pop("workspace", None)
@@ -1638,6 +2003,9 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
     top10_api_base = os.environ.get(
         "CHANLUN_TOP10_API_BASE", DEFAULT_TOP10_API_BASE
     ).strip().rstrip("/")
+    preclose_api_base = os.environ.get(
+        "CHANLUN_PRECLOSE_API_BASE", DEFAULT_PRECLOSE_API_BASE
+    ).strip().rstrip("/")
     decision_watchlist_url = (
         ""
         if daily_data.get("data_quality", {}).get("stock_pool_source")
@@ -1648,6 +2016,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         "pageDate": date_str,
         "inlineReportData": daily_data,
         "top10ApiBase": top10_api_base,
+        "precloseApiBase": preclose_api_base,
         "decisionWatchlistUrl": decision_watchlist_url,
         "accessControlEnabled": bool(ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY),
         "accessKeyHash": access_key_hash,

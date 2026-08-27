@@ -1,17 +1,76 @@
 import tempfile
 import unittest
 import json
+from copy import deepcopy
 from datetime import date, timedelta
 from pathlib import Path
 
 from chanlun.market_history_store import MarketHistoryStore
 from run import (
+    _build_market_sentiment_shadow_fields,
     _build_market_sentiment_history,
     _load_limit_count_evidence,
 )
 
 
 class RunMarketSentimentTests(unittest.TestCase):
+    def test_psy12_shadow_fields_do_not_mutate_formal_decision_inputs(self):
+        formal_sentiment = {
+            "date": "2026-08-26",
+            "score": 61,
+            "label": "偏强",
+            "components": {
+                "breadth": 52.69,
+                "limit_ecology": 82.71,
+                "index": 62.8,
+                "turnover": 38.09,
+                "trend": 56.66,
+            },
+        }
+        history = []
+        dates = [
+            "2026-08-11", "2026-08-12", "2026-08-13", "2026-08-14",
+            "2026-08-17", "2026-08-18", "2026-08-19", "2026-08-20",
+            "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26",
+        ]
+        for index, trade_date in enumerate(dates):
+            history.append({
+                "date": trade_date,
+                "evidence": {
+                    "index": {
+                        "available": True,
+                        "average_change_pct": 0.5 if index % 2 == 0 else -0.5,
+                    }
+                },
+            })
+        market_temperature = {
+            "score": formal_sentiment["score"],
+            "label": formal_sentiment["label"],
+        }
+        decision_gate_input = {
+            "market_sentiment_score": formal_sentiment["score"],
+            "market_sentiment_label": formal_sentiment["label"],
+        }
+        before = (
+            deepcopy(formal_sentiment),
+            deepcopy(market_temperature),
+            deepcopy(decision_gate_input),
+        )
+
+        fields = _build_market_sentiment_shadow_fields(
+            formal_sentiment,
+            history,
+        )
+
+        self.assertEqual(
+            (formal_sentiment, market_temperature, decision_gate_input),
+            before,
+        )
+        self.assertEqual(fields["psy12_shadow"]["mode"], "shadow")
+        self.assertFalse(fields["psy12_shadow"]["affects_production"])
+        self.assertNotIn("market_temperature", fields)
+        self.assertNotIn("decision_gate", fields)
+
     def test_reuses_previous_report_for_scoreless_historical_day(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

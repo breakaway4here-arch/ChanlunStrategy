@@ -140,6 +140,129 @@ def _report_data(overrides=None):
 
 
 class TestReportViewModel(unittest.TestCase):
+    def test_formal_decision_contract_preserves_only_declared_verified_fields(self):
+        pick = _fusion_pick()
+        pick.update({
+            "intended_horizon": "T+3",
+            "position_band": "10%-30%",
+            "reference_price": 10.0,
+            "invalidation_price": 9.2,
+            "pressure_price": 12.0,
+            "horizon_states": {
+                "daily": "up",
+                "weekly": "confirming",
+                "60m": "waiting",
+            },
+            "policy_version": "formal-policy-v1",
+            "evidence_refs": ["decision:2026-06-26:600001"],
+        })
+
+        row = build_workspace(_report_data({"picks_fusion": [pick]}))["views"]["main"][0]
+
+        self.assertEqual(row["formal_decision_contract"], {
+            "action": "可上车",
+            "action_reason": "主推命中，确认与结构条件已满足，偏执行优先。",
+            "intended_horizon": "T+3",
+            "position_band": "10%-30%",
+            "reference_price": 10.0,
+            "invalidation_price": 9.2,
+            "pressure_price": 12.0,
+            "horizon_states": {
+                "daily": "up",
+                "weekly": "confirming",
+                "60m": "waiting",
+            },
+            "policy_version": "formal-policy-v1",
+            "evidence_refs": ["decision:2026-06-26:600001"],
+        })
+
+    def test_formal_decision_contract_omits_conflicting_or_undeclared_fields(self):
+        pick = _fusion_pick(decision_engine_v1={
+            "decision_code": "recommend",
+            "decision": "推荐",
+            "intended_horizon": "T+5",
+        })
+        pick.update({
+            "intended_horizon": "T+3",
+            "highs": [99.0],
+            "position_band": "invalid",
+        })
+
+        row = build_workspace(_report_data({"picks_fusion": [pick]}))["views"]["main"][0]
+        contract = row["formal_decision_contract"]
+
+        self.assertNotIn("intended_horizon", contract)
+        self.assertNotIn("position_band", contract)
+        self.assertNotIn("pressure_price", contract)
+        self.assertEqual(
+            row["formal_decision_contract_diagnostics"]["intended_horizon"],
+            "conflict",
+        )
+
+    def test_existing_observe_contract_cannot_be_upgraded_by_outer_wrapper(self):
+        pick = _fusion_pick()
+        pick["formal_decision_contract"] = {
+            "action": "observe",
+            "action_reason": "周期尚未完成确认",
+        }
+
+        row = build_workspace(_report_data({"picks_fusion": [pick]}))["views"]["main"][0]
+
+        self.assertEqual(row["formal_decision_contract"]["action"], "观察")
+        self.assertEqual(
+            row["formal_decision_contract"]["action_reason"],
+            "周期尚未完成确认",
+        )
+    def test_workspace_exposes_primary_and_research_navigation_groups(self):
+        workspace = build_workspace({
+            "date": "2026-08-27",
+            "picks_fusion": [],
+            "picks_pure": [],
+            "startup_watchlist": {"candidates": []},
+            "selection_input_health": {
+                "schema_version": 2,
+                "by_strategy": {
+                    "daily_fusion": {"status": "verified", "formal_actions_allowed": True},
+                },
+            },
+        })
+
+        groups = workspace["navigation_groups"]
+        self.assertEqual(
+            [item["key"] for item in groups["primary"]],
+            ["main", "confirming", "observation_top5"],
+        )
+        self.assertEqual(
+            [item["label"] for item in groups["primary"]],
+            ["主推", "待确认", "观察"],
+        )
+        research_keys = [item["key"] for item in groups["research"]]
+        for key in ("baseline", "h4_t3", "acceleration", "luojie", "growth_quality"):
+            self.assertIn(key, research_keys)
+        self.assertNotIn("highlights", [item["key"] for item in groups["primary"]])
+
+    def test_workspace_keeps_internal_main_empty_reason_for_research_audit(self):
+        workspace = build_workspace({
+            "date": "2026-08-27",
+            "picks_fusion": [{"code": "600001", "name": "测试股"}],
+            "selection_input_health": {
+                "schema_version": 2,
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                        "reason_code": "formal_input_unavailable",
+                        "reason": "选股输入不可用，正式动作已封闭",
+                    },
+                },
+            },
+        })
+
+        self.assertEqual(workspace["views"]["main"], [])
+        availability = workspace["view_meta"]["main"]["availability"]
+        self.assertEqual(availability["state"], "unavailable")
+        self.assertTrue(availability["reason"])
+
 
     def test_workspace_shape_view_order_meta_counts_and_diagnostics(self):
         report_data = _report_data(

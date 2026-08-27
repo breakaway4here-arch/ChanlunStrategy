@@ -43,6 +43,429 @@ __BODY__
 
 
 class TestAuxiliaryCockpitContract(unittest.TestCase):
+    def test_psy12_shadow_stays_in_research_and_never_overrides_formal_temperature(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderPsy12ShadowCard, temperature: buildMarketTemperature }",
+            r"""
+const base = {
+  market_sentiment: { score: 61, label: '偏强', coverage: 1, components: {} },
+  psy12: {
+    status: 'available', score: 50, up_days: 6, valid_days: 12, window: 12,
+    start_date: '2026-08-11', end_date: '2026-08-26', daily_directions: []
+  },
+  psy12_shadow: {
+    schema_version: 1, mode: 'shadow', affects_production: false,
+    status: 'available', formal_score: 61, shadow_score_with_psy12: 61,
+    delta_vs_formal: 0, formal_label: '偏强', shadow_label: '偏强'
+  }
+};
+const html = globalThis.__auxTest.render(base);
+assert(html.includes('PSY12 影子情绪'), 'PSY12 research card missing');
+assert(html.includes('2026-08-11 至 2026-08-26'), 'PSY12 window missing');
+assert(html.includes('6 / 12'), 'PSY12 up-day evidence missing');
+assert(html.includes('正式分'), 'formal score missing');
+assert(html.includes('影子分'), 'shadow score missing');
+assert(html.includes('影子，不影响正式决策'), 'shadow boundary missing');
+const temperature = globalThis.__auxTest.temperature(Object.assign({}, base, {
+  psy12_shadow: Object.assign({}, base.psy12_shadow, {
+    shadow_score_with_psy12: 5, shadow_label: '冰点'
+  })
+}));
+assert(temperature.score === 61, 'shadow score replaced formal temperature');
+assert(temperature.label === '偏强', 'shadow label replaced formal label');
+""",
+        )
+
+    def test_psy12_shadow_fail_closed_and_label_difference_are_explicit(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderPsy12ShadowCard })",
+            r"""
+const insufficient = globalThis.__auxTest.render({
+  psy12: { status: 'unavailable', reason: 'insufficient_history', valid_days: 8, window: 12 },
+  psy12_shadow: {
+    schema_version: 1, mode: 'shadow', affects_production: false,
+    status: 'unavailable', shadow_score_with_psy12: null
+  }
+});
+assert(insufficient.includes('PSY12 数据不足'), 'insufficient state hidden');
+assert(!insufficient.includes('影子分</span><strong>0'), 'missing shadow score rendered as zero');
+
+const changed = globalThis.__auxTest.render({
+  psy12: {
+    status: 'available', score: 75, up_days: 9, valid_days: 12, window: 12,
+    start_date: '2026-08-11', end_date: '2026-08-26'
+  },
+  psy12_shadow: {
+    schema_version: 1, mode: 'shadow', affects_production: false,
+    status: 'available', formal_score: 59, shadow_score_with_psy12: 62,
+    delta_vs_formal: 3, formal_label: '平衡', shadow_label: '偏强'
+  }
+});
+assert(changed.includes('正式标签 平衡'), 'formal label missing in divergence');
+assert(changed.includes('影子标签 偏强'), 'shadow label missing in divergence');
+assert(changed.includes('差异只用于研究验证'), 'label divergence boundary missing');
+
+const escalated = globalThis.__auxTest.render({
+  psy12: { status: 'available', score: 75, valid_days: 12, window: 12 },
+  psy12_shadow: {
+    schema_version: 1, mode: 'shadow', affects_production: true,
+    status: 'available', shadow_score_with_psy12: 99
+  }
+});
+assert(escalated.includes('PSY12 影子合同不可用'), 'production escalation did not fail closed');
+assert(!escalated.includes('影子分</span><strong>99'), 'unsafe shadow score leaked');
+""",
+        )
+
+    def test_main_recommendation_empty_state_hides_internal_reason_in_all_fail_closed_states(self):
+        _assert_node_contract(
+            self,
+            "{ empty: buildCandidateEmptyState }",
+            r"""
+[
+  { state: 'verified_empty', reason: '正式规则正常空池' },
+  { state: 'unavailable', reason: '数据不可用 reason_code=formal_input_unavailable' },
+  { state: 'disabled', reason: '正式动作已封闭 fail-close' }
+].forEach(function (availability) {
+  const html = globalThis.__auxTest.empty('main', availability, { filtered: false });
+  assert(html.includes('本期未选出推荐票'), 'main empty state changed with internal reason');
+  ['数据不可用', '正式动作已封闭', 'fail-close', 'reason_code', 'formal_input_unavailable'].forEach(function (term) {
+    assert(!html.includes(term), 'main empty state leaked internal term: ' + term);
+  });
+});
+const filtered = globalThis.__auxTest.empty('main', { state: 'available' }, {
+  filtered: true, filterLabel: '工业金属', resultCount: 0
+});
+assert(filtered.includes('工业金属'), 'filtered zero state hid the active sector');
+assert(!filtered.includes('本期未选出推荐票'), 'filtered zero result pretended to be a global empty recommendation');
+""",
+        )
+
+    def test_main_recommendation_empty_state_is_one_full_width_message(self):
+        _assert_node_contract(
+            self,
+            "{ empty: buildCandidateEmptyState }",
+            r"""
+const html = globalThis.__auxTest.empty('main', { state: 'verified_empty' }, { filtered: false });
+assert(html === '<div class="candidate-empty is-verified-empty"><strong>本期未选出推荐票</strong></div>',
+  'main empty state contains duplicate explanatory copy');
+""",
+        )
+        self.assertIn(
+            ".today-workspace .workspace-body.is-unified-empty {\n  grid-template-columns: minmax(0, 1fr);",
+            CSS,
+        )
+        self.assertIn(
+            ".today-workspace .workspace-body.is-unified-empty .workspace-detail {\n  display: none;",
+            CSS,
+        )
+        self.assertIn(".today-workspace {\n  width: 100%;", CSS)
+
+    def test_primary_workbench_shell_defaults_to_today_and_removes_top10(self):
+        _assert_node_contract(
+            self,
+            "{ build: buildAppShell, state: state }",
+            r"""
+const app = {
+  innerHTML: '',
+  querySelector: function () { return null; }
+};
+global.document.getElementById = function (id) { return id === 'app' ? app : null; };
+globalThis.__auxTest.build();
+assert(globalThis.__auxTest.state.primaryMode === 'today', 'today decision is not the default primary view');
+assert(app.innerHTML.includes('class="primary-mode-tabs"'), 'primary mode navigation missing');
+assert(app.innerHTML.includes('data-primary-mode="today"'), 'today decision entry missing');
+assert(app.innerHTML.includes('data-primary-mode="research"'), 'research validation entry missing');
+assert(app.innerHTML.includes('id="todayDecisionView"'), 'today decision view missing');
+assert(app.innerHTML.includes('id="researchValidationView"'), 'research validation view missing');
+assert(app.innerHTML.includes('id="sectorStrip"'), 'sector strip missing from the first screen');
+assert(app.innerHTML.includes('id="precloseAdvisory"'), 'pre-close advisory missing from today decision');
+assert(app.innerHTML.includes('id="precloseReconciliation"'), 'post-close reconciliation missing from same advisory block');
+assert(app.innerHTML.includes('class="candidate-list"'), 'candidate list missing from the first screen');
+assert(!app.innerHTML.includes('id="top10Widget"'), 'temporary Top10 widget still occupies the default page');
+""",
+        )
+
+    def test_primary_mode_switch_resizes_chart_after_hidden_research_view_is_revealed(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderPrimaryMode, state: state, nodes: nodes }",
+            r"""
+let sentimentResizeCalls = 0;
+let todayHidden = false;
+let researchHidden = true;
+global.window.requestAnimationFrame = function (callback) { callback(); };
+globalThis.__auxTest.nodes.todayDecisionView = {
+  classList: { toggle: function (_name, hidden) { todayHidden = hidden; } }
+};
+globalThis.__auxTest.nodes.researchValidationView = {
+  classList: { toggle: function (_name, hidden) { researchHidden = hidden; } }
+};
+const buttons = ['today', 'research'].map(function (mode) {
+  return {
+    getAttribute: function () { return mode; },
+    classList: { toggle: function () {} },
+    setAttribute: function () {}
+  };
+});
+globalThis.__auxTest.nodes.primaryTabs = {
+  querySelectorAll: function () { return buttons; }
+};
+globalThis.__auxTest.state.primaryMode = 'research';
+globalThis.__auxTest.state.sentimentChartInstance = {
+  resize: function () { sentimentResizeCalls += 1; }
+};
+globalThis.__auxTest.render();
+assert(todayHidden === true, 'today view stayed visible');
+assert(researchHidden === false, 'research view stayed hidden');
+assert(sentimentResizeCalls === 1, 'research chart was not resized after reveal');
+""",
+        )
+
+    def test_candidate_row_tags_are_bounded_and_keep_formal_action(self):
+        _assert_node_contract(
+            self,
+            "{ tags: selectCandidateRowTags, state: state }",
+            r"""
+globalThis.__auxTest.state.data = { selection_input_health: {
+  schema_version: 2,
+  by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+} };
+const tags = globalThis.__auxTest.tags({
+  action: '可上车', effective_action: '可上车', action_semantics: 'formal',
+  is_formal_recommendation: true,
+  source_labels: ['正式主推', '日线共振', '30分钟确认'],
+  resonance_label: '多周期共振',
+  risk_flags: ['追高风险', '量能不足'],
+  intended_horizon: 'T+3'
+}, 'main');
+assert(Array.isArray(tags), 'candidate tag selector did not return a list');
+assert(tags.length <= 2, 'candidate row rendered more than two tags');
+assert(tags.some(function (tag) { return tag.text.includes('可上车'); }), 'formal action was removed from candidate row');
+""",
+        )
+
+    def test_decision_header_has_one_formal_action_and_omits_missing_contract_fields(self):
+        _assert_node_contract(
+            self,
+            "{ header: buildDecisionHeader }",
+            r"""
+const html = globalThis.__auxTest.header({
+  code: '600001', name: '测试股', sector: '工业金属',
+  formal_decision_contract: { action: '观察', reference_price: 10.5 },
+  strategy_stances: [
+    { strategy: 'H4 T+3', stance: 'support', action: '买入' },
+    { strategy: 'AI', stance: 'oppose', action: '卖出' }
+  ]
+});
+assert((html.match(/formal-action/g) || []).length === 1, 'detail rendered more than one formal action');
+assert(html.includes('观察'), 'formal fusion action missing');
+assert(!html.includes('买入') && !html.includes('卖出'), 'strategy opinion replaced the formal action');
+assert(!html.includes('position_band') && !html.includes('仓位'), 'missing position contract rendered a fake value');
+assert(!html.includes('intended_horizon') && !html.includes('周期'), 'missing horizon contract rendered a fake value');
+assert(!html.includes('pressure_price') && !html.includes('压力位'), 'missing pressure contract rendered a fake value');
+""",
+        )
+
+    def test_decision_header_uses_formal_contract_instead_of_raw_strategy_fields(self):
+        _assert_node_contract(
+            self,
+            "{ header: buildDecisionHeader }",
+            r"""
+const html = globalThis.__auxTest.header({
+  code: '600001', name: '测试股', sector: '工业金属',
+  intended_horizon: 'T+9', position_band: '90%-100%', pressure_price: 99,
+  stop_loss: 1.23,
+  formal_decision_contract: {
+    action: '观察', intended_horizon: 'T+3', position_band: '10%-30%',
+    reference_price: 10.5, invalidation_price: 9.2, pressure_price: 12
+  }
+}, {
+  intended_horizon: 'T+7', position_band: '70%-80%', pressure_price: 77
+});
+assert(html.includes('正式动作：观察'), 'formal action missing');
+assert(html.includes('T+3') && !html.includes('T+9') && !html.includes('T+7'), 'raw horizon overrode contract');
+assert(html.includes('10%-30%') && !html.includes('90%-100%') && !html.includes('70%-80%'), 'raw position overrode contract');
+assert(html.includes('9.20') && !html.includes('1.23'), 'raw stop loss overrode contract invalidation');
+assert(html.includes('12.00') && !html.includes('99.00') && !html.includes('77.00'), 'raw pressure overrode contract');
+""",
+        )
+
+    def test_strategy_opinions_are_stances_and_ai_cannot_change_formal_action(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderStrategyStances }",
+            r"""
+const html = globalThis.__auxTest.render({
+  strategy_stances: [
+    { strategy: 'H4 T+3', stance: 'support', action: '买入', reason: '结构支持' },
+    { strategy: '加速池', stance: 'reserve', action: '追涨', reason: '位置偏高' },
+    { strategy: '罗姐池', stance: 'oppose', action: '卖出', reason: '周期冲突' },
+    { strategy: 'AI', stance: 'insufficient_sample', action: '目标价20', reason: '证据不足' }
+  ],
+  ai_research: { summary: '存在情绪风险', action: '清仓', target_price: 20 }
+});
+['支持', '保留', '反对', '样本不足'].forEach(function (label) {
+  assert(html.includes(label), 'normalized stance missing: ' + label);
+});
+['买入', '追涨', '卖出', '目标价20', '清仓'].forEach(function (action) {
+  assert(!html.includes(action), 'strategy or AI action leaked into the formal decision: ' + action);
+});
+assert(html.includes('不改变正式动作'), 'AI research boundary is not explicit');
+""",
+        )
+
+    def test_strategy_disagreement_is_summary_first_and_detailed_only_in_research(self):
+        _assert_node_contract(
+            self,
+            "{ summary: buildStrategyDisagreementSummary, audit: renderStrategyDisagreementAudit }",
+            r"""
+const item = {
+  code: '600001', name: '测试股',
+  strategy_stances: [
+    { strategy: 'H4 T+3', stance: 'support', reason: 'H4结构支持', intended_horizon: 'T+3', version: 'h4-v1', evidence_refs: ['contrib:h4'] },
+    { strategy: '罗姐池', stance: 'oppose', reason: '周期冲突', intended_horizon: 'T+5', version: 'luojie-v2', evidence_refs: ['contrib:luojie'] }
+  ],
+  strategy_disagreement_summary: { counts: { support: 1, reserve: 0, oppose: 1, insufficient_sample: 0 } },
+  ai_research: { assessment: 'risk_notice', summary: '短周期回撤风险', evidence_refs: ['ai:risk'] }
+};
+const summary = globalThis.__auxTest.summary(item);
+assert(summary.includes('策略分歧') && summary.includes('1 支持') && summary.includes('1 反对'), 'first-screen disagreement count missing');
+['H4结构支持', '周期冲突', 'h4-v1', 'contrib:h4'].forEach(function (detail) {
+  assert(!summary.includes(detail), 'first-screen summary leaked drill-down detail: ' + detail);
+});
+const audit = globalThis.__auxTest.audit({ workspace: { views: { main: [item] } } });
+['H4结构支持', '周期冲突', 'T+3', 'T+5', 'h4-v1', 'luojie-v2', 'contrib:h4', 'contrib:luojie'].forEach(function (detail) {
+  assert(audit.includes(detail), 'research audit dropped strategy detail: ' + detail);
+});
+assert(audit.includes('短周期回撤风险') && audit.includes('不改变正式动作'), 'AI boundary missing from research audit');
+""",
+        )
+
+    def test_merged_candidate_detail_has_only_decision_chart_summary_and_audit_layers(self):
+        _assert_node_contract(
+            self,
+            "{ build: buildMergedCandidateDetail }",
+            r"""
+const html = globalThis.__auxTest.build({
+  code: '600001', name: '测试股', sector: '工业金属',
+  formal_decision_contract: { action: '观察', reference_price: 10.5 },
+  action_reason: '结构过门',
+  upgrade_conditions: ['放量', '站稳压力', '板块增强', '多余条件'],
+  cancel_conditions: ['跌破失效位'],
+  risk_flags: ['追高风险']
+}, {});
+assert((html.match(/formal-action/g) || []).length === 1, 'merged detail duplicated the formal action');
+assert(html.includes('class="chart-panel"'), 'K-line workspace missing');
+assert(html.includes('class="decision-summary-columns"'), 'why/next/invalidation summary missing');
+assert(html.includes('为什么') && html.includes('下一确认') && html.includes('失效条件'), 'summary semantics incomplete');
+assert(html.includes('class="evidence-audit-drawer"'), 'evidence and audit drawer missing');
+const summary = html.slice(html.indexOf('class="decision-summary-columns"'), html.indexOf('class="evidence-audit-drawer"'));
+assert(!summary.includes('多余条件'), 'summary item cap was not enforced');
+""",
+        )
+
+    def test_persistent_price_labels_follow_priority_merge_and_true_value_contract(self):
+        _assert_node_contract(
+            self,
+            "{ select: selectPersistentPriceLabels }",
+            r"""
+const priceLabels = [
+  { kind: 'pressure', value: 10.8, label: '压力位' },
+  { kind: 'reference', value: 10.01, label: '参考价' },
+  { kind: 'current', value: 10.05, label: '现价' },
+  { kind: 'invalidation', value: 9.2, label: '失效位' }
+];
+const before = JSON.stringify(priceLabels);
+const selected = globalThis.__auxTest.select(priceLabels);
+assert(selected.length === 2, 'persistent lane rendered more than two labels');
+assert(selected[0].kind === 'invalidation', 'invalidation did not win label priority');
+assert(selected[1].kind === 'current', 'current price did not win the close-price merge');
+assert(selected[1].merged === true, 'prices within 0.6% were not merged');
+assert(selected[1].value === 10.05, 'merged lane changed the primary true y value');
+assert(selected[1].values.includes(10.05) && selected[1].values.includes(10.01), 'merged lane lost true source y values');
+assert(JSON.stringify(priceLabels) === before, 'price label selection mutated source evidence');
+""",
+        )
+
+    def test_historical_chart_actions_keep_only_latest_text_and_layer_entries_are_data_driven(self):
+        _assert_node_contract(
+            self,
+            "{ marks: selectChartActionMarkers, layers: getAvailableChartLayers }",
+            r"""
+const marks = globalThis.__auxTest.marks([
+  { coord: [2, 10], name: '观察' },
+  { coord: [20, 11], name: '买入' },
+  { coord: [39, 12], name: '加仓' },
+  { coord: [58, 13], name: '减仓' }
+], 80);
+const visible = marks.filter(function (item) { return item.label && item.label.show; });
+assert(visible.length === 1, 'more than one historical action kept persistent text');
+assert(visible[0].name === '减仓', 'latest action text was not retained');
+assert(visible.length <= Math.ceil(80 / 40) * 3, 'text marker density exceeded three per 40 bars');
+const layers = globalThis.__auxTest.layers({
+  chart_annotations: { markPoints: [{ coord: [1, 10] }] },
+  ema5: [1, 2], ema20: [1, 2]
+});
+assert(layers.includes('decision') && layers.includes('trend'), 'available chart layers missing');
+assert(!layers.includes('structure'), 'structure switch appeared without structure evidence');
+""",
+        )
+
+    def test_chart_uses_a_responsive_right_label_lane(self):
+        start = JS.index("function renderChart")
+        end = JS.index("function renderStatusBadge", start)
+        renderer = JS[start:end]
+        self.assertIn("selectPersistentPriceLabels", renderer)
+        self.assertIn("selectChartActionMarkers", renderer)
+        self.assertIn("getAvailableChartLayers", renderer)
+        self.assertIn("right: state.isMobile ? '96px' : '124px'", renderer)
+        self.assertIn("决策位", JS)
+        self.assertIn("结构", JS)
+        self.assertIn("趋势", JS)
+        self.assertIn("formatPersistentPriceLabel", renderer)
+        self.assertIn("latestBarIndex >= Math.max(0, barCount - 5) ? 'left' : 'top'", JS)
+
+    def test_today_and_research_stacks_have_distinct_semantic_ownership(self):
+        _assert_node_contract(
+            self,
+            "{ build: buildAuxiliaryStacks }",
+            r"""
+const stacks = globalThis.__auxTest.build({ diagnostics: {} });
+['decision-directions-card', 'personal-watchlist-card', 'holding-risk-card'].forEach(function (className) {
+  assert(stacks.today.includes(className), 'today decision stack missing ' + className);
+  assert(!stacks.research.includes(className), 'today-only module leaked into research: ' + className);
+});
+['market-temperature-card', 'strategy-scorecards-card', 'shadow-card', 'diagnostics-card'].forEach(function (className) {
+  assert(stacks.research.includes(className), 'research validation stack missing ' + className);
+  assert(!stacks.today.includes(className), 'research-only module leaked into today decision: ' + className);
+});
+assert(stacks.research.includes('sector-flow-card') && stacks.research.includes('limit-up-ecology-card'), 'market evidence details incomplete');
+""",
+        )
+
+    def test_normal_diagnostics_are_collapsed_and_auxiliary_stacks_are_vertical(self):
+        start = JS.index("function renderDiagnosticsCard")
+        end = JS.index("function bindSingleOpenDetailsWithin", start)
+        diagnostics = JS[start:end]
+        self.assertIn('class="diagnostics-details"', diagnostics)
+        self.assertNotIn('class="diagnostics-details" open', diagnostics)
+        self.assertIn(".supporting-decisions-stack", CSS)
+        self.assertIn(".research-validation-stack", CSS)
+        self.assertNotIn(
+            ".aux-grid.decision-grid {\n  grid-template-columns: repeat(4, minmax(0, 1fr));",
+            CSS,
+        )
+
+    def test_comparison_summary_inserts_into_the_research_layer_parent(self):
+        start = JS.index("function initComparisonSummary")
+        end = JS.index("function renderComparisonSummaryResults", start)
+        renderer = JS[start:end]
+        self.assertIn("auxCenter.parentNode.insertBefore(section, auxCenter)", renderer)
+        self.assertNotIn("nodes.shell.insertBefore(section, auxCenter || null)", renderer)
+
     def test_historical_reconstruction_is_visibly_non_actionable(self):
         _assert_node_contract(
             self,
@@ -247,6 +670,94 @@ assert(!html.includes('资金流入与流出方向 · 层级已去重'), 'mixed 
 """,
         )
 
+    def test_verified_sector_heat_upgrades_funding_mainline_without_composite_score(self):
+        _assert_node_contract(
+            self,
+            "{ model: buildFundingMainlineModel, render: renderFundingMainline }",
+            r"""
+const missing = globalThis.__auxTest.model({});
+const missingHtml = globalThis.__auxTest.render(missing, '');
+assert(missing.title === '资金主线', 'P0 sector title changed to an unsupported hot-sector claim');
+assert(missingHtml.includes('资金主线'), 'funding mainline title missing');
+assert(!missingHtml.includes('今日无热点'), 'missing facts were presented as a verified no-hotspot result');
+const model = globalThis.__auxTest.model({
+  sector_flow: [{ name: ' 工业金属 ', flow: 12 }],
+  sector_outflow: [{ sector: '白酒', flow: -8 }],
+  sector_heat: {
+    status: 'verified_complete',
+    as_of: '2026-08-27T15:10:00+08:00',
+    source: 'eastmoney_sector_flow+verified_daily_close',
+    items: [{
+      sector_code: 'BK0099', sector_name: 'AI算力', change_pct: 3.21, rank: 1,
+      sector_refs: ['600001', '600002'],
+      up_count: 42, total_count: 51, limit_up_count: 6,
+      net_flow: 1200000000, net_flow_text: '12.00亿', status: 'verified_complete'
+    }]
+  },
+  data_quality: { sector_source: 'eastmoney' }
+});
+assert(model.title === '热门板块', 'verified sector heat did not upgrade the title');
+assert(model.items.length === 1 && model.items[0].name === 'AI算力', 'sector heat was not authoritative');
+assert(model.items[0].sectorCode === 'BK0099' && model.items[0].sectorRefs.join(',') === '600001,600002', 'exact sector mapping was dropped');
+const html = globalThis.__auxTest.render(model, '');
+assert(html.includes('+3.21%'), 'sector change is missing');
+assert(html.includes('涨 42/51'), 'sector breadth is missing');
+assert(html.includes('涨停 6'), 'sector limit-up count is missing');
+assert(html.includes('12.00亿'), 'sector net flow is missing');
+assert(!html.includes('热度分'), 'an unexplained composite heat score was rendered');
+const partial = globalThis.__auxTest.model({
+  sector_flow: [{ name: '工业金属', flow: 12 }], sector_outflow: [],
+  sector_heat: { status: 'verified_partial', items: [{ sector_name: 'AI算力' }] },
+  data_quality: { sector_source: 'eastmoney' }
+});
+assert(partial.title === '资金主线', 'partial breadth masqueraded as verified hot sectors');
+assert(partial.items[0].name === '工业金属', 'funding fallback disappeared for partial heat');
+""",
+        )
+
+    def test_sector_filter_is_exact_reversible_and_preserves_candidate_contracts(self):
+        _assert_node_contract(
+            self,
+            "{ normalize: normalizeSectorName, filter: filterCandidatesBySector }",
+            r"""
+const rows = [
+  { code: '600001', sector: ' 工业金属 ', action: '可上车', source_pool: 'picks_fusion' },
+  { code: '600002', sector: '工业金属加工', action: '观察', source_pool: 'picks_fusion' },
+  { code: '600003', sector: '白酒', action: '仅观察', source_pool: 'observation_watchlist' }
+];
+assert(globalThis.__auxTest.normalize('  工业 金属  ') === '工业 金属', 'sector normalization is not deterministic');
+const filtered = globalThis.__auxTest.filter(rows, '工业金属');
+assert(filtered.length === 1 && filtered[0].code === '600001', 'sector filter used fuzzy containment instead of exact matching');
+assert(filtered[0] === rows[0], 'filter cloned or rewrote the candidate contract');
+assert(filtered[0].action === '可上车' && filtered[0].source_pool === 'picks_fusion', 'filter changed action or pool identity');
+const restored = globalThis.__auxTest.filter(rows, '');
+assert(restored.length === rows.length, 'clearing the sector filter did not restore the current pool');
+assert(restored[0] === rows[0], 'clearing the filter changed candidate identity');
+assert(globalThis.__auxTest.filter(rows, '不存在板块').length === 0, 'zero-result filter backfilled candidates');
+""",
+        )
+
+    def test_verified_heat_filter_uses_exact_sector_code_and_sector_refs(self):
+        _assert_node_contract(
+            self,
+            "{ filter: filterCandidatesBySector }",
+            r"""
+const rows = [
+  { code: '600001', sector: 'AI算力', sector_code: 'BK0098' },
+  { code: '600002', sector: '通信设备', sector_code: 'BK0099' },
+  { code: '600003', sector: '光模块', sector_refs: [{ sector_code: 'BK0099' }] },
+  { code: '600004', sector: '服务器', sector_refs: ['BK0099'] },
+  { code: '600005', sector: 'AI算力加工', sector_code: 'BK0100' }
+];
+const filtered = globalThis.__auxTest.filter(rows, 'AI算力', 'BK0099');
+assert(filtered.map((row) => row.code).join(',') === '600002,600003,600004', 'heat filter did not use exact sector_code/sector_refs');
+assert(!filtered.some((row) => row.code === '600001'), 'same Chinese sector name bypassed a conflicting sector code');
+assert(!filtered.some((row) => row.code === '600005'), 'fuzzy Chinese containment bypassed the exact code contract');
+const byRefs = globalThis.__auxTest.filter(rows, 'AI算力', 'BK0099', ['600001', '600005']);
+assert(byRefs.map((row) => row.code).join(',') === '600001,600005', 'declared sector_refs did not map exact candidate codes');
+""",
+        )
+
     def test_view_meta_exposes_source_action_and_distinct_availability_tones(self):
         _assert_node_contract(
             self,
@@ -369,12 +880,13 @@ assert(unavailable.title === '数据不可用', 'unavailable pool mislabeled as 
 """,
         )
 
-    def test_workspace_tabs_print_the_state_not_only_a_colored_dot(self):
-        start = JS.index("function renderWorkspaceTabs")
+    def test_workspace_tabs_keep_compact_counts_without_internal_state_copy(self):
+        start = JS.index("function buildWorkspaceTabButton")
         end = JS.index("function renderViewDescription", start)
         renderer = JS[start:end]
-        self.assertIn("workspace-tab-status", renderer)
-        self.assertIn("availability.label", renderer)
+        self.assertNotIn("workspace-tab-status", renderer)
+        self.assertNotIn("getViewPageActionLabel", renderer)
+        self.assertIn("workspace-tab-count", renderer)
         self.assertIn("aria-label", renderer)
 
     def test_missing_formal_health_hides_legacy_formal_rows(self):
@@ -514,7 +1026,7 @@ const html = globalThis.__auxTest.section({
   page_action: '仅观察', page_action_reason: '跨池观察排序靠前',
   action_semantics: 'watch_only'
 }, {});
-assert(html.includes('页面动作：仅观察'), 'research action cap hidden');
+assert(html.includes('正式动作：仅观察'), 'research action cap hidden');
 assert(html.includes('跨池观察排序靠前'), 'page reason hidden');
 assert(!html.includes('偏执行优先'), 'formal action reason leaked into research conclusion');
 """,
@@ -721,17 +1233,17 @@ assert(globalThis.__auxTest.description('baseline').includes('共同上游全集
             self.assertIn(helper, JS)
 
     def test_primary_path_uses_decision_contracts_not_global_sell_list(self):
-        start = JS.index("function renderAuxiliaryCenter")
-        end = JS.index("function openMobileDetailDrawer", start)
+        start = JS.index("function buildAuxiliaryStacks")
+        end = JS.index("function renderAuxiliaryCenter", start)
         primary = JS[start:end]
         for call in (
-            "renderSectorFlowCard(data)",
-            "renderDecisionDirections(data)",
-            "renderPersonalWatchlist(data)",
-            "renderLimitUpEcologyCard(data)",
-            "renderHoldingRiskSection(data)",
-            "renderStrategyScorecards(data)",
-            "renderShadowEvaluations(data)",
+            "renderSectorFlowCard(source)",
+            "renderDecisionDirections(source)",
+            "renderPersonalWatchlist(source)",
+            "renderLimitUpEcologyCard(source)",
+            "renderHoldingRiskSection(source)",
+            "renderStrategyScorecards(source)",
+            "renderShadowEvaluations(source)",
         ):
             self.assertIn(call, primary)
         self.assertNotIn("renderSellSignalsCard(data)", primary)
@@ -847,6 +1359,14 @@ const base = {
     t3: { mature: 4, waiting: 2, unavailable: 0 },
     t5: { mature: 0, waiting: 6, unavailable: 0 }
   },
+  horizon_readiness: {
+    t1: 'collecting', t3: 'collecting', t5: 'waiting_for_maturity'
+  },
+  comparison_progress_by_horizon: {
+    t1: { status: 'collecting', mature_samples: 6, required_mature_samples: 100, active_dates: 4, required_active_dates: 20, active_months: 1, required_calendar_months: 2 },
+    t3: { status: 'collecting', mature_samples: 4, required_mature_samples: 100, active_dates: 4, required_active_dates: 20, active_months: 1, required_calendar_months: 2 },
+    t5: { status: 'waiting_for_maturity', mature_samples: 0, required_mature_samples: 100, active_dates: 0, required_active_dates: 20, active_months: 0, required_calendar_months: 2 }
+  },
   metrics_by_horizon: {
     t1: { n: 6, mean: 0, median: -0.2, excess_mean: 0.1, excess_n: 6,
       win_rate: 50, win_rate_n: 6, hit_rate_ge_5: 16.67, hit_rate_ge_5_n: 6,
@@ -878,19 +1398,19 @@ for (const label of ['正式推荐收益', '基础候选基线', '研究策略�
   assert(html.includes(label), 'missing section ' + label);
 }
 assert(html.includes('T+1 收盘'), 'T+1 close semantics missing');
-assert(html.includes('0.00%'), 'real zero was hidden');
+assert(html.includes('6&#47;100 成熟样本'), 'sample maturity progress missing');
+assert(html.includes('4&#47;20 活跃日'), 'active-day progress missing');
 assert(html.includes('等待到期'), 'right-censored horizon was not explicit');
 assert(html.includes('参考收盘价缺失'), 'blocking reason was not translated');
-assert(html.includes('≥5%命中'), 'high-return metric missing');
-assert(html.includes('期间最高'), 'period high missing');
-assert(html.includes('期间最低'), 'period low missing');
+assert(!html.includes('≥5%命中'), 'small-sample hit-rate conclusion leaked');
+assert(!html.includes('期间最高'), 'small-sample excursion conclusion leaked');
+assert(!html.includes('期间最低'), 'small-sample excursion conclusion leaked');
 assert(html.includes('该门控不计算收益'), 'gate was presented as return strategy');
 assert(html.includes('1 条账本身份无法安全分类'), 'classification failures were silently hidden');
 assert(html.includes('罗姐主题策略'), 'known historical name was not normalized');
 assert(!html.includes('罗杰主题策略'), 'legacy typo leaked into current UI');
 assert(!html.includes('MAE'), 'internal MAE leaked to user');
 assert(!html.includes('MFE'), 'internal MFE leaked to user');
-assert(!html.includes('/20'), 'obsolete hard-coded threshold leaked');
 """,
         )
 
@@ -907,6 +1427,64 @@ assert(html.includes('历史旧口径'), 'legacy warning missing');
 assert(html.includes('不作为成绩'), 'legacy score was still comparable');
 assert(html.includes('旧口径，仅追溯'), 'legacy badge still implied scored groups');
 assert(!html.includes('1个评测分组'), 'legacy identity row was counted as a score group');
+""",
+        )
+
+    def test_strategy_comparison_gate_hides_conclusions_until_mature(self):
+        _assert_node_contract(
+            self,
+            "({ renderScorecardV2Card })",
+            r"""
+const base = {
+  evaluation_role: 'research', strategy: 'next_day_boom', name: '次日爆发策略',
+  version: 'boom-v1', source_pool: 'next_day_boom', entry_mode: 'immediate_close',
+  intended_horizon: 3, research_tier: 'prospective_oot', evaluation_status: 'collecting',
+  metrics_publishable: true, signal_count: 4, eligible_signal_count: 4,
+  excluded_signal_count: 0, episode_count: 4, active_dates: 3, active_months: 1,
+  gate_outcomes: {}, publication_outcomes: {},
+  maturity_by_horizon: {
+    t1: { mature: 4, waiting: 0, unavailable: 0 },
+    t3: { mature: 4, waiting: 0, unavailable: 0 },
+    t5: { mature: 0, waiting: 4, unavailable: 0 }
+  },
+  horizon_readiness: { t1: 'collecting', t3: 'collecting', t5: 'waiting_for_maturity' },
+  comparison_progress_by_horizon: {
+    t1: { status: 'collecting', mature_samples: 4, required_mature_samples: 100, active_dates: 3, required_active_dates: 20, active_months: 1, required_calendar_months: 2 },
+    t3: { status: 'collecting', mature_samples: 4, required_mature_samples: 100, active_dates: 3, required_active_dates: 20, active_months: 1, required_calendar_months: 2 },
+    t5: { status: 'waiting_for_maturity', mature_samples: 0, required_mature_samples: 100, active_dates: 3, required_active_dates: 20, active_months: 1, required_calendar_months: 2 }
+  },
+  metrics_by_horizon: {
+    t1: { n: 4, mean: 88, median: 77, win_rate: 100 },
+    t3: { n: 4, mean: 99, median: 66, win_rate: 100 }, t5: {}
+  },
+  representative_samples: [{ code: '300308', returns: { t3: 99 } }]
+};
+const collecting = globalThis.__auxTest.renderScorecardV2Card({}, base);
+assert(collecting.includes('4&#47;100 成熟样本'), 'mature sample progress missing');
+assert(collecting.includes('3&#47;20 活跃日'), 'active date progress missing');
+assert(collecting.includes('1&#47;2 自然月'), 'calendar month progress missing');
+assert(!collecting.includes('+99.00%'), 'immature mean leaked');
+assert(!collecting.includes('上涨率'), 'immature win-rate conclusion leaked');
+assert(!collecting.includes('300308'), 'immature representative sample leaked');
+
+const mature = JSON.parse(JSON.stringify(base));
+mature.evaluation_status = 'ready_for_manual_comparison';
+mature.horizon_readiness.t3 = 'ready_for_manual_comparison';
+mature.comparison_progress_by_horizon.t3.status = 'ready_for_manual_comparison';
+mature.comparison_progress_by_horizon.t3.mature_samples = 100;
+mature.comparison_progress_by_horizon.t3.active_dates = 20;
+mature.comparison_progress_by_horizon.t3.active_months = 2;
+mature.maturity_by_horizon.t3.mature = 100;
+mature.metrics_by_horizon.t3 = {
+  n: 100, date_start: '2026-01-05', date_end: '2026-02-27', median: 3.5,
+  mean: 4.0, excess_mean: 1.2, excess_n: 100, max_drawdown: -8.0,
+  mean_mfe: 7.0, mean_mae: -2.0, mfe_n: 100, mae_n: 100
+};
+const ready = globalThis.__auxTest.renderScorecardV2Card({}, mature);
+['样本数', '样本区间', '中位收益', '平均收益', '基准超额', '最大回撤', 'MFE', 'MAE'].forEach(function (label) {
+  assert(ready.includes(label), 'mature metric missing: ' + label);
+});
+assert(!ready.includes('综合分'), 'unexplained composite score rendered');
 """,
         )
 
@@ -1027,7 +1605,7 @@ assert(!html.includes('<small>平均收益</small>'), 'metrics rendered despite 
 function card(role, strategy, source) {
   return {
     evaluation_role: role, strategy: strategy, name: strategy, version: 'v1',
-    source_pool: source, entry_mode: 'immediate_close', signal_count: 1,
+    source_pool: source, entry_mode: 'immediate_close', intended_horizon: 1, signal_count: 1,
     eligible_signal_count: 1, episode_count: 1, active_dates: 1, active_months: 1,
     evidence_tier: role === 'baseline' ? 'legacy_inferred' : 'prospective_ledger',
     evaluation_status: 'collecting', metrics_publishable: true,
@@ -1035,6 +1613,16 @@ function card(role, strategy, source) {
       t1: { mature: 1, waiting: 0, unavailable: 0 },
       t3: { mature: 0, waiting: 1, unavailable: 0 },
       t5: { mature: 0, waiting: 1, unavailable: 0 }
+    },
+    horizon_readiness: {
+      t1: 'ready_for_manual_comparison',
+      t3: 'waiting_for_maturity',
+      t5: 'waiting_for_maturity'
+    },
+    comparison_progress_by_horizon: {
+      t1: { status: 'ready_for_manual_comparison', mature_samples: 100, required_mature_samples: 100, active_dates: 20, required_active_dates: 20, active_months: 2, required_calendar_months: 2 },
+      t3: { status: 'waiting_for_maturity', mature_samples: 0, required_mature_samples: 100, active_dates: 0, required_active_dates: 20, active_months: 0, required_calendar_months: 2 },
+      t5: { status: 'waiting_for_maturity', mature_samples: 0, required_mature_samples: 100, active_dates: 0, required_active_dates: 20, active_months: 0, required_calendar_months: 2 }
     },
     metrics_by_horizon: {
       t1: { n: 1, mean: 1, median: 1, excess_mean: 0, excess_n: 1,
@@ -1276,20 +1864,17 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         tablet_end = CSS.index("@media (max-width: 760px)", tablet_start)
         tablet = CSS[tablet_start:tablet_end]
         self.assertIn(
-            ".aux-grid.decision-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr));",
+            ".aux-grid.decision-grid {\n    grid-template-columns: 1fr;",
             tablet,
         )
-        self.assertIn(
-            ".personal-watchlist-card,\n  .strategy-scorecards-card,\n  .decision-card.shadow-card {\n    grid-column: span 2;",
-            tablet,
-        )
+        self.assertNotIn("grid-template-columns: repeat(3, minmax(0, 1fr));", tablet)
         self.assertIn(".strategy-scorecards-card", tablet)
         self.assertIn(".decision-card.shadow-card", tablet)
 
     def test_dense_evaluation_cards_use_full_desktop_width(self):
         desktop = CSS[:CSS.index("@media (max-width: 1180px)")]
         self.assertIn(
-            ".strategy-scorecards-card,\n.decision-card.shadow-card {\n  grid-column: span 4;",
+            ".research-validation-stack,\n.supporting-decisions-stack {\n  display: grid;\n  grid-template-columns: 1fr;",
             desktop,
         )
 
@@ -1309,7 +1894,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
 
     def test_whole_page_copy_and_interaction_semantics_are_explicit(self):
         for text in (
-            "页面动作：",
+            "正式动作：",
             "规则判定：",
             "主要指数上涨数",
             "指标组件覆盖",
@@ -1328,23 +1913,24 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         self.assertIn("pending_report_validation", JS)
         self.assertIn("pending|waiting", JS)
 
-        start = JS.index("function renderAuxiliaryCenter")
-        end = JS.index("function openMobileDetailDrawer", start)
+        start = JS.index("function buildAuxiliaryStacks")
+        end = JS.index("function renderAuxiliaryCenter", start)
         primary = JS[start:end]
         self.assertLess(
-            primary.index("renderMarketTemperatureCard(data)"),
-            primary.index("renderDecisionDirections(data)"),
+            primary.index("renderDecisionDirections(source)"),
+            primary.index("renderPersonalWatchlist(source)"),
         )
         self.assertLess(
-            primary.index("renderDecisionDirections(data)"),
-            primary.index("renderSectorFlowCard(data)"),
+            primary.index("renderMarketTemperatureCard(source)"),
+            primary.index("renderSectorFlowCard(source)"),
         )
 
-    def test_formal_workspace_precedes_manual_top10_and_tabs_are_accessible(self):
+    def test_today_workspace_precedes_research_layer_and_tabs_are_accessible(self):
         start = JS.index("function buildAppShell")
         end = JS.index("function getReportDataStatus", start)
         shell = JS[start:end]
-        self.assertLess(shell.index('class="workspace"'), shell.index('class="top10-widget"'))
+        self.assertLess(shell.index('id="todayDecisionView"'), shell.index('id="researchValidationView"'))
+        self.assertNotIn('class="top10-widget"', shell)
         for token in (
             'role="tablist"',
             "setAttribute('role', 'tab')",
@@ -1361,7 +1947,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         shell = JS[start:end]
         self.assertLess(
             shell.index('id="directionQuickSummary"'),
-            shell.index('class="workspace"'),
+            shell.index('class="workspace today-workspace"'),
         )
         for token in (
             'id="candidateSearch"',
@@ -1573,17 +2159,17 @@ assert(html.includes('入场口径：未知'), 'unknown entry mode was not expli
         start = JS.index("function renderShadowEvaluations")
         end = JS.index("function renderDiagnosticsCard", start)
         renderer = JS[start:end]
-        primary_start = JS.index("function renderAuxiliaryCenter")
-        primary_end = JS.index("function openMobileDetailDrawer", primary_start)
+        primary_start = JS.index("function buildAuxiliaryStacks")
+        primary_end = JS.index("function renderAuxiliaryCenter", primary_start)
         primary = JS[primary_start:primary_end]
 
         self.assertLess(
-            primary.index("renderStrategyScorecards(data)"),
-            primary.index("renderShadowEvaluations(data)"),
+            primary.index("renderStrategyScorecards(source)"),
+            primary.index("renderShadowEvaluations(source)"),
         )
         self.assertLess(
-            primary.index("renderShadowEvaluations(data)"),
-            primary.index("renderDiagnosticsCard(data)"),
+            primary.index("renderShadowEvaluations(source)"),
+            primary.index("renderDiagnosticsCard(source)"),
         )
         for text in (
             "影子评测",

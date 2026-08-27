@@ -20,6 +20,8 @@ SCORECARD_THRESHOLDS = {
     "active_dates": 20,
     "calendar_months": 2,
 }
+_DEFAULT_RESEARCH_TIER = "prospective_ledger"
+_LEGACY_RESEARCH_TIER = "legacy_unclassified"
 _SCORECARD_ROLES = {"formal", "baseline", "research", "diagnostic"}
 _SECTION_BY_ROLE = {
     "formal": "formal",
@@ -978,6 +980,13 @@ def _normalized_horizon(value):
     return horizon if horizon in HORIZONS else None
 
 
+def _research_tier(contribution, *, legacy=False):
+    value = str((contribution or {}).get("research_tier") or "").strip()
+    if value:
+        return value
+    return _LEGACY_RESEARCH_TIER if legacy else _DEFAULT_RESEARCH_TIER
+
+
 def _legacy_role_for(contribution):
     strategy = str(contribution.get("strategy_name") or "unknown")
     version = str(contribution.get("strategy_version") or "unknown")
@@ -1054,6 +1063,8 @@ def _classify_scorecard_contribution(contribution):
 def _empty_horizon_metrics():
     return {
         "n": 0,
+        "date_start": None,
+        "date_end": None,
         "mean": None,
         "median": None,
         "excess_mean": None,
@@ -1073,6 +1084,7 @@ def _empty_horizon_metrics():
         "mean_excess_return": None,
         "mean_mfe": None,
         "mean_mae": None,
+        "max_drawdown": None,
         "mfe_n": 0,
         "mae_n": 0,
     }
@@ -1101,9 +1113,17 @@ def _horizon_metrics(outcomes, key, *, publishable=True):
         for outcome in outcomes
     ]
     lows = [value for value in lows if value is not None]
+    mature_dates = sorted({
+        str(outcome.get("report_date") or "")
+        for outcome in outcomes
+        if _finite(outcome.get("returns", {}).get(key)) is not None
+        and outcome.get("report_date")
+    })
     metrics = _empty_horizon_metrics()
     metrics.update({
         "n": len(returns),
+        "date_start": mature_dates[0] if mature_dates else None,
+        "date_end": mature_dates[-1] if mature_dates else None,
         "mean": mean(returns) if returns else None,
         "median": median(returns) if returns else None,
         "excess_mean": mean(excess) if excess else None,
@@ -1127,10 +1147,28 @@ def _horizon_metrics(outcomes, key, *, publishable=True):
         "mean_excess_return": mean(excess) if excess else None,
         "mean_mfe": mean(highs) if highs else None,
         "mean_mae": mean(lows) if lows else None,
+        # Worst observed adverse excursion across the mature cohort.  This is
+        # deliberately distinct from mean MAE and does not invent a portfolio
+        # equity curve for overlapping recommendations.
+        "max_drawdown": min(lows) if lows else None,
         "mfe_n": len(highs),
         "mae_n": len(lows),
     })
     return metrics
+
+
+def _comparison_progress(*, maturity, active_dates, active_months, status):
+    return {
+        "status": status,
+        "mature_samples": int((maturity or {}).get("mature") or 0),
+        "waiting_samples": int((maturity or {}).get("waiting") or 0),
+        "unavailable_samples": int((maturity or {}).get("unavailable") or 0),
+        "required_mature_samples": SCORECARD_THRESHOLDS["mature_samples"],
+        "active_dates": int(active_dates or 0),
+        "required_active_dates": SCORECARD_THRESHOLDS["active_dates"],
+        "active_months": int(active_months or 0),
+        "required_calendar_months": SCORECARD_THRESHOLDS["calendar_months"],
+    }
 
 
 def _maturity_by_horizon(outcomes):
@@ -1278,7 +1316,7 @@ def build_strategy_scorecards(
 
     def empty_card(
         *, role, strategy, version, source_pool, entry_mode,
-        intended_horizon, publication_surface,
+        intended_horizon, research_tier, publication_surface,
     ):
         return {
             "evaluation_role": role,
@@ -1288,6 +1326,7 @@ def build_strategy_scorecards(
             "source_pool": source_pool,
             "entry_mode": entry_mode,
             "intended_horizon": intended_horizon,
+            "research_tier": research_tier,
             "display_names": Counter(),
             "attribution_statuses": Counter(),
             "classification_statuses": Counter(),
@@ -1316,8 +1355,10 @@ def build_strategy_scorecards(
         source_pool = str(item.get("source_pool") or "unknown").strip() or "unknown"
         entry_mode = str(item.get("entry_mode") or "unknown").strip() or "unknown"
         intended_horizon = _normalized_horizon(item.get("intended_horizon"))
+        research_tier = _research_tier(item)
         key = (
-            role, strategy, version, source_pool, entry_mode, intended_horizon
+            role, strategy, version, source_pool, entry_mode,
+            intended_horizon, research_tier,
         )
         card = cards.setdefault(key, empty_card(
             role=role,
@@ -1326,6 +1367,7 @@ def build_strategy_scorecards(
             source_pool=source_pool,
             entry_mode=entry_mode,
             intended_horizon=intended_horizon,
+            research_tier=research_tier,
             publication_surface=_SURFACE_BY_ROLE[role],
         ))
         card["display_names"][str(item.get("name") or strategy)] += 1
@@ -1373,6 +1415,10 @@ def build_strategy_scorecards(
             intended_horizon = _normalized_horizon(
                 contribution.get("intended_horizon")
             )
+            research_tier = _research_tier(
+                contribution,
+                legacy=classification["classification_status"] == "legacy_corrected",
+            )
             key = (
                 role,
                 strategy,
@@ -1380,6 +1426,7 @@ def build_strategy_scorecards(
                 source_pool,
                 entry_mode,
                 intended_horizon,
+                research_tier,
             )
             card = cards.setdefault(key, empty_card(
                 role=role,
@@ -1388,6 +1435,7 @@ def build_strategy_scorecards(
                 source_pool=source_pool,
                 entry_mode=entry_mode,
                 intended_horizon=intended_horizon,
+                research_tier=research_tier,
                 publication_surface=classification["publication_surface"],
             ))
             card["display_names"][
@@ -1430,7 +1478,7 @@ def build_strategy_scorecards(
         cards,
         key=lambda value: (
             value[0], value[1], value[2], value[3], value[4],
-            -1 if value[5] is None else value[5],
+            -1 if value[5] is None else value[5], value[6],
         ),
     ):
         card = cards[key]
@@ -1472,6 +1520,15 @@ def build_strategy_scorecards(
             "source_pool": card["source_pool"],
             "entry_mode": card["entry_mode"],
             "intended_horizon": card["intended_horizon"],
+            "research_tier": card["research_tier"],
+            "comparison_identity": {
+                "strategy": card["strategy"],
+                "version": card["version"],
+                "source_pool": card["source_pool"],
+                "entry_mode": card["entry_mode"],
+                "intended_horizon": card["intended_horizon"],
+                "research_tier": card["research_tier"],
+            },
             "classification_status": classification_status,
             "classification_status_counts": classification_statuses,
             "signal_count": len(card["all_rows"]),
@@ -1576,7 +1633,7 @@ def build_strategy_scorecards(
         ):
             metrics_blocking_reasons.append("market_data_unavailable")
         metrics_publishable = not metrics_blocking_reasons
-        metrics = {
+        raw_metrics = {
             key_name: _horizon_metrics(
                 outcomes,
                 key_name,
@@ -1594,6 +1651,25 @@ def build_strategy_scorecards(
             for row in card["eligible_rows"]
             if row["entry"].get("report_date")
         })
+        mature_dates_by_horizon = {
+            key_name: sorted({
+                str(outcome.get("report_date") or "")
+                for outcome in outcomes
+                if outcome.get("maturity", {}).get(key_name) == "mature"
+                and outcome.get("report_date")
+            })
+            for key_name in ("t1", "t3", "t5")
+        }
+        mature_active_dates = {
+            key_name: len(values)
+            for key_name, values in mature_dates_by_horizon.items()
+        }
+        mature_active_months = {
+            key_name: len({value[:7] for value in values})
+            for key_name, values in mature_dates_by_horizon.items()
+        }
+        primary_horizon = card["intended_horizon"]
+        primary_key = "t{}".format(primary_horizon) if primary_horizon else None
         evaluation_status = _card_evaluation_status(
             role=role,
             signal_count=len(card["all_rows"]),
@@ -1601,8 +1677,14 @@ def build_strategy_scorecards(
             maturity=maturity,
             metrics_publishable=metrics_publishable,
             metrics_blocking_reasons=metrics_blocking_reasons,
-            active_dates=active_dates,
-            active_months=active_months,
+            active_dates=(
+                mature_active_dates.get(primary_key, 0)
+                if primary_key else active_dates
+            ),
+            active_months=(
+                mature_active_months.get(primary_key, 0)
+                if primary_key else active_months
+            ),
             intended_horizon=card["intended_horizon"],
         )
         if not card["all_rows"]:
@@ -1615,7 +1697,7 @@ def build_strategy_scorecards(
                     or "strategy_input_stale_or_unverified"
                 ]
                 metrics_publishable = False
-                metrics = {
+                raw_metrics = {
                     key_name: _horizon_metrics(
                         outcomes,
                         key_name,
@@ -1629,29 +1711,38 @@ def build_strategy_scorecards(
                 key=key_name,
                 metrics_publishable=metrics_publishable,
                 metrics_blocking_reasons=metrics_blocking_reasons,
-                active_dates=active_dates,
-                active_months=active_months,
+                active_dates=mature_active_dates[key_name],
+                active_months=mature_active_months[key_name],
             )
             for key_name in ("t1", "t3", "t5")
         }
-        primary_horizon = card["intended_horizon"]
-        primary_key = "t{}".format(primary_horizon) if primary_horizon else None
-        values = {
-            key_name: [
-                _finite(outcome.get("returns", {}).get(key_name))
-                for outcome in outcomes
-                if _finite(outcome.get("returns", {}).get(key_name)) is not None
-            ]
-            if metrics_publishable else []
+        comparison_progress = {
+            key_name: _comparison_progress(
+                maturity=maturity[key_name],
+                active_dates=mature_active_dates[key_name],
+                active_months=mature_active_months[key_name],
+                status=horizon_readiness[key_name],
+            )
+            for key_name in ("t1", "t3", "t5")
+        }
+        # The public scorecard deliberately withholds every return conclusion
+        # until the exact comparison cohort passes all three maturity gates.
+        # Maturity counts remain available through comparison_progress.
+        metrics = {
+            key_name: (
+                raw_metrics[key_name]
+                if horizon_readiness[key_name] == "ready_for_manual_comparison"
+                else {}
+            )
             for key_name in ("t1", "t3", "t5")
         }
         returns = {
-            key_name: (mean(values[key_name]) if values[key_name] else None)
-            for key_name in values
+            key_name: metrics[key_name].get("mean")
+            for key_name in metrics
         }
         median_returns = {
-            key_name: (median(values[key_name]) if values[key_name] else None)
-            for key_name in values
+            key_name: metrics[key_name].get("median")
+            for key_name in metrics
         }
         excess_values = {
             key_name: [
@@ -1659,19 +1750,26 @@ def build_strategy_scorecards(
                 for outcome in outcomes
                 if _finite(outcome.get("excess_returns", {}).get(key_name)) is not None
             ]
-            if metrics_publishable else []
+            if horizon_readiness[key_name] == "ready_for_manual_comparison"
+            else []
             for key_name in ("t1", "t3", "t5")
         }
         excess_returns = {
-            key_name: (mean(excess_values[key_name]) if excess_values[key_name] else None)
+            key_name: metrics[key_name].get("excess_mean")
             for key_name in excess_values
         }
         win_rates = {
-            key_name: metrics[key_name]["win_rate"] for key_name in metrics
+            key_name: metrics[key_name].get("win_rate") for key_name in metrics
         }
         excursions = {
-            "mae": {key_name: metrics[key_name]["period_low"] for key_name in metrics},
-            "mfe": {key_name: metrics[key_name]["period_high"] for key_name in metrics},
+            "mae": {
+                key_name: metrics[key_name].get("mean_mae")
+                for key_name in metrics
+            },
+            "mfe": {
+                key_name: metrics[key_name].get("mean_mfe")
+                for key_name in metrics
+            },
         }
         evaluable_episode_count = (
             sum(
@@ -1685,12 +1783,23 @@ def build_strategy_scorecards(
             "active_months": active_months,
             "episode_count": len(eligible_rows),
             "evaluable_episode_count": evaluable_episode_count,
-            "sample_size": metrics[primary_key]["n"] if primary_key else None,
+            "sample_size": (
+                raw_metrics[primary_key]["n"] if primary_key else None
+            ),
             "matured_by_horizon": {
-                key_name: metrics[key_name]["n"] for key_name in metrics
+                key_name: raw_metrics[key_name]["n"]
+                for key_name in raw_metrics
             },
             "maturity_by_horizon": maturity,
             "horizon_readiness": horizon_readiness,
+            "comparison_progress_by_horizon": comparison_progress,
+            "comparison_metrics_publishable_by_horizon": {
+                key_name: (
+                    horizon_readiness[key_name]
+                    == "ready_for_manual_comparison"
+                )
+                for key_name in horizon_readiness
+            },
             "metrics_by_horizon": metrics,
             "metrics_publishable": metrics_publishable,
             "metrics_blocking_reasons": metrics_blocking_reasons,
@@ -1718,7 +1827,11 @@ def build_strategy_scorecards(
                     outcomes,
                     primary_horizon=primary_horizon,
                 )
-                if metrics_publishable else []
+                if (
+                    primary_key
+                    and horizon_readiness[primary_key]
+                    == "ready_for_manual_comparison"
+                ) else []
             ),
         })
         sections[_SECTION_BY_ROLE[role]].append(base)

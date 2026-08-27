@@ -1,0 +1,28 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "chanlun-preclose-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "PRE_CLOSE_SNAPSHOT",
+        "class_name": "PrecloseSnapshot"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1-preclose-snapshot",
+      "new_sqlite_classes": ["PrecloseSnapshot"]
+    }
+  ],
+  "vars": {
+    "ALLOWED_ORIGINS": "https://breakaway4here-arch.github.io",
+    "PRECLOSE_ENABLED": "true"
+  }
+}

@@ -10,6 +10,7 @@ builds a compact, view-oriented workspace for the UI layer. The contract is:
 from __future__ import annotations
 
 import math
+import re
 
 from typing import Any, Dict, Iterable, List, Mapping
 
@@ -378,6 +379,240 @@ def _candidate_source_code(item: Mapping[str, Any], fallback: str = "") -> str:
 
 def _candidate_source_name(item: Mapping[str, Any], fallback: str = "") -> str:
     return str(_to_dict(item).get("name") or fallback or "")
+
+
+def _find_formal_source_row(
+    report_data: Mapping[str, Any], row: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Resolve the compact view row back to its declared formal pool row."""
+    ref = _to_dict(row.get("ref"))
+    pool = _safe_str(ref.get("pool"))
+    code = _safe_str(ref.get("code")) or _safe_str(row.get("code"))
+    if pool == "picks_fusion":
+        candidates = _get_list(report_data.get("picks_fusion"))
+    elif pool == "h4_t3_pool":
+        candidates = _get_list(
+            _to_dict(report_data.get("h4_t3_pool")).get("candidates")
+        )
+    else:
+        return {}
+    for candidate in candidates:
+        if _candidate_source_code(candidate) == code:
+            return _to_dict(candidate)
+    return {}
+
+
+def _normalize_horizon(value: Any) -> str | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int) and value > 0:
+        return f"T+{value}"
+    text = _safe_str(value).strip().upper()
+    match = re.fullmatch(r"T\s*\+\s*([1-9]\d*)", text)
+    if match:
+        return f"T+{int(match.group(1))}"
+    return None
+
+
+def _normalize_position_band(value: Any) -> str | None:
+    text = _safe_str(value).strip()
+    match = re.fullmatch(r"(\d+(?:\.\d+)?)\s*%\s*-\s*(\d+(?:\.\d+)?)\s*%", text)
+    if not match:
+        return None
+    low = float(match.group(1))
+    high = float(match.group(2))
+    if not (0 <= low <= high <= 100):
+        return None
+
+    def _format(number: float) -> str:
+        return str(int(number)) if number.is_integer() else str(number).rstrip("0").rstrip(".")
+
+    return f"{_format(low)}%-{_format(high)}%"
+
+
+def _normalize_positive_price(value: Any) -> float | None:
+    number = _safe_float(value)
+    if number is None or not math.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def _normalize_nonempty_text(value: Any) -> str | None:
+    text = _safe_str(value).strip()
+    return text or None
+
+
+def _normalize_horizon_states(value: Any) -> dict[str, str] | None:
+    if not isinstance(value, Mapping) or not value:
+        return None
+    normalized: dict[str, str] = {}
+    for key, state in value.items():
+        clean_key = _safe_str(key).strip()
+        clean_state = _safe_str(state).strip()
+        if not clean_key or not clean_state:
+            return None
+        normalized[clean_key] = clean_state
+    return normalized or None
+
+
+def _resolve_declared_value(
+    declared: Iterable[tuple[bool, Any]], normalizer
+) -> tuple[Any, str]:
+    """Return a value only when all declarations are valid and identical."""
+    values = [value for present, value in declared if present]
+    if not values:
+        return None, "missing"
+    normalized = [normalizer(value) for value in values]
+    if any(value is None for value in normalized):
+        return None, "invalid"
+    first = normalized[0]
+    if any(value != first for value in normalized[1:]):
+        return None, "conflict"
+    return first, "verified"
+
+
+def _action_level(action: str) -> int:
+    if action in {"仅观察", "拒绝"}:
+        return 0
+    if action in {"观察", "盯盘"}:
+        return 1
+    return 2
+
+
+def _normalize_declared_action(value: Any) -> str | None:
+    text = _safe_str(value).strip()
+    aliases = {
+        "recommend": "可上车",
+        "observe": "观察",
+        "reject": "仅观察",
+    }
+    normalized = aliases.get(text.lower(), text)
+    if normalized in {
+        "可上车", "等回踩", "慎追", "观察", "盯盘", "仅观察", "拒绝"
+    }:
+        return normalized
+    return None
+
+
+def _build_formal_decision_contract(
+    row: Mapping[str, Any], raw: Mapping[str, Any]
+) -> tuple[dict[str, Any], dict[str, str]]:
+    """Wrap verified display evidence without changing formal strategy output."""
+    source = _to_dict(raw)
+    declared_contract = _to_dict(source.get("formal_decision_contract"))
+    decision = _to_dict(source.get("decision_engine_v1"))
+
+    outer_action = _normalize_declared_action(row.get("page_action")) or "仅观察"
+    outer_reason = _safe_str(row.get("page_action_reason"))
+    declared_action = _normalize_declared_action(declared_contract.get("action"))
+    if declared_action is not None and _action_level(declared_action) < _action_level(outer_action):
+        action = declared_action
+        action_reason = (
+            _safe_str(declared_contract.get("action_reason")) or outer_reason
+        )
+    else:
+        action = outer_action
+        action_reason = outer_reason
+
+    contract: dict[str, Any] = {
+        "action": action,
+        "action_reason": action_reason,
+    }
+    diagnostics: dict[str, str] = {}
+    field_specs = {
+        "intended_horizon": (
+            _normalize_horizon,
+            (
+                ("intended_horizon" in declared_contract, declared_contract.get("intended_horizon")),
+                ("intended_horizon" in source, source.get("intended_horizon")),
+                ("intended_horizon" in decision, decision.get("intended_horizon")),
+            ),
+        ),
+        "position_band": (
+            _normalize_position_band,
+            (
+                ("position_band" in declared_contract, declared_contract.get("position_band")),
+                ("position_band" in source, source.get("position_band")),
+                ("position_band" in decision, decision.get("position_band")),
+            ),
+        ),
+        "reference_price": (
+            _normalize_positive_price,
+            (
+                ("reference_price" in declared_contract, declared_contract.get("reference_price")),
+                ("reference_price" in source, source.get("reference_price")),
+            ),
+        ),
+        "invalidation_price": (
+            _normalize_positive_price,
+            (
+                ("invalidation_price" in declared_contract, declared_contract.get("invalidation_price")),
+                ("invalidation_price" in source, source.get("invalidation_price")),
+            ),
+        ),
+        "pressure_price": (
+            _normalize_positive_price,
+            (
+                ("pressure_price" in declared_contract, declared_contract.get("pressure_price")),
+                ("pressure_price" in source, source.get("pressure_price")),
+            ),
+        ),
+        "horizon_states": (
+            _normalize_horizon_states,
+            (
+                ("horizon_states" in declared_contract, declared_contract.get("horizon_states")),
+                ("horizon_states" in source, source.get("horizon_states")),
+                ("horizon_states" in decision, decision.get("horizon_states")),
+            ),
+        ),
+    }
+    for field, (normalizer, declarations) in field_specs.items():
+        value, status = _resolve_declared_value(declarations, normalizer)
+        if status == "verified":
+            contract[field] = value
+        elif status != "missing":
+            diagnostics[field] = status
+
+    policy_declarations = (
+        ("policy_version" in declared_contract, declared_contract.get("policy_version")),
+        ("policy_version" in source, source.get("policy_version")),
+        ("policy_version" in decision, decision.get("policy_version")),
+    )
+    policy_version, policy_status = _resolve_declared_value(
+        policy_declarations, _normalize_nonempty_text
+    )
+    if policy_status == "missing":
+        policy_version, policy_status = _resolve_declared_value(
+            (
+                ("strategy_version" in source, source.get("strategy_version")),
+                ("strategy_version" in decision, decision.get("strategy_version")),
+            ),
+            _normalize_nonempty_text,
+        )
+    if policy_status == "verified":
+        contract["policy_version"] = policy_version
+    elif policy_status != "missing":
+        diagnostics["policy_version"] = policy_status
+
+    evidence_refs: list[str] = []
+    evidence_invalid = False
+    for container in (declared_contract, source, decision):
+        if "evidence_refs" not in container:
+            continue
+        refs = container.get("evidence_refs")
+        if not isinstance(refs, (list, tuple)):
+            evidence_invalid = True
+            continue
+        for ref in refs:
+            clean_ref = _safe_str(ref).strip()
+            if not clean_ref:
+                evidence_invalid = True
+            elif clean_ref not in evidence_refs:
+                evidence_refs.append(clean_ref)
+    contract["evidence_refs"] = evidence_refs
+    if evidence_invalid:
+        diagnostics["evidence_refs"] = "invalid"
+    return contract, diagnostics
 
 
 def _extract_main_metrics(item: Mapping[str, Any]) -> dict[str, float | None]:
@@ -1287,6 +1522,11 @@ def _apply_view_item_contract(
         row["page_action_reason"] = page_reason
         row["effective_action"] = page_action
         row["action_semantics"] = action_semantics
+        if action_semantics == "formal":
+            raw = _find_formal_source_row(report_data, row)
+            contract, diagnostics = _build_formal_decision_contract(row, raw)
+            row["formal_decision_contract"] = contract
+            row["formal_decision_contract_diagnostics"] = diagnostics
         # Freeze a renderable copy: the page needs the Chinese decision label
         # and score, not only the recommend/observe machine code.
         row["scoring_decision"] = dict(_to_dict(row.get("decision_engine_v1")))
@@ -1436,6 +1676,31 @@ def _build_view_meta(
         )
         result[name] = meta
     return result
+
+
+def _build_navigation_groups() -> dict[str, list[dict[str, str]]]:
+    """Expose a stable, low-noise navigation hierarchy for the workbench.
+
+    Pool availability belongs to ``view_meta``.  Keeping navigation stable when
+    a pool is empty lets the UI show a truthful empty state without inventing
+    candidates or making research pools look like formal recommendations.
+    """
+    labels = {
+        "main": "主推",
+        "confirming": "待确认",
+        "observation_top5": "观察",
+        "baseline": "基础候选",
+        "h4_t3": "H4 T+3",
+        "acceleration": "加速池",
+        "luojie": "罗姐池",
+        "growth_quality": "高弹性观察",
+    }
+    primary = ["main", "confirming", "observation_top5"]
+    research = ["baseline", "h4_t3", "acceleration", "luojie", "growth_quality"]
+    return {
+        "primary": [{"key": key, "label": labels[key]} for key in primary],
+        "research": [{"key": key, "label": labels[key]} for key in research],
+    }
 
 
 def _build_view_items(
@@ -1735,6 +2000,7 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
         "default_view": "main",
         "view_order": view_order,
         "view_meta": _build_view_meta(view_order, data, view_items),
+        "navigation_groups": _build_navigation_groups(),
         "views": view_items,
         "counts": counts,
         "diagnostics": diagnostics,

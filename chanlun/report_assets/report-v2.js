@@ -42,16 +42,21 @@
   var state = {
     data: null,
     workspace: null,
+    primaryMode: 'today',
     currentView: 'main',
     activeItem: null,
     isMobile: false,
     chartInstance: null,
     chartMount: null,
     sentimentChartInstance: null,
+    chartLayer: 'decision',
     rawPoolCandidates: null,
     drawerReturnFocus: null,
     drawerReturnCode: '',
     candidateQuery: '',
+    sectorFilter: '',
+    sectorFilterCode: '',
+    sectorFilterRefs: [],
     candidateLimit: 20,
     top10: {
       jobId: '',
@@ -62,6 +67,12 @@
       timer: null,
       pollCount: 0,
       busy: false,
+    },
+    preclose: {
+      snapshot: null,
+      reconciliation: null,
+      loading: false,
+      expiryTimer: null,
     },
     watchlistManager: {
       loaded: false,
@@ -82,8 +93,16 @@
     headerTitle: null,
     headerSubtitle: null,
     headerMetrics: null,
+    primaryTabs: null,
+    todayDecisionView: null,
+    researchValidationView: null,
+    marketEvidence: null,
+    sectorStrip: null,
+    supportingStack: null,
+    researchStack: null,
     tabs: null,
     description: null,
+    workspaceBody: null,
     candidateList: null,
     detailPanel: null,
     auxGrid: null,
@@ -95,6 +114,9 @@
     top10RunButton: null,
     top10Status: null,
     top10Result: null,
+    precloseAdvisory: null,
+    precloseBody: null,
+    precloseReconciliation: null,
     directionQuick: null,
     candidateSearch: null,
     candidateCount: null,
@@ -466,6 +488,242 @@
 
   function getTop10ApiBase() {
     return normalizeString(getBootstrap().top10ApiBase);
+  }
+
+  function getPrecloseApiBase() {
+    return normalizeString(getBootstrap().precloseApiBase).trim().replace(/\/+$/, '');
+  }
+
+  function getPreclosePageDate() {
+    var pageDate = normalizeString(getBootstrap().pageDate || state.date || '');
+    if (/^\d{4}-\d{2}-\d{2}$/.test(pageDate)) return pageDate;
+    return formatDateLabel(new Date().toISOString());
+  }
+
+  function formatPrecloseTime(value) {
+    var text = normalizeString(value);
+    var match = text.match(/T(\d{2}:\d{2}:\d{2})/);
+    return match ? match[1] : '--:--:--';
+  }
+
+  function preclosePoolRows(snapshot, key) {
+    var pools = snapshot && snapshot.pools;
+    var rows = pools && Array.isArray(pools[key]) ? pools[key] : [];
+    return rows.map(function (candidate) {
+      var source = candidate && typeof candidate === 'object' ? candidate : {};
+      var code = normalizeString(source.code).trim();
+      var name = normalizeString(source.name).trim();
+      var price = safeNumber(source.reference_price, null);
+      if (!/^\d{6}$/.test(code) || !name || price === null || price <= 0) return null;
+      return { code: code, name: name, reference_price: price };
+    }).filter(Boolean);
+  }
+
+  function buildPreclosePoolHtml(snapshot, key, label) {
+    var rows = preclosePoolRows(snapshot, key);
+    return ''
+      + '<section class="preclose-pool" aria-label="' + escapeHtml(label) + '">'
+      + '  <h3>' + escapeHtml(label) + '</h3>'
+      + (rows.length ? rows.map(function (candidate) {
+        return ''
+          + '<div class="preclose-candidate" title="' + escapeHtml(candidate.name + ' ' + candidate.code) + '">'
+          + '  <span><strong>' + escapeHtml(candidate.name) + '</strong><small>' + escapeHtml(candidate.code) + '</small></span>'
+          + '  <em>参考 ' + escapeHtml(formatNumber(candidate.reference_price, 2)) + '</em>'
+          + '</div>';
+      }).join('') : '<div class="preclose-pool-empty">本期未选出推荐票</div>')
+      + '</section>';
+  }
+
+  function buildPrecloseSnapshotHtml(snapshot, nowMs) {
+    var source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    var expiresAt = normalizeString(source.expires_at);
+    var expiresMs = Date.parse(expiresAt);
+    var resolvedNow = safeNumber(nowMs, Date.now());
+    var expired = normalizeString(source.status) === 'expired'
+      || (Number.isFinite(expiresMs) && resolvedNow >= expiresMs);
+    var mainRows = preclosePoolRows(source, 'main');
+    var h4Rows = preclosePoolRows(source, 'h4_t3');
+    var accelerationRows = preclosePoolRows(source, 'acceleration');
+    var available = normalizeString(source.status) === 'available'
+      && (mainRows.length + h4Rows.length + accelerationRows.length > 0)
+      && !expired;
+    var hash = normalizeString(source.content_hash);
+    var identity = normalizeString(source.snapshot_id);
+    var meta = ''
+      + '<div class="preclose-meta" aria-label="预跑快照信息">'
+      + '  <span>生成 ' + escapeHtml(formatPrecloseTime(source.generated_at)) + '</span>'
+      + '  <span>失效 ' + escapeHtml(formatPrecloseTime(expiresAt)) + '</span>'
+      + (hash ? '<span title="' + escapeHtml('预跑快照 ' + identity) + '">快照 ' + escapeHtml(hash.slice(0, 8)) + '</span>' : '')
+      + '</div>';
+    if (expired) {
+      return meta
+        + '<div class="preclose-expired" role="status">预跑已失效，14:57后不再依据预跑清单新增动作</div>';
+    }
+    if (!available) {
+      return meta
+        + '<div class="preclose-unified-empty" role="status">本期未选出推荐票</div>';
+    }
+    return meta
+      + '<div class="preclose-pools">'
+      + buildPreclosePoolHtml(source, 'main', '主推')
+      + buildPreclosePoolHtml(source, 'h4_t3', 'H4 T+3')
+      + buildPreclosePoolHtml(source, 'acceleration', '加速观察')
+      + '</div>';
+  }
+
+  function precloseDiffNames(value) {
+    return asArray(value).map(function (item) {
+      if (item && typeof item === 'object') {
+        return normalizeString(item.name || item.code).trim();
+      }
+      return normalizeString(item).trim();
+    }).filter(Boolean);
+  }
+
+  function buildPrecloseDiffLine(label, value) {
+    var source = value && typeof value === 'object' ? value : {};
+    var retained = precloseDiffNames(source.retained);
+    var added = precloseDiffNames(source.added_after_close);
+    var removed = precloseDiffNames(source.removed_after_close);
+    var details = [];
+    if (retained.length) details.push('保留 ' + retained.join('、'));
+    if (added.length) details.push('正式新增 ' + added.join('、'));
+    if (removed.length) details.push('预跑有、正式无 ' + removed.join('、'));
+    return escapeHtml(label) + '：' + (details.length ? details.map(escapeHtml).join('｜') : '无变化');
+  }
+
+  function buildPrecloseReconciliationHtml(reconciliation, snapshot) {
+    var source = reconciliation && typeof reconciliation === 'object' ? reconciliation : {};
+    var frozen = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    if (!normalizeString(frozen.content_hash)
+      || normalizeString(source.preclose_content_hash) !== normalizeString(frozen.content_hash)) {
+      return '';
+    }
+    var status = normalizeString(source.status);
+    if (status === 'formal_pending') {
+      return ''
+        + '<details class="preclose-reconciliation-card" open>'
+        + '<summary>盘后复核</summary>'
+        + '<p>今日正式结果尚未生成，暂不继续参考预跑清单</p>'
+        + '</details>';
+    }
+    var pools = source.pools && typeof source.pools === 'object' ? source.pools : {};
+    if (status === 'unchanged') {
+      var mainCount = precloseDiffNames((pools.main || {}).retained).length;
+      var h4Count = precloseDiffNames((pools.h4_t3 || {}).retained).length;
+      var accelerationCount = precloseDiffNames((pools.acceleration || {}).retained).length;
+      return ''
+        + '<details class="preclose-reconciliation-card" open>'
+        + '<summary>盘后复核</summary>'
+        + '<p>正式结果与14:47预跑一致</p>'
+        + '<small>主推' + mainCount + '只｜H4 T+3 ' + h4Count + '只｜加速' + accelerationCount + '只</small>'
+        + '</details>';
+    }
+    if (status !== 'changed') return '';
+    return ''
+      + '<details class="preclose-reconciliation-card">'
+      + '<summary>盘后复核 · 与14:47预跑有变化</summary>'
+      + '<div class="preclose-diff-lines">'
+      + '<p>' + buildPrecloseDiffLine('主推', pools.main) + '</p>'
+      + '<p>' + buildPrecloseDiffLine('H4 T+3', pools.h4_t3) + '</p>'
+      + '<p>' + buildPrecloseDiffLine('加速', pools.acceleration) + '</p>'
+      + '</div>'
+      + '</details>';
+  }
+
+  function renderPrecloseSnapshot(snapshot, nowMs) {
+    state.preclose.snapshot = snapshot && typeof snapshot === 'object' ? snapshot : null;
+    if (nodes.precloseBody) {
+      nodes.precloseBody.innerHTML = buildPrecloseSnapshotHtml(state.preclose.snapshot, nowMs);
+    }
+    if (nodes.precloseAdvisory && nodes.precloseAdvisory.classList) {
+      nodes.precloseAdvisory.classList.remove('hidden');
+    }
+    if (state.preclose.expiryTimer && window.clearTimeout) {
+      window.clearTimeout(state.preclose.expiryTimer);
+      state.preclose.expiryTimer = null;
+    }
+    var expiresMs = Date.parse(normalizeString(state.preclose.snapshot && state.preclose.snapshot.expires_at));
+    var delay = expiresMs - Date.now();
+    if (Number.isFinite(delay) && delay > 0 && window.setTimeout) {
+      state.preclose.expiryTimer = window.setTimeout(function () {
+        renderPrecloseSnapshot(state.preclose.snapshot, Date.now());
+        renderPrecloseReconciliation(state.preclose.reconciliation);
+      }, Math.min(delay, 2147483647));
+    }
+  }
+
+  function renderPrecloseReconciliation(reconciliation) {
+    state.preclose.reconciliation = reconciliation && typeof reconciliation === 'object'
+      ? reconciliation : null;
+    if (!nodes.precloseReconciliation) return;
+    var html = buildPrecloseReconciliationHtml(
+      state.preclose.reconciliation,
+      state.preclose.snapshot
+    );
+    nodes.precloseReconciliation.innerHTML = html;
+    if (nodes.precloseReconciliation.classList) {
+      nodes.precloseReconciliation.classList.toggle('hidden', !html);
+    }
+  }
+
+  function renderPrecloseFailure() {
+    state.preclose.snapshot = null;
+    state.preclose.reconciliation = null;
+    if (nodes.precloseBody) {
+      nodes.precloseBody.innerHTML = '<div class="preclose-load-failure" role="status">预跑暂不可用，请以盘后正式结果为准</div>';
+    }
+    if (nodes.precloseReconciliation) {
+      nodes.precloseReconciliation.innerHTML = '';
+      if (nodes.precloseReconciliation.classList) nodes.precloseReconciliation.classList.add('hidden');
+    }
+  }
+
+  function loadPrecloseAdvisory() {
+    var apiBase = getPrecloseApiBase();
+    if (!apiBase) {
+      if (nodes.precloseAdvisory && nodes.precloseAdvisory.classList) {
+        nodes.precloseAdvisory.classList.add('hidden');
+      }
+      return Promise.resolve(null);
+    }
+    if (nodes.precloseAdvisory && nodes.precloseAdvisory.classList) {
+      nodes.precloseAdvisory.classList.remove('hidden');
+    }
+    if (!window.fetch) {
+      renderPrecloseFailure();
+      return Promise.resolve(null);
+    }
+    state.preclose.loading = true;
+    if (nodes.precloseBody) {
+      nodes.precloseBody.innerHTML = '<div class="preclose-loading">正在读取当天预跑快照…</div>';
+    }
+    var pageDate = getPreclosePageDate();
+    var snapshotUrl = apiBase + '/api/preclose/latest?date=' + encodeURIComponent(pageDate);
+    var reconciliationUrl = apiBase + '/api/preclose/reconciliation?date=' + encodeURIComponent(pageDate);
+    return window.fetch(snapshotUrl).then(function (response) {
+      if (!response || !response.ok) throw new Error('pre-close snapshot unavailable');
+      return response.json();
+    }).then(function (snapshot) {
+      if (!snapshot || typeof snapshot !== 'object') throw new Error('invalid pre-close snapshot');
+      renderPrecloseSnapshot(snapshot, Date.now());
+      return window.fetch(reconciliationUrl).then(function (response) {
+        if (response && response.status === 404) return null;
+        if (!response || !response.ok) throw new Error('reconciliation unavailable');
+        return response.json();
+      }).then(function (reconciliation) {
+        renderPrecloseReconciliation(reconciliation);
+        return snapshot;
+      }).catch(function () {
+        renderPrecloseReconciliation(null);
+        return snapshot;
+      });
+    }).catch(function () {
+      renderPrecloseFailure();
+      return null;
+    }).finally(function () {
+      state.preclose.loading = false;
+    });
   }
 
   function getDecisionWatchlistUrl() {
@@ -977,8 +1235,32 @@
       meta: meta,
       views: views,
       order: workspace.view_order || DEFAULT_VIEW_ORDER,
+      navigationGroups: workspace.navigation_groups || null,
       defaultView: workspace.default_view || 'highlights',
       diagnostics: workspace.diagnostics || {},
+    };
+  }
+
+  function getWorkspaceNavigationGroups() {
+    var workspace = state.workspace || {};
+    var supplied = workspace.navigation_groups || {};
+    var fallback = {
+      primary: [
+        { key: 'main', label: '主推' },
+        { key: 'confirming', label: '待确认' },
+        { key: 'observation_top5', label: '观察' },
+      ],
+      research: [
+        { key: 'baseline', label: '基础候选' },
+        { key: 'h4_t3', label: 'H4 T+3' },
+        { key: 'acceleration', label: '加速池' },
+        { key: 'luojie', label: '罗姐池' },
+        { key: 'growth_quality', label: '高弹性观察' },
+      ],
+    };
+    return {
+      primary: asArray(supplied.primary).length ? asArray(supplied.primary) : fallback.primary,
+      research: asArray(supplied.research).length ? asArray(supplied.research) : fallback.research,
     };
   }
 
@@ -1087,6 +1369,22 @@
     };
   }
 
+  function buildCandidateEmptyState(viewKey, availability, context) {
+    var ctx = context || {};
+    if (ctx.filtered) {
+      var filterLabel = normalizeString(ctx.filterLabel || '当前筛选');
+      return '<div class="candidate-empty is-filtered"><strong>'
+        + escapeHtml(filterLabel + ' · 0只')
+        + '</strong><span>当前池没有匹配股票，已保留筛选条件。</span></div>';
+    }
+    if (viewKey === 'main') {
+      return '<div class="candidate-empty is-verified-empty"><strong>本期未选出推荐票</strong></div>';
+    }
+    var message = getViewAvailabilityMessage({ availability: availability || {} });
+    return '<div class="candidate-empty is-' + escapeHtml(message.state) + '"><strong>'
+      + escapeHtml(message.title) + '</strong><span>' + escapeHtml(message.detail) + '</span></div>';
+  }
+
   function getViewAvailabilityMeta(availability) {
     var stateName = normalizeString((availability || {}).state || 'unavailable');
     var states = {
@@ -1147,46 +1445,56 @@
     var app = document.getElementById('app') || document.body;
     app.innerHTML = ''
       + '<div class="report-shell" id="reportShell">'
-      + '  <header class="report-header market-header">'
+      + '  <header class="compact-header report-header market-header">'
       + '    <div class="report-title-wrap">'
       + '      <h1 class="report-title"></h1>'
       + '      <div class="report-subtitle"></div>'
       + '    </div>'
       + '    <div class="header-metrics"></div>'
       + '  </header>'
-      + '  <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
-      + '  <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
-      + '  <section class="workspace">'
-      + '    <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="选股池切换"></nav>'
-      + '    <div class="view-description" id="viewDescription"></div>'
-      + '    <div class="workspace-body">'
-      + '      <div class="candidate-list-shell">'
-      + '        <div class="candidate-list-tools">'
-      + '          <label for="candidateSearch">筛选当前池</label>'
-      + '          <input id="candidateSearch" type="search" placeholder="代码 / 名称 / 板块" autocomplete="off">'
-      + '          <span id="candidateCount" aria-live="polite"></span>'
+      + '  <nav class="primary-mode-tabs" role="tablist" aria-label="工作台层级">'
+      + '    <button type="button" data-primary-mode="today" role="tab" aria-controls="todayDecisionView">今日决策</button>'
+      + '    <button type="button" data-primary-mode="research" role="tab" aria-controls="researchValidationView">研究验证</button>'
+      + '  </nav>'
+      + '  <section class="primary-view today-decision-view" id="todayDecisionView">'
+      + '    <section class="sector-strip" id="sectorStrip" aria-label="资金主线"><strong>资金主线</strong><span>正在整理板块证据…</span></section>'
+      + '    <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
+      + '    <section class="preclose-advisory hidden" id="precloseAdvisory" aria-labelledby="precloseAdvisoryTitle">'
+      + '      <header class="preclose-advisory-head">'
+      + '        <span><strong id="precloseAdvisoryTitle">14:47预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
+      + '      </header>'
+      + '      <div class="preclose-body" id="precloseBody" aria-live="polite"></div>'
+      + '      <div class="preclose-reconciliation hidden" id="precloseReconciliation" aria-live="polite"></div>'
+      + '    </section>'
+      + '    <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
+      + '    <section class="workspace today-workspace">'
+      + '      <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="候选导航"></nav>'
+      + '      <div class="view-description" id="viewDescription"></div>'
+      + '      <div class="workspace-body">'
+      + '        <div class="candidate-list-shell">'
+      + '          <div class="candidate-list-tools">'
+      + '            <label for="candidateSearch">筛选当前池</label>'
+      + '            <input id="candidateSearch" type="search" placeholder="代码 / 名称 / 板块" autocomplete="off">'
+      + '            <span id="candidateCount" aria-live="polite"></span>'
+      + '          </div>'
+      + '          <div class="candidate-list" id="candidateList"></div>'
+      + '          <button type="button" class="candidate-more" id="candidateMore">加载更多</button>'
       + '        </div>'
-      + '        <div class="candidate-list" id="candidateList"></div>'
-      + '        <button type="button" class="candidate-more" id="candidateMore">加载更多</button>'
+      + '        <aside class="detail-panel workspace-detail" id="detailPanel"></aside>'
       + '      </div>'
-      + '      <aside class="detail-panel workspace-detail" id="detailPanel"></aside>'
-      + '    </div>'
+      + '    </section>'
+      + '    <section class="supporting-decisions-stack" id="supportingDecisionsStack"></section>'
       + '  </section>'
-      + '  <section class="top10-widget" id="top10Widget">'
-      + '    <div class="top10-widget-head">'
-      + '      <span class="top10-widget-title">即时 Top10（手动研究，不改写正式日报）</span>'
-      + '      <button type="button" class="top10-run-btn" id="top10RunButton">生成 Top10</button>'
-      + '    </div>'
-      + '    <div class="top10-status" id="top10Status" aria-live="polite">Top10 接口未配置</div>'
-      + '    <div class="top10-result" id="top10Result"></div>'
-      + '  </section>'
-      + '  <section class="aux-center decision-center">'
-      + '    <details id="auxCenter" open>'
-      + '      <summary>'
-      + '        <span><strong>辅助决策驾驶舱</strong><small>先看方向，再沿证据链定位到板块与重点股</small></span>'
-      + '      </summary>'
-      + '      <div class="aux-grid decision-grid" id="auxGrid"></div>'
-      + '    </details>'
+      + '  <section class="primary-view research-validation-view hidden" id="researchValidationView">'
+      + '    <div class="market-evidence" id="marketEvidence"></div>'
+      + '    <section class="aux-center decision-center">'
+      + '      <details id="auxCenter" open>'
+      + '        <summary>'
+      + '          <span><strong>辅助决策驾驶舱</strong><small>先看方向，再沿证据链定位到板块与重点股</small></span>'
+      + '        </summary>'
+      + '        <div class="research-validation-stack aux-grid decision-grid" id="auxGrid"></div>'
+      + '      </details>'
+      + '    </section>'
       + '  </section>'
       + '  <div class="mobile-drawer" id="mobileDrawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="mobileDrawerTitle">'
       + '    <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop"></div>'
@@ -1206,8 +1514,16 @@
     nodes.headerTitle = app.querySelector('.report-title');
     nodes.headerSubtitle = app.querySelector('.report-subtitle');
     nodes.headerMetrics = app.querySelector('.header-metrics');
+    nodes.primaryTabs = app.querySelector('.primary-mode-tabs');
+    nodes.todayDecisionView = app.querySelector('#todayDecisionView');
+    nodes.researchValidationView = app.querySelector('#researchValidationView');
+    nodes.marketEvidence = app.querySelector('#marketEvidence');
+    nodes.sectorStrip = app.querySelector('#sectorStrip');
+    nodes.supportingStack = app.querySelector('#supportingDecisionsStack');
+    nodes.researchStack = app.querySelector('#auxGrid');
     nodes.tabs = app.querySelector('#workspaceTabs');
     nodes.description = app.querySelector('#viewDescription');
+    nodes.workspaceBody = app.querySelector('.today-workspace .workspace-body');
     nodes.candidateList = app.querySelector('#candidateList');
     nodes.detailPanel = app.querySelector('#detailPanel');
     nodes.auxGrid = app.querySelector('#auxGrid');
@@ -1219,12 +1535,25 @@
     nodes.top10RunButton = app.querySelector('#top10RunButton');
     nodes.top10Status = app.querySelector('#top10Status');
     nodes.top10Result = app.querySelector('#top10Result');
+    nodes.precloseAdvisory = app.querySelector('#precloseAdvisory');
+    nodes.precloseBody = app.querySelector('#precloseBody');
+    nodes.precloseReconciliation = app.querySelector('#precloseReconciliation');
     nodes.directionQuick = app.querySelector('#directionQuickSummary');
     nodes.historicalReconstruction = app.querySelector('#historicalReconstruction');
     nodes.candidateSearch = app.querySelector('#candidateSearch');
     nodes.candidateCount = app.querySelector('#candidateCount');
     nodes.candidateMore = app.querySelector('#candidateMore');
     nodes.globalError = app.querySelector('#globalError');
+    if (nodes.primaryTabs) {
+      nodes.primaryTabs.addEventListener('click', function (event) {
+        var button = event.target && event.target.closest
+          ? event.target.closest('[data-primary-mode]')
+          : null;
+        if (!button) return;
+        state.primaryMode = button.getAttribute('data-primary-mode') === 'research' ? 'research' : 'today';
+        renderPrimaryMode();
+      });
+    }
     if (nodes.candidateSearch) {
       nodes.candidateSearch.addEventListener('input', function () {
         state.candidateQuery = normalizeString(nodes.candidateSearch.value).trim().toLowerCase();
@@ -1237,6 +1566,33 @@
         state.candidateLimit += 20;
         renderCandidateList();
       });
+    }
+  }
+
+  function renderPrimaryMode() {
+    var mode = state.primaryMode === 'research' ? 'research' : 'today';
+    state.primaryMode = mode;
+    if (nodes.todayDecisionView) nodes.todayDecisionView.classList.toggle('hidden', mode !== 'today');
+    if (nodes.researchValidationView) nodes.researchValidationView.classList.toggle('hidden', mode !== 'research');
+    if (nodes.primaryTabs) {
+      var buttons = nodes.primaryTabs.querySelectorAll('[data-primary-mode]');
+      for (var i = 0; i < buttons.length; i += 1) {
+        var active = buttons[i].getAttribute('data-primary-mode') === mode;
+        buttons[i].classList.toggle('is-active', active);
+        buttons[i].setAttribute('aria-selected', active ? 'true' : 'false');
+        buttons[i].setAttribute('tabindex', active ? '0' : '-1');
+      }
+    }
+    var resizeCharts = function () {
+      if (state.chartInstance) state.chartInstance.resize();
+      if (state.sentimentChartInstance) state.sentimentChartInstance.resize();
+    };
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(function () {
+        window.requestAnimationFrame(resizeCharts);
+      });
+    } else {
+      setTimeout(resizeCharts, 0);
     }
   }
 
@@ -1283,11 +1639,24 @@
     var dateLabel = data.date || getBootstrap().pageDate || formatDateLabel(new Date().toISOString());
     var summary = buildMarketSummary(data.market || {});
 
-    setTextNode(nodes.headerTitle, '缠论策略日报');
-    setTextNode(nodes.headerSubtitle, dateLabel + ' · ' + getReportDataStatus(data));
-    nodes.headerMetrics.innerHTML = '<details class="market-header-details"'
-      + (state.isMobile ? '' : ' open') + '><summary>大盘概览</summary>'
-      + renderMarketRegime(summary) + renderMarketIndexCards(summary.items) + '</details>';
+    var quality = data.data_quality || {};
+    var formal = quality.is_official === true && normalizeString(quality.bar_state) === 'closed';
+    var marketStatus = normalizeString(quality.market_status) === 'verified' ? '行情已核验' : '行情待核验';
+    var asOf = normalizeString(quality.as_of || quality.generated_at);
+    var timeMatch = asOf.match(/T(\d{2}:\d{2})/);
+    setTextNode(nodes.headerTitle, '缠论决策工作台');
+    setTextNode(nodes.headerSubtitle, '把正式动作放在第一屏，研究证据收进第二层');
+    nodes.headerMetrics.innerHTML = '<div class="compact-header-facts">'
+      + '<span><small>交易日</small><strong>' + escapeHtml(dateLabel) + '</strong></span>'
+      + '<span><small>版本</small><strong>' + escapeHtml(formal ? '正式收盘版' : '盘中预览') + '</strong></span>'
+      + '<span><small>更新时间</small><strong>' + escapeHtml(timeMatch ? timeMatch[1] : '--:--') + '</strong></span>'
+      + '<span><small>行情</small><strong>' + escapeHtml(marketStatus) + '</strong></span>'
+      + '<span><small>节奏</small><strong>' + escapeHtml(normalizeString(summary.regime || summary.label || '待确认')) + '</strong></span>'
+      + '</div>';
+    if (nodes.marketEvidence) {
+      nodes.marketEvidence.innerHTML = '<details class="market-header-details"><summary>大盘证据</summary>'
+        + renderMarketRegime(summary) + renderMarketIndexCards(summary.items) + '</details>';
+    }
   }
 
   function getDirectionBriefSourceLabel(brief) {
@@ -1787,7 +2156,10 @@
     state.candidateQuery = '';
     state.candidateLimit = 20;
     if (nodes.candidateSearch) nodes.candidateSearch.value = '';
-    var firstItem = getCurrentViewItems()[0] || null;
+    var firstItem = filterCandidatesBySector(
+      getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
+      state.sectorFilterRefs
+    )[0] || null;
     state.activeItem = firstItem;
     renderWorkspaceTabs();
     renderViewDescription();
@@ -1799,79 +2171,72 @@
     }
   }
 
+  function buildWorkspaceTabButton(entry, wsInfo, order) {
+    var viewKey = normalizeString((entry || {}).key);
+    var views = asArray(wsInfo.views[viewKey]);
+    var meta = resolveViewDisplayContract(viewKey, (wsInfo.meta || {})[viewKey] || {});
+    var rawAvailability = meta.availability || { state: views.length ? 'available' : 'unavailable' };
+    var availability = getViewAvailabilityMeta(rawAvailability);
+    var label = normalizeString((entry || {}).label || getCurrentLabel(viewKey));
+    var button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'workspace-tab' + (viewKey === state.currentView ? ' is-active' : '');
+    button.setAttribute('data-view', viewKey);
+    button.setAttribute('id', 'workspace-tab-' + viewKey);
+    button.setAttribute('role', 'tab');
+    button.setAttribute('aria-selected', viewKey === state.currentView ? 'true' : 'false');
+    button.setAttribute('aria-controls', 'candidateList');
+    button.setAttribute('tabindex', viewKey === state.currentView ? '0' : '-1');
+    button.setAttribute('title', label + ' · ' + views.length + '只');
+    button.setAttribute('aria-label', label + '，' + views.length + '只');
+    button.innerHTML = ''
+      + '<span class="workspace-tab-state is-' + escapeHtml(availability.tone) + '" aria-hidden="true"></span>'
+      + '<span class="workspace-tab-label">' + escapeHtml(label) + '</span>'
+      + '<span class="workspace-tab-count">(' + views.length + ')</span>';
+    button.addEventListener('click', function (event) {
+      activateWorkspaceView(event.currentTarget.getAttribute('data-view'), true);
+    });
+    button.addEventListener('keydown', function (event) {
+      if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(event.key) === -1) return;
+      event.preventDefault();
+      var current = order.indexOf(event.currentTarget.getAttribute('data-view'));
+      var nextIndex = event.key === 'Home'
+        ? 0
+        : (event.key === 'End'
+          ? order.length - 1
+          : (current + (event.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length);
+      activateWorkspaceView(order[nextIndex], true);
+    });
+    return button;
+  }
+
   function renderWorkspaceTabs() {
     if (!nodes.tabs) return;
     nodes.tabs.innerHTML = '';
     nodes.tabs.setAttribute('role', 'tablist');
-    nodes.tabs.setAttribute('aria-label', '选股池切换');
+    nodes.tabs.setAttribute('aria-label', '候选导航');
     var wsInfo = getCandidateViews();
-    var order = asArray(wsInfo.order);
-    if (order.length === 0) {
-      order = DEFAULT_VIEW_ORDER;
+    var groups = getWorkspaceNavigationGroups();
+    var entries = groups.primary.concat(groups.research);
+    var order = entries.map(function (entry) { return normalizeString(entry.key); });
+    for (var i = 0; i < groups.primary.length; i += 1) {
+      nodes.tabs.appendChild(buildWorkspaceTabButton(groups.primary[i], wsInfo, order));
     }
-    var lastRole = '';
-    for (var i = 0; i < order.length; i += 1) {
-      var viewKey = order[i];
-      var views = asArray(wsInfo.views[viewKey]);
-      var meta = resolveViewDisplayContract(
-        viewKey,
-        (wsInfo.meta || {})[viewKey] || {}
-      );
-      var rawAvailability = meta.availability || {
-        state: views.length ? 'available' : 'unavailable',
-      };
-      var availability = getViewAvailabilityMeta(rawAvailability);
-      var pageActionLabel = getViewPageActionLabel(meta.action_semantics, rawAvailability);
-      var groupRole = normalizeString(meta.role || 'research');
-      if (groupRole !== lastRole) {
-        var group = document.createElement('span');
-        group.className = 'workspace-tab-group';
-        group.textContent = groupRole === 'formal'
-          ? '正式策略'
-          : (groupRole === 'baseline' ? '上游全集' : '研究观察');
-        group.setAttribute('aria-hidden', 'true');
-        nodes.tabs.appendChild(group);
-        lastRole = groupRole;
-      }
-      var button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'workspace-tab' + (viewKey === state.currentView ? ' is-active' : '');
-      button.setAttribute('data-view', viewKey);
-      button.setAttribute('id', 'workspace-tab-' + viewKey);
-      button.setAttribute('role', 'tab');
-      button.setAttribute('aria-selected', viewKey === state.currentView ? 'true' : 'false');
-      button.setAttribute('aria-controls', 'candidateList');
-      button.setAttribute('tabindex', viewKey === state.currentView ? '0' : '-1');
-      button.setAttribute('title', availability.label + ' · ' + pageActionLabel);
-      button.setAttribute(
-        'aria-label',
-        getCurrentLabel(viewKey) + '，' + availability.label + '，'
-          + views.length + '只，' + pageActionLabel
-      );
-      button.innerHTML = ''
-        + '<span class="workspace-tab-state is-' + escapeHtml(availability.tone) + '" aria-hidden="true"></span>'
-        + '<span class="workspace-tab-label">' + escapeHtml(state.isMobile ? getCurrentShortLabel(viewKey) : getCurrentLabel(viewKey)) + '</span>'
-        + '<span class="workspace-tab-status">' + escapeHtml(availability.label) + '</span>'
-        + '<span class="workspace-tab-count">(' + views.length + ')</span>';
-      button.addEventListener('click', function (event) {
-        var buttonEl = event.currentTarget;
-        if (!buttonEl) return;
-        var nextView = buttonEl.getAttribute('data-view');
-        activateWorkspaceView(nextView, true);
-      });
-      button.addEventListener('keydown', function (event) {
-        if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(event.key) === -1) return;
-        event.preventDefault();
-        var current = order.indexOf(event.currentTarget.getAttribute('data-view'));
-        var nextIndex = event.key === 'Home'
-          ? 0
-          : (event.key === 'End'
-            ? order.length - 1
-            : (current + (event.key === 'ArrowRight' ? 1 : -1) + order.length) % order.length);
-        activateWorkspaceView(order[nextIndex], true);
-      });
-      nodes.tabs.appendChild(button);
+    var research = document.createElement('details');
+    research.className = 'research-pool-menu';
+    if (groups.research.some(function (entry) { return entry.key === state.currentView; })) {
+      research.open = true;
     }
+    var summary = document.createElement('summary');
+    summary.textContent = '研究池';
+    research.appendChild(summary);
+    var researchTabs = document.createElement('div');
+    researchTabs.className = 'research-pool-tabs';
+    for (var r = 0; r < groups.research.length; r += 1) {
+      researchTabs.appendChild(buildWorkspaceTabButton(groups.research[r], wsInfo, order));
+    }
+    research.appendChild(researchTabs);
+    nodes.tabs.appendChild(research);
     if (nodes.candidateList) {
       nodes.candidateList.setAttribute('role', 'tabpanel');
       nodes.candidateList.setAttribute('aria-labelledby', 'workspace-tab-' + state.currentView);
@@ -1899,6 +2264,15 @@
     };
     var availabilityMeta = getViewAvailabilityMeta(availability);
     var pageActionLabel = getViewPageActionLabel(meta.action_semantics, availability);
+    if (state.currentView === 'main') {
+      nodes.description.innerHTML = ''
+        + '<div class="view-description-copy">正式主推允许真实空池，只展示通过正式门槛的候选。</div>'
+        + '<div class="view-description-meta">'
+        + '  <span class="status-badge is-info">正式推荐</span>'
+        + '  <span>动作：<strong>唯一正式动作</strong></span>'
+        + '</div>';
+      return;
+    }
     nodes.description.innerHTML = ''
       + '<div class="view-description-copy">' + escapeHtml(text) + '</div>'
       + '<div class="view-description-meta">'
@@ -1912,6 +2286,29 @@
 
   function makeChip(text, className) {
     return '<span class="' + className + '">' + escapeHtml(text) + '</span>';
+  }
+
+  function selectCandidateRowTags(item, viewKey) {
+    var rec = item || {};
+    var tags = [];
+    var action = resolvePageAction(rec, viewKey);
+    if (action) {
+      tags.push({ text: '正式动作：' + action, className: getActionClass(action) });
+    }
+    var horizon = normalizeString(rec.intended_horizon);
+    var riskFlags = asArray(rec.risk_flags).filter(function (flag) {
+      return normalizeString(flag) && normalizeString(flag) !== '仅观察';
+    });
+    if (horizon) {
+      tags.push({ text: /^T\+/.test(horizon) ? horizon : 'T+' + horizon, className: 'source-chip' });
+    } else if (riskFlags.length) {
+      tags.push({ text: '风险 ' + riskFlags.length + ' 项', className: getRiskClass(riskFlags[0]) });
+    } else if (normalizeString(rec.resonance_label)) {
+      tags.push({ text: normalizeString(rec.resonance_label), className: getResonanceClass(rec.resonance_label) });
+    } else if (asArray(rec.source_labels).length) {
+      tags.push({ text: normalizeString(asArray(rec.source_labels)[0]), className: 'source-chip' });
+    }
+    return tags.slice(0, 2);
   }
 
   function getCandidateNavigationIndex(currentIndex, key, total) {
@@ -1929,7 +2326,11 @@
     if (!nodes.candidateList) return;
     nodes.candidateList.innerHTML = '';
 
-    var allItems = getCurrentViewItems();
+    var poolItems = getCurrentViewItems();
+    var allItems = filterCandidatesBySector(
+      poolItems, state.sectorFilter, state.sectorFilterCode,
+      state.sectorFilterRefs
+    );
     var query = state.candidateQuery;
     var items = allItems.filter(function (item) {
       if (!query) return true;
@@ -1942,6 +2343,13 @@
       });
     });
     var visibleItems = items.slice(0, state.candidateLimit);
+    var unifiedMainEmpty = state.currentView === 'main'
+      && !query
+      && !state.sectorFilter
+      && items.length === 0;
+    if (nodes.workspaceBody && nodes.workspaceBody.classList) {
+      nodes.workspaceBody.classList.toggle('is-unified-empty', unifiedMainEmpty);
+    }
     var activeVisible = visibleItems.some(function (candidate) {
       return state.activeItem
         && toCodeKey(candidate && candidate.code) === toCodeKey(state.activeItem.code);
@@ -1952,17 +2360,24 @@
     }
     if (nodes.candidateCount) {
       nodes.candidateCount.textContent = '显示 ' + visibleItems.length + ' / ' + items.length
-        + (query ? '（原池 ' + allItems.length + '）' : '');
+        + (query || state.sectorFilter ? '（原池 ' + poolItems.length + '）' : '');
     }
     if (nodes.candidateMore) {
       nodes.candidateMore.hidden = visibleItems.length >= items.length;
     }
     if (!items || items.length === 0) {
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
-      var availability = getViewAvailabilityMessage(viewMeta);
-      nodes.candidateList.innerHTML = '<div class="candidate-empty is-' + escapeHtml(availability.state) + '"><strong>'
-        + escapeHtml(availability.title) + '</strong><span>' + escapeHtml(availability.detail) + '</span></div>';
-      nodes.detailPanel.innerHTML = '<div class="detail-empty">' + escapeHtml(availability.title) + '，没有股票详情。</div>';
+      var rawAvailability = viewMeta.availability || {};
+      nodes.candidateList.innerHTML = buildCandidateEmptyState(state.currentView, rawAvailability, {
+        filtered: Boolean(query || state.sectorFilter),
+        filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
+      });
+      nodes.detailPanel.innerHTML = unifiedMainEmpty
+        ? ''
+        : buildCandidateEmptyState(state.currentView, rawAvailability, {
+          filtered: Boolean(query || state.sectorFilter),
+          filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
+        });
       return;
     }
 
@@ -1985,41 +2400,10 @@
         changeCls = 'is-down';
       }
 
-      var sourceLabels = asArray(item.source_labels);
-      if (sourceLabels.length === 0 && Array.isArray(item.sources)) {
-        sourceLabels = item.sources.map(function (source) {
-          return String(source || '');
-        });
-      }
-
-      var resonance = normalizeString(item.resonance_label || '');
-      var action = resolvePageAction(item, state.currentView);
-      var riskFlags = asArray(item.risk_flags).filter(function (flag) {
-        return normalizeString(flag) !== '仅观察';
-      });
-      var raw = findRawCandidate(item.ref || {});
-      var decision = resolveDecisionEngine(item, raw);
-
-      var tagHtml = '';
-      if (action) {
-        tagHtml += makeChip('页面动作：' + action, getActionClass(action));
-      }
-      for (var s = 0; s < sourceLabels.length; s += 1) {
-        if (sourceLabels[s]) {
-          tagHtml += makeChip(sourceLabels[s], getSourceClass(sourceLabels[s]));
-        }
-      }
-      if (resonance) {
-        tagHtml += makeChip(resonance, getResonanceClass(resonance));
-      }
-      tagHtml += renderDataBadges(item);
-      tagHtml += renderCandidateDecisionBadge(item, item.scoring_decision || decision);
-
-      for (var r = 0; r < riskFlags.length; r += 1) {
-        if (riskFlags[r]) {
-          tagHtml += makeChip(riskFlags[r], getRiskClass(riskFlags[r]));
-        }
-      }
+      var selectedTags = selectCandidateRowTags(item, state.currentView);
+      var tagHtml = selectedTags.map(function (tag) {
+        return makeChip(tag.text, tag.className);
+      }).join('');
 
       row.type = 'button';
       row.className = 'candidate-row';
@@ -2082,6 +2466,189 @@
     }
   }
 
+  function buildDecisionHeader(item, raw) {
+    var rec = item || {};
+    var source = raw || {};
+    var contract = rec.formal_decision_contract || source.formal_decision_contract || {};
+    var action = normalizeString(contract.action || resolvePageAction(rec, state.currentView) || '观察');
+    var currentPrice = safeNumber(contract.current_price, getCandidateCurrentPrice(rec));
+    var referencePrice = safeNumber(contract.reference_price, getCandidateReferencePrice(rec));
+    var changePct = safeNumber(contract.change_pct, getCandidateChangePct(rec));
+    var facts = [];
+    if (currentPrice !== null) facts.push('<span><small>现价</small><strong>' + escapeHtml(formatNumber(currentPrice, 2)) + '</strong></span>');
+    if (changePct !== null) facts.push('<span><small>当日</small><strong>' + escapeHtml(formatPct(changePct, true)) + '</strong></span>');
+    if (referencePrice !== null) facts.push('<span><small>参考价</small><strong>' + escapeHtml(formatNumber(referencePrice, 2)) + '</strong></span>');
+    if (normalizeString(contract.intended_horizon)) {
+      facts.push('<span><small>周期</small><strong>' + escapeHtml(normalizeString(contract.intended_horizon)) + '</strong></span>');
+    }
+    if (normalizeString(contract.position_band)) {
+      facts.push('<span><small>仓位</small><strong>' + escapeHtml(normalizeString(contract.position_band)) + '</strong></span>');
+    }
+    if (safeNumber(contract.invalidation_price, null) !== null) {
+      facts.push('<span><small>失效位</small><strong>' + escapeHtml(formatNumber(contract.invalidation_price, 2)) + '</strong></span>');
+    }
+    if (safeNumber(contract.pressure_price, null) !== null) {
+      facts.push('<span><small>压力位</small><strong>' + escapeHtml(formatNumber(contract.pressure_price, 2)) + '</strong></span>');
+    }
+    var disagreement = buildStrategyDisagreementSummary(rec);
+    if (disagreement) facts.push(disagreement);
+    return '<div class="detail-header decision-header">'
+      + '<div><h2 class="detail-title">' + escapeHtml(normalizeString(rec.name || rec.code || '未命名')) + '</h2>'
+      + '<p class="detail-subtitle">' + escapeHtml(normalizeString(rec.code) + (rec.sector ? (' · ' + rec.sector) : '')) + '</p></div>'
+      + '<div class="decision-header-action"><span class="formal-action ' + escapeHtml(getActionPillClass(action)) + '">'
+      + escapeHtml('正式动作：' + action) + '</span></div>'
+      + (facts.length ? '<div class="decision-header-facts">' + facts.join('') + '</div>' : '')
+      + '</div>';
+  }
+
+  function buildStrategyDisagreementSummary(item) {
+    var rec = item || {};
+    var summary = rec.strategy_disagreement_summary || {};
+    var counts = summary.counts || {};
+    if (!summary.counts) {
+      counts = { support: 0, reserve: 0, oppose: 0, insufficient_sample: 0 };
+      asArray(rec.strategy_stances).forEach(function (stance) {
+        var key = normalizeString(stance && stance.stance);
+        if (Object.prototype.hasOwnProperty.call(counts, key)) counts[key] += 1;
+      });
+    }
+    var labels = [
+      ['support', '支持'],
+      ['reserve', '保留'],
+      ['oppose', '反对'],
+      ['insufficient_sample', '样本不足'],
+    ];
+    var parts = labels.map(function (entry) {
+      var count = safeNumber(counts[entry[0]], 0);
+      return count > 0 ? formatNumber(count, 0) + ' ' + entry[1] : '';
+    }).filter(Boolean);
+    if (!parts.length) return '';
+    return '<span class="strategy-disagreement-summary"><small>策略分歧</small><strong>'
+      + escapeHtml(parts.join(' / ')) + '</strong></span>';
+  }
+
+  function renderStrategyStances(item) {
+    var rec = item || {};
+    var labels = {
+      support: '支持',
+      reserve: '保留',
+      oppose: '反对',
+      insufficient_sample: '样本不足',
+    };
+    var rows = asArray(rec.strategy_stances).map(function (stance) {
+      var key = normalizeString(stance && stance.stance);
+      var label = labels[key] || '样本不足';
+      var strategy = normalizeString(stance && stance.strategy || '未命名策略');
+      var reason = normalizeString(stance && stance.reason);
+      var horizon = normalizeString(stance && stance.intended_horizon);
+      var version = normalizeString(stance && stance.version);
+      var sourcePool = normalizeString(stance && stance.source_pool);
+      var metadata = [
+        horizon ? '周期 ' + horizon : '',
+        version ? '版本 ' + version : '',
+        sourcePool ? '来源 ' + sourcePool : '',
+      ].filter(Boolean);
+      var evidence = asArray(stance && stance.evidence_refs).map(normalizeString).filter(Boolean);
+      return '<li><span><strong>' + escapeHtml(strategy) + '</strong><em class="strategy-stance is-'
+        + escapeHtml(key || 'insufficient_sample') + '">' + escapeHtml(label) + '</em></span>'
+        + (reason ? '<small>' + escapeHtml(reason) + '</small>' : '')
+        + (metadata.length ? '<small>' + escapeHtml(metadata.join(' · ')) + '</small>' : '')
+        + (evidence.length ? '<div class="strategy-evidence-refs"><small>证据</small>'
+          + evidence.map(function (ref) { return '<code>' + escapeHtml(ref) + '</code>'; }).join('')
+          + '</div>' : '')
+        + '</li>';
+    }).join('');
+    var ai = rec.ai_research || rec.ai_analysis || {};
+    var aiSummary = normalizeString(ai.summary || ai.risk_notice || '');
+    var aiEvidence = asArray(ai.evidence_refs).map(normalizeString).filter(Boolean);
+    var aiHtml = aiSummary
+      ? '<div class="ai-research-boundary"><strong>AI 研究提示</strong><span>'
+        + escapeHtml(aiSummary) + '</span><small>仅用于支持、风险提醒或证据不足判断，不改变正式动作。</small>'
+        + (aiEvidence.length ? '<div class="strategy-evidence-refs"><small>证据</small>'
+          + aiEvidence.map(function (ref) { return '<code>' + escapeHtml(ref) + '</code>'; }).join('')
+          + '</div>' : '')
+        + '</div>'
+      : '';
+    return (rows ? '<ul class="strategy-stance-list">' + rows + '</ul>' : '') + aiHtml;
+  }
+
+  function renderStrategyDisagreementAudit(data) {
+    var workspace = data && data.workspace || {};
+    var mainRows = asArray(workspace.views && workspace.views.main);
+    var body = mainRows.length ? mainRows.map(function (item) {
+      var summary = buildStrategyDisagreementSummary(item);
+      var details = renderStrategyStances(item);
+      return '<details class="strategy-disagreement-item strategy-scorecard"><summary><span><strong>'
+        + escapeHtml(normalizeString(item.name || item.code || '未命名'))
+        + '</strong><small>' + escapeHtml(normalizeString(item.code)) + '</small></span>'
+        + (summary || '<span><small>策略分歧</small><strong>暂无其他策略立场</strong></span>')
+        + '</summary><div class="strategy-disagreement-detail">'
+        + (details || '<div class="decision-empty">暂无可审计策略立场</div>')
+        + '</div></details>';
+    }).join('') : '<div class="decision-empty">本期未选出推荐票</div>';
+    return renderDecisionCard({
+      title: '策略分歧',
+      subtitle: '相对唯一正式动作的立场；展开查看周期、版本和证据',
+      badge: { text: mainRows.length ? '可下钻' : '确认空池', tone: mainRows.length ? 'neutral' : 'neutral' },
+      className: 'strategy-disagreement-card strategy-scorecards-card',
+      bodyHtml: body,
+    });
+  }
+
+  function collectDecisionSummaryItems(values, limit) {
+    var seen = {};
+    var rows = [];
+    asArray(values).forEach(function (value) {
+      var text = value && typeof value === 'object'
+        ? normalizeString(value.text || value.reason || value.label || value.summary)
+        : normalizeString(value);
+      text = text.trim();
+      if (!text || seen[text]) return;
+      seen[text] = true;
+      rows.push(text);
+    });
+    return rows.slice(0, limit || 3);
+  }
+
+  function renderDecisionSummaryColumn(title, items, emptyText) {
+    var rows = collectDecisionSummaryItems(items, 3);
+    return '<section><h3>' + escapeHtml(title) + '</h3>'
+      + (rows.length
+        ? '<ul>' + rows.map(function (row) { return '<li>' + escapeHtml(row) + '</li>'; }).join('') + '</ul>'
+        : '<p>' + escapeHtml(emptyText) + '</p>')
+      + '</section>';
+  }
+
+  function buildDecisionSummaryColumns(item, raw) {
+    var rec = item || {};
+    var source = raw || {};
+    var why = [
+      rec.action_reason,
+      rec.page_action_reason,
+      rec.primary_reason,
+      source.action_reason,
+    ];
+    var next = asArray(rec.upgrade_conditions).concat(asArray(source.upgrade_conditions));
+    var invalidation = asArray(rec.cancel_conditions)
+      .concat(asArray(source.cancel_conditions))
+      .concat(asArray(rec.risk_flags));
+    return '<div class="decision-summary-columns">'
+      + renderDecisionSummaryColumn('为什么', why, '本期未补充新的结论说明。')
+      + renderDecisionSummaryColumn('下一确认', next, '暂无新增确认条件。')
+      + renderDecisionSummaryColumn('失效条件', invalidation, '暂无新增失效条件。')
+      + '</div>';
+  }
+
+  function buildEvidenceAuditDrawer(item, raw) {
+    return '<details class="evidence-audit-drawer"><summary>证据与审计</summary>'
+      + '<div class="evidence-audit-body">'
+      + buildDecisionEngineSection(item, raw)
+      + buildReasonSection(item, raw)
+      + buildRiskSection(item, raw)
+      + buildDetailsSection(item, raw)
+      + '</div></details>';
+  }
+
   function buildConclusionSection(item, raw) {
     var sourceLabels = asArray(item.source_labels);
     if (sourceLabels.length === 0 && Array.isArray(item.sources)) {
@@ -2089,9 +2656,6 @@
         return String(source || '');
       });
     }
-    var action = resolvePageAction(item, state.currentView);
-    var actionClass = getActionPillClass(action);
-
     var sourceHtml = '';
     for (var i = 0; i < sourceLabels.length; i += 1) {
       if (sourceLabels[i]) {
@@ -2109,19 +2673,11 @@
         : item.primary_reason
     ) || '无明确结论说明';
     return ''
-      + '<div class="detail-header">'
-      + '  <div>'
-      + '    <h2 class="detail-title">' + escapeHtml(normalizeString(item.name)) + '</h2>'
-      + '    <p class="detail-subtitle">' + escapeHtml(normalizeString(item.code) + (item.sector ? (' · ' + item.sector) : '')) + '</p>'
-      + '  </div>'
-      + '  <div class="detail-meta">'
-      + '    <span class="' + actionClass + '">' + escapeHtml('页面动作：' + action) + '</span>'
-      + sourceHtml
-      + '  </div>'
-      + '</div>'
+      + buildDecisionHeader(item, raw)
       + '<div class="detail-section">'
       + '  <h3 class="detail-section-title">01 结论</h3>'
       + '  <div class="detail-section-body text-item">' + escapeHtml(conclusion) + '</div>'
+      + (sourceHtml ? '  <div class="detail-meta">' + sourceHtml + '</div>' : '')
       + '</div>';
   }
 
@@ -2398,9 +2954,19 @@
       + '<div class="detail-section">'
       + '  <h3 class="detail-section-title">03 图表</h3>'
       + '  <div class="chart-panel">'
-      + '    <div class="chart-help">' + escapeHtml(helpText) + '</div>'
+      + '    <div class="chart-toolbar"><div class="chart-help">' + escapeHtml(helpText) + '</div>'
+      + '      <div class="chart-layer-switcher" id="chartLayerSwitcher" aria-label="K线图层"></div></div>'
       + '    <div id="chartCanvas" class="chart-canvas"></div>'
       + '  </div>'
+      + '</div>';
+  }
+
+  function buildMergedCandidateDetail(item, raw) {
+    return '<div class="detail-empty-wrap merged-candidate-detail">'
+      + buildDecisionHeader(item, raw)
+      + buildChartPlaceholder(item)
+      + buildDecisionSummaryColumns(item, raw)
+      + buildEvidenceAuditDrawer(item, raw)
       + '</div>';
   }
 
@@ -2410,26 +2976,117 @@
 
     if (!item) {
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
-      var availability = getViewAvailabilityMessage(viewMeta);
-      target.innerHTML = '<div class="detail-empty"><strong>'
-        + escapeHtml(availability.title) + '</strong><span>'
-        + escapeHtml(availability.detail) + '</span></div>';
+      target.innerHTML = state.currentView === 'main'
+        ? '<div class="detail-empty"><strong>本期未选出推荐票</strong></div>'
+        : buildCandidateEmptyState(state.currentView, viewMeta.availability || {}, { filtered: false });
       return;
     }
 
     var raw = findRawCandidate(item.ref || {});
-    target.innerHTML = ''
-      + '<div class="detail-empty-wrap">'
-      + buildConclusionSection(item, raw)
-      + buildPriceSection(item, raw)
-      + buildChartPlaceholder(item)
-      + buildDecisionEngineSection(item, raw)
-      + buildReasonSection(item, raw)
-      + buildRiskSection(item, raw)
-      + buildDetailsSection(item, raw)
-      + '</div>';
+    target.innerHTML = buildMergedCandidateDetail(item, raw);
     state.chartMount = target.querySelector('#chartCanvas');
     renderChart(raw, item);
+  }
+
+  function selectPersistentPriceLabels(labels) {
+    var priorities = { invalidation: 0, current: 1, reference: 2, pressure: 3 };
+    var candidates = asArray(labels).map(function (label) {
+      var value = safeNumber(label && label.value, null);
+      if (value === null) return null;
+      return {
+        kind: normalizeString(label.kind),
+        kinds: [normalizeString(label.kind)],
+        value: value,
+        values: [value],
+        label: normalizeString(label.label),
+        merged: false,
+      };
+    }).filter(Boolean).sort(function (left, right) {
+      return (priorities[left.kind] === undefined ? 99 : priorities[left.kind])
+        - (priorities[right.kind] === undefined ? 99 : priorities[right.kind]);
+    });
+    var selected = [];
+    for (var i = 0; i < candidates.length; i += 1) {
+      var candidate = candidates[i];
+      var closeTo = selected.filter(function (existing) {
+        var base = Math.max(Math.abs(existing.value), Math.abs(candidate.value), 0.0001);
+        return Math.abs(existing.value - candidate.value) / base < 0.006;
+      })[0];
+      if (closeTo) {
+        closeTo.merged = true;
+        closeTo.values.push(candidate.value);
+        closeTo.kinds.push(candidate.kind);
+        closeTo.label = [closeTo.label, candidate.label].filter(Boolean).join(' / ');
+        continue;
+      }
+      if (selected.length < 2) selected.push(candidate);
+    }
+    return selected;
+  }
+
+  function selectChartActionMarkers(markPoints, barCount) {
+    var rows = asArray(markPoints).map(function (point) {
+      return Object.assign({}, point || {}, {
+        coord: asArray(point && point.coord).slice(),
+        label: Object.assign({}, point && point.label || {}, { show: false }),
+      });
+    });
+    if (!rows.length) return rows;
+    var latestIndex = 0;
+    for (var i = 1; i < rows.length; i += 1) {
+      var current = safeNumber(rows[i].coord[0], i);
+      var latest = safeNumber(rows[latestIndex].coord[0], latestIndex);
+      if (current >= latest) latestIndex = i;
+    }
+    var textBudget = Math.max(1, Math.ceil(Math.max(1, Number(barCount) || 1) / 40) * 3);
+    if (textBudget > 0) {
+      var latestBarIndex = safeNumber(rows[latestIndex].barIndex, safeNumber(rows[latestIndex].coord[0], latestIndex));
+      rows[latestIndex].label.show = true;
+      rows[latestIndex].label.formatter = normalizeString(rows[latestIndex].name || '最新动作');
+      rows[latestIndex].label.position = latestBarIndex >= Math.max(0, barCount - 5) ? 'left' : 'top';
+      rows[latestIndex].label.distance = 10;
+    }
+    return rows;
+  }
+
+  function formatPersistentPriceLabel(label) {
+    var shortLabels = { invalidation: '止', current: '现', reference: '参', pressure: '压' };
+    var kinds = asArray(label && label.kinds).length ? asArray(label.kinds) : [label && label.kind];
+    var prefix = kinds.map(function (kind) { return shortLabels[kind] || ''; }).filter(Boolean).join('/');
+    return (prefix || '价') + ' ' + formatNumber(label && label.value, 2);
+  }
+
+  function getAvailableChartLayers(raw) {
+    var source = raw || {};
+    var annotations = source.chart_annotations || {};
+    var layers = [];
+    if (asArray(annotations.markPoints).length || asArray(annotations.markLines).length
+        || source.formal_decision_contract) layers.push('decision');
+    if (asArray(source.buy_points).length || asArray(source.reference_buy_points).length
+        || source.structure_annotations) layers.push('structure');
+    if (asArray(source.ema5).length || asArray(source.ema20).length
+        || asArray(source.ma5).length || asArray(source.ma20).length) layers.push('trend');
+    if (!layers.length) layers.push('decision');
+    return layers;
+  }
+
+  function renderChartLayerSwitcher(raw, workspaceItem) {
+    var mount = document.getElementById('chartLayerSwitcher');
+    if (!mount) return;
+    var labels = { decision: '决策位', structure: '结构', trend: '趋势' };
+    var layers = getAvailableChartLayers(raw);
+    if (layers.indexOf(state.chartLayer) === -1) state.chartLayer = layers[0];
+    mount.innerHTML = layers.map(function (layer) {
+      return '<button type="button" data-chart-layer="' + escapeHtml(layer) + '" class="'
+        + (layer === state.chartLayer ? 'is-active' : '') + '">' + escapeHtml(labels[layer]) + '</button>';
+    }).join('');
+    var buttons = mount.querySelectorAll('[data-chart-layer]');
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].addEventListener('click', function (event) {
+        state.chartLayer = event.currentTarget.getAttribute('data-chart-layer');
+        renderChart(raw, workspaceItem);
+      });
+    }
   }
 
   function renderChart(raw, workspaceItem) {
@@ -2487,6 +3144,9 @@
     var markPoints = [];
     var incidentReview = isIncidentReviewItem(workspaceItem);
     var annotations = raw.chart_annotations || {};
+    var availableLayers = getAvailableChartLayers(raw);
+    if (availableLayers.indexOf(state.chartLayer) === -1) state.chartLayer = availableLayers[0];
+    renderChartLayerSwitcher(raw, workspaceItem);
     var rawMarkPoints = asArray(annotations.markPoints);
     for (var p = 0; p < rawMarkPoints.length; p += 1) {
       var mp = rawMarkPoints[p] || {};
@@ -2494,6 +3154,7 @@
       if (coord.length >= 2) {
         markPoints.push({
           coord: [coord[0], coord[1]],
+          barIndex: Math.max(0, xAxis.indexOf(coord[0])),
           name: incidentReview
             ? '事故前信号·仅追溯'
             : normalizeString(mp.name),
@@ -2508,18 +3169,21 @@
       }
     }
 
-    var markLines = [];
+    markPoints = selectChartActionMarkers(markPoints, minLen);
+
+    var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
     for (var l = 0; l < rawMarkLines.length; l += 1) {
       var ml = rawMarkLines[l] || {};
       if (incidentReview) continue;
       if (ml && ml.name && ml.yAxis !== undefined) {
-        markLines.push({
-          name: normalizeString(ml.name),
-          yAxis: ml.yAxis,
-          label: ml.label || {},
-          lineStyle: ml.lineStyle || {},
-        });
+        var rawLineName = normalizeString(ml.name);
+        var rawKind = /失效|止损/.test(rawLineName)
+          ? 'invalidation'
+          : (/压力/.test(rawLineName)
+            ? 'pressure'
+            : (/参考/.test(rawLineName) ? 'reference' : (/现价|收盘/.test(rawLineName) ? 'current' : '')));
+        if (rawKind) priceLabelCandidates.push({ kind: rawKind, value: ml.yAxis, label: rawLineName });
       }
     }
 
@@ -2535,23 +3199,44 @@
       refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
     }
     if (refPrice !== null) {
-      markLines.push({
-        name: incidentReview ? '事故前参考·仅追溯' : '参考价',
-        yAxis: refPrice,
-        label: {
-          show: true,
-          position: 'middle',
-          formatter: incidentReview
-            ? '事故前参考·仅追溯 ' + formatNumber(refPrice, 2)
-            : '参考 ' + formatNumber(refPrice, 2),
-        },
+      priceLabelCandidates.push({
+        kind: 'reference',
+        value: refPrice,
+        label: incidentReview ? '事故前参考·仅追溯' : '参考价',
       });
     }
     if (curPrice !== null) {
-      markLines.push({
-        name: '信号日收盘',
-        yAxis: curPrice,
-        label: { show: true, position: 'end', formatter: '收盘 ' + formatNumber(curPrice, 2) },
+      priceLabelCandidates.push({ kind: 'current', value: curPrice, label: '信号日收盘' });
+    }
+    var formalContract = workspaceItem && workspaceItem.formal_decision_contract || raw.formal_decision_contract || {};
+    if (safeNumber(formalContract.invalidation_price, null) !== null) {
+      priceLabelCandidates.push({ kind: 'invalidation', value: formalContract.invalidation_price, label: '失效位' });
+    }
+    if (safeNumber(formalContract.pressure_price, null) !== null) {
+      priceLabelCandidates.push({ kind: 'pressure', value: formalContract.pressure_price, label: '压力位' });
+    }
+    var persistentLabels = selectPersistentPriceLabels(priceLabelCandidates);
+    var markLines = persistentLabels.map(function (label) {
+      return {
+        name: label.label,
+        yAxis: label.value,
+        label: {
+          show: true,
+          position: 'end',
+          formatter: formatPersistentPriceLabel(label),
+        },
+      };
+    });
+
+    var activeMarkPoints = state.chartLayer === 'decision' || state.chartLayer === 'structure'
+      ? markPoints
+      : [];
+    var activeMarkLines = state.chartLayer === 'decision' ? markLines : [];
+    var trendSeries = [];
+    if (state.chartLayer === 'trend') {
+      [['EMA5', raw.ema5 || raw.ma5], ['EMA20', raw.ema20 || raw.ma20]].forEach(function (entry) {
+        if (!asArray(entry[1]).length) return;
+        trendSeries.push({ name: entry[0], type: 'line', data: asArray(entry[1]).slice(-minLen), showSymbol: false, smooth: true });
       });
     }
 
@@ -2560,8 +3245,8 @@
       animation: false,
       backgroundColor: '#ffffff',
       grid: [
-        { left: '6%', right: '6%', top: '8%', height: '58%' },
-        { left: '6%', right: '6%', top: '72%', height: '20%' },
+        { left: '6%', right: state.isMobile ? '96px' : '124px', top: '8%', height: '58%' },
+        { left: '6%', right: state.isMobile ? '96px' : '124px', top: '72%', height: '20%' },
       ],
       xAxis: [
         {
@@ -2607,11 +3292,11 @@
           type: 'candlestick',
           data: kLines,
           markPoint: {
-            data: markPoints,
+            data: activeMarkPoints,
           },
           markLine: {
             symbol: 'none',
-            data: markLines.map(function (line) {
+            data: activeMarkLines.map(function (line) {
               return {
                 name: line.name,
                 yAxis: line.yAxis,
@@ -2649,7 +3334,7 @@
             },
           },
         },
-      ],
+      ].concat(trendSeries),
     }, true);
     setTimeout(function () {
       if (state.chartInstance) {
@@ -2723,6 +3408,95 @@
       subtitle: '全A宽度、涨跌停生态、成交与趋势结构',
       badge: { text: temperature.label, tone: temperature.tone },
       className: 'market-temperature-card',
+      bodyHtml: body,
+    });
+  }
+
+  function psy12UnavailableText(reason, validDays) {
+    if (reason === 'insufficient_history') {
+      return 'PSY12 数据不足：已有 ' + Math.max(0, safeNumber(validDays, 0)) + ' / 12 个有效交易日。';
+    }
+    if (reason === 'future_date') return 'PSY12 数据异常：窗口包含报告日之后的证据。';
+    if (reason === 'duplicate_date') return 'PSY12 数据异常：窗口包含重复交易日。';
+    if (reason === 'unordered_dates') return 'PSY12 数据异常：交易日顺序不可验证。';
+    if (reason === 'unverifiable_index_evidence') return 'PSY12 数据异常：指数涨跌证据不可验证。';
+    return 'PSY12 数据不足，暂不生成影子分。';
+  }
+
+  function renderPsy12ShadowCard(data) {
+    data = data || {};
+    var psy12 = data.psy12 || {};
+    var shadow = data.psy12_shadow || {};
+    var contractValid = shadow.schema_version === 1
+      && shadow.mode === 'shadow'
+      && shadow.affects_production === false;
+    if (!contractValid) {
+      return renderDecisionCard({
+        title: 'PSY12 影子情绪',
+        subtitle: '最近 12 个有效交易日上涨持续性',
+        badge: { text: '合同不可用', tone: 'danger' },
+        className: 'psy12-shadow-card',
+        bodyHtml: '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>',
+      });
+    }
+
+    var available = psy12.status === 'available'
+      && shadow.status === 'available'
+      && safeNumber(psy12.score, null) !== null
+      && safeNumber(psy12.up_days, null) !== null
+      && safeNumber(psy12.valid_days, null) === 12
+      && safeNumber(shadow.formal_score, null) !== null
+      && safeNumber(shadow.shadow_score_with_psy12, null) !== null;
+    if (!available) {
+      return renderDecisionCard({
+        title: 'PSY12 影子情绪',
+        subtitle: '最近 12 个有效交易日上涨持续性',
+        badge: { text: '数据不足', tone: 'neutral' },
+        className: 'psy12-shadow-card',
+        bodyHtml: ''
+          + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
+          + '<div class="decision-empty">'
+          + escapeHtml(psy12UnavailableText(psy12.reason || shadow.reason, psy12.valid_days))
+          + '</div>',
+      });
+    }
+
+    var formalScore = safeNumber(shadow.formal_score, null);
+    var shadowScore = safeNumber(shadow.shadow_score_with_psy12, null);
+    var delta = safeNumber(shadow.delta_vs_formal, shadowScore - formalScore);
+    var formalLabel = normalizeString(shadow.formal_label || '--');
+    var shadowLabel = normalizeString(shadow.shadow_label || '--');
+    var labelDifference = formalLabel !== shadowLabel
+      ? '<div class="psy12-label-difference">正式标签 ' + escapeHtml(formalLabel)
+        + ' · 影子标签 ' + escapeHtml(shadowLabel)
+        + '；差异只用于研究验证，首屏保持正式标签。</div>'
+      : '<div class="psy12-label-difference is-same">正式与影子标签均为 '
+        + escapeHtml(formalLabel) + '。</div>';
+    var directions = asArray(psy12.daily_directions);
+    var audit = directions.length
+      ? '<details class="psy12-direction-audit"><summary>查看 12 日方向审计</summary><div>'
+        + directions.map(function (item) {
+          return '<span><b>' + escapeHtml(normalizeString(item.date || '--')) + '</b>'
+            + escapeHtml(item.direction === 'up' ? '上涨' : '非上涨') + '</span>';
+        }).join('') + '</div></details>'
+      : '';
+    var body = ''
+      + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
+      + '<div class="psy12-shadow-grid">'
+      + '  <div><span>窗口</span><strong>' + escapeHtml(normalizeString(psy12.start_date)) + ' 至 ' + escapeHtml(normalizeString(psy12.end_date)) + '</strong></div>'
+      + '  <div><span>上涨日</span><strong>' + escapeHtml(String(psy12.up_days)) + ' / ' + escapeHtml(String(psy12.valid_days)) + '</strong></div>'
+      + '  <div><span>PSY12</span><strong>' + escapeHtml(formatNumber(psy12.score, 0)) + '</strong></div>'
+      + '  <div><span>正式分</span><strong>' + escapeHtml(formatNumber(formalScore, 0)) + '</strong></div>'
+      + '  <div><span>影子分</span><strong>' + escapeHtml(formatNumber(shadowScore, 0)) + '</strong></div>'
+      + '  <div><span>差值</span><strong>' + escapeHtml((delta > 0 ? '+' : '') + formatNumber(delta, 0)) + '</strong></div>'
+      + '</div>'
+      + labelDifference
+      + audit;
+    return renderDecisionCard({
+      title: 'PSY12 影子情绪',
+      subtitle: '最近 12 个有效交易日上涨持续性',
+      badge: { text: '影子评测', tone: 'info' },
+      className: 'psy12-shadow-card',
       bodyHtml: body,
     });
   }
@@ -2837,6 +3611,177 @@
       + '  <span class="flow-name">' + escapeHtml(normalizeString(rec.name || rec.sector || '--')) + '</span>'
       + '  <strong class="flow-value ' + (tone === 'in' ? 'is-up' : 'is-down') + '">' + escapeHtml(normalizeString(flow || '--')) + '</strong>'
       + '</div>';
+  }
+
+  function normalizeSectorName(value) {
+    return normalizeString(value).trim().replace(/\s+/g, ' ');
+  }
+
+  function candidateSectorCodes(item) {
+    var rec = item || {};
+    var codes = [];
+    function append(value) {
+      var code = normalizeString(value).trim();
+      if (code && codes.indexOf(code) === -1) codes.push(code);
+    }
+    append(rec.sector_code);
+    asArray(rec.sector_refs).forEach(function (ref) {
+      if (ref && typeof ref === 'object') {
+        append(ref.sector_code || ref.code);
+      } else {
+        append(ref);
+      }
+    });
+    return codes;
+  }
+
+  function filterCandidatesBySector(items, sectorName, sectorCode, sectorRefs) {
+    var rows = asArray(items);
+    var target = normalizeSectorName(sectorName);
+    var targetCode = normalizeString(sectorCode).trim();
+    var exactRefs = asArray(sectorRefs).map(function (ref) {
+      return normalizeString(ref).trim();
+    }).filter(Boolean);
+    if (!target && !targetCode && !exactRefs.length) return rows.slice();
+    return rows.filter(function (item) {
+      if (exactRefs.length) {
+        return exactRefs.indexOf(normalizeString(item && item.code).trim()) !== -1;
+      }
+      if (targetCode) {
+        return candidateSectorCodes(item).indexOf(targetCode) !== -1;
+      }
+      return normalizeSectorName(item && (item.sector_name || item.sector)) === target;
+    });
+  }
+
+  function buildFundingMainlineModel(data) {
+    var source = data || {};
+    var sectorHeat = source.sector_heat;
+    var heatItems = asArray(sectorHeat && sectorHeat.items);
+    var verifiedHeat = sectorHeat
+      && !Array.isArray(sectorHeat)
+      && normalizeString(sectorHeat.status) === 'verified_complete'
+      && heatItems.length > 0
+      && heatItems.every(function (item) {
+        return normalizeString(item && item.status) === 'verified_complete'
+          && normalizeSectorName(item && item.sector_name)
+          && normalizeString(item && item.sector_code)
+          && safeNumber(item && item.change_pct, null) !== null
+          && safeNumber(item && item.rank, null) !== null
+          && safeNumber(item && item.up_count, null) !== null
+          && safeNumber(item && item.total_count, null) !== null
+          && safeNumber(item && item.limit_up_count, null) !== null;
+      });
+    if (verifiedHeat) {
+      return {
+        title: '热门板块',
+        status: { label: '收盘核验', tone: 'positive', detail: '' },
+        items: heatItems.slice(0, 5).map(function (item) {
+          var changePct = safeNumber(item.change_pct, null);
+          return {
+            name: normalizeSectorName(item.sector_name),
+            sectorCode: normalizeString(item.sector_code),
+            sectorRefs: asArray(item.sector_refs).map(normalizeString).filter(Boolean),
+            direction: changePct !== null && changePct < 0 ? 'heat-down' : 'heat-up',
+            kind: 'heat',
+            fact: item,
+          };
+        }),
+      };
+    }
+    var sectorIn = asArray(source.sector_flow);
+    var sectorOut = asArray(source.sector_outflow);
+    var status = getSectorFlowStatus(source, sectorIn, sectorOut);
+    var seen = {};
+    var items = [];
+    function append(rows, direction) {
+      asArray(rows).slice(0, 5).forEach(function (item) {
+        var name = normalizeSectorName(item && (item.name || item.sector));
+        if (!name || seen[name]) return;
+        seen[name] = true;
+        items.push({ name: name, direction: direction, fact: item });
+      });
+    }
+    append(sectorIn, 'in');
+    append(sectorOut, 'out');
+    return {
+      title: '资金主线',
+      status: status,
+      items: items,
+    };
+  }
+
+  function renderFundingMainline(model, activeSector, activeSectorCode) {
+    var rec = model || { title: '资金主线', status: {}, items: [] };
+    var active = normalizeSectorName(activeSector);
+    var activeCode = normalizeString(activeSectorCode).trim();
+    var status = rec.status || {};
+    var tags = asArray(rec.items).map(function (item) {
+      var name = normalizeSectorName(item && item.name);
+      var sectorCode = normalizeString(item && item.sectorCode).trim();
+      var sectorRefs = asArray(item && item.sectorRefs).map(normalizeString).filter(Boolean);
+      var selected = activeCode ? sectorCode === activeCode : (!sectorCode && name === active);
+      var fact = item && item.fact || {};
+      var heatFacts = '';
+      if (item && item.kind === 'heat') {
+        var change = safeNumber(fact.change_pct, null);
+        var flowText = normalizeString(fact.net_flow_text);
+        heatFacts = '<small>'
+          + (change === null ? '' : escapeHtml(formatPct(change, true)))
+          + ' · 涨 ' + escapeHtml(normalizeString(fact.up_count)) + '/' + escapeHtml(normalizeString(fact.total_count))
+          + ' · 涨停 ' + escapeHtml(normalizeString(fact.limit_up_count))
+          + (flowText ? ' · ' + escapeHtml(flowText) : '')
+          + '</small>';
+      }
+      return '<button type="button" class="funding-mainline-tag is-' + escapeHtml(item.direction || 'in')
+        + (selected ? ' is-active' : '') + '" data-sector-filter="' + escapeHtml(name)
+        + '" data-sector-code="' + escapeHtml(sectorCode)
+        + '" data-sector-refs="' + escapeHtml(sectorRefs.join(',')) + '" aria-pressed="'
+        + (selected ? 'true' : 'false') + '"><strong>' + escapeHtml(name) + '</strong>' + heatFacts + '</button>';
+    }).join('');
+    var body = tags || '<span class="funding-mainline-state is-' + escapeHtml(status.tone || 'neutral') + '">'
+      + escapeHtml(status.detail || '板块资金事实尚未生成。') + '</span>';
+    return '<div class="funding-mainline-heading"><strong>' + escapeHtml(rec.title || '资金主线') + '</strong>'
+      + '<small>' + escapeHtml(status.label || '状态待确认') + '</small></div>'
+      + '<div class="funding-mainline-tags">' + body
+      + (active || activeCode ? '<button type="button" class="funding-mainline-clear" data-sector-filter="" data-sector-code="" data-sector-refs="">清除筛选</button>' : '')
+      + '</div>';
+  }
+
+  function renderFundingMainlineStrip() {
+    if (!nodes.sectorStrip) return;
+    var model = buildFundingMainlineModel(state.data || {});
+    nodes.sectorStrip.setAttribute('aria-label', model.title || '资金主线');
+    nodes.sectorStrip.innerHTML = renderFundingMainline(
+      model,
+      state.sectorFilter,
+      state.sectorFilterCode,
+      state.sectorFilterRefs
+    );
+    var buttons = nodes.sectorStrip.querySelectorAll('[data-sector-filter]');
+    for (var i = 0; i < buttons.length; i += 1) {
+      buttons[i].addEventListener('click', function (event) {
+        var requested = normalizeSectorName(event.currentTarget.getAttribute('data-sector-filter'));
+        var requestedCode = normalizeString(event.currentTarget.getAttribute('data-sector-code')).trim();
+        var requestedRefs = normalizeString(event.currentTarget.getAttribute('data-sector-refs'))
+          .split(',').map(function (ref) { return ref.trim(); }).filter(Boolean);
+        var sameFilter = requestedCode
+          ? requestedCode === state.sectorFilterCode
+          : (!state.sectorFilterCode && requested === state.sectorFilter);
+        state.sectorFilter = sameFilter ? '' : requested;
+        state.sectorFilterCode = sameFilter ? '' : requestedCode;
+        state.sectorFilterRefs = sameFilter ? [] : requestedRefs;
+        state.candidateLimit = 20;
+        var filtered = filterCandidatesBySector(
+          getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
+          state.sectorFilterRefs
+        );
+        state.activeItem = filtered[0] || null;
+        renderFundingMainlineStrip();
+        renderCandidateList();
+        renderCandidateDetail(state.activeItem);
+      });
+    }
   }
 
   function getSectorFlowStatus(data, sectorIn, sectorOut) {
@@ -3562,8 +4507,9 @@
   }
 
   function bindWatchlistManager() {
-    if (!nodes.auxGrid) return;
-    var root = nodes.auxGrid.querySelector('.watchlist-manager');
+    var owner = nodes.supportingStack || nodes.auxGrid;
+    if (!owner) return;
+    var root = owner.querySelector('.watchlist-manager');
     if (!root) return;
     var manager = watchlistManagerState();
     if (!manager.config) {
@@ -3809,6 +4755,19 @@
     return labels[normalizeString(sourcePool)] || normalizeString(sourcePool || '来源池未知');
   }
 
+  function getStrategyResearchTierLabel(value) {
+    var labels = {
+      prospective_ledger: '上线后前瞻账本',
+      prospective_oot: '上线后前瞻样本',
+      historical_replay: '历史回放样本',
+      legacy_unclassified: '旧账本未分类',
+      production_formal: '生产正式层',
+      production_baseline: '生产基线层',
+      production_research: '生产研究层',
+    };
+    return labels[normalizeString(value)] || normalizeString(value || '研究层级未知');
+  }
+
   function getStrategyLatestRunLabel(item) {
     var rec = item || {};
     var status = normalizeString(rec.latest_run_status);
@@ -3853,14 +4812,27 @@
       + '</span>';
   }
 
-  function renderStrategyHorizon(horizonKey, metrics, maturity, publishable, blockers, evaluationStatus) {
+  function renderStrategyPlainMetric(label, value, denominator) {
+    var text = normalizeString(value) || '--';
+    var n = safeNumber(denominator, null);
+    return ''
+      + '<span class="strategy-metric">'
+      + '  <small>' + escapeHtml(label) + '</small>'
+      + '  <strong>' + escapeHtml(text) + '</strong>'
+      + (n === null ? '' : '  <em>n=' + escapeHtml(formatNumber(n, 0)) + '</em>')
+      + '</span>';
+  }
+
+  function renderStrategyHorizon(horizonKey, metrics, maturity, publishable, blockers, evaluationStatus, progress, readiness) {
     var horizon = horizonKey.toUpperCase().replace('T', 'T+');
     var rec = metrics || {};
     var state = maturity || {};
+    var gate = progress && typeof progress === 'object' ? progress : {};
     var mature = safeNumber(state.mature, null);
     var waiting = safeNumber(state.waiting, null);
     var unavailable = safeNumber(state.unavailable, null);
     var evaluation = normalizeString(evaluationStatus);
+    var gateStatus = normalizeString(gate.status || readiness);
     var statusHtml = '';
     var metricsHtml = '';
     if (['no_signals', 'no_formal_recommendations', 'normal_empty'].indexOf(evaluation) !== -1) {
@@ -3881,16 +4853,33 @@
       statusHtml = '<div class="strategy-horizon-state"><strong>数据不可用</strong><small>'
         + (unavailable ? escapeHtml(formatNumber(unavailable, 0)) + ' 个回合缺少目标日行情' : '暂无成熟回合')
         + '</small></div>';
+    } else if (gateStatus !== 'ready_for_manual_comparison') {
+      var matureProgress = safeNumber(gate.mature_samples, null);
+      var requiredMature = safeNumber(gate.required_mature_samples, null);
+      var activeDates = safeNumber(gate.active_dates, null);
+      var requiredDates = safeNumber(gate.required_active_dates, null);
+      var activeMonths = safeNumber(gate.active_months, null);
+      var requiredMonths = safeNumber(gate.required_calendar_months, null);
+      if ([matureProgress, requiredMature, activeDates, requiredDates, activeMonths, requiredMonths].some(function (value) { return value === null; })) {
+        statusHtml = '<div class="strategy-horizon-state is-danger"><strong>样本门合同缺失</strong><small>成熟样本、活跃日或自然月进度未完整记录</small></div>';
+      } else {
+        statusHtml = '<div class="strategy-horizon-state is-waiting strategy-comparison-progress"><strong>样本采集中</strong><small>'
+          + escapeHtml(formatNumber(matureProgress, 0) + '/' + formatNumber(requiredMature, 0) + ' 成熟样本')
+          + ' · ' + escapeHtml(formatNumber(activeDates, 0) + '/' + formatNumber(requiredDates, 0) + ' 活跃日')
+          + ' · ' + escapeHtml(formatNumber(activeMonths, 0) + '/' + formatNumber(requiredMonths, 0) + ' 自然月')
+          + '</small></div>';
+      }
     } else {
       metricsHtml = ''
         + '<div class="strategy-metric-grid">'
-        + renderStrategyMetric('平均收益', rec.mean, rec.n)
+        + renderStrategyPlainMetric('样本数', formatNumber(rec.n, 0))
+        + renderStrategyPlainMetric('样本区间', (normalizeString(rec.date_start) && normalizeString(rec.date_end)) ? normalizeString(rec.date_start) + ' 至 ' + normalizeString(rec.date_end) : '--')
         + renderStrategyMetric('中位收益', rec.median, rec.n)
-        + renderStrategyMetric('平均超额', rec.excess_mean, rec.excess_n)
-        + renderStrategyMetric('上涨率', rec.win_rate, rec.win_rate_n, { rate: true })
-        + renderStrategyMetric('≥5%命中', rec.hit_rate_ge_5, rec.hit_rate_ge_5_n, { rate: true })
-        + renderStrategyMetric('期间最高', rec.period_high, rec.period_high_n)
-        + renderStrategyMetric('期间最低', rec.period_low, rec.period_low_n)
+        + renderStrategyMetric('平均收益', rec.mean, rec.n)
+        + renderStrategyMetric('基准超额', rec.excess_mean, rec.excess_n)
+        + renderStrategyMetric('最大回撤', rec.max_drawdown, rec.mae_n)
+        + renderStrategyMetric('MFE', rec.mean_mfe, rec.mfe_n)
+        + renderStrategyMetric('MAE', rec.mean_mae, rec.mae_n)
         + '</div>';
       statusHtml = '<div class="strategy-horizon-state is-ready"><strong>'
         + escapeHtml(formatNumber(mature, 0)) + ' 个成熟回合</strong><small>'
@@ -3992,6 +4981,11 @@
     var intended = [1, 3, 5].indexOf(Number(rec.intended_horizon)) !== -1
       ? '策略声明 T+' + Number(rec.intended_horizon)
       : '未声明单一主周期';
+    var primaryKey = [1, 3, 5].indexOf(Number(rec.intended_horizon)) !== -1
+      ? 't' + Number(rec.intended_horizon)
+      : '';
+    var primaryReady = primaryKey
+      && normalizeString((rec.horizon_readiness || {})[primaryKey]) === 'ready_for_manual_comparison';
     return ''
       + '<details class="strategy-scorecard">'
       + '  <summary>'
@@ -4002,6 +4996,7 @@
       + '  <div class="strategy-attribution-meta">'
       + '    <span>入场口径：' + escapeHtml(getStrategyEntryModeLabel(entryMode)) + '</span>'
       + '    <span>' + escapeHtml(intended) + '；页面逐周期独立展示</span>'
+      + '    <span>研究层级：' + escapeHtml(getStrategyResearchTierLabel(rec.research_tier)) + '</span>'
       + '    <span class="strategy-universe-line">今日运行：' + escapeHtml(getStrategyLatestRunLabel(rec)) + (rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '') + '</span>'
       + '    <span class="strategy-universe-line">账本累计：' + escapeHtml(getStrategyLedgerWindowLabel(rec))
       + '；累计信号 ' + escapeHtml(formatNumber(signalCount, 0))
@@ -4023,11 +5018,11 @@
       + '    <span>身份证据：' + escapeHtml(getStrategyEvidenceTierLabel(rec.evidence_tier)) + '</span>'
       + '  </div>'
       + '  <div class="strategy-returns">'
-      + renderStrategyHorizon('t1', metrics.t1, maturity.t1, rec.metrics_publishable !== false, blockers, rec.evaluation_status)
-      + renderStrategyHorizon('t3', metrics.t3, maturity.t3, rec.metrics_publishable !== false, blockers, rec.evaluation_status)
-      + renderStrategyHorizon('t5', metrics.t5, maturity.t5, rec.metrics_publishable !== false, blockers, rec.evaluation_status)
+      + renderStrategyHorizon('t1', metrics.t1, maturity.t1, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t1, (rec.horizon_readiness || {}).t1)
+      + renderStrategyHorizon('t3', metrics.t3, maturity.t3, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t3, (rec.horizon_readiness || {}).t3)
+      + renderStrategyHorizon('t5', metrics.t5, maturity.t5, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t5, (rec.horizon_readiness || {}).t5)
       + '  </div>'
-      + '  <ul class="strategy-samples">' + renderStrategySamples(rec.representative_samples, rec.evaluation_role) + '</ul>'
+      + (primaryReady ? '  <ul class="strategy-samples">' + renderStrategySamples(rec.representative_samples, rec.evaluation_role) + '</ul>' : '')
       + '</details>';
   }
 
@@ -4099,7 +5094,7 @@
       : '<div class="strategy-benchmark-status is-warning">沪深300基准历史暂不可用，超额收益显示 --，绝不以 0 代替。</div>';
     return renderDecisionCard({
       title: '策略收益回看（记分牌）',
-      subtitle: '先分角色，再按 T+1 / T+3 / T+5 对应交易日收盘逐周期核算；期间最高、最低单列',
+      subtitle: '先按完整比较身份分组，再逐周期核算；成熟前只展示采集进度，达到门槛后展示可解释统计',
       badge: isV2
         ? { text: rows.length ? rows.length + '个评测分组' : '待积累', tone: rows.length ? 'info' : 'neutral' }
         : { text: rows.length ? '旧口径，仅追溯' : '旧口径，无记录', tone: 'neutral' },
@@ -4695,15 +5690,17 @@
   }
 
   function bindSingleOpenDetailsWithin(containerSelector, detailSelector) {
-    if (!nodes.auxGrid) return;
-    var containers = nodes.auxGrid.querySelectorAll(containerSelector);
-    Array.prototype.forEach.call(containers, function (container) {
-      var details = container.querySelectorAll(detailSelector);
-      Array.prototype.forEach.call(details, function (current) {
-        current.addEventListener('toggle', function () {
-          if (!current.open) return;
-          Array.prototype.forEach.call(details, function (detail) {
-            if (detail !== current) detail.open = false;
+    var roots = [nodes.supportingStack, nodes.auxGrid].filter(Boolean);
+    roots.forEach(function (root) {
+      var containers = root.querySelectorAll(containerSelector);
+      Array.prototype.forEach.call(containers, function (container) {
+        var details = container.querySelectorAll(detailSelector);
+        Array.prototype.forEach.call(details, function (current) {
+          current.addEventListener('toggle', function () {
+            if (!current.open) return;
+            Array.prototype.forEach.call(details, function (detail) {
+              if (detail !== current) detail.open = false;
+            });
           });
         });
       });
@@ -4715,19 +5712,30 @@
     bindSingleOpenDetailsWithin('.strategy-scorecards-card', '.strategy-scorecard');
   }
 
+  function buildAuxiliaryStacks(data) {
+    var source = data || {};
+    return {
+      today: ''
+        + renderDecisionDirections(source)
+        + renderPersonalWatchlist(source)
+        + renderHoldingRiskSection(source),
+      research: ''
+        + renderMarketTemperatureCard(source)
+        + renderPsy12ShadowCard(source)
+        + renderSectorFlowCard(source)
+        + renderLimitUpEcologyCard(source)
+        + renderStrategyDisagreementAudit(source)
+        + renderStrategyScorecards(source)
+        + renderShadowEvaluations(source)
+        + renderDiagnosticsCard(source),
+    };
+  }
+
   function renderAuxiliaryCenter() {
-    if (!nodes.auxGrid) return;
-    var data = state.data || {};
-    nodes.auxGrid.innerHTML = ''
-      + renderMarketTemperatureCard(data)
-      + renderDecisionDirections(data)
-      + renderSectorFlowCard(data)
-      + renderLimitUpEcologyCard(data)
-      + renderPersonalWatchlist(data)
-      + renderHoldingRiskSection(data)
-      + renderStrategyScorecards(data)
-      + renderShadowEvaluations(data)
-      + renderDiagnosticsCard(data);
+    if (!nodes.auxGrid || !nodes.supportingStack) return;
+    var stacks = buildAuxiliaryStacks(state.data || {});
+    nodes.supportingStack.innerHTML = stacks.today;
+    nodes.auxGrid.innerHTML = stacks.research;
     bindSingleOpenDecisionDetails();
     bindWatchlistManager();
     setTimeout(renderMarketSentimentChart, 0);
@@ -4735,7 +5743,7 @@
 
   function setDrawerBackgroundInert(inert) {
     if (!nodes.shell) return;
-    var regions = nodes.shell.querySelectorAll('.report-header, .workspace, .top10-widget, .aux-center, .report-comparison-summary');
+    var regions = nodes.shell.querySelectorAll('.report-header, .workspace, .supporting-decisions-stack, .aux-center, .report-comparison-summary');
     Array.prototype.forEach.call(regions, function (region) {
       if ('inert' in region) region.inert = Boolean(inert);
       if (inert) region.setAttribute('aria-hidden', 'true');
@@ -4953,6 +5961,8 @@
     syncViewport();
     state.isMobile = isMobileViewport();
     buildAppShell();
+    renderPrimaryMode();
+    loadPrecloseAdvisory();
     state.rawPoolCandidates = null;
     resetTop10State();
     renderTop10Control();
@@ -4970,11 +5980,15 @@
       normalizeWorkspace(state.data);
       state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
       renderHeader();
+      renderFundingMainlineStrip();
       renderDirectionQuickSummary(state.data);
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
-      var first = getCurrentViewItems()[0] || null;
+      var first = filterCandidatesBySector(
+        getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
+        state.sectorFilterRefs
+      )[0] || null;
       state.activeItem = first;
       renderCandidateList();
       renderCandidateDetail(first);
@@ -5379,7 +6393,11 @@
     section.id = 'comparisonSummary';
     section.className = 'report-comparison-summary';
     section.innerHTML = '<header><div><h2>历史正式策略盘中追踪</h2><p>仅对正式策略刷新当前行情；这是盘中追踪，不是 T+N 收盘评价。</p></div><a href="' + (isArchiveReportPath(window.location.pathname) ? '../compare/' : 'compare/') + '">进入完整比对</a></header><div class="comparison-summary-body">正在读取历史报告索引…</div>';
-    nodes.shell.insertBefore(section, auxCenter || null);
+    if (auxCenter && auxCenter.parentNode) {
+      auxCenter.parentNode.insertBefore(section, auxCenter);
+    } else {
+      nodes.shell.appendChild(section);
+    }
     var body = section.querySelector('.comparison-summary-body');
     window.fetch(getComparisonIndexUrl()).then(function (resp) {
       if (!resp || !resp.ok) throw new Error('索引加载失败');

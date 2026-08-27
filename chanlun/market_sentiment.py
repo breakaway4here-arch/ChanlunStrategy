@@ -9,6 +9,7 @@ an apparently precise neutral score.
 from __future__ import annotations
 
 import math
+from datetime import date as calendar_date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from statistics import median
 
@@ -19,6 +20,15 @@ COMPONENT_WEIGHTS = {
     "index": 0.15,
     "turnover": 0.15,
     "trend": 0.10,
+}
+
+PSY12_SHADOW_WEIGHTS = {
+    "breadth": 0.25,
+    "limit_ecology": 0.30,
+    "index": 0.10,
+    "turnover": 0.15,
+    "trend": 0.10,
+    "psy12": 0.10,
 }
 
 
@@ -401,6 +411,145 @@ def _sentiment_label(score):
     if score >= 30:
         return "偏冷"
     return "冰点"
+
+
+def _unavailable_psy12(reason, *, valid_days=0):
+    return {
+        "status": "unavailable",
+        "reason": reason,
+        "score": None,
+        "up_days": None,
+        "valid_days": valid_days,
+        "window": 12,
+        "start_date": None,
+        "end_date": None,
+        "daily_directions": [],
+    }
+
+
+def build_psy12_evidence(report_date, market_sentiment_history):
+    """Build an auditable PSY12 window without sorting or filling evidence."""
+
+    try:
+        cutoff = calendar_date.fromisoformat(str(report_date or ""))
+    except (TypeError, ValueError):
+        return _unavailable_psy12("invalid_report_date")
+
+    history = list(market_sentiment_history or [])
+    parsed = []
+    seen = set()
+    for item in history:
+        if not isinstance(item, dict):
+            return _unavailable_psy12("unverifiable_index_evidence")
+        trade_date = str(item.get("date") or "")
+        try:
+            parsed_date = calendar_date.fromisoformat(trade_date)
+        except ValueError:
+            return _unavailable_psy12("unverifiable_index_evidence")
+        if trade_date in seen:
+            return _unavailable_psy12("duplicate_date")
+        seen.add(trade_date)
+        if parsed_date > cutoff:
+            return _unavailable_psy12("future_date")
+        parsed.append((parsed_date, trade_date, item))
+
+    if any(parsed[index][0] >= parsed[index + 1][0] for index in range(len(parsed) - 1)):
+        return _unavailable_psy12("unordered_dates")
+    if len(parsed) < 12:
+        return _unavailable_psy12("insufficient_history", valid_days=len(parsed))
+
+    selected = parsed[-12:]
+    directions = []
+    for _, trade_date, item in selected:
+        evidence = item.get("evidence")
+        evidence = evidence if isinstance(evidence, dict) else {}
+        index_evidence = evidence.get("index")
+        index_evidence = index_evidence if isinstance(index_evidence, dict) else {}
+        change = _number(index_evidence.get("average_change_pct"))
+        if index_evidence.get("available") is not True or change is None:
+            return _unavailable_psy12(
+                "unverifiable_index_evidence",
+                valid_days=len(directions),
+            )
+        directions.append({
+            "date": trade_date,
+            "average_change_pct": round(change, 3),
+            "direction": "up" if change > 0 else "non_up",
+        })
+
+    up_days = sum(item["direction"] == "up" for item in directions)
+    return {
+        "status": "available",
+        "reason": None,
+        "score": round(up_days / 12.0 * 100.0, 2),
+        "up_days": up_days,
+        "valid_days": 12,
+        "window": 12,
+        "start_date": directions[0]["date"],
+        "end_date": directions[-1]["date"],
+        "daily_directions": directions,
+    }
+
+
+def build_market_sentiment_psy12_shadow(
+    market_sentiment,
+    market_sentiment_history,
+):
+    """Return PSY12 research fields without mutating formal sentiment."""
+
+    formal = market_sentiment if isinstance(market_sentiment, dict) else {}
+    psy12 = build_psy12_evidence(
+        formal.get("date"),
+        market_sentiment_history,
+    )
+    components = formal.get("components")
+    components = components if isinstance(components, dict) else {}
+    formal_score = _number(formal.get("score"))
+    formal_label = formal.get("label") or _sentiment_label(formal_score)
+    shadow_components = {
+        name: _number(components.get(name))
+        for name in COMPONENT_WEIGHTS
+    }
+    unavailable_reason = psy12.get("reason")
+    if unavailable_reason is None and any(
+        value is None for value in shadow_components.values()
+    ):
+        unavailable_reason = "missing_formal_components"
+    if unavailable_reason is None and formal_score is None:
+        unavailable_reason = "formal_score_unavailable"
+
+    raw_shadow_score = None
+    shadow_score = None
+    shadow_label = None
+    delta = None
+    if unavailable_reason is None:
+        raw_shadow_score = sum(
+            shadow_components[name] * PSY12_SHADOW_WEIGHTS[name]
+            for name in COMPONENT_WEIGHTS
+        ) + psy12["score"] * PSY12_SHADOW_WEIGHTS["psy12"]
+        raw_shadow_score = round(_clamp(raw_shadow_score), 3)
+        shadow_score = round(raw_shadow_score)
+        shadow_label = _sentiment_label(shadow_score)
+        delta = round(shadow_score - formal_score, 2)
+
+    return {
+        "psy12": psy12,
+        "psy12_shadow": {
+            "schema_version": 1,
+            "mode": "shadow",
+            "status": "available" if unavailable_reason is None else "unavailable",
+            "reason": unavailable_reason,
+            "affects_production": False,
+            "formal_score": formal.get("score"),
+            "raw_shadow_score_with_psy12": raw_shadow_score,
+            "shadow_score_with_psy12": shadow_score,
+            "delta_vs_formal": delta,
+            "formal_label": formal_label,
+            "shadow_label": shadow_label,
+            "weight_version": "psy12-shadow-v1",
+            "weights": dict(PSY12_SHADOW_WEIGHTS),
+        },
+    }
 
 
 def build_market_sentiment(

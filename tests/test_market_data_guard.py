@@ -1030,6 +1030,10 @@ class TestMarketDataGuard(unittest.TestCase):
             data_fetcher, "batch_fetch_daily_klines", return_value=[]
         ), patch.object(
             data_fetcher,
+            "_get_kline_repository",
+            return_value=SimpleNamespace(list_instruments=lambda: []),
+        ), patch.object(
+            data_fetcher,
             "fetch_shanghai_index",
             return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
         ):

@@ -3,6 +3,7 @@ import unittest
 from chanlun.auxiliary_decision import (
     build_decision_brief,
     build_limit_up_snapshot,
+    build_sector_heat_snapshot,
 )
 
 
@@ -177,6 +178,141 @@ def _watchlist():
             },
         ],
     }
+
+
+class SectorHeatSnapshotTests(unittest.TestCase):
+    def _complete_inputs(self):
+        sectors = [
+            {
+                "code": "BK0001",
+                "name": "工业金属",
+                "change_pct": 3.21,
+                "flow": 1200000000,
+                "flow_str": "12.00亿",
+            },
+            {
+                "code": "BK0002",
+                "name": "通信",
+                "change_pct": 1.28,
+                "flow": 600000000,
+                "flow_str": "6.00亿",
+            },
+        ]
+        evidence = {
+            "BK0001": {
+                "component_codes": ["600001", "600002"],
+                "diagnostics": {"complete": True, "requested": 2},
+            },
+            "BK0002": {
+                "component_codes": ["600003"],
+                "diagnostics": {"complete": True, "requested": 1},
+            },
+        }
+        stocks = [
+            {
+                "code": "600001",
+                "change_pct": 1.2,
+                "data_status": {"daily": "verified", "latest_date": "2026-08-20"},
+            },
+            {
+                "code": "600002",
+                "change_pct": -0.3,
+                "data_status": {"daily": "verified", "latest_date": "2026-08-20"},
+            },
+            {
+                "code": "600003",
+                "change_pct": 0.4,
+                "data_status": {"daily": "verified", "latest_date": "2026-08-20"},
+            },
+        ]
+        limit_up = {
+            "status": "verified_complete",
+            "items": [{"code": "600001"}],
+        }
+        return sectors, evidence, stocks, limit_up
+
+    def test_verified_complete_contract_has_rank_breadth_limit_up_and_provenance(self):
+        sectors, evidence, stocks, limit_up = self._complete_inputs()
+
+        snapshot = build_sector_heat_snapshot(
+            "2026-08-20",
+            sectors,
+            evidence,
+            stocks,
+            limit_up,
+            as_of="2026-08-20T15:10:00+08:00",
+            source="eastmoney_sector_flow+verified_daily_close",
+        )
+
+        self.assertEqual(snapshot["status"], "verified_complete")
+        self.assertEqual(snapshot["as_of"], "2026-08-20T15:10:00+08:00")
+        self.assertEqual(snapshot["source"], "eastmoney_sector_flow+verified_daily_close")
+        self.assertEqual(snapshot["items"][0], {
+            "sector_code": "BK0001",
+            "sector_name": "工业金属",
+            "sector_refs": ["600001", "600002"],
+            "change_pct": 3.21,
+            "rank": 1,
+            "up_count": 1,
+            "total_count": 2,
+            "limit_up_count": 1,
+            "net_flow": 1200000000.0,
+            "net_flow_text": "12.00亿",
+            "as_of": "2026-08-20T15:10:00+08:00",
+            "source": "eastmoney_sector_flow+verified_daily_close",
+            "status": "verified_complete",
+        })
+        self.assertEqual(snapshot["items"][1]["rank"], 2)
+        self.assertEqual(snapshot["items"][1]["limit_up_count"], 0)
+
+    def test_partial_breadth_never_claims_verified_complete(self):
+        sectors, evidence, stocks, limit_up = self._complete_inputs()
+        stocks = stocks[:-1]
+
+        snapshot = build_sector_heat_snapshot(
+            "2026-08-20",
+            sectors,
+            evidence,
+            stocks,
+            limit_up,
+            as_of="2026-08-20T15:10:00+08:00",
+            source="eastmoney_sector_flow+verified_daily_close",
+        )
+
+        self.assertEqual(snapshot["status"], "verified_partial")
+        communication = next(
+            row for row in snapshot["items"] if row["sector_code"] == "BK0002"
+        )
+        self.assertEqual(communication["status"], "verified_partial")
+        self.assertIsNone(communication["up_count"])
+        self.assertEqual(communication["total_count"], 1)
+
+    def test_missing_stale_and_error_states_are_distinct(self):
+        missing = build_sector_heat_snapshot(
+            "2026-08-20", [], {}, [], {},
+            as_of="2026-08-20T15:10:00+08:00", source="eastmoney",
+        )
+        self.assertEqual(missing["status"], "missing")
+        self.assertEqual(missing["items"], [])
+
+        sectors, evidence, stocks, limit_up = self._complete_inputs()
+        stale = build_sector_heat_snapshot(
+            "2026-08-20", sectors, evidence, stocks, limit_up,
+            as_of="2026-08-19T15:10:00+08:00", source="eastmoney",
+        )
+        self.assertEqual(stale["status"], "stale")
+
+        broken = build_sector_heat_snapshot(
+            "2026-08-20",
+            [{"name": "缺少板块代码", "change_pct": 1.0}],
+            {},
+            [],
+            limit_up,
+            as_of="2026-08-20T15:10:00+08:00",
+            source="eastmoney",
+        )
+        self.assertEqual(broken["status"], "error")
+        self.assertEqual(broken["items"], [])
 
 
 class DecisionBriefTests(unittest.TestCase):

@@ -82,6 +82,7 @@ from chanlun.event_normalizer import normalize_events
 from chanlun.auxiliary_decision import (
     build_decision_brief,
     build_limit_up_snapshot,
+    build_sector_heat_snapshot,
 )
 from chanlun.personal_watchlist import (
     build_personal_watchlist_snapshot,
@@ -127,6 +128,7 @@ from chanlun.industry_metadata import hydrate_industry_metadata
 from chanlun.market_close_snapshot import ingest_market_close_snapshot
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
+    build_market_sentiment_psy12_shadow,
     build_sentiment_history,
     classify_price_limit,
     detect_turning_signal,
@@ -855,6 +857,17 @@ def _build_market_sentiment_history(
             "trend",
         ],
     }, []
+
+
+def _build_market_sentiment_shadow_fields(
+    market_sentiment,
+    market_sentiment_history,
+):
+    """Build research-only sentiment fields outside the formal result object."""
+    return build_market_sentiment_psy12_shadow(
+        market_sentiment,
+        market_sentiment_history,
+    )
 
 
 def _load_previous_sentiment_history(report_date, report_data_dir):
@@ -2774,6 +2787,10 @@ def main(debug=False, preview=False, generated_at=None):
             market_indices=market_indices,
         )
     )
+    market_sentiment_shadow_fields = _build_market_sentiment_shadow_fields(
+        market_sentiment,
+        market_sentiment_history,
+    )
     limit_ecology_evidence = (
         market_sentiment.get("evidence", {}).get("limit_ecology", {})
     )
@@ -3060,6 +3077,18 @@ def main(debug=False, preview=False, generated_at=None):
         "outflow_count": len(sector_outflow),
         "max_workers": 20,
     }
+    sector_heat = build_sector_heat_snapshot(
+        today,
+        sectors,
+        sector_component_evidence,
+        stocks_with_kline,
+        limit_up_snapshot,
+        as_of=time_metadata.get("as_of"),
+        source="{}+verified_daily_close+{}".format(
+            data_quality.get("sector_source") or "unknown_sector_source",
+            limit_up_snapshot.get("source") or "unknown_limit_source",
+        ),
+    )
     sentiment_components = market_sentiment.get("components", {})
     market_temperature = {
         "score": market_sentiment.get("score"),
@@ -3337,6 +3366,7 @@ def main(debug=False, preview=False, generated_at=None):
         "picks_pure": pure_scored,
         "picks_fusion": fusion_scored,
         "sector_flow": sectors,
+        "sector_heat": sector_heat,
         # 新增模块
         "sector_outflow": sector_outflow,
         "limit_up_pool": limit_up_pool_data,
@@ -3346,6 +3376,8 @@ def main(debug=False, preview=False, generated_at=None):
         "market_temperature": market_temperature,
         "market_sentiment": market_sentiment,
         "market_sentiment_history": market_sentiment_history,
+        "psy12": market_sentiment_shadow_fields["psy12"],
+        "psy12_shadow": market_sentiment_shadow_fields["psy12_shadow"],
         "events": events,
         "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
         "sell_signals": sell_signals,

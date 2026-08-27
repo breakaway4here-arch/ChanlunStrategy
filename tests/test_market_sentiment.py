@@ -2,7 +2,9 @@ import unittest
 
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
+    build_market_sentiment_psy12_shadow,
     build_market_sentiment,
+    build_psy12_evidence,
     build_sentiment_history,
     classify_price_limit,
     compute_limit_ecology,
@@ -38,6 +40,51 @@ def _day(date, up_count, down_count, unchanged=0, turnover=100.0):
         "turnover": turnover,
         "turnover_ma5": 100.0,
         "trend": {"above_ma20_ratio": up_count / max(1, up_count + down_count + unchanged)},
+    }
+
+
+def _psy12_history():
+    dates = [
+        "2026-08-11",
+        "2026-08-12",
+        "2026-08-13",
+        "2026-08-14",
+        "2026-08-17",
+        "2026-08-18",
+        "2026-08-19",
+        "2026-08-20",
+        "2026-08-21",
+        "2026-08-24",
+        "2026-08-25",
+        "2026-08-26",
+    ]
+    changes = [1.1, -0.4, 0.0, 0.3, -0.2, 0.8, -1.0, 0.6, -0.1, 0.2, -0.7, 0.5]
+    return [
+        {
+            "date": trade_date,
+            "evidence": {
+                "index": {
+                    "available": True,
+                    "average_change_pct": change,
+                }
+            },
+        }
+        for trade_date, change in zip(dates, changes)
+    ]
+
+
+def _formal_sentiment_fixture():
+    return {
+        "date": "2026-08-26",
+        "score": 61,
+        "label": "偏强",
+        "components": {
+            "breadth": 52.69,
+            "limit_ecology": 82.71,
+            "index": 62.8,
+            "turnover": 38.09,
+            "trend": 56.66,
+        },
     }
 
 
@@ -425,6 +472,71 @@ class SentimentHistoryTests(unittest.TestCase):
 
         self.assertEqual(detect_turning_signal(strengthening), "turning_stronger")
         self.assertEqual(detect_turning_signal(weakening), "turning_weaker")
+
+
+class Psy12ShadowContractTests(unittest.TestCase):
+    def test_builds_exact_twelve_day_auditable_window(self):
+        result = build_psy12_evidence("2026-08-26", _psy12_history())
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual(result["score"], 50.0)
+        self.assertEqual(result["up_days"], 6)
+        self.assertEqual(result["valid_days"], 12)
+        self.assertEqual(result["window"], 12)
+        self.assertEqual(result["start_date"], "2026-08-11")
+        self.assertEqual(result["end_date"], "2026-08-26")
+        self.assertEqual(result["daily_directions"][2]["direction"], "non_up")
+        self.assertEqual(len(result["daily_directions"]), 12)
+
+    def test_invalid_windows_fail_closed_without_neutral_fill(self):
+        valid = _psy12_history()
+        cases = {
+            "insufficient_history": valid[:-1],
+            "duplicate_date": valid[:-1] + [dict(valid[-2])],
+            "future_date": valid[:-1] + [{
+                "date": "2026-08-27",
+                "evidence": {
+                    "index": {"available": True, "average_change_pct": 0.5}
+                },
+            }],
+            "unordered_dates": valid[:4] + [valid[5], valid[4]] + valid[6:],
+            "unverifiable_index_evidence": valid[:-1] + [{
+                "date": "2026-08-26",
+                "evidence": {
+                    "index": {"available": False, "average_change_pct": None}
+                },
+            }],
+        }
+
+        for reason, history in cases.items():
+            with self.subTest(reason=reason):
+                evidence = build_psy12_evidence("2026-08-26", history)
+                shadow = build_market_sentiment_psy12_shadow(
+                    _formal_sentiment_fixture(),
+                    history,
+                )
+                self.assertEqual(evidence["status"], "unavailable")
+                self.assertEqual(evidence["reason"], reason)
+                self.assertIsNone(evidence["score"])
+                self.assertIsNone(
+                    shadow["psy12_shadow"]["shadow_score_with_psy12"]
+                )
+
+    def test_shadow_formula_matches_locked_2026_08_26_example(self):
+        result = build_market_sentiment_psy12_shadow(
+            _formal_sentiment_fixture(),
+            _psy12_history(),
+        )
+
+        shadow = result["psy12_shadow"]
+        self.assertEqual(sum(shadow["weights"].values()), 1.0)
+        self.assertEqual(shadow["raw_shadow_score_with_psy12"], 60.645)
+        self.assertEqual(shadow["shadow_score_with_psy12"], 61)
+        self.assertEqual(shadow["shadow_label"], "偏强")
+        self.assertEqual(shadow["formal_score"], 61)
+        self.assertEqual(shadow["delta_vs_formal"], 0)
+        self.assertEqual(shadow["mode"], "shadow")
+        self.assertFalse(shadow["affects_production"])
 
 
 if __name__ == "__main__":

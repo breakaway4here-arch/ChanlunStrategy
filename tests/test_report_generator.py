@@ -505,8 +505,200 @@ class TestFormalReportProjection(unittest.TestCase):
 
         self.assertNotEqual(after, before)
 
+    def test_psy12_shadow_fields_publish_only_on_research_projection(self):
+        report_data = _make_minimal_report_data()
+        report_data["psy12"] = {
+            "status": "available",
+            "score": 50.0,
+            "up_days": 6,
+            "valid_days": 12,
+            "window": 12,
+            "start_date": "2026-08-11",
+            "end_date": "2026-08-26",
+            "daily_directions": [],
+        }
+        report_data["psy12_shadow"] = {
+            "schema_version": 1,
+            "mode": "shadow",
+            "status": "available",
+            "affects_production": False,
+            "formal_score": 61,
+            "shadow_score_with_psy12": 61,
+        }
+
+        full = report_generator.build_full_daily_projection(report_data)
+        aggregate = report_generator.build_aggregate_day_projection(report_data)
+        formal = report_generator.build_formal_output_projection(report_data)
+
+        self.assertEqual(full["psy12"], report_data["psy12"])
+        self.assertEqual(full["psy12_shadow"], report_data["psy12_shadow"])
+        self.assertEqual(aggregate["psy12"], report_data["psy12"])
+        self.assertEqual(aggregate["psy12_shadow"], report_data["psy12_shadow"])
+        self.assertNotIn("psy12", formal["daily"])
+        self.assertNotIn("psy12_shadow", formal["daily"])
+        self.assertNotIn("psy12", formal["aggregate"])
+        self.assertNotIn("psy12_shadow", formal["aggregate"])
+
 
 class TestAuxiliaryDecisionSerialization(unittest.TestCase):
+
+    def test_strategy_stances_and_ai_research_are_normalized_without_new_actions(self):
+        report_data = _make_minimal_report_data()
+        pick = make_pick()
+        pick.update({
+            "decision_engine_v1": {
+                "decision_code": "recommend",
+                "decision": "推荐",
+            },
+            "strategy_stances": [{
+                "strategy": "罗姐池",
+                "stance": "oppose",
+                "reason": "周期结构冲突",
+                "intended_horizon": "T+5",
+                "version": "luojie-v2",
+                "source_pool": "luojie_pool",
+                "evidence_refs": ["contrib:luojie:600519"],
+                "action": "卖出",
+                "position_band": "0%-10%",
+            }],
+            "ai_research": {
+                "assessment": "risk_notice",
+                "summary": "短周期仍有回撤风险",
+                "model_version": "ai-review-v1",
+                "evidence_refs": ["ai:2026-05-26:600519"],
+                "action": "清仓",
+                "position_band": "0%-10%",
+                "target_price": 99.0,
+            },
+        })
+        report_data["picks_fusion"] = [pick]
+        report_data["recommendation_ledger"] = [{
+            "code": "600519",
+            "strategy_contributions": [{
+                "strategy_name": "h4_t3",
+                "display_name": "H4 T+3",
+                "strategy_version": "h4-v1",
+                "source_pool": "h4_t3_pool",
+                "user_action": "recommendation",
+                "decision_code": "recommend",
+                "decision_label": "推荐",
+                "intended_horizon": 3,
+                "attribution_status": "verified",
+                "version_status": "verified",
+                "contribution_id": "contrib:h4:600519",
+                "reason": "H4 结构支持正式动作",
+            }],
+        }]
+
+        daily = report_generator.build_full_daily_projection(report_data)
+        row = daily["workspace"]["views"]["main"][0]
+
+        self.assertEqual([stance["stance"] for stance in row["strategy_stances"]], [
+            "support", "oppose",
+        ])
+        self.assertEqual(row["strategy_stances"][0], {
+            "strategy": "H4 T+3",
+            "strategy_id": "h4_t3",
+            "stance": "support",
+            "reason": "H4 结构支持正式动作",
+            "intended_horizon": "T+3",
+            "version": "h4-v1",
+            "source_pool": "h4_t3_pool",
+            "evidence_refs": ["contrib:h4:600519"],
+        })
+        self.assertNotIn("action", row["strategy_stances"][1])
+        self.assertNotIn("position_band", row["strategy_stances"][1])
+        self.assertEqual(row["strategy_disagreement_summary"]["counts"], {
+            "support": 1,
+            "reserve": 0,
+            "oppose": 1,
+            "insufficient_sample": 0,
+        })
+        self.assertEqual(row["ai_research"], {
+            "assessment": "risk_notice",
+            "summary": "短周期仍有回撤风险",
+            "model_version": "ai-review-v1",
+            "evidence_refs": ["ai:2026-05-26:600519"],
+        })
+        self.assertEqual(
+            row["ai_research_diagnostics"]["rejected_fields"],
+            ["action", "position_band", "target_price"],
+        )
+        published_pick = daily["picks_fusion"][0]
+        for forbidden in ("action", "position_band", "target_price"):
+            self.assertNotIn(forbidden, published_pick["ai_research"])
+
+    def test_formal_decision_contract_is_serialized_through_workspace(self):
+        report_data = _make_minimal_report_data()
+        pick = make_pick()
+        pick.update({
+            "reference_price": 50.0,
+            "intended_horizon": "T+3",
+            "position_band": "10%-30%",
+            "invalidation_price": 47.5,
+            "pressure_price": 56.0,
+            "policy_version": "formal-policy-v1",
+            "evidence_refs": ["decision:2026-05-26:600519"],
+            "decision_engine_v1": {
+                "decision_code": "recommend",
+                "decision": "推荐",
+            },
+        })
+        report_data["picks_fusion"] = [pick]
+        report_data["selection_input_health"] = {
+            "schema_version": 2,
+            "status": "verified",
+            "formal": {"status": "verified", "formal_actions_allowed": True},
+            "by_strategy": {
+                "daily_fusion": {"status": "verified", "formal_actions_allowed": True}
+            },
+        }
+
+        daily = report_generator.build_full_daily_projection(report_data)
+        contract = daily["workspace"]["views"]["main"][0]["formal_decision_contract"]
+
+        self.assertEqual(contract["action"], "可上车")
+        self.assertEqual(contract["intended_horizon"], "T+3")
+        self.assertEqual(contract["position_band"], "10%-30%")
+        self.assertEqual(contract["reference_price"], 50.0)
+        self.assertEqual(contract["invalidation_price"], 47.5)
+        self.assertEqual(contract["pressure_price"], 56.0)
+        self.assertEqual(contract["policy_version"], "formal-policy-v1")
+        self.assertEqual(contract["evidence_refs"], ["decision:2026-05-26:600519"])
+
+    def test_sector_heat_is_preserved_in_daily_and_aggregate_json(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_sector_heat_serialization_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        sector_heat = {
+            "schema_version": 1,
+            "status": "verified_complete",
+            "as_of": "2026-05-26T15:10:00+08:00",
+            "source": "eastmoney_sector_flow+verified_daily_close",
+            "items": [{
+                "sector_code": "BK0001",
+                "sector_name": "工业金属",
+                "change_pct": 3.21,
+                "rank": 1,
+                "up_count": 42,
+                "total_count": 51,
+                "limit_up_count": 6,
+                "as_of": "2026-05-26T15:10:00+08:00",
+                "source": "eastmoney_sector_flow+verified_daily_close",
+                "status": "verified_complete",
+            }],
+        }
+        report_data["sector_heat"] = sector_heat
+
+        generate_report(report_data, output_dir=tmpdir)
+        report_generator.update_data_json(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "data", "2026-05-26.json"), encoding="utf-8") as handle:
+            daily = json.load(handle)
+        with open(os.path.join(tmpdir, "data.json"), encoding="utf-8") as handle:
+            aggregate = json.load(handle)
+        self.assertEqual(daily["sector_heat"], sector_heat)
+        self.assertEqual(aggregate["reports"]["2026-05-26"]["sector_heat"], sector_heat)
 
     def test_shadow_serialization_failure_degrades_without_blocking_formal_report(self):
         expected = {
@@ -813,6 +1005,28 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
             "https://worker.example.test/base/api/decision-watchlist",
         )
 
+    def test_preclose_worker_origin_is_independent_and_not_inline_report_data(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_preclose_worker_url_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "CHANLUN_TOP10_API_BASE": "https://top10.example.test/",
+                "CHANLUN_PRECLOSE_API_BASE": "https://preclose.example.test/base/",
+            },
+        ):
+            generate_report(report_data, output_dir=tmpdir)
+
+        with open(os.path.join(tmpdir, "index.html"), "r", encoding="utf-8") as handle:
+            bootstrap = _extract_bootstrap(handle.read())
+        self.assertEqual(bootstrap["top10ApiBase"], "https://top10.example.test")
+        self.assertEqual(
+            bootstrap["precloseApiBase"], "https://preclose.example.test/base"
+        )
+        self.assertNotIn("preclose", bootstrap["inlineReportData"])
+
     def test_holding_risks_are_preserved_separately_from_global_signals(self):
         tmpdir = tempfile.mkdtemp(prefix="test_holding_risks_")
         self.addCleanup(shutil.rmtree, tmpdir)
@@ -1026,6 +1240,86 @@ class TestAuxiliaryDecisionSerialization(unittest.TestCase):
         self.assertEqual(payload["strategy_scorecards"]["schema_version"], 2)
         self.assertNotIn("recent_reviews", payload)
 
+    def test_strategy_scorecards_fail_closed_before_comparison_gate(self):
+        tmpdir = tempfile.mkdtemp(prefix="test_strategy_sample_gate_")
+        self.addCleanup(shutil.rmtree, tmpdir)
+        report_data = _make_minimal_report_data()
+        report_data["strategy_scorecards"] = {
+            "schema_version": 2,
+            "thresholds": {
+                "mature_samples": 100,
+                "active_dates": 20,
+                "calendar_months": 2,
+            },
+            "formal": [{
+                "strategy": "daily_fusion",
+                "version": "fusion-v1",
+                "source_pool": "picks_fusion",
+                "entry_mode": "immediate_close",
+                "intended_horizon": 3,
+                "research_tier": "production_formal",
+                "horizon_readiness": {
+                    "t1": "collecting",
+                    "t3": "collecting",
+                    "t5": "waiting_for_maturity",
+                },
+                "comparison_progress_by_horizon": {
+                    "t3": {
+                        "status": "collecting",
+                        "mature_samples": 4,
+                        "required_mature_samples": 100,
+                        "active_dates": 3,
+                        "required_active_dates": 20,
+                        "active_months": 1,
+                        "required_calendar_months": 2,
+                    },
+                },
+                "metrics_by_horizon": {
+                    "t1": {"n": 4, "mean": 88.0, "win_rate": 100.0},
+                    "t3": {"n": 4, "median": 99.0, "max_drawdown": -1.0},
+                    "t5": {},
+                },
+                "returns": {"t1": 88.0, "t3": 99.0, "t5": None},
+                "median_returns": {"t1": 88.0, "t3": 99.0, "t5": None},
+                "win_rates": {"t1": 100.0, "t3": 100.0, "t5": None},
+                "win_rate": 100.0,
+                "cumulative_return": 999.0,
+                "representative_samples": [{"code": "300308"}],
+            }],
+            "baselines": [],
+            "research": [],
+            "gates": [],
+            "classification_failures": [],
+        }
+
+        generate_report(report_data, output_dir=tmpdir)
+
+        with open(
+            os.path.join(tmpdir, "data", "2026-05-26.json"),
+            "r",
+            encoding="utf-8",
+        ) as handle:
+            card = json.load(handle)["strategy_scorecards"]["formal"][0]
+        self.assertEqual(card["metrics_by_horizon"], {
+            "t1": {}, "t3": {}, "t5": {},
+        })
+        self.assertEqual(card["returns"], {
+            "t1": None, "t3": None, "t5": None,
+        })
+        self.assertEqual(card["median_returns"], {
+            "t1": None, "t3": None, "t5": None,
+        })
+        self.assertEqual(card["win_rates"], {
+            "t1": None, "t3": None, "t5": None,
+        })
+        self.assertIsNone(card["win_rate"])
+        self.assertNotIn("cumulative_return", card)
+        self.assertEqual(card["representative_samples"], [])
+        self.assertEqual(
+            card["comparison_progress_by_horizon"]["t3"]["mature_samples"],
+            4,
+        )
+
 
 class TestH4T3ReportSerialization(unittest.TestCase):
 
@@ -1100,6 +1394,7 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn('"pageDate"', self.html)
         self.assertIn('"inlineReportData"', self.html)
         self.assertIn('"top10ApiBase"', self.html)
+        self.assertIn('"precloseApiBase"', self.html)
 
     def test_frontend_top10_control_helpers_present(self):
         for helper in [
@@ -1144,6 +1439,10 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("market", self.bootstrap["inlineReportData"])
         self.assertIn("top10ApiBase", self.bootstrap)
         self.assertEqual(self.bootstrap.get("top10ApiBase"), "https://top10-worker.breakaway4here.workers.dev")
+        self.assertEqual(
+            self.bootstrap.get("precloseApiBase"),
+            "https://chanlun-preclose-worker.breakaway4here.workers.dev",
+        )
         self.assertEqual(
             self.bootstrap.get("decisionWatchlistUrl"),
             "https://top10-worker.breakaway4here.workers.dev/api/decision-watchlist",
@@ -2024,6 +2323,27 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn('辅助决策驾驶舱', self.asset_js)
         self.assertIn('先看方向，再沿证据链定位到板块与重点股', self.asset_js)
 
+    def test_primary_workbench_shell_contract(self):
+        self.assertIn('class="compact-header', self.asset_js)
+        self.assertIn('class="primary-mode-tabs"', self.asset_js)
+        self.assertIn('data-primary-mode="today"', self.asset_js)
+        self.assertIn('data-primary-mode="research"', self.asset_js)
+        self.assertIn('id="sectorStrip"', self.asset_js)
+        self.assertIn('id="todayDecisionView"', self.asset_js)
+        self.assertIn('id="researchValidationView"', self.asset_js)
+        shell_start = self.asset_js.find("function buildAppShell()")
+        shell_end = self.asset_js.find("function getReportDataStatus", shell_start)
+        self.assertGreater(shell_start, -1)
+        self.assertGreater(shell_end, shell_start)
+        shell = self.asset_js[shell_start:shell_end]
+        self.assertNotIn('id="top10Widget"', shell)
+
+    def test_candidate_navigation_uses_primary_groups_and_unified_main_empty_state(self):
+        self.assertIn("function getWorkspaceNavigationGroups", self.asset_js)
+        self.assertIn("function buildCandidateEmptyState", self.asset_js)
+        self.assertIn("本期未选出推荐票", self.asset_js)
+        self.assertIn("navigation_groups", self.asset_js)
+
     def test_observation_top5_tab_and_failure_details_are_rendered(self):
         self.assertIn("observation_top5: '观察 Top5'", self.asset_js)
         self.assertIn("失败门：", self.asset_js)
@@ -2082,9 +2402,13 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("renderStrategyHorizon('t3'", self.asset_js)
         self.assertIn("renderStrategyHorizon('t5'", self.asset_js)
         self.assertIn("metrics_by_horizon", self.asset_js)
-        self.assertIn("期间最高", self.asset_js)
-        self.assertIn("期间最低", self.asset_js)
-        self.assertIn("≥5%命中", self.asset_js)
+        self.assertIn("样本区间", self.asset_js)
+        self.assertIn("中位收益", self.asset_js)
+        self.assertIn("最大回撤", self.asset_js)
+        self.assertIn("MFE", self.asset_js)
+        self.assertIn("MAE", self.asset_js)
+        self.assertIn("comparison_progress_by_horizon", self.asset_js)
+        self.assertNotIn("≥5%命中", self.asset_js)
         self.assertIn("等待到期", self.asset_js)
         self.assertIn("T+1 / T+3 / T+5", self.asset_js)
         self.assertIn("正式推荐收益", self.asset_js)
@@ -2148,15 +2472,14 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
 
-    def test_candidate_rows_surface_decision_badge(self):
+    def test_candidate_rows_keep_only_bounded_decision_tags(self):
         self.assertIn("function renderDecisionBadge", self.asset_js)
         self.assertIn("function renderCandidateDecisionBadge", self.asset_js)
-        self.assertIn(
-            "tagHtml += renderCandidateDecisionBadge(item, item.scoring_decision || decision);",
-            self.asset_js,
-        )
+        self.assertIn("function selectCandidateRowTags", self.asset_js)
+        self.assertIn("return tags.slice(0, 2);", self.asset_js)
+        self.assertIn("var selectedTags = selectCandidateRowTags(item, state.currentView);", self.asset_js)
         self.assertIn("事故前原始判定·仅追溯", self.asset_js)
-        self.assertIn("页面动作：", self.asset_js)
+        self.assertIn("正式动作：", self.asset_js)
         self.assertIn("规则判定：", self.asset_js)
         self.assertIn("decision-badge-score", self.asset_js)
 

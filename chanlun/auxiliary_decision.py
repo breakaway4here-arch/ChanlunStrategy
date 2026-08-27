@@ -155,6 +155,181 @@ def build_limit_up_snapshot(
     return snapshot
 
 
+SECTOR_HEAT_STATUSES = {
+    "verified_complete",
+    "verified_partial",
+    "missing",
+    "stale",
+    "error",
+}
+
+
+def _finite_float(value):
+    if isinstance(value, bool) or value is None:
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    if result != result or result in (float("inf"), float("-inf")):
+        return None
+    return result
+
+
+def build_sector_heat_snapshot(
+    report_date,
+    sectors,
+    component_evidence,
+    stocks,
+    limit_up_snapshot,
+    *,
+    as_of=None,
+    source=None
+):
+    """Build an auditable hot-sector contract from verified close facts.
+
+    The contract never upgrades partial breadth into a complete ranking and
+    keeps change, funds, breadth, and limit-up counts as separate facts.
+    """
+    report_date = str(report_date or "")
+    as_of = str(as_of or report_date)
+    source = str(source or "").strip()
+    sector_rows = [dict(row) for row in (sectors or []) if isinstance(row, dict)]
+    evidence_by_code = (
+        component_evidence if isinstance(component_evidence, dict) else {}
+    )
+    stock_by_code = {
+        str(row.get("code") or ""): row
+        for row in (stocks or [])
+        if isinstance(row, dict) and str(row.get("code") or "")
+    }
+    limit_snapshot = (
+        limit_up_snapshot if isinstance(limit_up_snapshot, dict) else {}
+    )
+    limit_status = str(limit_snapshot.get("status") or "missing")
+    limit_codes = {
+        str(row.get("code") or "")
+        for row in (limit_snapshot.get("items") or [])
+        if isinstance(row, dict) and str(row.get("code") or "")
+    }
+    limit_counts_trusted = limit_status in {
+        "verified_complete", "verified_empty"
+    }
+    errors = []
+    built = []
+
+    for sector in sector_rows:
+        code = str(sector.get("sector_code") or sector.get("code") or "").strip()
+        name = str(sector.get("sector_name") or sector.get("name") or "").strip()
+        change_pct = _finite_float(sector.get("change_pct"))
+        if not code or not name or change_pct is None:
+            errors.append("invalid sector identity or change: {}".format(code or name or "unknown"))
+            continue
+
+        evidence = evidence_by_code.get(code)
+        if not isinstance(evidence, dict):
+            evidence = {}
+        diagnostics = evidence.get("diagnostics")
+        if not isinstance(diagnostics, dict):
+            diagnostics = {}
+        component_codes = list(dict.fromkeys(
+            str(item or "").strip()
+            for item in (evidence.get("component_codes") or [])
+            if str(item or "").strip()
+        ))
+        verified_changes = []
+        for component_code in component_codes:
+            stock = stock_by_code.get(component_code)
+            if not isinstance(stock, dict):
+                continue
+            data_status = stock.get("data_status")
+            if not isinstance(data_status, dict):
+                data_status = {}
+            change = _finite_float(stock.get("change_pct"))
+            if (
+                data_status.get("daily") == "verified"
+                and str(data_status.get("latest_date") or "") == report_date
+                and change is not None
+            ):
+                verified_changes.append(change)
+
+        breadth_complete = bool(
+            diagnostics.get("complete") is True
+            and component_codes
+            and len(verified_changes) == len(component_codes)
+        )
+        row_status = (
+            "verified_complete"
+            if breadth_complete and limit_counts_trusted
+            else "verified_partial"
+        )
+        built.append({
+            "sector_code": code,
+            "sector_name": name,
+            "sector_refs": component_codes,
+            "change_pct": change_pct,
+            "rank": 0,
+            "up_count": (
+                sum(1 for value in verified_changes if value > 0)
+                if breadth_complete else None
+            ),
+            "total_count": len(component_codes) if component_codes else None,
+            "limit_up_count": (
+                len(set(component_codes) & limit_codes)
+                if component_codes and limit_counts_trusted else None
+            ),
+            "net_flow": _finite_float(sector.get("flow")),
+            "net_flow_text": str(sector.get("flow_str") or ""),
+            "as_of": as_of,
+            "source": source,
+            "status": row_status,
+        })
+
+    built.sort(key=lambda row: (-row["change_pct"], row["sector_code"]))
+    for rank, row in enumerate(built, start=1):
+        row["rank"] = rank
+
+    if not sector_rows:
+        status = "missing"
+    elif not built:
+        status = "error"
+    elif report_date and as_of[:10] != report_date:
+        status = "stale"
+        for row in built:
+            row["status"] = "stale"
+    elif not source:
+        status = "error"
+        errors.append("sector heat source is missing")
+        for row in built:
+            row["status"] = "error"
+    elif errors or any(
+        row["status"] != "verified_complete" for row in built
+    ):
+        status = "verified_partial"
+    else:
+        status = "verified_complete"
+
+    snapshot = {
+        "schema_version": 1,
+        "date": report_date,
+        "as_of": as_of,
+        "source": source,
+        "status": status,
+        "items": built,
+        "coverage": (
+            round(
+                sum(1 for row in built if row["status"] == "verified_complete")
+                / float(len(built)),
+                4,
+            )
+            if built else 0.0
+        ),
+        "error": "; ".join(dict.fromkeys(errors)),
+    }
+    assert snapshot["status"] in SECTOR_HEAT_STATUSES
+    return snapshot
+
+
 _DIRECTION_VALUES = {"positive", "negative", "mixed", "neutral"}
 _STAGE_VALUES = {"confirmed", "developing", "risk", "monitor"}
 _CONFIDENCE_VALUES = {"low", "medium", "high"}

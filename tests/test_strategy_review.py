@@ -2,10 +2,12 @@ import copy
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.recommendation_ledger import build_recommendation_entries
 from chanlun.strategy_review import (
+    SCORECARD_THRESHOLDS,
     _card_evaluation_status,
     build_strategy_run_manifest,
     build_strategy_scorecards,
@@ -598,14 +600,99 @@ class StrategyScorecardTests(unittest.TestCase):
         for horizon in ("t1", "t3", "t5"):
             maturity = card["maturity_by_horizon"][horizon]
             self.assertEqual(set(maturity), {"mature", "waiting", "unavailable"})
-            metrics = card["metrics_by_horizon"][horizon]
-            for field in (
-                "n", "mean", "median", "excess_mean", "win_rate",
-                "hit_rate_ge_5", "period_high", "period_low",
-                "period_high_n", "period_low_n",
-            ):
-                self.assertIn(field, metrics)
-        self.assertEqual(card["metrics_by_horizon"]["t1"]["n"], 1)
+            progress = card["comparison_progress_by_horizon"][horizon]
+            self.assertEqual(progress["mature_samples"], maturity["mature"])
+            self.assertEqual(progress["required_mature_samples"], 100)
+            self.assertEqual(progress["required_active_dates"], 20)
+            self.assertEqual(progress["required_calendar_months"], 2)
+            self.assertEqual(card["metrics_by_horizon"][horizon], {})
+        self.assertIsNone(card["returns"]["t1"])
+        self.assertIsNone(card["win_rates"]["t1"])
+        self.assertEqual(card["representative_samples"], [])
+
+    def test_scorecards_separate_exact_comparison_identity_by_research_tier(self):
+        historical = _entry(report_date="2026-08-20")
+        prospective = _entry(report_date="2026-08-21")
+        historical["strategy_contributions"][0]["research_tier"] = (
+            "historical_replay"
+        )
+        prospective["strategy_contributions"][0]["research_tier"] = (
+            "prospective_oot"
+        )
+
+        cards = build_strategy_scorecards(
+            [historical, prospective],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )["baselines"]
+
+        self.assertEqual(len(cards), 2)
+        self.assertEqual(
+            {card["research_tier"] for card in cards},
+            {"historical_replay", "prospective_oot"},
+        )
+        for card in cards:
+            self.assertEqual(
+                set(card["comparison_identity"]),
+                {
+                    "strategy", "version", "source_pool", "entry_mode",
+                    "intended_horizon", "research_tier",
+                },
+            )
+            self.assertEqual(
+                card["comparison_identity"]["research_tier"],
+                card["research_tier"],
+            )
+
+    def test_mature_comparison_exposes_only_explainable_metrics(self):
+        entry = _entry(intended_horizon=3)
+        with mock.patch.dict(
+            SCORECARD_THRESHOLDS,
+            {"mature_samples": 1, "active_dates": 1, "calendar_months": 1},
+            clear=True,
+        ):
+            card = build_strategy_scorecards(
+                [entry],
+                {"300308": _kline()},
+                trading_calendar=_kline()["dates"],
+                benchmark_kline=_kline(),
+            )["baselines"][0]
+
+        self.assertEqual(
+            card["horizon_readiness"]["t3"],
+            "ready_for_manual_comparison",
+        )
+        metrics = card["metrics_by_horizon"]["t3"]
+        for field in (
+            "n", "date_start", "date_end", "median", "mean",
+            "excess_mean", "max_drawdown", "mean_mfe", "mean_mae",
+        ):
+            self.assertIn(field, metrics)
+            self.assertIsNotNone(metrics[field])
+        self.assertNotIn("composite_score", metrics)
+        self.assertEqual(metrics["n"], 1)
+        self.assertEqual(len(card["representative_samples"]), 1)
+
+    def test_right_censored_rows_do_not_inflate_mature_comparison_coverage(self):
+        mature = _entry(report_date="2026-08-20", code="300308")
+        waiting = _entry(report_date="2026-08-27", code="300139")
+        with mock.patch.dict(
+            SCORECARD_THRESHOLDS,
+            {"mature_samples": 1, "active_dates": 1, "calendar_months": 1},
+            clear=True,
+        ):
+            card = build_strategy_scorecards(
+                [mature, waiting],
+                {"300308": _kline(), "300139": _kline()},
+                trading_calendar=_kline()["dates"],
+            )["baselines"][0]
+
+        progress = card["comparison_progress_by_horizon"]["t3"]
+        self.assertEqual(progress["mature_samples"], 1)
+        self.assertEqual(progress["waiting_samples"], 1)
+        self.assertEqual(progress["active_dates"], 1)
+        self.assertEqual(progress["active_months"], 1)
+        self.assertEqual(card["metrics_by_horizon"]["t3"]["n"], 1)
 
     def test_legacy_roles_are_corrected_and_unknown_rows_fail_closed(self):
         known = _entry(
@@ -662,7 +749,7 @@ class StrategyScorecardTests(unittest.TestCase):
         self.assertIn("reference_close_missing", card["metrics_blocking_reasons"])
         self.assertNotIn("market_data_unavailable", card["metrics_blocking_reasons"])
         self.assertTrue(all(
-            metric["n"] == 0
+            metric == {}
             for metric in card["metrics_by_horizon"].values()
         ))
         self.assertEqual(card["returns"], {"t1": None, "t3": None, "t5": None})
@@ -890,7 +977,13 @@ class StrategyScorecardTests(unittest.TestCase):
         self.assertIn("median_returns", by_name["daily_pure"])
         self.assertIn("excess_returns", by_name["daily_pure"])
         self.assertIn("mae", by_name["daily_pure"]["excursions"])
-        self.assertIsNotNone(by_name["daily_pure"]["win_rates"]["t1"])
+        self.assertIsNone(by_name["daily_pure"]["win_rates"]["t1"])
+        self.assertEqual(
+            by_name["daily_pure"]["comparison_progress_by_horizon"]["t1"][
+                "mature_samples"
+            ],
+            2,
+        )
         self.assertEqual(by_name["daily_pure"]["ledger_active_dates"], 1)
         self.assertEqual(by_name["daily_pure"]["ledger_date_start"], "2026-08-20")
         self.assertEqual(by_name["daily_pure"]["ledger_date_end"], "2026-08-20")
@@ -947,9 +1040,14 @@ class StrategyScorecardTests(unittest.TestCase):
         ]
         klines = {entry["code"]: copy.deepcopy(_kline()) for entry in entries}
 
-        card = build_strategy_scorecards(
-            entries, klines, trading_calendar=_kline()["dates"]
-        )["baselines"][0]
+        with mock.patch.dict(
+            SCORECARD_THRESHOLDS,
+            {"mature_samples": 1, "active_dates": 1, "calendar_months": 1},
+            clear=True,
+        ):
+            card = build_strategy_scorecards(
+                entries, klines, trading_calendar=_kline()["dates"]
+            )["baselines"][0]
 
         self.assertLessEqual(len(card["representative_samples"]), 3)
         sample = card["representative_samples"][0]
@@ -993,10 +1091,15 @@ class StrategyScorecardTests(unittest.TestCase):
             lows=[99, 100],
         )
 
-        card = build_strategy_scorecards(
-            [entry], {"300308": kline},
-            trading_calendar=kline["dates"],
-        )["research"][0]
+        with mock.patch.dict(
+            SCORECARD_THRESHOLDS,
+            {"mature_samples": 1, "active_dates": 1, "calendar_months": 1},
+            clear=True,
+        ):
+            card = build_strategy_scorecards(
+                [entry], {"300308": kline},
+                trading_calendar=kline["dates"],
+            )["research"][0]
 
         self.assertEqual(card["intended_horizon"], 1)
         self.assertEqual(card["sample_size"], 1)
@@ -1298,16 +1401,26 @@ class StrategyScorecardTests(unittest.TestCase):
         contribution.pop("evaluation_eligible", None)
         contribution.pop("eligibility_reason", None)
 
-        card = build_strategy_scorecards(
+        cards = build_strategy_scorecards(
             [entry], {"300308": _kline()},
             trading_calendar=_kline()["dates"],
             run_manifest=manifest,
-        )["baselines"][0]
+        )["baselines"]
 
-        self.assertEqual(card["latest_run_status"], "verified_empty")
-        self.assertEqual(card["latest_signal_count"], 0)
-        self.assertEqual(card["latest_report_date"], "2026-08-26")
-        self.assertEqual(card["evidence_tier"], "legacy_inferred")
+        self.assertEqual(len(cards), 2)
+        legacy = next(
+            card for card in cards
+            if card["research_tier"] == "legacy_unclassified"
+        )
+        current = next(
+            card for card in cards
+            if card["research_tier"] == "prospective_ledger"
+        )
+        self.assertEqual(legacy["latest_run_status"], "unrecorded")
+        self.assertEqual(legacy["evidence_tier"], "legacy_inferred")
+        self.assertEqual(current["latest_run_status"], "verified_empty")
+        self.assertEqual(current["latest_signal_count"], 0)
+        self.assertEqual(current["latest_report_date"], "2026-08-26")
 
     def test_run_manifest_never_treats_invalid_pool_shapes_as_zero_signal(self):
         manifest = build_strategy_run_manifest({

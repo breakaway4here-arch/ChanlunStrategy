@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.breakaway4here.chanlun-preclose</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/zsh</string>
+        <string>/Users/yangfan/yf_source/ChanlunStrategy/scripts/preclose_run.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>CHANLUN_PRECLOSE_PYTHON</key>
+        <string>/usr/bin/python3</string>
+        <key>CHANLUN_PRECLOSE_ENV_FILE</key>
+        <string>/Users/yangfan/.config/chanlun-strategy/preclose.env</string>
+        <key>CHANLUN_MARKET_HISTORY_DB_PATH</key>
+        <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/market_history.sqlite</string>
+        <key>IWENCAI_API_KEY</key>
+        <string></string>
+        <key>IWENCAI_BASE_URL</key>
+        <string></string>
+        <key>OPENAI_API_KEY</key>
+        <string></string>
+        <key>DEEPSEEK_API_KEY</key>
+        <string></string>
+        <key>ANTHROPIC_API_KEY</key>
+        <string></string>
+    </dict>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>47</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>47</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>47</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>47</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>14</integer><key>Minute</key><integer>47</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>StandardOutPath</key>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/preclose/logs/launchd-preclose.stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/preclose/logs/launchd-preclose.stderr.log</string>
+</dict>
+</plist>
