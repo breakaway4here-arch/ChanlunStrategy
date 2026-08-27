@@ -563,6 +563,7 @@ def _serialize_startup_watchlist(watchlist):
             "startup_date": w.get("startup_date", ""),
             "startup_age_days": w.get("startup_age_days"),
             "change_pct": w.get("change_pct"),
+            "price_limit_state": w.get("price_limit_state", ""),
             "volume_ratio": w.get("volume_ratio", 0),
             "decision_engine_v1": w.get("decision_engine_v1"),
             "close": ref_price,

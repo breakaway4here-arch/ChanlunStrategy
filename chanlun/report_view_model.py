@@ -1021,6 +1021,9 @@ def _build_item(
         "decision_engine_v1": decision_payload,
         "h4_predictions": _to_dict(preferred_raw.get("h4_predictions")),
         "source_channel": _safe_str(preferred_raw.get("source_channel")),
+        "price_limit_state": _safe_str(
+            preferred_raw.get("price_limit_state")
+        ),
         "tier": _safe_str(preferred_raw.get("tier"))
         or _safe_str(_to_dict(preferred_raw.get("best_buy_point")).get("tier")),
         "category": _safe_str(preferred_raw.get("category"))

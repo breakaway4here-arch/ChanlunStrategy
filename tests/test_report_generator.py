@@ -1517,6 +1517,7 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         item.update({
             "source_channel": "trend_continuation",
             "view": "observation",
+            "price_limit_state": "limit_up",
             "reason_code": "waiting_30m_confirm",
             "failure_gate": "30min_confirm",
             "actual_value": {"volume_ratio": 1.3},
@@ -1529,6 +1530,7 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         serialized = _serialize_startup_watchlist([item])[0]
 
         self.assertEqual(serialized["source_channel"], "trend_continuation")
+        self.assertEqual(serialized["price_limit_state"], "limit_up")
         self.assertEqual(serialized["reference_price"], 14.5)
         self.assertEqual(serialized["failure_gate"], "30min_confirm")
         self.assertEqual(serialized["cancel_conditions"], ["跌破突破位"])

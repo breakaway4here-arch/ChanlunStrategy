@@ -562,3 +562,32 @@ H4 在 2026-08-26 的快照使用了 `picks_fusion` 上游，已独立登记为 
 上一次“任务与 Pages 均成功，但页面记分牌不可用”的完整因果链、逃逸分析和每次发布必须执行的“五证验收”，见 [2026-08-26 选股与记分牌不可用版本发布事故复盘](2026-08-26-strategy-scorecard-release-incident-retrospective.md)。核心根因是 finalizer 固化账本后没有重建页面回看投影，旧校验又未覆盖逐策略健康、共同上游、记分牌分母和最终线上业务字段；不是因为已经到期的 T+3 历史行情无法读取。
 
 当前明确未完成项是页面载荷分片：候选 DOM 已渐进渲染，但 HTML/JSON 仍携带完整个股详情。后续应把日报摘要与个股详情拆为静态分片并按需加载；此项不得通过限制 `picks_pure` 数量来规避。
+
+## 2026-08-27 分板块涨跌停误判修复记录
+
+### 根因与用户影响
+
+正式日报中的 301629 矽电股份已通过全 A、可选和召回阶段，趋势召回分为 90.91，但在 `daily_channel` 以 `daily_channel_not_matched` 被提前淘汰。当天前收 255.92 元、收盘 291.00 元，实际涨幅 13.71%；该股票属于创业板，真实涨停幅度为 20%，涨停价约 307.10 元。
+
+根因是日线结构池、旧纯净/融合筛选、强势启动和趋势延续共同引用 `LIMIT_UP_THRESHOLD=9.5`、`LIMIT_DOWN_THRESHOLD=-9.5`。这会把创业板、科创板和北交所未涨跌停的大幅波动错误当成涨跌停。日线结构池先删除后，强势启动和趋势延续又受 `picks_pure` 共同上游约束，导致高分股票在 30 分钟数据请求之前消失。
+
+### 已实施规则
+
+- 删除选股配置中的统一 9.5% 涨跌停入口；所有选股通道统一调用 `classify_price_limit`，使用板块、ST、无涨跌幅限制和交易所价格精度得出事实状态。
+- `normal` 状态继续参加每个策略自己的筛选；高涨幅本身不再构成删除理由。
+- `limit_down` 继续直接过滤。
+- `limit_up` 不进入当天正式候选；强势启动和趋势延续若满足各自结构条件，只生成带 `price_limit_state=limit_up` 的观察项。
+- 正式输出仍必须是基础候选 Tab（`picks_pure`）的子集。仅允许满足 `view=observation + tier=watch + price_limit_state=limit_up` 的观察项绕过正式上游；该旁路不能产生主推、账本样本或用户动作。
+- 涨跌停事实统一，不改变各池自己的结构、量能、确认、评分、排序、周期或失效逻辑，也不为候选数量回填。
+
+### 代码与测试落点
+
+- 事实判断：`chanlun/market_sentiment.py`
+- 活跃日线结构池：`chanlun/daily_structure_pool.py`
+- 旧版回滚筛选：`chanlun/screener_pure.py`、`chanlun/screener_fusion.py`
+- 独立策略：`chanlun/strong_startup.py`、`chanlun/trend_continuation.py`
+- 共同上游与涨停观察例外：`run.py`
+- 历史日报修复兼容：`scripts/repair_strategy_scorecard_snapshot.py`，只放行带三项观察标记的非正式视图，主推与 H4 仍严格按共同上游封闭
+- 回归测试：`tests/test_market_sentiment.py`、`tests/test_daily_structure_pool.py`、`tests/test_strong_startup.py`、`tests/test_trend_continuation.py`、`tests/test_market_data_guard.py`、`tests/test_repair_strategy_scorecard_snapshot.py`
+
+本规则的治理合同见设计文档第 14 节。后续只有交易所规则变化或用户明确批准重新设计时才能修改；普通选股优化、收益比较、页面调整和减少候选数量均不得隐式改变该合同。

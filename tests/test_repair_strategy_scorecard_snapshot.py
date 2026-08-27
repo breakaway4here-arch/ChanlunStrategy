@@ -3,6 +3,7 @@ import unittest
 
 
 from scripts.repair_strategy_scorecard_snapshot import (
+    _workspace_upstream_contract_violations,
     protected_report_digest,
     rebuild_strategy_scorecard_report,
     workspace_selection_projection,
@@ -11,6 +12,46 @@ from chanlun.report_view_model import build_workspace
 
 
 class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
+    def test_limit_up_watch_exception_is_not_an_upstream_contract_incident(self):
+        report = {
+            "picks_pure": [],
+            "workspace": {
+                "views": {
+                    "observation_top5": [{
+                        "code": "301630",
+                        "view": "observation",
+                        "tier": "watch",
+                        "price_limit_state": "limit_up",
+                    }],
+                    "confirming": [{
+                        "code": "301630",
+                        "view": "observation",
+                        "tier": "watch",
+                        "price_limit_state": "limit_up",
+                    }],
+                    "main": [{
+                        "code": "301631",
+                        "view": "main",
+                        "tier": "candidate",
+                        "price_limit_state": "limit_up",
+                    }],
+                    "growth_quality": [{
+                        "code": "301632",
+                        "view": "observation",
+                        "tier": "watch",
+                        "price_limit_state": "normal",
+                    }],
+                },
+            },
+        }
+
+        violations = _workspace_upstream_contract_violations(report)
+
+        self.assertNotIn("observation_top5", violations)
+        self.assertNotIn("confirming", violations)
+        self.assertEqual(["301631"], violations["main"])
+        self.assertEqual(["301632"], violations["growth_quality"])
+
     def _report(self):
         return {
             "date": "2026-08-26",

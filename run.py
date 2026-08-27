@@ -128,6 +128,7 @@ from chanlun.market_close_snapshot import ingest_market_close_snapshot
 from chanlun.market_sentiment import (
     build_daily_inputs_from_windows,
     build_sentiment_history,
+    classify_price_limit,
     detect_turning_signal,
 )
 from chanlun.candidate_funnel import CandidateFunnel
@@ -174,6 +175,91 @@ def _restrict_to_common_upstream(items, upstream_candidates):
         "kept_count": len(kept),
         "excluded_count": len(rows) - len(kept),
         "excluded_codes": excluded_codes,
+    }
+
+
+def _result_price_limit_state(item):
+    """Classify the latest bar without using a cross-board percentage shortcut."""
+    closes = getattr(item, "closes", None)
+    if closes is None and isinstance(item, dict):
+        closes = item.get("closes")
+    if closes is None or len(closes) < 2:
+        return "invalid"
+    code = _candidate_code(item)
+    name = (
+        str(item.get("name") or "")
+        if isinstance(item, dict)
+        else str(getattr(item, "name", "") or "")
+    )
+    return classify_price_limit({
+        "code": code,
+        "name": name,
+        "prev_close": closes[-2],
+        "close": closes[-1],
+    })
+
+
+def _extend_upstream_for_limit_up_observation(items, upstream_candidates):
+    """Allow exact limit-up rows to be scanned only for observation output."""
+    kept, diagnostics = _restrict_to_common_upstream(items, upstream_candidates)
+    kept_codes = {_candidate_code(item) for item in kept}
+    limit_up_rows = [
+        item for item in (items or [])
+        if _candidate_code(item)
+        and _candidate_code(item) not in kept_codes
+        and _result_price_limit_state(item) == "limit_up"
+    ]
+    limit_up_codes = sorted({_candidate_code(item) for item in limit_up_rows})
+    diagnostics = dict(diagnostics)
+    diagnostics["limit_up_observation_count"] = len(limit_up_rows)
+    diagnostics["limit_up_observation_codes"] = limit_up_codes
+    diagnostics["kept_count"] = len(kept) + len(limit_up_rows)
+    diagnostics["excluded_count"] = len(list(items or [])) - diagnostics["kept_count"]
+    diagnostics["excluded_codes"] = sorted(
+        set(diagnostics.get("excluded_codes", [])) - set(limit_up_codes)
+    )
+    return kept + limit_up_rows, diagnostics
+
+
+def _restrict_observation_to_common_upstream(items, upstream_candidates):
+    """Keep formal upstream membership, plus the explicit limit-up watch exception."""
+    upstream_codes = {
+        _candidate_code(item) for item in (upstream_candidates or [])
+        if _candidate_code(item)
+    }
+    rows = list(items or [])
+
+    def _is_limit_up_watch(item):
+        return bool(
+            isinstance(item, dict)
+            and item.get("view") == "observation"
+            and item.get("tier") == "watch"
+            and item.get("price_limit_state") == "limit_up"
+        )
+
+    kept = [
+        item for item in rows
+        if _candidate_code(item) in upstream_codes or _is_limit_up_watch(item)
+    ]
+    exception_codes = sorted({
+        _candidate_code(item) for item in rows
+        if _candidate_code(item) not in upstream_codes and _is_limit_up_watch(item)
+    })
+    excluded_codes = sorted({
+        _candidate_code(item) for item in rows
+        if _candidate_code(item)
+        and _candidate_code(item) not in upstream_codes
+        and not _is_limit_up_watch(item)
+    })
+    return kept, {
+        "upstream_pool": "picks_pure",
+        "upstream_count": len(upstream_codes),
+        "input_count": len(rows),
+        "kept_count": len(kept),
+        "excluded_count": len(rows) - len(kept),
+        "excluded_codes": excluded_codes,
+        "limit_up_exception_count": len(exception_codes),
+        "limit_up_exception_codes": exception_codes,
     }
 
 
@@ -2055,7 +2141,7 @@ def main(debug=False, preview=False, generated_at=None):
         return merged
 
     common_structure_results, startup_upstream_diag = (
-        _restrict_to_common_upstream(chan_results, pure_pool)
+        _extend_upstream_for_limit_up_observation(chan_results, pure_pool)
     )
     startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
         common_structure_results, sector_stocks)
@@ -2563,10 +2649,10 @@ def main(debug=False, preview=False, generated_at=None):
         fusion_scored, pure_scored
     )
     startup_watchlist, startup_final_upstream_diag = (
-        _restrict_to_common_upstream(startup_watchlist, pure_scored)
+        _restrict_observation_to_common_upstream(startup_watchlist, pure_scored)
     )
     trend_watchlist, trend_final_upstream_diag = (
-        _restrict_to_common_upstream(trend_watchlist, pure_scored)
+        _restrict_observation_to_common_upstream(trend_watchlist, pure_scored)
     )
     observation_watchlist = startup_watchlist + trend_watchlist
     luojie_candidates, luojie_final_upstream_diag = (

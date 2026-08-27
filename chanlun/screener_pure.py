@@ -10,9 +10,9 @@
 import numpy as np
 from config import (
     PURE_DIVERGENCE_THRESHOLD, MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
-    LIMIT_UP_THRESHOLD, LIMIT_DOWN_THRESHOLD,
 )
 from .data_fetcher import is_st_stock
+from .market_sentiment import classify_price_limit
 from .signal_quality_classifier import build_signal_context, tag_signal_quality_in_place
 
 
@@ -63,13 +63,18 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
         if len(result.closes) < MIN_LISTED_DAYS:
             continue
 
-        # 涨跌停过滤（用最近一日涨跌幅判断）
+        # 真实涨跌停过滤（按板块规则和价格精度判断）
         if len(result.closes) >= 2:
             prev_close = result.closes[-2]
             curr_close = result.closes[-1]
             if prev_close > 0:
-                change_pct = (curr_close - prev_close) / prev_close * 100
-                if change_pct >= LIMIT_UP_THRESHOLD or change_pct <= LIMIT_DOWN_THRESHOLD:
+                price_limit_state = classify_price_limit({
+                    "code": code,
+                    "name": name,
+                    "prev_close": prev_close,
+                    "close": curr_close,
+                })
+                if price_limit_state in ("limit_up", "limit_down"):
                     continue
 
         # 量能过滤：近5日日均成交额 > MIN_DAILY_AMOUNT

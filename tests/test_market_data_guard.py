@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
@@ -122,6 +123,57 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(2, diagnostics["kept_count"])
         self.assertEqual(["600001"], diagnostics["excluded_codes"])
         self.assertEqual("picks_pure", diagnostics["upstream_pool"])
+
+    def test_only_actual_limit_up_extends_strategy_scan_for_observation(self):
+        shared = SimpleNamespace(
+            code="600000", name="共同上游",
+            closes=np.array([10.0, 10.2]),
+        )
+        chinext_limit_up = SimpleNamespace(
+            code="301630", name="创业板涨停",
+            closes=np.array([10.0, 12.0]),
+        )
+        chinext_large_gain = SimpleNamespace(
+            code="301629", name="创业板未涨停",
+            closes=np.array([10.0, 11.37]),
+        )
+        chinext_limit_down = SimpleNamespace(
+            code="301631", name="创业板跌停",
+            closes=np.array([10.0, 8.0]),
+        )
+
+        rows, diagnostics = run._extend_upstream_for_limit_up_observation(
+            [shared, chinext_limit_up, chinext_large_gain, chinext_limit_down],
+            [{"code": "600000"}],
+        )
+
+        self.assertEqual(["600000", "301630"], [row.code for row in rows])
+        self.assertEqual(["301630"], diagnostics["limit_up_observation_codes"])
+        self.assertEqual(1, diagnostics["limit_up_observation_count"])
+
+    def test_limit_up_exception_never_keeps_formal_output_outside_upstream(self):
+        rows = [
+            {
+                "code": "301630", "view": "observation", "tier": "watch",
+                "price_limit_state": "limit_up",
+            },
+            {
+                "code": "301631", "view": "main", "tier": "candidate",
+                "price_limit_state": "limit_up",
+            },
+            {
+                "code": "301632", "view": "observation", "tier": "watch",
+                "price_limit_state": "normal",
+            },
+        ]
+
+        kept, diagnostics = run._restrict_observation_to_common_upstream(
+            rows, []
+        )
+
+        self.assertEqual(["301630"], [row["code"] for row in kept])
+        self.assertEqual(["301630"], diagnostics["limit_up_exception_codes"])
+        self.assertEqual(["301631", "301632"], diagnostics["excluded_codes"])
 
     def test_sublevel_input_health_separates_verified_partial_and_unavailable(self):
         requested = [

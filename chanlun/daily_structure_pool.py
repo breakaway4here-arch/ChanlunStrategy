@@ -8,10 +8,10 @@ can upgrade them to candidates.
 import numpy as np
 from config import (
     MIN_LISTED_DAYS, MIN_DAILY_AMOUNT,
-    LIMIT_UP_THRESHOLD, LIMIT_DOWN_THRESHOLD,
     ENABLE_SWING_POSITION_SEEDS,
 )
 from .data_fetcher import is_st_stock
+from .market_sentiment import classify_price_limit
 from .signal_policy import (
     is_formal_buy, is_upgradeable_reference, is_blocked_buy,
     is_candidate_seed, is_reference_only,
@@ -65,13 +65,18 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
         if len(result.closes) < MIN_LISTED_DAYS:
             continue
 
-        # Limit up/down
+        # 真实涨跌停过滤：必须按板块、ST和价格精度判断，禁止用统一涨跌幅阈值。
         if len(result.closes) >= 2:
             prev_close = result.closes[-2]
             curr_close = result.closes[-1]
             if prev_close > 0:
-                change_pct = (curr_close - prev_close) / prev_close * 100
-                if change_pct >= LIMIT_UP_THRESHOLD or change_pct <= LIMIT_DOWN_THRESHOLD:
+                price_limit_state = classify_price_limit({
+                    "code": code,
+                    "name": name,
+                    "prev_close": prev_close,
+                    "close": curr_close,
+                })
+                if price_limit_state in ("limit_up", "limit_down"):
                     continue
 
         # Liquidity

@@ -544,6 +544,23 @@ class TestReportViewModel(unittest.TestCase):
             all(row["view"] == "observation" for row in selected)
         )
 
+    def test_observation_top5_preserves_limit_up_exception_markers(self):
+        item = _confirming_pick(code="301630")
+        item.update({
+            "view": "observation",
+            "tier": "watch",
+            "price_limit_state": "limit_up",
+            "reason_code": "limit_up",
+            "failure_gate": "chase_risk",
+        })
+
+        workspace = build_workspace({"observation_watchlist": [item]})
+        row = workspace["views"]["observation_top5"][0]
+
+        self.assertEqual(row["view"], "observation")
+        self.assertEqual(row["tier"], "watch")
+        self.assertEqual(row["price_limit_state"], "limit_up")
+
     def test_growth_quality_view_exists_but_default_is_main(self):
         report_data = _report_data(
             {

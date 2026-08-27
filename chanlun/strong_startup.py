@@ -7,6 +7,7 @@
 import numpy as np
 import config
 from .data_fetcher import is_st_stock
+from .market_sentiment import classify_price_limit
 
 
 def build_strong_startup_pool(chan_results, sector_stocks=None):
@@ -56,12 +57,18 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             diag["dropped_base_filter"] += 1
             continue
 
+        price_limit_state = "invalid"
         if len(closes) >= 2:
             prev_close = closes[-2]
             curr_close = closes[-1]
             if prev_close > 0:
-                change_pct = (curr_close - prev_close) / prev_close * 100
-                if change_pct <= config.LIMIT_DOWN_THRESHOLD:
+                price_limit_state = classify_price_limit({
+                    "code": code,
+                    "name": name,
+                    "prev_close": prev_close,
+                    "close": curr_close,
+                })
+                if price_limit_state == "limit_down":
                     diag["dropped_base_filter"] += 1
                     continue
 
@@ -164,6 +171,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "startup_date": startup_date,
             "startup_age_days": startup_age_days,
             "change_pct": round(change_pct, 2),
+            "price_limit_state": price_limit_state,
             "volume_ratio": round(volume_ratio, 2),
             "close": curr_close,
             "pivot_info": pivot_info,
@@ -178,7 +186,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         }
 
         # --- Step 4: 涨停处理 → 当日不进候选，进观察 ---
-        if change_pct >= config.LIMIT_UP_THRESHOLD:
+        if price_limit_state == "limit_up":
             watch_item = _make_watch_item(seed, "低位放量涨停",
                 "涨停当日不追，等待次日回踩确认",
                 ["回踩不破突破位", "30min二买/三买", "缩量回踩后再放量"])
@@ -439,8 +447,8 @@ def _check_30min_confirmations(min30_result, seed):
 
 def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
     """Build a startup watchlist item."""
-    if "涨停" in str(watch_reason) or "涨停" in str(startup_reason):
-        reason_code = "overextended"
+    if seed.get("price_limit_state") == "limit_up":
+        reason_code = "limit_up"
         failure_gate = "chase_risk"
     else:
         reason_code = "waiting_30m_confirm"
@@ -462,6 +470,7 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "startup_date": seed.get("startup_date", ""),
         "startup_age_days": seed.get("startup_age_days", 0),
         "change_pct": seed.get("change_pct", 0),
+        "price_limit_state": seed.get("price_limit_state", "invalid"),
         "volume_ratio": seed.get("volume_ratio", 0),
         "close": seed.get("close", 0),
         "avoid_chase": True,

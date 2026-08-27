@@ -9,6 +9,7 @@ import numpy as np
 import config
 from .chan_engine import ema
 from .data_fetcher import is_st_stock
+from .market_sentiment import classify_price_limit
 
 
 def _float_array(value: Any) -> np.ndarray:
@@ -61,6 +62,14 @@ def _base_payload(
     change_pct = (
         (close / previous_close - 1.0) * 100.0 if previous_close > 0 else 0.0
     )
+    price_limit_state = classify_price_limit({
+        "code": code,
+        "name": str(getattr(result, "name", "") or code),
+        "prev_close": previous_close,
+        "close": close,
+    })
+    if price_limit_state == "limit_down":
+        return None
     gap_pct = (
         (float(opens[-1]) / previous_close - 1.0) * 100.0
         if previous_close > 0
@@ -107,6 +116,7 @@ def _base_payload(
         "reference_price": round(reference_price, 6),
         "distance_from_reference_pct": round(distance, 4),
         "change_pct": round(change_pct, 4),
+        "price_limit_state": price_limit_state,
         "gap_pct": round(gap_pct, 4),
         "volume_ratio": round(volume_ratio, 4),
         "strong_structure": strong_structure,
@@ -229,7 +239,7 @@ def build_trend_continuation_pool(
 
         risk_code = ""
         risk_reason = ""
-        if float(seed["change_pct"]) >= float(config.LIMIT_UP_THRESHOLD):
+        if seed.get("price_limit_state") == "limit_up":
             risk_code = "limit_up"
             risk_reason = "涨停当日不追，等待回踩确认"
         elif float(seed["gap_pct"]) >= float(config.TREND_CONTINUATION_MAX_GAP_PCT):

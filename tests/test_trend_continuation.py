@@ -44,6 +44,36 @@ def _result(
 
 
 class TrendContinuationTests(unittest.TestCase):
+    def test_chinext_large_gain_below_real_limit_is_trend_seed(self):
+        result = _result(
+            code="301629",
+            last_close=12.735,
+            previous_close=11.2,
+            today_open=11.2,
+        )
+
+        seeds, watchlist, diagnostics = build_trend_continuation_pool([result])
+
+        self.assertEqual([row["code"] for row in seeds], ["301629"])
+        self.assertEqual(watchlist, [])
+        self.assertEqual(diagnostics["trend_seed"], 1)
+
+    def test_actual_chinext_limit_up_stays_in_observation(self):
+        result = _result(
+            code="301630",
+            last_close=12.72,
+            previous_close=10.6,
+            today_open=10.6,
+        )
+
+        seeds, watchlist, diagnostics = build_trend_continuation_pool([result])
+
+        self.assertEqual(seeds, [])
+        self.assertEqual([row["code"] for row in watchlist], ["301630"])
+        self.assertEqual(watchlist[0]["reason_code"], "limit_up")
+        self.assertEqual(watchlist[0]["price_limit_state"], "limit_up")
+        self.assertEqual(diagnostics["watch_risk"], 1)
+
     def test_platform_breakout_reference_does_not_use_old_buy_source_price(self):
         seeds, watchlist, diagnostics = build_trend_continuation_pool([_result()])
 

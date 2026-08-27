@@ -106,6 +106,43 @@ class TestPriceBreakout(unittest.TestCase):
 
 class TestBuildStrongStartupPool(unittest.TestCase):
 
+    def test_chinext_large_gain_below_real_limit_remains_seed(self):
+        closes = _make_low_position_closes(120)
+        closes[-2] = 50.0
+        closes[-1] = 56.85  # +13.7%，不是创业板涨停
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        vols = _make_volume_spike(120)
+        result = _make_chan_result(
+            "301629", "矽电股份", closes, opens, highs, lows, vols
+        )
+
+        seeds, watchlist, diag = build_strong_startup_pool([result])
+
+        self.assertEqual([row["code"] for row in seeds], ["301629"])
+        self.assertEqual(watchlist, [])
+        self.assertEqual(diag["daily_startup_seed"], 1)
+
+    def test_actual_chinext_limit_up_stays_in_observation(self):
+        closes = _make_low_position_closes(120)
+        closes[-2] = 50.0
+        closes[-1] = 60.0
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        vols = _make_volume_spike(120)
+        result = _make_chan_result(
+            "301630", "创业板涨停测试", closes, opens, highs, lows, vols
+        )
+
+        seeds, watchlist, diag = build_strong_startup_pool([result])
+
+        self.assertEqual(seeds, [])
+        self.assertEqual([row["code"] for row in watchlist], ["301630"])
+        self.assertEqual(watchlist[0]["price_limit_state"], "limit_up")
+        self.assertEqual(diag["watch_due_to_limit_up"], 1)
+
     def test_low_volume_breakout_price_up(self):
         """Low position + volume spike + price breakout → seed."""
         closes = _make_low_position_closes(120)

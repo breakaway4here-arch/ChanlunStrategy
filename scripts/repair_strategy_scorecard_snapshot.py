@@ -52,6 +52,10 @@ COMMON_UPSTREAM_STRATEGY_VIEWS = (
     "confirming",
     "growth_quality",
 )
+LIMIT_UP_OBSERVATION_EXCEPTION_VIEWS = frozenset(
+    view for view in COMMON_UPSTREAM_STRATEGY_VIEWS
+    if view not in {"main", "h4_t3"}
+)
 
 
 def _deepcopy_json(value):
@@ -154,12 +158,23 @@ def _workspace_upstream_contract_violations(report):
     for view_name in COMMON_UPSTREAM_STRATEGY_VIEWS:
         rows = views.get(view_name)
         rows = rows if isinstance(rows, list) else []
+
+        def _is_limit_up_observation_exception(row):
+            return bool(
+                view_name in LIMIT_UP_OBSERVATION_EXCEPTION_VIEWS
+                and isinstance(row, dict)
+                and row.get("view") == "observation"
+                and row.get("tier") == "watch"
+                and row.get("price_limit_state") == "limit_up"
+            )
+
         invalid_codes = sorted({
             str(row.get("code") or "")
             for row in rows
             if isinstance(row, dict)
             and row.get("code")
             and str(row.get("code") or "") not in pure_codes
+            and not _is_limit_up_observation_exception(row)
         })
         if invalid_codes:
             violations[view_name] = invalid_codes

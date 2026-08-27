@@ -16,10 +16,11 @@ from config import (
     FUSION_TRAILING_TIERS, FUSION_HARD_STOP,
     FUSION_ACTIVE_DAYS, FUSION_ACTIVE_THRESHOLD,
     MA_SHORT, MA_MID, MA_LONG, MA_TREND,
-    MIN_DAILY_AMOUNT, LIMIT_UP_THRESHOLD, LIMIT_DOWN_THRESHOLD,
+    MIN_DAILY_AMOUNT,
 )
 from .chan_engine import ema
 from .data_fetcher import is_st_stock
+from .market_sentiment import classify_price_limit
 from .screener_pure import _get_pivot_info, _has_macd_bullish_signal
 
 
@@ -104,10 +105,15 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
         if len(closes) < MA_LONG + 1:
             continue
 
-        # 涨跌停
+        # 真实涨跌停（按板块规则和价格精度判断）
         if len(closes) >= 2 and closes[-2] > 0:
-            change_pct = (closes[-1] - closes[-2]) / closes[-2] * 100
-            if change_pct >= LIMIT_UP_THRESHOLD or change_pct <= LIMIT_DOWN_THRESHOLD:
+            price_limit_state = classify_price_limit({
+                "code": code,
+                "name": name,
+                "prev_close": closes[-2],
+                "close": closes[-1],
+            })
+            if price_limit_state in ("limit_up", "limit_down"):
                 continue
 
         # 量能：成交量（手）→ 成交额（元）

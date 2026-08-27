@@ -30,6 +30,81 @@ def make_result(code, closes, buy_points, volumes=None):
 
 class TestSwingSeedConstruction(unittest.TestCase):
 
+    def test_chinext_large_gain_below_real_limit_remains_eligible(self):
+        """创业板涨幅超过主板阈值但未涨停时，仍应进入正式候选流程。"""
+        closes = [250.0] * 60
+        closes[-2] = 255.92
+        closes[-1] = 291.0  # +13.71%，低于创业板20%涨停价307.10
+        result = make_result(
+            code="301629",
+            closes=closes,
+            buy_points=[{
+                "type": "一买",
+                "tier": "formal",
+                "price": 291.0,
+                "index": 59,
+                "trend_strength": 2,
+                "volatility": 0.05,
+            }],
+        )
+
+        pool, diag = build_daily_structure_pool(
+            [result], sector_stocks={}, mode="pure"
+        )
+
+        self.assertEqual([item["code"] for item in pool], ["301629"])
+        self.assertEqual(diag["base_pass"], 1)
+
+    def test_chinext_non_limit_down_large_loss_remains_eligible(self):
+        """创业板跌幅超过10%但未跌停时，不能按主板跌停规则误删。"""
+        closes = [250.0] * 60
+        closes[-2] = 250.0
+        closes[-1] = 215.0  # -14%，低于创业板20%跌停幅度
+        result = make_result(
+            code="301630",
+            closes=closes,
+            buy_points=[{
+                "type": "一买",
+                "tier": "formal",
+                "price": 215.0,
+                "index": 59,
+                "trend_strength": 2,
+                "volatility": 0.05,
+            }],
+        )
+
+        pool, diag = build_daily_structure_pool(
+            [result], sector_stocks={}, mode="pure"
+        )
+
+        self.assertEqual([item["code"] for item in pool], ["301630"])
+        self.assertEqual(diag["base_pass"], 1)
+
+    def test_actual_chinext_limit_up_is_excluded_from_formal_pool(self):
+        """真实创业板涨停仍不得进入当天正式候选池。"""
+        closes = [250.0] * 60
+        closes[-2] = 255.92
+        closes[-1] = 307.10
+        result = make_result(
+            code="301629",
+            closes=closes,
+            buy_points=[{
+                "type": "一买",
+                "tier": "formal",
+                "price": 307.10,
+                "index": 59,
+                "trend_strength": 2,
+                "volatility": 0.05,
+            }],
+        )
+
+        pool, diag = build_daily_structure_pool(
+            [result], sector_stocks={}, mode="pure"
+        )
+
+        self.assertEqual(pool, [])
+        self.assertEqual(diag["base_pass"], 0)
+
     def test_swing_reference_without_position_guard_is_excluded(self):
         """swing底背驰参考 above 20-day low +8% and near highs → no seed, excluded."""
         closes = [10, 10.5, 11, 11.2, 11.5] * 20  # 100 bars, all near 11
