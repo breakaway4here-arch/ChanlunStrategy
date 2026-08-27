@@ -343,6 +343,11 @@ def upgrade_trend_continuation_with_30min(
             "confirmed_by": "+".join(confirmations),
             "result_30min": result,
         })
+        input_evidence = getattr(
+            result, "strategy_input_evidence", None
+        )
+        if isinstance(input_evidence, Mapping):
+            seed["strategy_input_evidence"] = dict(input_evidence)
         candidates.append(seed)
         diagnostics["trend_candidate"] += 1
     return candidates, watchlist, diagnostics

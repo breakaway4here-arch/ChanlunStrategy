@@ -1155,6 +1155,7 @@
       + '    <div class="header-metrics"></div>'
       + '  </header>'
       + '  <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
+      + '  <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
       + '  <section class="workspace">'
       + '    <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="选股池切换"></nav>'
       + '    <div class="view-description" id="viewDescription"></div>'
@@ -1219,6 +1220,7 @@
     nodes.top10Status = app.querySelector('#top10Status');
     nodes.top10Result = app.querySelector('#top10Result');
     nodes.directionQuick = app.querySelector('#directionQuickSummary');
+    nodes.historicalReconstruction = app.querySelector('#historicalReconstruction');
     nodes.candidateSearch = app.querySelector('#candidateSearch');
     nodes.candidateCount = app.querySelector('#candidateCount');
     nodes.candidateMore = app.querySelector('#candidateMore');
@@ -1716,6 +1718,67 @@
           + '</div>';
       }).join('')
       + '</div>';
+  }
+
+  function renderHistoricalReconstruction(data, target) {
+    var mount = target || nodes.historicalReconstruction;
+    if (!mount) return '';
+    var receipt = data && data.historical_reconstruction;
+    if (!receipt || typeof receipt !== 'object') {
+      mount.className = 'historical-reconstruction hidden';
+      mount.innerHTML = '';
+      return '';
+    }
+    var candidates = asArray(receipt.candidates);
+    var input = receipt.input || {};
+    var original = receipt.original_publication || {};
+    var mainCount = safeNumber(original.main_count, 0);
+    var rawMainCount = safeNumber(original.raw_main_candidate_count, 0);
+    var content = ''
+      + '<div class="historical-reconstruction-head">'
+      + '  <div><span class="historical-kicker">历史数据修复复盘</span>'
+      + '  <h2>' + escapeHtml(receipt.report_date || '') + ' 分钟线已核验补齐</h2></div>'
+      + '  <div class="historical-guard"><strong>不属于正式主推</strong><span>评分不生效</span></div>'
+      + '</div>'
+      + '<p class="historical-explain">原始日报保持不变：当日正式推荐 '
+      + escapeHtml(formatNumber(mainCount, 0))
+      + ' 只；原始候选 ' + escapeHtml(formatNumber(rawMainCount, 0))
+      + ' 只因分钟数据未核验而封闭。下列结果为事后使用 15:00 已收盘分钟线重建，仅用于解释数据故障影响。</p>'
+      + '<div class="historical-evidence">'
+      + '  <span>数据截止 ' + escapeHtml(input.latest_ts || '--') + '</span>'
+      + '  <span>状态 ' + escapeHtml(input.status || '--') + '</span>'
+      + '  <span>补齐时间 ' + escapeHtml(receipt.acquired_at || '--') + '</span>'
+      + '</div>';
+    if (candidates.length) {
+      content += '<div class="historical-candidates">'
+        + candidates.map(function (item) {
+          var confirmations = asArray(item.confirmations);
+          var referenceClose = safeNumber(item.reference_close, null);
+          return ''
+            + '<article class="historical-candidate">'
+            + '  <div class="historical-candidate-id"><strong>'
+            + escapeHtml(item.name || item.code || '--') + '</strong><span>'
+            + escapeHtml(item.code || '') + '</span></div>'
+            + '  <span class="historical-review-badge">历史重建·仅复盘</span>'
+            + '  <p>' + escapeHtml(item.review_reason || '') + '</p>'
+            + '  <dl>'
+            + '    <div><dt>30分钟确认</dt><dd>'
+            + escapeHtml(confirmations.join('、') || '无确认') + '</dd></div>'
+            + '    <div><dt>确认时间</dt><dd>'
+            + escapeHtml(item.confirm_date || '--') + '</dd></div>'
+            + '    <div><dt>当日收盘价</dt><dd>'
+            + escapeHtml(referenceClose === null ? '--' : formatNumber(referenceClose, 2))
+            + '</dd></div>'
+            + '  </dl>'
+            + '</article>';
+        }).join('')
+        + '</div>';
+    } else {
+      content += '<div class="historical-empty">分钟线已补齐，但事后重建仍未通过确认条件。</div>';
+    }
+    mount.className = 'historical-reconstruction';
+    mount.innerHTML = content;
+    return content;
   }
 
   function activateWorkspaceView(nextView, focusTab) {
@@ -4908,6 +4971,7 @@
       state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
       renderHeader();
       renderDirectionQuickSummary(state.data);
+      renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
       var first = getCurrentViewItems()[0] || null;
@@ -4960,6 +5024,7 @@
   window.initReportV2 = initReportV2;
   window.renderHeader = renderHeader;
   window.renderWorkspaceTabs = renderWorkspaceTabs;
+  window.renderHistoricalReconstruction = renderHistoricalReconstruction;
   window.renderViewDescription = renderViewDescription;
   window.renderCandidateList = renderCandidateList;
   window.renderCandidateDetail = renderCandidateDetail;

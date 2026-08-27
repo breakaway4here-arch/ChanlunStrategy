@@ -4,7 +4,7 @@
 
 **Goal:** Make minute-level selection inputs retry safely and fail closed, then reconstruct the affected 2026-08-26 candidate from verified historical bars without contaminating the publication ledger or scorecard.
 
-**Architecture:** `KLineRepository` passes report context to production fetchers while remaining compatible with existing two-argument test fetchers. The minute fetcher performs one provider request per attempt, validates the payload before returning it to the repository, and alternates providers for a maximum of four requests. Candidate upgrade channels propagate acquisition evidence. A dedicated historical repair command stages and verifies bars, recomputes only the affected sublevel decision from the frozen report, and atomically rebuilds public report planes with a reconstruction receipt.
+**Architecture:** `KLineRepository` passes report context to production fetchers while remaining compatible with existing two-argument test fetchers. The minute fetcher performs one provider request per attempt, validates the payload before returning it to the repository, and alternates providers for a maximum of four requests. Candidate upgrade channels propagate acquisition evidence. A dedicated historical repair command stages and verifies bars, recomputes only the affected sublevel decision from the frozen report, and atomically adds an isolated review overlay while keeping every original report field immutable.
 
 **Tech Stack:** Python 3, `unittest`, SQLite market-history store, existing report workspace projection, static HTML/JSON publication, GitHub Pages.
 
@@ -61,20 +61,21 @@
 
 **Files:**
 - Create: `scripts/repair_sublevel_selection_snapshot.py`
-- Modify: `chanlun/report_view_model.py`
+- Modify: `chanlun/report_assets/report-v2.js`
+- Modify: `chanlun/report_assets/report-v2.css`
 - Create: `tests/test_repair_sublevel_selection_snapshot.py`
-- Modify: `tests/test_report_view_model.py`
+- Modify: `tests/test_auxiliary_frontend.py`
 
 **Steps:**
 
 1. Add failing tests for the repair command: wrong date rejected, source report must be official/closed, exact-date final bars required, future bars truncated by `as_of`, no confirmation produces no reconstructed candidate, and recommendation ledger remains byte-identical.
 2. Recreate the daily strong-startup seed for `300697` only from the frozen 2026-08-26 report row.
 3. Load verified 30-minute bars from canonical SQLite at `as_of=2026-08-26 15:00:00`, rerun Chan analysis and the original strong-startup confirmation.
-4. When it passes, update only its sublevel evidence and confirmation fields; set `publication_status=historical_reconstruction` and `scorecard_eligible=false`.
-5. Rebuild `selection_input_health` so `daily_fusion` is verified while unrelated H4/15-minute incidents remain unavailable.
-6. Rebuild workspace views and render the row as `历史重建候选`, with `is_formal_recommendation=false`.
-7. Add an atomic reconstruction receipt with before/after hashes and verified source metadata.
-8. Write all report planes to a staging directory, validate them, then atomically publish.
+4. When it passes, write the complete reconstructed sublevel result only to `historical_reconstruction.candidates`; never patch `picks_pure` or `picks_fusion` in place.
+5. Keep `selection_input_health`, workspace, recommendation ledger, scorecards, shadow guard and comparison index byte-equivalent to the original snapshot.
+6. Render a separate `历史数据修复复盘` card with `不属于正式主推`、`评分不生效` and the original visible recommendation count.
+7. Add a reconstruction receipt with the protected original SHA and verified source metadata; exclude the overlay from formal digest semantics.
+8. Write all report planes to a staging directory, assert every protected projection and index is unchanged, then atomically publish.
 
 ### Task 5: Collect and merge real historical minute bars
 
@@ -117,4 +118,4 @@
 5. Run report validators and rebuild comparison/scorecard projections in the required finalizer order.
 6. Push the repaired report commit.
 7. Read back remote `main` SHA, Pages assets, `docs/data/2026-08-26.json`, archive HTML and comparison index.
-8. Confirm the online main tab shows the reconstructed candidate and its historical marker, while the scorecard sample count does not increase.
+8. Confirm the online repair-review card shows the reconstructed candidate and historical marker, while the main tab and scorecard sample count remain unchanged.

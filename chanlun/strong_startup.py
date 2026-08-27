@@ -247,6 +247,11 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
             seed["source_channel"] = "low_position"
             seed["view"] = "main"
             seed["avoid_chase"] = False
+            input_evidence = getattr(
+                min30_result, "strategy_input_evidence", None
+            )
+            if isinstance(input_evidence, dict):
+                seed["strategy_input_evidence"] = dict(input_evidence)
 
             closes_30 = min30_result.closes
             dates_30 = min30_result.dates if hasattr(min30_result, 'dates') else []

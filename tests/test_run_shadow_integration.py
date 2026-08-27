@@ -482,14 +482,18 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         source = Path(run.__file__).read_text(encoding="utf-8")
         self.assertIn(
             "collect_15min_data(\n"
-            "        luojie_theme_stocks, required_date=today\n"
+            "        luojie_theme_stocks,\n"
+            "        required_date=today,\n"
+            "        as_of=time_metadata.get(\"as_of\"),\n"
             "    )",
             source,
         )
         self.assertGreaterEqual(
             source.count(
                 "collect_30min_data(\n"
-                "            all_targets, required_date=today\n"
+                "            all_targets,\n"
+                "            required_date=today,\n"
+                "            as_of=time_metadata.get(\"as_of\"),\n"
                 "        )"
             ),
             2,

@@ -42,7 +42,217 @@ def _payload(dates, final=True, source="remote"):
     }
 
 
+def _minute_payload(report_date, count=40, source="remote", final=True):
+    end = datetime.fromisoformat("{} 15:00:00".format(report_date))
+    dates = [
+        (end - timedelta(minutes=30 * (count - index - 1))).strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+        for index in range(count)
+    ]
+    return _payload(dates, final=final, source=source)
+
+
 class KLineRepositoryTests(unittest.TestCase):
+
+    def test_minute_fetch_retries_three_times_and_alternates_providers(self):
+        calls = []
+        sleeps = []
+
+        def eastmoney(code, scale, count):
+            calls.append("eastmoney")
+            return _minute_payload("2026-08-25", count, source="eastmoney")
+
+        def sina(code, scale, count):
+            calls.append("sina")
+            return None
+
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_minute_kline_remote",
+            side_effect=eastmoney,
+        ), patch.object(
+            data_fetcher,
+            "_fetch_sina_minute_kline_remote",
+            side_effect=sina,
+        ):
+            payload = data_fetcher._fetch_minute_for_repository(
+                "600000",
+                30,
+                40,
+                required_date="2026-08-26",
+                as_of="2026-08-26T15:05:00+08:00",
+                sleep_fn=sleeps.append,
+            )
+
+        self.assertIsNone(payload)
+        self.assertEqual(
+            calls,
+            ["eastmoney", "sina", "eastmoney", "sina"],
+        )
+        self.assertEqual(sleeps, [0.5, 1.0, 2.0])
+
+    def test_minute_fetch_stale_first_provider_uses_fresh_second_provider(self):
+        calls = []
+
+        def eastmoney(code, scale, count):
+            calls.append("eastmoney")
+            return _minute_payload("2026-08-25", count, source="eastmoney")
+
+        def sina(code, scale, count):
+            calls.append("sina")
+            return _minute_payload("2026-08-26", count, source="sina")
+
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_minute_kline_remote",
+            side_effect=eastmoney,
+        ), patch.object(
+            data_fetcher,
+            "_fetch_sina_minute_kline_remote",
+            side_effect=sina,
+        ):
+            payload = data_fetcher._fetch_minute_for_repository(
+                "600000",
+                30,
+                40,
+                required_date="2026-08-26",
+                as_of="2026-08-26T15:05:00+08:00",
+                sleep_fn=lambda _delay: None,
+            )
+
+        self.assertEqual(calls, ["eastmoney", "sina"])
+        self.assertEqual(payload["source"], "sina")
+        self.assertEqual(payload["dates"][-1], "2026-08-26 15:00:00")
+
+    def test_minute_fetch_first_fresh_response_stops_without_retry(self):
+        calls = []
+        sleeps = []
+
+        def eastmoney(code, scale, count):
+            calls.append("eastmoney")
+            return _minute_payload("2026-08-26", count, source="eastmoney")
+
+        with patch.object(
+            data_fetcher,
+            "_fetch_eastmoney_minute_kline_remote",
+            side_effect=eastmoney,
+        ), patch.object(
+            data_fetcher,
+            "_fetch_sina_minute_kline_remote",
+        ) as sina:
+            payload = data_fetcher._fetch_minute_for_repository(
+                "600000",
+                30,
+                40,
+                required_date="2026-08-26",
+                as_of="2026-08-26T15:05:00+08:00",
+                sleep_fn=sleeps.append,
+            )
+
+        self.assertEqual(calls, ["eastmoney"])
+        self.assertEqual(payload["source"], "eastmoney")
+        self.assertEqual(sleeps, [])
+        sina.assert_not_called()
+
+    def test_minute_fetch_rejects_same_day_payload_without_close_bar(self):
+        payload = _minute_payload("2026-08-26", 40, source="eastmoney")
+        payload["dates"] = [
+            (
+                datetime.fromisoformat(value) - timedelta(minutes=30)
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            for value in payload["dates"]
+        ]
+
+        error = data_fetcher._minute_payload_validation_error(
+            payload,
+            count=40,
+            required_date="2026-08-26",
+            as_of="2026-08-26T15:05:00+08:00",
+        )
+
+        self.assertEqual(error, "latest_close_bar_incomplete")
+
+    def test_repository_passes_report_context_to_supported_fetcher(self):
+        calls = []
+
+        def remote(code, count, required_date=None, as_of=None):
+            calls.append((code, count, required_date, as_of))
+            return _minute_payload(required_date, count, source="contextual")
+
+        repository = KLineRepository(
+            self.db_path, remote_fetchers={"30m": remote}
+        )
+        result = repository.get(
+            "30m",
+            "600000",
+            count=40,
+            required_date="2026-08-26",
+            as_of="2026-08-26T15:05:00+08:00",
+        )
+
+        self.assertEqual(
+            calls,
+            [
+                (
+                    "600000",
+                    40,
+                    "2026-08-26",
+                    "2026-08-26T15:05:00+08:00",
+                )
+            ],
+        )
+        self.assertEqual(result.status, "verified")
+
+    def test_stale_remote_payload_is_rejected_before_database_write(self):
+        repository = KLineRepository(
+            self.db_path,
+            remote_fetchers={
+                "30m": lambda code, count, required_date=None, as_of=None: (
+                    _minute_payload("2026-08-25", count, source="stale")
+                )
+            },
+        )
+
+        result = repository.get(
+            "30m",
+            "600000",
+            count=40,
+            required_date="2026-08-26",
+            as_of="2026-08-26T15:05:00+08:00",
+        )
+
+        self.assertEqual(result.status, "missing")
+        self.assertTrue(result.diagnostics["remote_failed"])
+        with MarketHistoryStore(self.db_path, readonly=True) as store:
+            self.assertIsNone(
+                store.resolve_instrument("stock", "SH", "600000")
+            )
+
+    def test_same_day_remote_without_close_bar_is_rejected_before_write(self):
+        incomplete = _minute_payload(
+            "2026-08-26", 40, source="incomplete"
+        )
+        incomplete["dates"][-1] = "2026-08-26 14:30:00"
+        repository = KLineRepository(
+            self.db_path,
+            remote_fetchers={"30m": lambda *args, **kwargs: incomplete},
+        )
+
+        result = repository.get(
+            "30m",
+            "600000",
+            count=40,
+            required_date="2026-08-26",
+            as_of="2026-08-26T15:05:00+08:00",
+        )
+
+        self.assertEqual(result.status, "missing")
+        self.assertTrue(result.diagnostics["remote_failed"])
+        with MarketHistoryStore(self.db_path, readonly=True) as store:
+            self.assertIsNone(
+                store.resolve_instrument("stock", "SH", "600000")
+            )
 
     def test_minute_provider_timestamp_is_treated_as_bar_end_time(self):
         cn_tz = timezone(timedelta(hours=8))
@@ -98,6 +308,43 @@ class KLineRepositoryTests(unittest.TestCase):
         self.assertEqual(result.status, "verified")
         self.assertEqual(result.kline["dates"][-1], "2026-07-02")
         self.assertEqual(result.kline["source"], "market_history_db")
+
+    def test_same_day_local_minute_window_without_close_bar_must_refresh(self):
+        dates = [
+            (
+                datetime.fromisoformat("2026-08-26 14:30:00")
+                - timedelta(minutes=30 * (39 - index))
+            ).strftime("%Y-%m-%d %H:%M:%S")
+            for index in range(40)
+        ]
+        self.seed(
+            "600000",
+            [_bar(ts, final=True) for ts in dates],
+            interval="30m",
+        )
+        calls = []
+
+        def remote(code, count, required_date=None, as_of=None):
+            calls.append((code, count, required_date, as_of))
+            return _minute_payload(required_date, count, source="fresh")
+
+        repository = KLineRepository(
+            self.db_path,
+            remote_fetchers={"30m": remote},
+            overlap_counts={"day": 2, "30m": 16, "15m": 32},
+        )
+
+        result = repository.get(
+            "30m",
+            "600000",
+            count=40,
+            required_date="2026-08-26",
+            as_of="2026-08-26T15:05:00+08:00",
+        )
+
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result.status, "verified")
+        self.assertEqual(result.kline["dates"][-1], "2026-08-26 15:00:00")
 
     def test_missing_fetches_remote_once_persists_and_reuses_database(self):
         calls = []
@@ -355,6 +602,22 @@ class KLineRepositoryTests(unittest.TestCase):
         legacy_read.assert_not_called()
         legacy_write.assert_not_called()
 
+    def test_formal_minute_fetch_fails_closed_when_repository_disabled(self):
+        for fetcher_name, legacy_name in (
+            ("fetch_30min_kline", "_fetch_30min_kline_legacy_cache"),
+            ("fetch_15min_kline", "_fetch_15min_kline_legacy_cache"),
+        ):
+            with self.subTest(fetcher=fetcher_name), patch.object(
+                data_fetcher, "KLINE_REPOSITORY_ENABLED", False
+            ), patch.object(data_fetcher, legacy_name) as legacy:
+                result = getattr(data_fetcher, fetcher_name)(
+                    "600000",
+                    required_date="2026-08-26",
+                    as_of="2026-08-26T15:05:00+08:00",
+                )
+                self.assertIsNone(result)
+                legacy.assert_not_called()
+
     def test_data_fetcher_batch_uses_one_repository_batch_call(self):
         kline = _payload(
             [
@@ -441,6 +704,10 @@ class KLineRepositoryTests(unittest.TestCase):
                         kline(interval, "2026-08-26 15:00:00", False, bars),
                         "preview", "market_history_db", False,
                     ),
+                    "600003": KLineResult(
+                        kline(interval, "2026-08-26 14:30:00", True, bars),
+                        "verified", "market_history_db", False,
+                    ),
                 }
                 previous = data_fetcher._KLINE_REPOSITORY
                 try:
@@ -448,9 +715,12 @@ class KLineRepositoryTests(unittest.TestCase):
                     rows = fetcher(
                         [
                             {"code": code, "name": code}
-                            for code in ("600000", "600001", "600002")
+                            for code in (
+                                "600000", "600001", "600002", "600003"
+                            )
                         ],
                         required_date="2026-08-26",
+                        as_of="2026-08-26T15:05:00+08:00",
                     )
                 finally:
                     data_fetcher._KLINE_REPOSITORY = previous
@@ -464,6 +734,10 @@ class KLineRepositoryTests(unittest.TestCase):
                 self.assertEqual(
                     repository.get_many.call_args[1]["required_date"],
                     "2026-08-26",
+                )
+                self.assertEqual(
+                    repository.get_many.call_args[1]["as_of"],
+                    "2026-08-26T15:05:00+08:00",
                 )
 
 

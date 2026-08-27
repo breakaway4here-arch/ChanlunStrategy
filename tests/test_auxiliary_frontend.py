@@ -43,6 +43,34 @@ __BODY__
 
 
 class TestAuxiliaryCockpitContract(unittest.TestCase):
+    def test_historical_reconstruction_is_visibly_non_actionable(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderHistoricalReconstruction }",
+            r"""
+const mount = { innerHTML: '', className: '' };
+const html = globalThis.__auxTest.render({ historical_reconstruction: {
+  report_date: '2026-08-26', acquired_at: '2026-08-27T12:00:00+08:00',
+  input: { latest_ts: '2026-08-26 15:00:00', status: 'verified' },
+  original_publication: { main_count: 0, raw_main_candidate_count: 1 },
+  candidates: [{
+    code: '300697', name: '电工合金', reference_close: 16.03,
+    confirmations: ['30min EMA5维持'], confirm_date: '2026-08-26 15:00:00',
+    review_reason: '仅用于复盘', is_formal_recommendation: false,
+    scorecard_eligible: false
+  }]
+}}, mount);
+assert(html.includes('历史数据修复复盘'), 'repair overlay heading missing');
+assert(html.includes('不属于正式主推'), 'formal-history boundary missing');
+assert(html.includes('评分不生效'), 'scorecard boundary missing');
+assert(html.includes('原始日报保持不变：当日正式推荐 0 只'), 'original count hidden');
+assert(html.includes('原始候选 1 只因分钟数据未核验而封闭'), 'incident cause hidden');
+assert(html.includes('电工合金'), 'reconstructed candidate hidden');
+assert(html.includes('2026-08-26 15:00:00'), 'verified close timestamp hidden');
+assert(!html.includes('可上车'), 'historical review leaked an executable action');
+""",
+        )
+
     def test_reject_decision_is_never_colored_as_recommendation(self):
         _assert_node_contract(
             self,

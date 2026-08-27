@@ -1391,34 +1391,197 @@ def _fetch_daily_for_repository(code, count):
     return None
 
 
-def _fetch_30min_for_repository(code, count):
-    return _fetch_minute_for_repository(code, 30, count)
+def _minute_context_datetime(value=None):
+    if value is None:
+        return datetime.now(_TZ_CN)
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value).strip().replace("Z", "+00:00")
+        parsed = datetime.fromisoformat(text)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_TZ_CN)
+    return parsed.astimezone(_TZ_CN)
 
 
-def _fetch_15min_for_repository(code, count):
-    return _fetch_minute_for_repository(code, 15, count)
+def _minute_payload_validation_error(
+    payload,
+    *,
+    count,
+    required_date=None,
+    as_of=None,
+):
+    if not isinstance(payload, dict):
+        return "payload_not_mapping"
+    try:
+        raw_dates = payload.get("dates")
+        dates = list(raw_dates) if raw_dates is not None else []
+        arrays = {}
+        for key in ("opens", "highs", "lows", "closes", "volumes"):
+            value = payload.get(key)
+            arrays[key] = list(value) if value is not None else []
+    except (TypeError, ValueError):
+        return "payload_arrays_invalid"
+    if not dates:
+        return "empty_dates"
+    if len(dates) < int(count):
+        return "insufficient_bars"
+    if any(len(values) != len(dates) for values in arrays.values()):
+        return "array_length_mismatch"
+
+    previous = None
+    for index, raw_date in enumerate(dates):
+        try:
+            parsed = _minute_context_datetime(raw_date)
+        except (TypeError, ValueError):
+            return "invalid_timestamp"
+        if previous is not None and parsed <= previous:
+            return "timestamps_not_strictly_increasing"
+        previous = parsed
+        try:
+            open_price = float(arrays["opens"][index])
+            high_price = float(arrays["highs"][index])
+            low_price = float(arrays["lows"][index])
+            close_price = float(arrays["closes"][index])
+            volume = float(arrays["volumes"][index])
+        except (TypeError, ValueError):
+            return "nonnumeric_ohlcv"
+        if not all(
+            math.isfinite(value)
+            for value in (open_price, high_price, low_price, close_price, volume)
+        ):
+            return "nonfinite_ohlcv"
+        if min(open_price, high_price, low_price, close_price) <= 0:
+            return "nonpositive_price"
+        if volume < 0:
+            return "negative_volume"
+        if high_price < max(open_price, low_price, close_price):
+            return "invalid_high"
+        if low_price > min(open_price, high_price, close_price):
+            return "invalid_low"
+
+    latest = previous
+    expected_date = str(
+        required_date or _minute_context_datetime(as_of).date().isoformat()
+    )
+    if latest.date().isoformat() != expected_date:
+        return "latest_date_mismatch"
+    if required_date:
+        expected_latest = _minute_context_datetime(
+            "{} 15:00:00".format(required_date)
+        )
+        if latest != expected_latest:
+            return "latest_close_bar_incomplete"
+    evaluation_time = _minute_context_datetime(as_of)
+    if latest > evaluation_time:
+        return "latest_bar_not_final"
+    finals = payload.get("finals")
+    if finals is not None:
+        try:
+            final_values = list(finals)
+        except TypeError:
+            return "finals_invalid"
+        if len(final_values) != len(dates) or final_values[-1] not in (
+            True,
+            1,
+        ):
+            return "latest_bar_not_final"
+    return ""
 
 
-def _fetch_minute_for_repository(code, scale, count):
-    sources = [(
-        "eastmoney",
-        lambda: _fetch_eastmoney_minute_kline_remote(code, scale, count),
-    )]
-    if count <= 240:
-        sources.append((
-            "sina",
-            lambda: _fetch_sina_minute_kline_remote(code, scale, count),
-        ))
-    with ThreadPoolExecutor(max_workers=len(sources)) as pool:
-        futures = {pool.submit(fetcher): source for source, fetcher in sources}
-        for future in as_completed(futures):
-            source = futures[future]
-            try:
-                kline = future.result()
-            except Exception:
-                kline = None
-            if kline:
-                return _with_source(kline, source)
+def _fetch_30min_for_repository(
+    code, count, required_date=None, as_of=None
+):
+    return _fetch_minute_for_repository(
+        code,
+        30,
+        count,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def _fetch_15min_for_repository(
+    code, count, required_date=None, as_of=None
+):
+    return _fetch_minute_for_repository(
+        code,
+        15,
+        count,
+        required_date=required_date,
+        as_of=as_of,
+    )
+
+
+def _fetch_minute_for_repository(
+    code,
+    scale,
+    count,
+    *,
+    required_date=None,
+    as_of=None,
+    max_attempts=4,
+    base_delay=0.5,
+    sleep_fn=time.sleep,
+):
+    providers = [
+        (
+            "eastmoney",
+            lambda: _fetch_eastmoney_minute_kline_remote(
+                code, scale, count
+            ),
+        )
+    ]
+    if int(count) <= 240:
+        providers.append(
+            (
+                "sina",
+                lambda: _fetch_sina_minute_kline_remote(
+                    code, scale, count
+                ),
+            )
+        )
+    attempts = max(1, int(max_attempts))
+    errors = []
+    for attempt in range(attempts):
+        source, fetcher = providers[attempt % len(providers)]
+        try:
+            payload = fetcher()
+        except Exception as exc:
+            payload = None
+            error = "{}:{}".format(type(exc).__name__, exc)
+        else:
+            error = _minute_payload_validation_error(
+                payload,
+                count=count,
+                required_date=required_date,
+                as_of=as_of,
+            )
+        if not error:
+            result = _with_source(payload, source)
+            result["_fetch_diagnostics"] = {
+                "attempts": attempt + 1,
+                "max_attempts": attempts,
+                "provider_order": [
+                    providers[index % len(providers)][0]
+                    for index in range(attempt + 1)
+                ],
+                "rejected": list(errors),
+            }
+            return result
+        errors.append({"provider": source, "reason": error})
+        if attempt + 1 < attempts:
+            sleep_fn(float(base_delay) * (2 ** attempt))
+    print(
+        "[ERROR] {}分钟K线重试耗尽 {}: {}".format(
+            scale,
+            code,
+            ", ".join(
+                "{}={}".format(item["provider"], item["reason"])
+                for item in errors
+            ),
+        )
+    )
     return None
 
 
@@ -1501,6 +1664,12 @@ def fetch_30min_kline(
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if not KLINE_REPOSITORY_ENABLED:
+        if required_date or as_of:
+            print(
+                "  [FAIL CLOSED] 30min {} formal context requires "
+                "canonical repository".format(code)
+            )
+            return None
         return _fetch_30min_kline_legacy_cache(
             code, count=count, force_refresh=effective_force
         )
@@ -1525,6 +1694,12 @@ def fetch_15min_kline(
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if not KLINE_REPOSITORY_ENABLED:
+        if required_date or as_of:
+            print(
+                "  [FAIL CLOSED] 15min {} formal context requires "
+                "canonical repository".format(code)
+            )
+            return None
         return _fetch_15min_kline_legacy_cache(
             code, count=count, force_refresh=effective_force
         )
@@ -1693,7 +1868,9 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
     }
 
 
-def _verified_sublevel_input(evidence, required_date, min_bars):
+def _verified_sublevel_input(
+    evidence, required_date, min_bars, expected_latest_ts=None
+):
     if not required_date:
         return True
     value = evidence if isinstance(evidence, dict) else {}
@@ -1704,11 +1881,18 @@ def _verified_sublevel_input(evidence, required_date, min_bars):
         and value.get("latest_date") == str(required_date)
         and str(value.get("latest_ts") or "").split(" ", 1)[0]
         == str(required_date)
+        and (
+            not expected_latest_ts
+            or str(value.get("latest_ts") or "")
+            == str(expected_latest_ts)
+        )
         and int(value.get("bars") or 0) >= int(min_bars)
     )
 
 
-def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
+def batch_fetch_30min_klines(
+    stocks, max_workers=8, required_date=None, as_of=None
+):
     """
     并发批量获取30分钟K线。
     """
@@ -1723,6 +1907,7 @@ def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
             [stock["code"] for stock in stocks],
             count=80,
             required_date=required_date,
+            as_of=as_of,
             force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
         )
 
@@ -1735,7 +1920,9 @@ def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
         klines = (
             repository_result.kline
             if repository_results is not None
-            else fetch_30min_kline(code, required_date=required_date)
+            else fetch_30min_kline(
+                code, required_date=required_date, as_of=as_of
+            )
         )
         evidence = _sublevel_input_evidence(
             "30m", klines, repository_result
@@ -1743,7 +1930,13 @@ def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
         if (
             klines
             and len(klines.get("closes", [])) >= 40
-            and _verified_sublevel_input(evidence, required_date, 40)
+            and _verified_sublevel_input(
+                evidence,
+                required_date,
+                40,
+                "{} 15:00:00".format(required_date)
+                if required_date else None,
+            )
         ):
             return {
                 "code": code,
@@ -1762,7 +1955,9 @@ def batch_fetch_30min_klines(stocks, max_workers=8, required_date=None):
     return results
 
 
-def batch_fetch_15min_klines(stocks, max_workers=8, required_date=None):
+def batch_fetch_15min_klines(
+    stocks, max_workers=8, required_date=None, as_of=None
+):
     """
     并发批量获取15分钟K线。
     """
@@ -1777,6 +1972,7 @@ def batch_fetch_15min_klines(stocks, max_workers=8, required_date=None):
             [stock["code"] for stock in stocks],
             count=MIN15_LOOKBACK_BARS,
             required_date=required_date,
+            as_of=as_of,
             force_refresh=KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE,
         )
 
@@ -1789,7 +1985,9 @@ def batch_fetch_15min_klines(stocks, max_workers=8, required_date=None):
         klines = (
             repository_result.kline
             if repository_results is not None
-            else fetch_15min_kline(code, required_date=required_date)
+            else fetch_15min_kline(
+                code, required_date=required_date, as_of=as_of
+            )
         )
         evidence = _sublevel_input_evidence(
             "15m", klines, repository_result
@@ -1797,7 +1995,13 @@ def batch_fetch_15min_klines(stocks, max_workers=8, required_date=None):
         if (
             klines
             and len(klines.get("closes", [])) >= 180
-            and _verified_sublevel_input(evidence, required_date, 180)
+            and _verified_sublevel_input(
+                evidence,
+                required_date,
+                180,
+                "{} 15:00:00".format(required_date)
+                if required_date else None,
+            )
         ):
             return {
                 "code": code,
@@ -2130,7 +2334,7 @@ def collect_daily_data(
     }
 
 
-def collect_30min_data(target_stocks, required_date=None):
+def collect_30min_data(target_stocks, required_date=None, as_of=None):
     """
     为目标池股票拉取30分钟K线。
     """
@@ -2139,13 +2343,13 @@ def collect_30min_data(target_stocks, required_date=None):
     print(f"  批量获取30分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_30min_klines(
-        target_stocks, required_date=required_date
+        target_stocks, required_date=required_date, as_of=as_of
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
 
 
-def collect_15min_data(target_stocks, required_date=None):
+def collect_15min_data(target_stocks, required_date=None, as_of=None):
     """
     为目标池股票拉取15分钟K线。
     """
@@ -2154,7 +2358,7 @@ def collect_15min_data(target_stocks, required_date=None):
     print(f"  批量获取15分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_15min_klines(
-        target_stocks, required_date=required_date
+        target_stocks, required_date=required_date, as_of=as_of
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results

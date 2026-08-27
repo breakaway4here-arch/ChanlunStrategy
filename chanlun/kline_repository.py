@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import inspect
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
@@ -80,6 +81,15 @@ class KLineRepository:
     @staticmethod
     def _latest_date(rows: Sequence[Mapping[str, Any]]) -> str:
         return str(rows[-1]["ts"]).split(" ")[0] if rows else ""
+
+    @staticmethod
+    def _expected_latest_ts(
+        interval: str,
+        required_date: Optional[str],
+    ) -> Optional[str]:
+        if interval not in _INTERVAL_MINUTES or not required_date:
+            return None
+        return "{} 15:00:00".format(required_date)
 
     @staticmethod
     def _safe_list(value: Any) -> List[Any]:
@@ -262,6 +272,7 @@ class KLineRepository:
     @classmethod
     def _needs_refresh(
         cls,
+        interval: str,
         rows: Sequence[Mapping[str, Any]],
         count: int,
         required_date: Optional[str],
@@ -270,6 +281,11 @@ class KLineRepository:
         if force_refresh or len(rows) < count:
             return True
         if required_date and cls._latest_date(rows) != str(required_date):
+            return True
+        expected_latest_ts = cls._expected_latest_ts(
+            interval, required_date
+        )
+        if expected_latest_ts and str(rows[-1]["ts"]) != expected_latest_ts:
             return True
         if (
             not required_date
@@ -281,6 +297,7 @@ class KLineRepository:
 
     def _status(
         self,
+        interval: str,
         rows: Sequence[Mapping[str, Any]],
         count: int,
         required_date: Optional[str],
@@ -291,16 +308,31 @@ class KLineRepository:
         latest_matches = (
             not required_date or self._latest_date(rows) == str(required_date)
         )
+        expected_latest_ts = self._expected_latest_ts(
+            interval, required_date
+        )
+        close_complete = (
+            not expected_latest_ts
+            or str(rows[-1]["ts"]) == expected_latest_ts
+        )
         enough = len(rows) >= count
         latest_final = bool(rows[-1]["is_final"])
         if self.mode == "backtest":
-            return ("verified", False) if enough and latest_matches and latest_final else (
+            return ("verified", False) if (
+                enough and latest_matches and close_complete and latest_final
+            ) else (
                 "missing",
                 True,
             )
-        if enough and latest_matches and latest_final and not remote_failed:
+        if (
+            enough
+            and latest_matches
+            and close_complete
+            and latest_final
+            and not remote_failed
+        ):
             return "verified", False
-        if latest_matches and not latest_final:
+        if latest_matches and close_complete and not latest_final:
             return "preview", False
         return "stale_cache", True
 
@@ -325,6 +357,66 @@ class KLineRepository:
                 except Exception:
                     store.connection.rollback()
                     raise
+
+    @staticmethod
+    def _fetcher_context_kwargs(
+        fetcher: Callable[..., Any],
+        required_date: Optional[str],
+        as_of: Optional[str],
+    ) -> Dict[str, Any]:
+        signature_target = getattr(fetcher, "side_effect", None)
+        if not callable(signature_target):
+            signature_target = fetcher
+        try:
+            parameters = inspect.signature(signature_target).parameters
+        except (TypeError, ValueError):
+            return {}
+        accepts_kwargs = any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters.values()
+        )
+        context = {}
+        for name, value in (
+            ("required_date", required_date),
+            ("as_of", as_of),
+        ):
+            if accepts_kwargs or name in parameters:
+                context[name] = value
+        return context
+
+    @classmethod
+    def _validate_prepared_remote(
+        cls,
+        item: Mapping[str, Any],
+        *,
+        count: int,
+        required_date: Optional[str],
+        as_of: Optional[str],
+    ) -> None:
+        bars = list(item.get("bars") or [])
+        if len(bars) < int(count):
+            raise ValueError("remote kline has insufficient bars")
+        latest = bars[-1]
+        if required_date and (
+            str(latest.get("ts") or "").split(" ", 1)[0]
+            != str(required_date)
+        ):
+            raise ValueError("remote kline latest date mismatch")
+        expected_latest_ts = cls._expected_latest_ts(
+            str(item.get("interval") or ""), required_date
+        )
+        if (
+            expected_latest_ts
+            and str(latest.get("ts") or "") != expected_latest_ts
+        ):
+            raise ValueError("remote kline latest close bar is incomplete")
+        if not bool(latest.get("is_final")):
+            raise ValueError("remote kline latest bar is not final")
+        if as_of:
+            latest_time = cls._parse_timestamp(latest.get("ts"))
+            cutoff = cls._parse_timestamp(as_of)
+            if latest_time > cutoff:
+                raise ValueError("remote kline latest bar exceeds as_of")
 
     def _shadow_diagnostics(
         self, interval: str, code: str, count: int, kline: Optional[Mapping[str, Any]]
@@ -365,6 +457,7 @@ class KLineRepository:
         normalized = list(dict.fromkeys(str(code).strip() for code in codes))
         local = self._load_many(interval, normalized, int(count), as_of)
         remote_failed = {}
+        remote_diagnostics = {}
         fetched_remote = set()
         prepared = []
 
@@ -373,7 +466,11 @@ class KLineRepository:
             for code in normalized
             if self.mode == "ongoing"
             and self._needs_refresh(
-                local[code], int(count), required_date, force_refresh
+                interval,
+                local[code],
+                int(count),
+                required_date,
+                force_refresh,
             )
         ]
         fetcher = self.remote_fetchers.get(interval)
@@ -387,7 +484,12 @@ class KLineRepository:
                     if force_refresh or len(existing) < int(count)
                     else int(self.overlap_counts[interval])
                 )
-                return code, fetcher(code, remote_count)
+                context = self._fetcher_context_kwargs(
+                    fetcher, required_date, as_of
+                )
+                return code, remote_count, fetcher(
+                    code, remote_count, **context
+                )
 
             with ThreadPoolExecutor(
                 max_workers=min(self.max_workers, len(refresh_codes))
@@ -396,12 +498,22 @@ class KLineRepository:
                 for future in as_completed(futures):
                     code = futures[future]
                     try:
-                        _returned_code, payload = future.result()
+                        _returned_code, remote_count, payload = future.result()
                         if not payload:
                             remote_failed[code] = True
                             continue
+                        if isinstance(payload, Mapping):
+                            diagnostics = payload.get("_fetch_diagnostics")
+                            if isinstance(diagnostics, Mapping):
+                                remote_diagnostics[code] = dict(diagnostics)
                         item = self._prepare_remote(interval, code, payload)
                         item["interval"] = interval
+                        self._validate_prepared_remote(
+                            item,
+                            count=remote_count,
+                            required_date=required_date,
+                            as_of=as_of,
+                        )
                         prepared.append(item)
                         fetched_remote.add(code)
                     except Exception:
@@ -422,6 +534,7 @@ class KLineRepository:
         for code in normalized:
             rows = local[code]
             status, stale = self._status(
+                interval,
                 rows,
                 int(count),
                 required_date,
@@ -432,6 +545,7 @@ class KLineRepository:
                 "remote_failed": bool(remote_failed.get(code)),
                 "mode": self.mode,
             }
+            diagnostics.update(remote_diagnostics.get(code, {}))
             diagnostics.update(
                 self._shadow_diagnostics(interval, code, int(count), kline)
             )

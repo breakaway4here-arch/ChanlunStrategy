@@ -2116,7 +2116,9 @@ def main(debug=False, preview=False, generated_at=None):
     )
     print(f"  国家队硬方向主题预筛: {len(luojie_theme_stocks)} 只")
     min15_data_list = collect_15min_data(
-        luojie_theme_stocks, required_date=today
+        luojie_theme_stocks,
+        required_date=today,
+        as_of=time_metadata.get("as_of"),
     )
     min15_input_health = _build_sublevel_input_health(
         "15m", luojie_theme_stocks, min15_data_list, today
@@ -2203,7 +2205,9 @@ def main(debug=False, preview=False, generated_at=None):
               f"(含低位启动: {len(startup_seed_codes)}, "
               f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
         min30_data_list = collect_30min_data(
-            all_targets, required_date=today
+            all_targets,
+            required_date=today,
+            as_of=time_metadata.get("as_of"),
         )
 
         if not min30_data_list:
@@ -2350,6 +2354,9 @@ def main(debug=False, preview=False, generated_at=None):
                             "reference_buy_points": sc.get("buy_points", []),
                             "blocked_buy_points": [],
                             "result_30min": sc.get("result_30min"),
+                            "strategy_input_evidence": dict(
+                                sc.get("strategy_input_evidence") or {}
+                            ),
                             "startup_reason": sc.get("startup_reason", ""),
                             "startup_signals": sc.get("startup_signals", []),
                             "change_pct": sc.get("change_pct", 0),
@@ -2441,7 +2448,9 @@ def main(debug=False, preview=False, generated_at=None):
         all_target_codes = pure_codes | fusion_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
         min30_data_list = collect_30min_data(
-            all_targets, required_date=today
+            all_targets,
+            required_date=today,
+            as_of=time_metadata.get("as_of"),
         )
 
         if not min30_data_list:

@@ -289,6 +289,29 @@ class TestUpgrade30min(unittest.TestCase):
         candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertIn("confirmations", candidates[0])
 
+    def test_candidate_preserves_verified_strategy_input_evidence(self):
+        seed = _make_seed()
+        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+        min30.strategy_input_evidence = {
+            "interval": "30m",
+            "status": "verified",
+            "latest_date": "2026-08-26",
+            "latest_ts": "2026-08-26 15:00:00",
+            "source": "market_history_db",
+            "bars": 50,
+            "stale": False,
+            "is_final": True,
+        }
+
+        candidates, _, _ = upgrade_strong_startup_with_30min(
+            [seed], [min30]
+        )
+
+        self.assertEqual(
+            candidates[0]["strategy_input_evidence"],
+            min30.strategy_input_evidence,
+        )
+
 
 class Test30minPatterns(unittest.TestCase):
 

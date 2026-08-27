@@ -167,14 +167,14 @@ def _read_bootstrap(path):
 
 
 def formal_report_digest(report):
-    """Digest every report field except the isolated shadow contract."""
+    """Digest formal report fields, excluding isolated review surfaces."""
 
     if not isinstance(report, dict):
         raise ValueError("formal report must be a JSON object")
     return production_digest({
         key: value
         for key, value in report.items()
-        if key != "shadow_evaluations"
+        if key not in ("shadow_evaluations", "historical_reconstruction")
     })
 
 

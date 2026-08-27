@@ -678,6 +678,102 @@ body {
   box-shadow: var(--shadow-card);
 }
 
+.historical-reconstruction {
+  margin: 16px 0;
+  padding: 18px 20px;
+  border: 1px solid rgba(245, 158, 11, 0.34);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #fff7ed, #ffffff);
+}
+
+.historical-reconstruction-head,
+.historical-candidate-id,
+.historical-evidence,
+.historical-candidate dl {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.historical-reconstruction h2 {
+  margin: 3px 0 0;
+  font-size: 18px;
+}
+
+.historical-kicker,
+.historical-guard span,
+.historical-evidence,
+.historical-candidate-id span,
+.historical-candidate dt {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.historical-guard,
+.historical-review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  border-radius: 999px;
+  color: #fbbf24;
+  background: rgba(120, 53, 15, 0.34);
+}
+
+.historical-explain {
+  margin: 14px 0 10px;
+  color: var(--text-sub);
+  line-height: 1.65;
+}
+
+.historical-evidence {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+}
+
+.historical-candidate {
+  padding: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.historical-candidate-id {
+  justify-content: flex-start;
+}
+
+.historical-candidate p {
+  margin: 10px 0;
+  color: var(--text-sub);
+  line-height: 1.55;
+}
+
+.historical-candidate dl {
+  margin: 0;
+  align-items: stretch;
+}
+
+.historical-candidate dl div {
+  flex: 1;
+}
+
+.historical-candidate dt,
+.historical-candidate dd {
+  margin: 0;
+}
+
+.historical-candidate dd {
+  margin-top: 4px;
+  color: var(--text-main);
+}
+
+.historical-empty {
+  color: var(--text-sub);
+}
+
 .direction-quick {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -3271,6 +3367,20 @@ body {
 @media (max-width: 760px) {
   body {
     font-size: 13px;
+  }
+
+  .historical-reconstruction {
+    padding: 14px;
+  }
+
+  .historical-reconstruction-head,
+  .historical-candidate dl {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .historical-candidate dl div {
+    width: 100%;
   }
 
   .report-shell {

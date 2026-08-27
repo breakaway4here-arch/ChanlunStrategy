@@ -156,6 +156,38 @@ class TrendContinuationTests(unittest.TestCase):
         )
         self.assertNotEqual(pick["best_buy_point"]["price"], 7.0)
 
+    def test_30min_candidate_preserves_verified_strategy_input_evidence(self):
+        seeds, _, _ = build_trend_continuation_pool([_result()])
+        closes = np.linspace(12.0, 12.8, 20)
+        evidence = {
+            "interval": "30m",
+            "status": "verified",
+            "latest_date": "2026-08-26",
+            "latest_ts": "2026-08-26 15:00:00",
+            "source": "market_history_db",
+            "bars": 20,
+            "stale": False,
+            "is_final": True,
+        }
+        min30 = SimpleNamespace(
+            code="600000",
+            closes=closes,
+            volumes=np.array(
+                [1_000_000] * 15 + [700_000] * 5, dtype=float
+            ),
+            dates=["2026-08-26 15:00"] * 20,
+            buy_points=[],
+            strategy_input_evidence=evidence,
+        )
+
+        candidates, _, _ = upgrade_trend_continuation_with_30min(
+            seeds, [min30]
+        )
+        normalized = normalize_trend_candidate(candidates[0])
+
+        self.assertEqual(candidates[0]["strategy_input_evidence"], evidence)
+        self.assertEqual(normalized["strategy_input_evidence"], evidence)
+
 
 if __name__ == "__main__":
     unittest.main()
