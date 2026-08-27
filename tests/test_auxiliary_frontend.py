@@ -297,6 +297,42 @@ assert(globalThis.__auxTest.risk('破位风险').includes('is-danger'), 'confirm
 """,
         )
 
+    def test_direction_tones_follow_a_share_market_color_semantics(self):
+        _assert_node_contract(
+            self,
+            "{ meta: getDirectionMeta }",
+            r"""
+assert(globalThis.__auxTest.meta('positive', 'confirmed', false, false).tone === 'up',
+  'bullish direction did not use the A-share up tone');
+assert(globalThis.__auxTest.meta('negative', 'risk', true, true).tone === 'down',
+  'verified risk direction did not use the A-share down tone');
+assert(globalThis.__auxTest.meta('negative', 'risk', true, false).tone === 'warning',
+  'unverified risk lost its pending warning tone');
+""",
+        )
+        self.assertIn(".status-badge.is-up", CSS)
+        self.assertIn("color: var(--up-red);", CSS)
+        self.assertIn(".status-badge.is-down", CSS)
+        self.assertIn("color: var(--down-green);", CSS)
+
+    def test_direction_quick_summary_carries_market_tone_classes(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderDirectionQuickSummary, nodes: nodes }",
+            r"""
+const mount = { innerHTML: '', querySelector: function () { return null; } };
+globalThis.__auxTest.nodes.directionQuick = mount;
+globalThis.__auxTest.render({ decision_brief: { theses: [
+  { theme: '算力', direction: 'positive', stage: 'confirmed', risk_reasons: [] },
+  { theme: '高位股', direction: 'negative', stage: 'risk', risk_reasons: [
+    { detail: '跌破支撑', verification_status: 'verified' }
+  ] }
+] } });
+assert(mount.innerHTML.includes('<span class="is-up">'), 'bullish quick direction lacked the up class');
+assert(mount.innerHTML.includes('<span class="is-down">'), 'risk quick direction lacked the down class');
+""",
+        )
+
     def test_watchlist_reload_requires_discard_confirmation_when_dirty(self):
         _assert_node_contract(
             self,

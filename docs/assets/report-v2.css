@@ -828,6 +828,24 @@ body {
   border: 1px solid var(--border-soft);
 }
 
+.direction-quick-list span.is-up {
+  border-color: rgba(185, 28, 28, 0.18);
+  background: var(--up-red-soft);
+}
+
+.direction-quick-list span.is-up em {
+  color: var(--up-red);
+}
+
+.direction-quick-list span.is-down {
+  border-color: rgba(4, 120, 87, 0.18);
+  background: var(--down-green-soft);
+}
+
+.direction-quick-list span.is-down em {
+  color: var(--down-green);
+}
+
 .direction-quick button,
 .candidate-more {
   min-height: 40px;
@@ -2920,6 +2938,18 @@ body {
   color: var(--up-red);
   background: rgba(239, 35, 60, 0.08);
   border-color: rgba(239, 35, 60, 0.18);
+}
+
+.status-badge.is-up {
+  color: var(--up-red);
+  background: var(--up-red-soft);
+  border-color: rgba(185, 28, 28, 0.18);
+}
+
+.status-badge.is-down {
+  color: var(--down-green);
+  background: var(--down-green-soft);
+  border-color: rgba(4, 120, 87, 0.18);
 }
 
 .status-badge.is-warning,

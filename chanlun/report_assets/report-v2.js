@@ -1322,7 +1322,7 @@
           riskFlags.hasReasons,
           riskFlags.hasVerified
         );
-        return '<span><b>' + escapeHtml(theme) + '</b><em>'
+        return '<span class="is-' + escapeHtml(directionMeta.tone) + '"><b>' + escapeHtml(theme) + '</b><em>'
           + escapeHtml(directionMeta.label)
           + (riskCount ? ' · 风险原因 ' + riskCount + ' 条' : '')
           + '</em></span>';
@@ -2967,11 +2967,11 @@
   }
 
   function getDirectionMeta(direction, stage, hasRiskReasons, hasVerifiedRisk) {
-    if (direction === 'positive') return { label: '偏多', tone: 'positive' };
+    if (direction === 'positive') return { label: '偏多', tone: 'up' };
     if (direction === 'negative') {
       if (stage === 'risk') {
         return hasVerifiedRisk
-          ? { label: '风险', tone: 'danger' }
+          ? { label: '风险', tone: 'down' }
           : { label: '风险待核实', tone: 'warning' };
       }
       return { label: '负向待核验', tone: 'warning' };
