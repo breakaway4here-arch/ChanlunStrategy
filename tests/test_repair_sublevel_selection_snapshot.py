@@ -297,6 +297,10 @@ class RepairSublevelSelectionSnapshotTests(unittest.TestCase):
         )
         self.assertFalse(repaired["scorecard_eligible"])
         self.assertEqual(overlay["original_publication"]["main_count"], 0)
+        self.assertEqual(
+            overlay["original_publication"]["affected_candidate_count"],
+            1,
+        )
         self.assertFalse(overlay["scorecard_eligible"])
         protected_after = copy.deepcopy(rebuilt)
         protected_after.pop("historical_reconstruction")

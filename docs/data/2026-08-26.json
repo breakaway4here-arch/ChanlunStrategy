@@ -464258,5 +464258,75 @@
         "output_hidden": true
       }
     }
+  },
+  "historical_reconstruction": {
+    "schema_version": 2,
+    "status": "verified_reconstruction",
+    "report_date": "2026-08-26",
+    "acquired_at": "2026-08-27T12:45:00+08:00",
+    "outcome": "reconstructed_candidate",
+    "codes": [
+      "300697"
+    ],
+    "candidates": [
+      {
+        "code": "300697",
+        "name": "电工合金",
+        "sector": "工业金属",
+        "review_identity": "历史重建·仅复盘",
+        "page_action": "仅复盘",
+        "is_formal_recommendation": false,
+        "scorecard_eligible": false,
+        "source_pool": "picks_fusion",
+        "reference_close": 16.03,
+        "reference_close_source": "original_report_closes[-1]",
+        "startup_date": "2026-08-26",
+        "startup_reason": "处于60日低位区间；放量1.8倍；站上MA5/MA10；涨幅6.5%",
+        "confirmations": [
+          "30min EMA5维持"
+        ],
+        "confirmed_by": "30min EMA5维持",
+        "confirm_date": "2026-08-26 15:00:00",
+        "confirm_index": 79,
+        "strategy_input_evidence": {
+          "interval": "30m",
+          "status": "verified",
+          "latest_date": "2026-08-26",
+          "latest_ts": "2026-08-26 15:00:00",
+          "source": "market_history_db",
+          "bars": 80,
+          "stale": false,
+          "is_final": true,
+          "as_of": "2026-08-26 15:00:00"
+        },
+        "review_reason": "使用报告日 15:00 已收盘分钟线事后重建；不视为当日已发布推荐，也不计入策略记分牌。"
+      }
+    ],
+    "input": {
+      "interval": "30m",
+      "status": "verified",
+      "latest_date": "2026-08-26",
+      "latest_ts": "2026-08-26 15:00:00",
+      "source": "market_history_db",
+      "bars": 80,
+      "stale": false,
+      "is_final": true,
+      "as_of": "2026-08-26 15:00:00"
+    },
+    "source_batches": [
+      "repair-20260826-300697-v1:0"
+    ],
+    "original_publication": {
+      "formal_snapshot_unchanged": true,
+      "main_count": 0,
+      "raw_main_candidate_count": 0,
+      "affected_candidate_count": 1,
+      "formal_actions_allowed": false
+    },
+    "published_after_fact": true,
+    "scorecard_eligible": false,
+    "recommendation_ledger_mutated": false,
+    "comparison_mutated": false,
+    "canonical_original_sha256": "ae6f0e7c3616fb5ed985db2b70900b78e5195edaa3292d998cb89f150177e581"
   }
 }

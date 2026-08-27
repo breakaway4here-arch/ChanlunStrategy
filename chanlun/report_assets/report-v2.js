@@ -1733,7 +1733,7 @@
     var input = receipt.input || {};
     var original = receipt.original_publication || {};
     var mainCount = safeNumber(original.main_count, 0);
-    var rawMainCount = safeNumber(original.raw_main_candidate_count, 0);
+    var affectedCount = safeNumber(original.affected_candidate_count, 0);
     var content = ''
       + '<div class="historical-reconstruction-head">'
       + '  <div><span class="historical-kicker">历史数据修复复盘</span>'
@@ -1742,7 +1742,7 @@
       + '</div>'
       + '<p class="historical-explain">原始日报保持不变：当日正式推荐 '
       + escapeHtml(formatNumber(mainCount, 0))
-      + ' 只；原始候选 ' + escapeHtml(formatNumber(rawMainCount, 0))
+      + ' 只；本次受影响候选 ' + escapeHtml(formatNumber(affectedCount, 0))
       + ' 只因分钟数据未核验而封闭。下列结果为事后使用 15:00 已收盘分钟线重建，仅用于解释数据故障影响。</p>'
       + '<div class="historical-evidence">'
       + '  <span>数据截止 ' + escapeHtml(input.latest_ts || '--') + '</span>'

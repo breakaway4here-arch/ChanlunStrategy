@@ -271,6 +271,11 @@ def _original_publication_summary(report):
         "formal_snapshot_unchanged": True,
         "main_count": raw_main_count if formal_allowed else 0,
         "raw_main_candidate_count": raw_main_count,
+        "affected_candidate_count": int(
+            _candidate_by_code(
+                report.get("picks_fusion"), SUPPORTED_CODE
+            ) is not None
+        ),
         "formal_actions_allowed": formal_allowed,
     }
 
