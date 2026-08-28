@@ -1562,8 +1562,8 @@ body {
 .candidate-row {
   width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
   align-items: center;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-md);
@@ -1578,9 +1578,23 @@ body {
 .candidate-row-main {
   width: 100%;
   display: grid;
-  grid-template-columns: 42px minmax(112px, 1fr) 84px;
+  grid-template-columns: 42px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
+}
+
+.candidate-row-meta {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  justify-items: stretch;
+  align-content: center;
+}
+
+.candidate-row-meta .candidate-tags {
+  justify-content: flex-start;
 }
 
 .candidate-row:hover {
@@ -1668,6 +1682,7 @@ body {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+  justify-content: flex-end;
   min-width: 0;
 }
 
@@ -2102,7 +2117,33 @@ body {
 
 .chart-canvas {
   width: 100%;
-  height: 320px;
+  height: 380px;
+}
+
+.chart-annotation-lane {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px;
+  border-bottom: 1px solid var(--border-soft);
+  color: var(--text-sub);
+  background: #FFFFFF;
+  font-size: 11px;
+}
+
+.chart-annotation-lane.hidden {
+  display: none;
+}
+
+.chart-annotation-lane strong {
+  color: var(--text-main);
+  font-weight: 800;
+}
+
+.chart-annotation-lane time {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .text-item {
@@ -4009,11 +4050,11 @@ body {
   }
 
   .candidate-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
   }
 
   .candidate-row-main {
-    grid-template-columns: 36px minmax(112px, 1fr) 76px;
+    grid-template-columns: 36px minmax(0, 1fr);
   }
 }
 
@@ -4074,6 +4115,10 @@ body {
   .chart-toolbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .chart-canvas {
+    height: 360px;
   }
 
   .market-header-details > :not(summary) {
@@ -4296,13 +4341,24 @@ body {
   }
 
   .candidate-row-main {
-    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-columns: 36px minmax(0, 1fr);
     gap: 8px;
   }
 
-  .candidate-tags {
+  .candidate-row-meta {
     grid-column: 1;
     margin-top: 2px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: stretch;
+  }
+
+  .candidate-tags {
+    justify-content: flex-start;
+  }
+
+  .candidate-price {
+    justify-self: end;
   }
 
   .review-row {

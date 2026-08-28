@@ -48,6 +48,7 @@
     isMobile: false,
     chartInstance: null,
     chartMount: null,
+    chartAnnotationLane: null,
     sentimentChartInstance: null,
     chartLayer: 'decision',
     rawPoolCandidates: null,
@@ -2421,9 +2422,11 @@
         + '    <span class="candidate-code"> ' + escapeHtml(code) + '</span>'
         + (sector ? ' <span class="candidate-code">· ' + escapeHtml(sector) + '</span>' : '')
         + '  </div>'
+        + '</div>'
+        + '<div class="candidate-row-meta">'
+        + '  <div class="candidate-tags">' + tagHtml + '</div>'
         + '  <div class="candidate-price' + (changeCls ? ' ' + changeCls : '') + '">' + escapeHtml('当日 ' + (change === null ? '--' : formatPct(change, true))) + '</div>'
         + '</div>'
-        + '<div class="candidate-tags">' + tagHtml + '</div>'
       ;
       if (state.activeItem && state.activeItem.code === code) {
         row.classList.add('is-selected');
@@ -2956,6 +2959,7 @@
       + '  <div class="chart-panel">'
       + '    <div class="chart-toolbar"><div class="chart-help">' + escapeHtml(helpText) + '</div>'
       + '      <div class="chart-layer-switcher" id="chartLayerSwitcher" aria-label="K线图层"></div></div>'
+      + '    <div class="chart-annotation-lane hidden" id="chartAnnotationLane" aria-live="polite"></div>'
       + '    <div id="chartCanvas" class="chart-canvas"></div>'
       + '  </div>'
       + '</div>';
@@ -2985,6 +2989,7 @@
     var raw = findRawCandidate(item.ref || {});
     target.innerHTML = buildMergedCandidateDetail(item, raw);
     state.chartMount = target.querySelector('#chartCanvas');
+    state.chartAnnotationLane = target.querySelector('#chartAnnotationLane');
     renderChart(raw, item);
   }
 
@@ -3025,28 +3030,39 @@
   }
 
   function selectChartActionMarkers(markPoints, barCount) {
-    var rows = asArray(markPoints).map(function (point) {
+    return asArray(markPoints).map(function (point) {
       return Object.assign({}, point || {}, {
         coord: asArray(point && point.coord).slice(),
         label: Object.assign({}, point && point.label || {}, { show: false }),
       });
     });
-    if (!rows.length) return rows;
+  }
+
+  function renderChartAnnotationLane(markPoints) {
+    var lane = state.chartAnnotationLane;
+    if (!lane) return;
+    var rows = asArray(markPoints);
+    if (!rows.length) {
+      lane.innerHTML = '';
+      if (lane.classList) lane.classList.toggle('hidden', true);
+      return;
+    }
     var latestIndex = 0;
     for (var i = 1; i < rows.length; i += 1) {
-      var current = safeNumber(rows[i].coord[0], i);
-      var latest = safeNumber(rows[latestIndex].coord[0], latestIndex);
-      if (current >= latest) latestIndex = i;
+      var currentIndex = safeNumber(rows[i] && rows[i].barIndex, i);
+      var latestBarIndex = safeNumber(rows[latestIndex] && rows[latestIndex].barIndex, latestIndex);
+      if (currentIndex >= latestBarIndex) latestIndex = i;
     }
-    var textBudget = Math.max(1, Math.ceil(Math.max(1, Number(barCount) || 1) / 40) * 3);
-    if (textBudget > 0) {
-      var latestBarIndex = safeNumber(rows[latestIndex].barIndex, safeNumber(rows[latestIndex].coord[0], latestIndex));
-      rows[latestIndex].label.show = true;
-      rows[latestIndex].label.formatter = normalizeString(rows[latestIndex].name || '最新动作');
-      rows[latestIndex].label.position = latestBarIndex >= Math.max(0, barCount - 5) ? 'left' : 'top';
-      rows[latestIndex].label.distance = 10;
+    var latest = rows[latestIndex] || {};
+    var date = normalizeString(asArray(latest.coord)[0]);
+    var name = normalizeString(latest.name);
+    if (!name || !date) {
+      lane.innerHTML = '';
+      if (lane.classList) lane.classList.toggle('hidden', true);
+      return;
     }
-    return rows;
+    lane.innerHTML = '<strong>' + escapeHtml(name) + '</strong><time>' + escapeHtml(date) + '</time>';
+    if (lane.classList) lane.classList.toggle('hidden', false);
   }
 
   function formatPersistentPriceLabel(label) {
@@ -3102,6 +3118,7 @@
     }
 
     if (!raw) {
+      renderChartAnnotationLane([]);
       state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
       return;
     }
@@ -3111,9 +3128,11 @@
     var highs = asArray(raw.highs);
     var lows = asArray(raw.lows);
     var closes = asArray(raw.closes);
+    var volumes = asArray(raw.volumes);
     var macd = asArray(raw.macd_hist);
     var minLen = Math.min(dates.length, opens.length, highs.length, lows.length, closes.length);
     if (minLen < 2) {
+      renderChartAnnotationLane([]);
       state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
       return;
     }
@@ -3129,17 +3148,16 @@
       ]);
     }
 
-    var macdSlice = [];
-    var macdLen = Math.min(minLen, macd.length);
-    for (var m = 0; m < macdLen; m += 1) {
-      macdSlice.push(macd[m]);
+    function tailAlignChartSeries(values, targetLength, missingValue) {
+      var source = asArray(values).slice(-targetLength).map(function (value) {
+        return safeNumber(value, missingValue);
+      });
+      while (source.length < targetLength) source.unshift(missingValue);
+      return source;
     }
-    if (macdLen > minLen) {
-      macdSlice = macdSlice.slice(-minLen);
-    }
-    while (macdSlice.length < minLen) {
-      macdSlice.push(0);
-    }
+
+    var volumeSlice = tailAlignChartSeries(volumes, minLen, null);
+    var macdSlice = tailAlignChartSeries(macd, minLen, 0);
 
     var markPoints = [];
     var incidentReview = isIncidentReviewItem(workspaceItem);
@@ -3170,6 +3188,7 @@
     }
 
     markPoints = selectChartActionMarkers(markPoints, minLen);
+    renderChartAnnotationLane(markPoints);
 
     var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
@@ -3241,12 +3260,16 @@
     }
 
     state.chartInstance = window.echarts.init(state.chartMount);
+    var defaultStartIndex = Math.max(0, minLen - 30);
+    var defaultStartValue = xAxis[defaultStartIndex];
+    var defaultEndValue = xAxis[minLen - 1];
     state.chartInstance.setOption({
       animation: false,
       backgroundColor: '#ffffff',
       grid: [
-        { left: '6%', right: state.isMobile ? '96px' : '124px', top: '8%', height: '58%' },
-        { left: '6%', right: state.isMobile ? '96px' : '124px', top: '72%', height: '20%' },
+        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '4%', height: '51%' },
+        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '59%', height: '12%' },
+        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '75%', height: '12%' },
       ],
       xAxis: [
         {
@@ -3254,12 +3277,22 @@
           data: xAxis,
           boundaryGap: true,
           axisLine: { lineStyle: { color: '#d1d5db' } },
+          axisLabel: { show: false },
           splitLine: { show: false },
         },
         {
           type: 'category',
           data: xAxis,
           gridIndex: 1,
+          boundaryGap: true,
+          axisLine: { lineStyle: { color: '#d1d5db' } },
+          axisLabel: { show: false },
+          splitLine: { show: false },
+        },
+        {
+          type: 'category',
+          data: xAxis,
+          gridIndex: 2,
           boundaryGap: true,
           axisLine: { lineStyle: { color: '#d1d5db' } },
           splitLine: { show: false },
@@ -3274,8 +3307,26 @@
         {
           scale: true,
           gridIndex: 1,
+          name: '成交量',
+          nameLocation: 'end',
+          nameGap: 4,
+          nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
           splitLine: { lineStyle: { color: '#f3f4f6' } },
-          axisLine: { lineStyle: { color: '#d1d5db' } },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { show: false },
+        },
+        {
+          scale: true,
+          gridIndex: 2,
+          name: 'MACD',
+          nameLocation: 'end',
+          nameGap: 4,
+          nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
+          splitLine: { lineStyle: { color: '#f3f4f6' } },
+          axisLine: { show: false },
+          axisTick: { show: false },
+          axisLabel: { show: false },
         },
       ],
       tooltip: {
@@ -3283,8 +3334,8 @@
         axisPointer: { type: 'cross' },
       },
       dataZoom: [
-        { type: 'inside', xAxisIndex: [0, 1], start: 0, end: 100 },
-        { xAxisIndex: [0, 1], height: 18, start: 0, end: 100 },
+        { type: 'inside', xAxisIndex: [0, 1, 2], startValue: defaultStartValue, endValue: defaultEndValue },
+        { xAxisIndex: [0, 1, 2], height: 18, startValue: defaultStartValue, endValue: defaultEndValue },
       ],
       series: [
         {
@@ -3322,10 +3373,24 @@
           },
         },
         {
-          name: 'MACD',
+          name: '成交量',
           type: 'bar',
           xAxisIndex: 1,
           yAxisIndex: 1,
+          data: volumeSlice,
+          itemStyle: {
+            color: function (params) {
+              var bar = kLines[params && params.dataIndex];
+              if (!bar || volumeSlice[params.dataIndex] === null) return '#94a3b8';
+              return bar[1] >= bar[0] ? '#EF4444' : '#10B981';
+            },
+          },
+        },
+        {
+          name: 'MACD',
+          type: 'bar',
+          xAxisIndex: 2,
+          yAxisIndex: 2,
           data: macdSlice,
           itemStyle: {
             color: function (params) {

@@ -247,6 +247,24 @@ assert(tags.some(function (tag) { return tag.text.includes('可上车'); }), 'fo
 """,
         )
 
+    def test_candidate_row_meta_separates_price_from_identity(self):
+        start = JS.index("function renderCandidateList")
+        end = JS.index("function buildDecisionHeader", start)
+        renderer = JS[start:end]
+        self.assertIn('class="candidate-row-meta"', renderer)
+        self.assertLess(
+            renderer.index('class="candidate-row-meta"'),
+            renderer.index('candidate-price'),
+        )
+        desktop_start = CSS.index(".candidate-row {")
+        desktop_end = CSS.index(".candidate-row:hover", desktop_start)
+        desktop_rules = CSS[desktop_start:desktop_end]
+        self.assertIn("grid-template-columns: minmax(0, 1fr);", desktop_rules)
+        self.assertIn("grid-template-columns: minmax(0, 1fr) auto;", desktop_rules)
+        self.assertNotIn("84px", desktop_rules)
+        self.assertNotIn("76px", desktop_rules)
+        self.assertIn(".candidate-row-meta {", CSS)
+
     def test_decision_header_has_one_formal_action_and_omits_missing_contract_fields(self):
         _assert_node_contract(
             self,
@@ -402,15 +420,85 @@ const marks = globalThis.__auxTest.marks([
   { coord: [58, 13], name: '减仓' }
 ], 80);
 const visible = marks.filter(function (item) { return item.label && item.label.show; });
-assert(visible.length === 1, 'more than one historical action kept persistent text');
-assert(visible[0].name === '减仓', 'latest action text was not retained');
-assert(visible.length <= Math.ceil(80 / 40) * 3, 'text marker density exceeded three per 40 bars');
+assert(visible.length === 0, 'action text remained inside the price plot');
 const layers = globalThis.__auxTest.layers({
   chart_annotations: { markPoints: [{ coord: [1, 10] }] },
   ema5: [1, 2], ema20: [1, 2]
 });
 assert(layers.includes('decision') && layers.includes('trend'), 'available chart layers missing');
 assert(!layers.includes('structure'), 'structure switch appeared without structure evidence');
+""",
+        )
+
+    def test_chart_renders_volume_macd_and_defaults_to_latest_thirty_bars(self):
+        _assert_node_contract(
+            self,
+            "{ chart: renderChart, state: state }",
+            r"""
+let chartOption = null;
+global.window.echarts = { init: function () { return {
+  setOption: function (option) { chartOption = option; },
+  dispose: function () {}, resize: function () {}
+}; } };
+const dates = Array.from({ length: 50 }, function (_, index) {
+  return 'D' + String(index + 1).padStart(2, '0');
+});
+const opens = dates.map(function (_, index) { return 10 + index / 10; });
+const closes = opens.map(function (value, index) { return value + (index % 2 === 0 ? 0.2 : -0.2); });
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.isMobile = false;
+globalThis.__auxTest.chart({
+  dates: dates,
+  opens: opens,
+  highs: opens.map(function (value) { return value + 0.4; }),
+  lows: opens.map(function (value) { return value - 0.4; }),
+  closes: closes,
+  volumes: dates.slice(1).map(function (_, index) { return 1000 + index; }),
+  macd_hist: dates.map(function (_, index) { return index % 2 === 0 ? 1 : -1; }),
+  chart_annotations: { markPoints: [], markLines: [] }
+}, {});
+assert(chartOption.grid.length === 3, 'chart does not have three synchronized panels');
+assert(chartOption.xAxis.length === 3 && chartOption.yAxis.length === 3, 'three-axis contract missing');
+assert(chartOption.yAxis[1].name === '成交量', 'volume panel label missing');
+assert(chartOption.yAxis[2].name === 'MACD', 'MACD panel label missing');
+assert(chartOption.yAxis[1].axisLabel.show === false, 'volume scale labels still collide in the compact panel');
+assert(chartOption.yAxis[2].axisLabel.show === false, 'MACD scale labels still collide in the compact panel');
+const names = chartOption.series.map(function (series) { return series.name; });
+assert(names.includes('K线') && names.includes('成交量') && names.includes('MACD'), 'price/volume/MACD series incomplete');
+const volume = chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(volume.data.length === 50 && volume.data[0] === null, 'short volume series was not tail-aligned with null evidence');
+assert(volume.itemStyle.color({ dataIndex: 0 }) === '#94a3b8', 'missing volume was colored like real evidence');
+assert(volume.itemStyle.color({ dataIndex: 1 }) === '#10B981', 'down-volume bar is not A-share green');
+assert(volume.itemStyle.color({ dataIndex: 2 }) === '#EF4444', 'up-volume bar is not A-share red');
+chartOption.dataZoom.forEach(function (zoom) {
+  assert(JSON.stringify(zoom.xAxisIndex) === JSON.stringify([0, 1, 2]), 'data zoom does not control all panels');
+  assert(zoom.startValue === 'D21' && zoom.endValue === 'D50', 'default window is not the latest 30 bars');
+});
+""",
+        )
+
+    def test_chart_moves_action_text_into_annotation_lane(self):
+        self.assertIn('id="chartAnnotationLane"', JS)
+        _assert_node_contract(
+            self,
+            "{ lane: renderChartAnnotationLane, marks: selectChartActionMarkers, state: state }",
+            r"""
+let hidden = null;
+globalThis.__auxTest.state.chartAnnotationLane = {
+  innerHTML: '',
+  classList: { toggle: function (_name, value) { hidden = value; } }
+};
+const marks = globalThis.__auxTest.marks([
+  { coord: ['2026-08-25', 10], name: '观察' },
+  { coord: ['2026-08-26', 11], name: '启动日' }
+], 50);
+globalThis.__auxTest.lane(marks);
+assert(marks.every(function (item) { return item.label.show === false; }), 'plot still carries action text');
+assert(globalThis.__auxTest.state.chartAnnotationLane.innerHTML.includes('启动日'), 'latest action missing from lane');
+assert(globalThis.__auxTest.state.chartAnnotationLane.innerHTML.includes('2026-08-26'), 'latest action date missing from lane');
+assert(hidden === false, 'lane hidden despite action evidence');
+globalThis.__auxTest.lane([]);
+assert(hidden === true && globalThis.__auxTest.state.chartAnnotationLane.innerHTML === '', 'empty action lane left stale content');
 """,
         )
 
@@ -421,12 +509,27 @@ assert(!layers.includes('structure'), 'structure switch appeared without structu
         self.assertIn("selectPersistentPriceLabels", renderer)
         self.assertIn("selectChartActionMarkers", renderer)
         self.assertIn("getAvailableChartLayers", renderer)
+        self.assertIn("left: state.isMobile ? '10%' : '6%'", renderer)
         self.assertIn("right: state.isMobile ? '96px' : '124px'", renderer)
         self.assertIn("决策位", JS)
         self.assertIn("结构", JS)
         self.assertIn("趋势", JS)
         self.assertIn("formatPersistentPriceLabel", renderer)
-        self.assertIn("latestBarIndex >= Math.max(0, barCount - 5) ? 'left' : 'top'", JS)
+        self.assertIn("renderChartAnnotationLane", renderer)
+
+    def test_three_panel_chart_has_explicit_desktop_and_mobile_heights(self):
+        desktop_start = CSS.index(".chart-canvas {")
+        desktop_end = CSS.index("}", desktop_start)
+        desktop_rule = CSS[desktop_start:desktop_end]
+        self.assertIn("height: 380px", desktop_rule)
+        mobile_start = CSS.rindex("@media (max-width: 760px)")
+        mobile_rules = CSS[mobile_start:]
+        self.assertRegex(
+            mobile_rules,
+            r"\.chart-canvas\s*\{[^}]*\bheight:\s*360px",
+        )
+        self.assertIn(".candidate-row-meta {", mobile_rules)
+        self.assertIn("grid-template-columns: minmax(0, 1fr) auto", mobile_rules)
 
     def test_today_and_research_stacks_have_distinct_semantic_ownership(self):
         _assert_node_contract(
