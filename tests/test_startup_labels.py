@@ -46,23 +46,71 @@ class TestAnnotateStartupQuality(unittest.TestCase):
             "change_pct": 2.0,
             "startup_signals": [],
             "confirmations": ["30min二买", "30min回踩不破"],
+            "confirmation_evidence": {"buy_point": "二买"},
         })
         self.assertEqual(bp["sublevel_confirm_grade"], "S")
         self.assertEqual(bp["sublevel_confirm_label"], "S级确认")
 
-    def test_sublevel_grade_a_for_strong_with_ema5(self):
+    def test_unrecognized_structured_buy_point_cannot_receive_s_grade(self):
+        bp = annotate_startup_quality({
+            "change_pct": 2.0,
+            "startup_signals": [],
+            "confirmations": ["30min类二买"],
+            "confirmation_evidence": {"buy_point": "类二买"},
+        })
+        self.assertEqual(bp["sublevel_confirm_grade"], "C")
+
+    def test_unrecognized_structured_pattern_cannot_receive_a_grade(self):
         bp = annotate_startup_quality({
             "change_pct": 5.0,
             "startup_signals": [],
-            "confirmations": ["30min EMA5维持"],
+            "confirmations": ["30min自定义两阳结构"],
+            "confirmation_evidence": {"fresh_yang_pattern": "custom"},
         })
-        self.assertEqual(bp["sublevel_confirm_grade"], "A")
+        self.assertEqual(bp["sublevel_confirm_grade"], "C")
 
-    def test_sublevel_grade_b_for_ema_only_confirmation_not_strong(self):
+    def test_alignment_only_is_observation_not_a_grade(self):
+        bp = annotate_startup_quality({
+            "change_pct": 5.0,
+            "startup_signals": [],
+            "confirmations": [],
+            "confirmation_evidence": {"ema_bullish_alignment": True},
+        })
+        self.assertEqual(bp["sublevel_confirm_grade"], "C")
+        self.assertIn("均线仍为多头排列", bp["sublevel_confirm_reason"])
+        self.assertIn("未形成独立确认", bp["sublevel_confirm_reason"])
+
+    def test_legacy_ema_confirmation_string_cannot_restore_a_or_b_grade(self):
         bp = annotate_startup_quality({
             "change_pct": 2.58,
             "startup_signals": [],
             "confirmations": ["30min EMA5维持"],
+        })
+        self.assertEqual(bp["sublevel_confirm_grade"], "C")
+
+    def test_legacy_yang_string_without_structured_evidence_cannot_restore_grade(self):
+        bp = annotate_startup_quality({
+            "change_pct": 5.0,
+            "startup_signals": [],
+            "confirmations": ["30min两阳夹一阴确认"],
+        })
+        self.assertEqual(bp["sublevel_confirm_grade"], "C")
+
+    def test_sublevel_grade_a_for_strong_with_fresh_yang_structure(self):
+        bp = annotate_startup_quality({
+            "change_pct": 5.0,
+            "startup_signals": [],
+            "confirmations": ["30min两阳夹一阴确认"],
+            "confirmation_evidence": {"fresh_yang_pattern": "two_yang_one_yin"},
+        })
+        self.assertEqual(bp["sublevel_confirm_grade"], "A")
+
+    def test_sublevel_grade_b_for_fresh_yang_structure_without_strong_daily(self):
+        bp = annotate_startup_quality({
+            "change_pct": 2.58,
+            "startup_signals": [],
+            "confirmations": ["30min两阳夹一阴确认"],
+            "confirmation_evidence": {"fresh_yang_pattern": "two_yang_one_yin"},
         })
         self.assertEqual(bp["sublevel_confirm_grade"], "B")
 

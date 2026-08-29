@@ -238,7 +238,8 @@ class TestBuildStrongStartupPool(unittest.TestCase):
             config.ENABLE_STRONG_STARTUP_CANDIDATES = old_val
 
 
-def _make_30min_result(code, closes_30, opens_30=None, buy_points=None):
+def _make_30min_result(code, closes_30, opens_30=None, highs_30=None,
+                       lows_30=None, buy_points=None, macd_hist=None):
     """Build a mock 30min chan result."""
     class Mock30Result:
         pass
@@ -248,10 +249,15 @@ def _make_30min_result(code, closes_30, opens_30=None, buy_points=None):
     r.opens = np.array(
         opens_30 if opens_30 is not None else np.array(closes_30, dtype=float) * 0.99
     )
-    r.highs = np.array(closes_30, dtype=float) * 1.01
-    r.lows = np.array(closes_30, dtype=float) * 0.99
+    r.highs = np.array(
+        highs_30 if highs_30 is not None else np.array(closes_30, dtype=float) * 1.01
+    )
+    r.lows = np.array(
+        lows_30 if lows_30 is not None else np.array(closes_30, dtype=float) * 0.99
+    )
     r.volumes = np.ones(len(closes_30)) * 100000
     r.buy_points = buy_points or []
+    r.macd_hist = np.array(macd_hist, dtype=float) if macd_hist is not None else None
     r.dates = [f"2026-05-26 {i:02d}:00:00" for i in range(len(closes_30))]
     return r
 
@@ -288,14 +294,59 @@ def _make_seed(code="000001", name="测试"):
 
 class TestUpgrade30min(unittest.TestCase):
 
-    def test_30min_confirm_upgrades_to_candidate(self):
-        """Seed with 30min EMA5 > EMA10 → candidate."""
+    def test_ema_alignment_without_fresh_event_stays_watch(self):
+        """A lagging EMA alignment is state evidence, not confirmation."""
         seed = _make_seed()
         min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
         candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [min30])
+        self.assertEqual(diag["startup_candidate"], 0)
+        self.assertEqual(len(candidates), 0)
+        self.assertEqual(len(watchlist), 1)
+        self.assertTrue(watchlist[0]["confirmation_evidence"]["ema_bullish_alignment"])
+        self.assertEqual(watchlist[0]["reason_code"], "alignment_without_confirmation")
+        self.assertIn("未形成独立确认", watchlist[0]["watch_reason"])
+        self.assertTrue(any("两阳" in item for item in watchlist[0]["next_day_conditions"]))
+        self.assertFalse(any("止跌结构" in item for item in watchlist[0]["next_day_conditions"]))
+
+    def test_301629_pullback_shape_stays_watch(self):
+        seed = _make_seed(code="301629", name="矽电股份")
+        closes = [
+            252.0, 254.0, 257.0, 261.0, 268.0, 279.0, 292.0, 310.0,
+            322.41, 318.01, 315.71, 312.89, 308.85, 308.38, 308.00, 309.85,
+        ]
+        min30 = _make_30min_result(
+            "301629",
+            closes,
+            opens_30=[value * 0.998 for value in closes],
+            highs_30=[252.5, 255.0, 258.0, 263.0, 270.0, 281.0, 295.0, 325.0,
+                       324.0, 320.0, 317.0, 314.0, 311.0, 310.0, 309.0, 310.5],
+            macd_hist=[0.5, 1.0, 2.0, 4.0, 7.0, 10.0, 12.0, 14.0,
+                       13.693, 12.4, 10.8, 8.9, 7.1, 5.9, 4.8, 4.331],
+        )
+
+        candidates, watchlist, _ = upgrade_strong_startup_with_30min([seed], [min30])
+
+        self.assertEqual(candidates, [])
+        self.assertEqual([item["code"] for item in watchlist], ["301629"])
+        evidence = watchlist[0]["confirmation_evidence"]
+        self.assertTrue(evidence["ema_bullish_alignment"])
+        self.assertEqual(evidence["macd_hist_direction"], "weakening")
+        self.assertFalse(evidence["recovery_bundle_match"])
+
+    def test_recommendable_30min_buy_point_upgrades_to_candidate(self):
+        seed = _make_seed()
+        min30 = _make_30min_result(
+            "000001",
+            np.linspace(50, 55, 50),
+            buy_points=[{"type": "二买", "index": 49}],
+        )
+
+        candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [min30])
+
         self.assertEqual(diag["startup_candidate"], 1)
-        self.assertEqual(len(candidates), 1)
-        self.assertEqual(candidates[0]["type"], "强势启动候选")
+        self.assertEqual(watchlist, [])
+        self.assertEqual(candidates[0]["confirmations"], ["30min 二买"])
+        self.assertEqual(candidates[0]["confirmation_evidence"]["buy_point"], "二买")
 
     def test_no_30min_confirm_goes_to_watch(self):
         """Seed with 30min data but no confirmation signals → watch."""
@@ -304,7 +355,7 @@ class TestUpgrade30min(unittest.TestCase):
         min30 = _make_30min_result("000001", np.linspace(55, 50, 50))
         orig = ss._check_30min_confirmations
         try:
-            ss._check_30min_confirmations = lambda r, s: []
+            ss._check_30min_confirmations = lambda r, s, **kwargs: []
             candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [min30])
             self.assertEqual(diag["watch_due_to_no_30min_confirm"], 1)
             self.assertEqual(len(watchlist), 1)
@@ -318,17 +369,59 @@ class TestUpgrade30min(unittest.TestCase):
         candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [])
         self.assertEqual(diag["watch_due_to_no_30min_confirm"], 1)
         self.assertEqual(len(watchlist), 1)
+        self.assertEqual(watchlist[0]["reason_code"], "missing_30m_data")
+        self.assertTrue(any("二买/三买" in item for item in watchlist[0]["next_day_conditions"]))
+        self.assertTrue(any("两阳" in item for item in watchlist[0]["next_day_conditions"]))
+        self.assertFalse(any("回踩不破" in item for item in watchlist[0]["next_day_conditions"]))
+        self.assertEqual(
+            watchlist[0]["confirmation_evidence"],
+            {
+                "schema_version": 1,
+                "sufficient_bars": False,
+                "ema_bullish_alignment": False,
+                "close_above_ema5": False,
+                "ema5_rising_bars": 0,
+                "recent_peak_drawdown_pct": None,
+                "macd_hist_direction": "unavailable",
+                "ema5_reclaim": False,
+                "stop_fall": False,
+                "buy_point": None,
+                "fresh_yang_pattern": None,
+                "recovery_bundle_match": False,
+            },
+        )
+
+    def test_recent_first_buy_does_not_upgrade_strong_startup(self):
+        seed = _make_seed()
+        min30 = _make_30min_result(
+            "000001",
+            np.linspace(50, 55, 50),
+            buy_points=[{"type": "一买", "index": 49}],
+        )
+
+        candidates, watchlist, diag = upgrade_strong_startup_with_30min(
+            [seed], [min30]
+        )
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(diag["startup_candidate"], 0)
+        self.assertEqual(len(watchlist), 1)
+        self.assertIsNone(watchlist[0]["confirmation_evidence"]["buy_point"])
 
     def test_candidate_has_confirmations_field(self):
         """Upgraded candidate has confirmations list."""
         seed = _make_seed()
-        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+        min30 = _make_30min_result(
+            "000001", np.linspace(50, 55, 50), buy_points=[{"type": "二买", "index": 49}]
+        )
         candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertIn("confirmations", candidates[0])
 
     def test_candidate_preserves_verified_strategy_input_evidence(self):
         seed = _make_seed()
-        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+        min30 = _make_30min_result(
+            "000001", np.linspace(50, 55, 50), buy_points=[{"type": "二买", "index": 49}]
+        )
         min30.strategy_input_evidence = {
             "interval": "30m",
             "status": "verified",
@@ -351,6 +444,14 @@ class TestUpgrade30min(unittest.TestCase):
 
 
 class Test30minPatterns(unittest.TestCase):
+
+    def test_ema_alignment_is_not_a_decision_confirmation(self):
+        result = _make_30min_result("000001", np.linspace(50, 55, 50))
+
+        confirms = _check_30min_confirmations(result, {})
+
+        self.assertNotIn("30min EMA5维持", confirms)
+        self.assertEqual(confirms, [])
 
     def test_two_yang_one_yin_confirmation(self):
         closes = np.array([10, 10.2, 11, 10.6, 11.4], dtype=float)
@@ -422,7 +523,9 @@ class TestStartupAgeFields(unittest.TestCase):
     def test_candidate_has_confirm_age_fields(self):
         """Upgraded candidate has confirm_index/date/age."""
         seed = _make_seed()
-        min30 = _make_30min_result("000001", np.linspace(50, 55, 50))
+        min30 = _make_30min_result(
+            "000001", np.linspace(50, 55, 50), buy_points=[{"type": "二买", "index": 49}]
+        )
         candidates, _, _ = upgrade_strong_startup_with_30min([seed], [min30])
         self.assertEqual(len(candidates), 1)
         c = candidates[0]

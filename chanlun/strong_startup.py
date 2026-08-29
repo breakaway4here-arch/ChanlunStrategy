@@ -8,6 +8,10 @@ import numpy as np
 import config
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
+from .sublevel_confirm import (
+    STRONG_STARTUP_BUY_POINT_TYPES,
+    build_30min_confirmation_evidence,
+)
 
 
 def build_strong_startup_pool(chan_results, sector_stocks=None):
@@ -235,14 +239,20 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         if min30_result is None:
             # No 30min data → watch
             diag["watch_due_to_no_30min_confirm"] += 1
+            seed["confirmation_evidence"] = build_30min_confirmation_evidence(None)
             watch_item = _make_watch_item(seed, seed["startup_reason"],
                 "缺少30分钟数据，等待次日确认",
-                ["回踩不破突破位", "30min出现二买/三买确认"])
+                ["30分钟数据可用", "30分钟出现二买/三买", "30分钟最新窗口出现两阳结构"],
+                reason_code="missing_30m_data")
             new_watchlist.append(watch_item)
             continue
 
-        # Check for 30min confirmation signals
-        confirmations = _check_30min_confirmations(min30_result, seed)
+        # Keep lagging state evidence separate from decision-grade signals.
+        confirmation_evidence = build_30min_confirmation_evidence(min30_result)
+        seed["confirmation_evidence"] = confirmation_evidence
+        confirmations = _check_30min_confirmations(
+            min30_result, seed, evidence=confirmation_evidence
+        )
         seed["confirmations"] = confirmations
 
         if confirmations:
@@ -276,9 +286,18 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         else:
             # No 30min confirmation → watch
             diag["watch_due_to_no_30min_confirm"] += 1
+            if confirmation_evidence.get("ema_bullish_alignment"):
+                watch_reason = "30分钟均线仍为多头排列，但未形成独立确认，继续观察"
+            else:
+                watch_reason = "日线启动但30分钟未形成独立确认，继续观察"
             watch_item = _make_watch_item(seed, seed["startup_reason"],
-                "日线启动但30min未确认，等待回踩确认",
-                ["30min回踩不破突破位", "30min EMA5/EMA10维持", "30min出现二买/三买"])
+                watch_reason,
+                ["30分钟出现二买/三买", "30分钟最新窗口出现两阳结构"],
+                reason_code=(
+                    "alignment_without_confirmation"
+                    if confirmation_evidence.get("ema_bullish_alignment")
+                    else "waiting_30m_confirm"
+                ))
             new_watchlist.append(watch_item)
 
     return candidates, new_watchlist, diag
@@ -382,77 +401,44 @@ def _check_price_breakout(closes, opens, highs, min_change_pct):
     return signals
 
 
-def _check_30min_confirmations(min30_result, seed):
-    """Check 30min chart for confirmation signals. Returns list of found confirmations."""
+def _check_30min_confirmations(min30_result, seed, evidence=None):
+    """Return only fresh, decision-grade 30-minute confirmation events."""
     confirms = []
 
     if min30_result is None:
         return confirms
-
-    closes_30 = min30_result.closes
-    opens_30 = min30_result.opens if hasattr(min30_result, "opens") else None
-    if closes_30 is None or len(closes_30) < 5:
+    evidence = evidence or build_30min_confirmation_evidence(min30_result)
+    if not evidence.get("sufficient_bars"):
         return confirms
 
-    # 两阳夹一阴 / 两阳夹两阴（30分钟级别）只看最新窗口，避免历史形态造成陈旧确认。
-    try:
-        closes_30_arr = np.asarray(closes_30, dtype=float)
-        opens_30_arr = np.asarray(opens_30, dtype=float) if opens_30 is not None else None
-        if opens_30_arr is not None and len(opens_30_arr) == len(closes_30_arr):
-            if len(closes_30_arr) >= 3:
-                prev2 = closes_30_arr[-3] > opens_30_arr[-3]
-                mid = closes_30_arr[-2] < opens_30_arr[-2]
-                curr = closes_30_arr[-1] > opens_30_arr[-1]
-                if prev2 and mid and curr:
-                    confirms.append("30min两阳夹一阴确认")
+    pattern = evidence.get("fresh_yang_pattern")
+    if pattern == "two_yang_one_yin":
+        confirms.append("30min两阳夹一阴确认")
+    elif pattern == "two_yang_two_yin":
+        confirms.append("30min两阳夹两阴确认")
 
-            if len(closes_30_arr) >= 4:
-                p1 = closes_30_arr[-4] > opens_30_arr[-4]
-                mid1 = closes_30_arr[-3] < opens_30_arr[-3]
-                mid2 = closes_30_arr[-2] < opens_30_arr[-2]
-                curr = closes_30_arr[-1] > opens_30_arr[-1]
-                if p1 and mid1 and mid2 and curr:
-                    confirms.append("30min两阳夹两阴确认")
-    except Exception:
-        pass
-
-    # EMA5/EMA10 maintenance on 30min
-    from .chan_engine import ema
-    try:
-        ema5_30 = ema(closes_30, 5)
-        ema10_30 = ema(closes_30, 10)
-        if len(ema5_30) >= 2 and len(ema10_30) >= 2:
-            if float(ema5_30[-1]) > float(ema10_30[-1]):
-                confirms.append("30min EMA5维持")
-    except Exception:
-        pass
-
-    # Check for 二买/三买 on 30min
-    if hasattr(min30_result, 'buy_points') and min30_result.buy_points:
-        for bp in min30_result.buy_points:
-            t = bp.get("type", "")
-            if t in ("二买", "二买候选", "三买", "三买候选"):
-                confirms.append(f"30min {t}")
-                break
-
-    # Check if close is near a recent low (回踩不破)
-    if len(closes_30) >= 10:
-        low_10 = float(np.min(closes_30[-10:]))
-        curr_30 = float(closes_30[-1])
-        if curr_30 <= low_10 * 1.02:
-            confirms.append("30min回踩不破突破位")
+    buy_point = evidence.get("buy_point")
+    if buy_point:
+        confirms.append(f"30min {buy_point}")
 
     return confirms
 
 
-def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
+def _make_watch_item(
+    seed,
+    startup_reason,
+    watch_reason,
+    next_day_conditions,
+    reason_code=None,
+):
     """Build a startup watchlist item."""
     if seed.get("price_limit_state") == "limit_up":
-        reason_code = "limit_up"
+        derived_reason_code = "limit_up"
         failure_gate = "chase_risk"
     else:
-        reason_code = "waiting_30m_confirm"
+        derived_reason_code = "waiting_30m_confirm"
         failure_gate = "30min_confirm"
+    reason_code = reason_code or derived_reason_code
     return {
         "code": seed["code"],
         "name": seed["name"],
@@ -484,6 +470,8 @@ def _make_watch_item(seed, startup_reason, watch_reason, next_day_conditions):
         "upgrade_conditions": list(next_day_conditions),
         "next_day_conditions": next_day_conditions,
         "cancel_conditions": ["跌破启动参考位", "放量长阴破坏结构"],
+        "confirmations": list(seed.get("confirmations", [])),
+        "confirmation_evidence": dict(seed.get("confirmation_evidence") or {}),
         "pivot_info": seed.get("pivot_info", {}),
         "buy_points": [],
         "closes": seed.get("closes", []),
@@ -507,6 +495,7 @@ def annotate_startup_quality(bp):
     startup_signals = bp.get("startup_signals", []) or []
     startup_reason = bp.get("startup_reason", "") or ""
     confirmations = bp.get("confirmations", []) or []
+    confirmation_evidence = bp.get("confirmation_evidence") or {}
 
     # --- daily_startup_grade ---
     is_strong = (
@@ -528,26 +517,38 @@ def annotate_startup_quality(bp):
         bp["daily_startup_warning"] = f"当日收跌{abs(change_pct):.1f}%，属于观察型启动，不是追涨启动"
 
     # --- sublevel_confirm_grade ---
-    conf_text = " ".join(confirmations) if confirmations else ""
-    has_buy23 = any("二买" in c or "三买" in c for c in confirmations)
-    has_ema5 = "EMA5" in conf_text
-    has_any_confirm = len(confirmations) > 0
+    buy_point_type = str(confirmation_evidence.get("buy_point") or "")
+    has_buy23 = buy_point_type in STRONG_STARTUP_BUY_POINT_TYPES
+    has_fresh_yang = confirmation_evidence.get("fresh_yang_pattern") in {
+        "two_yang_one_yin",
+        "two_yang_two_yin",
+    }
+    decision_confirmations = []
+    if has_buy23:
+        decision_confirmations = [
+            c for c in confirmations if "二买" in c or "三买" in c
+        ]
+    elif has_fresh_yang:
+        decision_confirmations = [c for c in confirmations if "两阳夹" in c]
 
     if has_buy23:
         bp["sublevel_confirm_grade"] = "S"
         bp["sublevel_confirm_label"] = "S级确认"
         bp["sublevel_confirm_reason"] = "30min出现二买/三买确认"
-    elif bp["daily_startup_grade"] == "strong" and has_ema5:
+    elif bp["daily_startup_grade"] == "strong" and has_fresh_yang:
         bp["sublevel_confirm_grade"] = "A"
         bp["sublevel_confirm_label"] = "A级确认"
-        bp["sublevel_confirm_reason"] = "日线强启动+30min EMA5维持"
-    elif has_any_confirm:
+        bp["sublevel_confirm_reason"] = "日线强启动+30分钟最新两阳结构"
+    elif decision_confirmations:
         bp["sublevel_confirm_grade"] = "B"
         bp["sublevel_confirm_label"] = "B级确认"
-        bp["sublevel_confirm_reason"] = f"30min确认: {', '.join(confirmations[:2])}"
+        bp["sublevel_confirm_reason"] = f"30分钟结构确认: {', '.join(decision_confirmations[:2])}"
     else:
         bp["sublevel_confirm_grade"] = "C"
         bp["sublevel_confirm_label"] = "C级确认"
-        bp["sublevel_confirm_reason"] = "暂无30min确认信号"
+        if confirmation_evidence.get("ema_bullish_alignment"):
+            bp["sublevel_confirm_reason"] = "30分钟均线仍为多头排列，但未形成独立确认"
+        else:
+            bp["sublevel_confirm_reason"] = "暂无30分钟独立确认信号"
 
     return bp

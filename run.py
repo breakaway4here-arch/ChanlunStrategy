@@ -2315,22 +2315,20 @@ def main(debug=False, preview=False, generated_at=None):
             pure_confirmed = _downgrade_to_formal_only(pure_pool)
             # All startup seeds → watch (no 30min data to confirm)
             if startup_seeds:
-                for s in startup_seeds:
-                    startup_watchlist.append(_attach_liquidity(_attach_sector_metadata({
-                        "code": s["code"], "name": s["name"],
-                        "type": "强势启动观察", "tier": "watch",
-                        "source_type": "日线强势启动",
-                        "startup_reason": s.get("startup_reason", ""),
-                        "startup_signals": s.get("startup_signals", []),
-                        "change_pct": s.get("change_pct", 0),
-                        "volume_ratio": s.get("volume_ratio", 0),
-                        "close": s.get("close", 0),
-                        "avoid_chase": True,
-                        "watch_reason": "缺少30分钟数据，等待次日确认",
-                        "next_day_conditions": ["回踩不破突破位", "30min出现二买/三买确认"],
-                    })))
-            startup_upgrade_diag = {"startup_candidate": 0,
-                                     "watch_due_to_no_30min_confirm": len(startup_seeds)}
+                (
+                    startup_candidates,
+                    startup_additional_watchlist,
+                    startup_upgrade_diag,
+                ) = upgrade_strong_startup_with_30min(startup_seeds, [])
+                startup_watchlist.extend(
+                    _attach_liquidity(_attach_sector_metadata(item))
+                    for item in startup_additional_watchlist
+                )
+            else:
+                startup_upgrade_diag = {
+                    "startup_candidate": 0,
+                    "watch_due_to_no_30min_confirm": 0,
+                }
             (
                 trend_candidates,
                 trend_additional_watchlist,
@@ -2413,6 +2411,9 @@ def main(debug=False, preview=False, generated_at=None):
                                 "source_type": sc.get("source_type", "日线强势启动"),
                                 "confirmed_by": "30min确认",
                                 "confirmations": sc.get("confirmations", []),
+                                "confirmation_evidence": dict(
+                                    sc.get("confirmation_evidence") or {}
+                                ),
                                 "startup_reason": sc.get("startup_reason", ""),
                                 "startup_signals": sc.get("startup_signals", []),
                                 "startup_index": sc.get("startup_index"),

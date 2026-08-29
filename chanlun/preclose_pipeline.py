@@ -279,6 +279,9 @@ def _normalize_startup_candidate(candidate):
         "source_type": "日线强势启动",
         "confirmed_by": "30min确认",
         "confirmations": confirmations,
+        "confirmation_evidence": copy.deepcopy(
+            item.get("confirmation_evidence") or {}
+        ),
         "change_pct": item.get("change_pct"),
         "volume_ratio": item.get("volume_ratio"),
     }

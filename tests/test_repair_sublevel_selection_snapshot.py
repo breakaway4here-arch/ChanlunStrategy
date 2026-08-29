@@ -319,7 +319,7 @@ class RepairSublevelSelectionSnapshotTests(unittest.TestCase):
         self.seed_verified_30m()
         source = _report()
         with patch(
-            "chanlun.strong_startup._check_30min_confirmations",
+            "scripts.repair_sublevel_selection_snapshot._legacy_2026_08_26_confirmations",
             return_value=[],
         ):
             rebuilt = rebuild_sublevel_selection_report(

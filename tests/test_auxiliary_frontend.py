@@ -1135,6 +1135,32 @@ assert(!html.includes('偏执行优先'), 'formal action reason leaked into rese
 """,
         )
 
+    def test_alignment_only_reason_is_truthful_and_hides_internal_evidence_keys(self):
+        _assert_node_contract(
+            self,
+            "({ reasons: buildReasonSection })",
+            r"""
+const html = globalThis.__auxTest.reasons(
+  { primary_reason: '日线强势启动观察', action_semantics: 'watch_only' },
+  {
+    sublevel_confirm_reason: '30分钟均线仍为多头排列，但未形成独立确认',
+    confirmation_evidence: {
+      ema_bullish_alignment: true,
+      recovery_bundle_match: false,
+      macd_hist_direction: 'weakening'
+    }
+  }
+);
+assert(html.includes('30分钟均线仍为多头排列，但未形成独立确认'),
+  'alignment-only reason is not displayed truthfully');
+assert(!html.includes('EMA5维持'), 'legacy EMA state was presented as confirmation');
+assert(!html.includes('确认良好'), 'alignment-only state was overstated');
+['ema_bullish_alignment', 'recovery_bundle_match', 'macd_hist_direction'].forEach(function (key) {
+  assert(!html.includes(key), 'internal evidence key leaked: ' + key);
+});
+""",
+        )
+
     def test_incident_review_marks_raw_decision_invalid_and_hides_scores(self):
         _assert_node_contract(
             self,

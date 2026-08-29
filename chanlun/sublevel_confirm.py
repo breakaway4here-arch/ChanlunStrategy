@@ -11,6 +11,166 @@ from .signal_policy import is_recommendable_buy
 
 NEAR_PRICE_PCT = 0.03
 RECENT_30MIN_BARS = 8
+STRONG_STARTUP_BUY_POINT_TYPES = frozenset({
+    "二买",
+    "二买候选",
+    "三买",
+    "三买候选",
+})
+
+
+def build_30min_confirmation_evidence(min30_result):
+    """Build JSON-safe facts used by 30-minute confirmation policies.
+
+    This function deliberately separates lagging state (for example EMA5 above
+    EMA10) from a fresh confirmation event.  Missing inputs fail closed so a
+    partially populated result cannot be promoted by accident.
+    """
+    evidence = {
+        "schema_version": 1,
+        "sufficient_bars": False,
+        "ema_bullish_alignment": False,
+        "close_above_ema5": False,
+        "ema5_rising_bars": 0,
+        "recent_peak_drawdown_pct": None,
+        "macd_hist_direction": "unavailable",
+        "ema5_reclaim": False,
+        "stop_fall": False,
+        "buy_point": None,
+        "fresh_yang_pattern": None,
+        "recovery_bundle_match": False,
+    }
+    if min30_result is None:
+        return evidence
+
+    closes = _finite_array(getattr(min30_result, "closes", None))
+    if closes is None or len(closes) < 5:
+        return evidence
+
+    from .chan_engine import ema
+
+    ema5 = np.asarray(ema(closes, 5), dtype=float)
+    ema10 = np.asarray(ema(closes, 10), dtype=float)
+    evidence["sufficient_bars"] = True
+    if len(ema5) == len(closes) and np.isfinite(ema5[-1]):
+        evidence["close_above_ema5"] = bool(closes[-1] > ema5[-1])
+        evidence["ema5_rising_bars"] = _count_rising_tail(ema5)
+        evidence["ema5_reclaim"] = _has_recent_ema5_reclaim(closes, ema5)
+        if len(ema10) == len(closes) and np.isfinite(ema10[-1]):
+            evidence["ema_bullish_alignment"] = bool(ema5[-1] > ema10[-1])
+
+    highs = _finite_array(getattr(min30_result, "highs", None))
+    peak_values = highs if highs is not None and len(highs) == len(closes) else closes
+    recent_peak = float(np.max(peak_values[-RECENT_30MIN_BARS:]))
+    if recent_peak > 0:
+        drawdown = max(0.0, (recent_peak - float(closes[-1])) / recent_peak * 100.0)
+        evidence["recent_peak_drawdown_pct"] = round(drawdown, 6)
+
+    evidence["macd_hist_direction"] = _macd_hist_direction(
+        getattr(min30_result, "macd_hist", None)
+    )
+    evidence["stop_fall"] = _check_stop_fall_bars(min30_result)
+    evidence["buy_point"] = _latest_recommendable_buy_point(
+        min30_result, len(closes)
+    )
+    evidence["fresh_yang_pattern"] = _latest_yang_pattern(min30_result)
+
+    # Initial recovery bundle.  Historical replay may tighten constants, but
+    # it may never fall back to EMA alignment as a standalone confirmation.
+    evidence["recovery_bundle_match"] = bool(
+        evidence["close_above_ema5"]
+        and evidence["ema5_rising_bars"] >= 2
+        and evidence["stop_fall"]
+        and evidence["macd_hist_direction"] == "improving"
+    )
+    return evidence
+
+
+def _finite_array(values):
+    if values is None:
+        return None
+    try:
+        array = np.asarray(values, dtype=float)
+    except (TypeError, ValueError):
+        return None
+    if array.ndim != 1 or len(array) == 0 or not np.all(np.isfinite(array)):
+        return None
+    return array
+
+
+def _count_rising_tail(values):
+    count = 0
+    for index in range(len(values) - 1, 0, -1):
+        if not np.isfinite(values[index]) or not np.isfinite(values[index - 1]):
+            break
+        if float(values[index]) <= float(values[index - 1]):
+            break
+        count += 1
+    return count
+
+
+def _has_recent_ema5_reclaim(closes, ema5):
+    start = max(1, len(closes) - 3)
+    for index in range(start, len(closes)):
+        if not np.isfinite(ema5[index]) or not np.isfinite(ema5[index - 1]):
+            continue
+        if closes[index] > ema5[index] and closes[index - 1] <= ema5[index - 1]:
+            return True
+    return False
+
+
+def _macd_hist_direction(values):
+    if values is None:
+        return "unavailable"
+    try:
+        hist = np.asarray(values, dtype=float)
+    except (TypeError, ValueError):
+        return "unavailable"
+    if hist.ndim != 1 or len(hist) < 3 or not np.all(np.isfinite(hist[-3:])):
+        return "unavailable"
+    recent = hist[-3:]
+    scale = max(1.0, float(np.max(np.abs(recent))))
+    tolerance = scale * 1e-6
+    if recent[-1] > recent[-2] + tolerance and recent[-2] >= recent[-3] - tolerance:
+        return "improving"
+    if recent[-1] < recent[-2] - tolerance and recent[-2] <= recent[-3] + tolerance:
+        return "weakening"
+    return "mixed"
+
+
+def _latest_recommendable_buy_point(min30_result, total_bars):
+    recent_start = max(0, int(total_bars) - RECENT_30MIN_BARS)
+    for bp in reversed(getattr(min30_result, "buy_points", None) or []):
+        try:
+            signal_index = int(bp.get("index"))
+        except (TypeError, ValueError):
+            continue
+        if (
+            recent_start <= signal_index < int(total_bars)
+            and str(bp.get("type") or "") in STRONG_STARTUP_BUY_POINT_TYPES
+            and is_recommendable_buy(bp)
+        ):
+            return str(bp.get("type"))
+    return None
+
+
+def _latest_yang_pattern(min30_result):
+    closes = _finite_array(getattr(min30_result, "closes", None))
+    opens = _finite_array(getattr(min30_result, "opens", None))
+    if closes is None or opens is None or len(closes) != len(opens):
+        return None
+    if len(closes) >= 3:
+        if closes[-3] > opens[-3] and closes[-2] < opens[-2] and closes[-1] > opens[-1]:
+            return "two_yang_one_yin"
+    if len(closes) >= 4:
+        if (
+            closes[-4] > opens[-4]
+            and closes[-3] < opens[-3]
+            and closes[-2] < opens[-2]
+            and closes[-1] > opens[-1]
+        ):
+            return "two_yang_two_yin"
+    return None
 
 
 def classify_30min_confirmation(daily_stock, source_bp, min30_result):
@@ -199,12 +359,12 @@ def _check_ema5_reclaim(min30_result):
 
 def _check_stop_fall_bars(min30_result):
     """Check for stop-fall K-line structure: higher lows + repair closes."""
-    lows = min30_result.lows
-    closes = min30_result.closes
-    opens = min30_result.opens
+    lows = _finite_array(getattr(min30_result, "lows", None))
+    closes = _finite_array(getattr(min30_result, "closes", None))
+    opens = _finite_array(getattr(min30_result, "opens", None))
     if lows is None or closes is None or opens is None:
         return False
-    if len(lows) < 4 or len(closes) < 4 or len(opens) < 4:
+    if len(lows) != len(closes) or len(opens) != len(closes) or len(closes) < 4:
         return False
 
     higher_lows = lows[-1] >= lows[-2] >= min(lows[-4:-2])

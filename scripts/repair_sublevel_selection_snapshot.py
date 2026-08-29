@@ -26,7 +26,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if os.fspath(ROOT_DIR) not in sys.path:
     sys.path.insert(0, os.fspath(ROOT_DIR))
 
-from chanlun.chan_engine import analyze  # noqa: E402
+from chanlun.chan_engine import analyze, ema  # noqa: E402
 from chanlun.kline_repository import KLineRepository  # noqa: E402
 from chanlun.market_history_store import MarketHistoryStore  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
@@ -36,9 +36,6 @@ from chanlun.report_generator import (  # noqa: E402
     copy_report_assets,
 )
 from chanlun.shadow_evaluation import production_digest  # noqa: E402
-from chanlun.strong_startup import (  # noqa: E402
-    upgrade_strong_startup_with_30min,
-)
 from scripts import enable_shadow_evaluation_snapshot as atomic  # noqa: E402
 
 
@@ -214,6 +211,62 @@ def _startup_seed(row):
     }
 
 
+def _legacy_2026_08_26_confirmations(min30_result):
+    """Freeze the decision semantics used by the dated incident review.
+
+    This reconstruction answers what the 2026-08-26 rule would have produced
+    had the now-verified bars been available.  It must not drift when the live
+    strong-startup policy changes after that date.
+    """
+    closes = np.asarray(getattr(min30_result, "closes", []), dtype=float)
+    opens = np.asarray(getattr(min30_result, "opens", []), dtype=float)
+    if len(closes) < 5:
+        return []
+    confirmations = []
+    if len(opens) == len(closes):
+        if closes[-3] > opens[-3] and closes[-2] < opens[-2] and closes[-1] > opens[-1]:
+            confirmations.append("30min两阳夹一阴确认")
+        elif (
+            len(closes) >= 4
+            and closes[-4] > opens[-4]
+            and closes[-3] < opens[-3]
+            and closes[-2] < opens[-2]
+            and closes[-1] > opens[-1]
+        ):
+            confirmations.append("30min两阳夹两阴确认")
+    ema5 = ema(closes, 5)
+    ema10 = ema(closes, 10)
+    if (
+        len(ema5) == len(closes)
+        and len(ema10) == len(closes)
+        and np.isfinite(ema5[-1])
+        and np.isfinite(ema10[-1])
+        and float(ema5[-1]) > float(ema10[-1])
+    ):
+        confirmations.append("30min EMA5维持")
+    for bp in getattr(min30_result, "buy_points", None) or []:
+        signal_type = str(bp.get("type") or "")
+        if signal_type in ("二买", "二买候选", "三买", "三买候选"):
+            confirmations.append("30min {}".format(signal_type))
+            break
+    if len(closes) >= 10 and float(closes[-1]) <= float(np.min(closes[-10:])) * 1.02:
+        confirmations.append("30min回踩不破突破位")
+    return confirmations
+
+
+def _legacy_2026_08_26_upgrade(seed, min30_result):
+    confirmations = _legacy_2026_08_26_confirmations(min30_result)
+    if not confirmations:
+        return None
+    upgraded = copy.deepcopy(seed)
+    upgraded["confirmations"] = confirmations
+    upgraded["result_30min"] = min30_result
+    upgraded["confirm_index"] = len(min30_result.closes) - 1
+    upgraded["confirm_date"] = str(min30_result.dates[-1])
+    upgraded["confirm_age_days"] = 0
+    return upgraded
+
+
 def _overlay_candidate(source, upgraded, evidence):
     confirmations = list(upgraded.get("confirmations") or [])
     source_best = source.get("best_buy_point")
@@ -311,14 +364,8 @@ def rebuild_sublevel_selection_report(
         volumes=kline["volumes"],
     )
     setattr(analysis, "strategy_input_evidence", copy.deepcopy(evidence))
-    upgraded, _watchlist, _diagnostics = upgrade_strong_startup_with_30min(
-        [_startup_seed(source)], [analysis]
-    )
-
-    candidates = (
-        [_overlay_candidate(source, upgraded[0], evidence)]
-        if upgraded else []
-    )
+    upgraded = _legacy_2026_08_26_upgrade(_startup_seed(source), analysis)
+    candidates = [_overlay_candidate(source, upgraded, evidence)] if upgraded else []
     rebuilt = _deepcopy_json(report)
     rebuilt[_OVERLAY_KEY] = {
         "schema_version": 2,

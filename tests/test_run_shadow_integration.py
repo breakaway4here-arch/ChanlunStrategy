@@ -145,7 +145,7 @@ def _canonical_review_context(_db_path, entries, *, as_of=None):
 
 
 class DailyShadowIntegrationTests(unittest.TestCase):
-    def _capture_real_main_report(self, mode):
+    def _capture_real_main_report(self, mode, startup_seeds=None):
         candidate = _candidate(0)
         candidate.update({
             "best_buy_point": {
@@ -292,7 +292,9 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             "_hydrate_market_cap_evidence": lambda *_args, **_kwargs: {},
             "analyze": lambda **_kwargs: analysis,
             "build_daily_structure_pool": lambda *_args, **_kwargs: (copy.deepcopy([candidate]), {"base_pass": 1, "with_buy_points": 1, "formal_count": 1, "upgradeable_count": 0, "reference_only_count": 0}),
-            "build_strong_startup_pool": lambda *_args, **_kwargs: ([], [], {}),
+            "build_strong_startup_pool": lambda *_args, **_kwargs: (
+                copy.deepcopy(startup_seeds or []), [], {}
+            ),
             "build_trend_continuation_pool": lambda *_args, **_kwargs: ([], [], {}),
             "prefilter_luojie_theme_candidates": lambda *_args, **_kwargs: [],
             "collect_15min_data": lambda *_args, **_kwargs: [],
@@ -477,6 +479,42 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertEqual(health["sublevels"]["30m"]["status"], "unavailable")
         self.assertTrue(health["formal"]["formal_actions_allowed"])
         self.assertEqual(health["status"], "partial")
+
+    def test_real_main_30min_total_failure_uses_unified_missing_data_contract(self):
+        seed = {
+            "code": "300000",
+            "name": "candidate-0",
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "source_type": "日线强势启动",
+            "startup_reason": "低位放量突破",
+            "startup_signals": ["放量", "突破20日平台"],
+            "startup_index": 1,
+            "startup_date": "2026-08-22",
+            "startup_age_days": 0,
+            "change_pct": 4.2,
+            "volume_ratio": 1.8,
+            "close": 11.0,
+            "price_limit_state": "normal",
+            "closes": [10.0, 11.0],
+            "opens": [10.0, 10.8],
+            "highs": [10.2, 11.2],
+            "lows": [9.8, 10.7],
+            "volumes": [1000, 1200],
+            "dates": ["2026-08-21", "2026-08-22"],
+        }
+
+        report = self._capture_real_main_report("off", startup_seeds=[seed])
+
+        watch = next(
+            item for item in report["startup_watchlist"]
+            if item["code"] == seed["code"]
+        )
+        self.assertEqual(watch["reason_code"], "missing_30m_data")
+        self.assertEqual(watch["confirmation_evidence"]["schema_version"], 1)
+        self.assertFalse(watch["confirmation_evidence"]["sufficient_bars"])
+        self.assertTrue(any("两阳" in item for item in watch["next_day_conditions"]))
+        self.assertFalse(any("回踩不破" in item for item in watch["next_day_conditions"]))
 
     def test_real_main_requests_report_date_for_all_sublevel_inputs(self):
         source = Path(run.__file__).read_text(encoding="utf-8")

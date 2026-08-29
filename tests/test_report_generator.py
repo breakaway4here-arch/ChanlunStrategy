@@ -278,6 +278,16 @@ class TestReportGenerator(unittest.TestCase):
             "reason": "test", "strength": "强",
             "source_type": "swing底背驰参考",
             "confirmed_by": "底分型+MACD金叉",
+            "confirmation_evidence": {
+                "schema_version": 1,
+                "ema_bullish_alignment": True,
+                "macd_hist_direction": "weakening",
+            },
+            "daily_startup_grade": "strong",
+            "daily_startup_label": "强启动",
+            "sublevel_confirm_grade": "C",
+            "sublevel_confirm_label": "C级确认",
+            "sublevel_confirm_reason": "30分钟均线仍为多头排列，但未形成独立确认",
             "seed_type": "swing底背驰候选种子",
             "seed_reason": "接近20日低点",
         }
@@ -285,6 +295,9 @@ class TestReportGenerator(unittest.TestCase):
         self.assertEqual(s["confirmed_by"], "底分型+MACD金叉")
         self.assertEqual(s["strength"], "强")
         self.assertEqual(s["source_type"], "swing底背驰参考")
+        self.assertEqual(s["confirmation_evidence"]["macd_hist_direction"], "weakening")
+        self.assertEqual(s["sublevel_confirm_grade"], "C")
+        self.assertIn("未形成独立确认", s["sublevel_confirm_reason"])
 
     def test_serialize_picks_has_chart_annotations(self):
         """Each pick gets chart_annotations dict."""
@@ -1691,6 +1704,11 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
 
     def test_serialized_has_chart_arrays(self):
         items = self._make_watch_item()
+        items["confirmation_evidence"] = {
+            "schema_version": 1,
+            "ema_bullish_alignment": True,
+            "macd_hist_direction": "weakening",
+        }
         result = _serialize_startup_watchlist([items])
         sw = result[0]
         self.assertIn("dates", sw)
@@ -1704,6 +1722,7 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         self.assertIn("sector", sw)
         self.assertIn("daily_startup_label", sw)
         self.assertIn("sublevel_confirm_label", sw)
+        self.assertEqual(sw["confirmation_evidence"]["macd_hist_direction"], "weakening")
         self.assertIsInstance(sw["dates"], list)
         self.assertIsInstance(sw["closes"], list)
 
