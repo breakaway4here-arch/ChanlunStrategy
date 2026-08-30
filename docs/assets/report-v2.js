@@ -105,6 +105,7 @@
     description: null,
     workspaceBody: null,
     candidateList: null,
+    candidateEvidenceComparison: null,
     detailPanel: null,
     auxGrid: null,
     drawer: null,
@@ -485,6 +486,43 @@
 
   function getBootstrap() {
     return window.CHANLUN_BOOTSTRAP || {};
+  }
+
+  function isCanonicalIsoDate(value) {
+    var text = normalizeString(value).trim();
+    var match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+    if (!match) return false;
+    var year = Number(match[1]);
+    var month = Number(match[2]);
+    var day = Number(match[3]);
+    var parsed = new Date(Date.UTC(year, month - 1, day));
+    return parsed.getUTCFullYear() === year
+      && parsed.getUTCMonth() === month - 1
+      && parsed.getUTCDate() === day;
+  }
+
+  function getRecommendationEvidenceProjection(data) {
+    var bootstrap = getBootstrap();
+    var projection = bootstrap.recommendationEvidence;
+    var report = data || state.data || {};
+    if (!projection || typeof projection !== 'object') return null;
+    if (Number(projection.schema_version) !== 1) return null;
+    if (!projection.views || typeof projection.views !== 'object') return null;
+    var evidenceDate = normalizeString(projection.report_date).trim();
+    var reportDate = normalizeString(report.date).trim();
+    var pageDate = normalizeString(bootstrap.pageDate).trim();
+    if (!isCanonicalIsoDate(evidenceDate)) return null;
+    if (!isCanonicalIsoDate(pageDate)) return null;
+    if (pageDate !== evidenceDate) return null;
+    if (reportDate && !isCanonicalIsoDate(reportDate)) return null;
+    if (reportDate && evidenceDate !== reportDate) return null;
+    return projection;
+  }
+
+  function getEvidenceRowsForView(viewKey, data) {
+    var projection = getRecommendationEvidenceProjection(data);
+    if (!projection) return [];
+    return asArray(projection.views[normalizeString(viewKey)]).slice();
   }
 
   function getTop10ApiBase() {
@@ -1471,6 +1509,10 @@
       + '    <section class="workspace today-workspace">'
       + '      <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="候选导航"></nav>'
       + '      <div class="view-description" id="viewDescription"></div>'
+      + '      <details class="candidate-evidence-comparison" id="candidateEvidenceComparison">'
+      + '        <summary>候选横向比较</summary>'
+      + '        <div class="candidate-evidence-comparison-body"></div>'
+      + '      </details>'
       + '      <div class="workspace-body">'
       + '        <div class="candidate-list-shell">'
       + '          <div class="candidate-list-tools">'
@@ -1526,6 +1568,7 @@
     nodes.description = app.querySelector('#viewDescription');
     nodes.workspaceBody = app.querySelector('.today-workspace .workspace-body');
     nodes.candidateList = app.querySelector('#candidateList');
+    nodes.candidateEvidenceComparison = app.querySelector('#candidateEvidenceComparison');
     nodes.detailPanel = app.querySelector('#detailPanel');
     nodes.auxGrid = app.querySelector('#auxGrid');
     nodes.drawer = app.querySelector('#mobileDrawer');
@@ -2164,6 +2207,7 @@
     state.activeItem = firstItem;
     renderWorkspaceTabs();
     renderViewDescription();
+    renderCandidateEvidenceComparisonMount();
     renderCandidateList();
     renderCandidateDetail(firstItem);
     if (focusTab && nodes.tabs) {
@@ -2287,6 +2331,181 @@
 
   function makeChip(text, className) {
     return '<span class="' + className + '">' + escapeHtml(text) + '</span>';
+  }
+
+  function recommendationEvidenceStatus(section) {
+    var value = section && typeof section === 'object' ? section : {};
+    var status = normalizeString(value.status).trim();
+    var labels = {
+      available: '证据可用',
+      partial: '部分证据',
+      missing: '未提供证据',
+      conflict: '证据冲突',
+      stale: '证据已过期',
+      unavailable: '证据不可用',
+    };
+    return labels[status] || '未提供证据';
+  }
+
+  function recommendationEvidenceNumber(value, digits) {
+    if (!isRecommendationEvidenceFiniteNumber(value)) return '--';
+    var number = Number(value);
+    return number.toFixed(typeof digits === 'number' ? digits : 0).replace(/\.0+$/, '');
+  }
+
+  function isRecommendationEvidenceFiniteNumber(value) {
+    return value !== null
+      && typeof value !== 'undefined'
+      && value !== ''
+      && typeof value !== 'boolean'
+      && Number.isFinite(Number(value));
+  }
+
+  function recommendationEvidenceReason(section) {
+    var value = section && typeof section === 'object' ? section : {};
+    return normalizeString(value.reason || value.empty_text).trim();
+  }
+
+  function recommendationEvidenceList(value) {
+    return asArray(value).map(function (item) {
+      return normalizeString(item).trim();
+    }).filter(Boolean);
+  }
+
+  function recommendationEvidenceSectionText(section, keys) {
+    var value = section && typeof section === 'object' ? section : {};
+    var texts = [];
+    asArray(keys).forEach(function (key) {
+      var current = value[key];
+      if (Array.isArray(current)) {
+        texts = texts.concat(recommendationEvidenceList(current));
+      } else if (current !== null && typeof current !== 'undefined' && current !== '') {
+        texts.push(normalizeString(current).trim());
+      }
+    });
+    texts = texts.filter(Boolean);
+    if (texts.length) return texts.join(' · ');
+    return recommendationEvidenceReason(value) || recommendationEvidenceStatus(value);
+  }
+
+  function normalizeCandidateEvidenceRow(row) {
+    var source = row && typeof row === 'object' ? row : {};
+    var summary = source.summary && typeof source.summary === 'object' ? source.summary : {};
+    var decision = source.decision_score && typeof source.decision_score === 'object' ? source.decision_score : {};
+    var components = decision.components && typeof decision.components === 'object' ? decision.components : {};
+    var rank = source.rank_evidence && typeof source.rank_evidence === 'object' ? source.rank_evidence : {};
+    var prices = source.price_evidence && typeof source.price_evidence === 'object' ? source.price_evidence : {};
+    var derived = source.display_derived && typeof source.display_derived === 'object' ? source.display_derived : {};
+    var risk = source.risk_and_next && typeof source.risk_and_next === 'object' ? source.risk_and_next : {};
+    var mainRise = source.main_rise_clue && typeof source.main_rise_clue === 'object' ? source.main_rise_clue : {};
+    var componentText = ['structure', 'position', 'sentiment'].map(function (key) {
+      var labels = { structure: '结构', position: '位置', sentiment: '情绪' };
+      var item = components[key] && typeof components[key] === 'object' ? components[key] : {};
+      return isRecommendationEvidenceFiniteNumber(item.score) ? labels[key] + ' ' + recommendationEvidenceNumber(item.score) : '';
+    }).filter(Boolean).join(' · ');
+    var priceParts = [
+      ['现价', prices.current_price],
+      ['参考', prices.reference_price],
+      ['压力', prices.pressure_price],
+      ['失效', prices.invalidation_price],
+    ].map(function (entry) {
+      return isRecommendationEvidenceFiniteNumber(entry[1]) ? entry[0] + ' ' + recommendationEvidenceNumber(entry[1], 2) : '';
+    }).filter(Boolean);
+    if (isRecommendationEvidenceFiniteNumber(derived.distance_from_reference_pct)) {
+      priceParts.push('距参考 ' + recommendationEvidenceNumber(derived.distance_from_reference_pct, 2) + '%');
+    }
+    var riskLabels = recommendationEvidenceList(risk.risk_labels);
+    return {
+      code: normalizeString(source.code || summary.code).trim(),
+      name: normalizeString(summary.name).trim(),
+      sector: normalizeString(summary.sector).trim(),
+      action: normalizeString(summary.formal_action).trim() || '本期未声明正式动作',
+      decision: isRecommendationEvidenceFiniteNumber(decision.score) ? '决策分 ' + recommendationEvidenceNumber(decision.score) : recommendationEvidenceStatus(decision),
+      decisionCode: normalizeString(decision.decision_code).trim(),
+      decisionComponents: componentText,
+      rank: isRecommendationEvidenceFiniteNumber(rank.view_rank) ? '#' + recommendationEvidenceNumber(rank.view_rank) : '--',
+      rankScore: isRecommendationEvidenceFiniteNumber(rank.opportunity_score) ? '排序分 ' + recommendationEvidenceNumber(rank.opportunity_score) : '排序分 --',
+      rankNote: normalizeString(rank.note).trim() || '仅用于当前池内排序',
+      prices: priceParts.join(' · ') || recommendationEvidenceStatus(prices),
+      daily: [
+        recommendationEvidenceSectionText(source.daily_structure, ['summary', 'state', 'signal', 'reasons']),
+        normalizeString(mainRise.label).trim(),
+      ].filter(Boolean).join(' · '),
+      sublevel: recommendationEvidenceSectionText(source.sublevel_30m, ['summary', 'state', 'signal', 'reasons']),
+      volume: recommendationEvidenceSectionText(source.volume_and_capital, ['summary', 'state', 'signal', 'reasons', 'capital_labels']),
+      resonance: recommendationEvidenceSectionText(source.market_and_sector, ['summary', 'state', 'signal', 'reasons', 'sector_labels']),
+      risk: riskLabels.join(' · ') || '本期未登记可展示风险标签',
+      validation: recommendationEvidenceSectionText(source.historical_validation, ['summary', 'sample_gate', 'warning', 'reasons']),
+    };
+  }
+
+  function renderCandidateEvidenceCell(primary, secondary) {
+    return '<strong>' + escapeHtml(primary || '--') + '</strong>'
+      + (secondary ? '<small>' + escapeHtml(secondary) + '</small>' : '');
+  }
+
+  function renderCandidateEvidenceComparison(viewKey, data) {
+    var projection = getRecommendationEvidenceProjection(data);
+    var boundary = '<p class="candidate-evidence-boundary">保持正式池原顺序；排序靠前不等于决策门槛更高，正式动作仍以唯一正式合同为准。</p>';
+    if (!projection) {
+      return boundary + '<div class="candidate-evidence-empty">本期未提供证据展示</div>';
+    }
+    var rows = getEvidenceRowsForView(viewKey, data).map(normalizeCandidateEvidenceRow);
+    if (!rows.length) {
+      return boundary + '<div class="candidate-evidence-empty">本期未选出推荐票</div>';
+    }
+    var headers = [
+      '候选', '唯一正式动作', '决策分', '池内排序证据', '价格位置',
+      '日线结构', '30分钟确认', '量价与资金', '市场与板块', '风险与下一步', '历史验证',
+    ];
+    var tableRows = rows.map(function (row) {
+      return '<tr>'
+        + '<th scope="row">' + renderCandidateEvidenceCell(row.name || row.code, [row.code, row.sector].filter(Boolean).join(' · ')) + '</th>'
+        + '<td>' + renderCandidateEvidenceCell(row.action, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.decision, [row.decisionCode, row.decisionComponents].filter(Boolean).join(' · ')) + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.rank + ' · ' + row.rankScore, row.rankNote) + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.prices, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.daily, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.sublevel, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.volume, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.resonance, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.risk, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.validation, '') + '</td>'
+        + '</tr>';
+    }).join('');
+    var tickets = rows.map(function (row) {
+      var facts = [
+        ['唯一正式动作', row.action],
+        ['决策分', [row.decision, row.decisionComponents].filter(Boolean).join(' · ')],
+        ['池内排序证据', row.rank + ' · ' + row.rankScore + ' · ' + row.rankNote],
+        ['价格位置', row.prices],
+        ['日线结构', row.daily],
+        ['30分钟确认', row.sublevel],
+        ['量价与资金', row.volume],
+        ['市场与板块', row.resonance],
+        ['风险与下一步', row.risk],
+        ['历史验证', row.validation],
+      ];
+      return '<article class="candidate-evidence-ticket">'
+        + '<header><strong>' + escapeHtml(row.name || row.code) + '</strong><small>'
+        + escapeHtml([row.code, row.sector].filter(Boolean).join(' · ')) + '</small></header>'
+        + '<dl>' + facts.map(function (fact) {
+          return '<div><dt>' + escapeHtml(fact[0]) + '</dt><dd>' + escapeHtml(fact[1] || '--') + '</dd></div>';
+        }).join('') + '</dl></article>';
+    }).join('');
+    return boundary
+      + '<div class="candidate-evidence-table-wrap" role="region" tabindex="0" aria-label="候选证据比较表"><table class="candidate-evidence-table">'
+      + '<thead><tr>' + headers.map(function (header) { return '<th scope="col">' + escapeHtml(header) + '</th>'; }).join('') + '</tr></thead>'
+      + '<tbody>' + tableRows + '</tbody></table></div>'
+      + '<div class="candidate-evidence-ticket-list">' + tickets + '</div>';
+  }
+
+  function renderCandidateEvidenceComparisonMount() {
+    if (!nodes.candidateEvidenceComparison) return '';
+    var body = nodes.candidateEvidenceComparison.querySelector('.candidate-evidence-comparison-body');
+    var html = renderCandidateEvidenceComparison(state.currentView, state.data);
+    if (body) body.innerHTML = html;
+    return html;
   }
 
   function selectCandidateRowTags(item, viewKey) {
@@ -2920,9 +3139,6 @@
     if (score === null) {
       score = safeNumber(decision.final_score, null);
     }
-    if (score === null) {
-      score = safeNumber(decision.opportunity_score, null);
-    }
 
     var parts = [];
     if (score !== null) {
@@ -2949,13 +3165,359 @@
     return parts.join('；');
   }
 
+  function getCandidateRecommendationEvidence(item, data) {
+    var code = toCodeKey(item && item.code);
+    if (!code) return null;
+    var rows = getEvidenceRowsForView(state.currentView, data);
+    for (var index = 0; index < rows.length; index += 1) {
+      var row = rows[index];
+      var summary = row && typeof row.summary === 'object' ? row.summary : {};
+      if (toCodeKey(row && (row.code || summary.code)) === code) return row;
+    }
+    return null;
+  }
+
+  function getCandidateChartEvidence(item, data) {
+    var evidence = getCandidateRecommendationEvidence(item, data);
+    var derived = evidence && evidence.display_derived;
+    var chart = derived && derived.chart_evidence;
+    return chart && typeof chart === 'object' ? chart : null;
+  }
+
+  function renderRecommendationEvidenceMeta(section, fallbackDate) {
+    var value = section && typeof section === 'object' ? section : {};
+    var asOf = normalizeString(value.as_of || fallbackDate).trim() || '未随本期提供';
+    var source = normalizeString(value.source).trim() || '未随本期提供';
+    var reason = recommendationEvidenceReason(value);
+    return '<div class="recommendation-evidence-meta">'
+      + '<span>状态：<strong>' + escapeHtml(recommendationEvidenceStatus(value)) + '</strong></span>'
+      + '<span>截至：<strong>' + escapeHtml(asOf) + '</strong></span>'
+      + '<span>来源：<strong>' + escapeHtml(source) + '</strong></span>'
+      + (reason ? '<small>审计说明：' + escapeHtml(reason) + '</small>' : '')
+      + '</div>';
+  }
+
+  function renderRecommendationEvidenceModule(number, title, section, body, fallbackDate) {
+    var titleId = 'evidence-module-' + normalizeString(number).trim();
+    return '<section class="detail-section recommendation-evidence-module" data-evidence-module="'
+      + escapeHtml(number) + '" aria-labelledby="' + escapeHtml(titleId) + '">'
+      + '<h3 id="' + escapeHtml(titleId) + '" class="detail-section-title">' + escapeHtml(number + ' ' + title) + '</h3>'
+      + '<div class="detail-section-body">' + body + '</div>'
+      + renderRecommendationEvidenceMeta(section, fallbackDate)
+      + '</section>';
+  }
+
+  function evidencePositiveNumber(value) {
+    var number = Number(value);
+    return Number.isFinite(number) && number > 0 ? number : null;
+  }
+
+  function renderRecommendationEvidenceHeader(evidence, incidentReview) {
+    var summary = evidence && typeof evidence.summary === 'object' ? evidence.summary : {};
+    var code = normalizeString(evidence && (evidence.code || summary.code)).trim();
+    var name = normalizeString(summary.name).trim() || code || '未命名';
+    var sector = normalizeString(summary.sector).trim();
+    var action = incidentReview
+      ? '仅追溯 · 评分不生效'
+      : (normalizeString(summary.formal_action).trim() || '本期未声明正式动作');
+    return '<div class="detail-header recommendation-evidence-header">'
+      + '<div><h2 class="detail-title">' + escapeHtml(name) + '</h2>'
+      + '<p class="detail-subtitle">' + escapeHtml([code, sector].filter(Boolean).join(' · ')) + '</p></div>'
+      + '<div class="decision-header-action"><span class="formal-action '
+      + escapeHtml(incidentReview ? 'is-neutral' : getActionPillClass(action)) + '">'
+      + escapeHtml(incidentReview ? action : '正式动作：' + action) + '</span></div>'
+      + '</div>';
+  }
+
+  function renderRecommendationConclusion(evidence, incidentReview) {
+    var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
+    var decision = evidence.decision_score && typeof evidence.decision_score === 'object' ? evidence.decision_score : {};
+    var components = decision.components && typeof decision.components === 'object' ? decision.components : {};
+    var rank = evidence.rank_evidence && typeof evidence.rank_evidence === 'object' ? evidence.rank_evidence : {};
+    var componentLabels = { structure: '结构', position: '位置', sentiment: '情绪' };
+    var componentHtml = ['structure', 'position', 'sentiment'].map(function (key) {
+      var component = components[key] && typeof components[key] === 'object' ? components[key] : {};
+      var score = component.score;
+      var reasons = recommendationEvidenceList(component.reasons);
+      return '<div><span>' + escapeHtml(componentLabels[key]) + '</span><strong>'
+        + escapeHtml(isRecommendationEvidenceFiniteNumber(score) ? recommendationEvidenceNumber(score) : '--') + '</strong>'
+        + (reasons.length ? '<small>' + escapeHtml(reasons.join(' · ')) + '</small>' : '') + '</div>';
+    }).join('');
+    var decisionScore = decision.score;
+    var rankScore = rank.opportunity_score;
+    var viewRank = rank.view_rank;
+    var body = renderRecommendationEvidenceHeader(evidence, incidentReview)
+      + (normalizeString(summary.formal_action_reason).trim()
+        ? '<p class="recommendation-conclusion-reason">' + escapeHtml(summary.formal_action_reason) + '</p>' : '')
+      + '<div class="recommendation-score-split">'
+      + '<section><span>决策分</span><strong>'
+      + escapeHtml(!incidentReview && isRecommendationEvidenceFiniteNumber(decisionScore) ? recommendationEvidenceNumber(decisionScore) : '本期未提供')
+      + '</strong><small>' + escapeHtml(incidentReview ? '事故复盘评分不生效' : (normalizeString(decision.decision_code).trim() || '未提供决策代码')) + '</small>'
+      + '<div class="recommendation-component-grid">' + componentHtml + '</div></section>'
+      + '<section><span>排序证据</span><strong>'
+      + escapeHtml(isRecommendationEvidenceFiniteNumber(viewRank) ? '池内 #' + recommendationEvidenceNumber(viewRank) : '池内名次 --')
+      + '</strong><small>'
+      + escapeHtml(isRecommendationEvidenceFiniteNumber(rankScore) ? '排序分 ' + recommendationEvidenceNumber(rankScore) : '排序分未提供')
+      + '</small><p>' + escapeHtml(normalizeString(rank.note).trim() || '仅用于当前池内排序') + '</p></section>'
+      + '</div>';
+    return body;
+  }
+
+  function renderRecommendationPriceEvidence(evidence) {
+    var prices = evidence.price_evidence && typeof evidence.price_evidence === 'object' ? evidence.price_evidence : {};
+    var derived = evidence.display_derived && typeof evidence.display_derived === 'object' ? evidence.display_derived : {};
+    var fields = [
+      ['现价', 'current_price', '本期未形成可验证现价'],
+      ['参考价', 'reference_price', '本期未形成可验证参考价'],
+      ['压力位', 'pressure_price', '本期未形成可验证压力位'],
+      ['失效位', 'invalidation_price', '本期未形成可验证失效位'],
+    ];
+    var cells = fields.map(function (field) {
+      var number = evidencePositiveNumber(prices[field[1]]);
+      return '<div class="price-cell"><div class="price-label">' + escapeHtml(field[0]) + '</div>'
+        + '<div class="price-value">' + escapeHtml(number === null ? field[2] : recommendationEvidenceNumber(number, 2)) + '</div></div>';
+    }).join('');
+    var targets = asArray(prices.trailing_targets).map(function (target) {
+      var source = target && typeof target === 'object' ? target : { price: target };
+      var price = evidencePositiveNumber(source.price);
+      if (price === null) return '';
+      var label = normalizeString(source.label).trim();
+      return (label ? label + ' ' : '') + recommendationEvidenceNumber(price, 2);
+    }).filter(Boolean);
+    var distance = derived.distance_from_reference_pct;
+    return '<div class="detail-price-grid">' + cells + '</div>'
+      + '<div class="recommendation-price-notes">'
+      + '<span>' + escapeHtml(isRecommendationEvidenceFiniteNumber(distance) ? '距参考价 ' + recommendationEvidenceNumber(distance, 2) + '%' : '距参考价未形成可验证计算') + '</span>'
+      + '<span>' + escapeHtml(targets.length ? '分级目标：' + targets.join(' · ') : '本期未形成分级目标') + '</span>'
+      + '</div>';
+  }
+
+  function evidenceFact(section, key, label) {
+    var value = section && typeof section === 'object' ? section[key] : null;
+    if (value === null || typeof value === 'undefined' || value === '') return '';
+    if (Array.isArray(value)) {
+      value = recommendationEvidenceList(value).join(' · ');
+    } else if (value && typeof value === 'object') {
+      return '';
+    }
+    if (value === '') return '';
+    return '<div><dt>' + escapeHtml(label) + '</dt><dd>' + escapeHtml(value) + '</dd></div>';
+  }
+
+  function renderEvidenceFactGrid(section, specs, missingCopy) {
+    var facts = asArray(specs).map(function (spec) {
+      return evidenceFact(section, spec[0], spec[1]);
+    }).filter(Boolean);
+    var reasons = recommendationEvidenceList(section && section.reasons);
+    if (reasons.length) {
+      facts.push('<div><dt>证据</dt><dd>' + escapeHtml(reasons.join(' · ')) + '</dd></div>');
+    }
+    return facts.length
+      ? '<dl class="recommendation-evidence-facts">' + facts.join('') + '</dl>'
+      : '<p class="recommendation-evidence-missing">' + escapeHtml(missingCopy) + '</p>';
+  }
+
+  function renderSublevelEvidence(section) {
+    var reason = recommendationEvidenceReason(section);
+    var missingCopy = reason === 'minute_data_not_serialized'
+      ? '30分钟数据未序列化'
+      : '本期未提供可验证的30分钟确认证据';
+    return renderEvidenceFactGrid(section, [
+      ['summary', '结论'], ['state', '状态'], ['confirmation_status', '确认状态'],
+      ['confirm_date', '确认时间'], ['confirm_age_days', '确认年龄'],
+      ['latest_bar_at', '最新K线'], ['ema_alignment', '均线状态'], ['macd_state', 'MACD'],
+    ], missingCopy);
+  }
+
+  function conditionItems(section, key, label) {
+    var block = section && section[key] && typeof section[key] === 'object' ? section[key] : {};
+    var items = recommendationEvidenceList(block.items);
+    var empty = normalizeString(block.empty_text).trim();
+    return '<section><h4>' + escapeHtml(label) + '</h4>'
+      + (items.length
+        ? '<ul>' + items.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
+        : '<p>' + escapeHtml(empty || '当前策略未声明该条件') + '</p>')
+      + '</section>';
+  }
+
+  function renderRiskAndNextEvidence(section) {
+    var risks = recommendationEvidenceList(section && section.risk_labels);
+    return '<div class="recommendation-risk-summary">'
+      + (risks.length ? '<strong>' + escapeHtml(risks.join(' · ')) + '</strong>' : '<strong>本期未登记可展示风险标签</strong>')
+      + '</div><div class="recommendation-condition-grid">'
+      + conditionItems(section, 'next_confirmation', '下一确认')
+      + conditionItems(section, 'keep_conditions', '继续保持')
+      + conditionItems(section, 'retest_conditions', '等待回踩')
+      + conditionItems(section, 'cancel_conditions', '取消或降级')
+      + conditionItems(section, 'invalidation_conditions', '结构失效')
+      + '</div>';
+  }
+
+  function renderMainRiseClue(section) {
+    var value = section && typeof section === 'object' ? section : {};
+    var label = normalizeString(value.label).trim() || '尚未形成主升浪线索';
+    var supporting = recommendationEvidenceList(value.supporting_evidence);
+    var opposing = recommendationEvidenceList(value.opposing_evidence);
+    var note = normalizeString(value.note).trim()
+      || '只翻译现有证据，不生成策略、分数或正式动作';
+    function evidenceSide(title, items, emptyCopy) {
+      return '<section><h5>' + escapeHtml(title) + '</h5>'
+        + (items.length
+          ? '<ul>' + items.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>'
+          : '<p>' + escapeHtml(emptyCopy) + '</p>')
+        + '</section>';
+    }
+    return '<aside class="recommendation-main-rise-clue" data-clue-type="'
+      + escapeHtml(normalizeString(value.clue_type).trim() || 'none') + '">'
+      + '<header><span>主升浪线索</span><strong>' + escapeHtml(label) + '</strong></header>'
+      + '<div class="recommendation-main-rise-sides">'
+      + evidenceSide('支持证据', supporting, '本期未提供支持证据')
+      + evidenceSide('反对证据', opposing, '本期未提供反对证据')
+      + '</div><small>' + escapeHtml(note) + '</small>'
+      + '</aside>';
+  }
+
+  function historicalMetricText(label, value) {
+    if (!isRecommendationEvidenceFiniteNumber(value)) return '';
+    var number = Number(value).toFixed(2)
+      .replace(/(\.\d*?[1-9])0+$/, '$1')
+      .replace(/\.0+$/, '');
+    return label + ' ' + number + '%';
+  }
+
+  function renderHistoricalHorizon(horizonKey, progress, metrics) {
+    var horizon = normalizeString(horizonKey).toUpperCase().replace('T', 'T+');
+    var gate = progress && typeof progress === 'object' ? progress : {};
+    var values = metrics && typeof metrics === 'object' ? metrics : {};
+    var mature = isRecommendationEvidenceFiniteNumber(gate.mature_samples) ? Number(gate.mature_samples) : null;
+    var requiredMature = isRecommendationEvidenceFiniteNumber(gate.required_mature_samples) ? Number(gate.required_mature_samples) : null;
+    var activeDates = isRecommendationEvidenceFiniteNumber(gate.active_dates) ? Number(gate.active_dates) : null;
+    var requiredDates = isRecommendationEvidenceFiniteNumber(gate.required_active_dates) ? Number(gate.required_active_dates) : null;
+    var activeMonths = isRecommendationEvidenceFiniteNumber(gate.active_months) ? Number(gate.active_months) : null;
+    var requiredMonths = isRecommendationEvidenceFiniteNumber(gate.required_calendar_months) ? Number(gate.required_calendar_months) : null;
+    var waiting = isRecommendationEvidenceFiniteNumber(gate.waiting_samples) ? Number(gate.waiting_samples) : null;
+    var unavailable = isRecommendationEvidenceFiniteNumber(gate.unavailable_samples) ? Number(gate.unavailable_samples) : null;
+    var progressParts = [];
+    if (mature !== null && requiredMature !== null) {
+      progressParts.push(escapeHtml(recommendationEvidenceNumber(mature)) + ' / ' + escapeHtml(recommendationEvidenceNumber(requiredMature)) + ' 成熟样本');
+    }
+    if (activeDates !== null && requiredDates !== null) {
+      progressParts.push(escapeHtml(recommendationEvidenceNumber(activeDates)) + ' / ' + escapeHtml(recommendationEvidenceNumber(requiredDates)) + ' 活跃日');
+    }
+    if (activeMonths !== null && requiredMonths !== null) {
+      progressParts.push(escapeHtml(recommendationEvidenceNumber(activeMonths)) + ' / ' + escapeHtml(recommendationEvidenceNumber(requiredMonths)) + ' 自然月');
+    }
+    if (waiting !== null && waiting > 0) progressParts.push('等待成熟 ' + escapeHtml(recommendationEvidenceNumber(waiting)));
+    if (unavailable !== null && unavailable > 0) progressParts.push('缺少目标日行情 ' + escapeHtml(recommendationEvidenceNumber(unavailable)));
+
+    var ready = normalizeString(gate.status).trim() === 'ready_for_manual_comparison';
+    var metricParts = ready ? [
+      historicalMetricText('均值', values.mean),
+      historicalMetricText('中位数', values.median),
+      historicalMetricText('上涨率', values.win_rate),
+      historicalMetricText('基准超额', values.excess_mean),
+      historicalMetricText('MFE', values.mean_mfe),
+      historicalMetricText('MAE', values.mean_mae),
+      historicalMetricText('最差', values.max_drawdown),
+    ].filter(Boolean) : [];
+    return '<section class="recommendation-history-horizon" data-history-horizon="'
+      + escapeHtml(normalizeString(horizonKey).toLowerCase()) + '">'
+      + '<header><strong>' + escapeHtml(horizon) + '</strong><span>'
+      + escapeHtml(ready ? '达到人工比较门槛' : '样本进度') + '</span></header>'
+      + (progressParts.length
+        ? '<p>' + progressParts.join(' · ') + '</p>'
+        : '<p>样本门合同未完整提供</p>')
+      + (metricParts.length
+        ? '<div class="recommendation-history-metrics">' + metricParts.map(function (item) {
+          return '<span>' + escapeHtml(item) + '</span>';
+        }).join('') + '</div>'
+        : '')
+      + '</section>';
+  }
+
+  function renderSimulationTracking(tracking) {
+    var value = tracking && typeof tracking === 'object' ? tracking : {};
+    var status = normalizeString(value.status).trim() || 'missing';
+    var label = status === 'missing'
+      ? '暂无同合同历史跟踪记录'
+      : '策略模拟跟踪';
+    if (status === 'missing') {
+      return '<aside class="recommendation-simulation-tracking is-missing"><strong>'
+        + escapeHtml(label) + '</strong></aside>';
+    }
+    var facts = [];
+    var signalDate = normalizeString(value.signal_date).trim();
+    var entryMode = normalizeString(value.entry_mode).trim();
+    var entryPrice = evidencePositiveNumber(value.entry_price);
+    var entrySource = normalizeString(value.entry_price_source).trim();
+    if (signalDate) facts.push('信号日 ' + signalDate);
+    if (entryMode) facts.push('入场方式 ' + entryMode);
+    if (entryPrice !== null && entrySource) {
+      facts.push('规则入场价 ' + recommendationEvidenceNumber(entryPrice, 2));
+      facts.push('价格来源 ' + entrySource);
+    } else if (status === 'entry_mode_unknown') {
+      facts.push('入场方式未通过合同验证，不生成模拟入场价');
+    } else {
+      facts.push('本期未提供已验证的模拟入场价');
+    }
+    return '<aside class="recommendation-simulation-tracking"><strong>'
+      + escapeHtml(label) + '</strong><p>' + escapeHtml(facts.join(' · ')) + '</p></aside>';
+  }
+
+  function renderHistoricalValidation(section) {
+    var value = section && typeof section === 'object' ? section : {};
+    var summary = normalizeString(value.summary).trim() || '本期未提供历史验证结果';
+    var identity = value.comparison_identity && typeof value.comparison_identity === 'object'
+      ? value.comparison_identity : {};
+    var progress = value.progress_by_horizon && typeof value.progress_by_horizon === 'object'
+      ? value.progress_by_horizon : {};
+    var metrics = value.metrics_by_horizon && typeof value.metrics_by_horizon === 'object'
+      ? value.metrics_by_horizon : {};
+    var identityParts = [];
+    if (normalizeString(identity.strategy).trim()) identityParts.push('策略 ' + normalizeString(identity.strategy).trim());
+    if (normalizeString(identity.version).trim()) identityParts.push('版本 ' + normalizeString(identity.version).trim());
+    if (normalizeString(identity.source_pool).trim()) identityParts.push('来源池 ' + normalizeString(identity.source_pool).trim());
+    if (normalizeString(identity.entry_mode).trim()) identityParts.push('入场方式 ' + normalizeString(identity.entry_mode).trim());
+    if ([1, 3, 5].indexOf(Number(identity.intended_horizon)) !== -1) {
+      identityParts.push('声明周期 T+' + Number(identity.intended_horizon));
+    } else {
+      identityParts.push('策略未声明统一周期');
+    }
+    if (normalizeString(identity.research_tier).trim()) identityParts.push('研究层级 ' + normalizeString(identity.research_tier).trim());
+    return '<div class="recommendation-historical-validation">'
+      + '<p class="recommendation-history-summary">' + escapeHtml(summary) + '</p>'
+      + (identityParts.length ? '<p class="recommendation-history-identity">' + escapeHtml(identityParts.join(' · ')) + '</p>' : '')
+      + '<div class="recommendation-history-horizons">'
+      + ['t1', 't3', 't5'].map(function (key) {
+        return renderHistoricalHorizon(key, progress[key], metrics[key]);
+      }).join('')
+      + '</div>'
+      + renderSimulationTracking(value.simulation_tracking)
+      + '</div>';
+  }
+
+  function renderRecommendationEvidenceAudit(evidence, fallbackDate) {
+    var keys = [
+      'summary', 'decision_score', 'rank_evidence', 'price_evidence', 'daily_structure',
+      'sublevel_30m', 'volume_and_capital', 'market_and_sector', 'risk_and_next',
+      'main_rise_clue', 'historical_validation', 'display_derived',
+    ];
+    return '<details class="evidence-audit-drawer"><summary>证据与审计</summary>'
+      + '<div class="evidence-audit-body recommendation-evidence-audit">'
+      + keys.map(function (key) {
+        var section = evidence[key] && typeof evidence[key] === 'object' ? evidence[key] : {};
+        return '<div><strong>' + escapeHtml(key) + '</strong>'
+          + renderRecommendationEvidenceMeta(section, fallbackDate) + '</div>';
+      }).join('') + '</div></details>';
+  }
+
   function buildChartPlaceholder(item) {
     var helpText = isIncidentReviewItem(item)
       ? '图钉、信号与参考线均为事故前原始证据，仅供追溯；信号日收盘仍使用已核验日线。'
       : '图钉为买点/信号标记，虚线为参考价和现价；拖动或滚动底部缩放条查看细节。';
     return ''
       + '<div class="detail-section">'
-      + '  <h3 class="detail-section-title">03 图表</h3>'
+      + '  <h3 class="detail-section-title">K线图表</h3>'
       + '  <div class="chart-panel">'
       + '    <div class="chart-toolbar"><div class="chart-help">' + escapeHtml(helpText) + '</div>'
       + '      <div class="chart-layer-switcher" id="chartLayerSwitcher" aria-label="K线图层"></div></div>'
@@ -2966,11 +3528,50 @@
   }
 
   function buildMergedCandidateDetail(item, raw) {
+    var evidence = getCandidateRecommendationEvidence(item, state.data);
+    if (!evidence) {
+      return '<div class="detail-empty-wrap merged-candidate-detail">'
+        + '<div class="detail-empty"><strong>本期未提供证据展示</strong></div>'
+        + buildChartPlaceholder(item)
+        + '</div>';
+    }
+    var projection = getRecommendationEvidenceProjection(state.data) || {};
+    var reportDate = normalizeString(projection.report_date).trim();
+    var incidentReview = isIncidentReviewItem(item);
+    var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
+    var price = evidence.price_evidence && typeof evidence.price_evidence === 'object' ? evidence.price_evidence : {};
+    var daily = evidence.daily_structure && typeof evidence.daily_structure === 'object' ? evidence.daily_structure : {};
+    var sublevel = evidence.sublevel_30m && typeof evidence.sublevel_30m === 'object' ? evidence.sublevel_30m : {};
+    var volume = evidence.volume_and_capital && typeof evidence.volume_and_capital === 'object' ? evidence.volume_and_capital : {};
+    var resonance = evidence.market_and_sector && typeof evidence.market_and_sector === 'object' ? evidence.market_and_sector : {};
+    var mainRise = evidence.main_rise_clue && typeof evidence.main_rise_clue === 'object' ? evidence.main_rise_clue : {};
+    var risk = evidence.risk_and_next && typeof evidence.risk_and_next === 'object' ? evidence.risk_and_next : {};
+    var validation = evidence.historical_validation && typeof evidence.historical_validation === 'object' ? evidence.historical_validation : {};
     return '<div class="detail-empty-wrap merged-candidate-detail">'
-      + buildDecisionHeader(item, raw)
+      + renderRecommendationEvidenceModule('01', '推荐结论', summary, renderRecommendationConclusion(evidence, incidentReview), reportDate)
+      + renderRecommendationEvidenceModule('02', '价格与关键位置', price, renderRecommendationPriceEvidence(evidence), reportDate)
       + buildChartPlaceholder(item)
-      + buildDecisionSummaryColumns(item, raw)
-      + buildEvidenceAuditDrawer(item, raw)
+      + renderRecommendationEvidenceModule('03', '日线结构', daily, renderEvidenceFactGrid(daily, [
+        ['summary', '结论'], ['trend', '趋势'], ['stage', '阶段'], ['signal', '信号'],
+        ['signal_date', '信号日期'], ['signal_age_days', '信号年龄'], ['health', '数据状态'],
+        ['ma5', 'MA5'], ['ma10', 'MA10'], ['ma20', 'MA20'], ['ma50', 'MA50'], ['macd', 'MACD'],
+      ], '本期未提供可验证的日线结构证据') + renderMainRiseClue(mainRise), reportDate)
+      + renderRecommendationEvidenceModule('04', '30分钟确认', sublevel, renderSublevelEvidence(sublevel), reportDate)
+      + renderRecommendationEvidenceModule('05', '量价与资金', volume, renderEvidenceFactGrid(volume, [
+        ['summary', '结论'], ['current_volume', '当日成交量'],
+        ['average_volume_5', '5日平均成交量'], ['volume20', '20日平均成交量'],
+        ['volume_ratio', '买点量比'], ['ratio20', '20日量比'],
+        ['money20_text', '20日平均成交额'], ['stock_money_flow', '个股资金'],
+        ['sector_money_flow_text', '板块资金'], ['capital_state', '资金边界'],
+      ], '本期未提供可验证的量价与资金证据'), reportDate)
+      + renderRecommendationEvidenceModule('06', '市场与板块共振', resonance, renderEvidenceFactGrid(resonance, [
+        ['summary', '结论'], ['market', '正式市场情绪'], ['market_label', '市场标签'],
+        ['market_sentiment_score', '正式情绪分'], ['sector', '板块状态'], ['sector_state', '板块结论'],
+        ['sector_support', '支持证据'], ['sector_risk', '风险证据'],
+      ], '本期未提供可验证的市场与板块共振证据'), reportDate)
+      + renderRecommendationEvidenceModule('07', '风险与下一步', risk, renderRiskAndNextEvidence(risk), reportDate)
+      + renderRecommendationEvidenceModule('08', '历史验证与回测提醒', validation, renderHistoricalValidation(validation), reportDate)
+      + renderRecommendationEvidenceAudit(evidence, reportDate)
       + '</div>';
   }
 
@@ -2997,7 +3598,7 @@
     var priorities = { invalidation: 0, current: 1, reference: 2, pressure: 3 };
     var candidates = asArray(labels).map(function (label) {
       var value = safeNumber(label && label.value, null);
-      if (value === null) return null;
+      if (value === null || !Number.isFinite(value) || value <= 0) return null;
       return {
         kind: normalizeString(label.kind),
         kinds: [normalizeString(label.kind)],
@@ -3152,6 +3753,25 @@
     if (lane.classList) lane.classList.toggle('hidden', false);
   }
 
+  function isChartPositivePrice(value) {
+    var number = safeNumber(value, null);
+    return number !== null && Number.isFinite(number) && number > 0;
+  }
+
+  function hasRealMacdEvidence(values) {
+    return asArray(values).some(function (value) {
+      var number = safeNumber(value, null);
+      return number !== null && Number.isFinite(number) && Math.abs(number) > 1e-9;
+    });
+  }
+
+  function chartProjectionAllowsPrice(chartEvidence, field, value) {
+    if (!isChartPositivePrice(value)) return false;
+    var prices = chartEvidence && chartEvidence.prices;
+    if (!prices || !Array.isArray(prices.available)) return true;
+    return prices.available.indexOf(field) !== -1;
+  }
+
   function formatPersistentPriceLabel(label) {
     var shortLabels = { invalidation: '止', current: '现', reference: '参', pressure: '压' };
     var kinds = asArray(label && label.kinds).length ? asArray(label.kinds) : [label && label.kind];
@@ -3159,11 +3779,31 @@
     return (prefix || '价') + ' ' + formatNumber(label && label.value, 2);
   }
 
-  function selectStructureChartLines(rawMarkLines) {
-    return asArray(rawMarkLines).map(function (line) {
+  function selectStructureChartLines(rawMarkLines, raw) {
+    var sourceLines = asArray(rawMarkLines).slice();
+    var record = raw && typeof raw === 'object' ? raw : {};
+    var pivots = record.pivots && typeof record.pivots === 'object' ? record.pivots : {};
+    [
+      {
+        name: 'ZG',
+        value: isChartPositivePrice(record.pivot_zg) ? record.pivot_zg : pivots.ZG,
+      },
+      {
+        name: 'ZD',
+        value: isChartPositivePrice(record.pivot_zd) ? record.pivot_zd : pivots.ZD,
+      },
+    ].forEach(function (pivot) {
+      if (!isChartPositivePrice(pivot.value)) return;
+      var alreadyPresent = sourceLines.some(function (line) {
+        return normalizeString(line && line.name).trim().toUpperCase() === pivot.name
+          && isChartPositivePrice(line && line.yAxis);
+      });
+      if (!alreadyPresent) sourceLines.push({ name: pivot.name, yAxis: pivot.value });
+    });
+    return sourceLines.map(function (line) {
       var name = normalizeString(line && line.name).trim().toUpperCase();
       var value = safeNumber(line && line.yAxis, null);
-      if ((name !== 'ZG' && name !== 'ZD') || value === null || !Number.isFinite(value)) return null;
+      if ((name !== 'ZG' && name !== 'ZD') || !isChartPositivePrice(value)) return null;
       var isUpper = name === 'ZG';
       return {
         name: name,
@@ -3190,7 +3830,7 @@
     if (asArray(annotations.markPoints).length || asArray(annotations.markLines).length
         || source.formal_decision_contract) layers.push('decision');
     if (asArray(source.buy_points).length || asArray(source.reference_buy_points).length
-        || source.structure_annotations || selectStructureChartLines(annotations.markLines).length) layers.push('structure');
+        || source.structure_annotations || selectStructureChartLines(annotations.markLines, source).length) layers.push('structure');
     if (asArray(source.ema5).length || asArray(source.ema20).length
         || asArray(source.ma5).length || asArray(source.ma20).length) layers.push('trend');
     if (!layers.length) layers.push('decision');
@@ -3205,7 +3845,9 @@
     if (layers.indexOf(state.chartLayer) === -1) state.chartLayer = layers[0];
     mount.innerHTML = layers.map(function (layer) {
       return '<button type="button" data-chart-layer="' + escapeHtml(layer) + '" class="'
-        + (layer === state.chartLayer ? 'is-active' : '') + '">' + escapeHtml(labels[layer]) + '</button>';
+        + (layer === state.chartLayer ? 'is-active' : '') + '" aria-pressed="'
+        + (layer === state.chartLayer ? 'true' : 'false') + '" aria-label="切换K线图层：'
+        + escapeHtml(labels[layer]) + '">' + escapeHtml(labels[layer]) + '</button>';
     }).join('');
     var buttons = mount.querySelectorAll('[data-chart-layer]');
     for (var i = 0; i < buttons.length; i += 1) {
@@ -3261,14 +3903,23 @@
 
     function tailAlignChartSeries(values, targetLength, missingValue) {
       var source = asArray(values).slice(-targetLength).map(function (value) {
-        return safeNumber(value, missingValue);
+        var number = safeNumber(value, missingValue);
+        return number !== null && Number.isFinite(number) ? number : missingValue;
       });
       while (source.length < targetLength) source.unshift(missingValue);
       return source;
     }
 
     var volumeSlice = tailAlignChartSeries(volumes, minLen, null);
-    var macdSlice = tailAlignChartSeries(macd, minLen, 0);
+    var chartEvidence = getCandidateChartEvidence(workspaceItem, state.data);
+    var projectedMacd = chartEvidence && chartEvidence.macd;
+    var macdAvailable = projectedMacd
+      ? normalizeString(projectedMacd.status).trim() === 'available'
+        && hasRealMacdEvidence(macd)
+      : hasRealMacdEvidence(macd);
+    var macdSlice = macdAvailable
+      ? tailAlignChartSeries(macd, minLen, null)
+      : Array(minLen).fill(null);
 
     var markPoints = [];
     var incidentReview = isIncidentReviewItem(workspaceItem);
@@ -3303,7 +3954,7 @@
 
     var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
-    var structureLines = selectStructureChartLines(rawMarkLines);
+    var structureLines = selectStructureChartLines(rawMarkLines, raw);
     for (var l = 0; l < rawMarkLines.length; l += 1) {
       var ml = rawMarkLines[l] || {};
       if (incidentReview) continue;
@@ -3313,8 +3964,12 @@
           ? 'invalidation'
           : (/压力/.test(rawLineName)
             ? 'pressure'
-            : (/参考/.test(rawLineName) ? 'reference' : (/现价|收盘/.test(rawLineName) ? 'current' : '')));
-        if (rawKind) priceLabelCandidates.push({ kind: rawKind, value: ml.yAxis, label: rawLineName });
+            : (/参考|source/i.test(rawLineName)
+              ? 'reference'
+              : (/现价|收盘|current/i.test(rawLineName) ? 'current' : '')));
+        if (rawKind && chartProjectionAllowsPrice(chartEvidence, rawKind + '_price', ml.yAxis)) {
+          priceLabelCandidates.push({ kind: rawKind, value: ml.yAxis, label: rawLineName });
+        }
       }
     }
 
@@ -3329,21 +3984,21 @@
     if (refPrice === null && raw && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
       refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
     }
-    if (refPrice !== null) {
+    if (chartProjectionAllowsPrice(chartEvidence, 'reference_price', refPrice)) {
       priceLabelCandidates.push({
         kind: 'reference',
         value: refPrice,
         label: incidentReview ? '事故前参考·仅追溯' : '参考价',
       });
     }
-    if (curPrice !== null) {
+    if (chartProjectionAllowsPrice(chartEvidence, 'current_price', curPrice)) {
       priceLabelCandidates.push({ kind: 'current', value: curPrice, label: '信号日收盘' });
     }
     var formalContract = workspaceItem && workspaceItem.formal_decision_contract || raw.formal_decision_contract || {};
-    if (safeNumber(formalContract.invalidation_price, null) !== null) {
+    if (chartProjectionAllowsPrice(chartEvidence, 'invalidation_price', formalContract.invalidation_price)) {
       priceLabelCandidates.push({ kind: 'invalidation', value: formalContract.invalidation_price, label: '失效位' });
     }
-    if (safeNumber(formalContract.pressure_price, null) !== null) {
+    if (chartProjectionAllowsPrice(chartEvidence, 'pressure_price', formalContract.pressure_price)) {
       priceLabelCandidates.push({ kind: 'pressure', value: formalContract.pressure_price, label: '压力位' });
     }
     var persistentLabels = selectPersistentPriceLabels(priceLabelCandidates);
@@ -3581,7 +4236,8 @@
       + '  <div class="market-temp-trend">'
       + '    <div id="marketSentimentChart" class="market-sentiment-chart" aria-label="最近20个交易日市场情绪折线图"></div>'
       + '  </div>'
-      + '</div>';
+      + '</div>'
+      + renderPsy12ShadowSubpanel(data || {});
     return renderDecisionCard({
       title: '市场情绪',
       subtitle: '全A宽度、涨跌停生态、成交与趋势结构',
@@ -3602,20 +4258,115 @@
     return 'PSY12 数据不足，暂不生成影子分。';
   }
 
-  function renderPsy12ShadowCard(data) {
+  function getPsy12ShadowAudit(data) {
+    var projection = getRecommendationEvidenceProjection(data);
+    if (!projection) return null;
+    var market = projection.market_sentiment;
+    if (!market || typeof market !== 'object') return null;
+    var audit = market.psy12_shadow_audit;
+    return audit && typeof audit === 'object' ? audit : null;
+  }
+
+  function renderPsy12AuditProgress(audit) {
+    var boundary = '<div class="psy12-promotion-boundary">'
+      + '<code>affects_production=false</code>'
+      + '<code>promotion_eligible=false</code>'
+      + '<strong>达到 20 个完整交易日也仍需新授权</strong>'
+      + '</div>';
+    if (!audit || typeof audit !== 'object') {
+      return '<div class="psy12-audit-progress is-missing">'
+        + '<strong>影子评测进度未随本期报告提供</strong>'
+        + '<span>不得用 PSY12 的 12 日窗口推断 20 日审计进度。</span>'
+        + '</div>' + boundary;
+    }
+    var required = isRecommendationEvidenceFiniteNumber(audit.required_days)
+      && Number(audit.required_days) > 0 ? Number(audit.required_days) : null;
+    var stored = isRecommendationEvidenceFiniteNumber(audit.stored_complete_days)
+      && Number(audit.stored_complete_days) >= 0 ? Number(audit.stored_complete_days) : null;
+    var recomputable = isRecommendationEvidenceFiniteNumber(audit.recomputable_days)
+      ? Number(audit.recomputable_days) : null;
+    var complete = isRecommendationEvidenceFiniteNumber(audit.complete_days)
+      ? Number(audit.complete_days) : null;
+    var missing = isRecommendationEvidenceFiniteNumber(audit.missing_days)
+      ? Number(audit.missing_days) : null;
+    var mismatch = isRecommendationEvidenceFiniteNumber(audit.mismatch_days)
+      ? Number(audit.mismatch_days) : null;
+    var status = normalizeString(audit.status).trim() || 'missing';
+    var statusText = {
+      insufficient_observation_days: '持续收集中',
+      ready_for_manual_review: '达到人工复核门槛',
+      recalculation_mismatch: '复算存在差异',
+      missing: '审计缺失',
+    }[status] || status;
+    var unsafeContract = audit.affects_production !== false
+      || audit.promotion_eligible !== false
+      || audit.promotion_requires_new_authorization !== true;
+    var reason = normalizeString(audit.reason).trim();
+    var asOf = normalizeString(audit.as_of_date).trim();
+    if (status === 'missing' || status === 'failed' || status === 'unavailable') {
+      return '<div class="psy12-audit-progress is-missing' + (unsafeContract ? ' is-warning' : '') + '">'
+        + '<strong>影子评测进度未随本期报告提供</strong>'
+        + '<span>不得用 PSY12 的 12 日窗口推断 20 日审计进度。</span>'
+        + '<small>状态：' + escapeHtml(statusText)
+        + (asOf ? ' · 截至 ' + escapeHtml(asOf) : '')
+        + (reason ? ' · ' + escapeHtml(reason) : '') + '</small>'
+        + (unsafeContract ? '<em>审计载荷越界，页面已强制保持影子隔离。</em>' : '')
+        + '</div>' + boundary;
+    }
+    var progress = required !== null && stored !== null
+      ? '<div class="psy12-audit-progress-value"><span>影子评测进度</span><strong>'
+        + escapeHtml(recommendationEvidenceNumber(stored)) + ' / '
+        + escapeHtml(recommendationEvidenceNumber(required)) + '</strong></div>'
+      : '<strong>影子评测进度未随本期报告提供</strong>';
+    var stats = [
+      recomputable === null ? '' : '可重算 ' + recommendationEvidenceNumber(recomputable) + ' 日',
+      complete === null ? '' : '复算一致 ' + recommendationEvidenceNumber(complete) + ' 日',
+      missing === null ? '' : '缺失 ' + recommendationEvidenceNumber(missing) + ' 日',
+      mismatch === null ? '' : '差异 ' + recommendationEvidenceNumber(mismatch) + ' 日',
+    ].filter(Boolean);
+    return '<div class="psy12-audit-progress' + (unsafeContract ? ' is-warning' : '') + '">'
+      + progress
+      + (stats.length ? '<p>' + escapeHtml(stats.join(' · ')) + '</p>' : '')
+      + '<small>状态：' + escapeHtml(statusText)
+      + (asOf ? ' · 截至 ' + escapeHtml(asOf) : '')
+      + (reason ? ' · ' + escapeHtml(reason) : '') + '</small>'
+      + (unsafeContract ? '<em>审计载荷越界，页面已强制保持影子隔离。</em>' : '')
+      + '</div>' + boundary;
+  }
+
+  function renderPsy12ShadowSubpanel(data) {
     data = data || {};
     var psy12 = data.psy12 || {};
     var shadow = data.psy12_shadow || {};
+    var auditProgress = renderPsy12AuditProgress(getPsy12ShadowAudit(data));
+    var evidence = getRecommendationEvidenceProjection(data);
+    var marketEvidence = evidence && evidence.market_sentiment
+      && typeof evidence.market_sentiment === 'object'
+      ? evidence.market_sentiment : {};
+    var projectedContract = marketEvidence.psy12_shadow_contract
+      && typeof marketEvidence.psy12_shadow_contract === 'object'
+      ? marketEvidence.psy12_shadow_contract : null;
+    var contract = projectedContract || shadow;
+    var shadowBoundaryConflict = shadow.promotion_eligible === true
+      || shadow.promotion_requires_new_authorization === false;
     var contractValid = shadow.schema_version === 1
       && shadow.mode === 'shadow'
-      && shadow.affects_production === false;
+      && shadow.affects_production === false
+      && !shadowBoundaryConflict
+      && contract.schema_version === 1
+      && contract.mode === 'shadow'
+      && contract.affects_production === false
+      && contract.promotion_eligible === false
+      && contract.promotion_requires_new_authorization === true
+      && (!projectedContract || projectedContract.status === 'available');
     if (!contractValid) {
       return renderDecisionCard({
         title: 'PSY12 影子情绪',
         subtitle: '最近 12 个有效交易日上涨持续性',
         badge: { text: '合同不可用', tone: 'danger' },
-        className: 'psy12-shadow-card',
-        bodyHtml: '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>',
+        className: 'psy12-shadow-card psy12-shadow-subpanel',
+        bodyHtml: '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>'
+          + auditProgress,
       });
     }
 
@@ -3631,12 +4382,13 @@
         title: 'PSY12 影子情绪',
         subtitle: '最近 12 个有效交易日上涨持续性',
         badge: { text: '数据不足', tone: 'neutral' },
-        className: 'psy12-shadow-card',
+        className: 'psy12-shadow-card psy12-shadow-subpanel',
         bodyHtml: ''
           + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
           + '<div class="decision-empty">'
           + escapeHtml(psy12UnavailableText(psy12.reason || shadow.reason, psy12.valid_days))
-          + '</div>',
+          + '</div>'
+          + auditProgress,
       });
     }
 
@@ -3670,14 +4422,19 @@
       + '  <div><span>差值</span><strong>' + escapeHtml((delta > 0 ? '+' : '') + formatNumber(delta, 0)) + '</strong></div>'
       + '</div>'
       + labelDifference
-      + audit;
+      + audit
+      + auditProgress;
     return renderDecisionCard({
       title: 'PSY12 影子情绪',
       subtitle: '最近 12 个有效交易日上涨持续性',
       badge: { text: '影子评测', tone: 'info' },
-      className: 'psy12-shadow-card',
+      className: 'psy12-shadow-card psy12-shadow-subpanel',
       bodyHtml: body,
     });
+  }
+
+  function renderPsy12ShadowCard(data) {
+    return renderPsy12ShadowSubpanel(data);
   }
 
   function renderMarketSentimentChart() {
@@ -5900,7 +6657,6 @@
         + renderHoldingRiskSection(source),
       research: ''
         + renderMarketTemperatureCard(source)
-        + renderPsy12ShadowCard(source)
         + renderSectorFlowCard(source)
         + renderLimitUpEcologyCard(source)
         + renderStrategyDisagreementAudit(source)
@@ -6164,6 +6920,7 @@
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
+      renderCandidateEvidenceComparisonMount();
       var first = filterCandidatesBySector(
         getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
         state.sectorFilterRefs

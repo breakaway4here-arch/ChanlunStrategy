@@ -213,6 +213,22 @@ class TestReportViewModel(unittest.TestCase):
             row["formal_decision_contract"]["action_reason"],
             "周期尚未完成确认",
         )
+
+    def test_research_view_never_exposes_a_formal_decision_contract(self):
+        pick = _fusion_pick()
+        pick["formal_decision_contract"] = {"action": "可上车"}
+
+        workspace = build_workspace(_report_data({"picks_fusion": [pick]}))
+
+        self.assertIsNotNone(
+            workspace["views"]["main"][0]["formal_decision_contract"]
+        )
+        self.assertIsNone(
+            workspace["views"]["highlights"][0].get(
+                "formal_decision_contract"
+            )
+        )
+
     def test_workspace_exposes_primary_and_research_navigation_groups(self):
         workspace = build_workspace({
             "date": "2026-08-27",

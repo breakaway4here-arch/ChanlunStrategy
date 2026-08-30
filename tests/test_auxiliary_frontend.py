@@ -43,6 +43,199 @@ __BODY__
 
 
 class TestAuxiliaryCockpitContract(unittest.TestCase):
+    def test_candidate_evidence_comparison_preserves_workspace_order(self):
+        _assert_node_contract(
+            self,
+            "({ projection: getRecommendationEvidenceProjection, rows: getEvidenceRowsForView, render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1,
+  report_date: '2026-08-28',
+  views: { main: [
+    { code: '301629', summary: { status: 'available', source: 'workspace', name: '矽电股份', formal_action: '观察' }, rank_evidence: { status: 'available', source: 'workspace', view_rank: 2, opportunity_score: 30 }, decision_score: { status: 'available', source: 'decision', score: 62, decision_code: 'recommend', components: {} } },
+    { code: '301266', summary: { status: 'available', source: 'workspace', name: '宇邦新材', formal_action: '可上车' }, rank_evidence: { status: 'available', source: 'workspace', view_rank: 1, opportunity_score: 90 }, decision_score: { status: 'available', source: 'decision', score: 63, decision_code: 'recommend', components: {} } }
+  ] }
+} };
+const rows = globalThis.__auxTest.rows('main');
+assert(rows.map(function (row) { return row.code; }).join(',') === '301629,301266', 'workspace order was changed');
+const html = globalThis.__auxTest.render('main');
+assert(html.indexOf('301629') < html.indexOf('301266'), 'comparison renderer re-sorted candidates');
+""",
+        )
+
+    def test_comparison_distinguishes_action_decision_and_rank_evidence(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '301629',
+    summary: { status: 'available', source: 'workspace', name: '矽电股份', sector: '半导体', formal_action: '观察' },
+    decision_score: { status: 'available', source: 'decision', score: 62, decision_code: 'recommend', components: { structure: { score: 10 }, position: { score: 15 }, sentiment: { score: 37 } } },
+    rank_evidence: { status: 'available', source: 'workspace', view_rank: 2, opportunity_score: 30, note: '仅用于当前池内排序' },
+    price_evidence: { status: 'partial', source: 'prices', current_price: 309.85, reference_price: 300 },
+    display_derived: { status: 'partial', source: 'derived', distance_from_reference_pct: 3.2833 },
+    daily_structure: { status: 'missing', reason: 'not provided' },
+    sublevel_30m: { status: 'missing', reason: 'not provided' },
+    volume_and_capital: { status: 'missing', reason: 'not provided' },
+    market_and_sector: { status: 'missing', reason: 'not provided' },
+    risk_and_next: { status: 'available', source: 'risk', risk_labels: ['追高风险'] },
+    historical_validation: { status: 'missing', reason: 'not provided' }
+  }] }
+} };
+const html = globalThis.__auxTest.render('main');
+assert(html.includes('唯一正式动作'), 'formal action column missing');
+assert(html.includes('观察'), 'formal action value missing');
+assert(html.includes('决策分'), 'decision score label missing');
+assert(html.includes('62'), 'decision score value missing');
+assert(html.includes('结构 10') && html.includes('位置 15') && html.includes('情绪 37'), 'decision components missing');
+assert(html.includes('池内排序证据'), 'rank evidence label missing');
+assert(html.includes('排序分 30'), 'rank opportunity score missing');
+assert(html.includes('仅用于当前池内排序'), 'rank scope boundary missing');
+""",
+        )
+
+    def test_candidate_comparison_has_no_sort_or_third_score(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [] }
+} };
+const html = globalThis.__auxTest.render('main');
+assert(!html.includes('data-sort'), 'comparison exposes a browser sort control');
+assert(!html.includes('<select'), 'comparison exposes a sort selector');
+assert(!html.includes('综合分'), 'third composite score was introduced');
+assert(!html.includes('成功概率'), 'uncalibrated success probability was introduced');
+assert(html.includes('保持正式池原顺序'), 'no-order-change boundary missing');
+""",
+        )
+
+    def test_candidate_comparison_mobile_tickets_and_desktop_scroll_contract(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '301629', summary: { status: 'available', source: 'workspace', name: '矽电股份' },
+    decision_score: { status: 'missing', source: 'decision', score: null },
+    rank_evidence: { status: 'available', source: 'workspace', view_rank: 1, opportunity_score: 30 }
+  }] }
+} };
+const html = globalThis.__auxTest.render('main');
+assert(html.includes('candidate-evidence-table-wrap'), 'desktop comparison table wrapper missing');
+assert(html.includes('candidate-evidence-ticket-list'), 'mobile ticket list missing');
+assert(html.includes('candidate-evidence-ticket'), 'mobile candidate ticket missing');
+""",
+        )
+        self.assertIn(
+            ".candidate-evidence-table-wrap {\n  max-width: 100%;\n  overflow-x: auto;",
+            CSS,
+        )
+        self.assertIn(
+            ".candidate-evidence-ticket-list {\n  display: none;",
+            CSS,
+        )
+        self.assertIn(
+            "@media (max-width: 760px)",
+            CSS,
+        )
+
+    def test_candidate_comparison_escapes_all_evidence_text(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '301629<img src=x onerror=alert(1)>',
+    summary: { status: 'available', source: 'workspace', name: '<img src=x onerror=alert(2)>', formal_action: '<script>alert(3)</script>' },
+    decision_score: { status: 'missing', source: 'decision', score: null, reason: '<svg onload=alert(4)>' },
+    rank_evidence: { status: 'available', source: 'workspace', view_rank: 1, opportunity_score: 30, note: '<b>rank</b>' },
+    risk_and_next: { status: 'available', source: 'risk', risk_labels: ['<iframe>bad</iframe>'] }
+  }] }
+} };
+const html = globalThis.__auxTest.render('main');
+['<img', '<script', '<svg', '<iframe', '<b>rank</b>'].forEach(function (unsafe) {
+  assert(!html.includes(unsafe), 'unsafe evidence text leaked: ' + unsafe);
+});
+assert(html.includes('&lt;img'), 'escaped evidence text missing');
+""",
+        )
+
+    def test_candidate_comparison_hides_internal_risk_reason_behind_user_copy(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '301629',
+    summary: { status: 'available', source: 'workspace', name: '矽电股份', formal_action: '可上车' },
+    risk_and_next: {
+      status: 'missing',
+      source: 'workspace risk flags + declared candidate conditions',
+      risk_labels: [],
+      reason: 'strategy_risk_and_conditions_not_declared'
+    }
+  }] }
+} };
+const html = globalThis.__auxTest.render('main');
+assert(html.includes('本期未登记可展示风险标签'), 'missing risk did not use user-facing copy');
+assert(!html.includes('strategy_risk_and_conditions_not_declared'), 'internal risk audit reason leaked into comparison');
+""",
+        )
+
+    def test_missing_or_mismatched_evidence_projection_fails_closed(self):
+        _assert_node_contract(
+            self,
+            "({ projection: getRecommendationEvidenceProjection, render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+[{}, { recommendationEvidence: {} }, { recommendationEvidence: { schema_version: 1, report_date: '2026-08-27', views: { main: [{ code: 'stale' }] } } }].forEach(function (bootstrap) {
+  window.CHANLUN_BOOTSTRAP = bootstrap;
+  assert(globalThis.__auxTest.projection() === null, 'invalid evidence projection was accepted');
+  const html = globalThis.__auxTest.render('main');
+  assert(html.includes('本期未提供证据展示'), 'missing evidence did not fail closed');
+  assert(!html.includes('stale'), 'mismatched-date evidence leaked');
+});
+""",
+        )
+
+    def test_evidence_projection_requires_canonical_date_and_page_match(self):
+        _assert_node_contract(
+            self,
+            "({ projection: getRecommendationEvidenceProjection, state: state })",
+            r"""
+[
+  { pageDate: '2026-02-30', reportDate: '2026-02-30' },
+  { pageDate: '2026-08-27', reportDate: '2026-08-28' },
+  { pageDate: '2026-8-28', reportDate: '2026-08-28' }
+].forEach(function (item) {
+  globalThis.__auxTest.state.data = { date: item.reportDate };
+  window.CHANLUN_BOOTSTRAP = {
+    pageDate: item.pageDate,
+    recommendationEvidence: {
+      schema_version: 1,
+      report_date: item.reportDate,
+      views: { main: [] }
+    }
+  };
+  assert(globalThis.__auxTest.projection() === null,
+    'invalid or cross-page evidence date was accepted');
+});
+""",
+        )
+
     def test_psy12_shadow_stays_in_research_and_never_overrides_formal_temperature(self):
         _assert_node_contract(
             self,
@@ -56,6 +249,7 @@ const base = {
   },
   psy12_shadow: {
     schema_version: 1, mode: 'shadow', affects_production: false,
+    promotion_eligible: false, promotion_requires_new_authorization: true,
     status: 'available', formal_score: 61, shadow_score_with_psy12: 61,
     delta_vs_formal: 0, formal_label: '偏强', shadow_label: '偏强'
   }
@@ -86,6 +280,7 @@ const insufficient = globalThis.__auxTest.render({
   psy12: { status: 'unavailable', reason: 'insufficient_history', valid_days: 8, window: 12 },
   psy12_shadow: {
     schema_version: 1, mode: 'shadow', affects_production: false,
+    promotion_eligible: false, promotion_requires_new_authorization: true,
     status: 'unavailable', shadow_score_with_psy12: null
   }
 });
@@ -99,6 +294,7 @@ const changed = globalThis.__auxTest.render({
   },
   psy12_shadow: {
     schema_version: 1, mode: 'shadow', affects_production: false,
+    promotion_eligible: false, promotion_requires_new_authorization: true,
     status: 'available', formal_score: 59, shadow_score_with_psy12: 62,
     delta_vs_formal: 3, formal_label: '平衡', shadow_label: '偏强'
   }
@@ -362,26 +558,38 @@ assert(audit.includes('短周期回撤风险') && audit.includes('不改变正�
 """,
         )
 
-    def test_merged_candidate_detail_has_only_decision_chart_summary_and_audit_layers(self):
+    def test_merged_candidate_detail_uses_evidence_modules_chart_and_audit_layers(self):
         _assert_node_contract(
             self,
-            "{ build: buildMergedCandidateDetail }",
+            "{ build: buildMergedCandidateDetail, state: state }",
             r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+globalThis.__auxTest.state.currentView = 'main';
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '600001',
+    summary: { status: 'available', as_of: '2026-08-28', source: 'summary', code: '600001', name: '测试股', sector: '工业金属', formal_action: '观察' },
+    decision_score: { status: 'missing', source: 'decision', score: null },
+    rank_evidence: { status: 'missing', source: 'rank', view_rank: null, opportunity_score: null },
+    price_evidence: { status: 'partial', source: 'price', reference_price: 10.5, trailing_targets: [] },
+    daily_structure: { status: 'missing', source: 'daily' },
+    sublevel_30m: { status: 'missing', source: '30m' },
+    volume_and_capital: { status: 'missing', source: 'volume' },
+    market_and_sector: { status: 'missing', source: 'market' },
+    risk_and_next: { status: 'available', source: 'risk', risk_labels: ['追高风险'], next_confirmation: { items: ['放量', '站稳压力', '板块增强', '多余条件'] }, cancel_conditions: { items: ['跌破失效位'] } },
+    historical_validation: { status: 'missing', source: 'history' },
+    display_derived: { status: 'missing', source: 'derived' }
+  }] }
+} };
 const html = globalThis.__auxTest.build({
   code: '600001', name: '测试股', sector: '工业金属',
-  formal_decision_contract: { action: '观察', reference_price: 10.5 },
-  action_reason: '结构过门',
-  upgrade_conditions: ['放量', '站稳压力', '板块增强', '多余条件'],
-  cancel_conditions: ['跌破失效位'],
-  risk_flags: ['追高风险']
+  formal_decision_contract: { action: '观察', reference_price: 10.5 }
 }, {});
 assert((html.match(/formal-action/g) || []).length === 1, 'merged detail duplicated the formal action');
 assert(html.includes('class="chart-panel"'), 'K-line workspace missing');
-assert(html.includes('class="decision-summary-columns"'), 'why/next/invalidation summary missing');
-assert(html.includes('为什么') && html.includes('下一确认') && html.includes('失效条件'), 'summary semantics incomplete');
+assert((html.match(/data-evidence-module=/g) || []).length === 8, 'eight evidence modules missing');
+assert(html.includes('下一确认') && html.includes('取消或降级'), 'risk and next-step semantics incomplete');
 assert(html.includes('class="evidence-audit-drawer"'), 'evidence and audit drawer missing');
-const summary = html.slice(html.indexOf('class="decision-summary-columns"'), html.indexOf('class="evidence-audit-drawer"'));
-assert(!summary.includes('多余条件'), 'summary item cap was not enforced');
 """,
         )
 

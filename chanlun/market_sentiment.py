@@ -540,6 +540,8 @@ def build_market_sentiment_psy12_shadow(
             "status": "available" if unavailable_reason is None else "unavailable",
             "reason": unavailable_reason,
             "affects_production": False,
+            "promotion_eligible": False,
+            "promotion_requires_new_authorization": True,
             "formal_score": formal.get("score"),
             "raw_shadow_score_with_psy12": raw_shadow_score,
             "shadow_score_with_psy12": shadow_score,

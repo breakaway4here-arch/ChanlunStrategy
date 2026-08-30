@@ -23,6 +23,13 @@ from chanlun.chan_engine import calc_macd
 from chanlun.report_comparison import write_comparison_index
 from chanlun.report_view_model import build_workspace
 from chanlun.personal_watchlist import resolve_decision_watchlist_url
+from chanlun.recommendation_evidence import (
+    build_recommendation_evidence_projection,
+)
+from chanlun.psy12_shadow_audit import (
+    evaluate_psy12_shadow_audit,
+    normalize_historical_reports,
+)
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
@@ -2171,9 +2178,85 @@ def build_formal_output_projection(report_data):
     }
 
 
+def _load_psy12_shadow_history(output_dir):
+    """Read the existing aggregate only for the HTML shadow-audit plane."""
+    path = os.path.join(output_dir, "data.json")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(payload, Mapping):
+        return None
+    reports = payload.get("reports")
+    return reports if isinstance(reports, Mapping) else None
+
+
+def _build_psy12_shadow_audit(daily_data, historical_reports, date_str):
+    """Compute truthful progress without mutating any formal report surface."""
+    normalized = normalize_historical_reports(
+        historical_reports,
+        current_report=daily_data,
+        as_of_date=date_str,
+    )
+    return evaluate_psy12_shadow_audit(normalized, required_days=20)
+
+
+def _build_report_bootstrap(
+    report_data,
+    daily_data,
+    top10_api_base,
+    preclose_api_base,
+    decision_watchlist_url,
+    access_key_hash,
+    historical_reports=None,
+):
+    """Build the HTML envelope without changing the formal daily payload."""
+    date_str = daily_data.get(
+        "date",
+        report_data.get("date", datetime.now().strftime("%Y-%m-%d")),
+    )
+    psy12_shadow_audit = _build_psy12_shadow_audit(
+        daily_data,
+        historical_reports,
+        date_str,
+    )
+    return {
+        "pageDate": date_str,
+        "inlineReportData": daily_data,
+        "recommendationEvidence": build_recommendation_evidence_projection(
+            report_data,
+            daily_data,
+            psy12_shadow_audit=psy12_shadow_audit,
+        ),
+        "top10ApiBase": top10_api_base,
+        "precloseApiBase": preclose_api_base,
+        "decisionWatchlistUrl": decision_watchlist_url,
+        "accessControlEnabled": bool(
+            ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY
+        ),
+        "accessKeyHash": access_key_hash,
+        "accessKeySalt": (
+            FULL_ACCESS_KEY_SALT if ENABLE_WEAK_ACCESS_CONTROL else ""
+        ),
+    }
+
+
 def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
     """Generate report with the v2 shell and external assets."""
     date_str = report_data.get("date", datetime.now().strftime("%Y-%m-%d"))
+
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    default_output_dir = os.path.realpath(
+        os.path.abspath(os.path.join(base_dir, OUTPUT_DIR))
+    )
+    if output_dir is None:
+        output_dir = default_output_dir
+    else:
+        output_dir = os.path.realpath(os.path.abspath(output_dir))
+    is_default_output = output_dir == default_output_dir
 
     access_key_hash = ""
     if ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY:
@@ -2195,25 +2278,16 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         == "manual_debug"
         else resolve_decision_watchlist_url(top10_api_base)
     )
-    bootstrap = {
-        "pageDate": date_str,
-        "inlineReportData": daily_data,
-        "top10ApiBase": top10_api_base,
-        "precloseApiBase": preclose_api_base,
-        "decisionWatchlistUrl": decision_watchlist_url,
-        "accessControlEnabled": bool(ENABLE_WEAK_ACCESS_CONTROL and FULL_ACCESS_KEY),
-        "accessKeyHash": access_key_hash,
-        "accessKeySalt": FULL_ACCESS_KEY_SALT if ENABLE_WEAK_ACCESS_CONTROL else "",
-    }
+    bootstrap = _build_report_bootstrap(
+        report_data,
+        daily_data,
+        top10_api_base,
+        preclose_api_base,
+        decision_watchlist_url,
+        access_key_hash,
+        historical_reports=_load_psy12_shadow_history(output_dir),
+    )
     bootstrap_data_json = _escape_inline_json(bootstrap)
-
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    default_output_dir = os.path.realpath(os.path.abspath(os.path.join(base_dir, OUTPUT_DIR)))
-    if output_dir is None:
-        output_dir = default_output_dir
-    else:
-        output_dir = os.path.realpath(os.path.abspath(output_dir))
-    is_default_output = output_dir == default_output_dir
 
     date_dir = os.path.join(output_dir, date_str)
     os.makedirs(date_dir, exist_ok=True)

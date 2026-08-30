@@ -546,6 +546,33 @@ def _make_minimal_report_data():
 
 class TestFormalReportProjection(unittest.TestCase):
 
+    def test_report_bootstrap_contains_evidence_but_daily_json_does_not(self):
+        report_data = _make_minimal_report_data()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generate_report(report_data, output_dir=tmpdir)
+            with open(
+                os.path.join(tmpdir, "index.html"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                bootstrap = _extract_bootstrap(handle.read())
+            with open(
+                os.path.join(tmpdir, "data", "2026-05-26.json"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                daily_data = json.load(handle)
+
+        self.assertEqual(
+            bootstrap["recommendationEvidence"]["report_date"],
+            "2026-05-26",
+        )
+        self.assertNotIn("recommendationEvidence", daily_data)
+        self.assertNotIn(
+            "recommendationEvidence",
+            daily_data.get("workspace", {}),
+        )
+
     def test_projection_preserves_pool_presence_and_selection_input_health(self):
         report_data = _make_minimal_report_data()
         report_data.pop("picks_fusion")
