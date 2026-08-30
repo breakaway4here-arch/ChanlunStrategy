@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="${0:A:h}"
 REPO_DIR="${SCRIPT_DIR:h}"
+PRODUCTION_ROOT="/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime"
 TEMPLATE_DIR="${REPO_DIR}/launchd"
 AGENT_DIR="${HOME}/Library/LaunchAgents"
 ENV_FILE="${CHANLUN_PRECLOSE_ENV_FILE:-${HOME}/.config/chanlun-strategy/preclose.env}"
@@ -23,7 +24,7 @@ sanitize_launchctl_print() {
   '
 }
 
-if [[ "$REPO_DIR" != "/Users/yangfan/yf_source/ChanlunStrategy" ]]; then
+if [[ "$REPO_DIR" != "$PRODUCTION_ROOT" ]]; then
   print -u2 "installer must run from the production checkout"
   exit 1
 fi

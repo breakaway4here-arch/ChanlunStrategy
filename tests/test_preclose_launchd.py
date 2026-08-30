@@ -8,7 +8,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-PRODUCTION_ROOT = "/Users/yangfan/yf_source/ChanlunStrategy"
+PRODUCTION_ROOT = (
+    "/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime"
+)
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
@@ -123,6 +125,8 @@ class PrecloseLaunchdTests(unittest.TestCase):
         script = (ROOT / "scripts" / "install_preclose_launchd.sh").read_text(
             encoding="utf-8"
         )
+        self.assertIn('PRODUCTION_ROOT="{}"'.format(PRODUCTION_ROOT), script)
+        self.assertIn('[[ "$REPO_DIR" != "$PRODUCTION_ROOT" ]]', script)
         self.assertIn("plutil -lint", script)
         self.assertIn("already exists", script)
         self.assertIn("launchctl bootstrap", script)

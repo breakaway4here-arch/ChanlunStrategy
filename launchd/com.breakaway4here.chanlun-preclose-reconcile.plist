@@ -7,10 +7,10 @@
     <key>ProgramArguments</key>
     <array>
         <string>/bin/zsh</string>
-        <string>/Users/yangfan/yf_source/ChanlunStrategy/scripts/preclose_reconcile.sh</string>
+        <string>/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime/scripts/preclose_reconcile.sh</string>
     </array>
     <key>WorkingDirectory</key>
-    <string>/Users/yangfan/yf_source/ChanlunStrategy</string>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime</string>
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
@@ -20,7 +20,7 @@
         <key>CHANLUN_PRECLOSE_ENV_FILE</key>
         <string>/Users/yangfan/.config/chanlun-strategy/preclose.env</string>
         <key>CHANLUN_MARKET_HISTORY_DB_PATH</key>
-        <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/market_history.sqlite</string>
+        <string>/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime/.cache/chanlun/market_history.sqlite</string>
         <key>IWENCAI_API_KEY</key>
         <string></string>
         <key>IWENCAI_BASE_URL</key>
@@ -45,8 +45,8 @@
     <key>ProcessType</key>
     <string>Background</string>
     <key>StandardOutPath</key>
-    <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/preclose/logs/launchd-reconcile.stdout.log</string>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime/.cache/chanlun/preclose/logs/launchd-reconcile.stdout.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/preclose/logs/launchd-reconcile.stderr.log</string>
+    <string>/Users/yangfan/yf_source/ChanlunStrategy/.worktrees/production-runtime/.cache/chanlun/preclose/logs/launchd-reconcile.stderr.log</string>
 </dict>
 </plist>
