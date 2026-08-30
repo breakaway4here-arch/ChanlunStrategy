@@ -2784,7 +2784,7 @@ body {
   z-index: 4;
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   min-height: 52px;
   margin: 0 -14px 10px;
   padding: max(10px, env(safe-area-inset-top)) 14px 10px;
@@ -2797,10 +2797,7 @@ body {
 }
 
 .mobile-drawer-floating-close {
-  position: fixed;
-  right: 18px;
-  bottom: calc(var(--mobile-drawer-bottom-offset, 16px) + env(safe-area-inset-bottom));
-  z-index: 45;
+  position: static;
   display: inline-flex;
   align-items: center;
   justify-content: center;

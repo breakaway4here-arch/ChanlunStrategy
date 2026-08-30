@@ -1638,7 +1638,8 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("max-height: calc(100vh - 230px);", self.asset_css)
         self.assertIn(".mobile-drawer-toolbar", self.asset_css)
         self.assertIn(".mobile-drawer-floating-close", self.asset_css)
-        self.assertIn("var(--mobile-drawer-bottom-offset, 16px)", self.asset_css)
+        self.assertIn("position: static;", self.asset_css)
+        self.assertNotIn("var(--mobile-drawer-bottom-offset, 16px)", self.asset_css)
         self.assertIn("min-width: 76px;", self.asset_css)
         self.assertIn("height: 42px;", self.asset_css)
 

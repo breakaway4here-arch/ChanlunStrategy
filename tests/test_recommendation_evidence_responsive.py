@@ -120,6 +120,26 @@ class TestRecommendationEvidenceResponsiveContract(unittest.TestCase):
                 "390px detail/chart lane is not explicitly single-column: " + selector,
             )
 
+    def test_mobile_drawer_close_stays_in_sticky_header_without_covering_content(self):
+        shell_start = JS.index("function buildAppShell")
+        shell_end = JS.index("function getReportDataStatus", shell_start)
+        shell = JS[shell_start:shell_end]
+        panel_start = shell.index('id="mobileDrawerPanel"')
+        toolbar_start = shell.index('class="mobile-drawer-toolbar"', panel_start)
+        toolbar_end = shell.index("</div>", toolbar_start)
+        close_start = shell.index('id="mobileDrawerClose"')
+        self.assertLess(toolbar_start, close_start, "drawer close must live inside its sticky header")
+        self.assertLess(close_start, toolbar_end, "drawer close must not float over drawer content")
+
+        close_rules = re.search(
+            r"\.mobile-drawer-floating-close\s*\{(?P<body>[^}]*)\}",
+            CSS,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(close_rules, "drawer close style is missing")
+        self.assertRegex(close_rules.group("body"), r"position:\s*static\s*;")
+        self.assertNotRegex(close_rules.group("body"), r"position:\s*(?:fixed|absolute)\s*;")
+
     def test_comparison_and_detail_have_keyboard_and_aria_labels(self):
         _assert_node_contract(
             self,
