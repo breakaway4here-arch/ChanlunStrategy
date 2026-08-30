@@ -2478,6 +2478,93 @@
     };
   }
 
+  function emptyRecommendationDisplayDerived() {
+    return {
+      distance_from_reference_pct: null,
+      upside_to_pressure_pct: null,
+      downside_to_invalidation_pct: null,
+      risk_reward_ratio: null,
+      distance_state: '',
+    };
+  }
+
+  function roundRecommendationDisplayDerived(value) {
+    return Math.round(Number(value) * 10000) / 10000;
+  }
+
+  function recommendationDisplayDerivedMatches(value, expected) {
+    return isRecommendationEvidenceFiniteNumber(value)
+      && Math.abs(Number(value) - expected) <= 0.0001001;
+  }
+
+  function validateRecommendationDisplayDerived(priceEvidence, displayDerived) {
+    var prices = priceEvidence && typeof priceEvidence === 'object' ? priceEvidence : {};
+    var derived = displayDerived && typeof displayDerived === 'object' ? displayDerived : {};
+    var priceStatus = normalizeString(prices.status).trim();
+    var derivedStatus = normalizeString(derived.status).trim();
+    if (['available', 'partial'].indexOf(priceStatus) === -1
+      || ['available', 'partial'].indexOf(derivedStatus) === -1
+      || priceStatus === 'conflict') {
+      return emptyRecommendationDisplayDerived();
+    }
+    var auditReasons = prices.audit_reasons && typeof prices.audit_reasons === 'object'
+      ? prices.audit_reasons : {};
+    var hasBoundaryConflict = function (field) {
+      return Boolean(evidenceScalarText(auditReasons[field]));
+    };
+    var current = evidencePositiveNumber(prices.current_price);
+    var reference = evidencePositiveNumber(prices.reference_price);
+    var pressure = evidencePositiveNumber(prices.pressure_price);
+    var invalidation = evidencePositiveNumber(prices.invalidation_price);
+    var distance = current !== null && reference !== null
+      && !hasBoundaryConflict('current_price')
+      && !hasBoundaryConflict('reference_price')
+      ? roundRecommendationDisplayDerived((current - reference) / reference * 100)
+      : null;
+    var upside = current !== null && pressure !== null && pressure >= current
+      && !hasBoundaryConflict('current_price')
+      && !hasBoundaryConflict('pressure_price')
+      ? roundRecommendationDisplayDerived((pressure - current) / current * 100)
+      : null;
+    var downside = current !== null && invalidation !== null && invalidation <= current
+      && !hasBoundaryConflict('current_price')
+      && !hasBoundaryConflict('invalidation_price')
+      ? roundRecommendationDisplayDerived((current - invalidation) / current * 100)
+      : null;
+    var riskReward = upside !== null && downside !== null && downside > 0
+      ? roundRecommendationDisplayDerived(upside / downside)
+      : null;
+    var expectedStatus = [distance, upside, downside, riskReward].every(function (value) {
+      return value !== null;
+    }) ? 'available' : ([distance, upside, downside, riskReward].some(function (value) {
+      return value !== null;
+    }) ? 'partial' : 'missing');
+    if (derivedStatus !== expectedStatus) return emptyRecommendationDisplayDerived();
+    var validated = emptyRecommendationDisplayDerived();
+    var distanceValid = distance !== null
+      && recommendationDisplayDerivedMatches(derived.distance_from_reference_pct, distance);
+    var upsideValid = upside !== null
+      && recommendationDisplayDerivedMatches(derived.upside_to_pressure_pct, upside);
+    var downsideValid = downside !== null
+      && recommendationDisplayDerivedMatches(derived.downside_to_invalidation_pct, downside);
+    var riskRewardValid = riskReward !== null
+      && recommendationDisplayDerivedMatches(derived.risk_reward_ratio, riskReward);
+    if (derivedStatus === 'available'
+      && (!distanceValid || !upsideValid || !downsideValid || !riskRewardValid)) {
+      return emptyRecommendationDisplayDerived();
+    }
+    if (distanceValid) {
+      validated.distance_from_reference_pct = distance;
+      validated.distance_state = evidenceScalarText(
+        derived.distance_state || derived.distance_status
+      );
+    }
+    if (upsideValid) validated.upside_to_pressure_pct = upside;
+    if (downsideValid) validated.downside_to_invalidation_pct = downside;
+    if (riskRewardValid) validated.risk_reward_ratio = riskReward;
+    return validated;
+  }
+
   function normalizeCandidateEvidenceRow(row) {
     var source = row && typeof row === 'object' ? row : {};
     var summary = source.summary && typeof source.summary === 'object' ? source.summary : {};
@@ -2485,7 +2572,7 @@
     var components = decision.components && typeof decision.components === 'object' ? decision.components : {};
     var rank = source.rank_evidence && typeof source.rank_evidence === 'object' ? source.rank_evidence : {};
     var prices = source.price_evidence && typeof source.price_evidence === 'object' ? source.price_evidence : {};
-    var derived = source.display_derived && typeof source.display_derived === 'object' ? source.display_derived : {};
+    var derived = validateRecommendationDisplayDerived(prices, source.display_derived);
     var daily = source.daily_structure && typeof source.daily_structure === 'object' ? source.daily_structure : {};
     var risk = source.risk_and_next && typeof source.risk_and_next === 'object' ? source.risk_and_next : {};
     var mainRise = source.main_rise_clue && typeof source.main_rise_clue === 'object' ? source.main_rise_clue : {};
@@ -2637,8 +2724,13 @@
       tags.push({ text: '风险 ' + riskFlags.length + ' 项', className: getRiskClass(riskFlags[0]) });
     } else if (normalizeString(rec.resonance_label)) {
       tags.push({ text: normalizeString(rec.resonance_label), className: getResonanceClass(rec.resonance_label) });
-    } else if (asArray(rec.source_labels).length) {
-      tags.push({ text: normalizeString(asArray(rec.source_labels)[0]), className: 'source-chip' });
+    } else {
+      var publicReason = getCandidatePublicReason(rec, summary, viewKey);
+      if (publicReason) {
+        tags.push({ text: publicReason, className: 'source-chip' });
+      } else if (asArray(rec.source_labels).length) {
+        tags.push({ text: normalizeString(asArray(rec.source_labels)[0]), className: 'source-chip' });
+      }
     }
     return tags.slice(0, 2);
   }
@@ -3287,6 +3379,22 @@
     return chart && typeof chart === 'object' ? chart : null;
   }
 
+  function getCandidatePublicReason(rec, summary, viewKey) {
+    var evidenceSummary = summary && typeof summary === 'object' ? summary : {};
+    var record = rec && typeof rec === 'object' ? rec : {};
+    var key = normalizeString(viewKey).trim();
+    var formalContext = key === 'main' || key === 'h4_t3';
+    var candidates = [
+      evidenceSummary.formal_action_reason,
+      record.page_action_reason,
+    ];
+    for (var index = 0; index < candidates.length; index += 1) {
+      var reason = evidenceScalarText(candidates[index]);
+      if (reason) return userFacingEvidenceText(reason, formalContext);
+    }
+    return '';
+  }
+
   function renderRecommendationEvidenceMeta(section, fallbackDate) {
     var value = section && typeof section === 'object' ? section : {};
     var asOf = normalizeString(value.as_of || fallbackDate).trim() || '未随本期提供';
@@ -3441,7 +3549,7 @@
 
   function renderRecommendationPriceEvidence(evidence) {
     var prices = evidence.price_evidence && typeof evidence.price_evidence === 'object' ? evidence.price_evidence : {};
-    var derived = evidence.display_derived && typeof evidence.display_derived === 'object' ? evidence.display_derived : {};
+    var derived = validateRecommendationDisplayDerived(prices, evidence.display_derived);
     var fields = [
       ['现价', 'current_price', '本期未形成可验证现价'],
       ['参考价', 'reference_price', '本期未形成可验证参考价'],
@@ -3470,6 +3578,25 @@
         + (maxVisibleTargets > 0 ? '（展示上限 ' + String(maxVisibleTargets) + '）' : '');
     }
     var distance = derived.distance_from_reference_pct;
+    var distanceState = evidenceScalarText(
+      derived.distance_state || derived.distance_status
+    );
+    var distanceText = isRecommendationEvidenceFiniteNumber(distance)
+      ? '距参考价 ' + recommendationEvidenceNumber(distance, 2) + '%'
+        + (distanceState ? ' · ' + distanceState : '')
+      : '距参考价未形成可验证计算';
+    var upside = derived.upside_to_pressure_pct;
+    var downside = derived.downside_to_invalidation_pct;
+    var riskReward = derived.risk_reward_ratio;
+    var derivedNotes = [
+      distanceText,
+      isRecommendationEvidenceFiniteNumber(upside)
+        ? '上行空间 ' + recommendationEvidenceNumber(upside, 2) + '%' : '',
+      isRecommendationEvidenceFiniteNumber(downside)
+        ? '下行空间 ' + recommendationEvidenceNumber(downside, 2) + '%' : '',
+      isRecommendationEvidenceFiniteNumber(riskReward)
+        ? '展示风险收益比 ' + recommendationEvidenceNumber(riskReward, 2) : '',
+    ].filter(Boolean);
     var structureFields = [
       ['中枢 ZG', 'pivot_zg', 'pivot_zg_source', '本期未形成可验证中枢 ZG'],
       ['中枢 ZD', 'pivot_zd', 'pivot_zd_source', '本期未形成可验证中枢 ZD'],
@@ -3496,7 +3623,9 @@
       + (hasConflict
         ? '<p class="recommendation-evidence-missing">关键价格存在冲突，冲突值已隐藏并进入证据审计。</p>' : '')
       + '<div class="recommendation-price-notes">'
-      + '<span>' + escapeHtml(isRecommendationEvidenceFiniteNumber(distance) ? '距参考价 ' + recommendationEvidenceNumber(distance, 2) + '%' : '距参考价未形成可验证计算') + '</span>'
+      + derivedNotes.map(function (note) {
+        return '<span>' + escapeHtml(note) + '</span>';
+      }).join('')
       + '<span>' + escapeHtml(targetText) + '</span>'
       + '</div>';
   }
@@ -3594,13 +3723,18 @@
       ['突破保持', typeof value.breakout_holds === 'boolean'
         ? evidenceBooleanText(value.breakout_holds, '突破位保持', '突破位未保持') : value.breakout_holds],
       ['回踩量能', value.pullback_volume_state],
+      ['确认依据', value.confirmed_by],
     ];
     var body = renderEvidenceRows(rows);
+    var confirmations = recommendationEvidenceList(value.confirmations);
+    var confirmedHtml = confirmations.length
+      ? evidenceListSection('已满足确认项', confirmations, '')
+      : '';
     var missing = renderEvidenceMissingEvidence(value);
-    if (!body && !missing) {
+    if (!body && !confirmedHtml && !missing) {
       return '<p class="recommendation-evidence-missing">' + escapeHtml(missingCopy) + '</p>';
     }
-    return body + missing;
+    return body + confirmedHtml + missing;
   }
 
   function renderVolumeCapitalEvidence(section) {
@@ -4015,6 +4149,15 @@
       }
       selected.push(candidate);
     }
+    var visibleCount = 0;
+    selected.forEach(function (candidate) {
+      if (candidate.labelVisible === false) return;
+      if (visibleCount >= 2) {
+        candidate.labelVisible = false;
+        return;
+      }
+      visibleCount += 1;
+    });
     return selected;
   }
 

@@ -1,5 +1,7 @@
 import hashlib
+import json
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -13,7 +15,7 @@ from chanlun.preclose_runtime import (
     build_scheduled_preclose_input,
     select_preclose_30m_targets,
 )
-from preclose_run import run_scheduled_preclose
+from preclose_run import PrecloseRunLock, run_scheduled_preclose
 
 
 TRADE_DATE = "2026-08-28"
@@ -242,6 +244,541 @@ class PrecloseRuntimeTests(unittest.TestCase):
             )
         self.assertEqual(result["status"], "skipped_non_trading_day")
         self.assertEqual(calls, [])
+
+    def test_scheduled_lock_covers_acquisition_and_preserves_existing_input(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            root = base / "preclose"
+            day_root = root / TRADE_DATE
+            day_root.mkdir(parents=True)
+            input_path = day_root / "input.json"
+            input_path.write_bytes(b"existing-input-sentinel\n")
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            lock = PrecloseRunLock(day_root / "run.lock", run_id="first-run")
+            self.assertTrue(lock.acquire())
+            try:
+                result = run_scheduled_preclose(
+                    root=root,
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: fixed_now,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: calls.append("fetch"),
+                    skip_publish=True,
+                )
+            finally:
+                lock.release()
+
+            self.assertEqual(result["status"], "locked")
+            self.assertEqual(result["exit_code"], 75)
+            self.assertEqual(calls, [])
+            self.assertEqual(input_path.read_bytes(), b"existing-input-sentinel\n")
+
+    def test_scheduled_entry_fails_closed_when_wall_clock_reaches_1449_before_pipeline(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        start = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        cutoff = datetime(2026, 8, 28, 14, 49, 0, tzinfo=cn_timezone)
+        now_calls = [0]
+
+        def wall_clock():
+            now_calls[0] += 1
+            return start if now_calls[0] == 1 else cutoff
+
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": start.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+        pipeline_calls = []
+
+        def pipeline_runner(*_args, **_kwargs):
+            pipeline_calls.append("pipeline")
+            raise AssertionError("pipeline must not start at or after 14:49")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=wall_clock,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                pipeline_runner=pipeline_runner,
+                skip_publish=True,
+            )
+
+        self.assertEqual(pipeline_calls, [])
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertNotIn("snapshot_path", result)
+
+    def test_scheduled_wall_alarm_interrupts_one_stuck_pipeline_stage(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        near_cutoff = datetime(
+            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+        )
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": near_cutoff.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+
+        def stuck_pipeline(*_args, **_kwargs):
+            time.sleep(0.20)
+            raise AssertionError("wall alarm did not interrupt the pipeline")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            started = time.monotonic()
+            with patch("preclose_run.DELIVERY_RESERVE_SECONDS", 0.0):
+                result = run_scheduled_preclose(
+                    root=base / "preclose",
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: near_cutoff,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                    pipeline_runner=stuck_pipeline,
+                    skip_publish=True,
+                )
+            elapsed = time.monotonic() - started
+            snapshot = json.loads(
+                (base / "preclose" / TRADE_DATE / "snapshot.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertLess(elapsed, 0.18)
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertGreaterEqual(snapshot["diagnostics"]["elapsed_seconds"], 0.03)
+
+    def test_scheduled_fallback_freeze_cannot_overrun_1449_hard_cutoff(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        near_cutoff = datetime(
+            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+        )
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": near_cutoff.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+        publisher_calls = []
+
+        def blocked_atomic_write(*_args, **_kwargs):
+            time.sleep(0.30)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            started = time.monotonic()
+            with patch("preclose_run._atomic_json", blocked_atomic_write):
+                result = run_scheduled_preclose(
+                    root=base / "preclose",
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: near_cutoff,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                    publisher=lambda *_args, **_kwargs: publisher_calls.append(True),
+                    notify=False,
+                )
+            elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 0.18)
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertNotIn("snapshot_path", result)
+        self.assertEqual(publisher_calls, [])
+
+    def test_scheduled_delivery_budget_is_bounded_by_monotonic_total(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+        clock_values = iter((0.0, 121.0))
+        publisher_calls = []
+
+        def monotonic():
+            try:
+                return next(clock_values)
+            except StopIteration:
+                return 121.0
+
+        def publisher(*_args, **_kwargs):
+            publisher_calls.append(True)
+            return {"publish": {"success": True}, "notifications": {}}
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            with patch("preclose_run.DELIVERY_RESERVE_SECONDS", 0.0):
+                result = run_scheduled_preclose(
+                    root=base / "preclose",
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: fixed_now,
+                    monotonic=monotonic,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                    publisher=publisher,
+                    notify=False,
+                )
+
+            delivery_path = base / "preclose" / TRADE_DATE / "delivery.json"
+
+        self.assertEqual(publisher_calls, [])
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertFalse(delivery_path.exists())
+
+    def test_scheduled_pipeline_exception_freezes_failed_snapshot_and_releases_lock(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+        }
+
+        def pipeline_runner(*_args, **_kwargs):
+            raise ValueError("pipeline fixture failure")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                pipeline_runner=pipeline_runner,
+                skip_publish=True,
+            )
+            snapshot_path = base / "preclose" / TRADE_DATE / "snapshot.json"
+            lock_path = base / "preclose" / TRADE_DATE / "run.lock"
+
+            self.assertTrue(snapshot_path.is_file())
+            self.assertFalse(lock_path.exists())
+            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(result["snapshot_status"], "failed")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(snapshot["diagnostics"]["failure"]["type"], "ValueError")
+
+    def test_scheduled_existing_snapshot_retries_publish_without_reacquiring_input(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+
+        def pipeline_runner(_inputs, config, components=None):
+            del components
+            return build_preclose_snapshot(
+                trade_date=config.trade_date,
+                as_of=config.as_of,
+                generated_at=config.generated_at,
+                pools={"main": [], "h4_t3": [], "acceleration": []},
+                source_sha=config.source_sha,
+                run_id=config.run_id,
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            root = base / "preclose"
+            first = run_scheduled_preclose(
+                root=root,
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                pipeline_runner=pipeline_runner,
+                skip_publish=True,
+            )
+            publisher_calls = []
+
+            def publisher(*_args, **_kwargs):
+                publisher_calls.append(True)
+                return {"publish": {"success": True}, "notifications": {}}
+
+            second = run_scheduled_preclose(
+                root=root,
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("existing snapshot must skip acquisition")
+                ),
+                pipeline_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("existing snapshot must skip pipeline")
+                ),
+                publisher=publisher,
+                notify=False,
+            )
+            delivery = json.loads(
+                (root / TRADE_DATE / "delivery.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(first["snapshot_status"], "empty")
+        self.assertEqual(publisher_calls, [True])
+        self.assertEqual(second["status"], "already_completed")
+        self.assertEqual(second["exit_code"], 0)
+        self.assertEqual(second["snapshot_status"], first["snapshot_status"])
+        self.assertEqual(second["snapshot_id"], first["snapshot_id"])
+        self.assertEqual(second["content_hash"], first["content_hash"])
+        self.assertEqual(delivery["snapshot_id"], first["snapshot_id"])
+        self.assertEqual(delivery["content_hash"], first["content_hash"])
+
+    def test_scheduled_existing_malformed_snapshot_fails_closed_without_publisher(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        publisher_calls = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            day_root = base / "preclose" / TRADE_DATE
+            day_root.mkdir(parents=True)
+            snapshot_path = day_root / "snapshot.json"
+            snapshot_path.write_text("{malformed-json", encoding="utf-8")
+
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("malformed snapshot must skip acquisition")
+                ),
+                pipeline_runner=lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                    AssertionError("malformed snapshot must skip pipeline")
+                ),
+                publisher=lambda *_args, **_kwargs: publisher_calls.append(True),
+                notify=False,
+            )
+            delivery = json.loads(
+                (day_root / "delivery.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(snapshot_path.read_text(encoding="utf-8"), "{malformed-json")
+
+        self.assertEqual(publisher_calls, [])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["snapshot_status"], "failed")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(delivery["error"], "InvalidPrecloseSnapshot")
+
+    def test_scheduled_existing_hash_mismatch_fails_closed_without_publisher(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        publisher_calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            day_root = base / "preclose" / TRADE_DATE
+            day_root.mkdir(parents=True)
+            snapshot = build_preclose_snapshot(
+                trade_date=TRADE_DATE,
+                as_of=fixed_now.isoformat(timespec="seconds"),
+                generated_at=fixed_now.isoformat(timespec="seconds"),
+                pools={"main": [], "h4_t3": [], "acceleration": []},
+                source_sha="release-sha",
+                run_id="forged-retry",
+            )
+            snapshot["status"] = "available"
+            (day_root / "snapshot.json").write_text(
+                json.dumps(snapshot), encoding="utf-8"
+            )
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                publisher=lambda *_args, **_kwargs: publisher_calls.append(True),
+                notify=False,
+            )
+
+        self.assertEqual(publisher_calls, [])
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["exit_code"], 1)
+
+    def test_scheduled_existing_deadline_snapshot_keeps_nonzero_exit_after_publish(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            day_root = base / "preclose" / TRADE_DATE
+            day_root.mkdir(parents=True)
+            snapshot = build_preclose_snapshot(
+                trade_date=TRADE_DATE,
+                as_of=fixed_now.isoformat(timespec="seconds"),
+                generated_at=fixed_now.isoformat(timespec="seconds"),
+                pools={"main": [], "h4_t3": [], "acceleration": []},
+                source_sha="release-sha",
+                status="deadline_exceeded",
+                run_id="deadline-retry",
+            )
+            (day_root / "snapshot.json").write_text(
+                json.dumps(snapshot), encoding="utf-8"
+            )
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                publisher=lambda *_args, **_kwargs: {
+                    "publish": {"success": True}, "notifications": {}
+                },
+                notify=False,
+            )
+
+        self.assertEqual(result["status"], "already_completed")
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+
+    def test_scheduled_lock_remains_held_through_publish(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            root = base / "preclose"
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+
+            def pipeline_runner(_inputs, config, components=None):
+                del _inputs, components
+                return build_preclose_snapshot(
+                    trade_date=config.trade_date,
+                    as_of=config.as_of,
+                    generated_at=config.generated_at,
+                    pools={"main": [], "h4_t3": [], "acceleration": []},
+                    source_sha=config.source_sha,
+                    run_id=config.run_id,
+                )
+
+            def publisher(_snapshot_path, **kwargs):
+                self.assertGreater(kwargs["timeout"], 0)
+                self.assertTrue((root / TRADE_DATE / "run.lock").is_file())
+                return {"publish": {"success": True}, "notifications": {}}
+
+            result = run_scheduled_preclose(
+                root=root,
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                pipeline_runner=pipeline_runner,
+                publisher=publisher,
+                notify=False,
+            )
+
+            self.assertFalse((root / TRADE_DATE / "run.lock").exists())
+        self.assertEqual(result["exit_code"], 0)
 
 
 if __name__ == "__main__":

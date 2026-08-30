@@ -124,7 +124,14 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertEqual(result["target_codes"], ["002328"])
         self.assertEqual(list(result["min30"]), ["002328"])
         self.assertEqual(result["min30"]["002328"]["status"], "available")
-        self.assertEqual(result["min30"]["002328"]["klines"]["finals"], [True, False])
+        self.assertEqual(
+            result["min30"]["002328"]["klines"]["dates"],
+            [f"{TRADE_DATE} 14:30:00"],
+        )
+        self.assertEqual(
+            result["min30"]["002328"]["klines"]["finals"],
+            [True],
+        )
         self.assertFalse(result["min30"]["002328"]["is_final"])
 
     def test_missing_current_30m_is_auditable_and_never_uses_stale_cache(self):
@@ -140,6 +147,24 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "unavailable")
         self.assertEqual(evidence["reason_code"], "current_trade_date_missing")
         self.assertEqual(evidence["latest_date"], "2026-08-26")
+        self.assertNotIn("klines", evidence)
+
+    def test_future_only_30m_is_unavailable_after_as_of_cutoff(self):
+        class FutureOnlyFetcher(SpyFetcher):
+            def fetch_30m(self, code, count, as_of):
+                self.events.append(("30m", code, count, as_of))
+                return _kline([TRADE_DATE + " 15:00:00"], start=13.0, finals=[False])
+
+        result = fetch_target_30m_snapshots(
+            self.universe[:1],
+            fetcher=FutureOnlyFetcher(),
+            trade_date=TRADE_DATE,
+            as_of=AS_OF,
+        )
+
+        evidence = result["300998"]
+        self.assertEqual(evidence["status"], "unavailable")
+        self.assertEqual(evidence["reason_code"], "current_trade_date_missing")
         self.assertNotIn("klines", evidence)
 
     def test_isolated_paths_write_only_preclose_namespace_and_open_formal_db_readonly(self):

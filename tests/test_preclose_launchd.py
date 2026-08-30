@@ -1,5 +1,6 @@
 import hashlib
 import plistlib
+import re
 import sqlite3
 import tempfile
 import unittest
@@ -16,6 +17,7 @@ RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
     "a0c5a68f3c67b6e0d5e632a5348ac362b73a7b1247dc9d38030bfaf875e1fbf0"
 )
+RUNBOOK_PATH = ROOT / "docs" / "runbooks" / "chanlun-preclose-runbook.md"
 
 
 def _load_plist(name):
@@ -24,6 +26,30 @@ def _load_plist(name):
 
 
 class PrecloseLaunchdTests(unittest.TestCase):
+    def test_runbook_is_present_and_keeps_safe_production_rollback_contract(self):
+        self.assertEqual(
+            RUNBOOK_PATH.relative_to(ROOT).as_posix(),
+            "docs/runbooks/chanlun-preclose-runbook.md",
+        )
+        self.assertTrue(RUNBOOK_PATH.is_file())
+        text = RUNBOOK_PATH.read_text(encoding="utf-8")
+        self.assertIn("/api/preclose/latest?date=", text)
+        self.assertIn("PRECLOSE_ENABLED=false", text)
+        self.assertIn("Durable Object", text)
+        self.assertIn("向前部署", text)
+        self.assertIn("不承诺旧版本简单 rollback 一定可用", text)
+        self.assertIn("=> [redacted]", text)
+        self.assertIn("cd cloudflare/preclose-worker", text)
+        self.assertIn("npx wrangler secret list", text)
+        self.assertNotIn("npx wrangler secret put PRE_CLOSE_WRITE_TOKEN", text)
+        self.assertNotIn("npx wrangler --cwd cloudflare/preclose-worker", text)
+        self.assertNotRegex(
+            text,
+            re.compile(
+                r"(?m)^\s*(?:/bin/)?launchctl print\b(?!.*\|\s*/usr/bin/awk).*$"
+            ),
+        )
+
     def test_preclose_runs_each_weekday_at_1447_from_absolute_wrapper(self):
         plist = _load_plist(PRECLOSE_LABEL + ".plist")
         self.assertEqual(plist["Label"], PRECLOSE_LABEL)

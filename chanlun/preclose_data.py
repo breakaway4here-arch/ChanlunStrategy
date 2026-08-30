@@ -86,6 +86,33 @@ def _normalize_kline(payload):
     return result
 
 
+def _truncate_kline_at(payload, as_of):
+    """Keep only bars whose timestamps are no later than ``as_of``."""
+
+    if not payload:
+        return None
+    keep = []
+    for index, raw_timestamp in enumerate(payload["dates"]):
+        try:
+            if _parse_datetime(raw_timestamp) <= as_of:
+                keep.append(index)
+        except (TypeError, ValueError):
+            continue
+    if not keep:
+        return None
+    result = {
+        "dates": [payload["dates"][index] for index in keep],
+    }
+    for key in _CORE_ARRAY_KEYS:
+        result[key] = [payload[key][index] for index in keep]
+    for optional in ("amounts", "finals"):
+        if optional in payload:
+            result[optional] = [payload[optional][index] for index in keep]
+    if "source" in payload:
+        result["source"] = payload["source"]
+    return result
+
+
 def _kline_rows(payload, default_final):
     normalized = _normalize_kline(payload)
     if not normalized:
@@ -270,14 +297,15 @@ def fetch_target_30m_snapshots(
     output = {}
     for target in targets or []:
         code = str((target or {}).get("code") or "").strip()
-        payload = _normalize_kline(fetcher.fetch_30m(code, int(count), as_of_text))
+        normalized = _normalize_kline(fetcher.fetch_30m(code, int(count), as_of_text))
+        payload = _truncate_kline_at(normalized, as_of_dt)
         latest_ts = payload["dates"][-1] if payload else ""
         latest_date = _date_part(latest_ts)
         if not payload or latest_date != date:
             output[code] = {
                 "status": "unavailable",
                 "reason_code": (
-                    "current_trade_date_missing" if payload else "data_missing"
+                    "current_trade_date_missing" if normalized else "data_missing"
                 ),
                 "latest_date": latest_date,
                 "bar_state": "intraday",

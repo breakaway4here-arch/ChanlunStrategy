@@ -2,8 +2,9 @@ import { DurableObject } from "cloudflare:workers";
 
 const POOL_KEYS = ["main", "h4_t3", "acceleration"] as const;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const HASH_PATTERN = /^[a-f0-9]{64}$/i;
+const HASH_PATTERN = /^[a-f0-9]{64}$/;
 const CODE_PATTERN = /^\d{6}$/;
+const EXPLICIT_TIMEZONE_PATTERN = /(?:Z|[+-]\d{2}:\d{2})$/;
 const NO_STORE = { "cache-control": "no-store" };
 
 type PoolKey = (typeof POOL_KEYS)[number];
@@ -69,9 +70,16 @@ function isCanonicalDate(value: unknown): value is string {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function isIsoOnDate(value: unknown, date: string): value is string {
-  if (typeof value !== "string" || !value.startsWith(`${date}T`)) return false;
-  return !Number.isNaN(Date.parse(value));
+function isIsoOnShanghaiDate(value: unknown, date: string): value is string {
+  if (typeof value !== "string" || !EXPLICIT_TIMEZONE_PATTERN.test(value)) return false;
+  const parsed = Date.parse(value);
+  if (Number.isNaN(parsed)) return false;
+  return new Date(parsed + 8 * 60 * 60 * 1000).toISOString().slice(0, 10) === date;
+}
+
+function isExactShanghaiExpiry(value: unknown, date: string): value is string {
+  return isIsoOnShanghaiDate(value, date)
+    && Date.parse(value) === Date.parse(`${date}T14:56:30+08:00`);
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -114,15 +122,14 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
     || value.strategy_version !== "preclose-1447-v1"
     || value.mode !== "preclose_advisory"
     || typeof value.snapshot_id !== "string"
-    || !value.snapshot_id.startsWith(`preclose:${tradeDate}:`)
     || typeof value.content_hash !== "string"
     || !HASH_PATTERN.test(value.content_hash)
+    || value.snapshot_id !== `preclose:${tradeDate}:${value.content_hash.slice(0, 16)}`
     || typeof value.source_sha !== "string"
     || !value.source_sha.trim()
-    || !isIsoOnDate(value.as_of, tradeDate)
-    || !isIsoOnDate(value.generated_at, tradeDate)
-    || !isIsoOnDate(value.expires_at, tradeDate)
-    || !String(value.expires_at).includes("T14:56:30")
+    || !isIsoOnShanghaiDate(value.as_of, tradeDate)
+    || !isIsoOnShanghaiDate(value.generated_at, tradeDate)
+    || !isExactShanghaiExpiry(value.expires_at, tradeDate)
     || !statuses.has(String(value.status))
     || value.is_final !== false
     || value.affects_formal !== false
@@ -150,7 +157,8 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
 
 function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: number) {
   const expired = now >= Date.parse(snapshot.expires_at);
-  const available = snapshot.status === "available" && !expired;
+  const hasRows = POOL_KEYS.some((key) => snapshot.pools[key].length > 0);
+  const available = snapshot.status === "available" && hasRows && !expired;
   const pools = {} as Record<PoolKey, PrecloseCandidate[]>;
   for (const key of POOL_KEYS) pools[key] = available ? snapshot.pools[key].map(normalizeCandidate).filter(Boolean) as PrecloseCandidate[] : [];
   return {
@@ -172,6 +180,47 @@ function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: n
     message: expired
       ? "预跑已过期，14:57后不再依据预跑清单新增动作"
       : available ? "14:56:30前有效" : "本期未选出推荐票",
+  };
+}
+
+function snapshotContentProjection(snapshot: PrecloseSnapshotBody) {
+  const pools = {} as Record<PoolKey, PrecloseCandidate[]>;
+  for (const key of POOL_KEYS) pools[key] = snapshot.pools[key];
+  return {
+    schema_version: snapshot.schema_version,
+    mode: snapshot.mode,
+    strategy_version: snapshot.strategy_version,
+    trade_date: snapshot.trade_date,
+    as_of: snapshot.as_of,
+    expires_at: snapshot.expires_at,
+    status: snapshot.status,
+    is_final: snapshot.is_final,
+    affects_formal: snapshot.affects_formal,
+    source_sha: snapshot.source_sha,
+    pools,
+  };
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined || value === null) return "null";
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (isObject(value)) {
+    return `{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${stableJson(value[key])}`
+    )).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function reconciliationContentProjection(value: Record<string, unknown>) {
+  return {
+    schema_version: value.schema_version,
+    trade_date: value.trade_date,
+    snapshot_id: value.snapshot_id,
+    preclose_content_hash: value.preclose_content_hash,
+    formal_content_hash: value.formal_content_hash,
+    status: value.status,
+    pools: value.pools,
   };
 }
 
@@ -285,8 +334,16 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
     if (current) {
       const stored = JSON.parse(current.body) as PrecloseSnapshotBody;
       if (stored.snapshot_id === snapshot.snapshot_id && current.content_hash === snapshot.content_hash) {
+        if (JSON.stringify(snapshotContentProjection(stored)) !== JSON.stringify(snapshotContentProjection(snapshot))) {
+          throw new Error("snapshot content changed without a new content hash");
+        }
         return { ok: true, status: "idempotent", revision: current.revision };
       }
+    }
+    if (this.row("reconciliations")) {
+      throw new Error("snapshot is sealed after reconciliation");
+    }
+    if (current) {
       if (expectedRevision === null || expectedRevision !== current.revision) {
         return { ok: false, status: "precondition_failed", revision: current.revision };
       }
@@ -314,6 +371,7 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
     if (
       typeof input.preclose_content_hash !== "string"
       || !HASH_PATTERN.test(input.preclose_content_hash)
+      || typeof input.snapshot_id !== "string"
       || typeof input.content_hash !== "string"
       || !HASH_PATTERN.test(input.content_hash)
       || typeof input.formal_content_hash !== "string"
@@ -322,9 +380,26 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
     ) {
       throw new Error("invalid reconciliation contract");
     }
+    const snapshotRow = this.row("snapshots");
+    if (!snapshotRow) throw new Error("snapshot required before reconciliation");
+    const storedSnapshot = JSON.parse(snapshotRow.body) as PrecloseSnapshotBody;
+    if (
+      storedSnapshot.trade_date !== input.trade_date
+      || storedSnapshot.snapshot_id !== input.snapshot_id
+      || snapshotRow.content_hash.toLowerCase() !== input.preclose_content_hash.toLowerCase()
+    ) {
+      throw new Error("reconciliation does not match stored snapshot");
+    }
     const fingerprint = input.content_hash.toLowerCase();
     const current = this.row("reconciliations");
     if (current?.content_hash === fingerprint) {
+      const stored = JSON.parse(current.body) as Record<string, unknown>;
+      if (
+        stableJson(reconciliationContentProjection(stored))
+        !== stableJson(reconciliationContentProjection(input))
+      ) {
+        throw new Error("reconciliation content changed without a new content hash");
+      }
       return { ok: true, status: "idempotent", revision: current.revision };
     }
     if (current && (expectedRevision === null || expectedRevision !== current.revision)) {
@@ -338,9 +413,20 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
   async getReconciliation() {
     const current = this.row("reconciliations");
     if (!current) return null;
+    const snapshotRow = this.row("snapshots");
+    if (!snapshotRow) return null;
+    const reconciliation = JSON.parse(current.body) as Record<string, unknown>;
+    const snapshot = JSON.parse(snapshotRow.body) as PrecloseSnapshotBody;
+    if (
+      reconciliation.trade_date !== snapshot.trade_date
+      || reconciliation.snapshot_id !== snapshot.snapshot_id
+      || String(reconciliation.preclose_content_hash).toLowerCase() !== snapshotRow.content_hash.toLowerCase()
+    ) {
+      return null;
+    }
     return {
       revision: current.revision,
-      value: publicReconciliation(JSON.parse(current.body), current.revision),
+      value: publicReconciliation(reconciliation, current.revision),
     };
   }
 }

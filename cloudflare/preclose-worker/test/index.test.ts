@@ -8,13 +8,14 @@ const PAGE_ORIGIN = "https://breakaway4here-arch.github.io";
 const TOKEN = "test-write-token";
 
 function snapshot(date: string, suffix = "a"): PrecloseSnapshotBody {
+  const contentHash = suffix.repeat(64).slice(0, 64);
   return {
     schema_version: "preclose-selection-v1",
     strategy_version: "preclose-1447-v1",
     mode: "preclose_advisory",
     trade_date: date,
-    snapshot_id: `preclose:${date}:${suffix}`,
-    content_hash: suffix.repeat(64).slice(0, 64),
+    snapshot_id: `preclose:${date}:${contentHash.slice(0, 16)}`,
+    content_hash: contentHash,
     source_sha: "6412624c",
     as_of: `${date}T14:47:00+08:00`,
     generated_at: `${date}T14:48:00+08:00`,
@@ -80,6 +81,20 @@ describe("pre-close worker", () => {
     expect(await repeated.json()).toMatchObject({ status: "idempotent", revision: 1 });
   });
 
+  it("rejects a changed content projection that reuses the same snapshot id and hash", async () => {
+    const body = snapshot("2026-09-18");
+    expect((await put(body)).status).toBe(201);
+    const changed = structuredClone(body);
+    changed.pools.main[0].name = "被篡改的候选";
+    expect((await put(changed)).status).toBe(400);
+  });
+
+  it("binds the snapshot id suffix to the declared content hash", async () => {
+    const body = snapshot("2026-09-21");
+    body.snapshot_id = `preclose:${body.trade_date}:${"f".repeat(16)}`;
+    expect((await put(body)).status).toBe(400);
+  });
+
   it("requires a matching revision before replacing a different hash", async () => {
     const date = "2026-09-03";
     await put(snapshot(date, "a"));
@@ -113,6 +128,23 @@ describe("pre-close worker", () => {
     });
   });
 
+  it("maps an available snapshot with three empty pools to the unified empty state", async () => {
+    vi.useFakeTimers();
+    const date = "2026-09-19";
+    vi.setSystemTime(new Date(`${date}T06:50:00Z`));
+    const body = snapshot(date);
+    body.pools = { main: [], h4_t3: [], acceleration: [] };
+    expect((await put(body)).status).toBe(201);
+
+    const response = await SELF.fetch(request(`/api/preclose/latest?date=${date}`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      status: "empty",
+      message: "本期未选出推荐票",
+      pools: { main: [], h4_t3: [], acceleration: [] },
+    });
+  });
+
   it("fails closed at the inclusive server expiry boundary", async () => {
     vi.useFakeTimers();
     await put(snapshot("2026-09-05"));
@@ -122,6 +154,24 @@ describe("pre-close worker", () => {
     expect(body.status).toBe("expired");
     expect(body.pools).toEqual({ main: [], h4_t3: [], acceleration: [] });
     expect(JSON.stringify(body)).not.toContain("300998");
+  });
+
+  it("rejects timezone-naive timestamps and an expiry that is not exactly 14:56:30 Asia/Shanghai", async () => {
+    const naiveExpiry = snapshot("2026-09-12");
+    naiveExpiry.expires_at = "2026-09-12T14:56:30";
+    expect((await put(naiveExpiry)).status).toBe(400);
+
+    const wrongExpiryInstant = snapshot("2026-09-13");
+    wrongExpiryInstant.expires_at = "2026-09-13T14:56:30Z";
+    expect((await put(wrongExpiryInstant)).status).toBe(400);
+
+    const naiveAsOf = snapshot("2026-09-14");
+    naiveAsOf.as_of = "2026-09-14T14:47:00";
+    expect((await put(naiveAsOf)).status).toBe(400);
+
+    const equivalentUtcExpiry = snapshot("2026-09-15");
+    equivalentUtcExpiry.expires_at = "2026-09-15T06:56:30Z";
+    expect((await put(equivalentUtcExpiry)).status).toBe(201);
   });
 
   it("allows only the Pages CORS origin and never emits a wildcard", async () => {
@@ -256,10 +306,13 @@ describe("pre-close worker", () => {
 
   it("stores and reads reconciliation through the same per-date RPC object", async () => {
     const date = "2026-09-11";
+    const storedSnapshot = snapshot(date);
+    await put(storedSnapshot);
     const reconciliation = {
       trade_date: date,
+      snapshot_id: storedSnapshot.snapshot_id,
       content_hash: "e".repeat(64),
-      preclose_content_hash: "a".repeat(64),
+      preclose_content_hash: storedSnapshot.content_hash,
       formal_content_hash: "f".repeat(64),
       status: "changed",
       diagnostics: { hidden: true },
@@ -289,6 +342,15 @@ describe("pre-close worker", () => {
     }));
     expect(await repeated.json()).toMatchObject({ status: "idempotent", revision: 1 });
 
+    const staleHashBody = structuredClone(reconciliation);
+    staleHashBody.pools = { main: { retained: ["600000"] } };
+    const staleHashWrite = await SELF.fetch(request("/api/preclose/reconciliation", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(staleHashBody),
+    }));
+    expect(staleHashWrite.status).toBe(400);
+
     const revised = { ...reconciliation, content_hash: "d".repeat(64), status: "unchanged" };
     const conflict = await SELF.fetch(request("/api/preclose/reconciliation", {
       method: "PUT",
@@ -314,5 +376,74 @@ describe("pre-close worker", () => {
       ).one().count
     ));
     expect(auditCount).toBe(2);
+  });
+
+  it("binds reconciliation to the stored snapshot identity and content hash", async () => {
+    const missingDate = "2026-09-16";
+    const missingSnapshot = snapshot(missingDate);
+    const base = {
+      trade_date: missingDate,
+      snapshot_id: missingSnapshot.snapshot_id,
+      content_hash: "e".repeat(64),
+      preclose_content_hash: missingSnapshot.content_hash,
+      formal_content_hash: "f".repeat(64),
+      status: "changed",
+      pools: {},
+    };
+    const write = (body: Record<string, unknown>) => SELF.fetch(request("/api/preclose/reconciliation", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }));
+
+    expect((await write(base)).status).toBe(400);
+
+    const date = "2026-09-17";
+    const storedSnapshot = snapshot(date);
+    await put(storedSnapshot);
+    const valid = {
+      ...base,
+      trade_date: date,
+      snapshot_id: storedSnapshot.snapshot_id,
+      preclose_content_hash: storedSnapshot.content_hash,
+    };
+    expect((await write({ ...valid, snapshot_id: `${storedSnapshot.snapshot_id}-wrong` })).status).toBe(400);
+    expect((await write({ ...valid, preclose_content_hash: "b".repeat(64) })).status).toBe(400);
+    expect((await write(valid)).status).toBe(201);
+  });
+
+  it("seals a snapshot after reconciliation and fails closed for a legacy mismatch", async () => {
+    const date = "2026-09-20";
+    const storedSnapshot = snapshot(date, "a");
+    await put(storedSnapshot);
+    const reconciliation = {
+      trade_date: date,
+      snapshot_id: storedSnapshot.snapshot_id,
+      content_hash: "e".repeat(64),
+      preclose_content_hash: storedSnapshot.content_hash,
+      formal_content_hash: "f".repeat(64),
+      status: "unchanged",
+      pools: {},
+    };
+    const write = await SELF.fetch(request("/api/preclose/reconciliation", {
+      method: "PUT",
+      headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+      body: JSON.stringify(reconciliation),
+    }));
+    expect(write.status).toBe(201);
+
+    const replacement = snapshot(date, "b");
+    expect((await put(replacement, { "if-match": '"1"' })).status).toBe(400);
+
+    const stub = env.PRE_CLOSE_SNAPSHOT.getByName(date);
+    await runInDurableObject(stub, async (_instance, state) => {
+      state.storage.sql.exec(
+        "UPDATE snapshots SET content_hash = ?, body = ? WHERE singleton = 1",
+        replacement.content_hash,
+        JSON.stringify(replacement),
+      );
+    });
+    const read = await SELF.fetch(request(`/api/preclose/reconciliation?date=${date}`));
+    expect(read.status).toBe(404);
   });
 });

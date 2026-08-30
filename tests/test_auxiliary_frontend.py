@@ -567,6 +567,67 @@ assert(!tags.some(function (tag) { return tag.text.includes('可上车'); }), 'r
 """,
         )
 
+    def test_candidate_row_uses_public_reason_projection_without_leaking_internal_reason_fields(self):
+        _assert_node_contract(
+            self,
+            "({ tags: selectCandidateRowTags, chip: makeChip, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1,
+  report_date: '2026-08-28',
+  views: { main: [{ code: '600001', summary: {
+    formal_action: '可上车',
+    formal_action_reason: '正式结构确认<script>alert(0)</script>',
+    applicable_horizon_status: 'missing'
+  } }] }
+} };
+const item = {
+  code: '600001',
+  action: '可上车',
+  action_reason: 'strategy_risk_and_conditions_not_declared',
+  primary_reason: 'decision_score_not_provided',
+  page_action_reason: '候选页公开理由不应覆盖正式证据',
+  source_labels: ['正式主推']
+};
+const tags = globalThis.__auxTest.tags(item, 'main');
+assert(tags.length === 2, 'candidate row did not keep the compact two-tag contract');
+assert(tags[1].text === '正式结构确认<script>alert(0)</script>', 'public formal action reason was not preferred');
+const html = globalThis.__auxTest.chip(tags[1].text, 'source-chip');
+assert(html.includes('&lt;script&gt;'), 'candidate reason was not HTML escaped');
+assert(!html.includes('<script>'), 'candidate reason leaked executable markup');
+assert(!html.includes('strategy_risk_and_conditions_not_declared'), 'internal action reason leaked into the row');
+assert(!html.includes('decision_score_not_provided'), 'internal primary reason leaked into the row');
+""",
+        )
+
+    def test_candidate_row_uses_page_reason_when_formal_projection_reason_is_missing(self):
+        _assert_node_contract(
+            self,
+            "({ tags: selectCandidateRowTags, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1,
+  report_date: '2026-08-28',
+  views: { main: [{ code: '600002', summary: {
+    formal_action: '观察',
+    applicable_horizon_status: 'missing'
+  } }] }
+} };
+const tags = globalThis.__auxTest.tags({
+  code: '600002',
+  page_action_reason: '页面公开说明：等待下一确认',
+  action_reason: 'formal_action_not_declared',
+  primary_reason: 'internal_reason_code'
+}, 'main');
+assert(tags.some(function (tag) { return tag.text === '页面公开说明：等待下一确认'; }),
+  'page-facing reason was not used when the formal projection reason was absent');
+assert(!tags.some(function (tag) { return tag.text.includes('internal_reason_code'); }),
+  'internal primary reason leaked when page-facing reason was available');
+""",
+        )
+
     def test_candidate_row_meta_separates_price_from_identity(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)
@@ -738,6 +799,11 @@ assert(selected[1].merged === true, 'prices within 0.6% were not merged');
 assert(selected[1].value === 10.05, 'merged lane changed the primary true y value');
 assert(selected[2].kind === 'reference' && selected[2].value === 10.01, 'merged lane removed the secondary real y line');
 assert(selected[1].labelVisible === true && selected[2].labelVisible === false, 'collision governance did not merge only the right-side label lane');
+const visible = selected.filter(function (item) { return item.labelVisible !== false; });
+assert(visible.length <= 2, 'persistent chart labels exceeded the two-label visible budget');
+assert(visible.some(function (item) { return item.kind === 'invalidation'; })
+  && visible.some(function (item) { return item.kind === 'current'; }),
+  'persistent label priority did not retain invalidation and current price');
 assert(selected[1].labelEntries.some(function (entry) { return entry.kind === 'current' && entry.value === 10.05; })
   && selected[1].labelEntries.some(function (entry) { return entry.kind === 'reference' && entry.value === 10.01; }), 'merged lane lost true source label values');
 assert(selected[3].kind === 'pressure' && selected[4].kind === 'target', 'non-colliding pressure or target lane was dropped');
@@ -748,6 +814,127 @@ assert(JSON.stringify(retainedKinds) === JSON.stringify(['current', 'invalidatio
 const mergedText = globalThis.__auxTest.format(selected[1]);
 assert(mergedText.includes('10.05') && mergedText.includes('10.01'), 'merged right-lane label hid one of the true prices');
 assert(JSON.stringify(priceLabels) === before, 'price label selection mutated source evidence');
+""",
+        )
+
+    def test_price_display_renders_real_boundary_derivatives(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderRecommendationPriceEvidence }",
+            r"""
+const html = globalThis.__auxTest.render({
+  price_evidence: {
+    status: 'available',
+    current_price: 10,
+    reference_price: 9,
+    pressure_price: 12,
+    invalidation_price: 8,
+    trailing_targets: []
+  },
+  display_derived: {
+    status: 'available',
+    distance_from_reference_pct: 11.1111,
+    upside_to_pressure_pct: 20,
+    downside_to_invalidation_pct: 20,
+    risk_reward_ratio: 1
+  }
+});
+assert(html.includes('上行空间 20%'), 'real upside-to-pressure distance was not rendered');
+assert(html.includes('下行空间 20%'), 'real downside-to-invalidation distance was not rendered');
+assert(html.includes('展示风险收益比 1'), 'real display risk/reward ratio was not rendered');
+""",
+        )
+
+    def test_price_display_hides_stale_or_status_inconsistent_derived_values(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderRecommendationPriceEvidence }",
+            r"""
+const html = globalThis.__auxTest.render({
+  price_evidence: {
+    status: 'missing',
+    current_price: 10,
+    reference_price: 9,
+    pressure_price: null,
+    invalidation_price: null,
+    trailing_targets: []
+  },
+  display_derived: {
+    status: 'available',
+    distance_from_reference_pct: 999,
+    upside_to_pressure_pct: 99,
+    downside_to_invalidation_pct: 88,
+    risk_reward_ratio: 4,
+    distance_state: '伪造状态'
+  }
+});
+assert(!html.includes('距参考价 999%'), 'stale distance was rendered despite missing price status');
+assert(!html.includes('上行空间 99%') && !html.includes('下行空间 88%'),
+  'derived boundaries were rendered without matching price evidence');
+assert(!html.includes('展示风险收益比 4'), 'risk/reward was rendered from an inconsistent payload');
+assert(!html.includes('伪造状态'), 'distance state was rendered without a validated distance');
+
+const mismatch = globalThis.__auxTest.render({
+  price_evidence: {
+    status: 'available', current_price: 10, reference_price: 9,
+    pressure_price: 12, invalidation_price: 8, trailing_targets: []
+  },
+  display_derived: {
+    status: 'available', distance_from_reference_pct: 999,
+    upside_to_pressure_pct: 20, downside_to_invalidation_pct: 20,
+    risk_reward_ratio: 1
+  }
+});
+assert(!mismatch.includes('距参考价 999%'), 'mismatched distance was rendered');
+assert(!mismatch.includes('上行空间 20%') && !mismatch.includes('下行空间 20%')
+  && !mismatch.includes('展示风险收益比 1'),
+  'available derived block was partially rendered after a boundary mismatch');
+""",
+        )
+
+    def test_price_display_uses_existing_distance_state_without_inventing_thresholds(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderRecommendationPriceEvidence }",
+            r"""
+const withState = globalThis.__auxTest.render({
+  price_evidence: { status: 'partial', current_price: 10, reference_price: 9 },
+  display_derived: { status: 'partial', distance_from_reference_pct: 11.1111, distance_state: '偏离' }
+});
+assert(withState.includes('距参考价 11.11% · 偏离'),
+  'an existing distance state was not displayed alongside its percentage');
+const withoutState = globalThis.__auxTest.render({
+  price_evidence: { status: 'partial', current_price: 10, reference_price: 9 },
+  display_derived: { status: 'partial', distance_from_reference_pct: 11.1111 }
+});
+assert(withoutState.includes('距参考价 11.11%')
+  && !withoutState.includes('接近')
+  && !withoutState.includes('适中')
+  && !withoutState.includes('偏离'),
+  'distance display invented a strategy threshold when no state was provided');
+""",
+        )
+
+    def test_sublevel_display_renders_satisfied_and_missing_confirmation_items(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderSublevelEvidence }",
+            r"""
+const html = globalThis.__auxTest.render({
+  status: 'available',
+  summary: '30分钟确认',
+  confirmation_status: 'confirmed',
+  confirmations: ['EMA5重新站上', '突破位保持'],
+  confirmed_by: '30m confirmation contract v1',
+  missing_evidence: ['MACD柱体连续性未提供']
+});
+assert(html.includes('已满足确认项'), 'satisfied confirmation heading was not rendered');
+assert(html.includes('EMA5重新站上') && html.includes('突破位保持'),
+  'satisfied confirmation items were not rendered');
+assert(html.includes('确认依据') && html.includes('30m confirmation contract v1'),
+  'confirmed_by provenance was not rendered');
+assert(html.includes('缺失证据') && html.includes('MACD柱体连续性未提供'),
+  'missing confirmation evidence was not rendered');
 """,
         )
 
