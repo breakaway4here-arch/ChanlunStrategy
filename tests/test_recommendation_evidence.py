@@ -240,6 +240,51 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
         self.assertEqual(prices["trailing_targets"], [])
         json.dumps(candidate, allow_nan=False)
 
+    def test_chart_price_metadata_admits_real_trailing_targets(self):
+        row = _workspace_row()
+        row["current_price"] = 10.2
+        row["formal_decision_contract"].update({
+            "reference_price": 10.0,
+            "pressure_price": 11.0,
+            "invalidation_price": 9.0,
+        })
+        raw = _raw_candidate()
+        raw["trailing_targets"] = [
+            {"price": 11.8, "label": "T+1"},
+            {"price": 12.6, "label": "T+3"},
+            {"price": 13.4, "label": "T+5"},
+            {"price": 14.2, "label": "目标4"},
+            {"price": 15.0, "label": "目标5"},
+            {"price": 15.8, "label": "目标6"},
+            {"price": 16.6, "label": "目标7"},
+        ]
+
+        candidate = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]
+
+        self.assertEqual(
+            [target["price"] for target in candidate["price_evidence"]["trailing_targets"]],
+            [11.8, 12.6, 13.4, 14.2, 15.0],
+        )
+        self.assertEqual(
+            candidate["price_evidence"]["trailing_targets_contract"],
+            {
+                "max_visible": 5,
+                "input_count": 7,
+                "valid_count": 7,
+                "visible_count": 5,
+                "omitted_count": 2,
+                "truncated": True,
+                "reason": "display_payload_limit",
+            },
+        )
+        self.assertIn(
+            "trailing_targets",
+            candidate["display_derived"]["chart_evidence"]["prices"]["available"],
+        )
+
     def test_invalid_latest_close_never_falls_back_to_an_older_price(self):
         row = _workspace_row()
         raw = _raw_candidate()

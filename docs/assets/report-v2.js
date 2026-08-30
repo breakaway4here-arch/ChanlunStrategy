@@ -3284,11 +3284,20 @@
       var label = normalizeString(source.label).trim();
       return (label ? label + ' ' : '') + recommendationEvidenceNumber(price, 2);
     }).filter(Boolean);
+    var targetContract = prices.trailing_targets_contract && typeof prices.trailing_targets_contract === 'object'
+      ? prices.trailing_targets_contract : {};
+    var omittedTargets = Math.max(0, Math.floor(safeNumber(targetContract.omitted_count, 0)));
+    var maxVisibleTargets = Math.max(0, Math.floor(safeNumber(targetContract.max_visible, 0)));
+    var targetText = targets.length ? '分级目标：' + targets.join(' · ') : '本期未形成分级目标';
+    if (omittedTargets > 0) {
+      targetText += ' · 另有 ' + String(omittedTargets) + ' 个目标未展开'
+        + (maxVisibleTargets > 0 ? '（展示上限 ' + String(maxVisibleTargets) + '）' : '');
+    }
     var distance = derived.distance_from_reference_pct;
     return '<div class="detail-price-grid">' + cells + '</div>'
       + '<div class="recommendation-price-notes">'
       + '<span>' + escapeHtml(isRecommendationEvidenceFiniteNumber(distance) ? '距参考价 ' + recommendationEvidenceNumber(distance, 2) + '%' : '距参考价未形成可验证计算') + '</span>'
-      + '<span>' + escapeHtml(targets.length ? '分级目标：' + targets.join(' · ') : '本期未形成分级目标') + '</span>'
+      + '<span>' + escapeHtml(targetText) + '</span>'
       + '</div>';
   }
 
@@ -3595,7 +3604,7 @@
   }
 
   function selectPersistentPriceLabels(labels) {
-    var priorities = { invalidation: 0, current: 1, reference: 2, pressure: 3 };
+    var priorities = { invalidation: 0, current: 1, reference: 2, pressure: 3, target: 4 };
     var candidates = asArray(labels).map(function (label) {
       var value = safeNumber(label && label.value, null);
       if (value === null || !Number.isFinite(value) || value <= 0) return null;
@@ -3605,6 +3614,13 @@
         value: value,
         values: [value],
         label: normalizeString(label.label),
+        entries: [{
+          kind: normalizeString(label.kind),
+          value: value,
+          label: normalizeString(label.label),
+        }],
+        labelEntries: [],
+        labelVisible: true,
         merged: false,
       };
     }).filter(Boolean).sort(function (left, right) {
@@ -3612,20 +3628,24 @@
         - (priorities[right.kind] === undefined ? 99 : priorities[right.kind]);
     });
     var selected = [];
+    var labelLanes = [];
     for (var i = 0; i < candidates.length; i += 1) {
       var candidate = candidates[i];
-      var closeTo = selected.filter(function (existing) {
+      candidate.labelEntries = candidate.entries.slice();
+      var closeTo = labelLanes.filter(function (existing) {
         var base = Math.max(Math.abs(existing.value), Math.abs(candidate.value), 0.0001);
         return Math.abs(existing.value - candidate.value) / base < 0.006;
       })[0];
       if (closeTo) {
         closeTo.merged = true;
-        closeTo.values.push(candidate.value);
-        closeTo.kinds.push(candidate.kind);
+        closeTo.labelEntries.push(candidate.entries[0]);
         closeTo.label = [closeTo.label, candidate.label].filter(Boolean).join(' / ');
-        continue;
+        candidate.merged = true;
+        candidate.labelVisible = false;
+      } else {
+        labelLanes.push(candidate);
       }
-      if (selected.length < 2) selected.push(candidate);
+      selected.push(candidate);
     }
     return selected;
   }
@@ -3773,10 +3793,31 @@
   }
 
   function formatPersistentPriceLabel(label) {
-    var shortLabels = { invalidation: '止', current: '现', reference: '参', pressure: '压' };
-    var kinds = asArray(label && label.kinds).length ? asArray(label.kinds) : [label && label.kind];
-    var prefix = kinds.map(function (kind) { return shortLabels[kind] || ''; }).filter(Boolean).join('/');
-    return (prefix || '价') + ' ' + formatNumber(label && label.value, 2);
+    var shortLabels = { invalidation: '止', current: '现', reference: '参', pressure: '压', target: '目' };
+    var entries = asArray(label && label.labelEntries);
+    if (!entries.length) entries = asArray(label && label.entries);
+    if (!entries.length) {
+      entries = [{ kind: label && label.kind, value: label && label.value, label: label && label.label }];
+    }
+    return entries.map(function (entry) {
+      var kind = normalizeString(entry && entry.kind);
+      var prefix = shortLabels[kind] || '价';
+      var targetLabel = kind === 'target'
+        ? normalizeString(entry && entry.label).replace(/^目标\s*/, '').trim()
+        : '';
+      return prefix + (targetLabel ? targetLabel : '') + ' ' + formatNumber(entry && entry.value, 2);
+    }).join('\n');
+  }
+
+  function persistentPriceLineContract(kind) {
+    var contracts = {
+      current: { lineType: 'solid', symbol: ['none', 'roundRect'] },
+      reference: { lineType: 'dashed', symbol: ['none', 'circle'] },
+      invalidation: { lineType: 'solid', symbol: ['none', 'arrow'] },
+      pressure: { lineType: 'dotted', symbol: ['none', 'diamond'] },
+      target: { lineType: 'dashed', symbol: ['none', 'triangle'] },
+    };
+    return contracts[kind] || { lineType: 'dashed', symbol: ['none', 'none'] };
   }
 
   function selectStructureChartLines(rawMarkLines, raw) {
@@ -3911,6 +3952,8 @@
     }
 
     var volumeSlice = tailAlignChartSeries(volumes, minLen, null);
+    var recommendationEvidence = getCandidateRecommendationEvidence(workspaceItem, state.data);
+    var priceEvidence = recommendationEvidence && recommendationEvidence.price_evidence;
     var chartEvidence = getCandidateChartEvidence(workspaceItem, state.data);
     var projectedMacd = chartEvidence && chartEvidence.macd;
     var macdAvailable = projectedMacd
@@ -3955,27 +3998,12 @@
     var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
     var structureLines = selectStructureChartLines(rawMarkLines, raw);
-    for (var l = 0; l < rawMarkLines.length; l += 1) {
-      var ml = rawMarkLines[l] || {};
-      if (incidentReview) continue;
-      if (ml && ml.name && ml.yAxis !== undefined) {
-        var rawLineName = normalizeString(ml.name);
-        var rawKind = /失效|止损/.test(rawLineName)
-          ? 'invalidation'
-          : (/压力/.test(rawLineName)
-            ? 'pressure'
-            : (/参考|source/i.test(rawLineName)
-              ? 'reference'
-              : (/现价|收盘|current/i.test(rawLineName) ? 'current' : '')));
-        if (rawKind && chartProjectionAllowsPrice(chartEvidence, rawKind + '_price', ml.yAxis)) {
-          priceLabelCandidates.push({ kind: rawKind, value: ml.yAxis, label: rawLineName });
-        }
-      }
-    }
-
     var curPrice = getCandidateCurrentPriceFromRecord(workspaceItem);
     if (curPrice === null && raw && raw !== workspaceItem) {
       curPrice = getCandidateCurrentPriceFromRecord(raw);
+    }
+    if (curPrice === null) {
+      curPrice = safeNumber(priceEvidence && priceEvidence.current_price, null);
     }
     var refPrice = getCandidateReferencePriceFromRecord(workspaceItem);
     if (refPrice === null && raw && raw !== workspaceItem) {
@@ -3983,6 +4011,9 @@
     }
     if (refPrice === null && raw && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
       refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
+    }
+    if (refPrice === null) {
+      refPrice = safeNumber(priceEvidence && priceEvidence.reference_price, null);
     }
     if (chartProjectionAllowsPrice(chartEvidence, 'reference_price', refPrice)) {
       priceLabelCandidates.push({
@@ -3995,21 +4026,78 @@
       priceLabelCandidates.push({ kind: 'current', value: curPrice, label: '信号日收盘' });
     }
     var formalContract = workspaceItem && workspaceItem.formal_decision_contract || raw.formal_decision_contract || {};
-    if (chartProjectionAllowsPrice(chartEvidence, 'invalidation_price', formalContract.invalidation_price)) {
-      priceLabelCandidates.push({ kind: 'invalidation', value: formalContract.invalidation_price, label: '失效位' });
+    var invalidationPrice = safeNumber(
+      formalContract.invalidation_price,
+      safeNumber(priceEvidence && priceEvidence.invalidation_price, null)
+    );
+    var pressurePrice = safeNumber(
+      formalContract.pressure_price,
+      safeNumber(priceEvidence && priceEvidence.pressure_price, null)
+    );
+    if (chartProjectionAllowsPrice(chartEvidence, 'invalidation_price', invalidationPrice)) {
+      priceLabelCandidates.push({ kind: 'invalidation', value: invalidationPrice, label: '失效位' });
     }
-    if (chartProjectionAllowsPrice(chartEvidence, 'pressure_price', formalContract.pressure_price)) {
-      priceLabelCandidates.push({ kind: 'pressure', value: formalContract.pressure_price, label: '压力位' });
+    if (chartProjectionAllowsPrice(chartEvidence, 'pressure_price', pressurePrice)) {
+      priceLabelCandidates.push({ kind: 'pressure', value: pressurePrice, label: '压力位' });
     }
+    asArray(priceEvidence && priceEvidence.trailing_targets).forEach(function (target, index) {
+      var source = target && typeof target === 'object' ? target : { price: target };
+      var targetPrice = safeNumber(source.price, null);
+      if (!chartProjectionAllowsPrice(chartEvidence, 'trailing_targets', targetPrice)) return;
+      var targetLabel = normalizeString(source.label).trim();
+      priceLabelCandidates.push({
+        kind: 'target',
+        value: targetPrice,
+        label: targetLabel ? '目标 ' + targetLabel : '目标 ' + String(index + 1),
+      });
+    });
+    var canonicalPriceKinds = {};
+    priceLabelCandidates.forEach(function (candidate) {
+      canonicalPriceKinds[candidate.kind] = true;
+    });
+    var rawPriceCandidates = {};
+    for (var l = 0; l < rawMarkLines.length; l += 1) {
+      var ml = rawMarkLines[l] || {};
+      if (incidentReview || !ml.name || ml.yAxis === undefined) continue;
+      var rawLineName = normalizeString(ml.name);
+      var rawKind = /失效|止损/.test(rawLineName)
+        ? 'invalidation'
+        : (/压力/.test(rawLineName)
+          ? 'pressure'
+          : (/参考|source/i.test(rawLineName)
+            ? 'reference'
+            : (/现价|收盘|current/i.test(rawLineName) ? 'current' : '')));
+      var rawValue = safeNumber(ml.yAxis, null);
+      if (!rawKind || canonicalPriceKinds[rawKind]
+          || rawValue === null || !Number.isFinite(rawValue) || rawValue <= 0
+          || !chartProjectionAllowsPrice(chartEvidence, rawKind + '_price', rawValue)) continue;
+      if (!rawPriceCandidates[rawKind]) rawPriceCandidates[rawKind] = [];
+      if (!rawPriceCandidates[rawKind].some(function (candidate) { return candidate.value === rawValue; })) {
+        rawPriceCandidates[rawKind].push({ kind: rawKind, value: rawValue, label: rawLineName });
+      }
+    }
+    Object.keys(rawPriceCandidates).forEach(function (kind) {
+      if (rawPriceCandidates[kind].length === 1) {
+        priceLabelCandidates.push(rawPriceCandidates[kind][0]);
+      }
+    });
     var persistentLabels = selectPersistentPriceLabels(priceLabelCandidates);
     var markLines = persistentLabels.map(function (label) {
+      var contract = persistentPriceLineContract(label.kind);
       return {
+        kind: label.kind,
+        kinds: label.kinds.slice(),
+        values: label.values.slice(),
         name: label.label,
         yAxis: label.value,
+        symbol: contract.symbol.slice(),
         label: {
-          show: true,
+          show: label.labelVisible !== false,
           position: 'end',
-          formatter: formatPersistentPriceLabel(label),
+          formatter: label.labelVisible === false ? '' : formatPersistentPriceLabel(label),
+        },
+        lineStyle: {
+          type: contract.lineType,
         },
       };
     });
@@ -4118,8 +4206,12 @@
             symbol: 'none',
             data: activeMarkLines.map(function (line) {
               return {
+                kind: line.kind,
+                kinds: line.kinds,
+                values: line.values,
                 name: line.name,
                 yAxis: line.yAxis,
+                symbol: line.symbol,
                 label: {
                   show: true,
                   color: '#374151',

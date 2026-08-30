@@ -187,13 +187,16 @@ const labels = [
 ];
 const before = JSON.stringify(labels);
 const selected = globalThis.__auxTest.select(labels);
-const merged = selected.filter(function (item) {
-  return item.kinds.includes('reference') && item.kinds.includes('current');
-})[0];
-assert(merged, 'nearby reference/current prices were not merged into one lane');
-assert(merged.merged === true, 'collision merge was not marked');
-assert(merged.values.includes(10.00) && merged.values.includes(10.03), 'merged lane lost true price values');
-assert(merged.kinds.includes('reference') && merged.kinds.includes('current'), 'merged lane lost true price kinds');
+assert(selected.length === 4, 'label collision removed one or more true price lines');
+const current = selected.filter(function (item) { return item.kind === 'current'; })[0];
+const reference = selected.filter(function (item) { return item.kind === 'reference'; })[0];
+const pressure = selected.filter(function (item) { return item.kind === 'pressure'; })[0];
+assert(current && current.merged === true, 'nearby prices were not merged into one right-side label lane');
+assert(current.labelVisible === true && reference.labelVisible === false && pressure.labelVisible === false, 'only the label lane should be merged');
+assert(current.labelEntries.some(function (entry) { return entry.kind === 'reference' && entry.value === 10.00; })
+  && current.labelEntries.some(function (entry) { return entry.kind === 'current' && entry.value === 10.03; })
+  && current.labelEntries.some(function (entry) { return entry.kind === 'pressure' && entry.value === 10.05; }), 'merged label lane lost true values or kinds');
+assert(reference.value === 10.00 && current.value === 10.03 && pressure.value === 10.05, 'real y values changed during label collision handling');
 assert(JSON.stringify(labels) === before, 'price collision handling mutated formal annotations');
 """,
         )

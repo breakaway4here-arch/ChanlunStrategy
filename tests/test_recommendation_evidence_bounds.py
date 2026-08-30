@@ -88,6 +88,18 @@ class RecommendationEvidenceBoundsTests(unittest.TestCase):
     def test_trailing_targets_are_bounded(self):
         targets = self.candidate["price_evidence"]["trailing_targets"]
         self.assertLessEqual(len(targets), MAX_TRAILING_TARGETS)
+        self.assertEqual(
+            self.candidate["price_evidence"]["trailing_targets_contract"],
+            {
+                "max_visible": MAX_TRAILING_TARGETS,
+                "input_count": 256,
+                "valid_count": 256,
+                "visible_count": MAX_TRAILING_TARGETS,
+                "omitted_count": 251,
+                "truncated": True,
+                "reason": "display_payload_limit",
+            },
+        )
 
     def test_daily_startup_signals_are_bounded(self):
         signals = self.candidate["daily_structure"]["startup_signals"]

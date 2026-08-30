@@ -590,12 +590,16 @@ def _formal_contract_price(contract, diagnostics, field, audit_reasons):
 def _project_trailing_targets(raw):
     targets = _as_mapping(raw).get("trailing_targets")
     if not isinstance(targets, (list, tuple)):
-        return []
+        targets = []
     projected = []
+    valid_count = 0
     for index, target in enumerate(targets):
         if isinstance(target, Mapping):
             price = _positive_price(target.get("price"))
             if price is None:
+                continue
+            valid_count += 1
+            if len(projected) >= _MAX_TRAILING_TARGETS:
                 continue
             item = {
                 "price": price,
@@ -608,18 +612,26 @@ def _project_trailing_targets(raw):
             if label:
                 item["label"] = label
             projected.append(item)
-            if len(projected) >= _MAX_TRAILING_TARGETS:
-                break
             continue
         price = _positive_price(target)
         if price is not None:
+            valid_count += 1
+            if len(projected) >= _MAX_TRAILING_TARGETS:
+                continue
             projected.append({
                 "price": price,
                 "source": "trailing_targets[{}]".format(index),
             })
-            if len(projected) >= _MAX_TRAILING_TARGETS:
-                break
-    return projected
+    omitted_count = max(0, valid_count - len(projected))
+    return projected, {
+        "max_visible": _MAX_TRAILING_TARGETS,
+        "input_count": len(targets),
+        "valid_count": valid_count,
+        "visible_count": len(projected),
+        "omitted_count": omitted_count,
+        "truncated": omitted_count > 0,
+        "reason": "display_payload_limit" if omitted_count else None,
+    }
 
 
 def _build_price_evidence(row, raw, original_raw, report_date):
@@ -673,7 +685,9 @@ def _build_price_evidence(row, raw, original_raw, report_date):
                 if original_raw is not None else "serialized.stop_loss"
             )
 
-    trailing_targets = _project_trailing_targets(price_raw)
+    trailing_targets, trailing_targets_contract = _project_trailing_targets(
+        price_raw
+    )
     missing_fields = []
     for name, value in (
         ("current_price", current_price),
@@ -713,6 +727,7 @@ def _build_price_evidence(row, raw, original_raw, report_date):
         "invalidation_price": invalidation_price,
         "invalidation_price_source": invalidation_source,
         "trailing_targets": trailing_targets,
+        "trailing_targets_contract": trailing_targets_contract,
         "missing_fields": missing_fields,
         "audit_reasons": audit_reasons,
     }
@@ -819,22 +834,41 @@ def _chart_price_metadata(price_evidence, report_date):
         "pressure_price",
         "invalidation_price",
     )
-    available = [field for field in fields if _positive_price(price_evidence.get(field)) is not None]
-    if len(available) == len(fields):
+    scalar_available = [
+        field
+        for field in fields
+        if _positive_price(price_evidence.get(field)) is not None
+    ]
+    available = list(scalar_available)
+    trailing_targets = [
+        target
+        for target in price_evidence.get("trailing_targets", [])
+        if isinstance(target, Mapping)
+        and _positive_price(target.get("price")) is not None
+    ]
+    if trailing_targets:
+        available.append("trailing_targets")
+    if len(scalar_available) == len(fields):
         status = "available"
     elif available:
         status = "partial"
     else:
         status = "missing"
+    field_sources = {
+        field: price_evidence.get(field + "_source")
+        for field in available
+        if field in fields
+    }
+    if trailing_targets:
+        field_sources["trailing_targets"] = [
+            target.get("source") for target in trailing_targets
+        ]
     metadata = {
         "status": status,
         "source": "price_evidence",
         "as_of": report_date,
         "available": available,
-        "field_sources": {
-            field: price_evidence.get(field + "_source")
-            for field in available
-        },
+        "field_sources": field_sources,
     }
     if status == "missing":
         metadata["reason"] = "real_price_boundaries_incomplete"

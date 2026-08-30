@@ -593,12 +593,13 @@ assert(html.includes('class="evidence-audit-drawer"'), 'evidence and audit drawe
 """,
         )
 
-    def test_persistent_price_labels_follow_priority_merge_and_true_value_contract(self):
+    def test_price_label_collision_keeps_all_real_values_and_kinds_without_two_lane_truncation(self):
         _assert_node_contract(
             self,
-            "{ select: selectPersistentPriceLabels }",
+            "{ select: selectPersistentPriceLabels, format: formatPersistentPriceLabel }",
             r"""
 const priceLabels = [
+  { kind: 'target', value: 11.6, label: '目标 T+5' },
   { kind: 'pressure', value: 10.8, label: '压力位' },
   { kind: 'reference', value: 10.01, label: '参考价' },
   { kind: 'current', value: 10.05, label: '现价' },
@@ -606,13 +607,190 @@ const priceLabels = [
 ];
 const before = JSON.stringify(priceLabels);
 const selected = globalThis.__auxTest.select(priceLabels);
-assert(selected.length === 2, 'persistent lane rendered more than two labels');
+assert(selected.length === 5, 'collision governance removed a real price line');
 assert(selected[0].kind === 'invalidation', 'invalidation did not win label priority');
 assert(selected[1].kind === 'current', 'current price did not win the close-price merge');
 assert(selected[1].merged === true, 'prices within 0.6% were not merged');
 assert(selected[1].value === 10.05, 'merged lane changed the primary true y value');
-assert(selected[1].values.includes(10.05) && selected[1].values.includes(10.01), 'merged lane lost true source y values');
+assert(selected[2].kind === 'reference' && selected[2].value === 10.01, 'merged lane removed the secondary real y line');
+assert(selected[1].labelVisible === true && selected[2].labelVisible === false, 'collision governance did not merge only the right-side label lane');
+assert(selected[1].labelEntries.some(function (entry) { return entry.kind === 'current' && entry.value === 10.05; })
+  && selected[1].labelEntries.some(function (entry) { return entry.kind === 'reference' && entry.value === 10.01; }), 'merged lane lost true source label values');
+assert(selected[3].kind === 'pressure' && selected[4].kind === 'target', 'non-colliding pressure or target lane was dropped');
+const retainedValues = selected.reduce(function (all, item) { return all.concat(item.values); }, []).sort(function (a, b) { return a - b; });
+const retainedKinds = selected.reduce(function (all, item) { return all.concat(item.kinds); }, []).sort();
+assert(JSON.stringify(retainedValues) === JSON.stringify([9.2, 10.01, 10.05, 10.8, 11.6]), 'collision governance lost a real source price');
+assert(JSON.stringify(retainedKinds) === JSON.stringify(['current', 'invalidation', 'pressure', 'reference', 'target']), 'collision governance lost a source price kind');
+const mergedText = globalThis.__auxTest.format(selected[1]);
+assert(mergedText.includes('10.05') && mergedText.includes('10.01'), 'merged right-lane label hid one of the true prices');
 assert(JSON.stringify(priceLabels) === before, 'price label selection mutated source evidence');
+""",
+        )
+
+    def test_decision_price_layer_includes_every_real_trailing_target(self):
+        _assert_node_contract(
+            self,
+            "{ chart: renderChart, state: state }",
+            r"""
+let chartOption = null;
+global.window.echarts = { init: function () { return {
+  setOption: function (option) { chartOption = option; },
+  dispose: function () {}, resize: function () {}
+}; } };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.isMobile = false;
+globalThis.__auxTest.state.chartLayer = 'decision';
+globalThis.__auxTest.state.currentView = 'main';
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '600001',
+    summary: { status: 'available', source: 'workspace', code: '600001' },
+    price_evidence: {
+      status: 'available', source: 'price_evidence',
+      current_price: 11.7, reference_price: 11.2,
+      invalidation_price: 10.4, pressure_price: 12.0,
+      trailing_targets: [
+        { price: 12.4, label: 'T+1', source: 'trailing_targets[0]' },
+        { price: 13.8, label: 'T+3', source: 'trailing_targets[1]' },
+        { price: 15.2, label: 'T+5', source: 'trailing_targets[2]' }
+      ]
+    },
+    display_derived: { status: 'available', source: 'derived', chart_evidence: {
+      status: 'available', source: 'chart metadata',
+      macd: { status: 'available' },
+      prices: {
+        status: 'available', source: 'price_evidence',
+        available: ['current_price', 'reference_price', 'invalidation_price', 'pressure_price', 'trailing_targets']
+      }
+    } }
+  }] }
+} };
+const raw = {
+  dates: ['2026-08-26', '2026-08-27', '2026-08-28'],
+  opens: [10.8, 11.0, 11.4], highs: [11.2, 11.6, 12.0],
+  lows: [10.4, 10.7, 11.1], closes: [11.0, 11.4, 11.7],
+  volumes: [100, 120, 180], macd_hist: [-0.1, 0.1, 0.2],
+  chart_annotations: {
+    markLines: [
+      { name: 'source price', yAxis: 11.2 },
+      { name: 'source price duplicate', yAxis: 11.2 },
+      { name: 'current close stale', yAxis: 99.0 },
+      { name: 'pressure stale', yAxis: 88.0 }
+    ],
+    markPoints: [], labels: []
+  }
+};
+globalThis.__auxTest.chart(raw, {
+  code: '600001', current_price: 11.7,
+  formal_decision_contract: {
+    action: '观察', reference_price: 11.2,
+    invalidation_price: 10.4, pressure_price: 12.0
+  }
+});
+const decisionLines = chartOption.series[0].markLine.data;
+const references = decisionLines.filter(function (line) { return line.kind === 'reference'; });
+const currents = decisionLines.filter(function (line) { return line.kind === 'current'; });
+const pressures = decisionLines.filter(function (line) { return line.kind === 'pressure'; });
+assert(references.length === 1 && references[0].yAxis === 11.2, 'raw duplicate was not deduped against canonical reference evidence');
+assert(currents.length === 1 && currents[0].yAxis === 11.7, 'stale raw current price was mixed with canonical evidence');
+assert(pressures.length === 1 && pressures[0].yAxis === 12.0, 'stale raw pressure was mixed with canonical evidence');
+const targets = decisionLines.filter(function (line) { return line.kind === 'target'; });
+assert(targets.length === 3, 'decision price layer omitted one or more real trailing targets');
+assert(JSON.stringify(targets.map(function (line) { return line.yAxis; })) === JSON.stringify([12.4, 13.8, 15.2]), 'decision price layer changed or reordered trailing target prices');
+assert(targets.map(function (line) { return line.name; }).join(',').includes('T+1')
+  && targets.map(function (line) { return line.name; }).join(',').includes('T+3')
+  && targets.map(function (line) { return line.name; }).join(',').includes('T+5'), 'decision price layer lost trailing target labels');
+""",
+        )
+
+    def test_trailing_target_display_declares_bounded_overflow(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderRecommendationPriceEvidence }",
+            r"""
+const html = globalThis.__auxTest.render({
+  price_evidence: {
+    current_price: 10.2,
+    trailing_targets: [
+      { price: 11.0, label: 'T+1' },
+      { price: 12.0, label: 'T+3' }
+    ],
+    trailing_targets_contract: {
+      max_visible: 5,
+      input_count: 7,
+      valid_count: 7,
+      visible_count: 5,
+      omitted_count: 2,
+      truncated: true,
+      reason: 'display_payload_limit'
+    }
+  },
+  display_derived: {}
+});
+assert(html.includes('另有 2 个目标未展开'), 'bounded trailing-target overflow was hidden from the user');
+assert(html.includes('展示上限 5'), 'trailing-target display bound was not declared');
+""",
+        )
+
+    def test_decision_price_kinds_have_distinct_non_color_line_and_symbol_contracts(self):
+        _assert_node_contract(
+            self,
+            "{ chart: renderChart, state: state }",
+            r"""
+let chartOption = null;
+global.window.echarts = { init: function () { return {
+  setOption: function (option) { chartOption = option; },
+  dispose: function () {}, resize: function () {}
+}; } };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.isMobile = false;
+globalThis.__auxTest.state.chartLayer = 'decision';
+globalThis.__auxTest.state.currentView = 'main';
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '600001',
+    summary: { status: 'available', source: 'workspace', code: '600001' },
+    price_evidence: {
+      status: 'available', source: 'price_evidence',
+      reference_price: 10.0, invalidation_price: 8.0, pressure_price: 12.0,
+      trailing_targets: [{ price: 14.0, label: 'T+3', source: 'trailing_targets[0]' }]
+    },
+    display_derived: { status: 'available', source: 'derived', chart_evidence: {
+      status: 'available', source: 'chart metadata',
+      macd: { status: 'available' },
+      prices: {
+        status: 'available', source: 'price_evidence',
+        available: ['reference_price', 'invalidation_price', 'pressure_price', 'trailing_targets']
+      }
+    } }
+  }] }
+} };
+globalThis.__auxTest.chart({
+  dates: ['2026-08-26', '2026-08-27', '2026-08-28'],
+  opens: [9.0, 9.4, 9.8], highs: [9.5, 10.0, 10.5],
+  lows: [8.7, 9.1, 9.5], closes: [9.4, 9.8, 10.2],
+  volumes: [100, 120, 180], macd_hist: [-0.1, 0.1, 0.2],
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }
+}, {
+  code: '600001',
+  formal_decision_contract: {
+    action: '观察', reference_price: 10.0,
+    invalidation_price: 8.0, pressure_price: 12.0
+  }
+});
+const lines = chartOption.series[0].markLine.data;
+const requiredKinds = ['reference', 'invalidation', 'pressure', 'target'];
+const signatures = requiredKinds.map(function (kind) {
+  const line = lines.filter(function (candidate) { return candidate.kind === kind; })[0];
+  assert(line, 'decision price layer did not preserve kind contract: ' + kind);
+  assert(line.lineStyle && typeof line.lineStyle.type === 'string' && line.lineStyle.type, 'lineType contract missing: ' + kind);
+  const symbol = Array.isArray(line.symbol) ? line.symbol.join('/') : String(line.symbol || '');
+  assert(symbol, 'symbol contract missing: ' + kind);
+  return line.lineStyle.type + '|' + symbol;
+});
+assert(new Set(signatures).size === requiredKinds.length, 'reference/invalidation/pressure/target are distinguishable only by color');
 """,
         )
 
