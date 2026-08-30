@@ -235,6 +235,8 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
         }
         exact_metrics["t3"] = {
             "n": 100,
+            "date_start": "2026-01-05",
+            "date_end": "2026-08-28",
             "mean": 1.5,
             "median": 1.0,
             "win_rate": 66.7,
@@ -288,6 +290,40 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
             1.5,
         )
         self.assertNotIn("999.0", json.dumps(validation, ensure_ascii=False))
+
+    def test_ready_progress_without_complete_dated_metrics_stays_collecting(self):
+        identity = _identity(intended_horizon=3)
+        readiness = {
+            key: "ready_for_manual_comparison"
+            for key in ("t1", "t3", "t5")
+        }
+        progress = {
+            key: _progress(
+                status="ready_for_manual_comparison",
+                mature_samples=100,
+                waiting_samples=0,
+                active_dates=20,
+                active_months=2,
+            )
+            for key in ("t1", "t3", "t5")
+        }
+        incomplete_metrics = {
+            key: {"n": 100, "mean": 1.5}
+            for key in ("t1", "t3", "t5")
+        }
+        validation = _project(
+            scorecards=_scorecards(_scorecard(
+                identity,
+                evaluation_status="ready_for_manual_comparison",
+                readiness=readiness,
+                progress=progress,
+                metrics=incomplete_metrics,
+            )),
+            ledger=[_ledger_entry([_contribution(identity)])],
+        )
+
+        self.assertEqual(validation["status"], "collecting")
+        self.assertEqual(validation["metrics_by_horizon"]["t3"], {})
 
     def test_duplicate_role_identity_is_ambiguous_and_fails_closed(self):
         identity = _identity()

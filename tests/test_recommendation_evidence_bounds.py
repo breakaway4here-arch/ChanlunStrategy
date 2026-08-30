@@ -17,6 +17,7 @@ REPORT_DATE = "2026-08-28"
 MAX_TEXT_ITEMS = 8
 MAX_TRAILING_TARGETS = 5
 MAX_CANDIDATE_BYTES = 32 * 1024
+MAX_TEXT_LENGTH = 512
 
 
 def _large_candidate_projection():
@@ -135,6 +136,38 @@ class RecommendationEvidenceBoundsTests(unittest.TestCase):
             allow_nan=False,
             separators=(",", ":"),
         ).encode("utf-8")
+        self.assertLess(len(encoded), MAX_CANDIDATE_BYTES)
+
+    def test_single_oversized_text_is_truncated_with_an_explicit_contract(self):
+        row = _workspace_row()
+        raw = _raw_candidate()
+        raw["best_buy_point"] = {
+            "type": "二买",
+            "summary": "X" * 100000,
+            "signal_date": REPORT_DATE,
+        }
+        candidate = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]
+
+        def strings(value):
+            if isinstance(value, str):
+                yield value
+            elif isinstance(value, dict):
+                for item in value.values():
+                    yield from strings(item)
+            elif isinstance(value, list):
+                for item in value:
+                    yield from strings(item)
+
+        self.assertLessEqual(max(map(len, strings(candidate))), MAX_TEXT_LENGTH)
+        self.assertEqual(candidate["payload_contract"]["status"], "truncated")
+        self.assertGreater(
+            candidate["payload_contract"]["truncated_text_count"],
+            0,
+        )
+        encoded = json.dumps(candidate, ensure_ascii=False).encode("utf-8")
         self.assertLess(len(encoded), MAX_CANDIDATE_BYTES)
 
 

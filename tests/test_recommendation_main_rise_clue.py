@@ -48,6 +48,13 @@ def _candidate(
     row.update(copy.deepcopy(row_updates))
 
     raw = copy.deepcopy(_raw_candidate(row["code"]))
+    raw["data_status"] = {
+        "daily": "verified",
+        "latest_date": REPORT_DATE,
+        "source": "market_history_db",
+        "stale": False,
+        "is_final": True,
+    }
     if bp is not None:
         raw["best_buy_point"] = copy.deepcopy(bp)
     raw["view"] = view
@@ -125,8 +132,112 @@ class RecommendationMainRiseClueTests(unittest.TestCase):
         self.assertIn("趋势延续候选", _evidence_text(clue["supporting_evidence"]))
         self.assertIn("日线趋势延续", _evidence_text(clue["supporting_evidence"]))
 
+    def test_missing_or_stale_30m_cannot_leak_confirmation_into_main_rise_support(self):
+        cases = (
+            ("missing", {}),
+            (
+                "stale",
+                {
+                    "strategy_input_evidence": {
+                        "interval": "30m",
+                        "status": "stale",
+                        "latest_date": "2026-08-21",
+                        "latest_ts": "2026-08-21 15:00:00",
+                        "stale": True,
+                        "is_final": True,
+                    },
+                },
+            ),
+        )
+        for expected_status, input_updates in cases:
+            with self.subTest(expected_status=expected_status):
+                raw_updates = {"source_channel": "trend_continuation"}
+                raw_updates.update(input_updates)
+                candidate = _candidate(
+                    bp={
+                        "type": "趋势延续候选",
+                        "source_type": "日线趋势延续",
+                        "reason": "20日平台突破",
+                        "confirmations": [
+                            "30min突破位不破",
+                            "30min EMA5维持",
+                            "30分钟缩量回踩",
+                        ],
+                        "signal_date": REPORT_DATE,
+                        "signal_age_days": 0,
+                    },
+                    raw_updates=raw_updates,
+                )
+
+                self.assertEqual(
+                    candidate["sublevel_30m"]["status"],
+                    expected_status,
+                )
+                supporting = _evidence_text(
+                    candidate["main_rise_clue"]["supporting_evidence"]
+                )
+                self.assertIn("趋势延续候选", supporting)
+                for forbidden in ("30min", "30m", "30分钟", "EMA"):
+                    self.assertNotIn(
+                        forbidden.lower(),
+                        supporting.lower(),
+                        "缺失或陈旧的30分钟证据泄漏进主升浪支持项: " + supporting,
+                    )
+
+    def test_stale_daily_evidence_cannot_publish_a_main_rise_clue(self):
+        candidate = _candidate(
+            bp={
+                "type": "趋势延续候选",
+                "source_type": "日线趋势延续",
+                "reason": "旧日线突破",
+                "signal_date": "2026-08-21",
+                "signal_age_days": 5,
+            },
+            raw_updates={
+                "data_status": {
+                    "daily": "verified",
+                    "latest_date": "2026-08-21",
+                    "source": "market_history_db",
+                    "stale": True,
+                    "is_final": True,
+                },
+            },
+        )
+
+        daily = candidate["daily_structure"]
+        clue = candidate["main_rise_clue"]
+        self.assertEqual(daily["status"], "stale")
+        self.assertEqual(clue["status"], "missing")
+        self.assertEqual(clue["supporting_evidence"], [])
+        self.assertTrue(any("日线证据陈旧" in item for item in clue["evidence_guards"]))
+
+    def test_missing_30m_filters_identity_fields_before_building_clue(self):
+        candidate = _candidate(
+            bp={
+                "type": "候选",
+                "source_type": "30min趋势延续",
+                "reason": "日线突破",
+                "signal_date": REPORT_DATE,
+            },
+            raw_updates={"source_channel": "30min_confirmation"},
+        )
+
+        clue = candidate["main_rise_clue"]
+        supporting = _evidence_text(clue["supporting_evidence"])
+        self.assertEqual(candidate["sublevel_30m"]["status"], "missing")
+        self.assertEqual(clue["status"], "missing")
+        self.assertEqual(clue["clue_type"], "none")
+        self.assertNotIn("30min", supporting.lower())
+
     def test_acceleration_pool_maps_to_acceleration_clue(self):
         candidate = _candidate(
+            bp={
+                "type": "强势启动候选",
+                "source_type": "日线强势启动",
+                "reason": "融合强势启动",
+                "signal_date": REPORT_DATE,
+                "signal_age_days": 0,
+            },
             view="acceleration",
             pool="next_day_boom",
             row_updates={

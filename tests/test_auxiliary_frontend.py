@@ -98,6 +98,48 @@ assert(html.includes('仅用于当前池内排序'), 'rank scope boundary missin
 """,
         )
 
+    def test_candidate_comparison_exposes_signal_freshness_and_data_status(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderCandidateEvidenceComparison, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28', views: { main: [{
+    code: '301629',
+    summary: { status: 'available', as_of: '2026-08-28', source: 'workspace.views.main',
+      name: '矽电股份', sector: '半导体', formal_action: '观察' },
+    decision_score: { status: 'available', source: 'decision', score: 62, components: {} },
+    rank_evidence: { status: 'available', source: 'workspace', view_rank: 2, opportunity_score: 30 },
+    daily_structure: { status: 'available', as_of: '2026-08-28', source: 'evidence-section-provenance',
+      data_source: 'serialized daily candidate fields',
+      signal: '二买', signal_date: '2026-08-28', signal_age_days: 0,
+      latest_date: '2026-08-28', health: 'verified' },
+    sublevel_30m: { status: 'missing', as_of: '2026-08-28', source: '30m', reason: 'not provided' },
+    volume_and_capital: { status: 'missing', source: 'volume', reason: 'not provided' },
+    market_and_sector: { status: 'missing', source: 'sector', reason: 'not provided' },
+    risk_and_next: { status: 'missing', source: 'risk', risk_labels: [] },
+    historical_validation: { status: 'missing', source: 'history', reason: 'not provided' }
+  }] }
+} };
+const html = globalThis.__auxTest.render('main');
+assert(html.includes('<th scope="col">信号与新鲜度</th>'),
+  '桌面比较表缺少信号日期/新鲜度列');
+assert(html.includes('<th scope="col">数据状态</th>'),
+  '桌面比较表缺少数据状态列');
+assert(html.includes('<dt>信号与新鲜度</dt>'),
+  '移动候选卡缺少信号日期/新鲜度字段');
+assert(html.includes('<dt>数据状态</dt>'),
+  '移动候选卡缺少数据状态字段');
+assert(html.includes('二买') && html.includes('2026-08-28'),
+  '信号类型或信号日期没有进入候选比较');
+assert(html.includes('0个交易日') || html.includes('0 个交易日') || html.includes('当日'),
+  '信号年龄没有转换为新鲜度文案');
+assert(html.includes('serialized daily candidate fields') && html.includes('verified'),
+  '证据来源或终局数据状态没有进入候选比较');
+""",
+        )
+
     def test_candidate_comparison_has_no_sort_or_third_score(self):
         _assert_node_contract(
             self,
@@ -251,7 +293,8 @@ const base = {
     schema_version: 1, mode: 'shadow', affects_production: false,
     promotion_eligible: false, promotion_requires_new_authorization: true,
     status: 'available', formal_score: 61, shadow_score_with_psy12: 61,
-    delta_vs_formal: 0, formal_label: '偏强', shadow_label: '偏强'
+    delta_vs_formal: 0, formal_label: '偏强', shadow_label: '偏强',
+    weights: { psy12: 0.1 }
   }
 };
 const html = globalThis.__auxTest.render(base);
@@ -281,7 +324,8 @@ const insufficient = globalThis.__auxTest.render({
   psy12_shadow: {
     schema_version: 1, mode: 'shadow', affects_production: false,
     promotion_eligible: false, promotion_requires_new_authorization: true,
-    status: 'unavailable', shadow_score_with_psy12: null
+    status: 'unavailable', shadow_score_with_psy12: null,
+    weights: { psy12: 0.1 }
   }
 });
 assert(insufficient.includes('PSY12 数据不足'), 'insufficient state hidden');
@@ -296,7 +340,8 @@ const changed = globalThis.__auxTest.render({
     schema_version: 1, mode: 'shadow', affects_production: false,
     promotion_eligible: false, promotion_requires_new_authorization: true,
     status: 'available', formal_score: 59, shadow_score_with_psy12: 62,
-    delta_vs_formal: 3, formal_label: '平衡', shadow_label: '偏强'
+    delta_vs_formal: 3, formal_label: '平衡', shadow_label: '偏强',
+    weights: { psy12: 0.1 }
   }
 });
 assert(changed.includes('正式标签 平衡'), 'formal label missing in divergence');
@@ -425,11 +470,21 @@ assert(sentimentResizeCalls === 1, 'research chart was not resized after reveal'
             self,
             "{ tags: selectCandidateRowTags, state: state }",
             r"""
-globalThis.__auxTest.state.data = { selection_input_health: {
-  schema_version: 2,
-  by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+globalThis.__auxTest.state.data = {
+  date: '2026-08-28',
+  selection_input_health: {
+    schema_version: 2,
+    by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+  }
+};
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28',
+  views: { main: [{ code: '600001', summary: {
+    formal_action: '可上车', applicable_horizon_status: 'missing'
+  } }] }
 } };
 const tags = globalThis.__auxTest.tags({
+  code: '600001',
   action: '可上车', effective_action: '可上车', action_semantics: 'formal',
   is_formal_recommendation: true,
   source_labels: ['正式主推', '日线共振', '30分钟确认'],
@@ -440,6 +495,75 @@ const tags = globalThis.__auxTest.tags({
 assert(Array.isArray(tags), 'candidate tag selector did not return a list');
 assert(tags.length <= 2, 'candidate row rendered more than two tags');
 assert(tags.some(function (tag) { return tag.text.includes('可上车'); }), 'formal action was removed from candidate row');
+""",
+        )
+
+    def test_candidate_row_horizon_uses_only_formal_evidence_summary(self):
+        _assert_node_contract(
+            self,
+            "({ tags: selectCandidateRowTags, state: state })",
+            r"""
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1,
+  report_date: '2026-08-28',
+  views: { main: [
+    { code: '600001', summary: {
+      applicable_horizon: 5,
+      applicable_horizon_text: 'T+5',
+      applicable_horizon_status: 'available'
+    } },
+    { code: '600002', summary: {
+      applicable_horizon: null,
+      applicable_horizon_text: '策略周期证据冲突',
+      applicable_horizon_status: 'conflict'
+    } }
+  ] }
+} };
+const formalTags = globalThis.__auxTest.tags({
+  code: '600001', action: '可上车', intended_horizon: 'T+3'
+}, 'main');
+assert(formalTags.some(function (tag) { return tag.text === 'T+5'; }), 'formal horizon was not rendered');
+assert(!formalTags.some(function (tag) { return tag.text === 'T+3'; }), 'raw horizon overrode formal evidence');
+const conflictTags = globalThis.__auxTest.tags({
+  code: '600002', action: '观察', intended_horizon: 'T+3'
+}, 'main');
+assert(conflictTags.some(function (tag) { return tag.text === '周期证据冲突'; }), 'horizon conflict was hidden');
+assert(!conflictTags.some(function (tag) { return tag.text === 'T+3'; }), 'conflicting raw horizon leaked');
+""",
+        )
+
+    def test_candidate_row_action_uses_only_formal_evidence_summary(self):
+        _assert_node_contract(
+            self,
+            "({ tags: selectCandidateRowTags, state: state })",
+            r"""
+globalThis.__auxTest.state.data = {
+  date: '2026-08-28',
+  selection_input_health: {
+    schema_version: 2,
+    by_strategy: {
+      daily_fusion: { status: 'verified', formal_actions_allowed: true }
+    }
+  }
+};
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1,
+  report_date: '2026-08-28',
+  views: { main: [{ code: '600001', summary: {
+    formal_action: '观察',
+    applicable_horizon_status: 'missing'
+  } }] }
+} };
+const tags = globalThis.__auxTest.tags({
+  code: '600001',
+  page_action: '可上车',
+  effective_action: '可上车',
+  action: '可上车',
+  action_semantics: 'formal'
+}, 'main');
+assert(tags.some(function (tag) { return tag.text === '正式动作：观察'; }), 'formal evidence action was not rendered');
+assert(!tags.some(function (tag) { return tag.text.includes('可上车'); }), 'raw action overrode formal evidence');
 """,
         )
 
@@ -1091,11 +1215,19 @@ assert(globalThis.__auxTest.action({
 assert(globalThis.__auxTest.action({
   action: '可上车', action_semantics: 'upstream_only', is_formal_recommendation: false
 }) === '仅作为上游候选', 'shared upstream pretended to be a page action');
-globalThis.__auxTest.state.data = { selection_input_health: {
-  schema_version: 2,
-  by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+globalThis.__auxTest.state.data = {
+  date: '2026-08-28',
+  selection_input_health: {
+    schema_version: 2,
+    by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+  }
+};
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
+  schema_version: 1, report_date: '2026-08-28',
+  views: { main: [{ code: '600001', summary: { formal_action: '可上车' } }] }
 } };
 assert(globalThis.__auxTest.action({
+  code: '600001',
   action: '可上车', effective_action: '可上车', action_semantics: 'formal',
   is_formal_recommendation: true
 }, 'main') === '可上车', 'verified formal action was suppressed');
@@ -1103,13 +1235,13 @@ globalThis.__auxTest.state.data = {};
 assert(globalThis.__auxTest.action({
   action: '可上车', effective_action: '可上车', action_semantics: 'formal',
   is_formal_recommendation: true
-}, 'main').includes('已封闭'), 'missing formal health failed open');
+}, 'main') === '本期未选出推荐票', 'missing formal health failed open');
 globalThis.__auxTest.state.data = { selection_input_health: {
   schema_version: 2,
   by_strategy: { h4_t3: { status: 'unavailable', formal_actions_allowed: false } }
 } };
 assert(globalThis.__auxTest.action({ action: '可上车', action_semantics: 'formal' }, 'h4_t3')
-  .includes('已封闭'), 'blocked H4 action failed open');
+  === '本期未选出推荐票', 'blocked H4 action failed open');
 assert(globalThis.__auxTest.action({
   action: '可上车', effective_action: '可上车'
 }, 'luojie') === '仅观察', 'legacy research tab leaked an actionable label');
@@ -1217,7 +1349,7 @@ assert(!regime.includes('>0/1<'), 'missing index changes were counted as flat/do
             "{ render: renderSectorFlowCard }",
             r"""
 const unavailable = globalThis.__auxTest.render({});
-assert(unavailable.includes('数据不可用'), 'missing sector source looked like an empty result');
+assert(unavailable.includes('证据不足'), 'missing sector source looked like an empty result');
 const verifiedEmpty = globalThis.__auxTest.render({
   sector_flow: [], sector_outflow: [], data_quality: { sector_source: 'eastmoney' }
 });
@@ -1341,7 +1473,7 @@ assert(globalThis.__auxTest.availability({ state: 'partial' }).tone === 'warning
 assert(globalThis.__auxTest.availability({ state: 'unavailable' }).tone === 'danger', 'unavailable tone wrong');
 assert(globalThis.__auxTest.source('picks_pure').includes('共同上游'), 'source pool was not translated');
 assert(globalThis.__auxTest.action('watch_only') === '页面只能观察', 'watch-only semantics hidden');
-assert(globalThis.__auxTest.pageAction('formal', { state: 'unavailable' }) === '正式动作已封闭', 'unavailable formal view still advertised actions');
+assert(globalThis.__auxTest.pageAction('formal', { state: 'unavailable' }) === '本期未选出推荐票', 'unavailable formal view still advertised actions');
 assert(globalThis.__auxTest.pageAction('formal', { state: 'available' }) === '页面可显示策略动作', 'available formal action semantics changed');
 assert(globalThis.__auxTest.pageAction('watch_only', { state: 'unavailable' }) === '页面只能观察', 'watch-only semantics should not be rewritten');
 """,
@@ -1448,7 +1580,7 @@ assert(disabled.title === '今日未启用', 'disabled pool mislabeled as empty'
 const unavailable = globalThis.__auxTest.empty({ availability: {
   state: 'unavailable', reason: '上游生成失败'
 } });
-assert(unavailable.title === '数据不可用', 'unavailable pool mislabeled as empty');
+assert(unavailable.title === '本期证据不足', 'unavailable pool mislabeled as empty');
 """,
         )
 
@@ -1542,7 +1674,7 @@ const blocked = globalThis.__auxTest.status({
     status: 'unavailable', formal: { formal_actions_allowed: false }
   }
 });
-assert(blocked.includes('正式动作已封闭'), 'invalid strategy input looked healthy');
+assert(blocked.includes('本期未选出推荐票'), 'invalid strategy input looked healthy');
 const partialFormal = globalThis.__auxTest.status({
   data_quality: {
     is_official: true, bar_state: 'closed', as_of: '2026-08-26T15:05:10+08:00',
@@ -2096,19 +2228,19 @@ const emptyHtml = globalThis.__auxTest.horizon(
   false, ['no_signals'], 'no_signals'
 );
 assert(emptyHtml.includes('本期无信号'), 'normal empty horizon was not neutral');
-assert(!emptyHtml.includes('<strong>数据不可用</strong>'), 'normal empty looked broken');
+assert(!emptyHtml.includes('<strong>本期证据不足</strong>'), 'normal empty looked broken');
 const disabledHtml = globalThis.__auxTest.horizon(
   't1', {}, { mature: 0, waiting: 0, unavailable: 0 },
   false, [], 'disabled'
 );
 assert(disabledHtml.includes('今日未启用'), 'disabled horizon was not neutral');
-assert(!disabledHtml.includes('<strong>数据不可用</strong>'), 'disabled strategy looked broken');
+assert(!disabledHtml.includes('<strong>本期证据不足</strong>'), 'disabled strategy looked broken');
 const staleHtml = globalThis.__auxTest.horizon(
   't1', {}, { mature: 0, waiting: 0, unavailable: 1 },
   false, ['strategy_input_stale_or_unverified'], 'data_unavailable'
 );
 assert(staleHtml.includes('策略输入日期过期或未核验，禁止评分'), 'stale input blocker was not explained');
-assert(staleHtml.includes('<strong>数据不可用</strong>'), 'stale input did not fail closed');
+assert(staleHtml.includes('<strong>本期证据不足</strong>'), 'stale input did not fail closed');
 """,
         )
 

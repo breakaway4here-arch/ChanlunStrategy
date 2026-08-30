@@ -76,6 +76,27 @@ textarea:focus-visible,
   outline-offset: 2px;
 }
 
+button {
+  touch-action: manipulation;
+}
+
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 8px;
+  z-index: 100;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  background: var(--primary);
+  font-weight: 700;
+  transform: translateY(-160%);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .comparison-shell {
   width: min(1400px, 100%);
   margin: 0 auto;
@@ -1695,6 +1716,11 @@ body {
   background: #3151F4;
 }
 
+.chart-layer-switcher button:hover:not(.is-active) {
+  color: var(--primary);
+  background: var(--primary-soft);
+}
+
 .evidence-audit-body {
   display: grid;
   gap: 8px;
@@ -1956,13 +1982,13 @@ body {
   background: #fff;
 }
 
-.recommendation-main-rise-sides h5,
+.recommendation-main-rise-sides h4,
 .recommendation-main-rise-sides p,
 .recommendation-main-rise-sides ul {
   margin: 0;
 }
 
-.recommendation-main-rise-sides h5 {
+.recommendation-main-rise-sides h4 {
   color: var(--text-main);
   font-size: 11px;
 }
@@ -2744,6 +2770,7 @@ body {
   position: relative;
   max-height: 88vh;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 0 14px 14px;
   border-top-left-radius: 14px;
   border-top-right-radius: 14px;
@@ -5618,6 +5645,16 @@ body {
 .research-validation-stack > .decision-card,
 .supporting-decisions-stack > .decision-card {
   grid-column: 1 / -1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    scroll-behavior: auto !important;
+    transition: none !important;
+  }
 }
 
 @media (max-width: 390px) {

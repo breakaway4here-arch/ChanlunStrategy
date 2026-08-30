@@ -6,6 +6,7 @@ selection stores, ledgers, or pre-close snapshots.
 """
 
 import math
+import re
 from collections.abc import Mapping
 from datetime import date as _calendar_date
 from datetime import datetime as _calendar_datetime
@@ -87,6 +88,7 @@ _FORMAL_MARKET_EVIDENCE_FIELDS = (
 _MAX_SECTOR_SIGNALS_PER_DIRECTION = 3
 _MAX_EVIDENCE_TEXT_ITEMS = 8
 _MAX_TRAILING_TARGETS = 5
+_MAX_EVIDENCE_TEXT_LENGTH = 512
 _VERIFIED_SECTOR_DEDUPE_STATUSES = frozenset({
     "checked_unique",
     "deduped_representative",
@@ -193,6 +195,18 @@ def _positive_price(value):
     if number is None or number <= 0:
         return None
     return number
+
+
+def _positive_integer(value):
+    number = _finite_number(value)
+    if number is None or number <= 0 or int(number) != number:
+        return None
+    return int(number)
+
+
+def _nonnegative_metric(value):
+    number = _finite_number(value)
+    return number if number is not None and number >= 0 else None
 
 
 def _strict_native(value):
@@ -391,17 +405,22 @@ def _find_serialized_candidate(daily_data, row):
     pool_name = _as_text(ref.get("pool"))
     code = _as_text(ref.get("code")) or _as_text(row.get("code"))
     if not pool_name or not code:
-        return None, pool_name
+        return None, pool_name, "candidate_ref_incomplete"
+    matches = []
     for candidate in _pool_candidates(daily_data.get(pool_name)):
         candidate = _as_mapping(candidate)
         if _as_text(candidate.get("code")) == code:
-            return candidate, pool_name
-    return None, pool_name
+            matches.append(candidate)
+    if len(matches) == 1:
+        return matches[0], pool_name, None
+    if len(matches) > 1:
+        return None, pool_name, "duplicate_candidate_code"
+    return None, pool_name, None
 
 
 def _find_original_candidate(formal_report, row):
-    candidate, _ = _find_serialized_candidate(formal_report, row)
-    return candidate
+    candidate, _, diagnostic = _find_serialized_candidate(formal_report, row)
+    return candidate, diagnostic
 
 
 def _missing_section(source, reason="evidence_not_projected"):
@@ -412,9 +431,93 @@ def _missing_section(source, reason="evidence_not_projected"):
     }
 
 
-def _build_summary(row, raw, view_name, report_date):
+def _bound_display_strings(value):
+    """Bound every projected string and return (copy, truncation_count)."""
+    if isinstance(value, str):
+        if len(value) <= _MAX_EVIDENCE_TEXT_LENGTH:
+            return value, 0
+        return value[:_MAX_EVIDENCE_TEXT_LENGTH - 1] + "…", 1
+    if isinstance(value, Mapping):
+        bounded = {}
+        count = 0
+        for key, item in value.items():
+            bounded_item, item_count = _bound_display_strings(item)
+            bounded[key] = bounded_item
+            count += item_count
+        return bounded, count
+    if isinstance(value, (list, tuple)):
+        bounded = []
+        count = 0
+        for item in value:
+            bounded_item, item_count = _bound_display_strings(item)
+            bounded.append(bounded_item)
+            count += item_count
+        return bounded, count
+    return value, 0
+
+
+def _normalize_summary_horizon(value):
+    if isinstance(value, bool):
+        return None
+    number = _finite_number(value)
+    if number is not None and number > 0 and int(number) == number:
+        return int(number)
+    text = _as_text(value).upper().replace(" ", "")
+    match = re.fullmatch(r"T\+([1-9]\d*)", text)
+    return int(match.group(1)) if match else None
+
+
+def _build_summary(
+    row,
+    raw,
+    original_raw,
+    pool_name,
+    view_name,
+    report_date,
+    daily_structure,
+):
     formal_contract = _as_mapping(row.get("formal_decision_contract"))
+    contract_diagnostics = _as_mapping(
+        row.get("formal_decision_contract_diagnostics")
+    )
     decision = _as_mapping(raw.get("decision_engine_v1")) if raw else {}
+    raw = _as_mapping(raw)
+    original_raw = _as_mapping(original_raw)
+    daily_structure = _as_mapping(daily_structure)
+    horizon = None
+    horizon_status = "missing"
+    audit_reasons = {}
+    if contract_diagnostics.get("intended_horizon"):
+        horizon_status = "conflict"
+        audit_reasons["intended_horizon"] = _as_text(
+            contract_diagnostics.get("intended_horizon")
+        ) or "conflict"
+    elif "intended_horizon" in formal_contract:
+        horizon = _normalize_summary_horizon(
+            formal_contract.get("intended_horizon")
+        )
+        if horizon is None:
+            horizon_status = "conflict"
+            audit_reasons["intended_horizon"] = "invalid"
+        else:
+            declarations = []
+            for source in (row, raw, original_raw):
+                for container in (
+                    source,
+                    _as_mapping(source.get("formal_decision_contract")),
+                    _as_mapping(source.get("decision_engine_v1")),
+                ):
+                    if "intended_horizon" in container:
+                        declarations.append(container.get("intended_horizon"))
+            normalized = [
+                _normalize_summary_horizon(value) for value in declarations
+            ]
+            if any(value is None or value != horizon for value in normalized):
+                horizon = None
+                horizon_status = "conflict"
+                audit_reasons["intended_horizon"] = "conflict"
+            else:
+                horizon_status = "available"
     code = _as_text(row.get("code"))
     summary = {
         "status": "available" if code else "missing",
@@ -428,6 +531,32 @@ def _build_summary(row, raw, view_name, report_date):
             _as_text(formal_contract.get("action_reason")) or None
         ),
         "decision_code": _as_text(decision.get("decision_code")) or None,
+        "pool_identity": pool_name or None,
+        "view_identity": view_name,
+        "view_rank": _positive_integer(row.get("view_rank")),
+        "signal_type": daily_structure.get("signal"),
+        "signal_date": daily_structure.get("signal_date"),
+        "signal_age_days": daily_structure.get("signal_age_days"),
+        "applicable_horizon": horizon,
+        "applicable_horizon_status": horizon_status,
+        "applicable_horizon_source": (
+            "workspace.formal_decision_contract.intended_horizon"
+            if horizon_status == "available" else None
+        ),
+        "applicable_horizon_text": (
+            "T+{}".format(horizon)
+            if horizon is not None else (
+                "策略周期证据冲突"
+                if horizon_status == "conflict"
+                else "策略未声明统一周期"
+            )
+        ),
+        "data_latest_date": daily_structure.get("latest_date"),
+        "data_source": daily_structure.get("data_source"),
+        "data_health": daily_structure.get("health"),
+        "data_is_final": daily_structure.get("is_final"),
+        "data_stale": daily_structure.get("stale"),
+        "audit_reasons": audit_reasons,
     }
     if not code:
         summary["reason"] = "workspace_code_missing"
@@ -501,8 +630,8 @@ def _build_decision_score(raw, pool_name):
 
 
 def _build_rank_evidence(row, view_name):
-    view_rank = _finite_number(row.get("view_rank"))
-    opportunity_score = _finite_number(row.get("opportunity_score"))
+    view_rank = _positive_integer(row.get("view_rank"))
+    opportunity_score = _nonnegative_metric(row.get("opportunity_score"))
     rank_trace = _compact_native_fields(
         row.get("rank_trace"),
         _RANK_TRACE_FIELDS,
@@ -688,6 +817,66 @@ def _build_price_evidence(row, raw, original_raw, report_date):
     trailing_targets, trailing_targets_contract = _project_trailing_targets(
         price_raw
     )
+
+    def _consistent_structure_price(field, candidates):
+        values = []
+        for raw_value, source in candidates:
+            value = _positive_price(raw_value)
+            if value is not None:
+                values.append((value, source))
+        unique = {}
+        for value, source in values:
+            unique.setdefault(round(float(value), 8), (value, source))
+        if len(unique) > 1:
+            audit_reasons[field] = "conflict"
+            return None, None
+        return next(iter(unique.values())) if unique else (None, None)
+
+    raw_map = _as_mapping(raw)
+    original_map = _as_mapping(original_raw)
+    row_map = _as_mapping(row)
+    raw_pivots = _as_mapping(raw_map.get("pivots"))
+    original_pivots = _as_mapping(original_map.get("pivots"))
+    row_pivots = _as_mapping(row_map.get("pivots"))
+    raw_bp = _as_mapping(raw_map.get("best_buy_point"))
+    original_bp = _as_mapping(original_map.get("best_buy_point"))
+    row_bp = _as_mapping(row_map.get("best_buy_point"))
+    pivot_zg, pivot_zg_source = _consistent_structure_price("pivot_zg", (
+        (raw_map.get("pivot_zg"), "serialized.pivot_zg"),
+        (raw_pivots.get("ZG"), "serialized.pivots.ZG"),
+        (original_map.get("pivot_zg"), "formal_report.pivot_zg"),
+        (original_pivots.get("ZG"), "formal_report.pivots.ZG"),
+        (row_map.get("pivot_zg"), "workspace.pivot_zg"),
+        (row_pivots.get("ZG"), "workspace.pivots.ZG"),
+    ))
+    pivot_zd, pivot_zd_source = _consistent_structure_price("pivot_zd", (
+        (raw_map.get("pivot_zd"), "serialized.pivot_zd"),
+        (raw_pivots.get("ZD"), "serialized.pivots.ZD"),
+        (original_map.get("pivot_zd"), "formal_report.pivot_zd"),
+        (original_pivots.get("ZD"), "formal_report.pivots.ZD"),
+        (row_map.get("pivot_zd"), "workspace.pivot_zd"),
+        (row_pivots.get("ZD"), "workspace.pivots.ZD"),
+    ))
+    platform_high, platform_high_source = _consistent_structure_price(
+        "platform_high",
+        tuple(
+            (source.get(key), "{}.{}".format(source_name, key))
+            for source, source_name in (
+                (raw_map, "serialized"),
+                (original_map, "formal_report"),
+                (row_map, "workspace"),
+            )
+            for key in ("platform_high", "platform_breakout_price")
+        ),
+    )
+    buy_point_price, buy_point_price_source = _consistent_structure_price(
+        "buy_point_price",
+        (
+            (raw_bp.get("price"), "serialized.best_buy_point.price"),
+            (original_bp.get("price"), "formal_report.best_buy_point.price"),
+            (row_bp.get("price"), "workspace.best_buy_point.price"),
+        ),
+    )
     missing_fields = []
     for name, value in (
         ("current_price", current_price),
@@ -698,13 +887,21 @@ def _build_price_evidence(row, raw, original_raw, report_date):
     ):
         if value is None or value == []:
             missing_fields.append(name)
+    structure_missing_fields = [
+        name for name, value in (
+            ("pivot_zg", pivot_zg),
+            ("pivot_zd", pivot_zd),
+            ("platform_high", platform_high),
+            ("buy_point_price", buy_point_price),
+        ) if value is None
+    ]
 
-    available_count = 5 - len(missing_fields)
+    available_count = 9 - len(missing_fields) - len(structure_missing_fields)
     if audit_reasons:
         status = "conflict"
     elif available_count == 0:
         status = "missing"
-    elif missing_fields:
+    elif missing_fields or structure_missing_fields:
         status = "partial"
     else:
         status = "available"
@@ -728,7 +925,16 @@ def _build_price_evidence(row, raw, original_raw, report_date):
         "invalidation_price_source": invalidation_source,
         "trailing_targets": trailing_targets,
         "trailing_targets_contract": trailing_targets_contract,
+        "pivot_zg": pivot_zg,
+        "pivot_zg_source": pivot_zg_source,
+        "pivot_zd": pivot_zd,
+        "pivot_zd_source": pivot_zd_source,
+        "platform_high": platform_high,
+        "platform_high_source": platform_high_source,
+        "buy_point_price": buy_point_price,
+        "buy_point_price_source": buy_point_price_source,
         "missing_fields": missing_fields,
+        "structure_missing_fields": structure_missing_fields,
         "audit_reasons": audit_reasons,
     }
     if status == "missing":
@@ -784,29 +990,26 @@ def _chart_macd_metadata(raw, original_raw, report_date):
     }
 
 
-def _chart_pivot_metadata(raw, original_raw, row, report_date):
-    """Describe available ZG/ZD lines while keeping the raw pivots out."""
-    values = {}
-    sources = {}
-    for source, source_name in (
-        (raw, "serialized"),
-        (original_raw, "formal_report"),
-        (row, "workspace"),
-    ):
-        if source is None:
-            continue
-        pivots = _as_mapping(_field(source, "pivots", None))
-        for key, direct_key in (("ZG", "pivot_zg"), ("ZD", "pivot_zd")):
-            if key in values:
-                continue
-            direct = _positive_price(_field(source, direct_key, None))
-            nested = _positive_price(pivots.get(key))
-            value = direct if direct is not None else nested
-            if value is not None:
-                values[key] = value
-                sources[key] = "{}.{}".format(source_name, direct_key if direct is not None else "pivots." + key)
-    available = [key for key in ("ZG", "ZD") if key in values]
-    if len(available) == 2:
+def _chart_pivot_metadata(price_evidence, report_date):
+    """Reuse conflict-checked ZG/ZD values from the price evidence plane."""
+    price_evidence = _as_mapping(price_evidence)
+    audit_reasons = _as_mapping(price_evidence.get("audit_reasons"))
+    conflicts = [
+        key for key in ("pivot_zg", "pivot_zd")
+        if key in audit_reasons
+    ]
+    values = {
+        "ZG": _positive_price(price_evidence.get("pivot_zg")),
+        "ZD": _positive_price(price_evidence.get("pivot_zd")),
+    }
+    sources = {
+        "ZG": _as_text(price_evidence.get("pivot_zg_source")) or None,
+        "ZD": _as_text(price_evidence.get("pivot_zd_source")) or None,
+    }
+    available = [key for key in ("ZG", "ZD") if values[key] is not None]
+    if conflicts:
+        status = "conflict"
+    elif len(available) == 2:
         status = "available"
     elif available:
         status = "partial"
@@ -814,15 +1017,21 @@ def _chart_pivot_metadata(raw, original_raw, row, report_date):
         status = "missing"
     metadata = {
         "status": status,
-        "source": "serialized/formal pivot fields",
+        "source": "price_evidence conflict-checked pivot fields",
         "as_of": report_date,
         "available": available,
-        "ZG": values.get("ZG"),
-        "ZD": values.get("ZD"),
-        "field_sources": sources,
+        "ZG": values["ZG"],
+        "ZD": values["ZD"],
+        "field_sources": {
+            key: sources[key] for key in available if sources[key]
+        },
+        "conflicts": conflicts,
     }
-    if status == "missing":
-        metadata["reason"] = "pivot_lines_not_provided"
+    if status in {"missing", "conflict"}:
+        metadata["reason"] = (
+            "pivot_lines_conflict"
+            if status == "conflict" else "pivot_lines_not_provided"
+        )
     return metadata
 
 
@@ -912,7 +1121,7 @@ def _build_chart_evidence_metadata(row, raw, original_raw, price_evidence, repor
     """Build compact, read-only chart provenance for the HTML evidence plane."""
     macd = _chart_macd_metadata(raw, original_raw, report_date)
     prices = _chart_price_metadata(price_evidence, report_date)
-    pivots = _chart_pivot_metadata(raw, original_raw, row, report_date)
+    pivots = _chart_pivot_metadata(price_evidence, report_date)
     annotations = _chart_annotations_metadata(raw, original_raw, report_date)
     statuses = (macd["status"], prices["status"], pivots["status"], annotations["status"])
     status = "available" if all(value == "available" for value in statuses) else (
@@ -1002,7 +1211,90 @@ def _condition_block(items, empty_text, source):
     }
 
 
-def _build_risk_and_next(row, raw, original_raw, price_evidence):
+def _verified_event_risk_projection(source, report_date):
+    """Accept event risk copy only from an explicit dated formal contract."""
+    source = _as_mapping(source)
+    evidences = [
+        candidate for candidate in (
+            _as_mapping(source.get("event_risk_evidence")),
+            _as_mapping(source.get("announcement_risk_evidence")),
+        ) if candidate
+    ]
+    legacy_declared = bool(
+        _declared_texts(
+            source.get("event_risks"),
+            source.get("announcement_risks"),
+        )
+    )
+    if not evidences:
+        return {
+            "status": "unverified" if legacy_declared else "missing",
+            "source": None,
+            "as_of": None,
+            "items": [],
+        }
+    projected = []
+    for evidence in evidences:
+        source_name = _as_text(evidence.get("source")) or None
+        current = _declared_dates_are_current(
+            evidence,
+            ("as_of", "date"),
+            report_date,
+            require_one=True,
+        )
+        if (
+            evidence.get("status") != "verified_complete"
+            or source_name is None
+            or not current
+        ):
+            return {
+                "status": "unverified",
+                "source": None,
+                "as_of": None,
+                "items": [],
+            }
+        items = _declared_texts(evidence.get("items"))
+        projected.append({
+            "source": source_name,
+            "as_of": _strict_date_value(
+                evidence.get("as_of") or evidence.get("date")
+            ),
+            "items": items,
+        })
+    signatures = {
+        (
+            item["source"],
+            item["as_of"],
+            tuple(item["items"]),
+        )
+        for item in projected
+    }
+    if len(signatures) > 1:
+        return {
+            "status": "conflict",
+            "source": None,
+            "as_of": None,
+            "items": [],
+        }
+    selected = projected[0]
+    items = selected["items"]
+    return {
+        "status": "available" if items else (
+            "missing"
+        ),
+        "source": selected["source"],
+        "as_of": selected["as_of"],
+        "items": items,
+    }
+
+
+def _build_risk_and_next(
+    row,
+    raw,
+    original_raw,
+    price_evidence,
+    report_date,
+):
     source_raw = _as_mapping(
         original_raw if original_raw is not None else raw
     )
@@ -1027,6 +1319,11 @@ def _build_risk_and_next(row, raw, original_raw, price_evidence):
     invalidation_conditions = _declared_texts(
         source_raw.get("invalidation_conditions")
     )
+    event_risk_projection = _verified_event_risk_projection(
+        source_raw,
+        report_date,
+    )
+    event_risks = event_risk_projection["items"]
     conditions = {
         "next_confirmation": _condition_block(
             next_confirmation,
@@ -1057,16 +1354,42 @@ def _build_risk_and_next(row, raw, original_raw, price_evidence):
     has_condition = any(block["items"] for block in conditions.values())
     status = "available" if (
         risk_labels
+        or event_risks
         or has_condition
         or price_evidence.get("invalidation_price") is not None
     ) else "missing"
     section = {
         "status": status,
         "source": "workspace risk flags + declared candidate conditions",
+        "as_of": report_date,
         "risk_labels": risk_labels,
+        "event_risks": event_risks,
+        "event_risk_status": event_risk_projection["status"],
+        "event_risk_source": event_risk_projection["source"],
+        "event_risk_as_of": event_risk_projection["as_of"],
         "invalidation_price": price_evidence.get("invalidation_price"),
+        "missing_evidence": [
+            label for label, present in (
+                ("当前风险标签未提供", bool(risk_labels)),
+                ("下一确认条件未提供", bool(next_confirmation)),
+                ("继续保持条件未提供", bool(keep_conditions)),
+                ("等待回踩条件未提供", bool(retest_conditions)),
+                ("取消或降级条件未提供", bool(cancel_conditions)),
+                ("结构失效条件未提供", bool(invalidation_conditions)),
+                (
+                    "结构失效价格未提供",
+                    price_evidence.get("invalidation_price") is not None,
+                ),
+            ) if not present
+        ],
         **conditions,
     }
+    if event_risk_projection["status"] == "unverified":
+        section["missing_evidence"].append("公告或事件风险缺少正式验证")
+    elif event_risk_projection["status"] == "conflict":
+        section["missing_evidence"].append("公告或事件风险证据存在冲突")
+    elif event_risk_projection["status"] == "missing":
+        section["missing_evidence"].append("公告或事件风险未提供")
     if status == "missing":
         section["reason"] = "strategy_risk_and_conditions_not_declared"
     return section
@@ -1150,6 +1473,62 @@ def _declared_text_list(sources, keys):
     return []
 
 
+def _comparison_signature(value):
+    if isinstance(value, Mapping):
+        return tuple(sorted(
+            (str(key), _comparison_signature(item))
+            for key, item in value.items()
+        ))
+    if isinstance(value, (list, tuple)):
+        return tuple(_comparison_signature(item) for item in value)
+    if isinstance(value, float):
+        return round(value, 10)
+    return value
+
+
+def _consistent_declaration(sources, keys, normalize):
+    """Return one declaration only when every explicit source agrees."""
+    declarations = []
+    for source in sources:
+        if source is None:
+            continue
+        for key in keys:
+            value = _field(source, key, _MISSING)
+            if value is _MISSING or value is None:
+                continue
+            normalized = normalize(value)
+            if normalized is None or normalized == []:
+                continue
+            declarations.append(normalized)
+    unique = {}
+    for declaration in declarations:
+        unique.setdefault(_comparison_signature(declaration), declaration)
+    if len(unique) > 1:
+        return None, "conflict"
+    return (next(iter(unique.values())), None) if unique else (None, None)
+
+
+def _normalize_text_declaration(value):
+    return _as_text(value) or None
+
+
+def _normalize_number_declaration(value):
+    return _finite_number(value)
+
+
+def _normalize_positive_declaration(value):
+    return _positive_price(value)
+
+
+def _normalize_bool_declaration(value):
+    return value if isinstance(value, bool) else None
+
+
+def _normalize_text_list_declaration(value):
+    texts = _declared_texts(value)
+    return texts or None
+
+
 def _best_buy_point_sources(raw, original_raw, row):
     sources = []
     for parent in (raw, original_raw, row):
@@ -1173,7 +1552,7 @@ def _project_pivots(sources):
                 if number is not None and number >= 0:
                     result[key] = int(number)
             else:
-                number = _finite_number(value)
+                number = _positive_price(value)
                 if number is not None:
                     result[key] = number
         if result:
@@ -1181,70 +1560,251 @@ def _project_pivots(sources):
     return None
 
 
-def _project_daily_structure(row, raw, original_raw, report_date):
-    """Project explicit daily structure facts without recomputing indicators."""
-    sources = (raw, original_raw, row)
+def _sanitize_unsupported_ma_claims(value, missing_ma_labels):
+    """Remove copied MA assertions that have no current-value evidence."""
+    text = _as_text(value)
+    if not text or not missing_ma_labels:
+        return text or None
+    parts = re.split(r"([；;。])", text)
+    kept = []
+    for index in range(0, len(parts), 2):
+        clause = parts[index].strip()
+        separator = parts[index + 1] if index + 1 < len(parts) else ""
+        if not clause:
+            continue
+        upper_clause = clause.upper()
+        unsupported = any(
+            re.search(r"{}(?!\d)".format(re.escape(label)), upper_clause)
+            for label in missing_ma_labels
+        )
+        explicitly_missing = any(
+            marker in clause for marker in ("未提供", "缺失", "未知", "不可验证")
+        )
+        if unsupported and not explicitly_missing:
+            continue
+        kept.append(clause + separator)
+    return "".join(kept).rstrip("；;。").strip() or None
+
+
+def _project_daily_structure(
+    row,
+    raw,
+    original_raw,
+    price_evidence,
+    report_date,
+):
+    """Project conflict-checked daily facts without recomputing indicators."""
+    sources = tuple(
+        source for source in (raw, original_raw, row) if source is not None
+    )
     buy_point_sources = _best_buy_point_sources(raw, original_raw, row)
-    bp_and_sources = tuple(buy_point_sources) + tuple(
-        source for source in sources if source is not None
+    bp_and_sources = tuple(buy_point_sources) + sources
+    price_evidence = _as_mapping(price_evidence)
+    audit_reasons = {}
+
+    def consistent(field, source_items, keys, normalize):
+        value, diagnostic = _consistent_declaration(
+            source_items,
+            keys,
+            normalize,
+        )
+        if diagnostic:
+            audit_reasons[field] = diagnostic
+        return value
+
+    def consistent_positive(field, source_items, keys):
+        invalid = False
+        for source in source_items:
+            for key in keys:
+                declared = _field(source, key, _MISSING)
+                if declared is _MISSING or declared is None:
+                    continue
+                if _positive_price(declared) is None:
+                    invalid = True
+        value = consistent(
+            field,
+            source_items,
+            keys,
+            _normalize_positive_declaration,
+        )
+        if invalid:
+            audit_reasons[field] = "invalid"
+            return None
+        return value
+
+    data_status_sources = tuple(
+        status for status in (
+            _as_mapping(_field(source, "data_status")) for source in sources
+        ) if status
+    )
+    health = consistent(
+        "health", data_status_sources, ("daily",), _normalize_text_declaration
+    )
+    latest_raw = consistent(
+        "latest_date",
+        data_status_sources,
+        ("latest_date",),
+        _normalize_text_declaration,
+    )
+    data_source = consistent(
+        "data_source",
+        data_status_sources,
+        ("source",),
+        _normalize_text_declaration,
+    )
+    declared_stale = consistent(
+        "stale",
+        data_status_sources,
+        ("stale",),
+        _normalize_bool_declaration,
+    )
+    is_final = consistent(
+        "is_final",
+        data_status_sources,
+        ("is_final",),
+        _normalize_bool_declaration,
     )
 
-    data_status = _declared_value(sources, ("data_status",))
-    data_status = data_status if isinstance(data_status, Mapping) else {}
-    health = _as_text(data_status.get("daily")) or None
-    latest_date = _as_text(data_status.get("latest_date")) or None
-    stale = data_status.get("stale") is True
-    if (
-        report_date
-        and latest_date
-        and latest_date != report_date
-        and health in {"verified", "available", "fresh"}
-    ):
+    expected_date = _strict_date_value(report_date)
+    latest_date = _strict_date_value(latest_raw)
+    if latest_raw and latest_date is None:
+        audit_reasons["latest_date"] = "invalid"
+        freshness_status = "invalid"
+        stale = None
+    elif expected_date is None:
+        audit_reasons["report_date"] = "invalid"
+        freshness_status = "invalid"
+        stale = None
+    elif latest_date is None:
+        freshness_status = "missing" if data_status_sources else "unknown"
+        stale = None
+    elif latest_date != expected_date:
+        freshness_status = "stale"
         stale = True
         health = "stale"
+    elif declared_stale is True:
+        freshness_status = "stale"
+        stale = True
+    elif declared_stale is False:
+        freshness_status = "current"
+        stale = False
+    else:
+        freshness_status = "unknown"
+        stale = None
 
-    trend = _as_text(_declared_value(sources, ("trend_type", "trend"))) or None
-    signal = _as_text(
-        _declared_value(bp_and_sources, ("signal", "type", "signal_type"))
-    ) or None
-    summary = _as_text(
-        _declared_value(
-            bp_and_sources,
-            ("summary", "reason", "primary_reason", "startup_reason"),
-        )
-    ) or None
-    stage = _as_text(
-        _declared_value(
-            bp_and_sources,
-            ("stage", "trend_stage", "daily_startup_label"),
-        )
-    ) or None
-    signal_date = _as_text(
-        _declared_value(
-            bp_and_sources,
-            ("signal_date", "date", "startup_date"),
-        )
-    ) or None
-    signal_age_days = _declared_number(
+    trend = consistent(
+        "trend", sources, ("trend_type", "trend"), _normalize_text_declaration
+    )
+    signal = consistent(
+        "signal",
+        bp_and_sources,
+        ("signal", "type", "signal_type"),
+        _normalize_text_declaration,
+    )
+    summary = consistent(
+        "summary",
+        bp_and_sources,
+        ("summary", "reason", "primary_reason", "startup_reason"),
+        _normalize_text_declaration,
+    )
+    stage = consistent(
+        "stage",
+        bp_and_sources,
+        ("stage", "trend_stage", "daily_startup_label"),
+        _normalize_text_declaration,
+    )
+    signal_date_raw = consistent(
+        "signal_date",
+        bp_and_sources,
+        ("signal_date", "date", "startup_date"),
+        _normalize_text_declaration,
+    )
+    signal_age_days = consistent(
+        "signal_age_days",
         bp_and_sources,
         ("signal_age_days", "startup_age_days"),
+        _normalize_number_declaration,
     )
-    startup_grade = _as_text(
-        _declared_value(bp_and_sources, ("daily_startup_grade",))
-    ) or None
-    startup_label = _as_text(
-        _declared_value(bp_and_sources, ("daily_startup_label",))
-    ) or None
-    startup_warning = _as_text(
-        _declared_value(bp_and_sources, ("daily_startup_warning",))
-    ) or None
-    startup_signals = _declared_text_list(
+    signal_date = _strict_date_value(signal_date_raw)
+    if signal_date_raw and signal_date is None:
+        audit_reasons["signal_date"] = "invalid"
+        signal_freshness_status = "invalid"
+        signal_age_days = None
+    elif signal_date and expected_date and signal_date > expected_date:
+        audit_reasons["signal_date"] = "future"
+        signal_date = None
+        signal_age_days = None
+        signal_freshness_status = "future"
+    elif signal_age_days is not None and (
+        signal_age_days < 0 or int(signal_age_days) != signal_age_days
+    ):
+        audit_reasons["signal_age_days"] = "invalid"
+        signal_date = None
+        signal_age_days = None
+        signal_freshness_status = "invalid"
+    elif (
+        signal_date
+        and expected_date
+        and signal_date == expected_date
+        and signal_age_days not in (None, 0)
+    ):
+        audit_reasons["signal_age_days"] = "conflict"
+        signal_date = None
+        signal_age_days = None
+        signal_freshness_status = "conflict"
+    elif (
+        signal_date
+        and expected_date
+        and signal_date < expected_date
+        and signal_age_days == 0
+    ):
+        audit_reasons["signal_age_days"] = "conflict"
+        signal_date = None
+        signal_age_days = None
+        signal_freshness_status = "conflict"
+    elif signal_date:
+        signal_age_days = (
+            int(signal_age_days) if signal_age_days is not None else None
+        )
+        signal_freshness_status = "available"
+    else:
+        signal_age_days = None
+        signal_freshness_status = (
+            "conflict" if audit_reasons.get("signal_date") == "conflict"
+            else "missing"
+        )
+
+    startup_grade = consistent(
+        "startup_grade",
+        bp_and_sources,
+        ("daily_startup_grade",),
+        _normalize_text_declaration,
+    )
+    startup_label = consistent(
+        "startup_label",
+        bp_and_sources,
+        ("daily_startup_label",),
+        _normalize_text_declaration,
+    )
+    startup_warning = consistent(
+        "startup_warning",
+        bp_and_sources,
+        ("daily_startup_warning",),
+        _normalize_text_declaration,
+    )
+    startup_signals = consistent(
+        "startup_signals",
         bp_and_sources,
         ("startup_signals",),
-    )
+        _normalize_text_list_declaration,
+    ) or []
 
-    # MA values are copied only when a source explicitly supplied them.  In
-    # particular, do not calculate MA5/10/20 from the serialized close array.
+    for field in ("pivot_zg", "pivot_zd", "buy_point_price"):
+        diagnostic = _as_mapping(price_evidence.get("audit_reasons")).get(field)
+        if diagnostic:
+            audit_reasons[field] = diagnostic
+    buy_point_price = _positive_price(price_evidence.get("buy_point_price"))
+
     ma_sources = []
     for source in sources:
         nested = _as_mapping(_field(source, "ma"))
@@ -1256,60 +1816,139 @@ def _project_daily_structure(row, raw, original_raw, report_date):
             ma_sources.append(nested_dma)
         ma_sources.append(source)
     ma_values = {
-        key: _declared_number(ma_sources, (key,))
+        key: consistent_positive(key, ma_sources, (key,))
         for key in ("ma5", "ma10", "ma20", "ma50", "ma100", "ma200")
     }
-    ma_bullish = _declared_bool(sources, ("ma_bullish",))
-    macd = _as_text(
-        _declared_value(
-            sources,
-            ("macd_status", "macd_state", "macd"),
-        )
-    ) or None
-    pivots = _project_pivots(sources)
+    missing_ma_labels = [
+        key.upper()
+        for key in ("ma5", "ma10", "ma20", "ma50")
+        if ma_values[key] is None
+    ]
+    summary = _sanitize_unsupported_ma_claims(summary, missing_ma_labels)
+    startup_signals = [
+        cleaned for cleaned in (
+            _sanitize_unsupported_ma_claims(item, missing_ma_labels)
+            for item in startup_signals
+        ) if cleaned
+    ]
+    ma_bullish = consistent(
+        "ma_bullish",
+        sources,
+        ("ma_bullish",),
+        _normalize_bool_declaration,
+    )
+    macd = consistent(
+        "macd",
+        sources,
+        ("macd_status", "macd_state", "macd"),
+        _normalize_text_declaration,
+    )
+
+    pivot_maps = tuple(
+        pivot for pivot in (
+            _as_mapping(_field(source, "pivots")) for source in sources
+        ) if pivot
+    )
+    pivot_count = consistent(
+        "pivot_count",
+        pivot_maps,
+        ("count",),
+        _normalize_number_declaration,
+    )
+    if pivot_count is not None and (
+        pivot_count < 0 or int(pivot_count) != pivot_count
+    ):
+        audit_reasons["pivot_count"] = "invalid"
+        pivot_count = None
+    pivots = {}
+    for key, price_field in (("ZG", "pivot_zg"), ("ZD", "pivot_zd")):
+        value = _positive_price(price_evidence.get(price_field))
+        if value is not None:
+            pivots[key] = value
+    if pivot_count is not None:
+        pivots["count"] = int(pivot_count)
+    pivots = pivots or None
 
     has_structure = any(
-        value is not None
-        for value in (
-            trend,
-            signal,
-            summary,
-            stage,
-            signal_date,
-            startup_grade,
-            startup_label,
-            macd,
-            pivots,
+        value is not None for value in (
+            trend, signal, summary, stage, signal_date, startup_grade,
+            startup_label, macd, pivots,
         )
-    ) or bool(startup_signals) or any(value is not None for value in ma_values.values())
-    if stale:
+    ) or bool(startup_signals) or any(
+        value is not None for value in ma_values.values()
+    )
+    if audit_reasons:
+        status = "conflict"
+        reason = "daily_evidence_conflict_or_invalid"
+    elif stale is True:
         status = "stale"
         reason = "daily_latest_date_mismatch" if latest_date else "daily_data_stale"
     elif health in {"missing", "unavailable", "error"}:
         status = "missing"
         reason = "daily_data_not_verified"
-    elif has_structure and health in {"verified", "available", "fresh"}:
+    elif (
+        has_structure
+        and health in {"verified", "available", "fresh"}
+        and freshness_status == "current"
+        and is_final is True
+        and data_source is not None
+    ):
         status = "available"
         reason = None
     elif has_structure:
         status = "partial"
-        reason = "daily_data_status_not_declared"
+        reason = "daily_data_contract_incomplete"
     else:
         status = "missing"
         reason = "daily_structure_not_projected"
 
+    missing_evidence = (
+        ["{} 当前值未提供".format("、".join(missing_ma_labels))]
+        if missing_ma_labels else []
+    )
+    missing_evidence.extend(
+        message for message, value in (
+            ("趋势方向未提供", trend),
+            ("结构阶段未提供", stage),
+            ("买点类型未提供", signal),
+            ("买点价格未提供", buy_point_price),
+            ("信号日期未提供", signal_date),
+            ("中枢 ZG 未提供", _as_mapping(pivots).get("ZG")),
+            ("中枢 ZD 未提供", _as_mapping(pivots).get("ZD")),
+            ("MACD 当前状态未提供", macd),
+        ) if value is None
+    )
+    if freshness_status in {"missing", "unknown"}:
+        missing_evidence.append("日线最后日期未提供")
+    if declared_stale is None:
+        missing_evidence.append("日线陈旧状态未声明")
+    if is_final is None:
+        missing_evidence.append("日线终局状态未声明")
+    if data_source is None:
+        missing_evidence.append("日线数据来源未提供")
+    for field, diagnostic in audit_reasons.items():
+        missing_evidence.append("{} 证据{}".format(field, diagnostic))
+    missing_evidence = list(dict.fromkeys(missing_evidence))
+
     section = {
         "status": status,
-        "source": "serialized daily candidate fields",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
         "as_of": report_date,
         "trend": trend,
         "stage": stage,
         "signal": signal,
         "summary": summary,
+        "signal_reason": summary,
+        "buy_point_price": buy_point_price,
         "signal_date": signal_date,
         "signal_age_days": signal_age_days,
+        "signal_freshness_status": signal_freshness_status,
         "health": health,
         "latest_date": latest_date,
+        "data_source": data_source,
+        "is_final": is_final,
+        "stale": stale,
+        "freshness_status": freshness_status,
         "startup_grade": startup_grade,
         "startup_label": startup_label,
         "startup_warning": startup_warning,
@@ -1318,6 +1957,8 @@ def _project_daily_structure(row, raw, original_raw, report_date):
         "ma_bullish": ma_bullish,
         "macd": macd,
         "pivots": pivots,
+        "audit_reasons": audit_reasons,
+        "missing_evidence": missing_evidence,
     }
     if reason:
         section["reason"] = reason
@@ -1387,29 +2028,75 @@ def _validate_30m_freshness_dates(input_evidence, report_date):
     return "ok" if declared else "missing"
 
 
+_30M_INPUT_EVIDENCE_FIELDS = (
+    "schema_version", "interval", "status", "source", "latest_date",
+    "latest_ts", "as_of", "bars", "stale", "is_final", "ema5",
+    "ema10", "close", "latest_close", "macd_dif", "dif", "macd_dea",
+    "dea", "macd_state", "macd_hist_direction",
+)
+
+_30M_CONFIRMATION_EVIDENCE_FIELDS = (
+    "schema_version", "sufficient_bars", "ema_bullish_alignment",
+    "close_above_ema5", "close_above_ema10", "ema5_rising_bars",
+    "recent_peak_drawdown_pct", "macd_hist_direction", "macd_state",
+    "ema5_reclaim", "stop_fall", "buy_point", "fresh_yang_pattern",
+    "recovery_bundle_match", "ema5", "ema10", "close", "latest_close",
+    "macd_dif", "dif", "macd_dea", "dea", "ema5_direction",
+    "ema10_direction", "breakout_holds", "key_level_holds",
+    "pullback_volume_state", "volume_state", "source", "as_of", "date",
+)
+
+
+def _merge_evidence_mappings(candidates, fields):
+    merged = {}
+    conflicts = []
+    for candidate in candidates:
+        if not isinstance(candidate, Mapping) or not candidate:
+            continue
+        for field in fields:
+            if field not in candidate:
+                continue
+            value = candidate.get(field)
+            if value is None or (isinstance(value, str) and not value.strip()):
+                continue
+            normalized = _strict_native(value)
+            if normalized is None:
+                conflicts.append(field)
+                continue
+            if (
+                field in merged
+                and _comparison_signature(merged[field])
+                != _comparison_signature(normalized)
+            ):
+                conflicts.append(field)
+                continue
+            merged.setdefault(field, normalized)
+    return merged, list(dict.fromkeys(conflicts))
+
+
 def _find_30m_input_evidence(raw, original_raw, buy_point_sources):
+    candidates = []
     for source in (raw, original_raw):
-        evidence = _field(source, "strategy_input_evidence", None)
-        if isinstance(evidence, Mapping) and evidence:
-            return evidence
-    for source in (original_raw, raw):
+        candidates.append(_field(source, "strategy_input_evidence", None))
+    for source in (raw, original_raw):
         result = _field(source, "result_30min", None)
-        evidence = _field(result, "strategy_input_evidence", None)
-        if isinstance(evidence, Mapping) and evidence:
-            return evidence
-    for source in buy_point_sources:
-        evidence = source.get("strategy_input_evidence")
-        if isinstance(evidence, Mapping) and evidence:
-            return evidence
-    return {}
+        candidates.append(_field(result, "strategy_input_evidence", None))
+    candidates.extend(
+        source.get("strategy_input_evidence")
+        for source in buy_point_sources
+    )
+    return _merge_evidence_mappings(candidates, _30M_INPUT_EVIDENCE_FIELDS)
 
 
 def _find_confirmation_evidence(raw, original_raw, buy_point_sources):
-    for source in buy_point_sources + [raw, original_raw]:
-        evidence = _field(source, "confirmation_evidence", None)
-        if isinstance(evidence, Mapping) and evidence:
-            return evidence
-    return {}
+    candidates = [
+        _field(source, "confirmation_evidence", None)
+        for source in tuple(buy_point_sources) + (raw, original_raw)
+    ]
+    return _merge_evidence_mappings(
+        candidates,
+        _30M_CONFIRMATION_EVIDENCE_FIELDS,
+    )
 
 
 def _latest_30m_buy_point_type(raw, original_raw):
@@ -1427,16 +2114,32 @@ def _latest_30m_buy_point_type(raw, original_raw):
 def _project_sublevel_30m(row, raw, original_raw, report_date):
     """Project fresh 30m confirmation facts, never the minute arrays."""
     buy_point_sources = _best_buy_point_sources(raw, original_raw, row)
-    input_evidence = _find_30m_input_evidence(
+    input_evidence, input_source_conflicts = _find_30m_input_evidence(
         raw,
         original_raw,
         buy_point_sources,
     )
-    confirmation = _find_confirmation_evidence(
+    confirmation, confirmation_source_conflicts = _find_confirmation_evidence(
         raw,
         original_raw,
         buy_point_sources,
     )
+    schema_version = _finite_number(confirmation.get("schema_version"))
+    confirmation_schema_status = (
+        "available" if schema_version == 1 else "invalid"
+    )
+    sufficient_bars = confirmation.get("sufficient_bars") is True
+    confirmation_contract_valid = bool(
+        confirmation_schema_status == "available" and sufficient_bars
+    )
+    source_conflicts = [
+        "strategy_input.{}".format(field)
+        for field in input_source_conflicts
+    ] + [
+        "confirmation.{}".format(field)
+        for field in confirmation_source_conflicts
+    ]
+    confirmation_conflicts = []
 
     interval = _normalize_30m_interval(input_evidence.get("interval"))
     input_status = _as_text(input_evidence.get("status")).lower() or None
@@ -1448,7 +2151,11 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         input_evidence,
         report_date,
     )
-    stale_flag = input_evidence.get("stale") is True
+    declared_stale = (
+        input_evidence.get("stale")
+        if isinstance(input_evidence.get("stale"), bool) else None
+    )
+    stale_flag = declared_stale is True
     stale_status = input_status in {"stale", "expired", "unavailable", "error"}
     date_mismatch = freshness_date_state in {"invalid", "mismatch"}
     is_stale = stale_flag or stale_status or date_mismatch
@@ -1459,6 +2166,7 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         and freshness_date
         and freshness_date_state == "ok"
         and input_evidence.get("is_final") is True
+        and declared_stale is False
         and not is_stale
     )
 
@@ -1484,10 +2192,66 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         (confirmation,),
         ("recent_peak_drawdown_pct",),
     )
-    macd_state = _as_text(
+    macd_state, macd_state_diagnostic = _consistent_declaration(
+        (confirmation, input_evidence),
+        ("macd_hist_direction", "macd_state"),
+        _normalize_text_declaration,
+    )
+    if macd_state_diagnostic:
+        confirmation_conflicts.append("macd_state")
+    def conflict_checked_positive(field, keys):
+        declared = []
+        invalid = False
+        for source in (confirmation, input_evidence):
+            for key in keys:
+                value = _field(source, key, _MISSING)
+                if value is _MISSING or value is None:
+                    continue
+                number = _finite_number(value)
+                if number is None or number <= 0:
+                    invalid = True
+                    continue
+                declared.append(number)
+        unique = {round(float(number), 10): number for number in declared}
+        if invalid or len(unique) > 1:
+            confirmation_conflicts.append(field)
+            return None
+        return next(iter(unique.values())) if unique else None
+
+    ema5 = conflict_checked_positive("ema5", ("ema5",))
+    ema10 = conflict_checked_positive("ema10", ("ema10",))
+    latest_close = conflict_checked_positive(
+        "close",
+        ("close", "latest_close"),
+    )
+    macd_dif, macd_dif_diagnostic = _consistent_declaration(
+        (confirmation, input_evidence),
+        ("macd_dif", "dif"),
+        _normalize_number_declaration,
+    )
+    macd_dea, macd_dea_diagnostic = _consistent_declaration(
+        (confirmation, input_evidence),
+        ("macd_dea", "dea"),
+        _normalize_number_declaration,
+    )
+    if macd_dif_diagnostic:
+        confirmation_conflicts.append("macd_dif")
+    if macd_dea_diagnostic:
+        confirmation_conflicts.append("macd_dea")
+    ema5_direction = _as_text(confirmation.get("ema5_direction")) or None
+    ema10_direction = _as_text(confirmation.get("ema10_direction")) or None
+    close_above_ema10 = _declared_bool(
+        (confirmation,),
+        ("close_above_ema10",),
+    )
+    breakout_holds = _declared_bool(
+        (confirmation,),
+        ("breakout_holds", "key_level_holds"),
+    )
+    pullback_volume_state = _as_text(
         _declared_value(
-            (confirmation, raw, original_raw),
-            ("macd_hist_direction", "macd_state"),
+            (confirmation,),
+            ("pullback_volume_state", "volume_state"),
         )
     ) or None
     declared_buy_point = _as_text(confirmation.get("buy_point")) or None
@@ -1537,24 +2301,77 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         tuple(buy_point_sources) + (raw, original_raw),
         ("confirm_age_days",),
     )
+    expected_date = _strict_date_value(report_date)
+    normalized_confirm_date = _strict_date_value(confirm_date)
+    if not confirm_date:
+        confirmation_date_status = "missing"
+    elif normalized_confirm_date is None:
+        confirmation_date_status = "invalid"
+    elif expected_date is None or normalized_confirm_date != expected_date:
+        confirmation_date_status = "mismatch"
+    elif confirm_age_days is not None and (
+        confirm_age_days < 0
+        or int(confirm_age_days) != confirm_age_days
+        or confirm_age_days != 0
+    ):
+        confirmation_date_status = "conflict"
+    else:
+        confirmation_date_status = "current"
+        confirm_date = normalized_confirm_date
+        if confirm_age_days is not None:
+            confirm_age_days = int(confirm_age_days)
 
-    independent_signal = bool(
+    if ema_alignment is True and ema5 is not None and ema10 is not None:
+        if ema5 <= ema10:
+            confirmation_conflicts.append("ema_alignment")
+    elif ema_alignment is False and ema5 is not None and ema10 is not None:
+        if ema5 > ema10:
+            confirmation_conflicts.append("ema_alignment")
+    if close_above_ema5 is not None and latest_close is not None and ema5 is not None:
+        if close_above_ema5 is not (latest_close > ema5):
+            confirmation_conflicts.append("close_above_ema5")
+    if close_above_ema10 is not None and latest_close is not None and ema10 is not None:
+        if close_above_ema10 is not (latest_close > ema10):
+            confirmation_conflicts.append("close_above_ema10")
+    confirmation_conflicts = list(dict.fromkeys(confirmation_conflicts))
+    if ema5_rising_bars is not None and (
+        ema5_rising_bars < 0 or int(ema5_rising_bars) != ema5_rising_bars
+    ):
+        confirmation_conflicts.append("ema5_rising_bars")
+        ema5_rising_bars = None
+    if recent_peak_drawdown_pct is not None and recent_peak_drawdown_pct < 0:
+        confirmation_conflicts.append("recent_peak_drawdown_pct")
+        recent_peak_drawdown_pct = None
+    confirmation_conflicts = list(dict.fromkeys(confirmation_conflicts))
+    bar_count = _nonnegative_count(input_evidence.get("bars"))
+
+    independent_signal_declared = bool(
         decision_buy_point
         or fresh_yang_pattern in {"two_yang_one_yin", "two_yang_two_yin"}
+    )
+    independent_signal = bool(
+        independent_signal_declared
+        and confirmation_contract_valid
+        and confirmation_date_status == "current"
+        and not confirmation_conflicts
     )
     alignment_only = bool(
         not independent_signal
         and (ema_alignment is True or close_above_ema5 is True)
     )
 
-    if not input_evidence or not interval:
+    if source_conflicts:
+        status = "conflict"
+        confirmation_status = "conflict"
+        reason = "30分钟原始与正式证据来源存在冲突"
+    elif not input_evidence or not interval:
         status = "missing"
         confirmation_status = "missing"
-        reason = reason or "本期未提供可验证的30分钟输入证据"
+        reason = "本期未提供可验证的30分钟输入证据"
     elif is_stale:
         status = "stale"
         confirmation_status = "stale"
-        reason = reason or (
+        reason = (
             "30分钟证据已过期，不能作为本期确认"
             if stale_flag or stale_status
             else "30分钟证据日期非法或与本期不一致，不能作为本期确认"
@@ -1562,11 +2379,27 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
     elif not fresh_input:
         status = "partial"
         confirmation_status = "unavailable"
-        reason = reason or (
+        reason = (
             "30分钟输入未标记正式收盘，不能作为本期确认"
             if input_evidence.get("is_final") is not True
             else "30分钟输入状态未核验，不能作为本期确认"
         )
+    elif confirmation_schema_status != "available":
+        status = "partial"
+        confirmation_status = "unavailable"
+        reason = "30分钟确认契约版本缺失或不受支持"
+    elif not sufficient_bars:
+        status = "partial"
+        confirmation_status = "insufficient"
+        reason = "30分钟确认样本数量不足或未声明"
+    elif confirmation_conflicts:
+        status = "conflict"
+        confirmation_status = "conflict"
+        reason = "30分钟证据数值或关系存在冲突"
+    elif independent_signal_declared and confirmation_date_status != "current":
+        status = "conflict"
+        confirmation_status = "conflict"
+        reason = "30分钟确认日期非法或与本期不一致"
     elif independent_signal:
         status = "available"
         confirmation_status = "confirmed"
@@ -1580,6 +2413,36 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         confirmation_status = "unconfirmed"
         reason = reason or "30分钟未形成独立确认信号"
 
+    if confirmation_status != "confirmed":
+        confirmations = []
+        confirmed_by = None
+        grade = None
+        label = None
+        confirm_date = None
+        confirm_age_days = None
+
+    if not fresh_input or source_conflicts:
+        ema_alignment = None
+        close_above_ema5 = None
+        ema5_reclaim = None
+        stop_fall = None
+        recovery_bundle_match = None
+        ema5_rising_bars = None
+        recent_peak_drawdown_pct = None
+        macd_state = None
+        ema5 = None
+        ema10 = None
+        latest_close = None
+        macd_dif = None
+        macd_dea = None
+        ema5_direction = None
+        ema10_direction = None
+        close_above_ema10 = None
+        breakout_holds = None
+        pullback_volume_state = None
+        buy_point = None
+        fresh_yang_pattern = None
+
     section = {
         "status": status,
         "source": "30m strategy_input_evidence + confirmation_evidence",
@@ -1588,12 +2451,24 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         "input_status": input_status,
         "latest_date": latest_date,
         "latest_ts": latest_ts,
-        "bars": _declared_number((input_evidence,), ("bars",)),
-        "stale": is_stale if input_evidence else None,
+        "bars": bar_count,
+        "stale": (
+            True if is_stale else declared_stale
+        ) if input_evidence else None,
         "is_final": _declared_bool((input_evidence,), ("is_final",)),
         "latest_bar_at": latest_ts or latest_date,
         "confirmed": bool(confirmation_status == "confirmed" and fresh_input),
         "confirmation_status": confirmation_status,
+        "confirmation_schema_status": confirmation_schema_status,
+        "confirmation_schema_version": (
+            int(schema_version) if schema_version == 1 else None
+        ),
+        "sufficient_bars": sufficient_bars,
+        "confirmation_date_status": confirmation_date_status,
+        "source_conflicts": source_conflicts,
+        "audit_reasons": {
+            field: "conflict" for field in confirmation_conflicts
+        },
         "grade": grade,
         "label": label,
         "reason": reason,
@@ -1605,16 +2480,52 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
             "EMA5 > EMA10" if ema_alignment is True
             else ("EMA5 <= EMA10" if ema_alignment is False else None)
         ),
+        "ema5": ema5,
+        "ema10": ema10,
+        "ema5_direction": ema5_direction,
+        "ema10_direction": ema10_direction,
+        "close": latest_close,
         "close_above_ema5": close_above_ema5,
+        "close_above_ema10": close_above_ema10,
         "ema5_rising_bars": ema5_rising_bars,
         "ema5_reclaim": ema5_reclaim,
         "stop_fall": stop_fall,
         "macd_state": macd_state,
+        "macd_dif": macd_dif,
+        "macd_dea": macd_dea,
+        "breakout_holds": breakout_holds,
+        "pullback_volume_state": pullback_volume_state,
         "recent_peak_drawdown_pct": recent_peak_drawdown_pct,
         "buy_point": buy_point,
         "fresh_yang_pattern": fresh_yang_pattern,
         "recovery_bundle_match": recovery_bundle_match,
     }
+    requested_facts = (
+        ("EMA5 当前值未提供", ema5),
+        ("EMA10 当前值未提供", ema10),
+        ("最新收盘价未提供", latest_close),
+        ("MACD DIF 当前值未提供", macd_dif),
+        ("MACD DEA 当前值未提供", macd_dea),
+        ("突破位保持状态未提供", breakout_holds),
+        ("回踩量能状态未提供", pullback_volume_state),
+    )
+    section["missing_evidence"] = [
+        message for message, value in requested_facts
+        if value is None
+    ]
+    if confirmation_schema_status != "available":
+        section["missing_evidence"].append("30分钟确认契约版本缺失或不受支持")
+    if not sufficient_bars:
+        section["missing_evidence"].append("30分钟确认样本数量不足或未声明")
+    if input_evidence and declared_stale is None:
+        section["missing_evidence"].append("30分钟陈旧状态未声明")
+    if independent_signal_declared and confirmation_date_status != "current":
+        section["missing_evidence"].append("30分钟确认日期与本期不一致")
+    for field in confirmation_conflicts:
+        section["missing_evidence"].append("{} 证据冲突".format(field))
+    for field in source_conflicts:
+        section["missing_evidence"].append("{} 跨来源冲突".format(field))
+    section["missing_evidence"] = list(dict.fromkeys(section["missing_evidence"]))
     return section
 
 
@@ -1677,21 +2588,28 @@ def _verified_daily_source(source, report_date):
     source = _as_mapping(source)
     data_status = _as_mapping(source.get("data_status"))
     latest_date = _date_prefix(data_status.get("latest_date"))
+    expected_date = _strict_date_value(report_date)
     return bool(
+        expected_date
+        and
         data_status.get("daily") == "verified"
+        and bool(_as_text(data_status.get("source")))
         and data_status.get("stale") is False
         and data_status.get("is_final") is True
         and latest_date
-        and (not report_date or latest_date == report_date)
+        and latest_date == expected_date
     )
 
 
 def _declared_date_is_current(value, report_date):
+    expected_date = _strict_date_value(report_date)
+    if expected_date is None:
+        return False
     raw_text = _as_text(value)
     if not raw_text:
         return True
     declared = _date_prefix(raw_text)
-    return bool(declared and (not report_date or declared == report_date))
+    return bool(declared and declared == expected_date)
 
 
 def _declared_dates_are_current(
@@ -1712,6 +2630,9 @@ def _declared_dates_are_current(
 
 
 def _dated_series_is_current(source, values, report_date):
+    expected_date = _strict_date_value(report_date)
+    if expected_date is None:
+        return False
     dates = source.get("dates") if isinstance(source, Mapping) else None
     if not isinstance(dates, (list, tuple)):
         return False
@@ -1728,9 +2649,9 @@ def _dated_series_is_current(source, values, report_date):
         for index in range(len(normalized) - 1)
     ):
         return False
-    if report_date and (
-        normalized[-1] != report_date
-        or any(value > report_date for value in normalized)
+    if (
+        normalized[-1] != expected_date
+        or any(value > expected_date for value in normalized)
     ):
         return False
     return True
@@ -1742,6 +2663,7 @@ def _pool_quality_is_current(row, raw, original_raw, report_date):
         pool_quality,
         ("as_of", "date"),
         report_date,
+        require_one=True,
     ):
         return False
     return any(
@@ -1805,6 +2727,7 @@ def _explicit_volume_ratio(row, raw, original_raw, report_date):
                 point,
                 ("as_of", "date"),
                 report_date,
+                require_one=True,
             )
         ):
             continue
@@ -1869,6 +2792,7 @@ def _sector_capital_flow(raw, original_raw, report_date):
             flow = None
         rank = _positive_metric(source.get("sector_rank"))
         label = _as_text(source.get("sector_strength_label")) or None
+        source_label = _as_text(source.get("sector_flow_source")) or None
         if flow is None and rank is None and label is None:
             continue
         declared_status = _as_text(source.get("sector_flow_status"))
@@ -1877,18 +2801,23 @@ def _sector_capital_flow(raw, original_raw, report_date):
             (data_status and not _verified_daily_source(source, report_date))
             or not _declared_dates_are_current(
                 source,
-                ("sector_flow_as_of", "date", "as_of"),
+                ("sector_flow_as_of",),
                 report_date,
+                require_one=True,
             )
         ):
             continue
         complete = (
             declared_status == "verified_complete"
             and _verified_daily_source(source, report_date)
+            and source_label is not None
         )
         return {
             "status": "available" if complete else "partial",
-            "source": "{}.sector_flow".format(source_name),
+            "source": "{}.sector_flow{}".format(
+                source_name,
+                ":{}".format(source_label) if source_label else "",
+            ),
             "as_of": report_date,
             "net_flow": flow,
             "rank": rank,
@@ -1909,6 +2838,55 @@ def _sector_capital_flow(raw, original_raw, report_date):
     }
 
 
+def _stock_capital_flow(raw, original_raw, report_date):
+    """Admit stock-level capital only with an explicit current verified source."""
+    for source_name, source in (
+        ("serialized", raw),
+        ("formal_report", original_raw),
+    ):
+        if not isinstance(source, Mapping):
+            continue
+        flow = _as_mapping(source.get("stock_capital_flow"))
+        if not flow:
+            continue
+        source_label = _as_text(flow.get("source"))
+        evidence_date = _as_text(flow.get("as_of") or flow.get("date"))
+        if (
+            flow.get("status") not in {"verified", "verified_complete"}
+            or not source_label
+            or not evidence_date
+            or not _declared_dates_are_current(
+                flow,
+                ("as_of", "date"),
+                report_date,
+                require_one=True,
+            )
+        ):
+            continue
+        net_flow = _finite_number(flow.get("net_flow"))
+        consecutive_days = _nonnegative_count(flow.get("consecutive_inflow_days"))
+        if net_flow is None and consecutive_days is None:
+            continue
+        return {
+            "status": "available",
+            "source": "{}.stock_capital_flow:{}".format(
+                source_name,
+                source_label,
+            ),
+            "as_of": evidence_date or report_date,
+            "net_flow": net_flow,
+            "consecutive_inflow_days": consecutive_days,
+        }
+    return {
+        "status": "missing",
+        "source": "verified individual-stock fund source",
+        "as_of": report_date,
+        "net_flow": None,
+        "consecutive_inflow_days": None,
+        "reason": "individual_stock_fund_source_not_provided",
+    }
+
+
 def _build_volume_and_capital(row, raw, original_raw, report_date):
     volume = _verified_volume_summary(raw, original_raw, report_date)
     ratio, ratio_source, ratio_plane = _explicit_volume_ratio(
@@ -1923,26 +2901,54 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
         original_raw,
         report_date,
     )
-    stock_flow = {
-        "status": "missing",
-        "source": "verified individual-stock fund source",
-        "as_of": report_date,
-        "net_flow": None,
-        "reason": "individual_stock_fund_source_not_provided",
-    }
+    stock_flow = _stock_capital_flow(raw, original_raw, report_date)
     sector_flow = _sector_capital_flow(raw, original_raw, report_date)
+    verified_sources = tuple(
+        source for source in (raw, original_raw, row)
+        if _verified_daily_source(source, report_date)
+    )
+    turnover_rate = _declared_number(
+        verified_sources,
+        ("turnover_rate", "turnover_pct"),
+    )
+    volume_labels = _declared_texts(
+        _declared_value(
+            verified_sources,
+            ("volume_labels", "volume_tags", "volume_state"),
+        )
+    )
+    stock_net_flow = stock_flow.get("net_flow")
+    stock_net_inflow_days = stock_flow.get("consecutive_inflow_days")
+    sector_net_flow = sector_flow.get("net_flow")
+    if (
+        stock_flow.get("status") != "available"
+        or sector_flow.get("status") != "available"
+    ):
+        alignment_state = "个股或板块资金证据不足"
+    elif stock_net_flow is None or sector_net_flow is None:
+        alignment_state = "资金方向不可判定"
+    elif stock_net_flow == 0 or sector_net_flow == 0:
+        alignment_state = "资金方向中性"
+    elif (stock_net_flow > 0) == (sector_net_flow > 0):
+        alignment_state = "个股与板块资金同向"
+    else:
+        alignment_state = "个股与板块资金分歧"
     parts = []
     if volume["status"] != "missing":
         parts.append("量能可验证")
     if turnover["status"] == "available":
         parts.append("20日平均成交额仅表示流动性")
-    parts.append("个股资金证据不足")
+    parts.append(
+        "个股资金可验证"
+        if stock_flow["status"] == "available" else "个股资金证据不足"
+    )
     if sector_flow["status"] != "missing":
         parts.append("板块资金单独展示")
     has_evidence = (
         volume["status"] != "missing"
         or ratio is not None
         or turnover["status"] == "available"
+        or stock_flow["status"] == "available"
         or sector_flow["status"] != "missing"
     )
     return {
@@ -1962,19 +2968,37 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
             if ratio_source == "workspace.pool_quality.volume_ratio20"
             else None
         ),
+        "turnover_rate": turnover_rate,
+        "volume_labels": volume_labels,
         "turnover": turnover,
         "money20": turnover.get("average_20"),
         "money20_text": _format_cn_amount(turnover.get("average_20")),
         "money20_kind": turnover.get("kind"),
         "money20_source": turnover.get("liquidity_source"),
         "stock_capital_flow": stock_flow,
-        "stock_money_flow": "个股资金证据不足",
+        "stock_money_flow": (
+            _format_cn_amount(stock_net_flow)
+            if stock_flow["status"] == "available"
+            else "个股资金证据不足"
+        ),
+        "stock_net_flow": stock_net_flow,
+        "stock_net_inflow_days": stock_net_inflow_days,
         "sector_capital_flow": sector_flow,
         "sector_money_flow": sector_flow.get("net_flow"),
         "sector_money_flow_text": _format_cn_amount(
             sector_flow.get("net_flow")
         ),
         "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": alignment_state,
+        "missing_evidence": [
+            label for label, value in (
+                ("换手率未提供", turnover_rate),
+                ("量价标签未提供", volume_labels),
+                ("个股大单净流入未提供", stock_net_flow),
+                ("个股连续净流入天数未提供", stock_net_inflow_days),
+                ("板块净流入未提供", sector_net_flow),
+            ) if value is None or value == []
+        ],
         **({"reason": "volume_and_capital_evidence_not_provided"}
            if not has_evidence else {}),
     }
@@ -1984,13 +3008,44 @@ def _formal_market_sentiment(daily_data, report_date):
     raw = _as_mapping(daily_data.get("market_sentiment"))
     score = _finite_number(raw.get("score"))
     label = _as_text(raw.get("label")) or None
-    evidence_date = _as_text(raw.get("date")) or report_date
+    version = _as_text(raw.get("version")) or None
+    coverage = _finite_number(raw.get("coverage"))
+    raw_components = _as_mapping(raw.get("components"))
+    raw_evidence = _as_mapping(raw.get("evidence"))
+    expected_date = _strict_date_value(report_date)
+    evidence_date = _strict_date_value(raw.get("date"))
+
+    def component_is_consistent(key):
+        if key not in raw_components:
+            return False
+        component_evidence = raw_evidence.get(key)
+        if not isinstance(component_evidence, Mapping):
+            return False
+        available = component_evidence.get("available")
+        if not isinstance(available, bool):
+            return False
+        component_value = raw_components.get(key)
+        if component_value is None:
+            return available is False
+        number = _finite_number(component_value)
+        return bool(number is not None and 0 <= number <= 100 and available)
+
+    component_contract_complete = all(
+        component_is_consistent(key)
+        for key in _FORMAL_MARKET_COMPONENTS
+    )
     valid = (
+        expected_date is not None
+        and
         score is not None
         and 0 <= score <= 100
         and label is not None
-        and raw.get("insufficient") is not True
-        and (not report_date or evidence_date == report_date)
+        and version is not None
+        and coverage is not None
+        and 0 < coverage <= 1
+        and raw.get("insufficient") is False
+        and component_contract_complete
+        and evidence_date == expected_date
     )
     if not valid:
         return {
@@ -2003,13 +3058,13 @@ def _formal_market_sentiment(daily_data, report_date):
             "coverage": None,
             "components": {},
             "evidence": {},
+            "direction_state": None,
             "reason": "formal_market_sentiment_not_provided",
         }
     components = _compact_native_fields(
         raw.get("components"),
         _FORMAL_MARKET_COMPONENTS,
     )
-    raw_evidence = _as_mapping(raw.get("evidence"))
     evidence = {
         component: _compact_native_fields(
             raw_evidence.get(component),
@@ -2024,11 +3079,28 @@ def _formal_market_sentiment(daily_data, report_date):
         "as_of": evidence_date,
         "score": score,
         "label": label,
-        "version": _as_text(raw.get("version")) or None,
-        "coverage": _finite_number(raw.get("coverage")),
+        "version": version,
+        "coverage": coverage,
+        "direction_state": _normalize_layer_state(
+            raw.get("direction_state", raw.get("direction"))
+        ),
         "components": components,
         "evidence": evidence,
     }
+
+
+def _normalize_layer_state(value):
+    text = _as_text(value).lower()
+    return {
+        "support": "支持",
+        "支持": "支持",
+        "disagreement": "分歧",
+        "分歧": "分歧",
+        "risk": "风险",
+        "风险": "风险",
+        "unknown": "未知",
+        "未知": "未知",
+    }.get(text)
 
 
 def _matching_sector_item(daily_data, row, raw):
@@ -2040,6 +3112,7 @@ def _matching_sector_item(daily_data, row, raw):
         _field(raw, "sector", None)
     )
     code = _as_text(row.get("code"))
+    matches = []
     for item in items:
         item = _as_mapping(item)
         refs = item.get("sector_refs")
@@ -2048,7 +3121,11 @@ def _matching_sector_item(daily_data, row, raw):
             (sector_name and _as_text(item.get("sector_name")) == sector_name)
             or (code and code in {_as_text(ref) for ref in refs})
         ):
-            return heat, item
+            matches.append(item)
+    if len(matches) == 1:
+        return heat, matches[0]
+    if len(matches) > 1:
+        return heat, {"_match_conflict": True}
     return heat, None
 
 
@@ -2079,6 +3156,7 @@ def _matching_flow_items(
             item,
             ("as_of", "date"),
             report_date,
+            require_one=True,
         ):
             continue
         flow = _finite_number(item.get("flow"))
@@ -2115,6 +3193,20 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
     sector_name = _as_text(row.get("sector")) or _as_text(
         _field(raw, "sector", None)
     )
+    if _as_mapping(item).get("_match_conflict") is True:
+        return {
+            "status": "conflict",
+            "source": "daily.sector_heat",
+            "as_of": report_date,
+            "sector": sector_name or None,
+            "direction": "unknown",
+            "display_completeness": "missing",
+            "display_missing_fields": [],
+            "net_flow": None,
+            "supporting_evidence": [],
+            "opposing_evidence": [],
+            "reason": "sector_item_ambiguous",
+        }
     if not item:
         return {
             "status": "missing",
@@ -2122,6 +3214,8 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
             "as_of": report_date,
             "sector": sector_name or None,
             "direction": "unknown",
+            "display_completeness": "missing",
+            "display_missing_fields": [],
             "net_flow": None,
             "supporting_evidence": [],
             "opposing_evidence": [],
@@ -2139,6 +3233,7 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
             item,
             ("date", "as_of"),
             report_date,
+            require_one=True,
         )
     ):
         return {
@@ -2147,6 +3242,8 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
             "as_of": report_date,
             "sector": sector_name or None,
             "direction": "unknown",
+            "display_completeness": "missing",
+            "display_missing_fields": [],
             "net_flow": None,
             "supporting_evidence": [],
             "opposing_evidence": [],
@@ -2155,9 +3252,15 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
 
     heat_status = _as_text(heat.get("status"))
     item_status = _as_text(item.get("status"))
+    coverage = _finite_number(item.get("component_coverage"))
+    dedupe_status = _as_text(item.get("hierarchy_dedup_status"))
+    item_source = _as_text(item.get("source")) or None
     complete = (
         heat_status == "verified_complete"
         and item_status == "verified_complete"
+        and coverage == 1
+        and dedupe_status in _VERIFIED_SECTOR_DEDUPE_STATUSES
+        and item_source is not None
     )
     partial = (
         heat_status.startswith("verified_")
@@ -2166,6 +3269,13 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
     )
     net_flow = _finite_number(item.get("net_flow"))
     change_pct = _finite_number(item.get("change_pct"))
+    up_count = _nonnegative_count(
+        item.get("up_count", item.get("advance_count"))
+    )
+    total_count = _nonnegative_count(
+        item.get("total_count", item.get("stock_count"))
+    )
+    limit_up_count = _nonnegative_count(item.get("limit_up_count"))
     supporting = []
     opposing = []
     if complete:
@@ -2209,14 +3319,33 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
         direction = "support"
     elif opposing:
         direction = "risk"
-    elif complete:
-        direction = "neutral"
     else:
         direction = "unknown"
     status = "available" if complete else ("partial" if partial else "missing")
+    display_missing_fields = [
+        field for field, value in (
+            ("component_coverage", 1 if coverage == 1 else None),
+            ("source", item_source),
+            ("change_pct", change_pct),
+            ("up_count", up_count),
+            ("total_count", total_count),
+            ("limit_up_count", limit_up_count),
+            ("net_flow", net_flow),
+            ("rank", _positive_metric(item.get("rank"))),
+            (
+                "hierarchy_dedup_status",
+                dedupe_status or None,
+            ),
+        ) if value is None
+    ]
+    display_completeness = (
+        "complete" if not display_missing_fields else (
+            "missing" if len(display_missing_fields) == 9 else "partial"
+        )
+    )
     return {
         "status": status,
-        "source": _as_text(item.get("source"))
+        "source": item_source
         or _as_text(heat.get("source"))
         or "daily.sector_heat",
         "as_of": _as_text(item.get("as_of")) or report_date,
@@ -2225,16 +3354,87 @@ def _build_sector_evidence(daily_data, row, raw, report_date):
         "heat_status": heat_status or None,
         "item_status": item_status or None,
         "direction": direction,
+        "display_completeness": display_completeness,
+        "display_missing_fields": display_missing_fields,
         "net_flow": net_flow,
         "change_pct": change_pct,
         "rank": _positive_metric(item.get("rank")),
+        "up_count": up_count,
+        "total_count": total_count,
+        "limit_up_count": limit_up_count,
+        "component_coverage": coverage,
+        "hierarchy_dedup_status": dedupe_status or None,
         "supporting_evidence": supporting,
         "opposing_evidence": opposing,
         **({"reason": "sector_item_not_fully_verified"} if partial else {}),
     }
 
 
-def _build_market_and_sector(daily_data, row, raw, report_date):
+def _stock_relative_projection(row, raw, original_raw, report_date):
+    candidates = []
+    for parent in (original_raw, raw, row):
+        evidence = _as_mapping(_field(parent, "stock_relative_evidence"))
+        source = _as_text(evidence.get("source")) or None
+        if (
+            evidence.get("status") != "verified_complete"
+            or source is None
+            or not _declared_dates_are_current(
+                evidence,
+                ("as_of", "date"),
+                report_date,
+                require_one=True,
+            )
+        ):
+            continue
+        value = _as_text(
+            evidence.get("relative_strength", evidence.get("value"))
+        ) or None
+        state = _normalize_layer_state(
+            evidence.get("direction_state", evidence.get("state"))
+        )
+        if value is None and state is None:
+            continue
+        candidates.append({
+            "status": "available",
+            "source": source,
+            "as_of": _strict_date_value(
+                evidence.get("as_of") or evidence.get("date")
+            ),
+            "value": value,
+            "state": state or "未知",
+        })
+    signatures = {
+        (candidate["value"], candidate["state"])
+        for candidate in candidates
+    }
+    if len(signatures) > 1:
+        return {
+            "status": "conflict",
+            "source": None,
+            "as_of": report_date,
+            "value": None,
+            "state": "未知",
+            "reason": "stock_relative_evidence_conflict",
+        }
+    if candidates:
+        return candidates[0]
+    return {
+        "status": "missing",
+        "source": None,
+        "as_of": report_date,
+        "value": None,
+        "state": "未知",
+        "reason": "verified_stock_relative_evidence_not_provided",
+    }
+
+
+def _build_market_and_sector(
+    daily_data,
+    row,
+    raw,
+    original_raw,
+    report_date,
+):
     market = _formal_market_sentiment(daily_data, report_date)
     sector = _build_sector_evidence(
         daily_data,
@@ -2246,7 +3446,6 @@ def _build_market_and_sector(daily_data, row, raw, report_date):
         "support": "支持",
         "risk": "风险",
         "disagreement": "分歧",
-        "neutral": "中性",
         "unknown": "证据部分可用 · 方向未知"
         if sector.get("status") == "partial" else "方向未知",
     }
@@ -2280,6 +3479,20 @@ def _build_market_and_sector(daily_data, row, raw, report_date):
     status = "available" if has_market and sector["status"] == "available" else (
         "partial" if has_market or has_sector else "missing"
     )
+    stock_relative = _stock_relative_projection(
+        row,
+        raw,
+        original_raw,
+        report_date,
+    )
+    stock_relative_strength = stock_relative["value"]
+    market_state = market.get("direction_state") or "未知"
+    sector_layer_state = {
+        "support": "支持",
+        "disagreement": "分歧",
+        "risk": "风险",
+    }.get(direction, "未知")
+    stock_state = stock_relative["state"]
     return {
         "status": status,
         "source": "daily.market_sentiment + daily.sector_heat",
@@ -2292,8 +3505,35 @@ def _build_market_and_sector(daily_data, row, raw, report_date):
         "sector_evidence": sector,
         "sector": sector.get("sector"),
         "sector_state": states.get(direction, "方向未知"),
+        "sector_layer_state": sector_layer_state,
         "sector_support": sector_support,
         "sector_risk": sector_risk,
+        "sector_change_pct": sector.get("change_pct"),
+        "sector_up_count": sector.get("up_count"),
+        "sector_total_count": sector.get("total_count"),
+        "sector_limit_up_count": sector.get("limit_up_count"),
+        "sector_net_flow": sector.get("net_flow"),
+        "sector_market_rank": sector.get("rank"),
+        "sector_hierarchy_dedup_status": sector.get(
+            "hierarchy_dedup_status"
+        ),
+        "stock_relative_strength": stock_relative_strength,
+        "stock_relative_status": stock_relative["status"],
+        "stock_relative_source": stock_relative["source"],
+        "stock_relative_as_of": stock_relative["as_of"],
+        "market_state": market_state,
+        "stock_state": stock_state,
+        "missing_evidence": [
+            label for label, value in (
+                ("板块涨跌幅未提供", sector.get("change_pct")),
+                ("板块上涨家数未提供", sector.get("up_count")),
+                ("板块总家数未提供", sector.get("total_count")),
+                ("板块涨停家数未提供", sector.get("limit_up_count")),
+                ("板块资金净流入未提供", sector.get("net_flow")),
+                ("板块市场排名未提供", sector.get("rank")),
+                ("个股板块内相对强弱未提供", stock_relative_strength),
+            ) if value is None
+        ],
         **({"reason": "market_and_sector_evidence_not_provided"}
            if status == "missing" else {}),
     }
@@ -2475,7 +3715,44 @@ def _scorecard_rows(scorecards):
     return rows
 
 
-def _project_historical_progress(scorecard, horizon):
+def _historical_metrics_contract_valid(
+    scorecard,
+    horizon,
+    mature_samples,
+    report_date,
+):
+    metrics = _as_mapping(
+        _as_mapping(scorecard.get("metrics_by_horizon")).get(horizon)
+    )
+    if any(field not in metrics for field in _HISTORICAL_METRIC_FIELDS):
+        return False
+    metric_count = _nonnegative_count(metrics.get("n"))
+    if metric_count is None or metric_count != mature_samples:
+        return False
+    date_start = _strict_date_value(metrics.get("date_start"))
+    date_end = _strict_date_value(metrics.get("date_end"))
+    expected_date = _strict_date_value(report_date)
+    if (
+        date_start is None
+        or date_end is None
+        or expected_date is None
+        or date_start > date_end
+        or date_end > expected_date
+    ):
+        return False
+    for field in (
+        "mean", "median", "win_rate", "excess_mean", "mean_mfe",
+        "mean_mae", "max_drawdown",
+    ):
+        value = _finite_number(metrics.get(field))
+        if value is None:
+            return False
+        if field == "win_rate" and not 0 <= value <= 100:
+            return False
+    return True
+
+
+def _project_historical_progress(scorecard, horizon, report_date):
     raw_progress = _as_mapping(
         _as_mapping(scorecard.get("comparison_progress_by_horizon")).get(
             horizon
@@ -2520,6 +3797,12 @@ def _project_historical_progress(scorecard, horizon):
         and readiness == "ready_for_manual_comparison"
         and declared_status == "ready_for_manual_comparison"
         and passes_gate
+        and _historical_metrics_contract_valid(
+            scorecard,
+            horizon,
+            mature,
+            report_date,
+        )
     ):
         status = "ready_for_manual_comparison"
     elif not complete:
@@ -2768,7 +4051,7 @@ def _build_historical_validation(
 
     card = cards[0]
     progress = {
-        key: _project_historical_progress(card, key)
+        key: _project_historical_progress(card, key, report_date)
         for key in _HISTORICAL_HORIZONS
     }
     metrics = {
@@ -2816,6 +4099,8 @@ def _build_main_rise_clue(
     pool_name,
     view_name,
     report_date,
+    sublevel_30m,
+    daily_structure,
 ):
     """Translate existing strategy signals into a display-only clue."""
     sources = (raw, original_raw, row)
@@ -2842,15 +4127,103 @@ def _build_main_rise_clue(
             signal_sources,
             ("startup_reason", "boom_reason", "next_day_reason", "reason"),
         ),
+    )
+    daily_structure = _as_mapping(daily_structure)
+    trustworthy_daily = bool(
+        daily_structure.get("status") == "available"
+        and daily_structure.get("freshness_status") == "current"
+        and daily_structure.get("latest_date") == _strict_date_value(report_date)
+        and daily_structure.get("stale") is False
+        and daily_structure.get("is_final") is True
+    )
+    missing_daily_ma = [
+        key.upper()
+        for key in ("ma5", "ma10", "ma20", "ma50")
+        if daily_structure.get(key) is None
+    ]
+    declared_reasons = [
+        cleaned for cleaned in (
+            _sanitize_unsupported_ma_claims(value, missing_daily_ma)
+            for value in declared_reasons
+        ) if cleaned
+    ]
+    startup_signals = _declared_texts(
         _declared_value(
             signal_sources,
-            ("startup_signals", "confirmations"),
+            ("startup_signals",),
         ),
+    )
+    confirmation_reasons = _declared_texts(
+        _declared_value(signal_sources, ("confirmations",)),
+    )
+    sublevel_30m = _as_mapping(sublevel_30m)
+    trustworthy_30m = bool(
+        sublevel_30m.get("status") == "available"
+        and sublevel_30m.get("confirmation_status") == "confirmed"
+        and sublevel_30m.get("confirmed") is True
+        and sublevel_30m.get("stale") is False
+        and sublevel_30m.get("is_final") is True
+    )
+
+    def _mentions_30m_confirmation(value):
+        lowered = _as_text(value).lower().replace(" ", "")
+        return any(marker in lowered for marker in (
+            "30m", "30min", "30分钟", "ema5", "ema10",
+        ))
+
+    evidence_guards = []
+    if not trustworthy_daily:
+        daily_status = _as_text(daily_structure.get("status")) or "missing"
+        evidence_guards.append(
+            "日线证据{}，相关线索未纳入主升浪支持项".format({
+                "stale": "陈旧",
+                "conflict": "冲突",
+                "partial": "未完整核验",
+                "missing": "缺失",
+            }.get(daily_status, "不可验证"))
+        )
+    if not trustworthy_30m:
+        declared_reasons = [
+            value for value in declared_reasons
+            if not _mentions_30m_confirmation(value)
+        ]
+        startup_signals = [
+            value for value in startup_signals
+            if not _mentions_30m_confirmation(value)
+        ]
+        confirmation_reasons = []
+        sublevel_status = _as_text(sublevel_30m.get("status")) or "missing"
+        evidence_guards.append(
+            "30分钟证据{}，相关确认未纳入主升浪支持项".format(
+                {
+                    "missing": "缺失",
+                    "stale": "陈旧",
+                    "partial": "未完整确认",
+                }.get(sublevel_status, "不可验证")
+            )
+        )
+    declared_reasons = _declared_texts(
+        declared_reasons,
+        startup_signals,
+        confirmation_reasons,
     )
     row_sources = _declared_texts(
         row.get("sources"),
         row.get("source_labels"),
     )
+    if not trustworthy_30m:
+        if _mentions_30m_confirmation(signal_type):
+            signal_type = ""
+        if _mentions_30m_confirmation(source_type):
+            source_type = ""
+        if _mentions_30m_confirmation(source_channel):
+            source_channel = ""
+        if _mentions_30m_confirmation(startup_label):
+            startup_label = ""
+        row_sources = [
+            value for value in row_sources
+            if not _mentions_30m_confirmation(value)
+        ]
     identity_text = " ".join(
         value for value in (
             signal_type,
@@ -2890,7 +4263,7 @@ def _build_main_rise_clue(
         label = "尚未形成主升浪线索"
 
     supporting = []
-    if clue_type != "none":
+    if clue_type != "none" and trustworthy_daily:
         supporting = _declared_texts(
             signal_type,
             source_type,
@@ -2943,7 +4316,13 @@ def _build_main_rise_clue(
         opposing.extend(_declared_texts("结构破坏", structure_values, risk_labels))
     opposing = _declared_texts(opposing)
 
-    if structure_invalid and supporting:
+    if not trustworthy_daily:
+        status = "missing"
+        clue_type = "none"
+        label = "尚未形成主升浪线索"
+        supporting = []
+        opposing = []
+    elif structure_invalid and supporting:
         status = "invalidated"
         clue_type = "invalidated"
         label = "主升线索失效"
@@ -2963,6 +4342,7 @@ def _build_main_rise_clue(
         "label": label,
         "supporting_evidence": supporting,
         "opposing_evidence": opposing,
+        "evidence_guards": evidence_guards,
         "note": "只翻译现有证据，不生成策略、分数或正式动作",
     }
     if status == "missing":
@@ -2978,6 +4358,7 @@ def _build_candidate_projection(
     view_name,
     report_date,
     daily_data,
+    source_identity_diagnostic=None,
 ):
     price_evidence = _build_price_evidence(
         row,
@@ -2992,25 +4373,36 @@ def _build_candidate_projection(
         price_evidence,
         report_date,
     )
+    daily_structure = _project_daily_structure(
+        row,
+        raw,
+        original_raw,
+        price_evidence,
+        report_date,
+    )
+    sublevel_30m = _project_sublevel_30m(
+        row,
+        raw,
+        original_raw,
+        report_date,
+    )
     candidate = {
         "view": view_name,
         "code": _as_text(row.get("code")),
-        "summary": _build_summary(row, raw, view_name, report_date),
+        "summary": _build_summary(
+            row,
+            raw,
+            original_raw,
+            pool_name,
+            view_name,
+            report_date,
+            daily_structure,
+        ),
         "decision_score": _build_decision_score(raw, pool_name),
         "rank_evidence": _build_rank_evidence(row, view_name),
         "price_evidence": price_evidence,
-        "daily_structure": _project_daily_structure(
-            row,
-            raw,
-            original_raw,
-            report_date,
-        ),
-        "sublevel_30m": _project_sublevel_30m(
-            row,
-            raw,
-            original_raw,
-            report_date,
-        ),
+        "daily_structure": daily_structure,
+        "sublevel_30m": sublevel_30m,
         "volume_and_capital": _build_volume_and_capital(
             row,
             raw,
@@ -3021,6 +4413,7 @@ def _build_candidate_projection(
             daily_data,
             row,
             raw,
+            original_raw,
             report_date,
         ),
         "main_rise_clue": _build_main_rise_clue(
@@ -3030,12 +4423,15 @@ def _build_candidate_projection(
             pool_name,
             view_name,
             report_date,
+            sublevel_30m,
+            daily_structure,
         ),
         "risk_and_next": _build_risk_and_next(
             row,
             raw,
             original_raw,
             price_evidence,
+            report_date,
         ),
         "historical_validation": _build_historical_validation(
             daily_data,
@@ -3047,12 +4443,26 @@ def _build_candidate_projection(
             price_evidence,
             chart_evidence=chart_evidence,
         ),
+        "source_identity": {
+            "status": "conflict" if source_identity_diagnostic else "available",
+            "source": "workspace ref + serialized/formal pool code",
+            "reason": source_identity_diagnostic,
+        },
     }
+    if source_identity_diagnostic:
+        candidate["summary"]["status"] = "conflict"
+        candidate["summary"]["reason"] = source_identity_diagnostic
     for section_name in EVIDENCE_SECTION_KEYS:
         if section_name not in candidate:
             candidate[section_name] = _missing_section(
                 "recommendation_evidence.{}".format(section_name)
             )
+    candidate, truncated_text_count = _bound_display_strings(candidate)
+    candidate["payload_contract"] = {
+        "status": "truncated" if truncated_text_count else "available",
+        "max_text_length": _MAX_EVIDENCE_TEXT_LENGTH,
+        "truncated_text_count": truncated_text_count,
+    }
     return candidate
 
 
@@ -3076,8 +4486,24 @@ def _build_views(formal_report, daily_data, report_date):
         projected = []
         for row in rows:
             row = _as_mapping(row)
-            raw, pool_name = _find_serialized_candidate(daily_data, row)
-            original_raw = _find_original_candidate(formal_report, row)
+            raw, pool_name, raw_diagnostic = _find_serialized_candidate(
+                daily_data,
+                row,
+            )
+            original_raw, formal_diagnostic = _find_original_candidate(
+                formal_report,
+                row,
+            )
+            diagnostics = [
+                diagnostic for diagnostic in (
+                    raw_diagnostic,
+                    formal_diagnostic,
+                ) if diagnostic
+            ]
+            source_identity_diagnostic = ";".join(diagnostics) or None
+            if source_identity_diagnostic:
+                raw = None
+                original_raw = None
             projected.append(_build_candidate_projection(
                 row,
                 raw,
@@ -3086,6 +4512,7 @@ def _build_views(formal_report, daily_data, report_date):
                 view_name,
                 report_date,
                 daily_data,
+                source_identity_diagnostic,
             ))
         views[view_name] = projected
     return views
@@ -3099,9 +4526,8 @@ def build_recommendation_evidence_projection(
     """Return the minimal versioned HTML-only evidence envelope."""
     formal_report = formal_report if isinstance(formal_report, dict) else {}
     daily_data = daily_data if isinstance(daily_data, dict) else {}
-    report_date = str(
-        daily_data.get("date") or formal_report.get("date") or ""
-    )
+    raw_report_date = daily_data.get("date") or formal_report.get("date")
+    report_date = _strict_date_value(raw_report_date) or ""
     market_sentiment = {}
     market_sentiment["psy12_shadow_contract"] = (
         _project_psy12_shadow_contract(daily_data)

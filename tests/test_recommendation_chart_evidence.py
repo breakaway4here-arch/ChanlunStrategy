@@ -79,6 +79,30 @@ def _serialization_pick():
 
 
 class TestRecommendationChartEvidence(unittest.TestCase):
+    def test_conflicting_projected_pivot_is_not_drawn_from_raw_fallback(self):
+        _assert_node_contract(
+            self,
+            "({ structure: selectStructureChartLines })",
+            r"""
+const raw = { pivot_zg: 20.5, pivot_zd: 17.8, pivots: { ZG: 20.5, ZD: 17.8 } };
+const projected = {
+  pivots: {
+    status: 'conflict', available: ['ZD'], ZG: null, ZD: 17.8,
+    field_sources: { ZD: 'serialized.pivot_zd' }
+  }
+};
+const lines = globalThis.__auxTest.structure(
+  [{ name: 'ZG', yAxis: 20.5 }, { name: 'ZD', yAxis: 17.8 }],
+  raw,
+  projected
+);
+assert(!lines.some(function (line) { return line.name === 'ZG'; }),
+  'conflicting ZG leaked back from raw chart annotations');
+assert(lines.length === 1 && lines[0].name === 'ZD' && lines[0].yAxis === 17.8,
+  'non-conflicting ZD was not preserved');
+""",
+        )
+
     def test_missing_macd_remains_null_and_is_not_drawn_as_zero(self):
         _assert_node_contract(
             self,
@@ -229,7 +253,28 @@ const raw = {
     labels: ['确认日: D04']
   }
 };
-globalThis.__auxTest.chart(raw, {});
+const freshConfirmedEvidence = {
+  code: '600001',
+  summary: { code: '600001' },
+  sublevel_30m: {
+    status: 'available',
+    confirmation_status: 'confirmed',
+    confirmed: true,
+    stale: false,
+    is_final: true
+  }
+};
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: {
+    schema_version: 1,
+    report_date: '2026-08-28',
+    views: { main: [freshConfirmedEvidence] }
+  }
+};
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+globalThis.__auxTest.state.currentView = 'main';
+globalThis.__auxTest.chart(raw, freshConfirmedEvidence);
 const lane = globalThis.__auxTest.state.chartAnnotationLane.innerHTML;
 assert(lane.includes('chart-signal-list'), 'chart did not reuse the signal annotation lane');
 assert(lane.includes('chart-signal-item'), 'signal lane did not receive chart actions');

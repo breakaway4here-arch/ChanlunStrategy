@@ -414,6 +414,7 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
             "data_status": {
                 "daily": "verified",
                 "latest_date": "2026-08-28",
+                "source": "market_history_db",
                 "bars": 120,
                 "stale": False,
                 "is_final": True,
@@ -463,6 +464,41 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
         self.assertIsNone(daily["ma20"])
         self.assertIsNone(daily["ma50"])
         self.assertEqual(daily["macd"], "DIF/DEA 双线0轴上")
+
+    def test_daily_summary_cannot_claim_ma5_ma10_hold_when_values_are_missing(self):
+        row = _workspace_row()
+        raw = _raw_candidate()
+        raw.update({
+            "best_buy_point": {
+                "type": "趋势延续候选",
+                "source_type": "日线趋势延续",
+                "reason": "20日平台突破；MA5/MA10保持",
+                "signal_date": "2026-08-28",
+            },
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-08-28",
+                "stale": False,
+                "is_final": True,
+            },
+            "ma20": 302.1,
+            "ma50": 286.4,
+        })
+
+        daily = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]["daily_structure"]
+
+        self.assertIsNone(daily["ma5"])
+        self.assertIsNone(daily["ma10"])
+        self.assertNotIn("MA5/MA10保持", daily.get("summary") or "")
+        explicit_missing = json.dumps(daily, ensure_ascii=False)
+        self.assertRegex(
+            explicit_missing,
+            r"(?:MA5[^\"]*未提供[^\"]*MA10|MA5[^\"]*MA10[^\"]*未提供)",
+            "MA5/MA10当前值缺失时，证据对象没有明确的用户可理解缺失语义",
+        )
 
     def test_sublevel_maps_fresh_independent_confirmation_without_minute_arrays(self):
         row = _workspace_row()
@@ -637,7 +673,8 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
         self.assertEqual(sublevel["buy_point"], "二买")
         self.assertEqual(sublevel["status"], "partial")
         self.assertFalse(sublevel["confirmed"])
-        self.assertEqual(sublevel["confirmation_status"], "unconfirmed")
+        self.assertEqual(sublevel["confirmation_status"], "unavailable")
+        self.assertEqual(sublevel["confirmation_schema_status"], "invalid")
 
     def test_stale_or_missing_30m_is_not_confirmed_and_keeps_explicit_reason(self):
         row = _workspace_row()

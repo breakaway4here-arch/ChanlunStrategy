@@ -54,7 +54,8 @@ const base = {
     shadow_score_with_psy12: 61,
     delta_vs_formal: 0,
     formal_label: '偏强',
-    shadow_label: '偏强'
+    shadow_label: '偏强',
+    weights: { psy12: 0.1 }
   },
   psy12_shadow_audit: audit
 };
@@ -171,6 +172,51 @@ assert(completeHtml.includes('6 / 12'), 'complete audit hid the PSY12 window');
 assert(completeHtml.includes('20 / 20'), 'complete audit progress is missing');
 assert(completeHtml.includes('仍需新授权'), 'twenty complete days implied automatic promotion');
 """.replace("COMPLETE_AUDIT", complete),
+        )
+
+    def test_psy12_shadow_panel_discloses_ten_percent_weighted_result(self):
+        fixture = _valid_market_fixture(audit=_audit_literal())
+        _assert_node_contract(
+            self,
+            "({ market: renderMarketTemperatureCard })",
+            fixture
+            + r"""
+const html = globalThis.__auxTest.market(base);
+assert(html.includes('10%'), 'PSY12 影子权重没有明确展示');
+assert(html.includes('加入 10% 后') || html.includes('加入10%后'),
+  'PSY12 加权后的影子结果没有按合同命名');
+assert(html.includes('影子分') && html.includes('差值'),
+  '10%影子结果缺少加权分或与正式分的差值');
+""",
+        )
+
+    def test_missing_or_invalid_psy12_weight_hides_weighted_result(self):
+        fixture = _valid_market_fixture(audit=_audit_literal())
+        _assert_node_contract(
+            self,
+            "({ market: renderMarketTemperatureCard })",
+            fixture
+            + r"""
+[
+  {},
+  { weights: {} },
+  { weights: { psy12: 0.2 } },
+  { weights: { psy12: '0.1' } }
+].forEach(function (override) {
+  const invalidShadow = Object.assign({}, base.psy12_shadow, override);
+  if (!Object.prototype.hasOwnProperty.call(override, 'weights')) {
+    delete invalidShadow.weights;
+  }
+  const html = globalThis.__auxTest.market(Object.assign({}, base, {
+    psy12_shadow: invalidShadow
+  }));
+  assert(html.includes('影子权重不可验证'), '缺失或异常影子权重没有 fail-closed');
+  assert(!html.includes('加入 10% 后') && !html.includes('加入10%后'),
+    '异常权重仍展示了10%加权结果');
+  assert(!html.includes('影子分</span><strong>61'),
+    '异常权重仍泄漏加权影子分');
+});
+""",
         )
 
     def test_missing_audit_progress_is_explicit_and_never_inferred_from_psy12(self):

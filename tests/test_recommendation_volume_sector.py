@@ -34,6 +34,7 @@ class RecommendationVolumeAndCapitalTests(unittest.TestCase):
             "money20": 174570073.16,
             "liquidity_source": "amounts",
             "quality_evidence_eligible": True,
+            "as_of": "2026-08-28",
         }
         raw = _raw_candidate()
         raw.update({
@@ -50,7 +51,13 @@ class RecommendationVolumeAndCapitalTests(unittest.TestCase):
                 "stale": False,
                 "is_final": True,
             },
-            "best_buy_point": {"volume_ratio": 1.4},
+            "best_buy_point": {
+                "volume_ratio": 1.4,
+                "as_of": "2026-08-28",
+            },
+            "sector_flow_status": "verified_complete",
+            "sector_flow_source": "licensed-sector-flow",
+            "sector_flow_as_of": "2026-08-28",
         })
 
         evidence = _candidate_section(row, raw)["volume_and_capital"]
@@ -235,6 +242,8 @@ class RecommendationMarketAndSectorTests(unittest.TestCase):
                 "net_flow": 900000000,
                 "change_pct": 3.2,
                 "rank": 1,
+                "component_coverage": 1,
+                "hierarchy_dedup_status": "checked_unique",
                 "source": "verified-sector-source",
                 "as_of": "2026-08-28T16:30:00+08:00",
             }],
@@ -266,6 +275,8 @@ class RecommendationMarketAndSectorTests(unittest.TestCase):
                 "net_flow": 900000000,
                 "change_pct": 3.2,
                 "rank": 1,
+                "component_coverage": 1,
+                "hierarchy_dedup_status": "checked_unique",
                 "source": "verified-sector-source",
                 "as_of": "2026-08-28T16:30:00+08:00",
             }],
@@ -334,6 +345,8 @@ class RecommendationMarketAndSectorTests(unittest.TestCase):
                 "net_flow": 900000000,
                 "change_pct": 3.2,
                 "rank": 1,
+                "component_coverage": 1,
+                "hierarchy_dedup_status": "checked_unique",
                 "source": "verified-sector-source",
                 "as_of": "2026-08-28T16:30:00+08:00",
             }],
@@ -369,6 +382,8 @@ class RecommendationMarketAndSectorTests(unittest.TestCase):
                 "net_flow": 900000000,
                 "change_pct": 3.2,
                 "rank": 1,
+                "component_coverage": 1,
+                "hierarchy_dedup_status": "checked_unique",
                 "source": "verified-sector-source",
                 "as_of": "2026-08-28T16:30:00+08:00",
             }],
@@ -379,6 +394,7 @@ class RecommendationMarketAndSectorTests(unittest.TestCase):
             "change_pct": -0.5,
             "component_coverage": 1,
             "hierarchy_dedup_status": "checked_unique",
+            "as_of": "2026-08-28T16:30:00+08:00",
         }]
 
         evidence = _candidate_section(

@@ -282,7 +282,7 @@ class RecommendationSectorFlowBoundsTests(unittest.TestCase):
                     }],
                 )["market_and_sector"]["sector_evidence"]
 
-                self.assertEqual(sector["direction"], "neutral")
+                self.assertEqual(sector["direction"], "unknown")
                 self.assertEqual(sector["supporting_evidence"], [])
 
     def test_sector_flow_matching_deduplicates_and_caps_supporting_signals(self):
