@@ -10,9 +10,11 @@ HTML 日报生成器 — v2 策略工作台壳子 + 外部静态资源
 import hashlib
 import json
 import os
+import re
 import shutil
 import copy
 from collections.abc import Mapping
+from html.parser import HTMLParser
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -1627,6 +1629,179 @@ def copy_report_assets(output_dir):
     return copied
 
 
+def _replace_start_tag_asset(tag_text, attribute_name, asset_name, asset_version):
+    tag_match = re.match(r"<\s*[^\s/>]+", tag_text)
+    if not tag_match:
+        return tag_text
+    position = tag_match.end()
+    length = len(tag_text)
+    asset_value = re.compile(
+        rf"(?P<path>(?:\.\./)?assets/{re.escape(asset_name)})"
+        r"(?:\?v=[^\"'&<>\s]+)?"
+    )
+
+    while position < length:
+        while position < length and tag_text[position].isspace():
+            position += 1
+        if position >= length or tag_text[position] in "/>":
+            break
+        name_start = position
+        while (
+            position < length
+            and not tag_text[position].isspace()
+            and tag_text[position] not in "=/>"
+        ):
+            position += 1
+        name = tag_text[name_start:position].lower()
+        while position < length and tag_text[position].isspace():
+            position += 1
+        if position >= length or tag_text[position] != "=":
+            continue
+        position += 1
+        while position < length and tag_text[position].isspace():
+            position += 1
+        if position >= length:
+            break
+
+        quote = tag_text[position] if tag_text[position] in "\"'" else ""
+        if quote:
+            value_start = position + 1
+            value_end = tag_text.find(quote, value_start)
+            if value_end < 0:
+                break
+            position = value_end + 1
+        else:
+            value_start = position
+            while (
+                position < length
+                and not tag_text[position].isspace()
+                and tag_text[position] != ">"
+            ):
+                position += 1
+            value_end = position
+
+        value_match = asset_value.fullmatch(tag_text[value_start:value_end])
+        if name != attribute_name or not value_match:
+            continue
+        replacement = value_match.group("path") + "?v=" + asset_version
+        return tag_text[:value_start] + replacement + tag_text[value_end:]
+    return tag_text
+
+
+class _ReportAssetTagParser(HTMLParser):
+    OPAQUE_TEXT_TAGS = {
+        "iframe",
+        "noembed",
+        "noframes",
+        "plaintext",
+        "script",
+        "style",
+        "textarea",
+        "title",
+        "xmp",
+    }
+
+    def __init__(self, html, asset_version):
+        super().__init__(convert_charrefs=False)
+        self.asset_version = asset_version
+        self.replacements = []
+        self.opaque_tag = None
+        self.line_offsets = [0]
+        for match in re.finditer(r"\n", html):
+            self.line_offsets.append(match.end())
+
+    def _record_start_tag(self, tag):
+        tag_text = self.get_starttag_text()
+        if not tag_text:
+            return
+        if tag.lower() == "link":
+            updated = _replace_start_tag_asset(
+                tag_text,
+                "href",
+                "report-v2.css",
+                self.asset_version,
+            )
+        elif tag.lower() == "script":
+            updated = _replace_start_tag_asset(
+                tag_text,
+                "src",
+                "report-v2.js",
+                self.asset_version,
+            )
+        else:
+            return
+        if updated == tag_text:
+            return
+        line, column = self.getpos()
+        start = self.line_offsets[line - 1] + column
+        self.replacements.append((start, start + len(tag_text), updated))
+
+    def handle_starttag(self, tag, attrs):
+        del attrs
+        tag = tag.lower()
+        if self.opaque_tag is not None:
+            return
+        if tag == "script":
+            self._record_start_tag(tag)
+            self.opaque_tag = tag
+            return
+        if tag in self.OPAQUE_TEXT_TAGS:
+            self.opaque_tag = tag
+            return
+        self._record_start_tag(tag)
+
+    def handle_startendtag(self, tag, attrs):
+        del attrs
+        if self.opaque_tag is not None:
+            return
+        self._record_start_tag(tag)
+
+    def handle_endtag(self, tag):
+        if self.opaque_tag == tag.lower():
+            self.opaque_tag = None
+
+
+def replace_report_asset_versions(html, asset_version):
+    """Replace only real report-v2 link/script attributes in an HTML document."""
+    if not re.fullmatch(r"[0-9a-f]{12}", str(asset_version or "")):
+        raise ValueError("asset_version must be a 12-character lowercase hex digest")
+
+    parser = _ReportAssetTagParser(html, asset_version)
+    parser.feed(html)
+    parser.close()
+    updated = html
+    for start, end, replacement in reversed(parser.replacements):
+        updated = updated[:start] + replacement + updated[end:]
+    return updated
+
+
+def refresh_report_asset_versions(output_dir, asset_version):
+    """Cache-bust shared report assets on every persisted report entrypoint."""
+    output_dir = os.path.realpath(os.path.abspath(output_dir))
+    html_paths = [
+        os.path.join(output_dir, "index.html"),
+        os.path.join(output_dir, "compare", "index.html"),
+    ]
+    if os.path.isdir(output_dir):
+        for entry in sorted(os.listdir(output_dir)):
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", entry):
+                html_paths.append(os.path.join(output_dir, entry, "index.html"))
+
+    changed_paths = []
+    for html_path in html_paths:
+        if not os.path.isfile(html_path):
+            continue
+        with open(html_path, "r", encoding="utf-8") as handle:
+            original = handle.read()
+        updated = replace_report_asset_versions(original, asset_version)
+        if updated == original:
+            continue
+        with open(html_path, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        changed_paths.append(html_path)
+    return changed_paths
+
+
 def write_comparison_page(output_dir, top10_api_base, asset_version=None):
     """Render the standalone comparison page with the same quote API config."""
     source_path = os.path.join(_report_asset_source_dir(), "comparison.html")
@@ -2081,6 +2256,8 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             asset_prefix="../",
             asset_version=asset_version,
         ))
+
+    refresh_report_asset_versions(output_dir, asset_version)
 
     print(f"  日报已生成: {index_path}")
     print(f"  数据已写入: {data_dir}")

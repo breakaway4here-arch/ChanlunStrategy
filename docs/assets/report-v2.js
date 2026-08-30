@@ -3374,7 +3374,7 @@
     }
 
     state.chartInstance = window.echarts.init(state.chartMount);
-    var defaultStartIndex = Math.max(0, minLen - 30);
+    var defaultStartIndex = Math.max(0, minLen - 20);
     var defaultStartValue = xAxis[defaultStartIndex];
     var defaultEndValue = xAxis[minLen - 1];
     state.chartInstance.setOption({

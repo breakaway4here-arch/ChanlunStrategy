@@ -31,6 +31,7 @@ TODAY_DATA_PATH="docs/data/${TODAY}.json"
 INDEX_PATH="docs/index.html"
 RETRY_MISSING_ONLY=0
 GIT_UPSTREAM="${CHANLUN_GIT_UPSTREAM:-origin/main}"
+FORMAL_PUBLISH_JOURNAL_PATH="${CHANLUN_FORMAL_PUBLISH_JOURNAL_PATH:-${SCRIPT_DIR}/.cache/chanlun/formal-publish-targets.json}"
 
 is_today_output_ready() {
     if [ ! -f "$TODAY_DATA_PATH" ]; then
@@ -86,6 +87,8 @@ fetch_with_proxy_fallback() {
 }
 
 sync_with_remote() {
+    local runtime_status
+
     if ! fetch_with_proxy_fallback; then
         return 1
     fi
@@ -95,6 +98,11 @@ sync_with_remote() {
     fi
 
     if git merge-base --is-ancestor HEAD "$GIT_UPSTREAM"; then
+        runtime_status=$(git status --porcelain=v1 --untracked-files=all)
+        if [ -n "$runtime_status" ]; then
+            echo "运行目录含未提交内容，拒绝在正式重试期间快进"
+            return 1
+        fi
         echo "本地落后 ${GIT_UPSTREAM}，执行安全快进"
         git merge --ff-only "$GIT_UPSTREAM"
         return $?
@@ -131,16 +139,58 @@ finalize_review_snapshot() {
         --market-db-path "$market_db_path"
 }
 
+prepare_formal_publish_state() {
+    /usr/bin/python3 scripts/formal_publish_guard.py prepare \
+        --repo-root "$SCRIPT_DIR" \
+        --trade-date "$TODAY" \
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"
+}
+
+preflight_formal_publish_state() {
+    /usr/bin/python3 scripts/formal_publish_guard.py preflight \
+        --repo-root "$SCRIPT_DIR" \
+        --trade-date "$TODAY" \
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"
+}
+
+record_formal_publish_targets() {
+    /usr/bin/python3 scripts/formal_publish_guard.py record \
+        --repo-root "$SCRIPT_DIR" \
+        --trade-date "$TODAY" \
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"
+}
+
+finalize_and_record_review_snapshot() {
+    local finalize_status
+
+    if finalize_review_snapshot; then
+        finalize_status=0
+    else
+        finalize_status=$?
+    fi
+    if ! record_formal_publish_targets; then
+        echo "盘后固化后的正式产物来源日志写入失败"
+        return 1
+    fi
+    return $finalize_status
+}
+
 main() {
     local run_status
 
     echo "=== 缠论选股日报 $(date '+%Y-%m-%d %H:%M:%S') ==="
 
-    if ! is_today_output_ready; then
-        if ! sync_with_remote; then
-            echo "远端同步未完成，停止生成，避免产生分叉提交"
-            exit 1
-        fi
+    if ! preflight_formal_publish_state; then
+        echo "正式发布来源无法确认，停止运行以保护用户改动"
+        exit 1
+    fi
+    if ! sync_with_remote; then
+        echo "远端同步未完成，停止生成，避免产生分叉提交"
+        exit 1
+    fi
+    if ! prepare_formal_publish_state; then
+        echo "远端同步后的正式发布来源无法确认，停止运行"
+        exit 1
     fi
 
     if is_today_output_ready; then
@@ -151,7 +201,7 @@ main() {
                 echo "正式策略已校验，但分钟级研究输入仍缺失，进入 15:20 增量补跑"
             else
                 /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
-                if ! finalize_review_snapshot; then
+                if ! finalize_and_record_review_snapshot; then
                     echo "账本已固化，但页面回看/固化状态回写失败，停止发布"
                     exit 1
                 fi
@@ -174,8 +224,15 @@ main() {
         echo "日报首跑模式：使用行情数据库优先，按需刷新日线数据"
     fi
 
-    /usr/bin/python3 -c 'import run; import chanlun.data_fetcher as df, chanlun.market_news as mn; df.SESSION.trust_env = False; mn.SESSION.trust_env = False; run.main(False)' 2>&1
-    run_status=$?
+    if /usr/bin/python3 -c 'import run; import chanlun.data_fetcher as df, chanlun.market_news as mn; df.SESSION.trust_env = False; mn.SESSION.trust_env = False; run.main(False)' 2>&1; then
+        run_status=0
+    else
+        run_status=$?
+    fi
+    if ! record_formal_publish_targets; then
+        echo "正式任务运行后的产物来源日志写入失败，停止发布"
+        exit 1
+    fi
 
     if [ $run_status -eq 0 ]; then
         if is_today_output_ready; then
@@ -184,7 +241,7 @@ main() {
                 exit 1
             fi
             /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
-            if ! finalize_review_snapshot; then
+            if ! finalize_and_record_review_snapshot; then
                 echo "账本已固化，但页面回看/固化状态回写失败，停止发布"
                 exit 1
             fi
@@ -202,6 +259,14 @@ main() {
 }
 
 commit_today_report_if_changed() {
+    if ! git diff --cached --quiet; then
+        echo "索引已有未提交改动，拒绝自动提交"
+        return 1
+    fi
+    /usr/bin/python3 scripts/stage_report_asset_version_updates.py \
+        --repo-root "$SCRIPT_DIR" \
+        --docs-dir "$SCRIPT_DIR/docs" \
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"
     git add \
         "docs/index.html" \
         docs/data.json \
@@ -219,8 +284,12 @@ commit_today_report_if_changed() {
 }
 
 publish_ready_report() {
-    if ! sync_with_remote; then
-        echo "远端同步未完成，保留已校验产物，等待下一次补推"
+    if ! fetch_with_proxy_fallback; then
+        echo "提交前远端回读失败，保留已校验产物，等待下一次补推"
+        return 1
+    fi
+    if ! git merge-base --is-ancestor "$GIT_UPSTREAM" HEAD; then
+        echo "提交前发现远端 main 已前进，拒绝在脏产物上自动合并"
         return 1
     fi
     if ! commit_today_report_if_changed; then

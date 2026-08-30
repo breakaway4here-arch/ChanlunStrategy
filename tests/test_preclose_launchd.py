@@ -12,7 +12,7 @@ PRODUCTION_ROOT = "/Users/yangfan/yf_source/ChanlunStrategy"
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
-    "0fd188c0549c1b71f46c2891cc48c94c6a063dde3419e3858bd8bc879b2153b3"
+    "a0c5a68f3c67b6e0d5e632a5348ac362b73a7b1247dc9d38030bfaf875e1fbf0"
 )
 
 

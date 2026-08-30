@@ -289,3 +289,48 @@ feat: 完善K线特殊指标提示
 **Step 5: 保留长期目标**
 
 本次 UI 缺口通过后仍不得调用 `update_goal(complete)`；继续等待下一真实交易日14:47/14:49/14:56:30、盘后复核、notify=1 供应商成功和手机到达等剩余生产门槛。
+
+### Task 6: 收口默认窗口和历史日报缓存合同
+
+**Files:**
+- Modify: `chanlun/report_assets/report-v2.js`
+- Modify: `chanlun/report_generator.py`
+- Modify: `tests/test_auxiliary_frontend.py`
+- Modify: `tests/test_report_generator.py`
+- Modify: `docs/assets/report-v2.js`
+- Modify: `daily_run.sh`
+- Create: `scripts/formal_publish_guard.py`
+- Create: `scripts/stage_report_asset_version_updates.py`
+- Create: `tests/test_formal_publish_guard.py`
+- Create: `tests/test_stage_report_asset_version_updates.py`
+- Modify: all tracked `docs/YYYY-MM-DD/index.html` report shells plus root/comparison shells
+
+**Step 1: RED — 默认最近 20 根**
+
+把 50 根输入的前端合同改为断言 `startValue=D31`、`endValue=D50`，先确认旧实现仍返回最近 30 根而失败。
+
+**Step 2: GREEN — 最小窗口调整**
+
+只把 `renderChart()` 的默认起点从 `minLen - 30` 改为 `minLen - 20`；不得裁剪源数组，缩放条仍控制 K 线、成交量、MACD 三个同步面板。
+
+**Step 3: RED — 历史日报 cache-bust**
+
+在临时输出目录创建引用旧版本 JS/CSS 的历史日报，再生成新日报；先确认旧实现不会刷新历史入口而失败，同时保留历史正文哨兵。
+
+**Step 4: GREEN — 统一刷新所有正式入口**
+
+新增 `refresh_report_asset_versions()`：只扫描根页、对比页和日期目录，并用 HTML tokenizer 只替换真实 `<link href>` / `<script src>` 的共享 JS/CSS 版本参数；注释、Bootstrap、内联脚本文本和 `data-src` 必须逐字节不变。在正常日报生成路径中调用。运行一次机械同步，使仓库中所有已跟踪正式入口引用 `_report_asset_version()` 的当前值。
+
+**Step 5: GREEN — 自动发布不捕获用户历史页改动**
+
+新增受限暂存器：仅当 compare/历史入口与 `HEAD` 相比除两条资产 query 外全文一致、且 query 已等于当前版本时才显式暂存；含用户正文、手工 query、非 UTF-8 或删除状态的页面一律保留且不暂存。`daily_run.sh` 通过 0600 hash journal 区分运行前用户改动与同一交易日、同一 HEAD 上由正式进程生成的待重试产物：顺序固定为 preflight → 远端安全同步 → prepare → run 后 record → finalizer 后再次 record。远端在存在待发布脏产物时前进则 fail-closed，禁止快进覆盖；继续禁止 `docs/20*/` 或 `git add docs/` 宽范围操作。
+
+这是用户追加“历史入口必须随特殊信号资产同步”的必要发布适配：它会改变 `daily_run.sh` 的资产暂存/来源保护代码及对应 baseline hash，但不改变正式选股、市场历史、账本固化顺序或 preclose 隔离语义；preclose/reconcile 仍不得调用 `daily_run.sh`。
+
+**Step 6: 回归与线上验收**
+
+- 定向运行窗口、信号车道、报告生成和历史正文保持测试。
+- 全量测试通过后发布 Pages。
+- 回读根页、2026-08-28 与 2026-08-27 的 HTML/JS/CSS 版本一致。
+- 使用 2026-08-27 飞凯材料真实页面截图确认启动短标、信号车道、成交量和 MACD；三视口精确像素且零横向溢出。
+- 历史日报 JSON 和正式运行产物 hash 保持不变。

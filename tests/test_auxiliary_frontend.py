@@ -445,7 +445,7 @@ assert(!layers.includes('structure'), 'structure switch appeared without structu
 """,
         )
 
-    def test_chart_renders_volume_macd_and_defaults_to_latest_thirty_bars(self):
+    def test_chart_renders_volume_macd_and_defaults_to_latest_twenty_bars(self):
         _assert_node_contract(
             self,
             "{ chart: renderChart, state: state }",
@@ -487,7 +487,7 @@ assert(volume.itemStyle.color({ dataIndex: 1 }) === '#10B981', 'down-volume bar 
 assert(volume.itemStyle.color({ dataIndex: 2 }) === '#EF4444', 'up-volume bar is not A-share red');
 chartOption.dataZoom.forEach(function (zoom) {
   assert(JSON.stringify(zoom.xAxisIndex) === JSON.stringify([0, 1, 2]), 'data zoom does not control all panels');
-  assert(zoom.startValue === 'D21' && zoom.endValue === 'D50', 'default window is not the latest 30 bars');
+  assert(zoom.startValue === 'D31' && zoom.endValue === 'D50', 'default window is not the latest 20 bars');
 });
 """,
         )

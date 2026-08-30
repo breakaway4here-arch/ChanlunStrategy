@@ -85,6 +85,107 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 class TestReportGenerator(unittest.TestCase):
 
+    def test_generate_report_refreshes_asset_version_on_existing_archives(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            archive_dir = os.path.join(tmpdir, "2026-07-16")
+            os.makedirs(archive_dir)
+            archive_path = os.path.join(archive_dir, "index.html")
+            original_marker = "历史日报正文保持不变"
+            bootstrap_marker = (
+                '<script>window.CHANLUN_BOOTSTRAP = {'
+                '"note":"assets/report-v2.js?v=bootstrap-sentinel",'
+                '"style_note":"../assets/report-v2.css?v=bootstrap-sentinel"'
+                '}; window.REPORT_MARKUP = \'<script '
+                'src="assets/report-v2.js?v=embedded-sentinel"></script>\';</script>'
+            )
+            comment_marker = (
+                '<!-- <link href="assets/report-v2.css?v=comment-sentinel">'
+                '<script src="assets/report-v2.js?v=comment-sentinel"></script> -->'
+            )
+            ignored_attribute_marker = (
+                '<script data-src="assets/report-v2.js?v=data-sentinel"></script>'
+            )
+            rcdata_marker = (
+                '<textarea><script src="assets/report-v2.js?v=textarea-sentinel">'
+                '</script></textarea>'
+                '<title><link href="assets/report-v2.css?v=title-sentinel"></title>'
+            )
+            opaque_marker = (
+                '<xmp><script src="assets/report-v2.js?v=xmp-sentinel"></script></xmp>'
+                '<iframe><link href="assets/report-v2.css?v=iframe-sentinel"></iframe>'
+            )
+            with open(archive_path, "w", encoding="utf-8") as handle:
+                handle.write(
+                    '<link rel="stylesheet" href="../assets/report-v2.css?v=stale">'
+                    + original_marker
+                    + bootstrap_marker
+                    + comment_marker
+                    + ignored_attribute_marker
+                    + rcdata_marker
+                    + opaque_marker
+                    + '<script src="../assets/report-v2.js?v=stale"></script>'
+                )
+
+            generate_report({
+                "date": "2026-07-17",
+                "market": {"沪深300": {"close": 4529.1}},
+                "data_quality": {"is_trading_day": True, "is_official": True},
+                "picks_pure": [make_pick()],
+            }, output_dir=tmpdir)
+
+            with open(archive_path, encoding="utf-8") as handle:
+                archive_html = handle.read()
+            expected_version = report_generator._report_asset_version()
+            self.assertIn(
+                f"../assets/report-v2.css?v={expected_version}",
+                archive_html,
+            )
+            self.assertIn(
+                f"../assets/report-v2.js?v={expected_version}",
+                archive_html,
+            )
+            self.assertIn(original_marker, archive_html)
+            self.assertIn(bootstrap_marker, archive_html)
+            self.assertIn(comment_marker, archive_html)
+            self.assertIn(ignored_attribute_marker, archive_html)
+            self.assertIn(rcdata_marker, archive_html)
+            self.assertIn(opaque_marker, archive_html)
+
+    def test_checked_in_v2_report_shells_use_current_asset_version(self):
+        docs_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "docs")
+        html_paths = [
+            os.path.join(docs_dir, "index.html"),
+            os.path.join(docs_dir, "compare", "index.html"),
+        ]
+        html_paths.extend(
+            os.path.join(docs_dir, entry, "index.html")
+            for entry in sorted(os.listdir(docs_dir))
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", entry)
+        )
+        expected_version = report_generator._report_asset_version()
+
+        checked = 0
+        for html_path in html_paths:
+            if not os.path.isfile(html_path):
+                continue
+            with open(html_path, encoding="utf-8") as handle:
+                html = handle.read()
+            if "report-v2.js" not in html and "report-v2.css" not in html:
+                continue
+            checked += 1
+            relative_path = os.path.relpath(html_path, docs_dir)
+            self.assertIn(
+                f"report-v2.css?v={expected_version}",
+                html,
+                relative_path,
+            )
+            self.assertIn(
+                f"report-v2.js?v={expected_version}",
+                html,
+                relative_path,
+            )
+        self.assertGreaterEqual(checked, 10)
+
     def test_generate_report_refreshes_offline_comparison_index(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             generate_report({

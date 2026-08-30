@@ -1361,10 +1361,13 @@ class TestMarketDataGuard(unittest.TestCase):
 
 class TestDailyRunScriptGuard(unittest.TestCase):
 
-    def test_validator_failure_stops_script_before_any_git_command(self):
+    def test_validator_failure_stops_script_before_any_git_mutation(self):
         source_script = Path("daily_run.sh").read_text(encoding="utf-8")
         lock_wrapper = Path(
             "scripts/run_with_docs_publish_lock.py"
+        ).read_text(encoding="utf-8")
+        formal_guard = Path(
+            "scripts/formal_publish_guard.py"
         ).read_text(encoding="utf-8")
         fixed_timestamp = datetime(
             2026, 6, 30, 12, 0, tzinfo=timezone(timedelta(hours=8))
@@ -1384,6 +1387,9 @@ class TestDailyRunScriptGuard(unittest.TestCase):
             (root / "scripts" / "run_with_docs_publish_lock.py").write_text(
                 lock_wrapper, encoding="utf-8"
             )
+            (root / "scripts" / "formal_publish_guard.py").write_text(
+                formal_guard, encoding="utf-8"
+            )
             (root / "scripts" / "validate_today_report.py").write_text(
                 "import os\n"
                 "with open(os.environ['VALIDATOR_LOG'], 'a', encoding='utf-8') as f:\n"
@@ -1400,14 +1406,7 @@ class TestDailyRunScriptGuard(unittest.TestCase):
 
             fake_bin = root / "bin"
             fake_bin.mkdir()
-            git_log = root / "git.log"
             validator_log = root / "validator.log"
-            fake_git = fake_bin / "git"
-            fake_git.write_text(
-                '#!/bin/zsh\nprint -r -- "$@" >> "$GIT_LOG"\nexit 0\n',
-                encoding="utf-8",
-            )
-            fake_git.chmod(0o755)
             fake_date = fake_bin / "date"
             fake_date.write_text(
                 '#!/bin/zsh\nif [[ "$1" == "+%Y-%m-%d" ]]; then print "2026-06-30"; '
@@ -1416,11 +1415,51 @@ class TestDailyRunScriptGuard(unittest.TestCase):
             )
             fake_date.chmod(0o755)
 
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.name", "Chanlun Test"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.email", "chanlun-test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "baseline"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(["git", "branch", "-M", "main"], cwd=root, check=True)
+            remote = root / "remote.git"
+            subprocess.run(
+                ["git", "init", "--bare", "-q", str(remote)],
+                check=True,
+            )
+            subprocess.run(
+                ["git", "remote", "add", "origin", str(remote)],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "push", "-q", "-u", "origin", "main"],
+                cwd=root,
+                check=True,
+            )
+            baseline_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True,
+            ).stdout.strip()
+
             env = dict(os.environ)
             env.update({
                 "HOME": str(root),
                 "PATH": f"{fake_bin}{os.pathsep}{env.get('PATH', '')}",
-                "GIT_LOG": str(git_log),
                 "VALIDATOR_LOG": str(validator_log),
             })
             completed = subprocess.run(
@@ -1432,12 +1471,26 @@ class TestDailyRunScriptGuard(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            git_calls = git_log.read_text(encoding="utf-8") if git_log.exists() else ""
             validator_calls = validator_log.read_text(encoding="utf-8").splitlines()
+            final_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True,
+            ).stdout.strip()
+            cached_diff = subprocess.run(
+                ["git", "diff", "--cached", "--name-only"],
+                cwd=root,
+                stdout=subprocess.PIPE,
+                text=True,
+                check=True,
+            ).stdout
 
         self.assertNotEqual(completed.returncode, 0)
         self.assertEqual(validator_calls, ["called", "called"])
-        self.assertEqual(git_calls, "", completed.stdout + completed.stderr)
+        self.assertEqual(final_head, baseline_head)
+        self.assertEqual(cached_diff, "", completed.stdout + completed.stderr)
 
     def test_daily_run_does_not_skip_existing_output_after_recheck_time(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:
@@ -1459,6 +1512,10 @@ class TestDailyRunScriptGuard(unittest.TestCase):
             script = f.read()
 
         self.assertNotIn("docs/20*/", script)
+        self.assertIn(
+            "/usr/bin/python3 scripts/stage_report_asset_version_updates.py",
+            script,
+        )
         self.assertIn('"docs/${TODAY}/index.html"', script)
         self.assertIn('"docs/data/${TODAY}.json"', script)
         self.assertIn('"docs/data/comparison-index.json"', script)
@@ -1473,6 +1530,19 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         git_add = script.find("git add \\")
         self.assertGreater(last_validator, 0)
         self.assertGreater(git_add, last_validator)
+
+    def test_daily_run_refuses_to_capture_preexisting_staged_changes(self):
+        with open("daily_run.sh", "r", encoding="utf-8") as f:
+            script = f.read()
+
+        commit_start = script.index("commit_today_report_if_changed() {")
+        helper_call = script.index(
+            "/usr/bin/python3 scripts/stage_report_asset_version_updates.py",
+            commit_start,
+        )
+        pre_stage = script[commit_start:helper_call]
+        self.assertIn("if ! git diff --cached --quiet; then", pre_stage)
+        self.assertIn("索引已有未提交改动，拒绝自动提交", pre_stage)
 
     def test_daily_run_finalizes_recommendation_ledger_only_after_validation(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:
