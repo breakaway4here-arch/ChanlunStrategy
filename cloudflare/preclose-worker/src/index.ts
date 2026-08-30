@@ -437,7 +437,7 @@ function mutationResponse(result: MutationResult, origin: string | null) {
 export async function handleRequest(request: Request, env: WorkerEnv): Promise<Response> {
   const origin = requestOrigin(request, env);
   if (origin === "") return jsonResponse(403, { error: "origin not allowed" }, null);
-  if (env.PRECLOSE_ENABLED === "false") return jsonResponse(503, { error: "pre-close service disabled" }, origin);
+  if (env.PRECLOSE_ENABLED !== "true") return jsonResponse(503, { error: "pre-close service disabled" }, origin);
   if (request.method === "OPTIONS") {
     if (!origin) return jsonResponse(403, { error: "origin required" }, null);
     return new Response(null, { status: 204, headers: { ...corsHeaders(origin), ...NO_STORE } });

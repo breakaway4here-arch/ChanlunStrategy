@@ -144,6 +144,61 @@ describe("pre-close worker", () => {
     expect(preflight.headers.get("access-control-allow-origin")).not.toBe("*");
   });
 
+  it("requires explicit enablement and blocks every route before storage", async () => {
+    const paths = [
+      request("/api/preclose/latest?date=2026-09-06"),
+      request("/api/preclose/reconciliation?date=2026-09-06"),
+      request("/api/preclose/snapshot", {
+        method: "PUT",
+        headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify(snapshot("2026-09-06")),
+      }),
+      request("/api/preclose/reconciliation", {
+        method: "PUT",
+        headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          trade_date: "2026-09-06",
+          content_hash: "e".repeat(64),
+          preclose_content_hash: "a".repeat(64),
+          formal_content_hash: "f".repeat(64),
+          status: "changed",
+          pools: {},
+        }),
+      }),
+      request("/api/preclose/latest?date=2026-09-06", {
+        method: "OPTIONS",
+        headers: {
+          origin: PAGE_ORIGIN,
+          "access-control-request-method": "GET",
+        },
+      }),
+    ];
+
+    for (const enabled of [undefined, "", "false", "FALSE", "TRUE", "1", " true "]) {
+      let storageCalls = 0;
+      const disabledEnv = {
+        ALLOWED_ORIGINS: PAGE_ORIGIN,
+        PRECLOSE_ENABLED: enabled,
+        PRE_CLOSE_WRITE_TOKEN: TOKEN,
+        PRE_CLOSE_SNAPSHOT: {
+          getByName() {
+            storageCalls += 1;
+            throw new Error("disabled worker must not access Durable Objects");
+          },
+        },
+      } as never;
+
+      for (const source of paths) {
+        const response = await handleRequest(source.clone(), disabledEnv);
+        expect(response.status).toBe(503);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(response.headers.get("access-control-allow-origin")).toBe(PAGE_ORIGIN);
+        expect(await response.json()).toEqual({ error: "pre-close service disabled" });
+      }
+      expect(storageCalls).toBe(0);
+    }
+  });
+
   it("routes different dates through getByName and calls RPC methods, never stub.fetch", async () => {
     const names: string[] = [];
     const rpcCalls: string[] = [];
