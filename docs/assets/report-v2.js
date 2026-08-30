@@ -3029,39 +3029,126 @@
     return selected;
   }
 
+  function shortChartSignalLabel(name) {
+    var normalized = normalizeString(name);
+    if (!normalized) return '';
+    if (/底背驰/.test(normalized)) return '底背驰';
+    if (/趋势延续/.test(normalized)) return '趋势';
+    if (/startup|启动日|启动信号/i.test(normalized)) return '启动';
+    if (/确认/.test(normalized)) return '确认';
+    return normalized.length > 6 ? normalized.slice(0, 6) + '…' : normalized;
+  }
+
+  function formatChartSignalTooltip(point) {
+    var coord = asArray(point && point.coord);
+    var date = normalizeString(coord[0]);
+    var price = safeNumber(coord[1], null);
+    var name = normalizeString(point && point.name);
+    if (!date || price === null || !Number.isFinite(price) || !name) return '';
+    return '<strong>' + escapeHtml(name) + '</strong>'
+      + '<br><span>' + escapeHtml(date) + '</span>'
+      + '<br><span>价格 ' + escapeHtml(formatNumber(price, 2)) + '</span>';
+  }
+
   function selectChartActionMarkers(markPoints, barCount) {
-    return asArray(markPoints).map(function (point) {
+    var selected = asArray(markPoints).map(function (point, sourceIndex) {
+      var coord = asArray(point && point.coord).slice();
+      var date = normalizeString(coord[0]);
+      var price = safeNumber(coord[1], null);
+      var name = normalizeString(point && point.name);
+      if (!date || price === null || !Number.isFinite(price) || !name) return null;
+      var sourceSize = safeNumber(point && point.symbolSize, 16);
+      if (!Number.isFinite(sourceSize)) sourceSize = 16;
+      var tooltipHtml = formatChartSignalTooltip({ coord: [date, price], name: name });
       return Object.assign({}, point || {}, {
-        coord: asArray(point && point.coord).slice(),
+        coord: [date, price],
+        name: name,
+        symbolSize: Math.max(6, sourceSize),
         label: Object.assign({}, point && point.label || {}, { show: false }),
+        tooltip: Object.assign({}, point && point.tooltip || {}, {
+          formatter: function () { return tooltipHtml; },
+        }),
+        _sourceIndex: sourceIndex,
       });
+    }).filter(Boolean);
+    if (!selected.length) return [];
+    var latestIndex = 0;
+    for (var i = 1; i < selected.length; i += 1) {
+      var currentBar = safeNumber(selected[i].barIndex, selected[i]._sourceIndex);
+      var latestBar = safeNumber(selected[latestIndex].barIndex, selected[latestIndex]._sourceIndex);
+      if (currentBar >= latestBar) latestIndex = i;
+    }
+    return selected.map(function (point, index) {
+      var isLatest = index === latestIndex;
+      var sourceSize = safeNumber(point.symbolSize, 16);
+      var marker = Object.assign({}, point, {
+        symbolSize: isLatest ? Math.max(16, sourceSize) : Math.min(10, Math.max(6, sourceSize * 0.6)),
+        label: Object.assign({}, point.label || {}, isLatest ? {
+          show: true,
+          formatter: shortChartSignalLabel(point.name),
+          position: 'top',
+          distance: 7,
+        } : { show: false }),
+      });
+      delete marker._sourceIndex;
+      return marker;
     });
   }
 
-  function renderChartAnnotationLane(markPoints) {
+  function buildChartSignalLaneModel(markPoints, extraLabels) {
+    var signals = asArray(markPoints).map(function (point, sourceIndex) {
+      var coord = asArray(point && point.coord);
+      var date = normalizeString(coord[0]);
+      var price = safeNumber(coord[1], null);
+      var name = normalizeString(point && point.name);
+      if (!date || price === null || !Number.isFinite(price) || !name) return null;
+      return {
+        name: name,
+        shortLabel: shortChartSignalLabel(name),
+        date: date,
+        price: price,
+        order: safeNumber(point && point.barIndex, sourceIndex),
+        sourceIndex: sourceIndex,
+      };
+    }).filter(Boolean).sort(function (left, right) {
+      if (right.order !== left.order) return right.order - left.order;
+      return right.sourceIndex - left.sourceIndex;
+    }).slice(0, 3);
+    var seenNotes = {};
+    var notes = asArray(extraLabels).map(function (label) {
+      return normalizeString(label);
+    }).filter(function (label) {
+      if (!label || seenNotes[label]) return false;
+      seenNotes[label] = true;
+      return true;
+    }).slice(0, 3);
+    return { signals: signals, notes: notes };
+  }
+
+  function renderChartAnnotationLane(markPoints, extraLabels) {
     var lane = state.chartAnnotationLane;
     if (!lane) return;
-    var rows = asArray(markPoints);
-    if (!rows.length) {
+    var model = buildChartSignalLaneModel(markPoints, extraLabels);
+    if (!model.signals.length && !model.notes.length) {
       lane.innerHTML = '';
       if (lane.classList) lane.classList.toggle('hidden', true);
       return;
     }
-    var latestIndex = 0;
-    for (var i = 1; i < rows.length; i += 1) {
-      var currentIndex = safeNumber(rows[i] && rows[i].barIndex, i);
-      var latestBarIndex = safeNumber(rows[latestIndex] && rows[latestIndex].barIndex, latestIndex);
-      if (currentIndex >= latestBarIndex) latestIndex = i;
-    }
-    var latest = rows[latestIndex] || {};
-    var date = normalizeString(asArray(latest.coord)[0]);
-    var name = normalizeString(latest.name);
-    if (!name || !date) {
-      lane.innerHTML = '';
-      if (lane.classList) lane.classList.toggle('hidden', true);
-      return;
-    }
-    lane.innerHTML = '<strong>' + escapeHtml(name) + '</strong><time>' + escapeHtml(date) + '</time>';
+    var signalHtml = model.signals.length
+      ? '<div class="chart-signal-list" aria-label="特殊信号">' + model.signals.map(function (signal, index) {
+        return '<div class="chart-signal-item' + (index === 0 ? ' is-latest' : '') + '">'
+          + '<span class="chart-signal-type">' + escapeHtml(signal.shortLabel) + '</span>'
+          + '<strong>' + escapeHtml(signal.name) + '</strong>'
+          + '<time>' + escapeHtml(signal.date) + '</time>'
+          + '</div>';
+      }).join('') + '</div>'
+      : '';
+    var noteHtml = model.notes.length
+      ? '<div class="chart-signal-notes" aria-label="信号补充说明">' + model.notes.map(function (note) {
+        return '<small>' + escapeHtml(note) + '</small>';
+      }).join('') + '</div>'
+      : '';
+    lane.innerHTML = signalHtml + noteHtml;
     if (lane.classList) lane.classList.toggle('hidden', false);
   }
 
@@ -3072,6 +3159,30 @@
     return (prefix || '价') + ' ' + formatNumber(label && label.value, 2);
   }
 
+  function selectStructureChartLines(rawMarkLines) {
+    return asArray(rawMarkLines).map(function (line) {
+      var name = normalizeString(line && line.name).trim().toUpperCase();
+      var value = safeNumber(line && line.yAxis, null);
+      if ((name !== 'ZG' && name !== 'ZD') || value === null || !Number.isFinite(value)) return null;
+      var isUpper = name === 'ZG';
+      return {
+        name: name,
+        yAxis: value,
+        label: {
+          show: true,
+          position: 'end',
+          formatter: name + ' ' + formatNumber(value, 2),
+          color: isUpper ? '#B91C1C' : '#047857',
+        },
+        lineStyle: {
+          color: isUpper ? '#DC2626' : '#059669',
+          width: 1,
+          type: 'dotted',
+        },
+      };
+    }).filter(Boolean);
+  }
+
   function getAvailableChartLayers(raw) {
     var source = raw || {};
     var annotations = source.chart_annotations || {};
@@ -3079,7 +3190,7 @@
     if (asArray(annotations.markPoints).length || asArray(annotations.markLines).length
         || source.formal_decision_contract) layers.push('decision');
     if (asArray(source.buy_points).length || asArray(source.reference_buy_points).length
-        || source.structure_annotations) layers.push('structure');
+        || source.structure_annotations || selectStructureChartLines(annotations.markLines).length) layers.push('structure');
     if (asArray(source.ema5).length || asArray(source.ema20).length
         || asArray(source.ma5).length || asArray(source.ma20).length) layers.push('trend');
     if (!layers.length) layers.push('decision');
@@ -3188,10 +3299,11 @@
     }
 
     markPoints = selectChartActionMarkers(markPoints, minLen);
-    renderChartAnnotationLane(markPoints);
+    renderChartAnnotationLane(markPoints, annotations.labels);
 
     var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
+    var structureLines = selectStructureChartLines(rawMarkLines);
     for (var l = 0; l < rawMarkLines.length; l += 1) {
       var ml = rawMarkLines[l] || {};
       if (incidentReview) continue;
@@ -3250,7 +3362,9 @@
     var activeMarkPoints = state.chartLayer === 'decision' || state.chartLayer === 'structure'
       ? markPoints
       : [];
-    var activeMarkLines = state.chartLayer === 'decision' ? markLines : [];
+    var activeMarkLines = state.chartLayer === 'decision'
+      ? markLines
+      : (state.chartLayer === 'structure' ? structureLines : []);
     var trendSeries = [];
     if (state.chartLayer === 'trend') {
       [['EMA5', raw.ema5 || raw.ma5], ['EMA20', raw.ema20 || raw.ma20]].forEach(function (entry) {

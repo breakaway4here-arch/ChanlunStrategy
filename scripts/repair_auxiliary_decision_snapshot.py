@@ -34,10 +34,10 @@ LEGACY_EXPERIMENT_ID = "h4-t3-close-review-v1"
 SUPPORTED_REPORT_DATE = "2026-08-21"
 APPROVED_ASSET_SHA256 = {
     "report-v2.js": (
-        "0da82fbf8c181ae37abb64ffe1cebaef2f3f12de2deae15594b3398826b078a5"
+        "df53872406bdbef97a0d4fe4b59fa6201973d6b94af284bb81cd381c6285c856"
     ),
     "report-v2.css": (
-        "a6566c9f8cbbd4ebc4a3193e01ebe2b1284489c53fcee4125fa530755150f896"
+        "e6b264e36be531ac6680daf4e482c9169c66c64463bdd3b4dff36eb184062cc1"
     ),
 }
 _TOP_SHADOW_FIELDS = {

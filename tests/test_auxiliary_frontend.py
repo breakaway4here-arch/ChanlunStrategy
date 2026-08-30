@@ -411,16 +411,31 @@ assert(JSON.stringify(priceLabels) === before, 'price label selection mutated so
     def test_historical_chart_actions_keep_only_latest_text_and_layer_entries_are_data_driven(self):
         _assert_node_contract(
             self,
-            "{ marks: selectChartActionMarkers, layers: getAvailableChartLayers }",
+            "{ marks: selectChartActionMarkers, short: shortChartSignalLabel, layers: getAvailableChartLayers }",
             r"""
-const marks = globalThis.__auxTest.marks([
-  { coord: [2, 10], name: '观察' },
-  { coord: [20, 11], name: '买入' },
-  { coord: [39, 12], name: '加仓' },
-  { coord: [58, 13], name: '减仓' }
-], 80);
+const rawMarks = [
+  { coord: ['2026-08-21', 10], barIndex: 3, name: '底背驰候选', symbolSize: 18 },
+  { coord: ['2026-08-27', 11], barIndex: 8, name: '启动日', symbolSize: 18 },
+  { coord: ['2026-08-28', 12], barIndex: 9, name: '趋势延续候选', symbolSize: 18 },
+  { coord: ['', 13], barIndex: 10, name: '无日期' },
+  { coord: ['2026-08-29', 'not-a-price'], barIndex: 11, name: '无价格' }
+];
+const before = JSON.stringify(rawMarks);
+const marks = globalThis.__auxTest.marks(rawMarks, 40);
 const visible = marks.filter(function (item) { return item.label && item.label.show; });
-assert(visible.length === 0, 'action text remained inside the price plot');
+assert(marks.length === 3, 'invalid action coordinates were not filtered');
+assert(visible.length === 1, 'price plot must keep exactly one latest short label');
+assert(visible[0].name === '趋势延续候选', 'latest action did not win label priority');
+assert(visible[0].label.formatter === '趋势', 'latest action did not use the short real-type label');
+assert(marks[0].label.show === false, 'historical action still carries permanent text');
+assert(marks[0].symbolSize < visible[0].symbolSize, 'historical marker was not visually reduced');
+assert(JSON.stringify(rawMarks) === before, 'action marker selection mutated source evidence');
+assert(globalThis.__auxTest.short('底背驰候选') === '底背驰', 'bottom-divergence mapping missing');
+assert(globalThis.__auxTest.short('swing底背驰候选种子') === '底背驰', 'swing bottom-divergence mapping missing');
+assert(globalThis.__auxTest.short('启动日') === '启动', 'startup mapping missing');
+assert(globalThis.__auxTest.short('30分钟结构确认') === '确认', 'confirmation mapping missing');
+assert(globalThis.__auxTest.short('非常非常长的未知信号名称') === '非常非常长的…', 'unknown signal did not retain a bounded truthful name');
+assert(visible.length <= 3, 'more than three permanent labels were emitted in a 40-bar window');
 const layers = globalThis.__auxTest.layers({
   chart_annotations: { markPoints: [{ coord: [1, 10] }] },
   ema5: [1, 2], ema20: [1, 2]
@@ -481,7 +496,7 @@ chartOption.dataZoom.forEach(function (zoom) {
         self.assertIn('id="chartAnnotationLane"', JS)
         _assert_node_contract(
             self,
-            "{ lane: renderChartAnnotationLane, marks: selectChartActionMarkers, state: state }",
+            "{ lane: renderChartAnnotationLane, model: buildChartSignalLaneModel, marks: selectChartActionMarkers, state: state }",
             r"""
 let hidden = null;
 globalThis.__auxTest.state.chartAnnotationLane = {
@@ -489,18 +504,33 @@ globalThis.__auxTest.state.chartAnnotationLane = {
   classList: { toggle: function (_name, value) { hidden = value; } }
 };
 const marks = globalThis.__auxTest.marks([
-  { coord: ['2026-08-25', 10], name: '观察' },
-  { coord: ['2026-08-26', 11], name: '启动日' }
+  { coord: ['2026-08-20', 9], barIndex: 1, name: '第四条旧信号' },
+  { coord: ['2026-08-21', 10], barIndex: 2, name: '底背驰候选' },
+  { coord: ['2026-08-27', 11], barIndex: 8, name: '启动日' },
+  { coord: ['2026-08-28', 12], barIndex: 9, name: '趋势延续候选' }
 ], 50);
-globalThis.__auxTest.lane(marks);
-assert(marks.every(function (item) { return item.label.show === false; }), 'plot still carries action text');
-assert(globalThis.__auxTest.state.chartAnnotationLane.innerHTML.includes('启动日'), 'latest action missing from lane');
-assert(globalThis.__auxTest.state.chartAnnotationLane.innerHTML.includes('2026-08-26'), 'latest action date missing from lane');
+const extras = ['确认日: 2026-08-28', '接近20日低点；接近swing参考价', '<img src=x onerror=alert(1)>'];
+const model = globalThis.__auxTest.model(marks, extras);
+assert(model.signals.length === 3, 'signal lane did not cap actions at three');
+assert(model.signals.map(function (item) { return item.date; }).join(',') === '2026-08-28,2026-08-27,2026-08-21', 'signal lane is not newest-first');
+globalThis.__auxTest.lane(marks, extras);
+const html = globalThis.__auxTest.state.chartAnnotationLane.innerHTML;
+assert((html.match(/class="chart-signal-item/g) || []).length === 3, 'signal lane rendered more or fewer than three actions');
+assert(html.includes('趋势延续候选') && html.includes('2026-08-28'), 'latest full signal evidence missing from lane');
+assert(html.includes('底背驰候选') && html.includes('2026-08-21'), 'historical bottom-divergence evidence missing from lane');
+assert(html.includes('>趋势<') && html.includes('>底背驰<'), 'signal lane short types missing');
+assert(!html.includes('第四条旧信号'), 'fourth historical action escaped the lane cap');
+assert(html.includes('确认日: 2026-08-28'), 'confirmation-day annotation missing');
+assert(html.includes('接近20日低点；接近swing参考价'), 'seed reason annotation missing');
+assert(!html.includes('<img src=x onerror=alert(1)>') && html.includes('&lt;img'), 'annotation text was not escaped');
 assert(hidden === false, 'lane hidden despite action evidence');
-globalThis.__auxTest.lane([]);
+globalThis.__auxTest.lane([], []);
 assert(hidden === true && globalThis.__auxTest.state.chartAnnotationLane.innerHTML === '', 'empty action lane left stale content');
 """,
         )
+        self.assertIn(".chart-signal-list {", CSS)
+        self.assertIn(".chart-signal-item {", CSS)
+        self.assertIn("overflow-wrap: anywhere", CSS)
 
     def test_chart_uses_a_responsive_right_label_lane(self):
         start = JS.index("function renderChart")
@@ -516,6 +546,59 @@ assert(hidden === true && globalThis.__auxTest.state.chartAnnotationLane.innerHT
         self.assertIn("趋势", JS)
         self.assertIn("formatPersistentPriceLabel", renderer)
         self.assertIn("renderChartAnnotationLane", renderer)
+
+    def test_chart_renders_structure_lines_and_signal_tooltips(self):
+        _assert_node_contract(
+            self,
+            "{ chart: renderChart, structure: selectStructureChartLines, state: state }",
+            r"""
+let chartOption = null;
+global.window.echarts = { init: function () { return {
+  setOption: function (option) { chartOption = option; },
+  dispose: function () {}, resize: function () {}
+}; } };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.isMobile = false;
+const raw = {
+  dates: ['2026-08-26', '2026-08-27', '2026-08-28'],
+  opens: [10.8, 11, 11.4], highs: [11.2, 11.6, 12],
+  lows: [10.4, 10.7, 11.1], closes: [11, 11.4, 11.7],
+  volumes: [100, 120, 180], macd_hist: [-0.1, 0.1, 0.2],
+  chart_annotations: {
+    markLines: [
+      { name: 'ZG', yAxis: 12.4 },
+      { name: 'ZD', yAxis: 10.8 },
+      { name: 'source', yAxis: 11.2 },
+      { name: '现价', yAxis: 11.7 },
+      { name: 'ZG', yAxis: 'not-a-number' }
+    ],
+    markPoints: [{ name: '底背驰候选<img src=x onerror=alert(1)>', coord: ['2026-08-28', 11.7] }],
+    labels: []
+  }
+};
+const structure = globalThis.__auxTest.structure(raw.chart_annotations.markLines);
+assert(structure.length === 2, 'structure selector admitted non-ZG/ZD or invalid y values');
+assert(structure[0].name === 'ZG' && structure[0].yAxis === 12.4, 'ZG true y value changed');
+assert(structure[1].name === 'ZD' && structure[1].yAxis === 10.8, 'ZD true y value changed');
+
+globalThis.__auxTest.state.chartLayer = 'decision';
+globalThis.__auxTest.chart(raw, {});
+let lineNames = chartOption.series[0].markLine.data.map(function (line) { return line.name; });
+assert(lineNames.includes('现价'), 'decision layer lost its persistent price evidence');
+assert(!lineNames.includes('ZG') && !lineNames.includes('ZD'), 'structure lines leaked into decision layer');
+const action = chartOption.series[0].markPoint.data[0];
+const tooltip = action.tooltip.formatter();
+assert(tooltip.includes('底背驰候选') && tooltip.includes('2026-08-28') && tooltip.includes('11.70'), 'signal tooltip lost full name/date/price');
+assert(!tooltip.includes('<img src=x onerror=alert(1)>') && tooltip.includes('&lt;img'), 'signal tooltip did not escape its full name');
+
+globalThis.__auxTest.state.chartLayer = 'structure';
+globalThis.__auxTest.chart(raw, {});
+lineNames = chartOption.series[0].markLine.data.map(function (line) { return line.name; });
+assert(lineNames.join(',') === 'ZG,ZD', 'structure layer did not exclusively render ZG/ZD');
+assert(chartOption.series[0].markLine.data[0].yAxis === 12.4, 'structure layer changed the real ZG coordinate');
+assert(!lineNames.includes('现价') && !lineNames.includes('参考价'), 'decision price labels leaked into structure layer');
+""",
+        )
 
     def test_three_panel_chart_has_explicit_desktop_and_mobile_heights(self):
         desktop_start = CSS.index(".chart-canvas {")
