@@ -2381,7 +2381,7 @@
     return '<span class="' + className + '">' + escapeHtml(text) + '</span>';
   }
 
-  function recommendationEvidenceStatus(section) {
+  function recommendationEvidenceStatus(section, statusContext) {
     var value = section && typeof section === 'object' ? section : {};
     var status = normalizeString(value.status).trim();
     var labels = {
@@ -2392,6 +2392,17 @@
       stale: '证据已过期',
       unavailable: '证据不可用',
     };
+    if (statusContext === 'historical_validation') {
+      labels.collecting = '样本采集中';
+      labels.waiting_for_maturity = '等待样本成熟';
+      labels.data_unavailable = '历史样本暂不可用';
+      labels.no_signals = '尚无历史信号样本';
+      labels.disabled = '历史验证未启用';
+      labels.no_formal_recommendations = '暂无正式推荐样本';
+      labels.ready_for_manual_comparison = '达到人工比较门槛';
+      labels.contract_missing = '样本合同缺失';
+      labels.ambiguous = '合同身份有歧义';
+    }
     return labels[status] || '未提供证据';
   }
 
@@ -3395,26 +3406,26 @@
     return '';
   }
 
-  function renderRecommendationEvidenceMeta(section, fallbackDate) {
+  function renderRecommendationEvidenceMeta(section, fallbackDate, statusContext) {
     var value = section && typeof section === 'object' ? section : {};
     var asOf = normalizeString(value.as_of || fallbackDate).trim() || '未随本期提供';
     var source = normalizeString(value.source).trim() || '未随本期提供';
     var reason = recommendationEvidenceReason(value);
     return '<div class="recommendation-evidence-meta">'
-      + '<span>状态：<strong>' + escapeHtml(recommendationEvidenceStatus(value)) + '</strong></span>'
+      + '<span>状态：<strong>' + escapeHtml(recommendationEvidenceStatus(value, statusContext)) + '</strong></span>'
       + '<span>截至：<strong>' + escapeHtml(asOf) + '</strong></span>'
       + '<span>来源：<strong>' + escapeHtml(source) + '</strong></span>'
       + (reason ? '<small>审计说明：' + escapeHtml(reason) + '</small>' : '')
       + '</div>';
   }
 
-  function renderRecommendationEvidenceModule(number, title, section, body, fallbackDate) {
+  function renderRecommendationEvidenceModule(number, title, section, body, fallbackDate, statusContext) {
     var titleId = 'evidence-module-' + normalizeString(number).trim();
     return '<section class="detail-section recommendation-evidence-module" data-evidence-module="'
       + escapeHtml(number) + '" aria-labelledby="' + escapeHtml(titleId) + '">'
       + '<h3 id="' + escapeHtml(titleId) + '" class="detail-section-title">' + escapeHtml(number + ' ' + title) + '</h3>'
       + '<div class="detail-section-body">' + body + '</div>'
-      + renderRecommendationEvidenceMeta(section, fallbackDate)
+      + renderRecommendationEvidenceMeta(section, fallbackDate, statusContext)
       + '</section>';
   }
 
@@ -3748,6 +3759,9 @@
     var rows = [
       ['结论', value.summary],
       ['当日成交量', value.current_volume],
+      ['当日成交额', value.current_amount_text || value.current_amount],
+      ['成交额日期', value.current_amount_as_of],
+      ['成交额来源', value.current_amount_source_label],
       ['5日平均成交量', value.average_volume_5],
       ['20日平均成交量', value.volume20],
       ['买点量比', value.volume_ratio],
@@ -3934,13 +3948,16 @@
 
     var ready = normalizeString(gate.status).trim() === 'ready_for_manual_comparison';
     var metricParts = ready ? [
+      (normalizeString(values.date_start).trim() && normalizeString(values.date_end).trim())
+        ? '样本区间 ' + normalizeString(values.date_start).trim() + ' 至 ' + normalizeString(values.date_end).trim()
+        : '',
       historicalMetricText('均值', values.mean),
       historicalMetricText('中位数', values.median),
       historicalMetricText('上涨率', values.win_rate),
       historicalMetricText('基准超额', values.excess_mean),
       historicalMetricText('MFE', values.mean_mfe),
       historicalMetricText('MAE', values.mean_mae),
-      historicalMetricText('最差', values.max_drawdown),
+      historicalMetricText('最差不利波动', values.max_drawdown),
     ].filter(Boolean) : [];
     return '<section class="recommendation-history-horizon" data-history-horizon="'
       + escapeHtml(normalizeString(horizonKey).toLowerCase()) + '">'
@@ -3970,10 +3987,16 @@
     var facts = [];
     var signalDate = normalizeString(value.signal_date).trim();
     var entryMode = normalizeString(value.entry_mode).trim();
+    var intendedHorizon = Number(value.intended_horizon);
+    var publicationStatus = normalizeString(value.publication_status).trim();
+    var decisionCode = normalizeString(value.decision_code).trim();
     var entryPrice = evidencePositiveNumber(value.entry_price);
     var entrySource = normalizeString(value.entry_price_source).trim();
     if (signalDate) facts.push('信号日 ' + signalDate);
     if (entryMode) facts.push('入场方式 ' + entryMode);
+    if ([1, 3, 5].indexOf(intendedHorizon) !== -1) facts.push('声明周期 T+' + intendedHorizon);
+    if (publicationStatus) facts.push('发布状态 ' + publicationStatus);
+    if (decisionCode) facts.push('记录决策 ' + decisionCode);
     if (entryPrice !== null && entrySource) {
       facts.push('规则入场价 ' + recommendationEvidenceNumber(entryPrice, 2));
       facts.push('价格来源 ' + entrySource);
@@ -4029,7 +4052,11 @@
       + keys.map(function (key) {
         var section = evidence[key] && typeof evidence[key] === 'object' ? evidence[key] : {};
         return '<div><strong>' + escapeHtml(key) + '</strong>'
-          + renderRecommendationEvidenceMeta(section, fallbackDate) + '</div>';
+          + renderRecommendationEvidenceMeta(
+            section,
+            fallbackDate,
+            key === 'historical_validation' ? 'historical_validation' : null,
+          ) + '</div>';
       }).join('') + '</div></details>';
   }
 
@@ -4081,7 +4108,14 @@
       + renderRecommendationEvidenceModule('06', '市场与板块共振', resonance,
         renderMarketSectorEvidence(resonance), reportDate)
       + renderRecommendationEvidenceModule('07', '风险与下一步', risk, renderRiskAndNextEvidence(risk), reportDate)
-      + renderRecommendationEvidenceModule('08', '历史验证与回测提醒', validation, renderHistoricalValidation(validation), reportDate)
+      + renderRecommendationEvidenceModule(
+        '08',
+        '历史验证与回测提醒',
+        validation,
+        renderHistoricalValidation(validation),
+        reportDate,
+        'historical_validation',
+      )
       + renderRecommendationEvidenceAudit(evidence, reportDate)
       + '</div>';
   }

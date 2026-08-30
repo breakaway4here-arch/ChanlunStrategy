@@ -938,6 +938,26 @@ assert(html.includes('缺失证据') && html.includes('MACD柱体连续性未提
 """,
         )
 
+    def test_volume_display_renders_current_amount_with_date_and_source(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderVolumeCapitalEvidence }",
+            r"""
+const html = globalThis.__auxTest.render({
+  status: 'partial',
+  current_amount: 250000000,
+  current_amount_text: '2.5亿',
+  current_amount_as_of: '2026-08-28',
+  current_amount_source: 'daily_kline.amounts',
+  current_amount_source_label: '日K成交额序列'
+});
+assert(html.includes('当日成交额') && html.includes('2.5亿'),
+  'current turnover amount was not rendered');
+assert(html.includes('2026-08-28') && html.includes('日K成交额序列'),
+  'current turnover amount provenance was not rendered');
+""",
+        )
+
     def test_decision_price_layer_includes_every_real_trailing_target(self):
         _assert_node_contract(
             self,

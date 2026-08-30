@@ -13,6 +13,31 @@ from tests.test_recommendation_evidence import (
 )
 
 
+class _Verified30mResult:
+    def __init__(self):
+        self.dates = [
+            "2026-08-27 13:00:00",
+            "2026-08-27 13:30:00",
+            "2026-08-27 14:00:00",
+            "2026-08-27 14:30:00",
+            "2026-08-28 09:30:00",
+            "2026-08-28 10:00:00",
+            "2026-08-28 10:30:00",
+            "2026-08-28 11:00:00",
+            "2026-08-28 13:00:00",
+            "2026-08-28 13:30:00",
+            "2026-08-28 14:00:00",
+            "2026-08-28 14:30:00",
+        ]
+        self.closes = [10.0 + index * 0.2 for index in range(len(self.dates))]
+        self.macd_dif = [0.1 + index * 0.03 for index in range(len(self.dates))]
+        self.macd_dea = [0.08 + index * 0.02 for index in range(len(self.dates))]
+        self.macd_hist = [
+            -0.30, -0.25, -0.20, -0.15, -0.10, -0.08,
+            -0.06, -0.04, -0.03, 0.01, 0.04, 0.08,
+        ]
+
+
 class RecommendationEvidenceCompletionTests(unittest.TestCase):
     def _candidate(self, raw_updates=None, row_updates=None, daily_updates=None):
         row = _workspace_row()
@@ -354,6 +379,169 @@ class RecommendationEvidenceCompletionTests(unittest.TestCase):
         self.assertEqual(sublevel["latest_bar_at"], "2026-08-28 14:30:00")
         self.assertEqual(sublevel["bars"], 32)
 
+    def test_verified_final_30m_result_projects_only_scalars_and_real_classifier_signals(self):
+        result = _Verified30mResult()
+        formal = _raw_candidate()
+        formal.update({
+            "result_30min": result,
+            "strategy_input_evidence": {
+                "interval": "30m",
+                "status": "verified",
+                "source": "market_history_db",
+                "latest_date": "2026-08-28",
+                "latest_ts": result.dates[-1],
+                "bars": len(result.dates),
+                "stale": False,
+                "is_final": True,
+            },
+            "signal_tier": "candidate",
+            "best_buy_point": {
+                "type": "底背驰候选",
+                "tier": "candidate",
+                "strength": "中",
+                "confirmations": ["30min底分型", "关键位不破"],
+                "confirmed_by": "30分钟底分型+关键位不破",
+            },
+            "upgraded_candidates": [{
+                "type": "底背驰候选",
+                "tier": "candidate",
+                "strength": "中",
+                "confirmations": ["30min底分型", "关键位不破"],
+                "confirmed_by": "30分钟底分型+关键位不破",
+            }],
+        })
+
+        candidate = build_recommendation_evidence_projection(
+            {"picks_fusion": [formal]},
+            _workspace_daily([_workspace_row()], [_raw_candidate()]),
+        )["views"]["main"][0]
+        sublevel = candidate["sublevel_30m"]
+
+        self.assertEqual(sublevel["status"], "available")
+        self.assertEqual(sublevel["confirmation_status"], "confirmed")
+        self.assertTrue(sublevel["confirmed"])
+        self.assertEqual(sublevel["latest_ts"], result.dates[-1])
+        self.assertEqual(sublevel["bars"], len(result.dates))
+        self.assertAlmostEqual(sublevel["close"], result.closes[-1])
+        self.assertGreater(sublevel["close"], sublevel["ema5"])
+        self.assertGreater(sublevel["ema5"], sublevel["ema10"])
+        self.assertAlmostEqual(sublevel["macd_dif"], result.macd_dif[-1])
+        self.assertAlmostEqual(sublevel["macd_dea"], result.macd_dea[-1])
+        self.assertEqual(sublevel["macd_state"], "improving")
+        self.assertEqual(sublevel["ema5_direction"], "上行")
+        self.assertEqual(sublevel["ema10_direction"], "上行")
+        self.assertEqual(
+            sublevel["confirmations"],
+            ["30min底分型", "关键位不破"],
+        )
+        self.assertEqual(
+            sublevel["confirmed_by"],
+            "30分钟底分型+关键位不破",
+        )
+        for forbidden_array in (
+            "dates", "closes", "macd_dif_series", "macd_dea_series", "macd_hist",
+        ):
+            self.assertNotIn(forbidden_array, sublevel)
+
+    def test_30m_serializer_never_promotes_alignment_or_arbitrary_candidate_confirmations(self):
+        for name, confirmations in (
+            ("ema_alignment_only", ["30min EMA5维持"]),
+            ("arbitrary_text", ["任意未审计确认"]),
+        ):
+            with self.subTest(name=name):
+                result = _Verified30mResult()
+                formal = _raw_candidate()
+                formal.update({
+                    "result_30min": result,
+                    "strategy_input_evidence": {
+                        "interval": "30m",
+                        "status": "verified",
+                        "source": "market_history_db",
+                        "latest_date": "2026-08-28",
+                        "latest_ts": result.dates[-1],
+                        "bars": len(result.dates),
+                        "stale": False,
+                        "is_final": True,
+                    },
+                    "signal_tier": "candidate",
+                    "best_buy_point": {
+                        "type": "底背驰候选",
+                        "tier": "candidate",
+                        "strength": "中",
+                        "confirmations": confirmations,
+                        "confirmed_by": "+".join(confirmations),
+                    },
+                    "upgraded_candidates": [{
+                        "type": "底背驰候选",
+                        "tier": "candidate",
+                        "strength": "中",
+                        "confirmations": confirmations,
+                        "confirmed_by": "+".join(confirmations),
+                    }],
+                })
+
+                sublevel = build_recommendation_evidence_projection(
+                    {"picks_fusion": [formal]},
+                    _workspace_daily([_workspace_row()], [_raw_candidate()]),
+                )["views"]["main"][0]["sublevel_30m"]
+
+                self.assertEqual(sublevel["status"], "partial")
+                self.assertEqual(sublevel["confirmation_status"], "alignment_only")
+                self.assertFalse(sublevel["confirmed"])
+                self.assertEqual(sublevel["confirmations"], [])
+                self.assertIsNone(sublevel["confirmed_by"])
+                self.assertEqual(sublevel["ema_alignment"], "EMA5 > EMA10")
+                self.assertGreater(sublevel["ema5"], sublevel["ema10"])
+                self.assertNotIn("任意未审计确认", sublevel["confirmations"])
+
+    def test_30m_scalar_projection_fails_closed_on_unverified_input_contract(self):
+        cases = {
+            "bar_count_mismatch": {"bars_delta": 1},
+            "latest_timestamp_mismatch": {"latest_ts": "2026-08-28 15:00:00"},
+            "not_final": {"is_final": False},
+            "stale": {"stale": True},
+        }
+        for name, changes in cases.items():
+            with self.subTest(name=name):
+                result = _Verified30mResult()
+                evidence = {
+                    "interval": "30m",
+                    "status": "verified",
+                    "source": "market_history_db",
+                    "latest_date": "2026-08-28",
+                    "latest_ts": result.dates[-1],
+                    "bars": len(result.dates),
+                    "stale": False,
+                    "is_final": True,
+                }
+                if "bars_delta" in changes:
+                    evidence["bars"] += changes["bars_delta"]
+                else:
+                    evidence.update(changes)
+                formal = _raw_candidate()
+                formal.update({
+                    "result_30min": result,
+                    "strategy_input_evidence": evidence,
+                    "signal_tier": "candidate",
+                    "best_buy_point": {
+                        "type": "底背驰候选",
+                        "tier": "candidate",
+                        "confirmations": ["30min底分型"],
+                        "confirmed_by": "30分钟底分型",
+                    },
+                })
+
+                sublevel = build_recommendation_evidence_projection(
+                    {"picks_fusion": [formal]},
+                    _workspace_daily([_workspace_row()], [_raw_candidate()]),
+                )["views"]["main"][0]["sublevel_30m"]
+
+                self.assertNotEqual(sublevel["status"], "available")
+                self.assertFalse(sublevel["confirmed"])
+                self.assertIsNone(sublevel["ema5"])
+                self.assertIsNone(sublevel["macd_dif"])
+                self.assertEqual(sublevel["confirmations"], [])
+
     def test_missing_30m_does_not_publish_legacy_confirmation_claims(self):
         candidate = self._candidate({
             "best_buy_point": {
@@ -613,6 +801,114 @@ class RecommendationEvidenceCompletionTests(unittest.TestCase):
             self.assertIn(field, market)
         self.assertIn("as_of", risk)
         self.assertIn("missing_evidence", risk)
+
+    def test_current_amount_uses_only_current_final_date_aligned_daily_series(self):
+        formal = _raw_candidate()
+        formal.update({
+            "dates": ["2026-08-26", "2026-08-27", "2026-08-28"],
+            "amount": 999_000_000,
+            "amounts": [120_000_000, 180_000_000, 250_000_000],
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-08-28",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+            },
+        })
+
+        volume = build_recommendation_evidence_projection(
+            {"picks_fusion": [formal]},
+            _workspace_daily([_workspace_row()], [_raw_candidate()]),
+        )["views"]["main"][0]["volume_and_capital"]
+
+        self.assertEqual(volume.get("current_amount"), 250_000_000)
+        self.assertEqual(volume.get("current_amount_text"), "2.5亿")
+        self.assertEqual(volume.get("current_amount_as_of"), "2026-08-28")
+        self.assertEqual(volume.get("current_amount_source"), "daily_kline.amounts")
+        self.assertEqual(volume.get("current_amount_status"), "available")
+
+    def test_current_amount_never_falls_back_to_quote_when_series_contract_is_invalid(self):
+        cases = {
+            "length_mismatch": {
+                "dates": ["2026-08-27", "2026-08-28"],
+                "amounts": [120_000_000],
+            },
+            "date_mismatch": {
+                "dates": ["2026-08-26", "2026-08-27"],
+                "amounts": [120_000_000, 180_000_000],
+            },
+            "not_final": {"is_final": False},
+            "stale": {"stale": True},
+        }
+        for name, changes in cases.items():
+            with self.subTest(name=name):
+                formal = _raw_candidate()
+                formal.update({
+                    "dates": ["2026-08-27", "2026-08-28"],
+                    "amount": 999_000_000,
+                    "amounts": [120_000_000, 180_000_000],
+                    "data_status": {
+                        "daily": "verified",
+                        "latest_date": "2026-08-28",
+                        "source": "market_history_db",
+                        "stale": False,
+                        "is_final": True,
+                    },
+                })
+                if "dates" in changes:
+                    formal["dates"] = changes["dates"]
+                if "amounts" in changes:
+                    formal["amounts"] = changes["amounts"]
+                if "is_final" in changes:
+                    formal["data_status"]["is_final"] = changes["is_final"]
+                if "stale" in changes:
+                    formal["data_status"]["stale"] = changes["stale"]
+
+                volume = build_recommendation_evidence_projection(
+                    {"picks_fusion": [formal]},
+                    _workspace_daily([_workspace_row()], [_raw_candidate()]),
+                )["views"]["main"][0]["volume_and_capital"]
+
+                self.assertIsNone(volume.get("current_amount"))
+                self.assertIsNone(volume.get("current_amount_text"))
+                self.assertIsNone(volume.get("current_amount_source"))
+                self.assertEqual(volume.get("current_amount_status"), "missing")
+
+    def test_distance_state_only_maps_exact_existing_formal_risk_labels(self):
+        for label in ("距参考价偏高", "距参考价过远", "距参考位过远"):
+            with self.subTest(label=label):
+                candidate = self._candidate(
+                    row_updates={
+                        "current_price": 10,
+                        "risk_flags": [label],
+                        "formal_decision_contract": {
+                            "action": "观察",
+                            "reference_price": 9,
+                        },
+                    },
+                )
+                derived = candidate["display_derived"]
+                self.assertEqual(derived.get("distance_state"), "偏离")
+                self.assertEqual(
+                    derived.get("distance_state_source"),
+                    "risk_and_next.risk_labels",
+                )
+
+        candidate = self._candidate(
+            row_updates={
+                "current_price": 10,
+                "risk_flags": ["距参考价适中"],
+                "formal_decision_contract": {
+                    "action": "观察",
+                    "reference_price": 9,
+                },
+            },
+        )
+        self.assertIsNone(candidate["display_derived"].get("distance_state"))
+        self.assertIsNone(
+            candidate["display_derived"].get("distance_state_source")
+        )
 
     def test_three_layer_states_do_not_relabel_market_or_sector_labels(self):
         candidate = self._candidate(

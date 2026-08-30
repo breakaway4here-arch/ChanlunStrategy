@@ -1,4 +1,5 @@
 import hashlib
+import json
 import plistlib
 import re
 import sqlite3
@@ -41,6 +42,15 @@ class PrecloseLaunchdTests(unittest.TestCase):
         self.assertIn("=> [redacted]", text)
         self.assertIn("cd cloudflare/preclose-worker", text)
         self.assertIn("npx wrangler secret list", text)
+        for evidence_name in (
+            "failure.json",
+            "timings.json",
+            "run-evidence.jsonl",
+            "reconciliation-polls.jsonl",
+            "reconciliation-failure.json",
+        ):
+            self.assertIn(evidence_name, text)
+        self.assertIn("15:35 到点不再启动", text)
         self.assertNotIn("npx wrangler secret put PRE_CLOSE_WRITE_TOKEN", text)
         self.assertNotIn("npx wrangler --cwd cloudflare/preclose-worker", text)
         self.assertNotRegex(
@@ -192,24 +202,71 @@ class PrecloseLaunchdTests(unittest.TestCase):
             datetime(2026, 8, 28, 15, 35, 0, tzinfo=cn_timezone),
         ])
         calls = []
+        budgets = []
         sleeps = []
 
-        def runner(trade_date, **_kwargs):
+        def runner(trade_date, **kwargs):
             calls.append(trade_date)
+            budgets.append(kwargs.get("deadline_seconds"))
             return {"status": "formal_pending", "exit_code": 0}
 
-        result = poll_reconciliation(
-            "2026-08-28",
-            poll_seconds=30,
-            stop_at="15:35:00",
-            runner=runner,
-            now=lambda: next(clock),
-            sleep=sleeps.append,
-        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "preclose"
+            result = poll_reconciliation(
+                "2026-08-28",
+                poll_seconds=30,
+                stop_at="15:35:00",
+                runner=runner,
+                now=lambda: next(clock),
+                sleep=sleeps.append,
+                root=root,
+            )
+            evidence_path = (
+                root / "2026-08-28" / "reconciliation-polls.jsonl"
+            )
+            evidence = [
+                json.loads(line)
+                for line in evidence_path.read_text(encoding="utf-8").splitlines()
+            ]
 
         self.assertEqual(result["status"], "formal_pending_timeout")
-        self.assertEqual(calls, ["2026-08-28", "2026-08-28"])
+        self.assertEqual(calls, ["2026-08-28"])
+        self.assertEqual(budgets, [15.0])
         self.assertEqual(sleeps, [15.0])
+        self.assertEqual(
+            [row["status"] for row in evidence],
+            ["formal_pending", "formal_pending_timeout"],
+        )
+        self.assertEqual(
+            [row["observed_at"] for row in evidence],
+            [
+                "2026-08-28T15:34:45+08:00",
+                "2026-08-28T15:35:00+08:00",
+            ],
+        )
+
+    def test_reconciliation_poll_never_starts_at_the_hard_stop(self):
+        from scripts.preclose_reconcile import poll_reconciliation
+
+        cn_timezone = timezone(timedelta(hours=8))
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "preclose"
+            result = poll_reconciliation(
+                "2026-08-28",
+                poll_seconds=30,
+                stop_at="15:35:00",
+                runner=lambda *_args, **_kwargs: calls.append(True),
+                now=lambda: datetime(
+                    2026, 8, 28, 15, 35, 0, tzinfo=cn_timezone
+                ),
+                sleep=lambda _seconds: None,
+                root=root,
+            )
+
+        self.assertEqual(result["status"], "formal_pending_timeout")
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(calls, [])
 
 
 if __name__ == "__main__":

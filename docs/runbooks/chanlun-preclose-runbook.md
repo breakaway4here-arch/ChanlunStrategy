@@ -48,7 +48,7 @@ done
 
 禁止把原始 `launchctl print` 直接输出到终端、日志或验收记录；当前用户会话的继承环境可能包含与本任务无关的凭证。回读必须先按上面的方式脱敏，验收只记录 label、绝对路径、状态、运行次数和退出码。
 
-安装器拒绝覆盖已有同名 plist。若存在冲突，先查明来源，不要直接删除或覆盖。两个任务分别在工作日 14:47 和 15:05 启动；复核每 30 秒只读轮询，15:35 硬退出。
+安装器拒绝覆盖已有同名 plist。若存在冲突，先查明来源，不要直接删除或覆盖。两个任务分别在工作日 14:47 和 15:05 启动；复核每 30 秒只读轮询，15:35 硬退出。15:35 到点不再启动新的正式校验、Worker 写入或提醒发送；已经启动的一轮也受同一个硬截止约束。
 
 ## 手工 dry-run 与查看证据
 
@@ -67,6 +67,18 @@ ls -l .cache/chanlun/preclose/YYYY-MM-DD/
 /usr/bin/python3 -m json.tool .cache/chanlun/preclose/YYYY-MM-DD/snapshot.json
 /usr/bin/python3 -m json.tool .cache/chanlun/preclose/YYYY-MM-DD/reconciliation.json
 ```
+
+当日隔离目录中的运行证据含义如下：
+
+- `failure.json`：失败或硬截止的真实内部原因、run/source 身份及快照 hash；不得公开到今日决策页面。
+- `timings.json`：行情获取、三池计算、发布/提醒三个外层阶段和全程耗时；日线、30 分钟、市场上下文、决策门控与各池细项读取 `snapshot.json` 内部 `diagnostics.stage_seconds`。
+- `run-evidence.jsonl`：14:47 任务开始与结束的追加式证据；用于区分已启动任务的成功、失败和超时。
+- `reconciliation-polls.jsonl`：盘后每轮只读复核状态及 15:35 终止证据。
+- `reconciliation-failure.json`：盘后校验、环境读取、发布或证据写入异常的阶段与错误类型；只属于隔离复核任务。
+
+“未运行”不能由一个从未启动的进程自行写文件；必须联合使用 launchd 当日运行次数、调度日志和当日隔离目录不存在这三项证据，不能用事后手工创建的 `not_run` 文件冒充。
+
+14:49 前若正常快照写入失败，任务会原子提升启动前已准备的空池截止快照，使网页只显示“本期未选出推荐票”；真实失败原因继续只保存在上述内部证据。验收时应同时核对这些文件的 `trade_date`、`run_id`、`source_sha`、`snapshot_id/content_hash`，不能仅以进程退出码代替。
 
 `run.lock` 与 `reconcile.lock` 是不同的短期活动锁。进程不存在但锁仍在时，先保留锁内容和日志作为证据，再由人工确认后处理；不要把删除锁当成常规重试。
 

@@ -142,11 +142,17 @@ def _contribution(
     return row
 
 
-def _ledger_entry(contributions, *, reference_close=10.5):
+def _ledger_entry(
+    contributions,
+    *,
+    reference_close=10.5,
+    report_date=DATE,
+    recommendation_id="rec:historical-validation",
+):
     return {
         "schema_version": "1",
-        "recommendation_id": "rec:historical-validation",
-        "report_date": DATE,
+        "recommendation_id": recommendation_id,
+        "report_date": report_date,
         "code": CODE,
         "name": "证据股",
         "reference_close": reference_close,
@@ -456,7 +462,15 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
     def test_missing_entry_mode_never_creates_simulated_entry_price(self):
         identity = _identity(entry_mode="unknown")
         contribution = _contribution(identity)
-        ledger = [_ledger_entry([contribution], reference_close=10.5)]
+        ledger = [
+            _ledger_entry([contribution], reference_close=10.5),
+            _ledger_entry(
+                [contribution],
+                reference_close=9.5,
+                report_date="2026-08-20",
+                recommendation_id="rec:historical-entry-mode-unknown",
+            ),
+        ]
         validation = _project(
             scorecards=_scorecards(_scorecard(identity)),
             ledger=ledger,
@@ -472,12 +486,14 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
     def test_same_contract_tracking_uses_ledger_identity_only(self):
         exact = _identity()
         near_match = _identity(source_pool="picks_pure")
+        current_contribution = _contribution(exact)
         exact_contribution = _contribution(
             exact,
             entry_price=10.5,
             entry_price_status="verified",
             entry_price_source="ledger.exact.entry_price",
         )
+        exact_contribution["publication_status"] = "published"
         wrong_contribution = _contribution(
             near_match,
             role="baseline",
@@ -487,15 +503,56 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
         )
         validation = _project(
             scorecards=_scorecards(_scorecard(exact)),
-            ledger=[_ledger_entry([exact_contribution, wrong_contribution])],
+            ledger=[
+                _ledger_entry([current_contribution]),
+                _ledger_entry(
+                    [exact_contribution],
+                    report_date="2026-08-20",
+                    recommendation_id="rec:historical-exact",
+                ),
+                _ledger_entry(
+                    [wrong_contribution],
+                    report_date="2026-08-27",
+                    recommendation_id="rec:historical-wrong-contract",
+                ),
+            ],
         )
 
         tracking = validation["simulation_tracking"]
         self.assertEqual(tracking["status"], "available")
+        self.assertEqual(tracking["signal_date"], "2026-08-20")
         self.assertEqual(tracking["entry_mode"], "immediate_close")
+        self.assertEqual(tracking["intended_horizon"], None)
+        self.assertEqual(tracking["publication_status"], "published")
+        self.assertEqual(tracking["decision_code"], "recommend")
         self.assertEqual(tracking["entry_price"], 10.5)
         self.assertIn("ledger", tracking["entry_price_source"])
         self.assertNotEqual(tracking["entry_price"], 99.0)
+
+    def test_current_report_record_is_not_historical_tracking(self):
+        identity = _identity(intended_horizon=3)
+        current = _contribution(
+            identity,
+            entry_price=10.5,
+            entry_price_status="verified",
+            entry_price_source="ledger.current.entry_price",
+        )
+        validation = _project(
+            scorecards=_scorecards(_scorecard(identity)),
+            ledger=[_ledger_entry([current], reference_close=10.5)],
+        )
+
+        tracking = validation["simulation_tracking"]
+        self.assertEqual(tracking["status"], "missing")
+        self.assertEqual(
+            tracking["label"],
+            "暂无同合同历史跟踪记录",
+        )
+        self.assertIsNone(tracking.get("signal_date"))
+        self.assertIsNone(tracking.get("entry_price"))
+        self.assertIsNone(tracking.get("tracking_status"))
+        self.assertIsNone(tracking.get("target_triggered"))
+        self.assertIsNone(tracking.get("invalidation_triggered"))
 
     def test_simulation_copy_never_says_real_holding_or_real_trade(self):
         identity = _identity()
@@ -507,7 +564,14 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
         )
         validation = _project(
             scorecards=_scorecards(_scorecard(identity)),
-            ledger=[_ledger_entry([contribution])],
+            ledger=[
+                _ledger_entry([_contribution(identity)]),
+                _ledger_entry(
+                    [contribution],
+                    report_date="2026-08-20",
+                    recommendation_id="rec:historical-copy",
+                ),
+            ],
         )
         encoded = json.dumps(validation, ensure_ascii=False)
 
@@ -558,7 +622,15 @@ class TestRecommendationHistoricalValidation(unittest.TestCase):
         identity = _identity()
         validation = _project(
             scorecards=_scorecards(_scorecard(identity)),
-            ledger=[_ledger_entry([_contribution(identity)], reference_close=10.5)],
+            ledger=[
+                _ledger_entry([_contribution(identity)], reference_close=10.5),
+                _ledger_entry(
+                    [_contribution(identity)],
+                    reference_close=9.5,
+                    report_date="2026-08-20",
+                    recommendation_id="rec:historical-no-entry-price",
+                ),
+            ],
             raw=_raw_candidate(),
         )
 

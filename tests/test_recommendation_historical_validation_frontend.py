@@ -66,7 +66,11 @@ class RecommendationHistoricalValidationFrontendTests(unittest.TestCase):
             "simulation_tracking": {
                 "status": "available",
                 "label": "策略模拟跟踪",
+                "signal_date": "2026-08-20",
                 "entry_mode": "immediate_close",
+                "intended_horizon": 3,
+                "publication_status": "published",
+                "decision_code": "recommend",
                 "entry_price": 10.5,
                 "entry_price_source": "ledger.exact.entry_price",
             },
@@ -84,6 +88,10 @@ assert(html.includes('3 / 20'), 'active-date progress is missing');
 assert(html.includes('1 / 2'), 'active-month progress is missing');
 assert(html.includes('等待成熟 2'), 'right-censored waiting samples are hidden');
 assert(html.includes('策略模拟跟踪'), 'simulation tracking label is missing');
+assert(html.includes('状态：<strong>样本采集中</strong>'), 'collecting history status is not understandable');
+assert(html.includes('信号日 2026-08-20'), 'prior ledger signal date is missing');
+assert(html.includes('声明周期 T+3'), 'existing ledger horizon is missing');
+assert(html.includes('发布状态 published') && html.includes('记录决策 recommend'), 'existing ledger fields are missing');
 assert(html.includes('immediate_close') && html.includes('10.5'), 'verified simulated entry evidence is missing');
 assert(!html.includes('胜率') && !html.includes('平均收益'), 'immature scorecard leaked performance claims');
 assert(!html.includes('真实持仓') && !html.includes('真实交易'), 'simulation was described as a real trade');
@@ -112,7 +120,7 @@ assert(!html.includes('真实持仓') && !html.includes('真实交易'), 'simula
             },
             "metrics_by_horizon": {
                 "t1": {},
-                "t3": {"mean": 1.5, "median": 1.0, "win_rate": 66.7, "excess_mean": 0.2, "mean_mfe": 4.0, "mean_mae": -2.0, "max_drawdown": -4.0},
+                "t3": {"date_start": "2026-01-05", "date_end": "2026-08-27", "mean": 1.5, "median": 1.0, "win_rate": 66.7, "excess_mean": 0.2, "mean_mfe": 4.0, "mean_mae": -2.0, "max_drawdown": -4.0},
                 "t5": {},
             },
             "simulation_tracking": {"status": "missing", "label": "暂无同合同历史跟踪记录"},
@@ -126,11 +134,77 @@ const html = globalThis.__auxTest.detail({ code: '600001' }, {});
 assert(html.includes('T+3') && html.includes('均值 1.5%'), 'mature mean is missing');
 assert(html.includes('中位数 1%') && html.includes('上涨率 66.7%'), 'mature median/up-rate is missing');
 assert(html.includes('基准超额 0.2%'), 'mature benchmark excess is missing');
-assert(html.includes('MFE 4%') && html.includes('MAE -2%') && html.includes('最差 -4%'), 'mature risk metrics are missing');
+assert(html.includes('MFE 4%') && html.includes('MAE -2%') && html.includes('最差不利波动 -4%'), 'mature risk metrics are missing');
+assert(!html.includes('最差 -4%'), 'ambiguous worst-move copy is still shown');
+assert(html.includes('样本区间 2026-01-05 至 2026-08-27'), 'metric sample date range is missing');
+assert(html.includes('状态：<strong>达到人工比较门槛</strong>'), 'ready history status is not understandable');
 assert(!html.includes('T+1 均值') && !html.includes('T+5 均值'), 'empty horizons fabricated metrics');
 assert(html.includes('暂无同合同历史跟踪记录'), 'missing same-contract tracking is not explicit');
 """,
         )
+
+    def test_contract_missing_history_status_is_explicit(self):
+        history = {
+            "status": "contract_missing",
+            "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+            "as_of": "2026-08-28",
+            "summary": "样本门合同未完整提供",
+            "declared_horizon": None,
+            "progress_by_horizon": {
+                key: {"status": "contract_missing"}
+                for key in ("t1", "t3", "t5")
+            },
+            "metrics_by_horizon": {"t1": {}, "t3": {}, "t5": {}},
+            "simulation_tracking": {
+                "status": "missing",
+                "label": "暂无同合同历史跟踪记录",
+            },
+        }
+        _assert_node_contract(
+            self,
+            "({ detail: buildMergedCandidateDetail, state: state })",
+            _fixture(history)
+            + r"""
+const html = globalThis.__auxTest.detail({ code: '600001' }, {});
+assert(html.includes('状态：<strong>样本合同缺失</strong>'), 'contract-missing history status is not understandable');
+""",
+        )
+
+    def test_declared_history_statuses_are_user_understandable(self):
+        expected_labels = {
+            "waiting_for_maturity": "等待样本成熟",
+            "data_unavailable": "历史样本暂不可用",
+            "no_signals": "尚无历史信号样本",
+            "disabled": "历史验证未启用",
+            "no_formal_recommendations": "暂无正式推荐样本",
+        }
+        for status, label in expected_labels.items():
+            with self.subTest(status=status):
+                history = {
+                    "status": status,
+                    "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+                    "as_of": "2026-08-28",
+                    "summary": "历史验证状态说明",
+                    "declared_horizon": None,
+                    "progress_by_horizon": {
+                        key: {"status": status}
+                        for key in ("t1", "t3", "t5")
+                    },
+                    "metrics_by_horizon": {"t1": {}, "t3": {}, "t5": {}},
+                    "simulation_tracking": {
+                        "status": "missing",
+                        "label": "暂无同合同历史跟踪记录",
+                    },
+                }
+                _assert_node_contract(
+                    self,
+                    "({ detail: buildMergedCandidateDetail, state: state })",
+                    _fixture(history)
+                    + """
+const html = globalThis.__auxTest.detail({ code: '600001' }, {});
+assert(html.includes('状态：<strong>STATUS_LABEL</strong>'), 'history status is not understandable');
+""".replace("STATUS_LABEL", label),
+                )
 
 
 if __name__ == '__main__':

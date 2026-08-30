@@ -32,7 +32,10 @@ from chanlun.preclose_runtime import build_scheduled_preclose_input
 from chanlun.preclose_schedule import is_trading_day
 
 
-DELIVERY_RESERVE_SECONDS = 24.0
+# One target can still have a running Sina + Eastmoney fallback thread for up
+# to 30 seconds after the main acquisition alarm.  Keep that drain window and
+# one bounded Worker request window inside the shared 14:49 cutoff.
+DELIVERY_RESERVE_SECONDS = 36.0
 
 
 class PrecloseExecutionDeadline(BaseException):
@@ -130,6 +133,229 @@ def _atomic_json(path, payload):
     os.replace(str(temporary), str(path))
 
 
+def _durable_json(path, payload):
+    """Write deadline evidence independently from the normal snapshot writer."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(
+        ".{}-{}.tmp".format(path.name, uuid.uuid4().hex[:12])
+    )
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8") + b"\n"
+    descriptor = os.open(
+        str(temporary),
+        os.O_CREAT | os.O_EXCL | os.O_WRONLY,
+        0o600,
+    )
+    try:
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.replace(str(temporary), str(path))
+
+
+def _append_jsonl(path, payload):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    ).encode("utf-8") + b"\n"
+    descriptor = os.open(
+        str(path),
+        os.O_CREAT | os.O_APPEND | os.O_WRONLY,
+        0o600,
+    )
+    try:
+        os.write(descriptor, encoded)
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def _prepare_deadline_fallback(
+    day_root,
+    *,
+    trade_date,
+    as_of,
+    source_sha,
+    run_id,
+):
+    snapshot = build_preclose_snapshot(
+        trade_date=trade_date,
+        as_of=as_of,
+        generated_at=as_of,
+        pools={"main": [], "h4_t3": [], "acceleration": []},
+        source_sha=source_sha,
+        status="deadline_exceeded",
+        diagnostics={
+            "failure": {
+                "stage": "execution",
+                "type": "PrecloseExecutionDeadline",
+            },
+            "prepared_before_acquisition": True,
+        },
+        run_id=run_id,
+    )
+    path = Path(day_root) / "prepared-deadline.json"
+    _durable_json(path, snapshot)
+    return path, snapshot
+
+
+def _promote_prepared_deadline_fallback(
+    result,
+    *,
+    prepared_path,
+    snapshot_path,
+    failure_path,
+    source_sha,
+    run_id,
+    started_at_iso,
+    now,
+    monotonic,
+    monotonic_started,
+):
+    if result.get("snapshot_path") or result.get("status") not in {
+        "deadline_exceeded", "failed"
+    }:
+        return result
+    current = now()
+    if current.time().replace(tzinfo=None) > wall_time(14, 49):
+        return result
+    try:
+        os.replace(str(prepared_path), str(snapshot_path))
+        snapshot = _read_frozen_snapshot(snapshot_path, result["trade_date"])
+    except (OSError, TypeError, ValueError) as exc:
+        result = dict(result)
+        result["fallback_promotion_error"] = type(exc).__name__
+        return result
+    elapsed = max(0.0, float(monotonic()) - monotonic_started)
+    result = dict(result)
+    result.update({
+        "snapshot_status": snapshot["status"],
+        "snapshot_id": snapshot["snapshot_id"],
+        "content_hash": snapshot["content_hash"],
+        "snapshot_path": str(snapshot_path),
+        "exit_code": 1,
+    })
+    _durable_json(failure_path, {
+        "schema_version": "preclose-run-failure-v1",
+        "trade_date": result["trade_date"],
+        "run_id": run_id,
+        "source_sha": source_sha,
+        "status": snapshot["status"],
+        "stage": str(result.get("failure_stage") or "fallback_freeze"),
+        "error_type": str(
+            result.get("failure_type") or "PrecloseExecutionDeadline"
+        ),
+        "started_at": started_at_iso,
+        "finished_at": current.isoformat(timespec="seconds"),
+        "elapsed_seconds": round(elapsed, 6),
+        "snapshot_id": snapshot["snapshot_id"],
+        "content_hash": snapshot["content_hash"],
+    })
+    return result
+
+
+def _record_finished_run(
+    result,
+    *,
+    evidence_path,
+    failure_path,
+    prepared_path,
+    source_sha,
+    run_id,
+    started_at_iso,
+    now,
+    monotonic,
+    monotonic_started,
+):
+    current = now()
+    elapsed = max(0.0, float(monotonic()) - monotonic_started)
+    snapshot_status = result.get("snapshot_status") or result.get("status")
+    status = result.get("run_status") or snapshot_status
+    failure_stage = "execution"
+    failure_type = {
+        "deadline_exceeded": "PrecloseExecutionDeadline",
+        "not_run": "PrecloseNotRun",
+    }.get(status, "PrecloseExecutionFailure")
+    snapshot_path = result.get("snapshot_path")
+    if snapshot_path:
+        try:
+            frozen = json.loads(
+                Path(snapshot_path).read_text(encoding="utf-8")
+            )
+            failure = (frozen.get("diagnostics") or {}).get("failure") or {}
+            if str(failure.get("stage") or "").strip():
+                failure_stage = str(failure["stage"])
+            if str(failure.get("type") or "").strip():
+                failure_type = str(failure["type"])
+        except (OSError, TypeError, ValueError):
+            pass
+    if status == "delivery_failed":
+        failure_stage = (
+            "delivery_evidence"
+            if result.get("delivery_evidence_error")
+            else "delivery"
+        )
+        failure_type = str(
+            result.get("delivery_evidence_error")
+            or result.get("delivery_error")
+            or "DeliveryFailed"
+        )
+    if result.get("fallback_promotion_error"):
+        failure_stage = "fallback_promotion"
+        failure_type = str(result["fallback_promotion_error"])
+    if status in {
+        "failed", "deadline_exceeded", "not_run", "delivery_failed"
+    } \
+            and not Path(failure_path).exists():
+        _durable_json(failure_path, {
+            "schema_version": "preclose-run-failure-v1",
+            "trade_date": result.get("trade_date"),
+            "run_id": run_id,
+            "source_sha": source_sha,
+            "status": status,
+            "snapshot_status": snapshot_status,
+            "stage": failure_stage,
+            "error_type": failure_type,
+            "started_at": started_at_iso,
+            "finished_at": current.isoformat(timespec="seconds"),
+            "elapsed_seconds": round(elapsed, 6),
+            "snapshot_id": result.get("snapshot_id"),
+            "content_hash": result.get("content_hash"),
+        })
+    _append_jsonl(evidence_path, {
+        "schema_version": "preclose-run-evidence-v1",
+        "event": "finished",
+        "trade_date": result.get("trade_date"),
+        "run_id": run_id,
+        "source_sha": source_sha,
+        "recorded_at": current.isoformat(timespec="seconds"),
+        "status": status,
+        "exit_code": int(result.get("exit_code") or 0),
+        "snapshot_id": result.get("snapshot_id"),
+        "content_hash": result.get("content_hash"),
+        "elapsed_seconds": round(elapsed, 6),
+        "fallback_promotion_error": result.get("fallback_promotion_error"),
+    })
+    if snapshot_path:
+        try:
+            Path(prepared_path).unlink()
+        except FileNotFoundError:
+            pass
+
+
 def _current_source_sha():
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -202,6 +428,16 @@ def _finalize_scheduled_result(
     """Publish a frozen result while enforcing both deadline clocks."""
 
     result["trade_date"] = trade_date
+    delivery_path = root / trade_date / "delivery.json"
+
+    def record_delivery(payload):
+        try:
+            _durable_json(delivery_path, payload)
+        except Exception as exc:
+            result["exit_code"] = 1
+            result["run_status"] = "delivery_failed"
+            result["delivery_evidence_error"] = type(exc).__name__
+
     input_path = paths.input_path(trade_date)
     if input_path.is_file():
         result["input_path"] = str(input_path)
@@ -209,7 +445,9 @@ def _finalize_scheduled_result(
     if snapshot_error:
         result["exit_code"] = 1
         if not skip_publish:
-            _atomic_json(root / trade_date / "delivery.json", {
+            result["run_status"] = "failed"
+            result["delivery_error"] = snapshot_error
+            record_delivery({
                 "snapshot_id": result.get("snapshot_id"),
                 "content_hash": result.get("content_hash"),
                 "delivery": None,
@@ -228,7 +466,9 @@ def _finalize_scheduled_result(
     delivery_budget = min(wall_budget, total_budget)
     if delivery_budget <= 0:
         result["exit_code"] = 1
-        _atomic_json(root / trade_date / "delivery.json", {
+        result["run_status"] = "delivery_failed"
+        result["delivery_error"] = "PrecloseExecutionDeadline"
+        record_delivery({
             "snapshot_id": result.get("snapshot_id"),
             "content_hash": result.get("content_hash"),
             "delivery": None,
@@ -261,14 +501,18 @@ def _finalize_scheduled_result(
         )
         if not publish_ok or not notify_ok:
             result["exit_code"] = 1
-        _atomic_json(root / trade_date / "delivery.json", {
+            result["run_status"] = "delivery_failed"
+            result["delivery_error"] = "PublishOrNotificationFailed"
+        record_delivery({
             "snapshot_id": result.get("snapshot_id"),
             "content_hash": result.get("content_hash"),
             "delivery": delivery,
         })
     except PrecloseExecutionDeadline:
         result["exit_code"] = 1
-        _atomic_json(root / trade_date / "delivery.json", {
+        result["run_status"] = "delivery_failed"
+        result["delivery_error"] = "PrecloseExecutionDeadline"
+        record_delivery({
             "snapshot_id": result.get("snapshot_id"),
             "content_hash": result.get("content_hash"),
             "delivery": None,
@@ -276,7 +520,9 @@ def _finalize_scheduled_result(
         })
     except Exception as exc:
         result["exit_code"] = 1
-        _atomic_json(root / trade_date / "delivery.json", {
+        result["run_status"] = "delivery_failed"
+        result["delivery_error"] = type(exc).__name__
+        record_delivery({
             "snapshot_id": result.get("snapshot_id"),
             "content_hash": result.get("content_hash"),
             "delivery": None,
@@ -298,15 +544,18 @@ def _freeze_fallback_before_cutoff(
     """Freeze a non-actionable fallback only while both hard budgets remain."""
 
     elapsed = max(0.0, float(monotonic()) - started_at)
-    budget = min(
+    remaining = min(
         _scheduled_wall_budget(now()),
         max(0.0, 120.0 - elapsed),
     )
+    budget = max(0.0, remaining - DELIVERY_RESERVE_SECONDS)
     deadline_result = {
         "status": "deadline_exceeded",
         "snapshot_status": "deadline_exceeded",
         "trade_date": config.trade_date,
         "exit_code": 1,
+        "failure_stage": "fallback_freeze",
+        "failure_type": "DeliveryReserveReached",
     }
     if budget <= 0:
         return deadline_result
@@ -319,6 +568,10 @@ def _freeze_fallback_before_cutoff(
                 pipeline_runner=pipeline_runner,
             )
     except PrecloseExecutionDeadline:
+        deadline_result["failure_type"] = "PrecloseExecutionDeadline"
+        return deadline_result
+    except Exception as exc:
+        deadline_result["failure_type"] = type(exc).__name__
         return deadline_result
 
 
@@ -409,31 +662,60 @@ def run_scheduled_preclose(
                skip_publish=skip_publish, notify=notify, now=now,
                monotonic=monotonic, started_at=started_at)
 
+        prepared_path, _prepared_snapshot = _prepare_deadline_fallback(
+            day_root,
+            trade_date=trade_date,
+            as_of=as_of,
+            source_sha=source_sha,
+            run_id=run_id,
+        )
+        failure_path = day_root / "failure.json"
+        evidence_path = day_root / "run-evidence.jsonl"
+        _append_jsonl(evidence_path, {
+            "schema_version": "preclose-run-evidence-v1",
+            "event": "started",
+            "trade_date": trade_date,
+            "run_id": run_id,
+            "source_sha": source_sha,
+            "recorded_at": as_of,
+            "status": "running",
+        })
+        phase_seconds = {}
+
         market_inputs = None
         acquisition_error = None
         acquisition_status = None
         compute_budget = max(
             0.001, initial_budget - DELIVERY_RESERVE_SECONDS
         )
+        acquisition_started = float(monotonic())
         try:
-            with _deadline_alarm(compute_budget, "input_acquisition"):
-                market_inputs = runtime_builder(
-                    trade_date,
-                    as_of,
-                    formal_market_db=formal_market_db,
-                )
-                frozen_input_path = write_preclose_input_snapshot(
-                    paths, market_inputs
-                )
-                market_inputs = json.loads(
-                    frozen_input_path.read_text(encoding="utf-8")
-                )
+            if initial_budget <= DELIVERY_RESERVE_SECONDS:
+                acquisition_status = "deadline_exceeded"
+                acquisition_error = "DeliveryReserveReached"
+            else:
+                with _deadline_alarm(compute_budget, "input_acquisition"):
+                    market_inputs = runtime_builder(
+                        trade_date,
+                        as_of,
+                        formal_market_db=formal_market_db,
+                    )
+                    frozen_input_path = write_preclose_input_snapshot(
+                        paths, market_inputs
+                    )
+                    market_inputs = json.loads(
+                        frozen_input_path.read_text(encoding="utf-8")
+                    )
         except PrecloseExecutionDeadline:
             acquisition_status = "deadline_exceeded"
             acquisition_error = "PrecloseExecutionDeadline"
         except Exception as exc:
             acquisition_status = "failed"
             acquisition_error = type(exc).__name__
+        finally:
+            phase_seconds["input_acquisition"] = round(max(
+                0.0, float(monotonic()) - acquisition_started
+            ), 6)
 
         generated = now()
         elapsed = max(0.0, float(monotonic()) - started_at)
@@ -492,6 +774,7 @@ def run_scheduled_preclose(
             )
             return lambda *_args, **_kwargs: frozen
 
+        pipeline_started = float(monotonic())
         if acquisition_status:
             if acquisition_status == "deadline_exceeded":
                 selected_runner = deadline_runner(
@@ -557,8 +840,24 @@ def run_scheduled_preclose(
                     monotonic=monotonic,
                     started_at=started_at,
                 )
+        phase_seconds["pipeline"] = round(max(
+            0.0, float(monotonic()) - pipeline_started
+        ), 6)
 
-        return _finalize_scheduled_result(
+        result = _promote_prepared_deadline_fallback(
+            result,
+            prepared_path=prepared_path,
+            snapshot_path=snapshot_path,
+            failure_path=failure_path,
+            source_sha=source_sha,
+            run_id=run_id,
+            started_at_iso=as_of,
+            now=now,
+            monotonic=monotonic,
+            monotonic_started=started_at,
+        )
+        delivery_started = float(monotonic())
+        final_result = _finalize_scheduled_result(
             result,
             root=root,
             trade_date=trade_date,
@@ -571,6 +870,40 @@ def run_scheduled_preclose(
             monotonic=monotonic,
             started_at=started_at,
         )
+        phase_seconds["delivery"] = round(max(
+            0.0, float(monotonic()) - delivery_started
+        ), 6)
+        timing_finished = now()
+        _durable_json(day_root / "timings.json", {
+            "schema_version": "preclose-run-timings-v1",
+            "trade_date": trade_date,
+            "run_id": run_id,
+            "source_sha": source_sha,
+            "started_at": as_of,
+            "finished_at": timing_finished.isoformat(timespec="seconds"),
+            "status": (
+                final_result.get("run_status")
+                or final_result.get("snapshot_status")
+                or final_result.get("status")
+            ),
+            "elapsed_seconds": round(max(
+                0.0, float(monotonic()) - started_at
+            ), 6),
+            "phase_seconds": phase_seconds,
+        })
+        _record_finished_run(
+            final_result,
+            evidence_path=evidence_path,
+            failure_path=failure_path,
+            prepared_path=prepared_path,
+            source_sha=source_sha,
+            run_id=run_id,
+            started_at_iso=as_of,
+            now=now,
+            monotonic=monotonic,
+            monotonic_started=started_at,
+        )
+        return final_result
     finally:
         lock.release()
 

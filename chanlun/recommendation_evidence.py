@@ -1141,7 +1141,18 @@ def _build_chart_evidence_metadata(row, raw, original_raw, price_evidence, repor
     return metadata
 
 
-def _build_display_derived(price_evidence, chart_evidence=None):
+_DISTANCE_RISK_LABELS = frozenset({
+    "距参考价偏高",
+    "距参考价过远",
+    "距参考位过远",
+})
+
+
+def _build_display_derived(
+    price_evidence,
+    chart_evidence=None,
+    risk_labels=None,
+):
     current = price_evidence.get("current_price")
     reference = price_evidence.get("reference_price")
     pressure = price_evidence.get("pressure_price")
@@ -1163,6 +1174,12 @@ def _build_display_derived(price_evidence, chart_evidence=None):
     risk_reward = None
     if upside is not None and downside is not None and downside > 0:
         risk_reward = _percent(upside / downside)
+    declared_risk_labels = _declared_texts(risk_labels)
+    distance_state = (
+        "偏离"
+        if any(label in _DISTANCE_RISK_LABELS for label in declared_risk_labels)
+        else None
+    )
 
     values = (distance, upside, downside, risk_reward)
     status = "available" if all(value is not None for value in values) else (
@@ -1172,6 +1189,10 @@ def _build_display_derived(price_evidence, chart_evidence=None):
         "status": status,
         "source": "display calculation from price_evidence",
         "distance_from_reference_pct": distance,
+        "distance_state": distance_state,
+        "distance_state_source": (
+            "risk_and_next.risk_labels" if distance_state else None
+        ),
         "upside_to_pressure_pct": upside,
         "downside_to_invalidation_pct": downside,
         "risk_reward_ratio": risk_reward,
@@ -2006,6 +2027,280 @@ def _strict_date_value(value):
     return prefix if parsed.date().isoformat() == prefix else None
 
 
+def _verified_numeric_series(source, field, expected_length, positive=False):
+    values = _field(source, field, None)
+    if isinstance(values, (str, bytes)):
+        return None
+    try:
+        if len(values) != expected_length:
+            return None
+    except (TypeError, ValueError):
+        return None
+    projected = []
+    for value in values:
+        number = _finite_number(value)
+        if number is None or (positive and number <= 0):
+            return None
+        projected.append(number)
+    return projected
+
+
+def _verified_numeric_suffix(
+    source,
+    field,
+    expected_length,
+    minimum_length,
+    positive=False,
+):
+    values = _field(source, field, None)
+    if isinstance(values, (str, bytes)):
+        return None
+    try:
+        if len(values) != expected_length:
+            return None
+    except (TypeError, ValueError):
+        return None
+    suffix = []
+    for value in reversed(values):
+        number = _finite_number(value)
+        if number is None or (positive and number <= 0):
+            break
+        suffix.append(number)
+    if len(suffix) < minimum_length:
+        return None
+    suffix.reverse()
+    return suffix
+
+
+def _series_direction(values):
+    if not values or len(values) < 2:
+        return None
+    previous = float(values[-2])
+    current = float(values[-1])
+    tolerance = max(1.0, abs(previous), abs(current)) * 1e-9
+    if current > previous + tolerance:
+        return "上行"
+    if current < previous - tolerance:
+        return "下行"
+    return "走平"
+
+
+def _macd_hist_direction(values):
+    if not values or len(values) < 3:
+        return None
+    recent = [float(value) for value in values[-3:]]
+    tolerance = max(1.0, *(abs(value) for value in recent)) * 1e-6
+    if (
+        recent[-1] > recent[-2] + tolerance
+        and recent[-2] >= recent[-3] - tolerance
+    ):
+        return "improving"
+    if (
+        recent[-1] < recent[-2] - tolerance
+        and recent[-2] <= recent[-3] + tolerance
+    ):
+        return "weakening"
+    return "mixed"
+
+
+def _count_rising_tail(values):
+    count = 0
+    for index in range(len(values) - 1, 0, -1):
+        if values[index] <= values[index - 1]:
+            break
+        count += 1
+    return count
+
+
+_AUDITED_30M_UPGRADE_TYPES = frozenset({
+    "二买候选",
+    "盘整低吸候选",
+    "中枢低吸候选",
+    "三买候选",
+    "底背驰候选",
+})
+_AUDITED_30M_BUY_SIGNAL_TYPES = frozenset({
+    "一买",
+    "二买",
+    "三买",
+    "二买候选",
+    "盘整低吸候选",
+    "中枢低吸候选",
+    "三买候选",
+    "底背驰候选",
+    "强势启动候选",
+})
+_AUDITED_30M_CLASSIFIER_SIGNALS = frozenset({
+    "30min底背驰",
+    "30min底分型",
+    "关键位不破",
+    "EMA5收复",
+    "止跌结构",
+})
+
+
+def _is_audited_30m_classifier_signal(value):
+    if value in _AUDITED_30M_CLASSIFIER_SIGNALS:
+        return True
+    if not value.startswith("30min"):
+        return False
+    return value[len("30min"):] in _AUDITED_30M_BUY_SIGNAL_TYPES
+
+
+def _audited_30m_classification_signals(source, point):
+    """Read classifier signals only from the explicit upgraded-candidate trail."""
+    point = _as_mapping(point)
+    point_type = _as_text(point.get("type"))
+    point_tier = _as_text(point.get("tier"))
+    point_strength = _as_text(point.get("strength"))
+    point_confirmed_by = _as_text(point.get("confirmed_by"))
+    point_signals = _declared_texts(point.get("confirmations"))
+    if (
+        point_type not in _AUDITED_30M_UPGRADE_TYPES
+        or point_tier != "candidate"
+        or _as_text(_field(source, "signal_tier", None)) != "candidate"
+        or point_strength not in {"强", "中"}
+        or not point_confirmed_by
+        or not point_signals
+        or any(
+            not _is_audited_30m_classifier_signal(signal)
+            for signal in point_signals
+        )
+    ):
+        return []
+
+    upgraded_candidates = _field(source, "upgraded_candidates", None)
+    if not isinstance(upgraded_candidates, (list, tuple)):
+        return []
+    for candidate in upgraded_candidates:
+        candidate = _as_mapping(candidate)
+        if (
+            _as_text(candidate.get("type")) == point_type
+            and _as_text(candidate.get("tier")) == point_tier
+            and _as_text(candidate.get("strength")) == point_strength
+            and _as_text(candidate.get("confirmed_by")) == point_confirmed_by
+            and _declared_texts(candidate.get("confirmations")) == point_signals
+        ):
+            return point_signals
+    return []
+
+
+def _serialize_verified_30m_scalar_evidence(source):
+    """Serialize only verified final 30m scalars for the HTML evidence plane."""
+    result = _field(source, "result_30min", None)
+    if result is None:
+        return {}
+    direct_input = _field(source, "strategy_input_evidence", None)
+    if isinstance(direct_input, Mapping) and direct_input:
+        input_evidence = direct_input
+    else:
+        input_evidence = _field(result, "strategy_input_evidence", None)
+    input_evidence = _as_mapping(input_evidence)
+
+    interval = _normalize_30m_interval(input_evidence.get("interval"))
+    status = _as_text(input_evidence.get("status")).lower()
+    source_name = _as_text(input_evidence.get("source"))
+    latest_date = _strict_date_value(input_evidence.get("latest_date"))
+    latest_ts = _as_text(input_evidence.get("latest_ts"))
+    bars = _positive_integer(input_evidence.get("bars"))
+    if (
+        interval != "30m"
+        or status != "verified"
+        or not source_name
+        or latest_date is None
+        or _strict_date_value(latest_ts) != latest_date
+        or bars is None
+        or input_evidence.get("stale") is not False
+        or input_evidence.get("is_final") is not True
+    ):
+        return {}
+
+    dates = _field(result, "dates", None)
+    if isinstance(dates, (str, bytes)):
+        return {}
+    try:
+        if len(dates) != bars:
+            return {}
+        result_latest_ts = str(dates[-1]).strip()
+    except (IndexError, TypeError, ValueError):
+        return {}
+    if result_latest_ts != latest_ts or _strict_date_value(result_latest_ts) != latest_date:
+        return {}
+
+    closes = _verified_numeric_series(result, "closes", bars, positive=True)
+    if closes is None or len(closes) < 5:
+        return {}
+    try:
+        from chanlun.chan_engine import ema
+
+        ema5_values = _verified_numeric_suffix(
+            {"values": ema(closes, 5)},
+            "values",
+            bars,
+            2,
+            positive=True,
+        )
+        ema10_values = _verified_numeric_suffix(
+            {"values": ema(closes, 10)},
+            "values",
+            bars,
+            2,
+            positive=True,
+        )
+    except (ArithmeticError, TypeError, ValueError):
+        return {}
+    if ema5_values is None or ema10_values is None:
+        return {}
+
+    dif_values = _verified_numeric_suffix(result, "macd_dif", bars, 1)
+    dea_values = _verified_numeric_suffix(result, "macd_dea", bars, 1)
+    hist_values = _verified_numeric_suffix(result, "macd_hist", bars, 3)
+    point = _as_mapping(_field(source, "best_buy_point", None))
+    classification_signals = _audited_30m_classification_signals(source, point)
+    classification_confirmed = bool(classification_signals)
+
+    scalar_fields = {
+        "ema5": ema5_values[-1],
+        "ema10": ema10_values[-1],
+        "close": closes[-1],
+        "ema5_direction": _series_direction(ema5_values),
+        "ema10_direction": _series_direction(ema10_values),
+        "ema_bullish_alignment": ema5_values[-1] > ema10_values[-1],
+        "close_above_ema5": closes[-1] > ema5_values[-1],
+        "close_above_ema10": closes[-1] > ema10_values[-1],
+        "ema5_rising_bars": _count_rising_tail(ema5_values),
+        "macd_dif": dif_values[-1] if dif_values else None,
+        "macd_dea": dea_values[-1] if dea_values else None,
+        "macd_hist_direction": _macd_hist_direction(hist_values),
+    }
+    input_projection = {
+        "schema_version": 1,
+        "interval": "30m",
+        "status": "verified",
+        "source": source_name,
+        "latest_date": latest_date,
+        "latest_ts": latest_ts,
+        "as_of": latest_ts,
+        "bars": bars,
+        "stale": False,
+        "is_final": True,
+        **scalar_fields,
+    }
+    confirmation_projection = {
+        "schema_version": 1,
+        "sufficient_bars": True,
+        "as_of": latest_ts,
+        "date": latest_date,
+        "classification_signals": classification_signals,
+        "classification_confirmed": classification_confirmed,
+        **scalar_fields,
+    }
+    return {
+        "input": input_projection,
+        "confirmation": confirmation_projection,
+    }
+
+
 def _validate_30m_freshness_dates(input_evidence, report_date):
     """Validate every declared 30m date and align it to the report date."""
     input_evidence = _as_mapping(input_evidence)
@@ -2044,6 +2339,7 @@ _30M_CONFIRMATION_EVIDENCE_FIELDS = (
     "macd_dif", "dif", "macd_dea", "dea", "ema5_direction",
     "ema10_direction", "breakout_holds", "key_level_holds",
     "pullback_volume_state", "volume_state", "source", "as_of", "date",
+    "classification_signals", "classification_confirmed",
 )
 
 
@@ -2074,7 +2370,12 @@ def _merge_evidence_mappings(candidates, fields):
     return merged, list(dict.fromkeys(conflicts))
 
 
-def _find_30m_input_evidence(raw, original_raw, buy_point_sources):
+def _find_30m_input_evidence(
+    raw,
+    original_raw,
+    buy_point_sources,
+    serialized_scalar_evidence=(),
+):
     candidates = []
     for source in (raw, original_raw):
         candidates.append(_field(source, "strategy_input_evidence", None))
@@ -2085,14 +2386,29 @@ def _find_30m_input_evidence(raw, original_raw, buy_point_sources):
         source.get("strategy_input_evidence")
         for source in buy_point_sources
     )
+    candidates.extend(
+        evidence.get("input")
+        for evidence in serialized_scalar_evidence
+        if isinstance(evidence, Mapping)
+    )
     return _merge_evidence_mappings(candidates, _30M_INPUT_EVIDENCE_FIELDS)
 
 
-def _find_confirmation_evidence(raw, original_raw, buy_point_sources):
+def _find_confirmation_evidence(
+    raw,
+    original_raw,
+    buy_point_sources,
+    serialized_scalar_evidence=(),
+):
     candidates = [
         _field(source, "confirmation_evidence", None)
         for source in tuple(buy_point_sources) + (raw, original_raw)
     ]
+    candidates.extend(
+        evidence.get("confirmation")
+        for evidence in serialized_scalar_evidence
+        if isinstance(evidence, Mapping)
+    )
     return _merge_evidence_mappings(
         candidates,
         _30M_CONFIRMATION_EVIDENCE_FIELDS,
@@ -2114,15 +2430,25 @@ def _latest_30m_buy_point_type(raw, original_raw):
 def _project_sublevel_30m(row, raw, original_raw, report_date):
     """Project fresh 30m confirmation facts, never the minute arrays."""
     buy_point_sources = _best_buy_point_sources(raw, original_raw, row)
+    serialized_scalar_evidence = tuple(
+        evidence
+        for evidence in (
+            _serialize_verified_30m_scalar_evidence(raw),
+            _serialize_verified_30m_scalar_evidence(original_raw),
+        )
+        if evidence
+    )
     input_evidence, input_source_conflicts = _find_30m_input_evidence(
         raw,
         original_raw,
         buy_point_sources,
+        serialized_scalar_evidence,
     )
     confirmation, confirmation_source_conflicts = _find_confirmation_evidence(
         raw,
         original_raw,
         buy_point_sources,
+        serialized_scalar_evidence,
     )
     schema_version = _finite_number(confirmation.get("schema_version"))
     confirmation_schema_status = (
@@ -2263,10 +2589,25 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         else None
     )
     fresh_yang_pattern = _as_text(confirmation.get("fresh_yang_pattern")) or None
-    confirmations = _declared_text_list(
+    declared_confirmations = _declared_text_list(
         tuple(buy_point_sources) + (raw, original_raw),
         ("confirmations",),
     )
+    classification_signals = _declared_text_list(
+        (confirmation,),
+        ("classification_signals",),
+    )
+    classification_confirmed = _declared_bool(
+        (confirmation,),
+        ("classification_confirmed",),
+    )
+    if (
+        classification_signals
+        and declared_confirmations
+        and classification_signals != declared_confirmations
+    ):
+        confirmation_conflicts.append("classification_signals")
+    confirmations = classification_signals or declared_confirmations
     confirmed_by = _as_text(
         _declared_value(
             tuple(buy_point_sources) + (raw, original_raw),
@@ -2297,6 +2638,10 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
             ("confirm_date",),
         )
     ) or None
+    if confirm_date is None:
+        confirm_date = _as_text(
+            confirmation.get("date") or confirmation.get("as_of")
+        ) or None
     confirm_age_days = _declared_number(
         tuple(buy_point_sources) + (raw, original_raw),
         ("confirm_age_days",),
@@ -2345,9 +2690,13 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
     confirmation_conflicts = list(dict.fromkeys(confirmation_conflicts))
     bar_count = _nonnegative_count(input_evidence.get("bars"))
 
+    classification_signal_declared = bool(
+        classification_confirmed is True and classification_signals
+    )
     independent_signal_declared = bool(
         decision_buy_point
         or fresh_yang_pattern in {"two_yang_one_yin", "two_yang_two_yin"}
+        or classification_signal_declared
     )
     independent_signal = bool(
         independent_signal_declared
@@ -2416,6 +2765,8 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
     if confirmation_status != "confirmed":
         confirmations = []
         confirmed_by = None
+        classification_signals = []
+        classification_confirmed = False
         grade = None
         label = None
         confirm_date = None
@@ -2476,6 +2827,8 @@ def _project_sublevel_30m(row, raw, original_raw, report_date):
         "confirm_age_days": confirm_age_days,
         "confirmations": confirmations,
         "confirmed_by": confirmed_by,
+        "classification_signals": classification_signals,
+        "classification_confirmed": classification_confirmed,
         "ema_alignment": (
             "EMA5 > EMA10" if ema_alignment is True
             else ("EMA5 <= EMA10" if ema_alignment is False else None)
@@ -2715,6 +3068,44 @@ def _verified_volume_summary(raw, original_raw, report_date):
     }
 
 
+def _verified_current_amount(raw, original_raw, report_date):
+    """Read only the final date-aligned daily amount series; never quote f6."""
+    for source_plane, source in (
+        ("formal_report", original_raw),
+        ("serialized", raw),
+    ):
+        if not isinstance(source, Mapping):
+            continue
+        if not _verified_daily_source(source, report_date):
+            continue
+        values = source.get("amounts")
+        if not _dated_series_is_current(source, values, report_date):
+            continue
+        latest = _positive_tail(values, 1)
+        if latest is None:
+            continue
+        data_status = _as_mapping(source.get("data_status"))
+        return {
+            "status": "available",
+            "source": "daily_kline.amounts",
+            "source_label": "日K成交额序列",
+            "source_plane": source_plane,
+            "provider": _as_text(data_status.get("source")) or None,
+            "as_of": _date_prefix(data_status.get("latest_date")),
+            "current": latest[0],
+        }
+    return {
+        "status": "missing",
+        "source": None,
+        "source_label": None,
+        "source_plane": None,
+        "provider": None,
+        "as_of": report_date,
+        "current": None,
+        "reason": "verified_final_daily_amount_series_not_provided",
+    }
+
+
 def _explicit_volume_ratio(row, raw, original_raw, report_date):
     for source_name, source in (
         ("formal_report", original_raw),
@@ -2889,6 +3280,11 @@ def _stock_capital_flow(raw, original_raw, report_date):
 
 def _build_volume_and_capital(row, raw, original_raw, report_date):
     volume = _verified_volume_summary(raw, original_raw, report_date)
+    current_amount = _verified_current_amount(
+        raw,
+        original_raw,
+        report_date,
+    )
     ratio, ratio_source, ratio_plane = _explicit_volume_ratio(
         row,
         raw,
@@ -2936,6 +3332,8 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
     parts = []
     if volume["status"] != "missing":
         parts.append("量能可验证")
+    if current_amount["status"] == "available":
+        parts.append("当日成交额可验证")
     if turnover["status"] == "available":
         parts.append("20日平均成交额仅表示流动性")
     parts.append(
@@ -2946,6 +3344,7 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
         parts.append("板块资金单独展示")
     has_evidence = (
         volume["status"] != "missing"
+        or current_amount["status"] == "available"
         or ratio is not None
         or turnover["status"] == "available"
         or stock_flow["status"] == "available"
@@ -2958,6 +3357,14 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
         "summary": "；".join(parts),
         "volume": volume,
         "current_volume": volume.get("current"),
+        "current_amount": current_amount.get("current"),
+        "current_amount_text": _format_cn_amount(current_amount.get("current")),
+        "current_amount_status": current_amount.get("status"),
+        "current_amount_as_of": current_amount.get("as_of"),
+        "current_amount_source": current_amount.get("source"),
+        "current_amount_source_label": current_amount.get("source_label"),
+        "current_amount_source_plane": current_amount.get("source_plane"),
+        "current_amount_provider": current_amount.get("provider"),
         "average_volume_5": volume.get("average_5"),
         "volume20": volume.get("average_20"),
         "volume_ratio": ratio,
@@ -2993,6 +3400,7 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
         "missing_evidence": [
             label for label, value in (
                 ("换手率未提供", turnover_rate),
+                ("当日成交额未提供", current_amount.get("current")),
                 ("量价标签未提供", volume_labels),
                 ("个股大单净流入未提供", stock_net_flow),
                 ("个股连续净流入天数未提供", stock_net_inflow_days),
@@ -3697,6 +4105,78 @@ def _candidate_ledger_contract(daily_data, row, pool_name, report_date):
     return matches, None
 
 
+def _historical_candidate_ledger_contract(
+    daily_data,
+    row,
+    pool_name,
+    report_date,
+    comparison_identity,
+):
+    """Return the latest earlier immutable row for the exact stock/contract."""
+    code = _as_text(row.get("code"))
+    expected_strategy = _POOL_STRATEGY_IDENTITIES.get(pool_name)
+    expected_date = _strict_date_value(report_date)
+    ledger = daily_data.get("recommendation_ledger")
+    if (
+        not code
+        or not expected_strategy
+        or expected_date is None
+        or not isinstance(comparison_identity, Mapping)
+        or not isinstance(ledger, list)
+    ):
+        return [], "same_contract_historical_record_not_found"
+
+    matches = []
+    for entry in ledger:
+        entry = _as_mapping(entry)
+        entry_date = _strict_date_value(entry.get("report_date"))
+        if entry_date is None or entry_date >= expected_date:
+            continue
+        if _as_text(entry.get("code")) != code:
+            continue
+        contributions = entry.get("strategy_contributions")
+        if not isinstance(contributions, list):
+            continue
+        for contribution in contributions:
+            contribution = _as_mapping(contribution)
+            if (
+                contribution.get("evaluation_eligible") is not True
+                or contribution.get("cohort_eligible") is not True
+                or _as_text(contribution.get("attribution_status"))
+                != "verified"
+                or _as_text(contribution.get("decision_code"))
+                != "recommend"
+                or _as_text(contribution.get("user_action"))
+                != "recommendation"
+                or _as_text(contribution.get("publication_surface"))
+                != "formal_recommendation"
+                or _as_text(contribution.get("evaluation_role")) != "formal"
+                or _as_text(contribution.get("strategy_name"))
+                != expected_strategy
+                or _as_text(contribution.get("source_pool")) != pool_name
+            ):
+                continue
+            identity = _contribution_identity(contribution)
+            if identity != dict(comparison_identity):
+                continue
+            matches.append({
+                "entry": entry,
+                "contribution": contribution,
+                "identity": identity,
+                "report_date": entry_date,
+            })
+
+    if not matches:
+        return [], "same_contract_historical_record_not_found"
+    latest_date = max(match["report_date"] for match in matches)
+    latest = [
+        match for match in matches if match["report_date"] == latest_date
+    ]
+    if len(latest) != 1:
+        return latest, "same_contract_historical_record_ambiguous"
+    return latest, None
+
+
 def _scorecard_rows(scorecards):
     if not isinstance(scorecards, Mapping):
         return []
@@ -3898,6 +4378,13 @@ def _simulation_tracking(contract_match):
         "label": "策略模拟跟踪",
         "signal_date": _as_text(entry.get("report_date")) or None,
         "entry_mode": entry_mode,
+        "intended_horizon": identity.get("intended_horizon"),
+        "publication_status": (
+            _as_text(contribution.get("publication_status")) or None
+        ),
+        "decision_code": (
+            _as_text(contribution.get("decision_code")) or None
+        ),
         "entry_price": None,
         "entry_price_source": None,
     }
@@ -3996,6 +4483,22 @@ def _build_historical_validation(
 
     contract_match = matches[0]
     identity = contract_match["identity"]
+    historical_matches, historical_reason = (
+        _historical_candidate_ledger_contract(
+            daily_data,
+            row,
+            pool_name,
+            report_date,
+            identity,
+        )
+    )
+    historical_tracking = _simulation_tracking(
+        historical_matches[0]
+        if len(historical_matches) == 1 and not historical_reason
+        else None
+    )
+    if historical_reason:
+        historical_tracking["reason"] = historical_reason
     card_matches = [
         (section, card) for section, card in _scorecard_rows(
             daily_data.get("strategy_scorecards")
@@ -4027,7 +4530,7 @@ def _build_historical_validation(
             "declared_horizon": identity["intended_horizon"],
             "progress_by_horizon": empty_progress,
             "metrics_by_horizon": empty_metrics,
-            "simulation_tracking": _simulation_tracking(contract_match),
+            "simulation_tracking": historical_tracking,
             "reason": (
                 "same_contract_scorecard_ambiguous"
                 if len(cards) > 1
@@ -4082,7 +4585,7 @@ def _build_historical_validation(
         "declared_horizon": identity["intended_horizon"],
         "progress_by_horizon": progress,
         "metrics_by_horizon": metrics,
-        "simulation_tracking": _simulation_tracking(contract_match),
+        "simulation_tracking": historical_tracking,
     }
     section["summary"] = _historical_summary(
         status,
@@ -4386,6 +4889,13 @@ def _build_candidate_projection(
         original_raw,
         report_date,
     )
+    risk_and_next = _build_risk_and_next(
+        row,
+        raw,
+        original_raw,
+        price_evidence,
+        report_date,
+    )
     candidate = {
         "view": view_name,
         "code": _as_text(row.get("code")),
@@ -4426,13 +4936,7 @@ def _build_candidate_projection(
             sublevel_30m,
             daily_structure,
         ),
-        "risk_and_next": _build_risk_and_next(
-            row,
-            raw,
-            original_raw,
-            price_evidence,
-            report_date,
-        ),
+        "risk_and_next": risk_and_next,
         "historical_validation": _build_historical_validation(
             daily_data,
             row,
@@ -4442,6 +4946,7 @@ def _build_candidate_projection(
         "display_derived": _build_display_derived(
             price_evidence,
             chart_evidence=chart_evidence,
+            risk_labels=risk_and_next.get("risk_labels"),
         ),
         "source_identity": {
             "status": "conflict" if source_identity_diagnostic else "available",

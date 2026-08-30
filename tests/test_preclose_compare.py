@@ -1,8 +1,10 @@
 import hashlib
 import json
 import tempfile
+import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from chanlun.preclose_compare import (
     build_reconciliation,
@@ -299,6 +301,178 @@ class PrecloseCompareTests(unittest.TestCase):
             self.assertFalse((day_root / "reconcile.lock").exists())
             self.assertTrue((day_root / "reconciliation.json").is_file())
             self.assertTrue((day_root / "reconciliation-delivery.json").is_file())
+
+    def test_reconcile_run_hard_deadline_interrupts_validator_before_publish(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            (docs / "data").mkdir(parents=True)
+            (docs / "data" / (TRADE_DATE + ".json")).write_text(
+                json.dumps(_formal_report(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            cache = base / "preclose"
+            day_root = cache / TRADE_DATE
+            day_root.mkdir(parents=True)
+            (day_root / "snapshot.json").write_text(
+                json.dumps(_preclose_snapshot(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.example\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+            published = []
+
+            def blocked_validator(*_args):
+                time.sleep(0.20)
+                return True
+
+            started = time.monotonic()
+            result = run_reconciliation_once(
+                TRADE_DATE,
+                root=cache,
+                docs_dir=docs,
+                env_file=env_file,
+                validator=blocked_validator,
+                publisher=lambda *_args, **_kwargs: published.append(True),
+                deadline_seconds=0.05,
+            )
+            elapsed = time.monotonic() - started
+
+            self.assertLess(elapsed, 0.18)
+            self.assertEqual(result["status"], "formal_pending_timeout")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(published, [])
+            self.assertFalse((day_root / "reconcile.lock").exists())
+            self.assertFalse((day_root / "reconciliation.json").exists())
+            failure = json.loads(
+                (day_root / "reconciliation-failure.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(failure["status"], "formal_pending_timeout")
+            self.assertEqual(failure["stage"], "formal_validation")
+            self.assertEqual(failure["error_type"], "ReconciliationDeadline")
+
+    def test_reconcile_round_passes_decreasing_budget_to_validator_and_publisher(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            (docs / "data").mkdir(parents=True)
+            (docs / "data" / (TRADE_DATE + ".json")).write_text(
+                json.dumps(_formal_report(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            cache = base / "preclose"
+            day_root = cache / TRADE_DATE
+            day_root.mkdir(parents=True)
+            (day_root / "snapshot.json").write_text(
+                json.dumps(_preclose_snapshot(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.example\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+            clock = [100.0]
+            validator_budgets = []
+            publisher_budgets = []
+
+            def monotonic():
+                return clock[0]
+
+            def validator(_trade_date, _docs_dir, timeout=180):
+                validator_budgets.append(timeout)
+                clock[0] += 0.20
+                return True
+
+            def publisher(_reconciliation, **kwargs):
+                publisher_budgets.append(kwargs.get("timeout"))
+                return {"publish": {"success": True}, "notifications": {}}
+
+            with patch(
+                "scripts.preclose_reconcile.run_report_validator",
+                side_effect=validator,
+            ):
+                result = run_reconciliation_once(
+                    TRADE_DATE,
+                    root=cache,
+                    docs_dir=docs,
+                    env_file=env_file,
+                    publisher=publisher,
+                    deadline_seconds=0.50,
+                    monotonic=monotonic,
+                )
+
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(len(validator_budgets), 1)
+        self.assertGreater(validator_budgets[0], 0)
+        self.assertLessEqual(validator_budgets[0], 0.50)
+        self.assertEqual(len(publisher_budgets), 1)
+        self.assertGreater(publisher_budgets[0], 0)
+        self.assertLess(publisher_budgets[0], validator_budgets[0])
+
+    def test_reconcile_publisher_error_records_failure_and_releases_lock(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            (docs / "data").mkdir(parents=True)
+            (docs / "data" / (TRADE_DATE + ".json")).write_text(
+                json.dumps(_formal_report(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            cache = base / "preclose"
+            day_root = cache / TRADE_DATE
+            day_root.mkdir(parents=True)
+            (day_root / "snapshot.json").write_text(
+                json.dumps(_preclose_snapshot(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.example\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+
+            def failed_publisher(*_args, **_kwargs):
+                raise RuntimeError("fixture provider failure")
+
+            result = run_reconciliation_once(
+                TRADE_DATE,
+                root=cache,
+                docs_dir=docs,
+                env_file=env_file,
+                validator=lambda *_args: True,
+                publisher=failed_publisher,
+                deadline_seconds=1.0,
+            )
+            failure = json.loads(
+                (day_root / "reconciliation-failure.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+
+        self.assertEqual(result["status"], "reconciliation_failed")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["error_type"], "RuntimeError")
+        self.assertEqual(failure["stage"], "publisher")
+        self.assertEqual(failure["error_type"], "RuntimeError")
+        self.assertFalse((day_root / "reconcile.lock").exists())
 
 
 if __name__ == "__main__":

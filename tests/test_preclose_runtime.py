@@ -216,13 +216,25 @@ class PrecloseRuntimeTests(unittest.TestCase):
             )
             input_path = base / "preclose" / TRADE_DATE / "input.json"
             snapshot_path = base / "preclose" / TRADE_DATE / "snapshot.json"
+            timings_path = base / "preclose" / TRADE_DATE / "timings.json"
             self.assertTrue(input_path.is_file())
             self.assertTrue(snapshot_path.is_file())
+            timings = json.loads(timings_path.read_text(encoding="utf-8"))
             self.assertEqual(hashlib.sha256(db.read_bytes()).hexdigest(), hashlib.sha256(b"formal-sentinel").hexdigest())
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(configs), 1)
-        self.assertLessEqual(configs[0].deadline_seconds, 118.0)
+        self.assertLessEqual(configs[0].deadline_seconds, 82.0)
+        self.assertEqual(
+            set(timings["phase_seconds"]),
+            {"input_acquisition", "pipeline", "delivery"},
+        )
+        self.assertTrue(
+            all(value >= 0 for value in timings["phase_seconds"].values())
+        )
+        self.assertEqual(timings["run_id"], configs[0].run_id)
+        self.assertEqual(timings["source_sha"], "release-sha")
+        self.assertEqual(timings["status"], "empty")
 
     def test_scheduled_entry_skips_non_trading_day_before_acquisition(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -244,6 +256,60 @@ class PrecloseRuntimeTests(unittest.TestCase):
             )
         self.assertEqual(result["status"], "skipped_non_trading_day")
         self.assertEqual(calls, [])
+
+    def test_scheduled_late_start_skips_acquisition_when_reserve_exhausts_window(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 48, 40, tzinfo=cn_timezone)
+        acquisition_calls = []
+        pipeline_calls = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+
+            def runtime_builder(*_args, **_kwargs):
+                acquisition_calls.append(True)
+                return {
+                    "schema_version": "preclose-input-v1",
+                    "mode": "preclose_advisory",
+                    "trade_date": TRADE_DATE,
+                    "as_of": fixed_now.isoformat(timespec="seconds"),
+                    "bar_state": "intraday",
+                    "is_final": False,
+                    "daily": [],
+                    "target_codes": [],
+                    "min30": {},
+                    "market": {},
+                }
+
+            def pipeline_runner(*_args, **_kwargs):
+                pipeline_calls.append(True)
+                raise AssertionError("late start must not enter the pipeline")
+
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=runtime_builder,
+                pipeline_runner=pipeline_runner,
+                skip_publish=True,
+            )
+            day_root = base / "preclose" / TRADE_DATE
+            snapshot = json.loads(
+                (day_root / "snapshot.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(acquisition_calls, [])
+        self.assertEqual(pipeline_calls, [])
+        self.assertEqual(result["status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(snapshot["status"], "deadline_exceeded")
 
     def test_scheduled_lock_covers_acquisition_and_preserves_existing_input(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -323,12 +389,21 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 pipeline_runner=pipeline_runner,
                 skip_publish=True,
             )
+            day_root = base / "preclose" / TRADE_DATE
+            snapshot = json.loads(
+                (day_root / "snapshot.json").read_text(encoding="utf-8")
+            )
+            failure = json.loads(
+                (day_root / "failure.json").read_text(encoding="utf-8")
+            )
 
         self.assertEqual(pipeline_calls, [])
         self.assertEqual(result["status"], "deadline_exceeded")
         self.assertEqual(result["snapshot_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertNotIn("snapshot_path", result)
+        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(failure["error_type"], "DeliveryReserveReached")
+        self.assertEqual(result["snapshot_id"], snapshot["snapshot_id"])
 
     def test_scheduled_wall_alarm_interrupts_one_stuck_pipeline_stage(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -419,15 +494,91 @@ class PrecloseRuntimeTests(unittest.TestCase):
                     runtime_builder=lambda *_args, **_kwargs: market_inputs,
                     publisher=lambda *_args, **_kwargs: publisher_calls.append(True),
                     notify=False,
+                    skip_publish=True,
                 )
             elapsed = time.monotonic() - started
+
+            snapshot_path = base / "preclose" / TRADE_DATE / "snapshot.json"
+            failure_path = base / "preclose" / TRADE_DATE / "failure.json"
+            evidence_path = base / "preclose" / TRADE_DATE / "run-evidence.jsonl"
+            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            failure = json.loads(failure_path.read_text(encoding="utf-8"))
+            evidence = [
+                json.loads(line)
+                for line in evidence_path.read_text(encoding="utf-8").splitlines()
+            ]
 
         self.assertLess(elapsed, 0.18)
         self.assertEqual(result["status"], "deadline_exceeded")
         self.assertEqual(result["snapshot_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertNotIn("snapshot_path", result)
+        self.assertEqual(
+            Path(result["snapshot_path"]).resolve(), snapshot_path.resolve()
+        )
+        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(snapshot["source_sha"], "release-sha")
+        self.assertEqual(failure["status"], "deadline_exceeded")
+        self.assertEqual(failure["source_sha"], "release-sha")
+        self.assertEqual(failure["run_id"], snapshot["run_id"])
+        self.assertEqual(failure["snapshot_id"], snapshot["snapshot_id"])
+        self.assertEqual(
+            [row["event"] for row in evidence],
+            ["started", "finished"],
+        )
+        self.assertEqual(evidence[-1]["status"], "deadline_exceeded")
+        self.assertIn("elapsed_seconds", evidence[-1])
         self.assertEqual(publisher_calls, [])
+
+    def test_scheduled_fallback_write_error_promotes_prepared_empty_evidence(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        near_cutoff = datetime(
+            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+        )
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": near_cutoff.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            with patch("preclose_run.DELIVERY_RESERVE_SECONDS", 0.0), patch(
+                "preclose_run._atomic_json",
+                side_effect=OSError("fixture write failure"),
+            ):
+                result = run_scheduled_preclose(
+                    root=base / "preclose",
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: near_cutoff,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                    notify=False,
+                    skip_publish=True,
+                )
+            day_root = base / "preclose" / TRADE_DATE
+            snapshot = json.loads(
+                (day_root / "snapshot.json").read_text(encoding="utf-8")
+            )
+            failure = json.loads(
+                (day_root / "failure.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(failure["stage"], "fallback_freeze")
+        self.assertEqual(failure["error_type"], "OSError")
 
     def test_scheduled_delivery_budget_is_bounded_by_monotonic_total(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -513,15 +664,106 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 skip_publish=True,
             )
             snapshot_path = base / "preclose" / TRADE_DATE / "snapshot.json"
+            failure_path = base / "preclose" / TRADE_DATE / "failure.json"
+            prepared_path = (
+                base / "preclose" / TRADE_DATE / "prepared-deadline.json"
+            )
             lock_path = base / "preclose" / TRADE_DATE / "run.lock"
 
             self.assertTrue(snapshot_path.is_file())
+            self.assertTrue(failure_path.is_file())
+            self.assertFalse(prepared_path.exists())
             self.assertFalse(lock_path.exists())
             snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            failure = json.loads(failure_path.read_text(encoding="utf-8"))
 
         self.assertEqual(result["snapshot_status"], "failed")
         self.assertEqual(result["exit_code"], 1)
         self.assertEqual(snapshot["diagnostics"]["failure"]["type"], "ValueError")
+        self.assertEqual(failure["stage"], "pipeline")
+        self.assertEqual(failure["error_type"], "ValueError")
+
+    def test_delivery_evidence_write_error_still_records_terminal_run_evidence(self):
+        import preclose_run as runtime_module
+
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+
+        def pipeline_runner(_inputs, config, components=None):
+            del components
+            return build_preclose_snapshot(
+                trade_date=config.trade_date,
+                as_of=config.as_of,
+                generated_at=config.generated_at,
+                pools={"main": [], "h4_t3": [], "acceleration": []},
+                source_sha=config.source_sha,
+                run_id=config.run_id,
+            )
+
+        durable_json = runtime_module._durable_json
+
+        def selective_evidence_failure(path, payload):
+            if Path(path).name == "delivery.json":
+                raise OSError("fixture delivery evidence failure")
+            return durable_json(path, payload)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            with patch(
+                "preclose_run._durable_json",
+                side_effect=selective_evidence_failure,
+            ):
+                result = run_scheduled_preclose(
+                    root=base / "preclose",
+                    formal_market_db=db,
+                    env_file=base / "missing.env",
+                    source_sha="release-sha",
+                    now=lambda: fixed_now,
+                    monotonic=lambda: 10.0,
+                    trading_day_check=lambda *_args: True,
+                    runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                    pipeline_runner=pipeline_runner,
+                    publisher=lambda *_args, **_kwargs: {
+                        "publish": {"success": True},
+                        "notifications": {},
+                    },
+                    notify=False,
+                )
+            day_root = base / "preclose" / TRADE_DATE
+            timings = json.loads(
+                (day_root / "timings.json").read_text(encoding="utf-8")
+            )
+            failure = json.loads(
+                (day_root / "failure.json").read_text(encoding="utf-8")
+            )
+            evidence = [
+                json.loads(line)
+                for line in (day_root / "run-evidence.jsonl")
+                .read_text(encoding="utf-8")
+                .splitlines()
+            ]
+
+        self.assertEqual(result["exit_code"], 1)
+        self.assertEqual(result["run_status"], "delivery_failed")
+        self.assertEqual(result["delivery_evidence_error"], "OSError")
+        self.assertEqual(timings["status"], "delivery_failed")
+        self.assertEqual(failure["stage"], "delivery_evidence")
+        self.assertEqual(failure["error_type"], "OSError")
+        self.assertEqual(evidence[-1]["status"], "delivery_failed")
 
     def test_scheduled_existing_snapshot_retries_publish_without_reacquiring_input(self):
         cn_timezone = timezone(timedelta(hours=8))
