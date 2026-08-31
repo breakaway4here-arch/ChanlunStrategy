@@ -263,10 +263,13 @@ commit_today_report_if_changed() {
         echo "索引已有未提交改动，拒绝自动提交"
         return 1
     fi
-    /usr/bin/python3 scripts/stage_report_asset_version_updates.py \
+    if ! /usr/bin/python3 scripts/stage_report_asset_version_updates.py \
         --repo-root "$SCRIPT_DIR" \
         --docs-dir "$SCRIPT_DIR/docs" \
-        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"; then
+        echo "历史入口资源版本暂存失败，停止自动提交"
+        return 1
+    fi
     git add \
         "docs/index.html" \
         docs/data.json \

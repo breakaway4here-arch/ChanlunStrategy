@@ -4,9 +4,11 @@ import json
 import os
 import sqlite3
 import tempfile
+import time
 import unittest
+from pathlib import Path
 
-from chanlun.report_comparison import build_comparison_index
+from chanlun.report_comparison import build_comparison_index, write_comparison_index
 from scripts.validate_today_report import (
     validate_comparison_contract,
     validate_comparison_formal_alignment,
@@ -265,3 +267,35 @@ class ReportComparisonIndexTest(unittest.TestCase):
                 {"main": 1},
                 snapshot["quality"]["formal_input_blocked_counts"],
             )
+
+    def test_identical_rebuild_preserves_existing_comparison_index_bytes(self):
+        with tempfile.TemporaryDirectory() as root:
+            data_dir = os.path.join(root, "data")
+            os.mkdir(data_dir)
+            date = "2026-08-31"
+            self._write_report(data_dir, date)
+            with open(
+                os.path.join(data_dir, "index.json"), "w", encoding="utf-8"
+            ) as handle:
+                json.dump(
+                    {
+                        "dates": [date],
+                        "date_meta": {
+                            date: {
+                                "is_trading_day": True,
+                                "is_official": True,
+                            }
+                        },
+                    },
+                    handle,
+                )
+            db_path = os.path.join(root, "market.sqlite")
+            self._create_db(db_path)
+
+            target = write_comparison_index(data_dir, db_path)
+            first = Path(target).read_bytes()
+            time.sleep(0.001)
+            write_comparison_index(data_dir, db_path)
+            second = Path(target).read_bytes()
+
+            self.assertEqual(second, first)

@@ -1,10 +1,14 @@
+import json
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from chanlun.report_generator import _report_asset_version
 from scripts.stage_report_asset_version_updates import (
+    _journal_exclusions,
     stage_report_asset_version_updates,
 )
 
@@ -107,6 +111,90 @@ class TestStageReportAssetVersionUpdates(unittest.TestCase):
             with tempfile.TemporaryDirectory() as docs_tmpdir:
                 with self.assertRaisesRegex(ValueError, "inside repo_root"):
                     stage_report_asset_version_updates(repo_tmpdir, docs_tmpdir)
+
+    def test_cli_imports_repository_package_in_launchd_style_environment(self):
+        root = Path(__file__).resolve().parents[1]
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(root / "scripts" / "stage_report_asset_version_updates.py"),
+                "--help",
+            ],
+            cwd=str(root),
+            env={
+                "HOME": os.environ.get("HOME", "/private/tmp"),
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            },
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            check=False,
+        )
+
+        self.assertEqual(
+            completed.returncode,
+            0,
+            completed.stdout + completed.stderr,
+        )
+
+    def test_stages_generated_history_deletion_but_preserves_excluded_deletion(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            docs = root / "docs"
+            generated = docs / "2026-08-21" / "index.html"
+            excluded = docs / "2026-08-22" / "index.html"
+            for path in (generated, excluded):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(_report_shell("111111111111"), encoding="utf-8")
+
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.name", "Chanlun Test")
+            self._git(root, "config", "user.email", "chanlun-test@example.invalid")
+            self._git(root, "add", "docs")
+            self._git(root, "commit", "-q", "-m", "baseline")
+
+            generated.unlink()
+            excluded.unlink()
+            staged, skipped = stage_report_asset_version_updates(
+                root,
+                docs,
+                excluded_paths={"docs/2026-08-22/index.html"},
+                stage_generated_deletions=True,
+            )
+
+            self.assertEqual(staged, ["docs/2026-08-21/index.html"])
+            self.assertEqual(skipped, ["docs/2026-08-22/index.html"])
+            self.assertEqual(
+                self._git(root, "diff", "--cached", "--name-only").splitlines(),
+                ["docs/2026-08-21/index.html"],
+            )
+            self.assertEqual(
+                self._git(root, "diff", "--name-only").splitlines(),
+                ["docs/2026-08-22/index.html"],
+            )
+
+    def test_rejects_stale_journal_before_enabling_generated_deletions(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "tracked.txt").write_text("baseline", encoding="utf-8")
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.name", "Chanlun Test")
+            self._git(root, "config", "user.email", "chanlun-test@example.invalid")
+            self._git(root, "add", "tracked.txt")
+            self._git(root, "commit", "-q", "-m", "baseline")
+            journal = root / "journal.json"
+            journal.write_text(
+                json.dumps(
+                    {
+                        "head_sha": "0" * 40,
+                        "excluded_report_entrypoints": [],
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "HEAD"):
+                _journal_exclusions(journal, root)
 
 
 if __name__ == "__main__":

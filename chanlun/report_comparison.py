@@ -306,6 +306,24 @@ def write_comparison_index(data_dir, db_path, window_size=26):
     """Rebuild and atomically publish ``comparison-index.json``."""
     index = build_comparison_index(data_dir, db_path, window_size=window_size)
     target = os.path.join(data_dir, "comparison-index.json")
+    try:
+        with open(target, "r", encoding="utf-8") as handle:
+            existing = json.load(handle)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        existing = None
+    if isinstance(existing, dict) and isinstance(
+        existing.get("generated_at"), str
+    ):
+        existing_semantic = {
+            key: value for key, value in existing.items()
+            if key != "generated_at"
+        }
+        rebuilt_semantic = {
+            key: value for key, value in index.items()
+            if key != "generated_at"
+        }
+        if existing_semantic == rebuilt_semantic:
+            return target
     fd, temporary = tempfile.mkstemp(prefix=".comparison-index-", suffix=".json", dir=data_dir)
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:

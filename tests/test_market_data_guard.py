@@ -1544,6 +1544,19 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         self.assertIn("if ! git diff --cached --quiet; then", pre_stage)
         self.assertIn("索引已有未提交改动，拒绝自动提交", pre_stage)
 
+    def test_daily_run_stops_when_history_staging_helper_fails(self):
+        script = Path("daily_run.sh").read_text(encoding="utf-8")
+        commit_start = script.index("commit_today_report_if_changed() {")
+        git_add = script.index("    git add \\", commit_start)
+        staging_block = script[commit_start:git_add]
+
+        self.assertIn(
+            "if ! /usr/bin/python3 scripts/stage_report_asset_version_updates.py",
+            staging_block,
+        )
+        self.assertIn("历史入口资源版本暂存失败，停止自动提交", staging_block)
+        self.assertIn("return 1", staging_block)
+
     def test_daily_run_finalizes_recommendation_ledger_only_after_validation(self):
         with open("daily_run.sh", "r", encoding="utf-8") as f:
             script = f.read()

@@ -16,7 +16,7 @@ PRODUCTION_ROOT = (
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
-    "a0c5a68f3c67b6e0d5e632a5348ac362b73a7b1247dc9d38030bfaf875e1fbf0"
+    "f5821333f4c04be36f4bbb2d79fd3dc5a5463114ae2805dd503a51a636071c51"
 )
 RUNBOOK_PATH = ROOT / "docs" / "runbooks" / "chanlun-preclose-runbook.md"
 
