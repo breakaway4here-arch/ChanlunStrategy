@@ -519,8 +519,19 @@ def _build_summary(
             else:
                 horizon_status = "available"
     code = _as_text(row.get("code"))
+    if not code:
+        summary_status = "missing"
+    elif daily_structure.get("stale") is True or daily_structure.get("freshness_status") == "stale":
+        summary_status = "stale"
+    elif daily_structure.get("status") in {"stale", "conflict", "missing", "unavailable"}:
+        summary_status = daily_structure.get("status")
+    elif daily_structure.get("is_final") is False or daily_structure.get("status") == "partial":
+        summary_status = "partial"
+    else:
+        summary_status = "available"
+
     summary = {
-        "status": "available" if code else "missing",
+        "status": summary_status,
         "source": "workspace.views.{}".format(view_name),
         "as_of": report_date,
         "code": code,

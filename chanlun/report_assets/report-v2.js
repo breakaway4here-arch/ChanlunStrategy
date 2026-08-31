@@ -3618,12 +3618,23 @@
     if (!horizonText && isRecommendationEvidenceFiniteNumber(summary.applicable_horizon)) {
       horizonText = 'T+' + recommendationEvidenceNumber(summary.applicable_horizon);
     }
-    var primaryFacts = renderEvidenceRows([
+    var primaryFactRows = [
       ['信号类型', evidenceScalarText(summary.signal_type) || '未提供'],
       ['信号日期', evidenceScalarText(summary.signal_date) || '未提供'],
       ['信号新鲜度', recommendationSignalAgeText(summary.signal_age_days)],
       ['适用周期', horizonText || '策略未声明统一周期'],
-    ]);
+    ];
+    if (summary.data_stale === true) {
+      primaryFactRows.push(['陈旧状态', '已陈旧']);
+    }
+    if (summary.data_is_final === false) {
+      primaryFactRows.push(['终局状态', '非终局']);
+    }
+    var healthText = evidenceScalarText(summary.data_health);
+    if (healthText && !/verified|fresh|available/i.test(healthText)) {
+      primaryFactRows.push(['数据健康', healthText]);
+    }
+    var primaryFacts = renderEvidenceRows(primaryFactRows);
     var metaFacts = renderEvidenceRows([
       ['池身份', poolIdentity],
       ['池内顺序', isRecommendationEvidenceFiniteNumber(summaryRank) ? '#' + recommendationEvidenceNumber(summaryRank) : '未提供'],

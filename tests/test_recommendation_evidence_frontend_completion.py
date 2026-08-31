@@ -643,6 +643,75 @@ assert(JSON.stringify(raw) === before, 'chart display injected or mutated trend 
 """,
         )
 
+    def test_stale_and_non_final_risk_states_visible_outside_collapsed_details(self):
+        _assert_node_contract(
+            self,
+            "({ detail: buildMergedCandidateDetail, state: state })",
+            r"""
+const staleNonFinalEvidence = {
+  view: 'main',
+  code: '600002',
+  summary: {
+    name: '风险股',
+    sector: '半导体',
+    formal_action: '观察',
+    pool_identity: 'picks_fusion',
+    view_identity: 'main',
+    view_rank: 1,
+    signal_type: '二买',
+    signal_date: '2026-08-25',
+    signal_age_days: 3,
+    applicable_horizon: 3,
+    applicable_horizon_text: 'T+3',
+    data_latest_date: '2026-08-25',
+    data_source: 'market_history_db',
+    data_health: 'stale',
+    data_is_final: false,
+    data_stale: true,
+    status: 'stale'
+  },
+  decision_score: { status: 'available', score: 50, components: {} },
+  rank_evidence: { status: 'available', view_rank: 1, opportunity_score: 50 },
+  price_evidence: { status: 'available', current_price: 10, reference_price: 10 },
+  daily_structure: { status: 'stale', stale: true, is_final: false },
+  sublevel_30m: { status: 'stale' },
+  volume_and_capital: { status: 'available' },
+  market_and_sector: { status: 'available' },
+  main_rise_clue: { status: 'missing' },
+  risk_and_next: { status: 'available', risk_labels: [] },
+  historical_validation: { status: 'missing' },
+  display_derived: { status: 'available' }
+};
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: {
+    schema_version: 1,
+    report_date: '2026-08-28',
+    views: { main: [staleNonFinalEvidence] }
+  }
+};
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+globalThis.__auxTest.state.currentView = 'main';
+const html = globalThis.__auxTest.detail({
+  code: '600002', name: '风险股', sector: '半导体',
+  ref: { pool: 'picks_fusion', code: '600002' },
+  formal_decision_contract: { action: '观察' }
+}, {});
+const module01Start = html.indexOf('data-evidence-module="01"');
+const module02Start = html.indexOf('data-evidence-module="02"');
+const module01 = html.slice(module01Start, module02Start);
+const detailsIndex = module01.indexOf('<details class="evidence-meta-details">');
+assert(detailsIndex > 0, '<details class="evidence-meta-details"> missing from module 01');
+const mainArea = module01.slice(0, detailsIndex);
+assert(mainArea.includes('陈旧状态') && mainArea.includes('已陈旧'),
+  'stale risk status is not visible outside collapsed details');
+assert(mainArea.includes('终局状态') && mainArea.includes('非终局'),
+  'non-final risk status is not visible outside collapsed details');
+assert(module01.includes('证据已过期') || module01.includes('is-stale'),
+  'stale status badge is missing from module 01 header');
+""",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
