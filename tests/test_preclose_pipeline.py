@@ -182,7 +182,13 @@ class FixedClock:
         self.value += float(seconds)
 
 
-def _components(events=None, clock=None, deadline_during_daily=False):
+def _components(
+    events=None,
+    clock=None,
+    deadline_during_daily=False,
+    right_side_mode="shadow",
+    include_right_side=False,
+):
     events = events if events is not None else []
 
     def analyze(**kwargs):
@@ -215,6 +221,36 @@ def _components(events=None, clock=None, deadline_during_daily=False):
     def startup_upgrade(seeds, min30_results):
         events.append(("startup_upgrade", len(seeds), len(min30_results)))
         return [], [], {"startup_candidate": 0}
+
+    def right_side_pool(results, sector_stocks=None):
+        del sector_stocks
+        events.append((
+            "right_side_pool", tuple(result.code for result in results)
+        ))
+        if not include_right_side:
+            return [], [], {"trend_seed": 0}
+        return [{
+            "code": "002328",
+            "name": "新朋股份",
+            "reference_price": 11.0,
+        }], [], {"trend_seed": 1}
+
+    def right_side_upgrade(seeds, min30_results):
+        events.append((
+            "right_side_upgrade", len(seeds), len(min30_results)
+        ))
+        if not seeds:
+            return [], [], {"trend_candidate": 0}
+        candidate = _candidate("002328", "新朋股份")
+        candidate.update({
+            "close": 11.0,
+            "reference_price": 11.0,
+            "source_channel": "right_side_startup",
+            "source_type": "日线右侧启动",
+            "trend_signals": ["平台突破"],
+            "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+        })
+        return [candidate], [], {"trend_candidate": 1}
 
     def fusion(picks, sh_closes, sector_stocks=None):
         events.append(("fusion", tuple(item["code"] for item in picks)))
@@ -269,6 +305,9 @@ def _components(events=None, clock=None, deadline_during_daily=False):
         upgrade_daily_candidates=upgrade,
         build_strong_startup_pool=startup_pool,
         upgrade_strong_startup=startup_upgrade,
+        build_right_side_startup_pool=right_side_pool,
+        upgrade_right_side_startup=right_side_upgrade,
+        right_side_startup_mode=right_side_mode,
         apply_fusion_admission=fusion,
         apply_scores=score,
         evaluate_stock=evaluate,
@@ -349,8 +388,84 @@ class PreclosePipelineTests(unittest.TestCase):
         self.assertEqual([item["code"] for item in result["picks_pure"]], ["300998"])
         self.assertEqual([item["code"] for item in result["picks_fusion"]], ["300998"])
         self.assertEqual([event[0] for event in events if event[0] in {
-            "daily_pool", "startup_pool", "upgrade", "startup_upgrade", "fusion", "score"
-        }], ["daily_pool", "startup_pool", "upgrade", "startup_upgrade", "fusion", "score", "score"])
+            "daily_pool", "startup_pool", "right_side_pool", "upgrade",
+            "startup_upgrade", "right_side_upgrade", "fusion", "score"
+        }], [
+            "daily_pool", "startup_pool", "right_side_pool", "upgrade",
+            "startup_upgrade", "right_side_upgrade", "fusion", "score", "score",
+        ])
+
+    def test_right_side_shadow_scans_full_daily_set_without_changing_formal_picks(self):
+        events = []
+        result = build_preclose_main_pool(
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            sector_stocks={
+                "300998": {"sector": "汽车零部件"},
+                "002328": {"sector": "汽车零部件"},
+            },
+            sh_closes=[3000, 3036],
+            components=_components(
+                events,
+                right_side_mode="shadow",
+                include_right_side=True,
+            ),
+        )
+
+        self.assertEqual(["300998", "002328"], [
+            item["code"] for item in result["picks_fusion"]
+        ])
+        self.assertIn(
+            ("right_side_pool", ("300998", "002328")), events
+        )
+        self.assertEqual(
+            [], result["diagnostics"]["right_side_startup"]["published_codes"]
+        )
+
+    def test_right_side_active_appends_only_scored_independent_candidates(self):
+        events = []
+
+        def daily_pool_first(results, sector_stocks=None, mode="pure"):
+            del sector_stocks
+            events.append(("daily_pool", mode, tuple(
+                result.code for result in results
+            )))
+            return [_candidate(results[0].code, results[0].name)], {"mode": mode}
+
+        components = _components(
+            events,
+            right_side_mode="active",
+            include_right_side=True,
+        )
+        components = PreclosePipelineComponents(
+            **{
+                **components.__dict__,
+                "build_daily_structure_pool": daily_pool_first,
+            }
+        )
+        result = build_preclose_main_pool(
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            sector_stocks={
+                "300998": {"sector": "汽车零部件"},
+                "002328": {"sector": "汽车零部件"},
+            },
+            sh_closes=[3000, 3036],
+            components=components,
+        )
+
+        self.assertEqual(
+            ["300998", "002328"],
+            [item["code"] for item in result["picks_fusion"]],
+        )
+        self.assertEqual(
+            ["002328"],
+            result["diagnostics"]["right_side_startup"]["published_codes"],
+        )
+        self.assertIn(("startup_pool", 1), events)
+        self.assertIn(
+            ("right_side_pool", ("300998", "002328")), events
+        )
 
     def test_market_context_uses_current_deterministic_components_and_ignores_psy12(self):
         plain = build_preclose_market_context(_market_inputs())
@@ -421,6 +536,26 @@ class PreclosePipelineTests(unittest.TestCase):
         self.assertEqual(acceleration["action_semantics"], "research_observation")
         self.assertIn(("h4", "picks_pure", ("300998",)), events)
         self.assertIn(("acceleration", ("002328",), ("600001",)), events)
+
+    def test_h4_excludes_active_right_side_candidates_before_component_call(self):
+        events = []
+        components = _components(events)
+        pure = [
+            _candidate("300998", "宁波方正"),
+            {
+                **_candidate("002328", "新朋股份"),
+                "source_channel": "right_side_startup",
+            },
+        ]
+
+        result = build_preclose_h4_pool(
+            pure, TRADE_DATE, components=components
+        )
+
+        self.assertIn(("h4", "picks_pure", ("300998",)), events)
+        source_filter = result["diagnostics"]["right_side_source_filter"]
+        self.assertEqual(1, source_filter["right_side_excluded_count"])
+        self.assertEqual(["002328"], source_filter["right_side_excluded_codes"])
 
     def test_deadline_is_hard_and_same_content_has_stable_hash_across_run_ids(self):
         first = run_preclose_pipeline(

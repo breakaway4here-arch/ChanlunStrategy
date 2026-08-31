@@ -1,4 +1,4 @@
-"""Isolated, deterministic three-pool orchestration for the 14:47 advisory."""
+"""Isolated, deterministic three-pool orchestration for the 14:45 advisory."""
 
 from __future__ import annotations
 
@@ -15,18 +15,28 @@ from .chan_engine import analyze as analyze_chanlun
 from .decision_engine import evaluate_stock as evaluate_decision_stock
 from .daily_structure_pool import build_daily_structure_pool
 from .fusion_admission import apply_fusion_admission
-from .h4_t3_pool import build_h4_t3_pool
+from .h4_t3_pool import build_h4_t3_pool, filter_h4_upstream_candidates
 from .market_sentiment import build_market_sentiment
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
 from .scorer import apply_scores
+from .right_side_startup import (
+    apply_right_side_startup_mode,
+    resolve_right_side_startup_mode,
+    select_classic_startup_inputs,
+)
 from .strong_startup import (
     build_strong_startup_pool,
     upgrade_strong_startup_with_30min,
 )
+from .trend_continuation import (
+    build_trend_continuation_pool,
+    normalize_trend_candidate,
+    upgrade_trend_continuation_with_30min,
+)
 
 
-PRE_CLOSE_STRATEGY_VERSION = "preclose-1447-v1"
+PRE_CLOSE_STRATEGY_VERSION = "preclose-1445-v2"
 EXECUTED_STAGES = (
     "daily_structure",
     "target_30m_confirm",
@@ -56,6 +66,9 @@ class PreclosePipelineComponents:
     upgrade_daily_candidates: object = upgrade_daily_candidates_with_30min
     build_strong_startup_pool: object = build_strong_startup_pool
     upgrade_strong_startup: object = upgrade_strong_startup_with_30min
+    build_right_side_startup_pool: object = build_trend_continuation_pool
+    upgrade_right_side_startup: object = upgrade_trend_continuation_with_30min
+    right_side_startup_mode: object = None
     apply_fusion_admission: object = apply_fusion_admission
     apply_scores: object = apply_scores
     evaluate_stock: object = evaluate_decision_stock
@@ -71,7 +84,7 @@ class PreclosePipelineConfig:
     generated_at: str
     source_sha: str
     run_id: str
-    deadline_seconds: float = 120.0
+    deadline_seconds: float = 240.0
     monotonic: object = time.monotonic
 
     def __post_init__(self):
@@ -82,8 +95,8 @@ class PreclosePipelineConfig:
             raise ValueError("as_of date mismatch")
         if generated_at.date().isoformat() != trade_date:
             raise ValueError("generated_at date mismatch")
-        if float(self.deadline_seconds) <= 0 or float(self.deadline_seconds) > 120:
-            raise ValueError("deadline_seconds must be in (0, 120]")
+        if float(self.deadline_seconds) <= 0 or float(self.deadline_seconds) > 240:
+            raise ValueError("deadline_seconds must be in (0, 240]")
         if not callable(self.monotonic):
             raise TypeError("monotonic must be callable")
         if not str(self.source_sha or "").strip():
@@ -309,18 +322,50 @@ def _build_daily_state(daily_results, sector_stocks, components):
     pure_pool, daily_diagnostics = components.build_daily_structure_pool(
         daily_results, sector_stocks, mode="pure"
     )
-    startup_seeds, startup_watchlist, startup_diagnostics = (
-        components.build_strong_startup_pool(daily_results, sector_stocks)
+    classic_input_state = select_classic_startup_inputs(
+        daily_results, pure_pool
     )
+    startup_seeds, startup_watchlist, startup_diagnostics = (
+        components.build_strong_startup_pool(
+            classic_input_state["rows"], sector_stocks
+        )
+    )
+    right_mode = resolve_right_side_startup_mode(
+        components.right_side_startup_mode
+    )
+    if right_mode == "off":
+        right_seeds, right_watchlist = [], []
+        right_diagnostics = {"enabled": False, "mode": "off", "scanned": 0}
+    else:
+        right_seeds, right_watchlist, right_diagnostics = (
+            components.build_right_side_startup_pool(
+                daily_results, sector_stocks
+            )
+        )
+        right_diagnostics = dict(right_diagnostics or {})
+        right_diagnostics["mode"] = right_mode
+        right_diagnostics["independent_input_count"] = len(
+            daily_results or []
+        )
+    startup_diagnostics = dict(startup_diagnostics or {})
+    startup_diagnostics["common_upstream"] = classic_input_state[
+        "diagnostics"
+    ]
     return {
         "pure_pool": _merge_sector_metadata(pure_pool, sector_stocks),
         "startup_seeds": _merge_sector_metadata(startup_seeds, sector_stocks),
         "startup_watchlist": _merge_sector_metadata(
             startup_watchlist, sector_stocks
         ),
+        "right_seeds": _merge_sector_metadata(right_seeds, sector_stocks),
+        "right_watchlist": _merge_sector_metadata(
+            right_watchlist, sector_stocks
+        ),
+        "right_mode": right_mode,
         "diagnostics": {
             "daily_structure": daily_diagnostics,
             "strong_startup": startup_diagnostics,
+            "right_side_daily": right_diagnostics,
         },
     }
 
@@ -336,6 +381,14 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
     )
     normalized_startup = [
         _normalize_startup_candidate(item) for item in startup_candidates
+    ]
+    right_candidates, right_waiting, right_upgrade_diagnostics = (
+        components.upgrade_right_side_startup(
+            copy.deepcopy(daily_state["right_seeds"]), min30_results
+        )
+    )
+    normalized_right = [
+        normalize_trend_candidate(item) for item in right_candidates
     ]
     pure_ready = _dedupe_candidates(
         _merge_sector_metadata(
@@ -357,9 +410,67 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
             if value.get("sector")
         ],
     )
+    existing_fusion_codes = {
+        str(item.get("code") or "") for item in fusion_scored
+    }
+    right_ready = [
+        item for item in _dedupe_candidates(_merge_sector_metadata(
+            normalized_right, sector_stocks
+        ))
+        if str(item.get("code") or "") not in existing_fusion_codes
+    ]
+    right_fusion_scored = []
+    right_pure_scored = []
+    right_fusion_diagnostics = {"input_count": 0, "output_count": 0}
+    if right_ready:
+        right_fusion_ready, right_fusion_diagnostics = (
+            components.apply_fusion_admission(
+                copy.deepcopy(right_ready), sh_closes, sector_stocks
+            )
+        )
+        right_pure_scored = components.apply_scores(
+            copy.deepcopy(right_ready), version="pure"
+        )
+        right_fusion_scored = components.apply_scores(
+            copy.deepcopy(right_fusion_ready),
+            version="fusion",
+            sector_rank_map=[
+                {"name": value.get("sector")}
+                for value in sector_stocks.values()
+                if value.get("sector")
+            ],
+        )
+    right_mode_state = apply_right_side_startup_mode(
+        right_fusion_scored,
+        existing_candidates=fusion_scored,
+        mode=daily_state["right_mode"],
+    )
+    published_right_fusion = list(right_mode_state["published"])
+    published_codes = {
+        str(item.get("code") or "") for item in published_right_fusion
+    }
+    published_right_pure = [
+        item for item in right_pure_scored
+        if str(item.get("code") or "") in published_codes
+    ]
+    right_diagnostics = {
+        **dict(right_mode_state["diagnostics"]),
+        "mode": daily_state["right_mode"],
+        "published_codes": [
+            str(item.get("code") or "") for item in published_right_fusion
+        ],
+        "upgrade": right_upgrade_diagnostics,
+        "fusion_admission": right_fusion_diagnostics,
+        "waiting_count": len(right_waiting),
+        "daily_watch_count": len(daily_state["right_watchlist"]),
+    }
     return {
-        "picks_pure": _merge_sector_metadata(pure_scored, sector_stocks),
-        "picks_fusion": _merge_sector_metadata(fusion_scored, sector_stocks),
+        "picks_pure": _merge_sector_metadata(
+            list(pure_scored) + published_right_pure, sector_stocks
+        ),
+        "picks_fusion": _merge_sector_metadata(
+            list(fusion_scored) + published_right_fusion, sector_stocks
+        ),
         "startup_watchlist": _dedupe_candidates(
             _merge_sector_metadata(
                 list(daily_state["startup_watchlist"]) + list(startup_waiting),
@@ -371,6 +482,7 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
             "candidate_upgrade": upgrade_diagnostics,
             "startup_upgrade": startup_upgrade_diagnostics,
             "fusion_admission": fusion_diagnostics,
+            "right_side_startup": right_diagnostics,
         },
     }
 
@@ -575,9 +687,17 @@ def evaluate_preclose_main_candidates(
 
 def build_preclose_h4_pool(picks_pure, trade_date, *, components=None):
     components = components or PreclosePipelineComponents()
-    return components.build_h4_t3_pool(
-        list(picks_pure or []), trade_date, upstream_pool="picks_pure"
+    h4_upstream, source_diagnostics = filter_h4_upstream_candidates(
+        picks_pure
     )
+    result = components.build_h4_t3_pool(
+        h4_upstream, trade_date, upstream_pool="picks_pure"
+    )
+    result = dict(result or {})
+    result.setdefault("diagnostics", {})["right_side_source_filter"] = (
+        source_diagnostics
+    )
+    return result
 
 
 def build_preclose_acceleration_pool(
@@ -687,7 +807,7 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
     try:
         as_of_dt = _parse_datetime(config.as_of)
         if as_of_dt.time().replace(tzinfo=None) >= wall_time(14, 49):
-            raise PrecloseDeadlineExceeded("startup", 120.0)
+            raise PrecloseDeadlineExceeded("startup", 240.0)
 
         def daily_operation():
             daily_results, rows_by_code, failures = _analyze_daily_inputs(

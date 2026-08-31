@@ -2349,6 +2349,53 @@ def collect_30min_data(target_stocks, required_date=None, as_of=None):
     return results
 
 
+def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
+    """Load verified 30m bars from the formal store without refresh or writes.
+
+    This is intentionally separate from ``collect_30min_data``.  Shadow
+    strategies may inspect bars that the formal pipeline already owns, but
+    they must never cause a remote fetch or extend the formal SQLite store.
+    """
+    if not target_stocks:
+        return []
+    repository = KLineRepository(
+        MARKET_HISTORY_DB_PATH,
+        mode="backtest",
+        immutable_backtest=False,
+    )
+    by_code = repository.get_many(
+        "30m",
+        [stock["code"] for stock in target_stocks],
+        count=80,
+        required_date=required_date,
+        as_of=as_of,
+    )
+    output = []
+    for stock in target_stocks:
+        code = stock["code"]
+        result = by_code[code]
+        evidence = _sublevel_input_evidence("30m", result.kline, result)
+        if not (
+            result.kline
+            and len(result.kline.get("closes", [])) >= 40
+            and _verified_sublevel_input(
+                evidence,
+                required_date,
+                40,
+                "{} 15:00:00".format(required_date)
+                if required_date else None,
+            )
+        ):
+            continue
+        output.append({
+            "code": code,
+            "name": stock.get("name", ""),
+            "klines": result.kline,
+            "input_evidence": evidence,
+        })
+    return output
+
+
 def collect_15min_data(target_stocks, required_date=None, as_of=None):
     """
     为目标池股票拉取15分钟K线。

@@ -119,7 +119,7 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
   const statuses = new Set(["available", "empty", "failed", "deadline_exceeded", "not_run"]);
   if (
     value.schema_version !== "preclose-selection-v1"
-    || value.strategy_version !== "preclose-1447-v1"
+    || value.strategy_version !== "preclose-1445-v2"
     || value.mode !== "preclose_advisory"
     || typeof value.snapshot_id !== "string"
     || typeof value.content_hash !== "string"
@@ -139,7 +139,7 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
   return {
     ...value,
     schema_version: "preclose-selection-v1",
-    strategy_version: "preclose-1447-v1",
+    strategy_version: "preclose-1445-v2",
     mode: "preclose_advisory",
     trade_date: tradeDate,
     snapshot_id: value.snapshot_id,

@@ -391,6 +391,24 @@ def _fit_predictor(rows, current_date):
     return predict, mature
 
 
+def filter_h4_upstream_candidates(candidates):
+    rows = list(candidates or [])
+    excluded = [
+        row for row in rows
+        if isinstance(row, dict)
+        and str(row.get("source_channel") or "") == "right_side_startup"
+    ]
+    kept = [row for row in rows if row not in excluded]
+    return kept, {
+        "input_count": len(rows),
+        "right_side_excluded_count": len(excluded),
+        "right_side_excluded_codes": sorted({
+            str(row.get("code") or "") for row in excluded
+            if str(row.get("code") or "")
+        }),
+    }
+
+
 def build_h4_t3_pool(
     picks_fusion,
     trade_date,
@@ -403,9 +421,14 @@ def build_h4_t3_pool(
     if not isinstance(upstream_pool, str) or not upstream_pool.strip():
         raise H4T3PoolError("upstream_pool is invalid")
     upstream_pool = upstream_pool.strip()
+    h4_upstream, source_diagnostics = filter_h4_upstream_candidates(
+        picks_fusion
+    )
     model = load_model(model_path)
     predict, mature = _fit_predictor(model["training_rows"], trade_date)
-    microstate = [row for row in picks_fusion if is_continuation_microstate(row)]
+    microstate = [
+        row for row in h4_upstream if is_continuation_microstate(row)
+    ]
     eligible = []
     rejected_base = rejected_tail = rejected_q10 = 0
     for candidate in microstate:
@@ -456,9 +479,11 @@ def build_h4_t3_pool(
         ),
         "diagnostics": {
             "upstream_pool": upstream_pool,
-            "upstream_count": len(picks_fusion),
+            "input_upstream_count": len(picks_fusion),
+            "upstream_count": len(h4_upstream),
             # Compatibility alias retained for existing report consumers.
-            "fusion_count": len(picks_fusion),
+            "fusion_count": len(h4_upstream),
+            **source_diagnostics,
             "microstate_count": len(microstate),
             "eligible_count": len(eligible),
             "selected_count": len(eligible),

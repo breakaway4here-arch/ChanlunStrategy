@@ -1,4 +1,4 @@
-"""Browser-contract tests for the isolated 14:47 advisory panel."""
+"""Browser-contract tests for the isolated 14:45 advisory panel."""
 
 import pathlib
 import subprocess
@@ -197,7 +197,7 @@ const changed = {
   }
 };
 const html = globalThis.__precloseTest.build(changed, snapshot);
-assert(html.includes('与14:47预跑有变化'), 'changed wording missing');
+assert(html.includes('与14:45预跑有变化'), 'changed wording missing');
 assert(html.includes('保留 宁波方正') && html.includes('正式新增 新朋股份'), 'changed details missing');
 assert(html.includes('预跑有、正式无 A股'), 'removed details missing');
 assert(html.includes('H4 T+3：无变化'), 'unchanged pool missing');
@@ -206,7 +206,7 @@ const unchanged = globalThis.__precloseTest.build({
   status: 'unchanged', preclose_content_hash: 'a'.repeat(64), formal_content_hash: 'c'.repeat(64),
   pools: { main: { retained: [{ code: '1' }, { code: '2' }] }, h4_t3: { retained: [{ code: '3' }] }, acceleration: { retained: [{ code: '4' }] } }
 }, snapshot);
-assert(unchanged.includes('正式结果与14:47预跑一致'), 'unchanged wording missing');
+assert(unchanged.includes('正式结果与14:45预跑一致'), 'unchanged wording missing');
 assert(unchanged.includes('主推2只｜H4 T+3 1只｜加速1只'), 'unchanged counts missing');
 
 const mismatch = globalThis.__precloseTest.build(Object.assign({}, changed, {
@@ -230,6 +230,30 @@ globalThis.__precloseTest.nodes.precloseAdvisory = { classList: {
 window.fetch = function () { throw new Error('fetch must not run'); };
 await globalThis.__precloseTest.load();
 assert(hidden, 'missing API did not hide advisory');
+""",
+        )
+
+    def test_right_side_evidence_is_compact_and_never_renders_missing_noise(self):
+        _assert_node_contract(
+            self,
+            "({ summary: buildDecisionSummaryColumns })",
+            r"""
+const raw = {
+  right_side_startup_evidence: {
+    source_label: '右侧启动',
+    reference_price: 48.11,
+    why: ['突破20日平台'],
+    confirmations: ['30分钟结构确认', '30分钟量能确认'],
+    invalidation: ['跌破右侧突破参考位 48.11']
+  }
+};
+const html = globalThis.__precloseTest.summary({}, raw);
+assert(html.includes('右侧启动'), 'source label missing');
+assert(html.includes('参考位 48.11'), 'reference missing');
+assert(html.includes('为何进入') && html.includes('突破20日平台'), 'why missing');
+assert(html.includes('关键确认') && html.includes('30分钟结构确认'), 'confirmation missing');
+assert(html.includes('失效条件') && html.includes('跌破右侧突破参考位'), 'invalidation missing');
+assert(!html.includes('未提供') && !html.includes('暂无'), 'missing-value noise rendered');
 """,
         )
 

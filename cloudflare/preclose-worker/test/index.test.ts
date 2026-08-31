@@ -11,13 +11,13 @@ function snapshot(date: string, suffix = "a"): PrecloseSnapshotBody {
   const contentHash = suffix.repeat(64).slice(0, 64);
   return {
     schema_version: "preclose-selection-v1",
-    strategy_version: "preclose-1447-v1",
+    strategy_version: "preclose-1445-v2",
     mode: "preclose_advisory",
     trade_date: date,
     snapshot_id: `preclose:${date}:${contentHash.slice(0, 16)}`,
     content_hash: contentHash,
     source_sha: "6412624c",
-    as_of: `${date}T14:47:00+08:00`,
+    as_of: `${date}T14:45:00+08:00`,
     generated_at: `${date}T14:48:00+08:00`,
     expires_at: `${date}T14:56:30+08:00`,
     status: "available",

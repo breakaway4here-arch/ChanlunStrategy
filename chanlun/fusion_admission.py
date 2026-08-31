@@ -186,12 +186,12 @@ def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
                 return False, "强势启动候选弱市要求30min确认强/中"
             return True, "强势启动候选弱市通过"
 
-    if bp_type == "趋势延续候选":
+    if bp_type in ("趋势延续候选", "右侧启动候选"):
         if not ma_ok:
-            return False, "趋势延续候选要求MA多头(MA5>MA10>MA20)"
+            return False, "{}要求MA多头(MA5>MA10>MA20)".format(bp_type)
         if not confirmed_by:
-            return False, "趋势延续候选要求30min趋势确认"
-        return True, "趋势延续候选独立通道通过"
+            return False, "{}要求30min趋势确认".format(bp_type)
+        return True, "{}独立通道通过".format(bp_type)
 
     # Unknown type — do not admit
     return False, f"未知类型{bp_type}不默认放行"

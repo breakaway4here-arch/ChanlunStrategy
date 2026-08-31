@@ -22,6 +22,7 @@ import numpy as np
 from chanlun.chan_engine import calc_macd
 from chanlun.report_comparison import write_comparison_index
 from chanlun.report_view_model import build_workspace
+from chanlun.right_side_startup import build_right_side_startup_evidence
 from chanlun.personal_watchlist import resolve_decision_watchlist_url
 from chanlun.recommendation_evidence import (
     build_recommendation_evidence_projection,
@@ -706,6 +707,9 @@ def _serialize_picks(picks):
             "pivot_zg": p["pivots"].get("ZG") if p.get("pivots") else None,
             "pivot_zd": p["pivots"].get("ZD") if p.get("pivots") else None,
         }
+        right_side_evidence = build_right_side_startup_evidence(p)
+        if right_side_evidence:
+            item["right_side_startup_evidence"] = right_side_evidence
         result.append(item)
     return result
 
@@ -1421,6 +1425,9 @@ def _serialize_picks_light(picks):
             "pivot_zg": p["pivots"].get("ZG") if p.get("pivots") else None,
             "pivot_zd": p["pivots"].get("ZD") if p.get("pivots") else None,
         }
+        right_side_evidence = build_right_side_startup_evidence(p)
+        if right_side_evidence:
+            item["right_side_startup_evidence"] = right_side_evidence
         result.append(item)
     return result
 
@@ -2019,7 +2026,9 @@ def _native_public_projection(value):
     ))
 
 
-def build_full_daily_projection(report_data, include_shadow=True):
+def build_full_daily_projection(
+    report_data, include_shadow=True, include_right_side_shadow=False
+):
     """Build the sole full daily payload used by guards and public writers."""
     daily_data = {
         "date": report_data.get("date", datetime.now().strftime("%Y-%m-%d")),
@@ -2093,13 +2102,27 @@ def build_full_daily_projection(report_data, include_shadow=True):
         for shadow_field in ("psy12", "psy12_shadow"):
             if shadow_field in report_data:
                 daily_data[shadow_field] = report_data[shadow_field]
+    right_side_state = report_data.get("right_side_startup")
+    right_side_mode = (
+        str(right_side_state.get("mode") or "")
+        if isinstance(right_side_state, Mapping)
+        else ""
+    )
+    if "right_side_startup" in report_data and (
+        right_side_mode == "active" or include_right_side_shadow
+    ):
+        daily_data["right_side_startup"] = report_data[
+            "right_side_startup"
+        ]
     daily_data["workspace"] = build_workspace(daily_data)
     _attach_strategy_research_contracts(daily_data)
     _backfill_workspace_scores(daily_data)
     return _native_public_projection(daily_data)
 
 
-def build_aggregate_day_projection(report_data, include_shadow=True):
+def build_aggregate_day_projection(
+    report_data, include_shadow=True, include_right_side_shadow=False
+):
     """Build the sole lightweight aggregate entry used by data.json."""
     day_entry = {
         "market": report_data.get("market", {}),
@@ -2162,6 +2185,18 @@ def build_aggregate_day_projection(report_data, include_shadow=True):
         for shadow_field in ("psy12", "psy12_shadow"):
             if shadow_field in report_data:
                 day_entry[shadow_field] = report_data[shadow_field]
+    right_side_state = report_data.get("right_side_startup")
+    right_side_mode = (
+        str(right_side_state.get("mode") or "")
+        if isinstance(right_side_state, Mapping)
+        else ""
+    )
+    if "right_side_startup" in report_data and (
+        right_side_mode == "active" or include_right_side_shadow
+    ):
+        day_entry["right_side_startup"] = report_data[
+            "right_side_startup"
+        ]
     day_entry["workspace"] = build_workspace(day_entry)
     _backfill_workspace_scores(day_entry)
     day_entry.pop("workspace", None)

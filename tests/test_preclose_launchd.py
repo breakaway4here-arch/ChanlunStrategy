@@ -60,7 +60,7 @@ class PrecloseLaunchdTests(unittest.TestCase):
             ),
         )
 
-    def test_preclose_runs_each_weekday_at_1447_from_absolute_wrapper(self):
+    def test_preclose_runs_each_weekday_at_1445_from_absolute_wrapper(self):
         plist = _load_plist(PRECLOSE_LABEL + ".plist")
         self.assertEqual(plist["Label"], PRECLOSE_LABEL)
         self.assertEqual(plist["WorkingDirectory"], PRODUCTION_ROOT)
@@ -71,7 +71,7 @@ class PrecloseLaunchdTests(unittest.TestCase):
         schedule = plist["StartCalendarInterval"]
         self.assertEqual(
             {(row["Weekday"], row["Hour"], row["Minute"]) for row in schedule},
-            {(weekday, 14, 47) for weekday in range(1, 6)},
+            {(weekday, 14, 45) for weekday in range(1, 6)},
         )
         self.assertFalse(plist["RunAtLoad"])
 

@@ -237,6 +237,22 @@ class TestFusionAdmission(unittest.TestCase):
         self.assertEqual(len(picks), 1)
         self.assertEqual(picks[0]["source_channel"], "trend_continuation")
 
+    def test_right_side_startup_candidate_uses_same_strict_admission(self):
+        stock = self._make_stock("右侧启动候选", strength="中")
+        stock.update({
+            "source_channel": "right_side_startup",
+            "reference_type": "platform_high_20d",
+            "reference_price": 50.0,
+            "confirmations": ["30min突破位不破", "30min新鲜结构"],
+        })
+
+        picks, _ = apply_fusion_admission(
+            [stock], self._make_sh_closes(False)
+        )
+
+        self.assertEqual(1, len(picks))
+        self.assertEqual("right_side_startup", picks[0]["source_channel"])
+
 
 if __name__ == "__main__":
     unittest.main()

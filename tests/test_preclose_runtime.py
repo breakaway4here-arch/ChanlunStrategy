@@ -5,11 +5,13 @@ import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import numpy as np
 
 from chanlun.preclose_contract import build_preclose_snapshot
+from chanlun.preclose_pipeline import PreclosePipelineComponents
 from chanlun.preclose_runtime import (
     MARKET_INDICES,
     build_scheduled_preclose_input,
@@ -53,6 +55,50 @@ class PrecloseRuntimeTests(unittest.TestCase):
         rows[0]["klines"]["finals"][-1] = False
         targets = select_preclose_30m_targets(rows)
         self.assertIsInstance(targets, list)
+
+    def test_target_selector_keeps_classic_common_upstream_and_independent_right_side(self):
+        rows = [
+            _history("300998", "公共上游", 10.0),
+            _history("002328", "右侧独立", 11.0),
+        ]
+        calls = {}
+
+        def analyze(**kwargs):
+            closes = np.asarray(kwargs["closes"], dtype=float)
+            return SimpleNamespace(
+                code=kwargs["code"],
+                name=kwargs["name"],
+                closes=closes,
+            )
+
+        def daily_pool(results, sector_stocks=None, mode="pure"):
+            del sector_stocks, mode
+            return [{"code": results[0].code}], {}
+
+        def classic_pool(results, sector_stocks=None):
+            del sector_stocks
+            calls["classic"] = [row.code for row in results]
+            return [], [], {}
+
+        def right_pool(results, sector_stocks=None):
+            del sector_stocks
+            calls["right"] = [row.code for row in results]
+            return [{"code": results[1].code}], [], {}
+
+        components = PreclosePipelineComponents(
+            analyze=analyze,
+            build_daily_structure_pool=daily_pool,
+            build_strong_startup_pool=classic_pool,
+            build_right_side_startup_pool=right_pool,
+            right_side_startup_mode="shadow",
+        )
+        targets = select_preclose_30m_targets(rows, components=components)
+
+        self.assertEqual(["300998"], calls["classic"])
+        self.assertEqual(["300998", "002328"], calls["right"])
+        self.assertEqual(
+            ["300998", "002328"], [row["code"] for row in targets]
+        )
 
     def test_live_builder_uses_batch_quotes_and_fetches_30m_only_for_daily_targets(self):
         histories = [
@@ -235,6 +281,57 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(timings["run_id"], configs[0].run_id)
         self.assertEqual(timings["source_sha"], "release-sha")
         self.assertEqual(timings["status"], "empty")
+
+    def test_1445_start_uses_extended_budget_without_crossing_1449_cutoff(self):
+        cn_timezone = timezone(timedelta(hours=8))
+        fixed_now = datetime(2026, 8, 28, 14, 45, 2, tzinfo=cn_timezone)
+        market_inputs = {
+            "schema_version": "preclose-input-v1",
+            "mode": "preclose_advisory",
+            "trade_date": TRADE_DATE,
+            "as_of": fixed_now.isoformat(timespec="seconds"),
+            "bar_state": "intraday",
+            "is_final": False,
+            "daily": [],
+            "target_codes": [],
+            "min30": {},
+            "market": {},
+        }
+        configs = []
+
+        def pipeline_runner(_inputs, config, components=None):
+            del _inputs, components
+            configs.append(config)
+            return build_preclose_snapshot(
+                trade_date=config.trade_date,
+                as_of=config.as_of,
+                generated_at=config.generated_at,
+                pools={"main": [], "h4_t3": [], "acceleration": []},
+                source_sha=config.source_sha,
+                run_id=config.run_id,
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            db = base / "market.sqlite"
+            db.write_bytes(b"formal-sentinel")
+            result = run_scheduled_preclose(
+                root=base / "preclose",
+                formal_market_db=db,
+                env_file=base / "missing.env",
+                source_sha="release-sha",
+                now=lambda: fixed_now,
+                monotonic=lambda: 10.0,
+                trading_day_check=lambda *_args: True,
+                runtime_builder=lambda *_args, **_kwargs: market_inputs,
+                pipeline_runner=pipeline_runner,
+                skip_publish=True,
+            )
+
+        self.assertEqual("completed", result["status"])
+        self.assertEqual(1, len(configs))
+        self.assertGreater(configs[0].deadline_seconds, 120.0)
+        self.assertLessEqual(configs[0].deadline_seconds, 202.0)
 
     def test_scheduled_entry_skips_non_trading_day_before_acquisition(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -595,14 +692,14 @@ class PrecloseRuntimeTests(unittest.TestCase):
             "min30": {},
             "market": {},
         }
-        clock_values = iter((0.0, 121.0))
+        clock_values = iter((0.0, 241.0))
         publisher_calls = []
 
         def monotonic():
             try:
                 return next(clock_values)
             except StopIteration:
-                return 121.0
+                return 241.0
 
         def publisher(*_args, **_kwargs):
             publisher_calls.append(True)

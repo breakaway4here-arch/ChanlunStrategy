@@ -184,7 +184,7 @@ class PrecloseEndToEndTests(unittest.TestCase):
                 worker.reconciliation["preclose_content_hash"],
                 snapshot["content_hash"],
             )
-            # One 14:47 notice and one post-close notice; the repeated formal hash
+            # One 14:45 notice and one post-close notice; the repeated formal hash
             # is suppressed by the append-only outbox.
             self.assertEqual(len(provider_calls), 2)
 

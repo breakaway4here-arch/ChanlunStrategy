@@ -167,6 +167,21 @@ if RECALL_STRATEGY_MODE not in {"legacy", "shadow", "active"}:
     )
 
 
+def _resolve_right_side_startup_mode(value):
+    if not isinstance(value, str) or value.strip().lower() not in {
+        "off", "shadow", "active"
+    }:
+        raise ValueError(
+            "CHANLUN_RIGHT_SIDE_STARTUP_MODE must be off, shadow or active"
+        )
+    return value.strip().lower()
+
+
+RIGHT_SIDE_STARTUP_MODE = _resolve_right_side_startup_mode(
+    os.environ.get("CHANLUN_RIGHT_SIDE_STARTUP_MODE", "shadow")
+)
+
+
 def _resolve_stock_selection_shadow_mode(value):
     if not isinstance(value, str) or value.strip().lower() not in {
         "off", "shadow"

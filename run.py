@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import sys
+import copy
 import json
 import time
 import argparse
@@ -49,10 +50,11 @@ from config import (
     FULL_A_NO_OVERLAY_NEUTRAL_QUOTA,
     FULL_A_MIN_ELIGIBLE_COUNT,
     MARKET_HISTORY_CUTOVER_MODE, RECALL_STRATEGY_MODE,
-    STOCK_SELECTION_SHADOW_MODE,
+    STOCK_SELECTION_SHADOW_MODE, RIGHT_SIDE_STARTUP_MODE,
 )
 from chanlun.data_fetcher import (
     collect_daily_data, collect_30min_data, collect_15min_data,
+    load_30min_data_readonly,
     fetch_daily_kline, fetch_kline, fetch_verified_index_kline,
     MarketDataUnavailable,
     build_market_time_metadata,
@@ -117,6 +119,13 @@ from chanlun.trend_continuation import (
     normalize_trend_candidate,
     upgrade_trend_continuation_with_30min,
 )
+from chanlun.right_side_startup import (
+    POLICY_VERSION as RIGHT_SIDE_STARTUP_POLICY_VERSION,
+    apply_right_side_startup_mode,
+    resolve_right_side_startup_mode,
+    select_classic_startup_inputs,
+)
+from chanlun.right_side_audit import write_right_side_startup_audit
 from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
@@ -221,6 +230,169 @@ def _extend_upstream_for_limit_up_observation(items, upstream_candidates):
         set(diagnostics.get("excluded_codes", [])) - set(limit_up_codes)
     )
     return kept + limit_up_rows, diagnostics
+
+
+def _build_independent_daily_channels(
+    chan_results,
+    pure_pool,
+    sector_stocks,
+    *,
+    mode=None,
+    classic_builder=None,
+    right_builder=None,
+):
+    """Build classic startup from common upstream and right-side independently."""
+
+    selected_mode = resolve_right_side_startup_mode(mode)
+    classic_builder = classic_builder or build_strong_startup_pool
+    right_builder = right_builder or build_trend_continuation_pool
+    classic_input_state = select_classic_startup_inputs(
+        chan_results, pure_pool
+    )
+    common_results = classic_input_state["rows"]
+    common_diagnostics = classic_input_state["diagnostics"]
+    classic_seeds, classic_watchlist, classic_diagnostics = classic_builder(
+        common_results, sector_stocks
+    )
+    if selected_mode == "off":
+        right_seeds, right_watchlist = [], []
+        right_diagnostics = {
+            "enabled": False,
+            "mode": "off",
+            "scanned": 0,
+        }
+    else:
+        right_seeds, right_watchlist, right_diagnostics = right_builder(
+            chan_results, sector_stocks
+        )
+        right_diagnostics = dict(right_diagnostics or {})
+        right_diagnostics["mode"] = selected_mode
+        right_diagnostics["independent_input_count"] = len(chan_results or [])
+    classic_diagnostics = dict(classic_diagnostics or {})
+    classic_diagnostics["common_upstream"] = common_diagnostics
+    return {
+        "mode": selected_mode,
+        "classic_seeds": list(classic_seeds or []),
+        "classic_watchlist": list(classic_watchlist or []),
+        "classic_diagnostics": classic_diagnostics,
+        "right_seeds": list(right_seeds or []),
+        "right_watchlist": list(right_watchlist or []),
+        "right_diagnostics": right_diagnostics,
+        "classic_upstream": common_diagnostics,
+    }
+
+
+def _merge_right_side_scored_candidates(existing, right_side, *, mode=None):
+    """Append active right-side Top3 without mutating or reordering existing rows."""
+
+    selected_mode = resolve_right_side_startup_mode(mode)
+    existing_rows = list(existing or [])
+    existing_codes = {
+        str(row.get("code") or "")
+        for row in existing_rows
+        if isinstance(row, dict)
+    }
+    eligible = [
+        row for row in (right_side or [])
+        if isinstance(row, dict)
+        and str(row.get("code") or "") not in existing_codes
+    ]
+    mode_state = apply_right_side_startup_mode(
+        eligible,
+        existing_candidates=existing_rows,
+        mode=selected_mode,
+    )
+    published = list(mode_state["published"])
+    return existing_rows + published, {
+        **dict(mode_state["diagnostics"]),
+        "mode": selected_mode,
+        "published_codes": [
+            str(row.get("code") or "") for row in published
+        ],
+    }
+
+
+def _partition_30min_targets(
+    pure_pool,
+    fusion_pool,
+    startup_seeds,
+    right_side_seeds,
+    *,
+    fusion_admission_enabled,
+    right_side_mode,
+):
+    """Separate writable formal targets from read-only shadow inspection."""
+    selected_mode = resolve_right_side_startup_mode(right_side_mode)
+    writable_codes = {
+        _candidate_code(row) for row in (pure_pool or [])
+        if _candidate_code(row)
+    }
+    if not fusion_admission_enabled:
+        writable_codes.update(
+            _candidate_code(row) for row in (fusion_pool or [])
+            if _candidate_code(row)
+        )
+    writable_codes.update(
+        _candidate_code(row) for row in (startup_seeds or [])
+        if _candidate_code(row)
+    )
+    right_codes = {
+        _candidate_code(row) for row in (right_side_seeds or [])
+        if _candidate_code(row)
+    }
+    readonly_shadow_codes = set()
+    if selected_mode == "active":
+        writable_codes.update(right_codes)
+    elif selected_mode == "shadow":
+        readonly_shadow_codes = right_codes - writable_codes
+    return {
+        "writable_codes": writable_codes,
+        "readonly_shadow_codes": readonly_shadow_codes,
+    }
+
+
+def _analyze_30min_rows(rows):
+    """Analyze a caller-owned 30m row set without crossing channel boundaries."""
+    results = []
+    for row in rows or []:
+        kline = row["klines"]
+        result = analyze(
+            code=row["code"],
+            name=row.get("name", ""),
+            dates=kline["dates"],
+            opens=kline["opens"],
+            highs=kline["highs"],
+            lows=kline["lows"],
+            closes=kline["closes"],
+            volumes=kline["volumes"],
+        )
+        setattr(
+            result,
+            "strategy_input_evidence",
+            dict(row.get("input_evidence") or {}),
+        )
+        results.append(result)
+    return results
+
+
+def _eligible_acceleration_inputs(rows):
+    """Keep classic rows and only decision-approved right-side rows."""
+    output = []
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        if row.get("source_channel") != "right_side_startup":
+            output.append(row)
+            continue
+        decision = row.get("decision_engine_v1") or {}
+        if decision.get("decision_code") == "recommend":
+            output.append(row)
+    return output
+
+
+def _retain_formal_right_side_recommendations(rows):
+    """Fail closed for right-side rows after the shared formal decision gate."""
+    return _eligible_acceleration_inputs(rows)
 
 
 def _restrict_observation_to_common_upstream(items, upstream_candidates):
@@ -2153,20 +2325,23 @@ def main(debug=False, preview=False, generated_at=None):
 
         return merged
 
-    common_structure_results, startup_upstream_diag = (
-        _extend_upstream_for_limit_up_observation(chan_results, pure_pool)
+    daily_channels = _build_independent_daily_channels(
+        chan_results,
+        pure_pool,
+        sector_stocks,
+        mode=RIGHT_SIDE_STARTUP_MODE,
     )
-    startup_seeds, startup_watchlist, startup_diag = build_strong_startup_pool(
-        common_structure_results, sector_stocks)
-    startup_diag["common_upstream"] = startup_upstream_diag
+    startup_upstream_diag = daily_channels["classic_upstream"]
+    startup_seeds = daily_channels["classic_seeds"]
+    startup_watchlist = daily_channels["classic_watchlist"]
+    startup_diag = daily_channels["classic_diagnostics"]
     startup_seeds = [_attach_sector_metadata(s) for s in startup_seeds]
     startup_seeds = [_attach_liquidity(s) for s in startup_seeds]
     startup_watchlist = [_attach_sector_metadata(w) for w in startup_watchlist]
     startup_watchlist = [_attach_liquidity(w) for w in startup_watchlist]
-    trend_seeds, trend_watchlist, trend_diag = build_trend_continuation_pool(
-        common_structure_results, sector_stocks
-    )
-    trend_diag["common_upstream"] = startup_upstream_diag
+    trend_seeds = daily_channels["right_seeds"]
+    trend_watchlist = daily_channels["right_watchlist"]
+    trend_diag = daily_channels["right_diagnostics"]
     trend_seeds = [_attach_liquidity(_attach_sector_metadata(s)) for s in trend_seeds]
     trend_watchlist = [
         _attach_liquidity(_attach_sector_metadata(w)) for w in trend_watchlist
@@ -2176,8 +2351,11 @@ def main(debug=False, preview=False, generated_at=None):
         + ([] if ENABLE_FUSION_ADMISSION_POLICY else list(fusion_pool))
         + list(startup_seeds)
         + list(startup_watchlist)
-        + list(trend_seeds)
-        + list(trend_watchlist)
+        + (
+            list(trend_seeds) + list(trend_watchlist)
+            if RIGHT_SIDE_STARTUP_MODE == "active"
+            else []
+        )
     )
     candidate_funnel.register_many(daily_channel_items)
     candidate_funnel.mark_membership(
@@ -2195,10 +2373,18 @@ def main(debug=False, preview=False, generated_at=None):
           f"无量={startup_diag.get('dropped_no_volume', 0)}, "
           f"无突破={startup_diag.get('dropped_no_breakout', 0)}")
     print(
-        f"  趋势延续: 种子={trend_diag.get('trend_seed', 0)}, "
+        f"  右侧启动({RIGHT_SIDE_STARTUP_MODE}): 种子={trend_diag.get('trend_seed', 0)}, "
         f"近失观察={trend_diag.get('watch_near_miss', 0)}, "
         f"风险观察={trend_diag.get('watch_risk', 0)}"
     )
+
+    right_side_confirmed = []
+    right_side_fusion_confirmed = []
+    right_side_fusion_diag = {}
+    right_side_publish_diag = {
+        "mode": RIGHT_SIDE_STARTUP_MODE,
+        "published_codes": [],
+    }
 
     # ================================================================
     # Phase 4.6: 罗姐池（国家队硬方向 + 15min生命线）
@@ -2283,33 +2469,44 @@ def main(debug=False, preview=False, generated_at=None):
     trend_additional_watchlist = []
     all_target_codes = set()
     all_targets = []
-    min30_data_list = []
+    formal_min30_data_list = []
+    shadow_min30_data_list = []
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
-        if ENABLE_FUSION_ADMISSION_POLICY:
-            all_target_codes = {s["code"] for s in pure_pool}
-        else:
-            pure_codes = {s["code"] for s in pure_pool}
-            fusion_codes = {s["code"] for s in fusion_pool}
-            all_target_codes = pure_codes | fusion_codes
-
-        # Add startup seed codes (only non-limit-up, which need 30min confirmation)
+        target_partition = _partition_30min_targets(
+            pure_pool,
+            [] if ENABLE_FUSION_ADMISSION_POLICY else fusion_pool,
+            startup_seeds,
+            trend_seeds,
+            fusion_admission_enabled=ENABLE_FUSION_ADMISSION_POLICY,
+            right_side_mode=RIGHT_SIDE_STARTUP_MODE,
+        )
+        all_target_codes = set(target_partition["writable_codes"])
         startup_seed_codes = {s["code"] for s in startup_seeds}
         trend_seed_codes = {s["code"] for s in trend_seeds}
-        all_target_codes |= startup_seed_codes | trend_seed_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
 
         print(f"  结构池并集: {len(all_target_codes)} 只 "
               f"(含低位启动: {len(startup_seed_codes)}, "
               f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
-        min30_data_list = collect_30min_data(
+        formal_min30_data_list = collect_30min_data(
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
         )
+        if target_partition["readonly_shadow_codes"]:
+            shadow_targets = [
+                {"code": code, "name": ""}
+                for code in sorted(target_partition["readonly_shadow_codes"])
+            ]
+            shadow_min30_data_list = load_30min_data_readonly(
+                shadow_targets,
+                required_date=today,
+                as_of=time_metadata.get("as_of"),
+            )
 
-        if not min30_data_list:
+        if not formal_min30_data_list:
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结构池结果")
             # Without 30min, keep formal buys only, drop upgradeable-only stocks
             pure_confirmed = _downgrade_to_formal_only(pure_pool)
@@ -2329,15 +2526,6 @@ def main(debug=False, preview=False, generated_at=None):
                     "startup_candidate": 0,
                     "watch_due_to_no_30min_confirm": 0,
                 }
-            (
-                trend_candidates,
-                trend_additional_watchlist,
-                trend_upgrade_diag,
-            ) = upgrade_trend_continuation_with_30min(trend_seeds, [])
-            trend_watchlist.extend(
-                _attach_liquidity(_attach_sector_metadata(item))
-                for item in trend_additional_watchlist
-            )
             upgrade_diag_pure = {"requested_30min": 0, "fetched_30min": 0, "formal_kept": len(pure_confirmed),
                                  "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(pure_confirmed)}
             if ENABLE_FUSION_ADMISSION_POLICY:
@@ -2353,22 +2541,8 @@ def main(debug=False, preview=False, generated_at=None):
                                        "candidate_upgraded": 0, "dropped_no_confirm": 0, "dropped_no_30min": len(pure_pool) - len(fusion_confirmed)}
                 fusion_admission_diag = {}
         else:
-            print(f"  30分钟数据获取: {len(min30_data_list)} 只, 缠论分析 ...")
-            chan_results_30min = []
-            for d in min30_data_list:
-                kline = d["klines"]
-                result = analyze(
-                    code=d["code"], name=d.get("name", ""),
-                    dates=kline["dates"], opens=kline["opens"],
-                    highs=kline["highs"], lows=kline["lows"],
-                    closes=kline["closes"], volumes=kline["volumes"],
-                )
-                setattr(
-                    result,
-                    "strategy_input_evidence",
-                    dict(d.get("input_evidence") or {}),
-                )
-                chan_results_30min.append(result)
+            print(f"  30分钟数据获取: {len(formal_min30_data_list)} 只, 缠论分析 ...")
+            chan_results_30min = _analyze_30min_rows(formal_min30_data_list)
 
             print(f"  30分钟分析完成: {sum(1 for r in chan_results_30min if r is not None)} 只有效")
 
@@ -2472,44 +2646,9 @@ def main(debug=False, preview=False, generated_at=None):
             else:
                 startup_upgrade_diag = {}
 
-            if trend_seeds:
-                print("[趋势延续30min升级]")
-                (
-                    trend_candidates,
-                    trend_additional_watchlist,
-                    trend_upgrade_diag,
-                ) = upgrade_trend_continuation_with_30min(
-                    trend_seeds, chan_results_30min
-                )
-                trend_watchlist.extend(
-                    _attach_liquidity(_attach_sector_metadata(item))
-                    for item in trend_additional_watchlist
-                )
-                existing_codes = {
-                    str(item.get("code") or "") for item in pure_confirmed
-                }
-                normalized_trend = []
-                for candidate in trend_candidates:
-                    if str(candidate.get("code") or "") in existing_codes:
-                        continue
-                    pick = normalize_trend_candidate(candidate)
-                    pick["macd_hist"] = calc_macd(
-                        candidate.get("closes", [])
-                    )[2]
-                    normalized_trend.append(
-                        _attach_liquidity(_attach_sector_metadata(pick))
-                    )
-                pure_confirmed.extend(normalized_trend)
-                print(
-                    f"  trend_candidate={trend_upgrade_diag['trend_candidate']}, "
-                    f"watch={len(trend_additional_watchlist)}, "
-                    f"合并主池={len(normalized_trend)}"
-                )
-
             if ENABLE_FUSION_ADMISSION_POLICY:
                 # Fusion: apply admission policy on top of pure confirmed picks
                 print("[融合版admission]")
-                import copy
                 fusion_ready = copy.deepcopy(pure_confirmed)
                 fusion_confirmed, fusion_admission_diag = apply_fusion_admission(
                     fusion_ready, sh_closes, sector_stocks)
@@ -2541,40 +2680,73 @@ def main(debug=False, preview=False, generated_at=None):
                       f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}, "
                       f"dropped_diverge_far={upgrade_diag_fusion.get('dropped_diverge_far', 0)}")
                 fusion_admission_diag = {}
+
+        # Right-side startup has a private 30m lane.  In shadow mode its
+        # read-only hits must never make the formal fetch appear successful.
+        if trend_seeds:
+            right_side_rows_by_code = {}
+            for row in formal_min30_data_list:
+                code = str(row.get("code") or "")
+                if code in trend_seed_codes:
+                    right_side_rows_by_code[code] = row
+            for row in shadow_min30_data_list:
+                code = str(row.get("code") or "")
+                if code in trend_seed_codes:
+                    right_side_rows_by_code.setdefault(code, row)
+            right_side_min30_rows = list(right_side_rows_by_code.values())
+            right_side_chan_results = _analyze_30min_rows(
+                right_side_min30_rows
+            )
+            print("[右侧启动30min升级]")
+            (
+                trend_candidates,
+                trend_additional_watchlist,
+                trend_upgrade_diag,
+            ) = upgrade_trend_continuation_with_30min(
+                trend_seeds, right_side_chan_results
+            )
+            trend_watchlist.extend(
+                _attach_liquidity(_attach_sector_metadata(item))
+                for item in trend_additional_watchlist
+            )
+            normalized_trend = []
+            for candidate in trend_candidates:
+                pick = normalize_trend_candidate(candidate)
+                pick["macd_hist"] = calc_macd(
+                    candidate.get("closes", [])
+                )[2]
+                normalized_trend.append(
+                    _attach_liquidity(_attach_sector_metadata(pick))
+                )
+            right_side_confirmed = normalized_trend
+            print(
+                f"  trend_candidate={trend_upgrade_diag['trend_candidate']}, "
+                f"watch={len(trend_additional_watchlist)}, "
+                f"影子候选={len(normalized_trend)}, "
+                f"mode={RIGHT_SIDE_STARTUP_MODE}"
+            )
     else:
         # Rollback: old 30min confirmation flow
         pure_codes = {s["code"] for s in pure_pool}
         fusion_codes = {s["code"] for s in fusion_pool}
         all_target_codes = pure_codes | fusion_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
-        min30_data_list = collect_30min_data(
+        formal_min30_data_list = collect_30min_data(
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
         )
 
-        if not min30_data_list:
+        if not formal_min30_data_list:
             print("  30分钟数据获取失败，跳过精细确认，直接用日线结果")
             pure_confirmed = pure_pool
             fusion_confirmed = fusion_pool
         else:
-            min30_map = {d["code"]: d for d in min30_data_list}
+            min30_map = {d["code"]: d for d in formal_min30_data_list}
             print("  30分钟缠论分析 ...")
-            chan_results_30min = []
-            for d in min30_data_list:
-                kline = d["klines"]
-                result = analyze(
-                    code=d["code"], name=d.get("name", ""),
-                    dates=kline["dates"], opens=kline["opens"],
-                    highs=kline["highs"], lows=kline["lows"],
-                    closes=kline["closes"], volumes=kline["volumes"],
-                )
-                setattr(
-                    result,
-                    "strategy_input_evidence",
-                    dict(d.get("input_evidence") or {}),
-                )
-                chan_results_30min.append(result)
+            chan_results_30min = _analyze_30min_rows(
+                formal_min30_data_list
+            )
             print("[纯净版 30min确认]")
             pure_confirmed = screen_30min_pure(pure_pool, chan_results_30min)
             print(f"  区间套确认: {len(pure_confirmed)} 只")
@@ -2597,8 +2769,17 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     min30_input_health = _build_sublevel_input_health(
-        "30m", all_targets, min30_data_list, today
+        "30m", all_targets, formal_min30_data_list, today
     )
+
+    if right_side_confirmed:
+        right_side_fusion_confirmed, right_side_fusion_diag = (
+            apply_fusion_admission(
+                copy.deepcopy(right_side_confirmed),
+                sh_closes,
+                sector_stocks,
+            )
+        )
 
     # ================================================================
     # Phase 6: Score + generate report
@@ -2610,6 +2791,14 @@ def main(debug=False, preview=False, generated_at=None):
     # Signal recency filter (before scoring, per spec)
     pure_confirmed, recency_pure_diag = filter_recent_picks(pure_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
     fusion_confirmed, recency_fusion_diag = filter_recent_picks(fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS)
+    right_side_confirmed, recency_right_side_diag = filter_recent_picks(
+        right_side_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    right_side_fusion_confirmed, recency_right_side_fusion_diag = (
+        filter_recent_picks(
+            right_side_fusion_confirmed, SIGNAL_MAX_AGE_TRADING_DAYS
+        )
+    )
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
     trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
@@ -2619,7 +2808,21 @@ def main(debug=False, preview=False, generated_at=None):
         _attach_liquidity(_attach_sector_metadata(item))
         for item in trend_watchlist
     ]
-    observation_watchlist = startup_watchlist + trend_watchlist
+    right_side_shadow_candidates = copy.deepcopy(right_side_confirmed)
+    right_side_shadow_watchlist = copy.deepcopy(trend_watchlist)
+    formal_recency_trend_watch_diag = (
+        recency_trend_watch_diag
+        if RIGHT_SIDE_STARTUP_MODE == "active"
+        else {
+            "input": 0,
+            "kept": 0,
+            "dropped_expired": 0,
+            "dropped_details": [],
+        }
+    )
+    observation_watchlist = startup_watchlist + (
+        trend_watchlist if RIGHT_SIDE_STARTUP_MODE == "active" else []
+    )
     minute30_pass_items = (
         list(pure_confirmed)
         + list(fusion_confirmed)
@@ -2642,10 +2845,26 @@ def main(debug=False, preview=False, generated_at=None):
     # Score
     pure_scored = apply_scores(pure_confirmed, version="pure")
     fusion_scored = apply_scores(fusion_confirmed, version="fusion", sector_rank_map=sectors)
+    right_side_pure_scored = apply_scores(
+        right_side_confirmed, version="pure"
+    )
+    right_side_fusion_scored = apply_scores(
+        right_side_fusion_confirmed,
+        version="fusion",
+        sector_rank_map=sectors,
+    )
     pure_scored = [_attach_sector_metadata(p) for p in pure_scored]
     fusion_scored = [_attach_sector_metadata(p) for p in fusion_scored]
     pure_scored = [_attach_liquidity(p) for p in pure_scored]
     fusion_scored = [_attach_liquidity(p) for p in fusion_scored]
+    right_side_pure_scored = [
+        _attach_liquidity(_attach_sector_metadata(p))
+        for p in right_side_pure_scored
+    ]
+    right_side_fusion_scored = [
+        _attach_liquidity(_attach_sector_metadata(p))
+        for p in right_side_fusion_scored
+    ]
     pure_scored = _attach_gf_dma_health(pure_scored)
     fusion_scored = _attach_gf_dma_health(fusion_scored)
     pure_scored = [_attach_signal_dimensions(p) for p in pure_scored]
@@ -2659,16 +2878,55 @@ def main(debug=False, preview=False, generated_at=None):
             legacy_codes,
         )
     )
+    fusion_scored, right_side_publish_diag = (
+        _merge_right_side_scored_candidates(
+            fusion_scored,
+            right_side_fusion_scored,
+            mode=RIGHT_SIDE_STARTUP_MODE,
+        )
+    )
+    published_right_side_codes = set(
+        right_side_publish_diag["published_codes"]
+    )
+    selected_right_side_pure = [
+        row for row in right_side_pure_scored
+        if str(row.get("code") or "") in published_right_side_codes
+    ]
+    pure_scored, right_side_pure_publish_diag = (
+        _merge_right_side_scored_candidates(
+            pure_scored,
+            selected_right_side_pure,
+            mode=(
+                "active"
+                if RIGHT_SIDE_STARTUP_MODE == "active"
+                else RIGHT_SIDE_STARTUP_MODE
+            ),
+        )
+    )
+    right_side_publish_diag["pure_published_codes"] = (
+        right_side_pure_publish_diag["published_codes"]
+    )
     fusion_scored, fusion_upstream_diag = _restrict_to_common_upstream(
         fusion_scored, pure_scored
     )
     startup_watchlist, startup_final_upstream_diag = (
         _restrict_observation_to_common_upstream(startup_watchlist, pure_scored)
     )
-    trend_watchlist, trend_final_upstream_diag = (
+    trend_watchlist, shadow_trend_final_upstream_diag = (
         _restrict_observation_to_common_upstream(trend_watchlist, pure_scored)
     )
-    observation_watchlist = startup_watchlist + trend_watchlist
+    formal_trend_watchlist = (
+        trend_watchlist if RIGHT_SIDE_STARTUP_MODE == "active" else []
+    )
+    _, empty_trend_upstream_diag = _restrict_observation_to_common_upstream(
+        [], pure_scored
+    )
+    trend_final_upstream_diag = (
+        shadow_trend_final_upstream_diag
+        if RIGHT_SIDE_STARTUP_MODE == "active"
+        else empty_trend_upstream_diag
+    )
+    observation_watchlist = startup_watchlist + formal_trend_watchlist
     luojie_candidates, luojie_final_upstream_diag = (
         _restrict_to_common_upstream(
             luojie_pool.get("candidates", []), pure_scored
@@ -2731,41 +2989,6 @@ def main(debug=False, preview=False, generated_at=None):
             reason=index_error,
         )
 
-    # 次日大涨候选（独立于原选股池，不改变 pure/fusion 结果）
-    next_day_boom = build_next_day_boom_candidates(
-        picks_fusion=fusion_scored,
-        startup_watchlist=[
-            item
-            for item in startup_watchlist
-            if (
-                RECALL_STRATEGY_MODE == "active"
-                or str(item.get("code") or "") in legacy_codes
-            )
-        ],
-        market=market_indices,
-    )
-    print(f"  次日大涨模式: {next_day_boom.get('mode')} "
-          f"候选={len(next_day_boom.get('candidates', []))} "
-          f"原因={next_day_boom.get('reason', '')}")
-    next_day_source_map = {}
-    for item in list(fusion_scored) + list(startup_watchlist):
-        if isinstance(item, dict) and item.get("code"):
-            next_day_source_map[item["code"]] = item
-    next_day_candidates = []
-    for candidate in next_day_boom.get("candidates", []):
-        merged = dict(candidate)
-        source = next_day_source_map.get(candidate.get("code"), {})
-        if isinstance(source, dict):
-            source_for_merge = {
-                k: source.get(k)
-                for k in ("market_cap", "circulating_market_cap", "float_market_cap", "amounts", "amount", "closes", "volumes")
-            }
-            merged.update(source_for_merge)
-        merged = _attach_sector_metadata(merged)
-        merged = _attach_liquidity(merged)
-        next_day_candidates.append(merged)
-    next_day_boom["candidates"] = next_day_candidates
-
     # 上证缠论结构
     print("  分析上证缠论结构 ...")
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
@@ -2815,7 +3038,6 @@ def main(debug=False, preview=False, generated_at=None):
             pure_scored,
             fusion_scored,
             observation_watchlist,
-            next_day_boom.get("candidates", []),
             luojie_pool.get("candidates", []),
         ):
             for decision_item in decision_items or []:
@@ -2823,8 +3045,63 @@ def main(debug=False, preview=False, generated_at=None):
         _inject_decision_engine(pure_scored, decision_engine, market_context)
         _inject_decision_engine(fusion_scored, decision_engine, market_context)
         _inject_decision_engine(observation_watchlist, decision_engine, market_context)
-        _inject_decision_engine(next_day_boom.get("candidates", []), decision_engine, market_context)
         _inject_decision_engine(luojie_pool.get("candidates", []), decision_engine, market_context)
+
+    pure_scored = _retain_formal_right_side_recommendations(pure_scored)
+    fusion_scored = _retain_formal_right_side_recommendations(fusion_scored)
+    final_right_side_codes = [
+        str(row.get("code") or "") for row in fusion_scored
+        if row.get("source_channel") == "right_side_startup"
+    ]
+    right_side_publish_diag["published_codes"] = final_right_side_codes
+    right_side_publish_diag["pure_published_codes"] = [
+        str(row.get("code") or "") for row in pure_scored
+        if row.get("source_channel") == "right_side_startup"
+    ]
+
+    # 次日大涨候选是研究池；右侧来源必须已经通过正式决策门。
+    acceleration_inputs = _eligible_acceleration_inputs(fusion_scored)
+    next_day_boom = build_next_day_boom_candidates(
+        picks_fusion=acceleration_inputs,
+        startup_watchlist=[
+            item
+            for item in startup_watchlist
+            if (
+                RECALL_STRATEGY_MODE == "active"
+                or str(item.get("code") or "") in legacy_codes
+            )
+        ],
+        market=market_indices,
+    )
+    print(f"  次日大涨模式: {next_day_boom.get('mode')} "
+          f"候选={len(next_day_boom.get('candidates', []))} "
+          f"原因={next_day_boom.get('reason', '')}")
+    next_day_source_map = {}
+    for item in list(acceleration_inputs) + list(startup_watchlist):
+        if isinstance(item, dict) and item.get("code"):
+            next_day_source_map[item["code"]] = item
+    next_day_candidates = []
+    for candidate in next_day_boom.get("candidates", []):
+        merged = dict(candidate)
+        source = next_day_source_map.get(candidate.get("code"), {})
+        if isinstance(source, dict):
+            merged.update({
+                key: source.get(key)
+                for key in (
+                    "market_cap", "circulating_market_cap",
+                    "float_market_cap", "amounts", "amount", "closes",
+                    "volumes",
+                )
+            })
+        merged = _attach_liquidity(_attach_sector_metadata(merged))
+        next_day_candidates.append(merged)
+    next_day_boom["candidates"] = next_day_candidates
+    if decision_engine:
+        for decision_item in next_day_boom.get("candidates", []):
+            _attach_position_evidence(decision_item, today)
+        _inject_decision_engine(
+            next_day_boom.get("candidates", []), decision_engine, market_context
+        )
 
     h4_t3_pool = _build_daily_h4_t3_pool(pure_scored, today)
     daily_fusion_input_health = _build_formal_input_health(
@@ -3013,12 +3290,6 @@ def main(debug=False, preview=False, generated_at=None):
             "startup_candidates": len(startup_candidates),
             "startup_watchlist": len(startup_watchlist),
         },
-        "trend_continuation": {
-            "daily_scan": trend_diag,
-            "upgrade": trend_upgrade_diag,
-            "trend_candidates": len(trend_candidates),
-            "trend_watchlist": len(trend_watchlist),
-        },
         "candidate_funnel": {
             **candidate_funnel.summary(),
             "persist_status": funnel_persist_status,
@@ -3037,16 +3308,16 @@ def main(debug=False, preview=False, generated_at=None):
             "watch_input": recency_watch_diag["input"],
             "watch_kept": recency_watch_diag["kept"],
             "watch_dropped_expired": recency_watch_diag["dropped_expired"],
-            "trend_watch_input": recency_trend_watch_diag["input"],
-            "trend_watch_kept": recency_trend_watch_diag["kept"],
-            "trend_watch_dropped_expired": recency_trend_watch_diag[
+            "trend_watch_input": formal_recency_trend_watch_diag["input"],
+            "trend_watch_kept": formal_recency_trend_watch_diag["kept"],
+            "trend_watch_dropped_expired": formal_recency_trend_watch_diag[
                 "dropped_expired"
             ],
             "dropped_details": (
                 recency_pure_diag.get("dropped_details", []) +
                 recency_fusion_diag.get("dropped_details", []) +
                 recency_watch_diag.get("dropped_details", []) +
-                recency_trend_watch_diag.get("dropped_details", [])
+                formal_recency_trend_watch_diag.get("dropped_details", [])
             ),
         },
         "preview": {
@@ -3394,6 +3665,32 @@ def main(debug=False, preview=False, generated_at=None):
         "luojie_pool": luojie_pool,
         "h4_t3_pool": h4_t3_pool,
     }
+    report_data["right_side_startup"] = {
+        "mode": RIGHT_SIDE_STARTUP_MODE,
+        "policy_version": RIGHT_SIDE_STARTUP_POLICY_VERSION,
+        "affects_production": bool(
+            RIGHT_SIDE_STARTUP_MODE == "active"
+            and right_side_publish_diag.get("published_codes")
+        ),
+        "published_codes": list(
+            right_side_publish_diag.get("published_codes") or []
+        ),
+        "diagnostics": {
+            "daily": trend_diag,
+            "upgrade": trend_upgrade_diag,
+            "fusion_admission": right_side_fusion_diag,
+            "publication": right_side_publish_diag,
+            "recency": recency_trend_watch_diag,
+            "final_upstream": shadow_trend_final_upstream_diag,
+        },
+    }
+    if RIGHT_SIDE_STARTUP_MODE == "active":
+        report_data["diagnostics"]["trend_continuation"] = {
+            "daily_scan": trend_diag,
+            "upgrade": trend_upgrade_diag,
+            "trend_candidates": len(trend_candidates),
+            "trend_watchlist": len(trend_watchlist),
+        }
 
     report_data["shadow_evaluations"] = build_daily_shadow_evaluations(
         report_data,
@@ -3411,6 +3708,36 @@ def main(debug=False, preview=False, generated_at=None):
     # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
     generate_report(report_data, output_dir)
     update_data_json(report_data, output_dir)
+
+    if (
+        RIGHT_SIDE_STARTUP_MODE == "shadow"
+        and not debug
+        and not preview
+    ):
+        try:
+            audit_result = write_right_side_startup_audit(
+                report_data["right_side_startup"],
+                trade_date=today,
+                generated_at=time_metadata.get("generated_at") or "",
+                as_of=time_metadata.get("as_of") or "",
+                candidates=right_side_shadow_candidates,
+                watchlist=right_side_shadow_watchlist,
+                run_identity={
+                    "plane": "formal_postclose",
+                    "formal_report_identity": {
+                        "trade_date": today,
+                        "candidate_funnel_run_id": (
+                            report_data.get("diagnostics", {})
+                            .get("candidate_funnel", {})
+                            .get("run_id")
+                        ),
+                    },
+                    "preclose_snapshot_identity": None,
+                },
+            )
+            print("  右侧启动影子审计: {}".format(audit_result["path"]))
+        except Exception as exc:
+            print("  右侧启动影子审计写入失败（不阻塞正式任务）: {}".format(exc))
 
     print()
     print("=" * 60)

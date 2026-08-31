@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only post-close reconciliation for the isolated 14:47 advisory."""
+"""Read-only post-close reconciliation for the isolated 14:45 advisory."""
 
 from __future__ import annotations
 
@@ -166,7 +166,7 @@ def load_formal_workspace(
 
 
 class PrecloseReconcileLock:
-    """Atomic lock isolated from both the formal and 14:47 run locks."""
+    """Atomic lock isolated from both the formal and 14:45 run locks."""
 
     def __init__(self, path, run_id):
         self.path = Path(path)

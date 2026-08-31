@@ -50,9 +50,9 @@ def format_preclose_message(snapshot):
     pools = source.get("pools") if isinstance(source.get("pools"), dict) else {}
     has_rows = any(pools.get(key) for key, _label in POOL_LABELS)
     if source.get("status") != "available" or not has_rows:
-        return "【14:47预跑】\n本期未选出推荐票"
+        return "【14:45预跑】\n本期未选出推荐票"
     return "\n".join(
-        ["【14:47预跑】14:56:30前有效"]
+        ["【14:45预跑】14:56:30前有效"]
         + _pool_lines(source)
         + ["14:57后不再下单"]
     )
@@ -78,10 +78,10 @@ def format_reconciliation_message(reconciliation):
             ))
         return "\n".join([
             "【盘后复核】",
-            "正式结果与14:47预跑一致",
+            "正式结果与14:45预跑一致",
             "｜".join(counts),
         ])
-    lines = ["【盘后复核】与14:47预跑有变化"]
+    lines = ["【盘后复核】与14:45预跑有变化"]
     for key, label in POOL_LABELS:
         pool = pools.get(key) if isinstance(pools.get(key), dict) else {}
         pieces = []
@@ -137,7 +137,7 @@ def send_wxpusher_message(
     uid,
     post=None,
     timeout=10,
-    summary="14:47预跑提醒",
+    summary="14:45预跑提醒",
 ):
     """Return success only when both HTTP and WxPusher business status succeed."""
 

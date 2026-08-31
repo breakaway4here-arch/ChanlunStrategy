@@ -6,6 +6,7 @@ import re
 import shutil
 import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 import numpy as np
 
@@ -84,6 +85,139 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 
 class TestReportGenerator(unittest.TestCase):
+    def test_right_side_evidence_and_shadow_diagnostics_are_serialized_without_second_score(self):
+        pick = make_pick()
+        pick.update({
+            "source_channel": "right_side_startup",
+            "source_type": "日线右侧启动",
+            "reference_price": 48.11,
+            "trend_signals": ["突破20日平台"],
+            "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+            "cancel_conditions": ["跌破右侧突破参考位 48.11"],
+            "decision_engine_v1": {
+                "decision_code": "recommend",
+                "decision": "推荐",
+                "total_score": 73,
+            },
+        })
+        serialized = _serialize_picks([pick])[0]
+        report_data = {
+            "date": "2026-08-31",
+            "picks_pure": [],
+            "picks_fusion": [pick],
+            "right_side_startup": {
+                "mode": "shadow",
+                "policy_version": "right-side-startup-v1",
+                "diagnostics": {"candidate_count": 1},
+            },
+        }
+        daily = report_generator.build_full_daily_projection(
+            report_data, include_right_side_shadow=True
+        )
+
+        self.assertEqual({
+            "source_label": "右侧启动",
+            "reference_price": 48.11,
+            "why": ["突破20日平台"],
+            "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+            "invalidation": ["跌破右侧突破参考位 48.11"],
+        }, serialized["right_side_startup_evidence"])
+        self.assertNotIn("right_side_score", serialized)
+        self.assertEqual("shadow", daily["right_side_startup"]["mode"])
+        self.assertEqual(
+            "shadow",
+            daily["workspace"]["diagnostics"]["right_side_startup"]["mode"],
+        )
+
+        formal = report_generator.build_formal_output_projection(report_data)
+        self.assertNotIn("right_side_startup", formal["daily"])
+        self.assertNotIn("right_side_startup", formal["aggregate"])
+
+        public_daily = report_generator.build_full_daily_projection(report_data)
+        public_aggregate = report_generator.build_aggregate_day_projection(
+            report_data
+        )
+        self.assertNotIn("right_side_startup", public_daily)
+        self.assertNotIn("right_side_startup", public_aggregate)
+
+        active_data = dict(report_data)
+        active_data["right_side_startup"] = {
+            **report_data["right_side_startup"],
+            "mode": "active",
+            "affects_production": True,
+        }
+        active_formal = report_generator.build_formal_output_projection(
+            active_data
+        )
+        self.assertEqual(
+            "active", active_formal["daily"]["right_side_startup"]["mode"]
+        )
+
+    def test_public_writers_are_byte_equivalent_for_off_and_shadow_right_side(self):
+        base = {
+            "date": "2026-08-31",
+            "picks_pure": [],
+            "picks_fusion": [],
+            "diagnostics": {"stable": True},
+        }
+        off = {
+            **base,
+            "right_side_startup": {
+                "mode": "off",
+                "diagnostics": {"candidate_count": 0},
+            },
+        }
+        shadow = {
+            **base,
+            "right_side_startup": {
+                "mode": "shadow",
+                "diagnostics": {
+                    "candidate_count": 1,
+                    "items": [{"code": "300709"}],
+                },
+            },
+        }
+
+        canonical = lambda payload: json.dumps(
+            payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+        self.assertEqual(
+            canonical(report_generator.build_full_daily_projection(off)),
+            canonical(report_generator.build_full_daily_projection(shadow)),
+        )
+        self.assertEqual(
+            canonical(report_generator.build_aggregate_day_projection(off)),
+            canonical(report_generator.build_aggregate_day_projection(shadow)),
+        )
+
+        with tempfile.TemporaryDirectory() as off_dir, tempfile.TemporaryDirectory() as shadow_dir:
+            generate_report(off, output_dir=off_dir, comparison_db_path="")
+            update_data_json(off, output_dir=off_dir)
+            generate_report(shadow, output_dir=shadow_dir, comparison_db_path="")
+            update_data_json(shadow, output_dir=shadow_dir)
+            for relative in (
+                "index.html",
+                "data.json",
+                "data/2026-08-31.json",
+            ):
+                self.assertEqual(
+                    (Path(off_dir) / relative).read_bytes(),
+                    (Path(shadow_dir) / relative).read_bytes(),
+                    relative,
+                )
+            off_comparison = json.loads(
+                (Path(off_dir) / "data/comparison-index.json").read_text()
+            )
+            shadow_comparison = json.loads(
+                (Path(shadow_dir) / "data/comparison-index.json").read_text()
+            )
+            off_comparison.pop("generated_at", None)
+            shadow_comparison.pop("generated_at", None)
+            self.assertEqual(off_comparison, shadow_comparison)
+
 
     def test_generate_report_refreshes_asset_version_on_existing_archives(self):
         with tempfile.TemporaryDirectory() as tmpdir:

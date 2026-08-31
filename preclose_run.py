@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI and single-run lock for the isolated 14:47 pre-close pipeline."""
+"""CLI and single-run lock for the isolated 14:45 pre-close pipeline."""
 
 from __future__ import annotations
 
@@ -36,6 +36,9 @@ from chanlun.preclose_schedule import is_trading_day
 # to 30 seconds after the main acquisition alarm.  Keep that drain window and
 # one bounded Worker request window inside the shared 14:49 cutoff.
 DELIVERY_RESERVE_SECONDS = 36.0
+MAX_PRE_CLOSE_RUNTIME_SECONDS = 240.0
+PRE_CLOSE_START_TIME = wall_time(14, 45)
+PRE_CLOSE_CUTOFF_TIME = wall_time(14, 49)
 
 
 class PrecloseExecutionDeadline(BaseException):
@@ -375,7 +378,10 @@ def _scheduled_wall_budget(current):
     deadline = current.replace(
         hour=14, minute=49, second=0, microsecond=0
     )
-    return max(0.0, min(120.0, (deadline - current).total_seconds()))
+    return max(0.0, min(
+        MAX_PRE_CLOSE_RUNTIME_SECONDS,
+        (deadline - current).total_seconds(),
+    ))
 
 
 def _read_frozen_snapshot(snapshot_path, trade_date):
@@ -458,11 +464,11 @@ def _finalize_scheduled_result(
     if skip_publish or not snapshot_path:
         return result
 
-    # A monotonic clock protects the 120-second total budget even if the wall
+    # A monotonic clock protects the 240-second total budget even if the wall
     # clock supplied by the scheduler is stale or moves backwards.
     elapsed = max(0.0, float(monotonic()) - started_at)
     wall_budget = _scheduled_wall_budget(now())
-    total_budget = max(0.0, 120.0 - elapsed)
+    total_budget = max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed)
     delivery_budget = min(wall_budget, total_budget)
     if delivery_budget <= 0:
         result["exit_code"] = 1
@@ -546,7 +552,7 @@ def _freeze_fallback_before_cutoff(
     elapsed = max(0.0, float(monotonic()) - started_at)
     remaining = min(
         _scheduled_wall_budget(now()),
-        max(0.0, 120.0 - elapsed),
+        max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed),
     )
     budget = max(0.0, remaining - DELIVERY_RESERVE_SECONDS)
     deadline_result = {
@@ -603,7 +609,7 @@ def run_scheduled_preclose(
             "exit_code": 0,
         }
     current_clock = current.time().replace(tzinfo=None)
-    if not (wall_time(14, 47) <= current_clock < wall_time(14, 49)):
+    if not (PRE_CLOSE_START_TIME <= current_clock < PRE_CLOSE_CUTOFF_TIME):
         return {
             "status": "outside_preclose_window",
             "trade_date": trade_date,
@@ -720,7 +726,7 @@ def run_scheduled_preclose(
         generated = now()
         elapsed = max(0.0, float(monotonic()) - started_at)
         strategy_remaining = min(
-            120.0 - elapsed - DELIVERY_RESERVE_SECONDS,
+            MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed - DELIVERY_RESERVE_SECONDS,
             _scheduled_wall_budget(generated) - DELIVERY_RESERVE_SECONDS,
         )
         if strategy_remaining <= 0 and not acquisition_status:
@@ -732,7 +738,10 @@ def run_scheduled_preclose(
             generated_at=generated.isoformat(timespec="seconds"),
             source_sha=source_sha,
             run_id=run_id,
-            deadline_seconds=max(0.001, min(120.0, strategy_remaining)),
+            deadline_seconds=max(
+                0.001,
+                min(MAX_PRE_CLOSE_RUNTIME_SECONDS, strategy_remaining),
+            ),
             monotonic=monotonic,
         )
 
@@ -992,7 +1001,11 @@ def _arguments(argv=None):
     parser.add_argument("--generated-at")
     parser.add_argument("--source-sha")
     parser.add_argument("--run-id")
-    parser.add_argument("--deadline-seconds", type=float, default=120.0)
+    parser.add_argument(
+        "--deadline-seconds",
+        type=float,
+        default=MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    )
     parser.add_argument(
         "--env-file",
         default="~/.config/chanlun-strategy/preclose.env",

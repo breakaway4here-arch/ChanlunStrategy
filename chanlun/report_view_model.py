@@ -16,6 +16,7 @@ from typing import Any, Dict, Iterable, List, Mapping
 
 from chanlun.scoring_engine import compute_opportunity_score
 from chanlun.pool_contract import resolve_list_pool, resolve_nested_strategy_pool
+from chanlun.right_side_startup import build_right_side_startup_evidence
 from config import (
     OBSERVATION_MAX_PER_REASON,
     OBSERVATION_MAX_PER_SECTOR,
@@ -1269,6 +1270,17 @@ def _build_item(
         or ("main" if "main" in ordered_sources else "observation"),
         "ref": {"pool": SOURCE_POOLS.get(preferred, ""), "code": code},
     }
+    right_side_evidence = build_right_side_startup_evidence(preferred_raw)
+    if not right_side_evidence:
+        right_side_evidence = _to_dict(
+            preferred_raw.get("right_side_startup_evidence")
+        )
+    if right_side_evidence:
+        item["right_side_startup_evidence"] = right_side_evidence
+        item["info_tags"].append({
+            "type": "strategy",
+            "label": "右侧启动",
+        })
     return item
 
 
@@ -1995,6 +2007,10 @@ def build_workspace(report_data: Mapping[str, Any] | None = None) -> dict[str, A
         "observation_top5": observation_diagnostics,
         "h4_t3": _to_dict(_to_dict(data.get("h4_t3_pool")).get("diagnostics")),
     }
+    if isinstance(data.get("right_side_startup"), Mapping):
+        diagnostics["right_side_startup"] = _to_dict(
+            data.get("right_side_startup")
+        )
 
     return {
         "default_view": "main",

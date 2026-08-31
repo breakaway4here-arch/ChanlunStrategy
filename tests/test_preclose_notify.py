@@ -62,7 +62,7 @@ class PrecloseNotifyTests(unittest.TestCase):
         message = format_preclose_message(_snapshot())
 
         self.assertEqual(message, "\n".join([
-            "【14:47预跑】14:56:30前有效",
+            "【14:45预跑】14:56:30前有效",
             "主推：宁波方正 300998｜参考26.86；第四只不展示 600001｜参考10.00；第二只 600002｜参考11.00",
             "H4 T+3：本期未选出推荐票",
             "加速：新朋股份 002328｜参考7.61",
@@ -81,7 +81,7 @@ class PrecloseNotifyTests(unittest.TestCase):
             snapshot["pools"] = {"main": [], "h4_t3": [], "acceleration": []}
             self.assertEqual(
                 format_preclose_message(snapshot),
-                "【14:47预跑】\n本期未选出推荐票",
+                "【14:45预跑】\n本期未选出推荐票",
             )
 
     def test_wxpusher_requires_http_and_business_success(self):
@@ -233,7 +233,7 @@ class PrecloseNotifyTests(unittest.TestCase):
         }
         self.assertEqual(format_reconciliation_message(unchanged), "\n".join([
             "【盘后复核】",
-            "正式结果与14:47预跑一致",
+            "正式结果与14:45预跑一致",
             "主推2只｜H4 T+3 1只｜加速1只",
         ]))
 
@@ -252,7 +252,7 @@ class PrecloseNotifyTests(unittest.TestCase):
             },
         }
         self.assertEqual(format_reconciliation_message(changed), "\n".join([
-            "【盘后复核】与14:47预跑有变化",
+            "【盘后复核】与14:45预跑有变化",
             "主推：保留 宁波方正｜正式新增 新朋股份｜预跑有、正式无 A股",
             "H4 T+3：无变化",
             "加速：正式新增 B股",

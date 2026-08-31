@@ -145,7 +145,13 @@ def _canonical_review_context(_db_path, entries, *, as_of=None):
 
 
 class DailyShadowIntegrationTests(unittest.TestCase):
-    def _capture_real_main_report(self, mode, startup_seeds=None):
+    def _capture_real_main_report(
+        self,
+        mode,
+        startup_seeds=None,
+        right_side_seeds=None,
+        shadow_min30_rows=None,
+    ):
         candidate = _candidate(0)
         candidate.update({
             "best_buy_point": {
@@ -244,6 +250,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             }
 
         reports = []
+        audit_calls = []
         daily_data = {
             "sectors": [],
             "sh_index": kline,
@@ -295,11 +302,53 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             "build_strong_startup_pool": lambda *_args, **_kwargs: (
                 copy.deepcopy(startup_seeds or []), [], {}
             ),
-            "build_trend_continuation_pool": lambda *_args, **_kwargs: ([], [], {}),
+            "build_trend_continuation_pool": lambda *_args, **_kwargs: (
+                copy.deepcopy(right_side_seeds or []), [], {}
+            ),
             "prefilter_luojie_theme_candidates": lambda *_args, **_kwargs: [],
             "collect_15min_data": lambda *_args, **_kwargs: [],
             "build_luojie_pool": lambda *_args, **_kwargs: {"candidates": [], "diagnostics": {}},
             "collect_30min_data": lambda *_args, **_kwargs: [],
+            "load_30min_data_readonly": lambda *_args, **_kwargs: copy.deepcopy(
+                shadow_min30_rows or []
+            ),
+            "upgrade_daily_candidates_with_30min": mock.Mock(
+                side_effect=AssertionError(
+                    "formal upgrade must not consume shadow-only 30m rows"
+                )
+            ),
+            "upgrade_trend_continuation_with_30min": (
+                lambda seeds, rows: (
+                    [
+                        {
+                            **copy.deepcopy(seed),
+                            "confirmation_evidence": {
+                                "data": {"valid": True},
+                                "mandatory": {"reference_hold": True},
+                                "structure": {"fresh_event": True},
+                                "quality": {"independent_confirm": True},
+                                "passed": True,
+                            },
+                            "confirmations": [
+                                "30min突破位不破",
+                                "30min新鲜结构",
+                                "30min独立质量确认",
+                            ],
+                        }
+                        for seed in seeds
+                    ],
+                    [],
+                    {
+                        "trend_candidate": len(seeds),
+                        "watch_due_to_no_30min_confirm": 0,
+                    },
+                )
+                if rows
+                else ([], copy.deepcopy(seeds), {
+                    "trend_candidate": 0,
+                    "watch_due_to_no_30min_confirm": len(seeds),
+                })
+            ),
             "_downgrade_to_formal_only": lambda rows: copy.deepcopy(rows),
             "apply_fusion_admission": lambda rows, *_args, **_kwargs: (copy.deepcopy(rows), copy.deepcopy(admission_diag)),
             "filter_recent_picks": recency,
@@ -335,6 +384,16 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             "generate_forecast": lambda *_args, **_kwargs: {"summary": "fixture"},
             "generate_report": lambda report, _output: reports.append(copy.deepcopy(report)),
             "update_data_json": lambda *_args, **_kwargs: None,
+            "write_right_side_startup_audit": lambda state, **kwargs: (
+                audit_calls.append({
+                    "state": copy.deepcopy(state),
+                    **copy.deepcopy(kwargs),
+                })
+                or {
+                    "status": "written",
+                    "path": "/isolated/right-side-audit.json",
+                }
+            ),
         }
         with ExitStack() as stack:
             for name, value in patch_values.items():
@@ -363,6 +422,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
                     generated_at=datetime(2026, 8, 22, 15, 10),
                 )
         self.assertEqual(len(reports), 1)
+        self._last_right_side_audit_calls = audit_calls
         return reports[0]
 
     def test_real_main_off_and_shadow_preserve_every_formal_consumer(self):
@@ -419,6 +479,74 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         }
         self.assertTrue(shadow_codes.issubset(pure_codes))
         self.assertTrue(all(value not in formal_consumers for value in shadow_ids))
+
+    def test_shadow_only_30min_hit_cannot_change_formal_empty_fetch_branch(self):
+        right_seed = _candidate(709)
+        right_seed["code"] = "300709"
+        right_seed["name"] = "精研科技"
+        right_seed["source_channel"] = "right_side_startup"
+        right_seed["reference_type"] = "platform_high_20d"
+        right_seed["reference_price"] = 48.0
+        right_seed["distance_from_reference_pct"] = 0.2292
+        shadow_row = {
+            "code": "300709",
+            "name": "精研科技",
+            "klines": {
+                "dates": ["2026-08-22 14:30:00", "2026-08-22 15:00:00"],
+                "opens": [47.8, 48.0],
+                "closes": [48.0, 48.11],
+                "highs": [48.2, 48.3],
+                "lows": [47.7, 47.9],
+                "volumes": [1000, 1200],
+            },
+            "input_evidence": {
+                "source": "market_history_db",
+                "latest_date": "2026-08-22",
+                "is_final": True,
+            },
+        }
+        off = self._capture_real_main_report("off")
+        shadow = self._capture_real_main_report(
+            "shadow",
+            right_side_seeds=[right_seed],
+            shadow_min30_rows=[shadow_row],
+        )
+
+        def formal_projection(report):
+            result = copy.deepcopy(report)
+            result.pop("right_side_startup", None)
+            result.pop("shadow_evaluations", None)
+            result["data_quality"]["runtime_policy"].pop(
+                "stock_selection_shadow_mode", None
+            )
+            return result
+
+        self.assertEqual(formal_projection(off), formal_projection(shadow))
+        for key in (
+            "picks_pure",
+            "picks_fusion",
+            "h4_t3_pool",
+            "next_day_boom",
+            "recommendation_ledger",
+            "strategy_scorecards",
+        ):
+            self.assertEqual(off[key], shadow[key])
+        self.assertEqual(
+            off["diagnostics"]["candidate_funnel"],
+            shadow["diagnostics"]["candidate_funnel"],
+        )
+        self.assertEqual(len(self._last_right_side_audit_calls), 1)
+        audit_call = self._last_right_side_audit_calls[0]
+        self.assertEqual(audit_call["as_of"], "2026-08-22T15:10:00+08:00")
+        self.assertEqual(
+            audit_call["run_identity"]["plane"], "formal_postclose"
+        )
+        self.assertEqual(audit_call["candidates"][0]["code"], "300709")
+        self.assertTrue(
+            audit_call["candidates"][0]["confirmation_evidence"][
+                "mandatory"
+            ]["reference_hold"]
+        )
 
     def test_new_formal_research_cohort_is_versioned_and_uses_signal_close(self):
         report = self._capture_real_main_report("off")

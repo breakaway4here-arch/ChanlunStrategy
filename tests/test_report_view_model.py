@@ -140,6 +140,75 @@ def _report_data(overrides=None):
 
 
 class TestReportViewModel(unittest.TestCase):
+    def test_right_side_source_is_compact_evidence_not_a_second_action_or_score(self):
+        pick = _fusion_pick(
+            code="300709",
+            name="精研科技",
+            score=96,
+            decision_engine_v1={
+                "decision_code": "recommend",
+                "decision": "推荐",
+                "total_score": 73,
+            },
+        )
+        pick.update({
+            "source_channel": "right_side_startup",
+            "source_type": "日线右侧启动",
+            "reference_price": 48.11,
+            "trend_signals": ["突破20日平台"],
+            "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+            "cancel_conditions": ["跌破右侧突破参考位 48.11"],
+        })
+
+        workspace = build_workspace(_report_data({
+            "picks_fusion": [pick],
+            "right_side_startup": {
+                "mode": "active",
+                "policy_version": "right-side-startup-v1",
+                "diagnostics": {"candidate_count": 1},
+            },
+        }))
+        row = workspace["views"]["main"][0]
+
+        self.assertEqual("可上车", row["page_action"])
+        self.assertEqual(73, row["scoring_decision"]["total_score"])
+        self.assertNotIn("right_side_score", row)
+        self.assertEqual({
+            "source_label": "右侧启动",
+            "reference_price": 48.11,
+            "why": ["突破20日平台"],
+            "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+            "invalidation": ["跌破右侧突破参考位 48.11"],
+        }, row["right_side_startup_evidence"])
+        self.assertIn(
+            {"type": "strategy", "label": "右侧启动"},
+            row["info_tags"],
+        )
+        self.assertEqual(
+            "active",
+            workspace["diagnostics"]["right_side_startup"]["mode"],
+        )
+
+    def test_shadow_right_side_state_stays_in_diagnostics_and_not_formal_views(self):
+        workspace = build_workspace(_report_data({
+            "picks_fusion": [],
+            "right_side_startup": {
+                "mode": "shadow",
+                "policy_version": "right-side-startup-v1",
+                "diagnostics": {"candidate_count": 2},
+            },
+        }))
+
+        self.assertEqual([], workspace["views"]["main"])
+        self.assertEqual([], workspace["views"].get("h4_t3", []))
+        self.assertEqual([], workspace["views"]["confirming"])
+        self.assertEqual(
+            2,
+            workspace["diagnostics"]["right_side_startup"]["diagnostics"][
+                "candidate_count"
+            ],
+        )
+
     def test_formal_decision_contract_preserves_only_declared_verified_fields(self):
         pick = _fusion_pick()
         pick.update({

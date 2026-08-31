@@ -7,9 +7,9 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 
 import config
-from .chan_engine import ema
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
+from .sublevel_confirm import build_30min_confirmation_evidence
 
 
 def _float_array(value: Any) -> np.ndarray:
@@ -19,18 +19,26 @@ def _float_array(value: Any) -> np.ndarray:
         return np.asarray([], dtype=float)
 
 
+def _field_value(value: Any, *keys: str) -> Any:
+    for key in keys:
+        if isinstance(value, Mapping):
+            candidate = value.get(key)
+        else:
+            candidate = getattr(value, key, None)
+        if candidate is not None:
+            return candidate
+    return None
+
+
 def _latest_pivot_upper(result: Any) -> Optional[float]:
     pivots = getattr(result, "pivots", None) or []
     for pivot in reversed(list(pivots)):
-        if not isinstance(pivot, Mapping):
+        try:
+            value = float(_field_value(pivot, "ZG", "zg", "upper", "high"))
+        except (TypeError, ValueError):
             continue
-        for key in ("ZG", "zg", "upper", "high"):
-            try:
-                value = float(pivot.get(key))
-            except (TypeError, ValueError):
-                continue
-            if value > 0:
-                return value
+        if value > 0:
+            return value
     return None
 
 
@@ -82,17 +90,14 @@ def _base_payload(
     pivot_breakout = bool(pivot_upper and close > pivot_upper)
     ma_hold = close >= ma5 >= ma10
 
-    reference_type = ""
-    reference_price = 0.0
+    reference_type = "platform_high_20d"
+    reference_price = platform_high
     if platform_breakout:
         reference_type = "platform_high_20d"
         reference_price = platform_high
     elif pivot_breakout:
         reference_type = "pivot_upper"
         reference_price = float(pivot_upper)
-    elif close >= ma10:
-        reference_type = "ma10"
-        reference_price = ma10
     if reference_price <= 0:
         return None
 
@@ -105,13 +110,13 @@ def _base_payload(
         "name": str(getattr(result, "name", "") or code),
         "sector": sector.get("sector", ""),
         "sector_tags": list(sector.get("sector_tags", []) or []),
-        "source_channel": "trend_continuation",
+        "source_channel": "right_side_startup",
         "tier": "seed",
         "category": "B",
         "quality_tier": "",
         "view": "main",
-        "type": "趋势延续种子",
-        "source_type": "日线趋势延续",
+        "type": "右侧启动种子",
+        "source_type": "日线右侧启动",
         "reference_type": reference_type,
         "reference_price": round(reference_price, 6),
         "distance_from_reference_pct": round(distance, 4),
@@ -151,6 +156,7 @@ def _watch(
     actual_value: Any,
     upgrade_conditions: Sequence[str],
     cancel_conditions: Sequence[str],
+    threshold: Any = None,
 ) -> Dict[str, Any]:
     row = dict(seed)
     row.update({
@@ -163,6 +169,7 @@ def _watch(
         "failure_gate": failure_gate,
         "watch_reason": watch_reason,
         "actual_value": actual_value,
+        "threshold": threshold,
         "upgrade_conditions": list(upgrade_conditions),
         "next_day_conditions": list(upgrade_conditions),
         "cancel_conditions": list(cancel_conditions),
@@ -204,15 +211,19 @@ def build_trend_continuation_pool(
             if volume_ratio >= float(config.TREND_CONTINUATION_WATCH_VOLUME_RATIO):
                 watchlist.append(_watch(
                     seed,
-                    "ma_near_miss",
-                    "trend_structure",
-                    "趋势结构接近成立，但平台突破或MA保持仍差一项",
+                    "daily_breakout_near_miss",
+                    "daily_breakout",
+                    "均线状态保持，但尚未有效突破平台或中枢上沿",
                     {
                         "volume_ratio": volume_ratio,
-                        "strong_structure": False,
+                        "close": seed["close"],
+                        "reference_price": seed["reference_price"],
                     },
-                    ["站稳MA5/MA10", "有效突破20日平台或中枢上沿"],
+                    ["有效突破20日平台或中枢上沿"],
                     ["跌破MA10", "放量长阴破坏平台"],
+                    threshold={
+                        "close_gt_reference_price": seed["reference_price"],
+                    },
                 ))
                 diagnostics["watch_near_miss"] += 1
             else:
@@ -231,6 +242,9 @@ def build_trend_continuation_pool(
                     volume_ratio,
                     ["量比回到1.3以上", "30min突破位不破并缩量回踩"],
                     ["跌破趋势参考位", "放量滞涨"],
+                    threshold=float(
+                        config.TREND_CONTINUATION_CONDITIONAL_VOLUME_RATIO
+                    ),
                 ))
                 diagnostics["watch_near_miss"] += 1
             else:
@@ -265,6 +279,15 @@ def build_trend_continuation_pool(
                 },
                 ["回踩趋势参考位不破", "30min EMA保持且缩量回踩"],
                 ["跌破趋势参考位", "高位放量长阴"],
+                threshold={
+                    "max_gap_pct": float(
+                        config.TREND_CONTINUATION_MAX_GAP_PCT
+                    ),
+                    "max_extension_pct": float(
+                        config.TREND_CONTINUATION_MAX_EXTENSION_PCT
+                    ),
+                    "price_limit_state": "not_limit_up",
+                },
             ))
             diagnostics["watch_risk"] += 1
             continue
@@ -276,24 +299,149 @@ def build_trend_continuation_pool(
     return seeds, watchlist, diagnostics
 
 
-def _confirm_30min(result: Any, reference_price: float) -> List[str]:
+def _input_evidence(result: Any, expected_date: str) -> Dict[str, Any]:
+    raw = getattr(result, "strategy_input_evidence", None)
+    evidence = dict(raw) if isinstance(raw, Mapping) else {}
+    latest_date = str(evidence.get("latest_date") or "").split(" ", 1)[0]
+    dates = list(getattr(result, "dates", None) or [])
+    bar_date = str(dates[-1]).split(" ", 1)[0] if dates else ""
+    status = str(evidence.get("status") or "")
+    bar_state = str(evidence.get("bar_state") or "")
+    is_final = evidence.get("is_final")
+    stale = evidence.get("stale")
+    as_of_date = str(evidence.get("as_of") or "").split("T", 1)[0]
+    formal_valid = bool(
+        status == "verified"
+        and is_final is True
+        and bar_state in {"closed", "final"}
+    )
+    intraday_valid = bool(
+        status in {"available", "intraday_available"}
+        and is_final is False
+        and bar_state == "intraday"
+        and as_of_date == latest_date
+    )
+    valid = bool(
+        evidence.get("interval") == "30m"
+        and stale is False
+        and latest_date == str(expected_date or "")
+        and bar_date == latest_date
+        and (formal_valid or intraday_valid)
+    )
+    return {
+        "valid": valid,
+        "status": status or "missing",
+        "latest_date": latest_date,
+        "bar_date": bar_date,
+        "bar_state": bar_state,
+        "is_final": is_final,
+        "stale": stale,
+        "expected_date": str(expected_date or ""),
+    }
+
+
+def _volume_contraction(volumes: np.ndarray) -> bool:
+    if len(volumes) < 10:
+        return False
+    recent = float(np.mean(volumes[-3:]))
+    previous = float(np.mean(volumes[-10:-3]))
+    return bool(previous > 0 and recent <= previous * 0.9)
+
+
+def _confirm_30min(
+    result: Any,
+    reference_price: float,
+    expected_date: str,
+) -> Dict[str, Any]:
     closes = _float_array(getattr(result, "closes", None))
     volumes = _float_array(getattr(result, "volumes", None))
-    if len(closes) < 10:
-        return []
+    data = _input_evidence(result, expected_date)
+    base = build_30min_confirmation_evidence(result)
+    sufficient = bool(base.get("sufficient_bars") and len(closes) >= 10)
+    reference_hold = bool(
+        sufficient
+        and float(reference_price) > 0
+        and float(np.min(closes[-5:])) >= float(reference_price) * 0.995
+    )
+
+    structure_labels = []
+    buy_point = str(base.get("buy_point") or "")
+    if buy_point:
+        structure_labels.append("30min {}".format(buy_point))
+    pattern = str(base.get("fresh_yang_pattern") or "")
+    if pattern == "two_yang_one_yin":
+        structure_labels.append("30min两阳夹一阴确认")
+    elif pattern == "two_yang_two_yin":
+        structure_labels.append("30min两阳夹两阴确认")
+
+    quality_labels = []
+    if base.get("ema5_reclaim"):
+        quality_labels.append("30min EMA5收复")
+    elif (
+        base.get("close_above_ema5")
+        and int(base.get("ema5_rising_bars") or 0) >= 2
+    ):
+        quality_labels.append("30min EMA5持续上行")
+    if _volume_contraction(volumes):
+        quality_labels.append("30min缩量回踩")
+    if base.get("stop_fall"):
+        quality_labels.append("30min止跌结构")
+    if base.get("macd_hist_direction") == "improving":
+        quality_labels.append("30min MACD改善")
+
+    structure_pass = bool(structure_labels)
+    quality_pass = bool(quality_labels)
+    passed = bool(
+        data["valid"]
+        and sufficient
+        and reference_hold
+        and structure_pass
+        and quality_pass
+    )
     confirmations = []
-    if float(np.min(closes[-5:])) >= float(reference_price) * 0.995:
+    if reference_hold:
         confirmations.append("30min突破位不破")
-    ema5 = ema(closes, 5)
-    ema10 = ema(closes, 10)
-    if len(ema5) and len(ema10) and float(ema5[-1]) >= float(ema10[-1]):
-        confirmations.append("30min EMA5维持")
-    if len(volumes) >= 10:
-        recent = float(np.mean(volumes[-3:]))
-        previous = float(np.mean(volumes[-10:-3]))
-        if previous > 0 and recent <= previous:
-            confirmations.append("30min缩量回踩")
-    return confirmations
+    confirmations.extend(structure_labels)
+    confirmations.extend(quality_labels)
+    return {
+        "schema_version": 1,
+        "data": data,
+        "mandatory": {
+            "reference_hold": reference_hold,
+            "sufficient_bars": sufficient,
+        },
+        "structure": {
+            "fresh_event": structure_pass,
+            "labels": structure_labels,
+        },
+        "quality": {
+            "independent_confirm": quality_pass,
+            "labels": quality_labels,
+            "ema_bullish_alignment": bool(
+                base.get("ema_bullish_alignment")
+            ),
+        },
+        "risk": {
+            "macd_weakening": (
+                base.get("macd_hist_direction") == "weakening"
+            ),
+            "macd_hist_direction": base.get("macd_hist_direction"),
+        },
+        "confirmations": confirmations,
+        "passed": passed,
+    }
+
+
+def _confirmation_failure(evidence: Mapping[str, Any]) -> Tuple[str, str]:
+    if not (evidence.get("data") or {}).get("valid"):
+        return "30min_data_contract", "30分钟数据日期或最终状态不符合合同"
+    if not (evidence.get("mandatory") or {}).get("sufficient_bars"):
+        return "30min_data_contract", "30分钟有效样本不足"
+    if not (evidence.get("mandatory") or {}).get("reference_hold"):
+        return "30min_reference_hold", "30分钟已跌破右侧突破参考位"
+    if not (evidence.get("structure") or {}).get("fresh_event"):
+        return "30min_structure", "30分钟只有状态，没有新鲜价格结构"
+    return "30min_quality", "30分钟结构已出现，但缺少独立质量确认"
 
 
 def upgrade_trend_continuation_with_30min(
@@ -312,6 +460,10 @@ def upgrade_trend_continuation_with_30min(
         "trend_candidate": 0,
         "watch_due_to_no_30min": 0,
         "watch_due_to_no_confirm": 0,
+        "watch_due_to_data_contract": 0,
+        "watch_due_to_reference_break": 0,
+        "watch_due_to_no_structure": 0,
+        "watch_due_to_no_quality": 0,
     }
     for raw in seeds:
         seed = dict(raw)
@@ -325,26 +477,53 @@ def upgrade_trend_continuation_with_30min(
                 None,
                 ["获取30min数据", "突破位不破且EMA保持"],
                 ["跌破趋势参考位"],
+                threshold={
+                    "data_contract": "current_trade_date_verified_30m",
+                },
             ))
             diagnostics["watch_due_to_no_30min"] += 1
             continue
-        confirmations = _confirm_30min(
-            result, float(seed["reference_price"])
+        confirmation_evidence = _confirm_30min(
+            result,
+            float(seed["reference_price"]),
+            str(seed.get("startup_date") or "").split(" ", 1)[0],
         )
-        if len(confirmations) < 2:
+        seed["confirmation_evidence"] = confirmation_evidence
+        confirmations = list(
+            confirmation_evidence.get("confirmations") or []
+        )
+        if not confirmation_evidence.get("passed"):
+            failure_gate, watch_reason = _confirmation_failure(
+                confirmation_evidence
+            )
             watchlist.append(_watch(
                 seed,
                 "waiting_30m_confirm",
-                "30min_confirm",
-                "日线趋势成立，但30min确认不足",
-                confirmations,
-                ["突破位不破", "EMA5维持", "缩量回踩满足两项"],
+                failure_gate,
+                watch_reason,
+                confirmation_evidence,
+                ["突破位不破", "出现新鲜价格结构", "获得独立质量确认"],
                 ["跌破趋势参考位", "30min EMA转空"],
+                threshold={
+                    "data_contract": "valid",
+                    "reference_hold_min": round(
+                        float(seed["reference_price"]) * 0.995, 6
+                    ),
+                    "fresh_structure": True,
+                    "independent_quality": True,
+                },
             ))
             diagnostics["watch_due_to_no_confirm"] += 1
+            diagnostic_key = {
+                "30min_data_contract": "watch_due_to_data_contract",
+                "30min_reference_hold": "watch_due_to_reference_break",
+                "30min_structure": "watch_due_to_no_structure",
+                "30min_quality": "watch_due_to_no_quality",
+            }[failure_gate]
+            diagnostics[diagnostic_key] += 1
             continue
         seed.update({
-            "type": "趋势延续候选",
+            "type": "右侧启动候选",
             "tier": "candidate",
             "category": "A",
             "quality_tier": "A",
@@ -372,7 +551,7 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
     closes = row.get("closes")
     close_count = len(closes) if closes is not None else 0
     buy_point = {
-        "type": "趋势延续候选",
+        "type": "右侧启动候选",
         "tier": "candidate",
         "index": close_count - 1,
         "price": reference_price,
@@ -383,7 +562,7 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         ),
         "reason": "；".join(row.get("trend_signals") or []),
         "strength": "强" if len(confirmations) >= 3 else "中",
-        "source_type": "日线趋势延续",
+        "source_type": "日线右侧启动",
         "confirmed_by": "+".join(confirmations),
         "confirmations": confirmations,
         "change_pct": row.get("change_pct", 0),
@@ -399,7 +578,6 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         "blocked_buy_points": [],
         "pivots": {},
         "trend_type": "up",
-        "score": 0,
         "resonance": {},
         "ma_bullish": True,
         "fusion_admission": {},

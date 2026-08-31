@@ -1,9 +1,22 @@
 import unittest
 
 from chanlun.report_view_model import build_workspace
+from chanlun.h4_t3_pool import filter_h4_upstream_candidates
 
 
 class TestH4ProductionBoundary(unittest.TestCase):
+
+    def test_h4_explicitly_excludes_right_side_startup_source(self):
+        rows = [
+            {"code": "600001", "source_channel": "low_position"},
+            {"code": "300001", "source_channel": "right_side_startup"},
+        ]
+
+        kept, diagnostics = filter_h4_upstream_candidates(rows)
+
+        self.assertEqual(["600001"], [row["code"] for row in kept])
+        self.assertEqual(1, diagnostics["right_side_excluded_count"])
+        self.assertEqual(["300001"], diagnostics["right_side_excluded_codes"])
 
     def test_unattested_h4_shadow_pool_is_not_exposed_in_daily_views(self):
         workspace = build_workspace(

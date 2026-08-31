@@ -1664,6 +1664,43 @@ body {
   font-size: 12px;
 }
 
+.right-side-evidence {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);
+}
+
+.right-side-evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.right-side-evidence-head strong {
+  color: #002fa7;
+  font-size: 14px;
+}
+
+.right-side-evidence-head span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #fff;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.right-side-evidence .decision-summary-columns {
+  margin-top: 8px;
+}
+
+.right-side-evidence .decision-summary-columns section {
+  background: rgba(255, 255, 255, 0.82);
+}
+
 .evidence-audit-drawer {
   margin-top: 10px;
   border: 1px solid var(--border-soft);

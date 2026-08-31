@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Isolated 14:47 advisory. Python validates and reads only the dedicated 0600
+# Isolated 14:45 advisory. Python validates and reads only the dedicated 0600
 # preclose.env; this wrapper deliberately does not source formal strategy flags.
 
 set -euo pipefail

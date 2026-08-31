@@ -1,3 +1,4 @@
+import hashlib
 import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
@@ -288,6 +289,36 @@ class KLineRepositoryTests(unittest.TestCase):
         with MarketHistoryStore(self.db_path) as store:
             instrument_id = store.upsert_instrument("stock", exchange, code)
             store.upsert_bars(interval, instrument_id, bars, adjustment="qfq")
+
+    def test_shadow_30min_loader_is_readonly_and_never_fetches_remote(self):
+        end = datetime.fromisoformat("2026-08-26 15:00:00")
+        bars = [
+            _bar(
+                (end - timedelta(minutes=30 * (79 - index))).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
+                final=True,
+            )
+            for index in range(80)
+        ]
+        self.seed("300709", bars, interval="30m")
+        before = hashlib.sha256(self.db_path.read_bytes()).hexdigest()
+
+        with patch.object(
+            data_fetcher, "MARKET_HISTORY_DB_PATH", str(self.db_path)
+        ), patch.object(
+            data_fetcher, "_fetch_30min_for_repository"
+        ) as remote:
+            rows = data_fetcher.load_30min_data_readonly(
+                [{"code": "300709", "name": "精研科技"}],
+                required_date="2026-08-26",
+                as_of="2026-08-26T15:05:00+08:00",
+            )
+
+        after = hashlib.sha256(self.db_path.read_bytes()).hexdigest()
+        self.assertEqual(["300709"], [row["code"] for row in rows])
+        self.assertEqual(before, after)
+        remote.assert_not_called()
 
     def test_complete_final_local_window_does_not_call_remote(self):
         self.seed(

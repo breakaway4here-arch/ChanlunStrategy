@@ -687,14 +687,14 @@
       return ''
         + '<details class="preclose-reconciliation-card" open>'
         + '<summary>盘后复核</summary>'
-        + '<p>正式结果与14:47预跑一致</p>'
+        + '<p>正式结果与14:45预跑一致</p>'
         + '<small>主推' + mainCount + '只｜H4 T+3 ' + h4Count + '只｜加速' + accelerationCount + '只</small>'
         + '</details>';
     }
     if (status !== 'changed') return '';
     return ''
       + '<details class="preclose-reconciliation-card">'
-      + '<summary>盘后复核 · 与14:47预跑有变化</summary>'
+      + '<summary>盘后复核 · 与14:45预跑有变化</summary>'
       + '<div class="preclose-diff-lines">'
       + '<p>' + buildPrecloseDiffLine('主推', pools.main) + '</p>'
       + '<p>' + buildPrecloseDiffLine('H4 T+3', pools.h4_t3) + '</p>'
@@ -1537,7 +1537,7 @@
       + '    <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
       + '    <section class="preclose-advisory hidden" id="precloseAdvisory" aria-labelledby="precloseAdvisoryTitle">'
       + '      <header class="preclose-advisory-head">'
-      + '        <span><strong id="precloseAdvisoryTitle">14:47预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
+      + '        <span><strong id="precloseAdvisoryTitle">14:45预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
       + '      </header>'
       + '      <div class="preclose-body" id="precloseBody" aria-live="polite"></div>'
       + '      <div class="preclose-reconciliation hidden" id="precloseReconciliation" aria-live="polite"></div>'
@@ -3154,6 +3154,34 @@
   function buildDecisionSummaryColumns(item, raw) {
     var rec = item || {};
     var source = raw || {};
+    var rightSide = source.right_side_startup_evidence
+      && typeof source.right_side_startup_evidence === 'object'
+      ? source.right_side_startup_evidence
+      : (rec.right_side_startup_evidence
+        && typeof rec.right_side_startup_evidence === 'object'
+        ? rec.right_side_startup_evidence : null);
+    if (rightSide) {
+      var reference = safeNumber(rightSide.reference_price, null);
+      var heading = '<header class="right-side-evidence-head"><strong>'
+        + escapeHtml(normalizeString(rightSide.source_label) || '右侧启动')
+        + '</strong>'
+        + (reference === null ? '' : '<span>参考位 ' + escapeHtml(formatNumber(reference, 2)) + '</span>')
+        + '</header>';
+      var sections = [];
+      [
+        ['为何进入', rightSide.why],
+        ['关键确认', rightSide.confirmations],
+        ['失效条件', rightSide.invalidation]
+      ].forEach(function (entry) {
+        var rows = collectDecisionSummaryItems(entry[1], 3);
+        if (!rows.length) return;
+        sections.push('<section><h3>' + escapeHtml(entry[0]) + '</h3><ul>'
+          + rows.map(function (row) { return '<li>' + escapeHtml(row) + '</li>'; }).join('')
+          + '</ul></section>');
+      });
+      return '<div class="right-side-evidence">' + heading
+        + '<div class="decision-summary-columns">' + sections.join('') + '</div></div>';
+    }
     var why = [
       rec.action_reason,
       rec.page_action_reason,

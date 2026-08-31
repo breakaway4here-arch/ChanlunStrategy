@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import tempfile
 import unittest
@@ -107,6 +108,23 @@ def _complete_sector_fetch(rows_by_code):
 
 
 class TestMarketDataGuard(unittest.TestCase):
+
+    def test_right_side_fixture_intraday_evidence_matches_trade_date(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "fixtures"
+            / "right_side_startup"
+            / "2026-08-31.json"
+        )
+        payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+
+        self.assertEqual("2026-08-31", payload["trade_date"])
+        self.assertTrue(payload["as_of"].startswith("2026-08-31T"))
+        for case in payload["cases"].values():
+            self.assertEqual(
+                payload["trade_date"],
+                str(case["min30_tail"]["dates"][-1]).split(" ", 1)[0],
+            )
 
     def test_independent_strategy_output_is_restricted_to_picks_pure_upstream(self):
         rows = [

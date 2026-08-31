@@ -1,4 +1,4 @@
-"""Pure contracts for the isolated 14:47 pre-close advisory workflow."""
+"""Pure contracts for the isolated 14:45 pre-close advisory workflow."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 POOL_KEYS = ("main", "h4_t3", "acceleration")
 SNAPSHOT_SCHEMA_VERSION = "preclose-selection-v1"
 SNAPSHOT_MODE = "preclose_advisory"
-PRE_CLOSE_STRATEGY_VERSION = "preclose-1447-v1"
+PRE_CLOSE_STRATEGY_VERSION = "preclose-1445-v2"
 
 
 def _parse_iso(value):

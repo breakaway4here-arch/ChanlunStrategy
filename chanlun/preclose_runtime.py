@@ -1,4 +1,4 @@
-"""Production read-only input acquisition for the scheduled 14:47 run."""
+"""Production read-only input acquisition for the scheduled 14:45 run."""
 
 from __future__ import annotations
 
@@ -24,6 +24,10 @@ from config import (
 from .market_history_store import MarketHistoryStore
 from .preclose_data import fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
+from .right_side_startup import (
+    resolve_right_side_startup_mode,
+    select_classic_startup_inputs,
+)
 from .universe_builder import (
     UniverseConfig,
     build_candidate_universe,
@@ -268,12 +272,30 @@ def select_preclose_30m_targets(rows, components=None):
     pure_pool, _diagnostics = components.build_daily_structure_pool(
         analyses, sector_stocks, mode="pure"
     )
-    startup_seeds, _watchlist, _startup_diagnostics = (
-        components.build_strong_startup_pool(analyses, sector_stocks)
+    classic_input_state = select_classic_startup_inputs(
+        analyses, pure_pool
     )
+    startup_seeds, _watchlist, _startup_diagnostics = (
+        components.build_strong_startup_pool(
+            classic_input_state["rows"], sector_stocks
+        )
+    )
+    right_seeds = []
+    if resolve_right_side_startup_mode(
+        components.right_side_startup_mode
+    ) != "off":
+        right_seeds, _right_watchlist, _right_diagnostics = (
+            components.build_right_side_startup_pool(
+                analyses, sector_stocks
+            )
+        )
     codes = []
     seen = set()
-    for item in list(pure_pool or []) + list(startup_seeds or []):
+    for item in (
+        list(pure_pool or [])
+        + list(startup_seeds or [])
+        + list(right_seeds or [])
+    ):
         code = str((item or {}).get("code") or "")
         if code and code not in seen:
             seen.add(code)
