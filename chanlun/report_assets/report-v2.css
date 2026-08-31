@@ -1826,6 +1826,56 @@ body {
   font-size: 10px;
 }
 
+.reason-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.reason-pill {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.08);
+  color: #1e40af;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.evidence-meta-details {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px dashed var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--card-soft);
+}
+
+.evidence-meta-summary {
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  user-select: none;
+}
+
+.evidence-meta-summary:hover {
+  color: var(--primary);
+}
+
+.evidence-meta-details[open] .evidence-meta-summary {
+  margin-bottom: 8px;
+}
+
+.price-cell.is-missing .price-value,
+.recommendation-evidence-facts div.is-missing dd strong {
+  color: var(--text-muted);
+  font-weight: normal;
+  font-size: 12px;
+  opacity: 0.75;
+}
+
 .recommendation-price-notes {
   display: grid;
   gap: 5px;
