@@ -557,7 +557,16 @@
     return normalizeString(getBootstrap().precloseApiBase).trim().replace(/\/+$/, '');
   }
 
-  function getPreclosePageDate() {
+  function getPreclosePageDate(nowMs) {
+    var pathname = normalizeString(window.location && window.location.pathname);
+    var archiveMatch = pathname.match(/\/(\d{4}-\d{2}-\d{2})(?:\/index\.html)?\/?$/);
+    if (archiveMatch && isCanonicalIsoDate(archiveMatch[1])) {
+      return archiveMatch[1];
+    }
+    if (pathname) {
+      var resolvedNow = safeNumber(nowMs, Date.now());
+      return new Date(resolvedNow + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    }
     var pageDate = normalizeString(getBootstrap().pageDate || state.date || '');
     if (/^\d{4}-\d{2}-\d{2}$/.test(pageDate)) return pageDate;
     return formatDateLabel(new Date().toISOString());

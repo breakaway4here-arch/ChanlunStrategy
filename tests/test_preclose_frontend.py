@@ -56,6 +56,7 @@ window.CHANLUN_BOOTSTRAP = {
   top10ApiBase: 'https://top10.example',
   precloseApiBase: 'https://preclose.example'
 };
+window.location.pathname = '/ChanlunStrategy/2026-08-27/';
 const classList = { add: function () {}, remove: function () {}, toggle: function () {} };
 globalThis.__precloseTest.nodes.precloseAdvisory = { classList: classList };
 globalThis.__precloseTest.nodes.precloseBody = { innerHTML: '' };
@@ -86,6 +87,42 @@ assert(urls[0] === 'https://preclose.example/api/preclose/latest?date=2026-08-27
 assert(urls[1] === 'https://preclose.example/api/preclose/reconciliation?date=2026-08-27', 'reconciliation route wrong');
 assert(!urls.join('|').includes('top10.example'), 'preclose reused Top10 API');
 assert(globalThis.__precloseTest.state.preclose.snapshot.content_hash === 'a'.repeat(64), 'snapshot identity not retained');
+""",
+        )
+
+    def test_current_root_queries_shanghai_today_instead_of_stale_formal_date(self):
+        _assert_node_contract(
+            self,
+            "({ load: loadPrecloseAdvisory, state: state, nodes: nodes })",
+            r"""
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  precloseApiBase: 'https://preclose.example'
+};
+window.location.pathname = '/ChanlunStrategy/';
+Date.now = function () { return Date.parse('2026-08-31T00:05:10+08:00'); };
+const classList = { add: function () {}, remove: function () {}, toggle: function () {} };
+globalThis.__precloseTest.nodes.precloseAdvisory = { classList: classList };
+globalThis.__precloseTest.nodes.precloseBody = { innerHTML: '' };
+globalThis.__precloseTest.nodes.precloseReconciliation = { innerHTML: '', classList: classList };
+const urls = [];
+window.fetch = function (url) {
+  urls.push(url);
+  const reconciliation = url.includes('/reconciliation?');
+  return Promise.resolve({
+    ok: true,
+    status: reconciliation ? 404 : 200,
+    json: function () { return Promise.resolve({
+      status: 'available', trade_date: '2026-08-31',
+      snapshot_id: 'preclose:2026-08-31:abc', content_hash: 'a'.repeat(64),
+      generated_at: '2026-08-31T14:48:20+08:00', expires_at: '2026-08-31T14:56:30+08:00',
+      pools: { main: [], h4_t3: [], acceleration: [] }
+    }); }
+  });
+};
+await globalThis.__precloseTest.load();
+assert(urls[0] === 'https://preclose.example/api/preclose/latest?date=2026-08-31', 'root reused stale formal date');
+assert(urls[1] === 'https://preclose.example/api/preclose/reconciliation?date=2026-08-31', 'root reconciliation reused stale formal date');
 """,
         )
 
