@@ -163,7 +163,9 @@ Expected: FAIL on missing schema and score/rank separation.
 - 按 workspace `view_order` 和现有行顺序生成 `views[view]`，禁止重新排序。
 - 以 `row.ref.pool + row.code` 找到序列化 raw；找不到时保持 workspace 事实并将模块标为 missing。
 - `summary.formal_action` 只读 `row.formal_decision_contract.action`。
-- `decision_score` 只读 `decision_engine_v1.total_score/score/final_score` 及 `structure/position/sentiment`；不得读取 `opportunity_score` 作为 fallback。
+- `decision_score` 数值只读 `decision_engine_v1.total_score`，并读取
+  `structure/position/sentiment` 分项；`score`、`final_score` 和
+  `opportunity_score` 都不得作为 fallback。
 - `rank_evidence` 只读 `view_rank`、`opportunity_score`、`rank_trace`，标注“仅用于当前池内排序”。
 - 保留 `decision_code`，但不生成第二个动作。
 
@@ -497,7 +499,11 @@ def test_formal_market_sentiment_is_copied_without_psy12_override():
 - `money20` 标明来源；没有正式个股资金源时写“个股资金证据不足”。
 - 个股成交量、个股资金、板块资金分别呈现，禁止互相替代。
 - sector_heat 只有 verified 状态才用于结论；正反证据同时存在统一为“分歧”。
-- 市场层只读正式 market sentiment；PSY12 只在子面板。
+- 市场层只读正式 market sentiment；报告日期、版本、标签、分数、覆盖率、
+  `insufficient=false`、五个 components 及对应 evidence availability
+  必须形成完整一致合同，否则显示数据不足。新 Bootstrap 投影存在时它是
+  唯一权威来源；旧归档无投影时只允许经过同等严格校验的 raw 合同。
+  PSY12 只在子面板。
 
 **Step 4: Run GREEN**
 

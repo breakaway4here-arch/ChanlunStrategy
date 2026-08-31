@@ -1931,9 +1931,95 @@
     return '市场温度较冷，优先提高候选证据完整性。';
   }
 
+  var FORMAL_MARKET_COMPONENT_KEYS = [
+    'breadth', 'limit_ecology', 'index', 'turnover', 'trend',
+  ];
+
+  function isFormalMarketNumber(value, minimum, maximum) {
+    return typeof value === 'number'
+      && Number.isFinite(value)
+      && value >= minimum
+      && value <= maximum;
+  }
+
+  function isFormalMarketText(value) {
+    return typeof value === 'string' && value.trim().length > 0;
+  }
+
+  function hasCompleteFormalMarketComponents(sentiment) {
+    var components = sentiment && sentiment.components;
+    var evidence = sentiment && sentiment.evidence;
+    if (!components || typeof components !== 'object'
+        || !evidence || typeof evidence !== 'object') {
+      return false;
+    }
+    return FORMAL_MARKET_COMPONENT_KEYS.every(function (key) {
+      if (!Object.prototype.hasOwnProperty.call(components, key)) return false;
+      var item = evidence[key];
+      if (!item || typeof item !== 'object'
+          || typeof item.available !== 'boolean') {
+        return false;
+      }
+      var value = components[key];
+      if (value === null) return item.available === false;
+      return item.available === true && isFormalMarketNumber(value, 0, 100);
+    });
+  }
+
+  function isCompleteFormalMarketSentiment(sentiment, expectedDate, dateField, raw) {
+    if (!sentiment || typeof sentiment !== 'object') return false;
+    if (!isCanonicalIsoDate(expectedDate)
+        || normalizeString(sentiment[dateField]).trim() !== expectedDate) {
+      return false;
+    }
+    if (!isFormalMarketNumber(sentiment.score, 0, 100)
+        || !isFormalMarketNumber(sentiment.coverage, 0, 1)
+        || sentiment.coverage <= 0
+        || !isFormalMarketText(sentiment.label)
+        || !isFormalMarketText(sentiment.version)
+        || (raw && sentiment.insufficient !== false)
+        || (!raw
+          && Object.prototype.hasOwnProperty.call(sentiment, 'insufficient')
+          && sentiment.insufficient !== false)) {
+      return false;
+    }
+    return hasCompleteFormalMarketComponents(sentiment);
+  }
+
+  function getFormalMarketSentimentContract(data) {
+    data = data || {};
+    var bootstrap = getBootstrap();
+    var hasProjection = Object.prototype.hasOwnProperty.call(
+      bootstrap, 'recommendationEvidence'
+    );
+    var projection = getRecommendationEvidenceProjection(data);
+    if (hasProjection) {
+      var market = projection && projection.market_sentiment;
+      var formal = market && typeof market === 'object'
+        ? market.formal_contract : null;
+      var projectionDate = projection
+        ? normalizeString(projection.report_date).trim() : '';
+      if (!formal || normalizeString(formal.status) !== 'available'
+          || !isCompleteFormalMarketSentiment(
+            formal, projectionDate, 'as_of', false
+          )) {
+        return null;
+      }
+      return formal;
+    }
+
+    var reportDate = normalizeString(data.date).trim();
+    var pageDate = normalizeString(bootstrap.pageDate).trim();
+    if (!isCanonicalIsoDate(reportDate) || pageDate !== reportDate) return null;
+    var legacy = data.market_sentiment;
+    return isCompleteFormalMarketSentiment(
+      legacy, reportDate, 'date', true
+    ) ? legacy : null;
+  }
+
   function buildMarketTemperature(data) {
     data = data || {};
-    var sentiment = data.market_sentiment || {};
+    var sentiment = getFormalMarketSentimentContract(data) || {};
     var sentimentScore = safeNumber(sentiment.score, null);
     var sentimentComponents = sentiment.components || {};
     if (!Number.isFinite(sentimentScore)) {

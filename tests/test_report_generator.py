@@ -2585,7 +2585,8 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn('components.index_score', self.asset_js)
 
     def test_market_sentiment_uses_backend_v2_and_renders_twenty_day_chart(self):
-        self.assertIn('var sentiment = data.market_sentiment || {};', self.asset_js)
+        self.assertIn('function getFormalMarketSentimentContract', self.asset_js)
+        self.assertIn('var sentiment = getFormalMarketSentimentContract(data) || {};', self.asset_js)
         self.assertIn("label: '数据不足'", self.asset_js)
         self.assertIn('market_sentiment_history', self.asset_js)
         self.assertIn('sentimentChartInstance', self.asset_js)

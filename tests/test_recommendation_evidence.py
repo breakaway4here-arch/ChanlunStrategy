@@ -179,6 +179,24 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
         self.assertEqual(candidate["decision_score"]["status"], "missing")
         self.assertEqual(candidate["rank_evidence"]["opportunity_score"], 99)
 
+    def test_decision_score_only_accepts_formal_total_score(self):
+        row = _workspace_row(opportunity_score=30)
+        raw = _raw_candidate(decision={
+            "decision_code": "recommend",
+            "score": 88,
+            "final_score": 77,
+            "opportunity_score": 99,
+        })
+
+        candidate = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]
+
+        self.assertIsNone(candidate["decision_score"]["score"])
+        self.assertEqual(candidate["decision_score"]["status"], "missing")
+        self.assertEqual(candidate["rank_evidence"]["opportunity_score"], 30)
+
     def test_rank_evidence_preserves_workspace_order_and_view_rank(self):
         second = _workspace_row("301629", rank=2, opportunity_score=30)
         first = _workspace_row("301266", rank=1, opportunity_score=90)

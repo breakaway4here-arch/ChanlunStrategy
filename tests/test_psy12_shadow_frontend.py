@@ -24,13 +24,22 @@ const base = {
     date: '2026-08-28',
     score: 61,
     label: '偏强',
+    version: 'v2',
     coverage: 1,
+    insufficient: false,
     components: {
       breadth: 41,
       index: 52,
       limit_ecology: 63,
       turnover: 74,
       trend: 85
+    },
+    evidence: {
+      breadth: { available: true },
+      index: { available: true },
+      limit_ecology: { available: true },
+      turnover: { available: true },
+      trend: { available: true }
     }
   },
   psy12: {
@@ -65,7 +74,32 @@ window.CHANLUN_BOOTSTRAP = {
     schema_version: 1,
     report_date: '2026-08-28',
     views: {},
-    market_sentiment: { psy12_shadow_audit: audit }
+    market_sentiment: {
+      formal_contract: {
+        status: 'available',
+        source: 'daily.market_sentiment',
+        as_of: '2026-08-28',
+        score: 61,
+        label: '偏强',
+        version: 'v2',
+        coverage: 1,
+        components: {
+          breadth: 41,
+          index: 52,
+          limit_ecology: 63,
+          turnover: 74,
+          trend: 85
+        },
+        evidence: {
+          breadth: { available: true },
+          index: { available: true },
+          limit_ecology: { available: true },
+          turnover: { available: true },
+          trend: { available: true }
+        }
+      },
+      psy12_shadow_audit: audit
+    }
   }
 };
 """.replace("AUDIT_EXPR", audit_expr)
@@ -291,6 +325,144 @@ assert(html.includes('promotion_eligible=false'), 'promotion boundary is not exp
 assert(html.includes('仍需新授权'), 'new authorization boundary is not explicit');
 assert(!html.includes('affects_production=true'), 'unsafe production flag leaked into the UI');
 assert(!html.includes('promotion_eligible=true'), 'unsafe promotion flag leaked into the UI');
+""",
+        )
+
+    def test_incomplete_raw_sentiment_cannot_bypass_formal_projection_contract(self):
+        _assert_node_contract(
+            self,
+            "({ temperature: buildMarketTemperature })",
+            r"""
+const report = {
+  date: '2026-08-28',
+  market_sentiment: { score: 62, label: '偏强' }
+};
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: {
+    schema_version: 1,
+    report_date: '2026-08-28',
+    views: {},
+    market_sentiment: {
+      formal_contract: {
+        status: 'available',
+        source: 'daily.market_sentiment',
+        as_of: '2026-08-28',
+        score: 62,
+        label: '偏强',
+        coverage: null,
+        components: {},
+        evidence: {}
+      }
+    }
+  }
+};
+const temperature = globalThis.__auxTest.temperature(report);
+assert(temperature.score === null, 'incomplete raw sentiment bypassed the formal projection');
+assert(temperature.insufficient === true, 'incomplete formal sentiment looked available');
+assert(temperature.label === '数据不足', 'incomplete formal sentiment kept a formal label');
+""",
+        )
+
+    def test_complete_legacy_raw_sentiment_remains_available_without_projection(self):
+        _assert_node_contract(
+            self,
+            "({ temperature: buildMarketTemperature })",
+            r"""
+const report = {
+  date: '2026-08-27',
+  market_sentiment: {
+    date: '2026-08-27',
+    score: 63,
+    label: '偏强',
+    version: 'v2',
+    coverage: 1,
+    insufficient: false,
+    components: {
+      breadth: 41,
+      index: 52,
+      limit_ecology: 63,
+      turnover: 74,
+      trend: 85
+    },
+    evidence: {
+      breadth: { available: true },
+      index: { available: true },
+      limit_ecology: { available: true },
+      turnover: { available: true },
+      trend: { available: true }
+    }
+  }
+};
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-27' };
+const temperature = globalThis.__auxTest.temperature(report);
+assert(temperature.score === 63, 'complete legacy formal sentiment was discarded');
+assert(temperature.label === '偏强', 'complete legacy formal label was discarded');
+assert(temperature.insufficient === false, 'complete legacy formal sentiment was degraded');
+""",
+        )
+
+    def test_unavailable_component_requires_null_value_in_legacy_contract(self):
+        _assert_node_contract(
+            self,
+            "({ temperature: buildMarketTemperature })",
+            r"""
+const report = {
+  date: '2026-08-27',
+  market_sentiment: {
+    date: '2026-08-27',
+    score: 63,
+    label: '偏强',
+    version: 'v2',
+    coverage: 0.8,
+    insufficient: false,
+    components: {
+      breadth: null,
+      index: 52,
+      limit_ecology: 63,
+      turnover: 74,
+      trend: 85
+    },
+    evidence: {
+      breadth: { available: false },
+      index: { available: true },
+      limit_ecology: { available: true },
+      turnover: { available: true },
+      trend: { available: true }
+    }
+  }
+};
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-27' };
+let temperature = globalThis.__auxTest.temperature(report);
+assert(temperature.score === 63, 'null/unavailable component broke a valid partial contract');
+assert(temperature.components.breadth_score === null, 'unavailable component gained a value');
+report.market_sentiment.evidence.breadth.available = true;
+temperature = globalThis.__auxTest.temperature(report);
+assert(temperature.score === null, 'null/available component conflict was accepted');
+assert(temperature.insufficient === true, 'component conflict did not fail closed');
+""",
+        )
+
+    def test_formal_contract_rejects_non_string_text_and_insufficient_conflicts(self):
+        fixture = _valid_market_fixture(audit=_audit_literal())
+        _assert_node_contract(
+            self,
+            "({ temperature: buildMarketTemperature })",
+            fixture
+            + r"""
+const formal = window.CHANLUN_BOOTSTRAP
+  .recommendationEvidence.market_sentiment.formal_contract;
+formal.label = true;
+let temperature = globalThis.__auxTest.temperature(base);
+assert(temperature.score === null, 'boolean label was accepted as formal text');
+        formal.label = '偏强';
+        formal.version = 2;
+        temperature = globalThis.__auxTest.temperature(base);
+        assert(temperature.score === null, 'numeric version was accepted as formal text');
+        formal.version = 'v2';
+        formal.insufficient = true;
+        temperature = globalThis.__auxTest.temperature(base);
+        assert(temperature.score === null, 'insufficient projection was accepted as formal');
 """,
         )
 

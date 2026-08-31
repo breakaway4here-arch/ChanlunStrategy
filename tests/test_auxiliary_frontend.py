@@ -284,7 +284,17 @@ globalThis.__auxTest.state.data = { date: '2026-08-28' };
             "{ render: renderPsy12ShadowCard, temperature: buildMarketTemperature }",
             r"""
 const base = {
-  market_sentiment: { score: 61, label: '偏强', coverage: 1, components: {} },
+  date: '2026-08-26',
+  market_sentiment: {
+    date: '2026-08-26', score: 61, label: '偏强', version: 'v2',
+    coverage: 1, insufficient: false,
+    components: { breadth: 41, index: 52, limit_ecology: 63, turnover: 74, trend: 85 },
+    evidence: {
+      breadth: { available: true }, index: { available: true },
+      limit_ecology: { available: true }, turnover: { available: true },
+      trend: { available: true }
+    }
+  },
   psy12: {
     status: 'available', score: 50, up_days: 6, valid_days: 12, window: 12,
     start_date: '2026-08-11', end_date: '2026-08-26', daily_directions: []
@@ -295,6 +305,31 @@ const base = {
     status: 'available', formal_score: 61, shadow_score_with_psy12: 61,
     delta_vs_formal: 0, formal_label: '偏强', shadow_label: '偏强',
     weights: { psy12: 0.1 }
+  }
+};
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-26',
+  recommendationEvidence: {
+    schema_version: 1,
+    report_date: '2026-08-26',
+    views: {},
+    market_sentiment: {
+      formal_contract: {
+        status: 'available',
+        source: 'daily.market_sentiment',
+        as_of: '2026-08-26',
+        score: 61,
+        label: '偏强',
+        version: 'v2',
+        coverage: 1,
+        components: { breadth: 41, index: 52, limit_ecology: 63, turnover: 74, trend: 85 },
+        evidence: {
+          breadth: { available: true }, index: { available: true },
+          limit_ecology: { available: true }, turnover: { available: true },
+          trend: { available: true }
+        }
+      }
+    }
   }
 };
 const html = globalThis.__auxTest.render(base);

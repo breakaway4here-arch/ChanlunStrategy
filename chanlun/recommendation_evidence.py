@@ -599,11 +599,7 @@ def _build_decision_score(raw, pool_name):
         return section
 
     decision = _as_mapping(raw.get("decision_engine_v1"))
-    score = None
-    for key in ("total_score", "score", "final_score"):
-        score = _finite_number(decision.get(key))
-        if score is not None:
-            break
+    score = _finite_number(decision.get("total_score"))
     components = {
         name: _decision_component(decision, name)
         for name in ("structure", "position", "sentiment")
@@ -3415,13 +3411,30 @@ def _build_volume_and_capital(row, raw, original_raw, report_date):
 def _formal_market_sentiment(daily_data, report_date):
     raw = _as_mapping(daily_data.get("market_sentiment"))
     score = _finite_number(raw.get("score"))
-    label = _as_text(raw.get("label")) or None
-    version = _as_text(raw.get("version")) or None
+    raw_label = raw.get("label")
+    raw_version = raw.get("version")
+    label = (
+        raw_label.strip()
+        if isinstance(raw_label, str) and raw_label.strip()
+        else None
+    )
+    version = (
+        raw_version.strip()
+        if isinstance(raw_version, str) and raw_version.strip()
+        else None
+    )
     coverage = _finite_number(raw.get("coverage"))
     raw_components = _as_mapping(raw.get("components"))
     raw_evidence = _as_mapping(raw.get("evidence"))
     expected_date = _strict_date_value(report_date)
-    evidence_date = _strict_date_value(raw.get("date"))
+    raw_date = raw.get("date")
+    date_text = raw_date.strip() if isinstance(raw_date, str) else ""
+    evidence_date = (
+        date_text
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_text)
+        and _strict_date_value(date_text) == date_text
+        else None
+    )
 
     def component_is_consistent(key):
         if key not in raw_components:
@@ -5034,6 +5047,10 @@ def build_recommendation_evidence_projection(
     raw_report_date = daily_data.get("date") or formal_report.get("date")
     report_date = _strict_date_value(raw_report_date) or ""
     market_sentiment = {}
+    market_sentiment["formal_contract"] = _formal_market_sentiment(
+        daily_data,
+        report_date,
+    )
     market_sentiment["psy12_shadow_contract"] = (
         _project_psy12_shadow_contract(daily_data)
     )
