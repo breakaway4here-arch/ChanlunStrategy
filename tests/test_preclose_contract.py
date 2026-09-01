@@ -111,9 +111,17 @@ class PrecloseContractTests(unittest.TestCase):
         self.assertTrue(is_preclose_expired(snapshot, now))
         public = build_public_preclose_view(snapshot, now=now)
         self.assertEqual(public["status"], "expired")
-        self.assertEqual(public["pools"]["main"], [])
+        self.assertEqual(public["pools"]["main"], [
+            {
+                "code": "300998",
+                "name": "宁波方正",
+                "reference_price": 26.86,
+            }
+        ])
+        self.assertIn("已封存", public["message"])
         self.assertIn("14:57", public["message"])
-        self.assertNotIn("300998", json.dumps(public, ensure_ascii=False))
+        self.assertFalse(public["is_final"])
+        self.assertFalse(public["affects_formal"])
 
 
 if __name__ == "__main__":

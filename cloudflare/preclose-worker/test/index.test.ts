@@ -152,8 +152,17 @@ describe("pre-close worker", () => {
     const response = await SELF.fetch(request("/api/preclose/latest?date=2026-09-05"));
     const body = await response.json<Record<string, any>>();
     expect(body.status).toBe("expired");
-    expect(body.pools).toEqual({ main: [], h4_t3: [], acceleration: [] });
-    expect(JSON.stringify(body)).not.toContain("300998");
+    expect(body.pools).toEqual({
+      main: [{ code: "300998", name: "宁波方正", reference_price: 26.86 }],
+      h4_t3: [],
+      acceleration: [],
+    });
+    expect(body.message).toContain("已封存");
+    expect(body.is_final).toBe(false);
+    expect(body.affects_formal).toBe(false);
+    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(JSON.stringify(body)).not.toContain("internal_reason");
+    expect(JSON.stringify(body)).not.toContain("score");
   });
 
   it("rejects timezone-naive timestamps and an expiry that is not exactly 14:56:30 Asia/Shanghai", async () => {

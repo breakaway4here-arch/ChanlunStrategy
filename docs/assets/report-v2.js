@@ -608,39 +608,56 @@
 
   function buildPrecloseSnapshotHtml(snapshot, nowMs) {
     var source = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    var status = normalizeString(source.status);
     var expiresAt = normalizeString(source.expires_at);
     var expiresMs = Date.parse(expiresAt);
     var resolvedNow = safeNumber(nowMs, Date.now());
-    var expired = normalizeString(source.status) === 'expired'
+    var expired = status === 'expired'
       || (Number.isFinite(expiresMs) && resolvedNow >= expiresMs);
     var mainRows = preclosePoolRows(source, 'main');
     var h4Rows = preclosePoolRows(source, 'h4_t3');
     var accelerationRows = preclosePoolRows(source, 'acceleration');
-    var available = normalizeString(source.status) === 'available'
-      && (mainRows.length + h4Rows.length + accelerationRows.length > 0)
+    var rowCount = mainRows.length + h4Rows.length + accelerationRows.length;
+    var available = status === 'available'
+      && rowCount > 0
       && !expired;
     var hash = normalizeString(source.content_hash);
     var identity = normalizeString(source.snapshot_id);
+    var countSummary = '主推 ' + mainRows.length + '只'
+      + '｜H4 T+3 ' + h4Rows.length + '只'
+      + '｜加速 ' + accelerationRows.length + '只';
     var meta = ''
       + '<div class="preclose-meta" aria-label="预跑快照信息">'
       + '  <span>生成 ' + escapeHtml(formatPrecloseTime(source.generated_at)) + '</span>'
-      + '  <span>失效 ' + escapeHtml(formatPrecloseTime(expiresAt)) + '</span>'
-      + (hash ? '<span title="' + escapeHtml('预跑快照 ' + identity) + '">快照 ' + escapeHtml(hash.slice(0, 8)) + '</span>' : '')
+      + '  <span>' + (expired ? '封存 ' : '失效 ') + escapeHtml(formatPrecloseTime(expiresAt)) + '</span>'
       + '</div>';
-    if (expired) {
-      return meta
-        + '<div class="preclose-expired" role="status">预跑已失效，14:57后不再依据预跑清单新增动作</div>';
-    }
-    if (!available) {
+    if (!expired && !available) {
       return meta
         + '<div class="preclose-unified-empty" role="status">本期未选出推荐票</div>';
     }
-    return meta
-      + '<div class="preclose-pools">'
-      + buildPreclosePoolHtml(source, 'main', '主推')
-      + buildPreclosePoolHtml(source, 'h4_t3', 'H4 T+3')
-      + buildPreclosePoolHtml(source, 'acceleration', '加速观察')
-      + '</div>';
+    var archived = expired;
+    var cardClass = archived ? 'preclose-snapshot-archived' : 'preclose-snapshot-active';
+    var cardTitle = archived ? '14:45预跑 · 已封存' : '14:45预跑';
+    var poolsHtml = rowCount
+      ? '<div class="preclose-pools">'
+        + buildPreclosePoolHtml(source, 'main', '主推')
+        + buildPreclosePoolHtml(source, 'h4_t3', 'H4 T+3')
+        + buildPreclosePoolHtml(source, 'acceleration', '加速观察')
+        + '</div>'
+      : '<div class="preclose-unified-empty" role="status">本期未选出推荐票</div>';
+    return ''
+      + '<details class="preclose-snapshot-card ' + cardClass + '"' + (archived ? '' : ' open') + '>'
+      + '  <summary>'
+      + '    <strong>' + cardTitle + '</strong>'
+      + '    <span>' + countSummary + '</span>'
+      + (hash ? '<small title="' + escapeHtml('预跑快照 ' + identity) + '">快照 ' + escapeHtml(hash.slice(0, 8)) + '</small>' : '')
+      + '  </summary>'
+      + '  <div class="preclose-snapshot-content">'
+      + meta
+      + (archived ? '<div class="preclose-expired" role="status">预跑已封存，仅供回看；14:57后不再依据预跑清单新增动作</div>' : '')
+      + poolsHtml
+      + '  </div>'
+      + '</details>';
   }
 
   function precloseDiffNames(value) {

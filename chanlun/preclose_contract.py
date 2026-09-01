@@ -200,15 +200,17 @@ def build_public_preclose_view(snapshot, now):
     source = snapshot if isinstance(snapshot, dict) else {}
     expired = is_preclose_expired(source, now)
     available = source.get("status") == "available" and not expired
+    replayable = source.get("status") == "available" and expired
+    show_pools = available or replayable
     status = "available" if available else ("expired" if expired else "empty")
     pools = {
         pool_key: list((source.get("pools") or {}).get(pool_key) or [])
-        if available
+        if show_pools
         else []
         for pool_key in POOL_KEYS
     }
     if expired:
-        message = "预跑已过期，14:57后不再依据预跑清单新增动作"
+        message = "预跑已封存，仅供回看；14:57后不再依据预跑清单新增动作"
     elif available:
         message = "14:56:30前有效"
     else:

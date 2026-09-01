@@ -406,6 +406,83 @@ body {
   font-size: 15px;
 }
 
+.preclose-snapshot-card {
+  overflow: hidden;
+  border: 1px solid rgba(49, 81, 244, .14);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, .78);
+}
+
+.preclose-snapshot-card > summary {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 6px 12px;
+  align-items: center;
+  padding: 10px 12px;
+  color: var(--text-sub);
+  cursor: pointer;
+  list-style: none;
+}
+
+.preclose-snapshot-card > summary::-webkit-details-marker {
+  display: none;
+}
+
+.preclose-snapshot-card > summary::after {
+  content: "›";
+  grid-column: 4;
+  color: #3151f4;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform .16s ease;
+}
+
+.preclose-snapshot-card[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.preclose-snapshot-card > summary:focus-visible {
+  outline: 2px solid rgba(49, 81, 244, .72);
+  outline-offset: -2px;
+}
+
+.preclose-snapshot-card > summary strong {
+  color: #1737bd;
+  font-size: 13px;
+}
+
+.preclose-snapshot-card > summary span {
+  min-width: 0;
+  color: var(--text-sub);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.preclose-snapshot-card > summary small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.preclose-snapshot-archived {
+  border-color: rgba(148, 163, 184, .34);
+  background: rgba(248, 250, 252, .86);
+}
+
+.preclose-snapshot-archived > summary strong {
+  color: #475569;
+}
+
+.preclose-snapshot-content {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.preclose-snapshot-content .preclose-meta {
+  margin-top: 9px;
+}
+
 .preclose-advisory-head small,
 .preclose-meta,
 .preclose-candidate small,
@@ -493,6 +570,7 @@ body {
 }
 
 .preclose-expired {
+  margin-bottom: 8px;
   color: #7c4a03;
   background: rgba(254, 243, 199, .72);
 }
@@ -5644,6 +5722,34 @@ body {
 @media screen and (max-width: 760px) {
   .preclose-pools {
     grid-template-columns: 1fr;
+  }
+
+  .preclose-snapshot-card > summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+  }
+
+  .preclose-snapshot-card > summary strong {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .preclose-snapshot-card > summary span,
+  .preclose-snapshot-card > summary small {
+    grid-column: 1 / -1;
+  }
+
+  .preclose-snapshot-card > summary span {
+    grid-row: 2;
+  }
+
+  .preclose-snapshot-card > summary small {
+    grid-row: 3;
+  }
+
+  .preclose-snapshot-card > summary::after {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .preclose-advisory-head > span {

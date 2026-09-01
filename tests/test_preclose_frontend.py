@@ -143,6 +143,7 @@ const snapshot = {
   diagnostics: { failure_reason: 'secret_failure' }
 };
 const available = globalThis.__precloseTest.build(snapshot, Date.parse('2026-08-27T14:50:00+08:00'));
+assert(available.includes('<details class="preclose-snapshot-card preclose-snapshot-active" open>'), 'active snapshot is not expanded');
 assert(available.includes('14:48:20'), 'generated time missing');
 assert(available.includes('14:56:30'), 'expiry time missing');
 assert(available.includes('宁波方正') && available.includes('参考 26.86'), 'main candidate missing');
@@ -160,9 +161,15 @@ assert(empty.includes('本期未选出推荐票'), 'unified empty state missing'
 assert(!empty.includes('参考 '), 'empty state retained price');
 
 const expired = globalThis.__precloseTest.build(snapshot, Date.parse('2026-08-27T14:56:30+08:00'));
+assert(expired.includes('<details class="preclose-snapshot-card preclose-snapshot-archived">'), 'expired snapshot is not archived');
+assert(!expired.includes('<details class="preclose-snapshot-card preclose-snapshot-archived" open>'), 'archived snapshot expanded by default');
+assert(expired.includes('14:45预跑 · 已封存'), 'archived title missing');
+assert(expired.includes('主推 1只｜H4 T+3 0只｜加速 1只'), 'archived pool counts missing');
 assert(expired.includes('14:57后不再依据预跑清单新增动作'), 'inclusive expiry message missing');
-assert(!expired.includes('宁波方正') && !expired.includes('参考 '), 'expired action fields remained');
+assert(expired.includes('宁波方正') && expired.includes('参考 26.86'), 'archived candidates missing');
+assert(expired.includes('仅供回看'), 'archived read-only boundary missing');
 assert(!expired.includes('<button'), 'expired card kept executable control');
+assert(!expired.includes('<a '), 'expired card kept executable link');
 """,
         )
 

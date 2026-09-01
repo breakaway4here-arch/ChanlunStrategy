@@ -159,8 +159,10 @@ function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: n
   const expired = now >= Date.parse(snapshot.expires_at);
   const hasRows = POOL_KEYS.some((key) => snapshot.pools[key].length > 0);
   const available = snapshot.status === "available" && hasRows && !expired;
+  const replayable = snapshot.status === "available" && expired;
+  const showPools = available || replayable;
   const pools = {} as Record<PoolKey, PrecloseCandidate[]>;
-  for (const key of POOL_KEYS) pools[key] = available ? snapshot.pools[key].map(normalizeCandidate).filter(Boolean) as PrecloseCandidate[] : [];
+  for (const key of POOL_KEYS) pools[key] = showPools ? snapshot.pools[key].map(normalizeCandidate).filter(Boolean) as PrecloseCandidate[] : [];
   return {
     schema_version: snapshot.schema_version,
     strategy_version: snapshot.strategy_version,
@@ -178,7 +180,7 @@ function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: n
     revision,
     pools,
     message: expired
-      ? "预跑已过期，14:57后不再依据预跑清单新增动作"
+      ? "预跑已封存，仅供回看；14:57后不再依据预跑清单新增动作"
       : available ? "14:56:30前有效" : "本期未选出推荐票",
   };
 }
