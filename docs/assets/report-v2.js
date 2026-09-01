@@ -3650,9 +3650,14 @@
       var component = components[key] && typeof components[key] === 'object' ? components[key] : {};
       var score = component.score;
       var reasons = recommendationEvidenceList(component.reasons);
+      var pillsHtml = reasons.length
+        ? '<div class="reason-pills">' + reasons.map(function (reason) {
+            return '<span class="reason-pill">' + escapeHtml(reason.trim()) + '</span>';
+          }).join('') + '</div>'
+        : '<small>无分项原因</small>';
       return '<div><span>' + escapeHtml(componentLabels[key]) + '</span><strong>'
         + escapeHtml(isRecommendationEvidenceFiniteNumber(score) ? recommendationEvidenceNumber(score) : '--') + '</strong>'
-        + (reasons.length ? '<small>' + escapeHtml(reasons.join(' · ')) + '</small>' : '') + '</div>';
+        + pillsHtml + '</div>';
     }).join('');
     var decisionScore = decision.score;
     var rankScore = rank.opportunity_score;
@@ -3667,19 +3672,47 @@
     if (!horizonText && isRecommendationEvidenceFiniteNumber(summary.applicable_horizon)) {
       horizonText = 'T+' + recommendationEvidenceNumber(summary.applicable_horizon);
     }
-    var completionFacts = renderEvidenceRows([
-      ['池身份', poolIdentity],
-      ['池内顺序', isRecommendationEvidenceFiniteNumber(summaryRank) ? '#' + recommendationEvidenceNumber(summaryRank) : '未提供'],
+    var primaryFactRows = [
       ['信号类型', evidenceScalarText(summary.signal_type) || '未提供'],
       ['信号日期', evidenceScalarText(summary.signal_date) || '未提供'],
       ['信号新鲜度', recommendationSignalAgeText(summary.signal_age_days)],
       ['适用周期', horizonText || '策略未声明统一周期'],
+    ];
+    var riskRows = [];
+    if (summary.data_stale === true) {
+      riskRows.push(['陈旧状态', '已陈旧']);
+    } else if (summary.data_stale !== false) {
+      riskRows.push(['陈旧状态', '陈旧状态未提供']);
+    }
+    if (summary.data_is_final === false) {
+      riskRows.push(['终局状态', '非终局']);
+    } else if (summary.data_is_final !== true) {
+      riskRows.push(['终局状态', '终局状态未提供']);
+    }
+    var healthText = evidenceScalarText(summary.data_health);
+    var healthIsVerified = ['verified', 'fresh', 'available'].indexOf(
+      healthText.toLowerCase()
+    ) !== -1;
+    if (!healthText) {
+      riskRows.push(['数据健康', '数据健康未提供']);
+    } else if (!healthIsVerified) {
+      riskRows.push(['数据健康', healthText]);
+    }
+    var primaryFacts = renderEvidenceRows(primaryFactRows);
+    var riskFacts = renderEvidenceRows(riskRows);
+    var metaFacts = renderEvidenceRows([
+      ['池身份', poolIdentity],
+      ['池内顺序', isRecommendationEvidenceFiniteNumber(summaryRank) ? '#' + recommendationEvidenceNumber(summaryRank) : '未提供'],
       ['数据日期', evidenceScalarText(summary.data_latest_date) || '未提供'],
       ['数据来源', evidenceScalarText(summary.data_source) || '未提供'],
       ['数据健康', evidenceScalarText(summary.data_health) || '未提供'],
       ['终局状态', evidenceBooleanText(summary.data_is_final, '已终局', '非终局', '终局状态未提供')],
       ['陈旧状态', evidenceBooleanText(summary.data_stale, '已陈旧', '未陈旧', '陈旧状态未提供')],
     ]);
+    var metaHtml = '<details class="evidence-meta-details">'
+      + '<summary class="evidence-meta-summary">数据存证与审计凭证</summary>'
+      + metaFacts
+      + '</details>';
     var body = renderRecommendationEvidenceHeader(evidence, incidentReview)
       + (normalizeString(summary.formal_action_reason).trim()
         ? '<p class="recommendation-conclusion-reason">' + escapeHtml(summary.formal_action_reason) + '</p>' : '')
@@ -3694,7 +3727,11 @@
       + escapeHtml(isRecommendationEvidenceFiniteNumber(rankScore) ? '排序分 ' + recommendationEvidenceNumber(rankScore) : '排序分未提供')
       + '</small><p>' + escapeHtml(normalizeString(rank.note).trim() || '仅用于当前池内排序') + '</p></section>'
       + '</div>'
-      + completionFacts;
+      + primaryFacts
+      + (riskFacts
+        ? '<aside class="recommendation-evidence-risk-facts" aria-label="数据风险提示">' + riskFacts + '</aside>'
+        : '')
+      + metaHtml;
     return body;
   }
 
@@ -3709,8 +3746,10 @@
     ];
     var cells = fields.map(function (field) {
       var number = evidencePositiveNumber(prices[field[1]]);
-      return '<div class="price-cell"><div class="price-label">' + escapeHtml(field[0]) + '</div>'
-        + '<div class="price-value">' + escapeHtml(number === null ? field[2] : recommendationEvidenceNumber(number, 2)) + '</div></div>';
+      var isMissing = number === null;
+      var cellClass = 'price-cell' + (isMissing ? ' is-missing' : '');
+      return '<div class="' + cellClass + '"><div class="price-label">' + escapeHtml(field[0]) + '</div>'
+        + '<div class="price-value">' + escapeHtml(isMissing ? field[2] : recommendationEvidenceNumber(number, 2)) + '</div></div>';
     }).join('');
     var targets = asArray(prices.trailing_targets).map(function (target) {
       var source = target && typeof target === 'object' ? target : { price: target };
@@ -3757,8 +3796,10 @@
     var structureHtml = structureFields.map(function (field) {
       var number = evidencePositiveNumber(prices[field[1]]);
       var source = evidenceScalarText(prices[field[2]]);
-      return '<div><dt>' + escapeHtml(field[0]) + '</dt><dd><strong>'
-        + escapeHtml(number === null ? field[3] : recommendationEvidenceNumber(number, 2))
+      var isMissing = number === null;
+      var itemClass = isMissing ? ' class="is-missing"' : '';
+      return '<div' + itemClass + '><dt>' + escapeHtml(field[0]) + '</dt><dd><strong>'
+        + escapeHtml(isMissing ? field[3] : recommendationEvidenceNumber(number, 2))
         + '</strong>' + (number !== null
           ? '<small>来源：' + escapeHtml(source || '未提供') + '</small>' : '')
         + '</dd></div>';

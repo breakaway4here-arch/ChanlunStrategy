@@ -320,6 +320,18 @@ class TestReportGenerator(unittest.TestCase):
             )
         self.assertGreaterEqual(checked, 10)
 
+    def test_checked_in_v2_assets_match_report_asset_sources(self):
+        root_dir = Path(__file__).resolve().parents[1]
+        source_dir = root_dir / "chanlun" / "report_assets"
+        docs_assets_dir = root_dir / "docs" / "assets"
+
+        for asset_name in report_generator.REPORT_V2_ASSETS:
+            self.assertEqual(
+                (docs_assets_dir / asset_name).read_bytes(),
+                (source_dir / asset_name).read_bytes(),
+                asset_name,
+            )
+
     def test_generate_report_refreshes_offline_comparison_index(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             generate_report({
