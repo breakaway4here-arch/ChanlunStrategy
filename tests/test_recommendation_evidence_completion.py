@@ -101,9 +101,32 @@ class RecommendationEvidenceCompletionTests(unittest.TestCase):
         summary = candidate["summary"]
         daily = candidate["daily_structure"]
         self.assertEqual(daily["status"], "stale")
+        self.assertEqual(summary["status"], "stale")
         self.assertEqual(summary["data_health"], daily["health"])
         self.assertEqual(summary["data_latest_date"], daily["latest_date"])
         self.assertEqual(summary["data_stale"], daily["stale"])
+
+    def test_recommendation_conclusion_marks_non_final_daily_evidence_partial(self):
+        candidate = self._candidate({
+            "best_buy_point": {
+                "type": "二买",
+                "signal_date": "2026-08-28",
+                "signal_age_days": 0,
+            },
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-08-28",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": False,
+            },
+        })
+
+        summary = candidate["summary"]
+        daily = candidate["daily_structure"]
+        self.assertEqual(daily["status"], "partial")
+        self.assertEqual(summary["status"], "partial")
+        self.assertIs(summary["data_is_final"], False)
 
     def test_daily_freshness_is_unknown_when_not_declared(self):
         candidate = self._candidate({

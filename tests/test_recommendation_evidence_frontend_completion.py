@@ -353,6 +353,8 @@ const module02 = moduleHtml('02', '03');
 ].forEach(function (text) {
   assert(module02.includes(text), 'module 02 missing: ' + text);
 });
+assert(module02.includes('price-cell is-missing'),
+  'unformed price cells are not visually distinguished from verified prices');
 
 const module03 = moduleHtml('03', '04');
 [
@@ -362,6 +364,82 @@ const module03 = moduleHtml('03', '04');
 ].forEach(function (text) {
   assert(module03.includes(text), 'module 03 missing: ' + text);
 });
+""",
+        )
+
+    def test_conclusion_keeps_risk_states_visible_and_audit_metadata_collapsed(self):
+        _assert_node_contract(
+            self,
+            "({ detail: buildMergedCandidateDetail, state: state })",
+            FIXTURE
+            + r"""
+function moduleFrom(rendered, number, nextNumber) {
+  const start = rendered.indexOf('data-evidence-module="' + number + '"');
+  const end = nextNumber
+    ? rendered.indexOf('data-evidence-module="' + nextNumber + '"', start + 1)
+    : rendered.length;
+  assert(start >= 0 && end > start, 'module ' + number + ' missing');
+  return rendered.slice(start, end);
+}
+
+const normalModule = moduleHtml('01', '02');
+const normalDetails = normalModule.indexOf('<details class="evidence-meta-details">');
+assert(normalDetails > 0, 'module 01 does not collapse low-priority audit metadata');
+assert(!normalModule.includes('<details class="evidence-meta-details" open>'),
+  'audit metadata must remain closed by default');
+const normalPrimary = normalModule.slice(0, normalDetails);
+assert(normalPrimary.includes('reason-pill'),
+  'decision reasons are not rendered as compact pills');
+assert(!normalPrimary.includes('池身份') && normalModule.slice(normalDetails).includes('池身份'),
+  'pool identity is not reserved for the collapsed audit metadata');
+
+const staleEvidence = JSON.parse(JSON.stringify(evidence));
+staleEvidence.code = '600002';
+staleEvidence.summary.code = '600002';
+staleEvidence.summary.status = 'stale';
+staleEvidence.summary.data_health = 'stale';
+staleEvidence.summary.data_stale = true;
+staleEvidence.summary.data_is_final = false;
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: { schema_version: 1, report_date: '2026-08-28', views: { main: [staleEvidence] } }
+};
+const staleHtml = globalThis.__auxTest.detail({
+  code: '600002', name: '风险股', sector: '半导体',
+  ref: { pool: 'picks_fusion', code: '600002' },
+  formal_decision_contract: { action: '观察' }
+}, {});
+const staleModule = moduleFrom(staleHtml, '01', '02');
+const staleDetails = staleModule.indexOf('<details class="evidence-meta-details">');
+const stalePrimary = staleModule.slice(0, staleDetails);
+assert(stalePrimary.includes('陈旧状态') && stalePrimary.includes('已陈旧'),
+  'stale risk status is not visible outside collapsed details');
+assert(stalePrimary.includes('终局状态') && stalePrimary.includes('非终局'),
+  'non-final risk status is not visible outside collapsed details');
+
+const unavailableEvidence = JSON.parse(JSON.stringify(evidence));
+unavailableEvidence.code = '600003';
+unavailableEvidence.summary.code = '600003';
+unavailableEvidence.summary.status = 'missing';
+unavailableEvidence.summary.data_health = 'unavailable';
+unavailableEvidence.summary.data_stale = null;
+unavailableEvidence.summary.data_is_final = null;
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: { schema_version: 1, report_date: '2026-08-28', views: { main: [unavailableEvidence] } }
+};
+const unavailableHtml = globalThis.__auxTest.detail({
+  code: '600003', name: '缺口股', sector: '半导体',
+  ref: { pool: 'picks_fusion', code: '600003' },
+  formal_decision_contract: { action: '观察' }
+}, {});
+const unavailableModule = moduleFrom(unavailableHtml, '01', '02');
+const unavailableDetails = unavailableModule.indexOf('<details class="evidence-meta-details">');
+const unavailablePrimary = unavailableModule.slice(0, unavailableDetails);
+assert(unavailablePrimary.includes('数据健康') && unavailablePrimary.includes('unavailable'),
+  'unavailable data health was hidden by a substring match');
+assert(unavailablePrimary.includes('终局状态未提供') && unavailablePrimary.includes('陈旧状态未提供'),
+  'undeclared data-finality risks are not visible outside collapsed details');
 """,
         )
 
