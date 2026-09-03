@@ -14,7 +14,9 @@ from chanlun.preclose_contract import build_preclose_snapshot
 from chanlun.preclose_pipeline import PreclosePipelineComponents
 from chanlun.preclose_runtime import (
     MARKET_INDICES,
+    _append_intraday_quote,
     build_scheduled_preclose_input,
+    fetch_preclose_30m,
     select_preclose_30m_targets,
 )
 from preclose_run import PrecloseRunLock, run_scheduled_preclose
@@ -44,6 +46,84 @@ def _history(code, name, start):
 
 
 class PrecloseRuntimeTests(unittest.TestCase):
+    @staticmethod
+    def _minute_payload(trade_date, close, source):
+        clocks = (
+            "10:00:00", "10:30:00", "11:00:00", "11:30:00",
+            "13:30:00", "14:00:00", "14:30:00", "15:00:00",
+        )
+        dates = []
+        for day in (
+            "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26",
+            "2026-08-27",
+        ):
+            dates.extend("{} {}".format(day, clock) for clock in clocks)
+        dates.extend(
+            "{} {}".format(trade_date, clock) for clock in clocks[:7]
+        )
+        values = [float(close)] * len(dates)
+        return {
+            "dates": dates,
+            "opens": values,
+            "highs": [value + 0.1 for value in values],
+            "lows": [value - 0.1 for value in values],
+            "closes": values,
+            "volumes": [1000.0] * len(values),
+            "source": source,
+        }
+
+    def test_30m_fallback_rejects_stale_truthy_provider(self):
+        stale = self._minute_payload("2026-08-27", 10.0, "sina")
+        fresh = self._minute_payload(TRADE_DATE, 10.0, "eastmoney")
+        with patch(
+            "chanlun.data_fetcher._fetch_sina_minute_kline_remote",
+            return_value=stale,
+        ), patch(
+            "chanlun.data_fetcher._fetch_eastmoney_minute_kline_remote",
+            return_value=fresh,
+        ):
+            result = fetch_preclose_30m(
+                [{"code": "300900", "name": "广联航空"}],
+                TRADE_DATE,
+                AS_OF,
+                max_workers=1,
+            )
+
+        self.assertEqual(result["300900"]["status"], "available")
+        self.assertEqual(
+            result["300900"]["klines"]["source"], "eastmoney"
+        )
+    def test_intraday_quote_is_scaled_into_formal_qfq_basis(self):
+        history = _history("300900", "广联航空", 3.81)
+        history["klines"]["adjustment"] = "qfq"
+        adjusted_previous_close = history["klines"]["closes"][-1]
+        raw_previous_close = adjusted_previous_close * 2.0
+        quote = {
+            "code": "300900",
+            "name": "广联航空",
+            "industry": "航空装备",
+            "is_st": False,
+            "listed_date": "20201029",
+            "prev_close": raw_previous_close,
+            "open": raw_previous_close * 0.98,
+            "high": raw_previous_close * 1.05,
+            "low": raw_previous_close * 0.97,
+            "current_price": raw_previous_close * 1.02,
+            "volume": 2000,
+            "amount": 20000000,
+            "change_pct": 2.0,
+        }
+
+        row = _append_intraday_quote(history, quote, TRADE_DATE, AS_OF)
+
+        self.assertIsNotNone(row)
+        self.assertAlmostEqual(
+            row["klines"]["closes"][-1], adjusted_previous_close * 1.02
+        )
+        self.assertAlmostEqual(row["price_basis"]["factor_vs_raw"], 0.5)
+        self.assertEqual(row["price_basis"]["adjustment"], "qfq")
+        self.assertEqual(row["klines"]["adjustment"], "qfq")
+
     def test_default_daily_target_selector_accepts_json_lists(self):
         rows = [_history("300998", "宁波方正", 10.0)]
         rows[0].update({
@@ -191,7 +271,72 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertTrue(all(row["is_final"] is False for row in result["daily"]))
         self.assertTrue(all(row["klines"]["finals"][-1] is False for row in result["daily"]))
         self.assertEqual(len(result["market"]["stock_bars"]), 2)
+        self.assertEqual(
+            result["runtime_diagnostics"]["daily_splice"],
+            {
+                "requested_count": 2,
+                "available_count": 2,
+                "coverage": 1.0,
+                "minimum_coverage": 0.9,
+                "excluded_by_reason": {},
+                "excluded_codes": [],
+            },
+        )
         self.assertNotIn("psy12", result)
+
+    def test_daily_splice_below_90_percent_coverage_fails_closed(self):
+        histories = [
+            _history(str(300000 + index), "样本{}".format(index), 10.0 + index)
+            for index in range(10)
+        ]
+        quotes = []
+        for row in histories[:8]:
+            previous = row["klines"]["closes"][-1]
+            quotes.append({
+                "code": row["code"],
+                "name": row["name"],
+                "industry": "测试行业",
+                "is_st": False,
+                "listed_date": "20200101",
+                "prev_close": previous,
+                "open": previous,
+                "high": previous + 0.2,
+                "low": previous - 0.2,
+                "current_price": previous + 0.1,
+                "volume": 2000,
+                "amount": 20000000,
+                "change_pct": 1.0,
+            })
+        with tempfile.TemporaryDirectory() as temp_dir:
+            db = Path(temp_dir) / "market.sqlite"
+            db.write_bytes(b"formal-read-only-sentinel")
+            with self.assertRaisesRegex(RuntimeError, "daily splice coverage"):
+                build_scheduled_preclose_input(
+                    TRADE_DATE,
+                    AS_OF,
+                    formal_market_db=db,
+                    universe_loader=lambda *_args: (histories, {"source": "fixture"}),
+                    quote_fetcher=lambda: (
+                        quotes,
+                        {
+                            "complete": True,
+                            "requested": len(quotes),
+                            "unique": len(quotes),
+                        },
+                    ),
+                    index_fetcher=lambda *_args: {
+                        name: {
+                            "code": code,
+                            "close": 3100,
+                            "change_pct": 1.0,
+                            "closes": [3000, 3100],
+                        }
+                        for name, code in MARKET_INDICES.items()
+                    },
+                    target_selector=lambda _rows: [],
+                    min30_fetcher=lambda *_args: {},
+                    turnover_loader=lambda *_args: [100.0, 120.0, 140.0],
+                )
 
     def test_incomplete_full_market_quote_snapshot_fails_closed(self):
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -21,6 +21,7 @@ from config import (
 from .chan_engine import ema
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
+from .price_basis import align_intraday_price
 from .screener_pure import _get_pivot_info, _has_macd_bullish_signal
 
 
@@ -245,11 +246,18 @@ def screen_30min_fusion(daily_pool, chan_results_30min):
                 if bottom_fractals:
                     last_bottom = bottom_fractals[-1]
                     daily_bp_price = stock["best_buy_point"]["price"]
-                    if abs(last_bottom.price - daily_bp_price) / daily_bp_price < 0.05:
+                    aligned_bottom_price = align_intraday_price(
+                        last_bottom.price, stock, min30_result
+                    )
+                    if (
+                        aligned_bottom_price is not None
+                        and abs(aligned_bottom_price - daily_bp_price)
+                        / daily_bp_price < 0.05
+                    ):
                         buy_points_30 = [{
                             "type": "底分型确认",
                             "index": last_bottom.index,
-                            "price": round(last_bottom.price, 2),
+                            "price": round(aligned_bottom_price, 2),
                             "date": str(min30_result.dates[last_bottom.index]) if last_bottom.index < len(min30_result.dates) else "",
                             "reason": "30分钟形成底分型+MACD金叉/底背驰确认",
                             "strength": "中",
@@ -294,6 +302,11 @@ def _confirm_third_buy_30min(stock, min30_result):
     # 检查30分钟回抽最低点 > ZG
     if len(lows_30) >= 5:
         recent_low = np.min(lows_30[-5:])
+        recent_low = align_intraday_price(
+            recent_low, stock, min30_result
+        )
+        if recent_low is None:
+            return False
         if recent_low <= zg:
             return False  # 回抽跌破ZG，三买不成立
 

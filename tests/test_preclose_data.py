@@ -28,6 +28,7 @@ def _kline(dates, start=10.0, finals=None):
         "closes": [start + index + 0.5 for index in range(size)],
         "volumes": [1000 + index for index in range(size)],
         "source": "spy-market",
+        "adjustment": "qfq",
     }
     if finals is not None:
         payload["finals"] = list(finals)
@@ -50,10 +51,27 @@ class SpyFetcher:
     def fetch_30m(self, code, count, as_of):
         self.events.append(("30m", code, count, as_of))
         date = "2026-08-26" if self.stale_30m else TRADE_DATE
+        prior_dates = (
+            ("2026-08-19", "2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25")
+            if self.stale_30m
+            else ("2026-08-20", "2026-08-21", "2026-08-24", "2026-08-25", "2026-08-26")
+        )
+        clocks = (
+            "10:00:00", "10:30:00", "11:00:00", "11:30:00",
+            "13:30:00", "14:00:00", "14:30:00", "15:00:00",
+        )
+        dates = [
+            "{} {}".format(day, clock)
+            for day in prior_dates
+            for clock in clocks
+        ]
+        dates.extend(
+            "{} {}".format(date, clock) for clock in clocks[:7]
+        )
         return _kline(
-            [date + " 14:30:00", date + " 15:00:00"],
+            dates,
             start=13.0,
-            finals=[True, False],
+            finals=[True] * len(dates),
         )
 
     def fetch_1m(self, *args, **kwargs):
@@ -99,6 +117,25 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertTrue(all(row["as_of"] == AS_OF for row in rows))
         self.assertTrue(all(row["klines"]["dates"][-1] == TRADE_DATE for row in rows))
         self.assertTrue(all(row["klines"]["finals"][-1] is False for row in rows))
+        self.assertTrue(all(row["klines"]["adjustment"] == "qfq" for row in rows))
+
+    def test_daily_snapshot_rejects_mismatched_adjustment_metadata(self):
+        class MismatchedFetcher(SpyFetcher):
+            def fetch_intraday_daily(self, code, as_of):
+                payload = super().fetch_intraday_daily(code, as_of)
+                payload["adjustment"] = "raw"
+                return payload
+
+        rows = build_intraday_daily_snapshot(
+            self.universe[:1],
+            fetcher=MismatchedFetcher(),
+            trade_date=TRADE_DATE,
+            as_of=AS_OF,
+            history_count=120,
+        )
+
+        self.assertEqual(rows[0]["status"], "unavailable")
+        self.assertEqual(rows[0]["reason_code"], "adjustment_mismatch")
 
     def test_daily_filter_runs_before_30m_and_only_targets_are_fetched(self):
         fetcher = SpyFetcher()
@@ -125,14 +162,16 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertEqual(list(result["min30"]), ["002328"])
         self.assertEqual(result["min30"]["002328"]["status"], "available")
         self.assertEqual(
-            result["min30"]["002328"]["klines"]["dates"],
-            [f"{TRADE_DATE} 14:30:00"],
+            result["min30"]["002328"]["klines"]["dates"][-1],
+            f"{TRADE_DATE} 14:30:00",
         )
-        self.assertEqual(
-            result["min30"]["002328"]["klines"]["finals"],
-            [True],
+        self.assertGreaterEqual(
+            len(result["min30"]["002328"]["klines"]["dates"]), 40
         )
         self.assertFalse(result["min30"]["002328"]["is_final"])
+        self.assertEqual(
+            result["min30"]["002328"]["klines"]["adjustment"], "qfq"
+        )
 
     def test_missing_current_30m_is_auditable_and_never_uses_stale_cache(self):
         fetcher = SpyFetcher(stale_30m=True)
@@ -147,6 +186,29 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertEqual(evidence["status"], "unavailable")
         self.assertEqual(evidence["reason_code"], "current_trade_date_missing")
         self.assertEqual(evidence["latest_date"], "2026-08-26")
+        self.assertNotIn("klines", evidence)
+
+    def test_current_day_30m_with_too_few_bars_is_unavailable(self):
+        class ShortFetcher(SpyFetcher):
+            def fetch_30m(self, code, count, as_of):
+                self.events.append(("30m", code, count, as_of))
+                return _kline(
+                    [TRADE_DATE + " 14:30:00"],
+                    start=13.0,
+                    finals=[True],
+                )
+
+        result = fetch_target_30m_snapshots(
+            self.universe[:1],
+            fetcher=ShortFetcher(),
+            trade_date=TRADE_DATE,
+            as_of=AS_OF,
+        )
+
+        evidence = result["300998"]
+        self.assertEqual(evidence["status"], "unavailable")
+        self.assertEqual(evidence["reason_code"], "insufficient_bars")
+        self.assertEqual(evidence["bars"], 1)
         self.assertNotIn("klines", evidence)
 
     def test_future_only_30m_is_unavailable_after_as_of_cutoff(self):

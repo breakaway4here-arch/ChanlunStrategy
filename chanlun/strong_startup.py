@@ -46,6 +46,10 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         code = result.code
         name = result.name
         sector_name = sector_stocks.get(code, {}).get("sector", "") if sector_stocks else ""
+        price_basis = (
+            dict(sector_stocks.get(code, {}).get("price_basis") or {})
+            if sector_stocks else {}
+        )
         closes = result.closes
         opens = result.opens
         highs = result.highs
@@ -187,6 +191,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "dates": dates,
             "buy_points": list(result.buy_points) if hasattr(result, 'buy_points') and result.buy_points else [],
             "result_30min": None,
+            "price_basis": price_basis,
         }
 
         # --- Step 4: 涨停处理 → 当日不进候选，进观察 ---

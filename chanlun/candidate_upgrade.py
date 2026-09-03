@@ -5,6 +5,7 @@ reference signals into recommendable candidates.
 
 import numpy as np
 
+from .price_basis import align_intraday_price
 from .signal_policy import (
     is_formal_buy, is_upgradeable_reference, is_candidate_seed,
     UPGRADE_OUTPUT_TYPE,
@@ -228,6 +229,11 @@ def _passes_upgrade_risk_guard(stock, source_bp, min30_result):
     lows_30 = min30_result.lows
     if source_price > 0 and lows_30 is not None and len(lows_30) >= 8:
         recent_low = float(np.min(lows_30[-8:]))
+        recent_low = align_intraday_price(
+            recent_low, stock, min30_result
+        )
+        if recent_low is None:
+            return False
         if recent_low < source_price * 0.97:
             return False
 

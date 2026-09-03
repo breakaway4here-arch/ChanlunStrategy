@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import inspect
 import math
 import time
 from dataclasses import dataclass
@@ -19,6 +20,7 @@ from .h4_t3_pool import build_h4_t3_pool, filter_h4_upstream_candidates
 from .market_sentiment import build_market_sentiment
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
+from .price_basis import scale_price
 from .scorer import apply_scores
 from .right_side_startup import (
     apply_right_side_startup_mode,
@@ -37,6 +39,7 @@ from .trend_continuation import (
 
 
 PRE_CLOSE_STRATEGY_VERSION = "preclose-1445-v2"
+MINIMUM_DAILY_ANALYSIS_COVERAGE = 0.90
 EXECUTED_STAGES = (
     "daily_structure",
     "target_30m_confirm",
@@ -238,6 +241,9 @@ def _analyze_30m_inputs(market_inputs, rows_by_code, components):
             "is_final": False,
             "bar_state": "intraday",
             "as_of": str(evidence.get("as_of") or market_inputs.get("as_of") or ""),
+            "bars": int(evidence.get("bars") or len(evidence["klines"].get("dates") or [])),
+            "source": str(evidence["klines"].get("source") or ""),
+            "adjustment": str(evidence["klines"].get("adjustment") or ""),
         })
         results.append(result)
     return results, unavailable
@@ -259,6 +265,7 @@ def _sector_stocks(rows_by_code):
                 "float_market_cap",
                 "amount",
                 "amounts",
+                "price_basis",
             )
             if source.get(key) is not None
         }
@@ -266,12 +273,19 @@ def _sector_stocks(rows_by_code):
 
 
 def _merge_sector_metadata(candidates, sector_stocks):
+    def missing(value):
+        return (
+            value is None
+            or (isinstance(value, str) and value == "")
+            or (isinstance(value, (list, tuple, dict)) and len(value) == 0)
+        )
+
     output = []
     for raw in candidates or []:
         item = dict(raw)
         context = sector_stocks.get(str(item.get("code") or ""), {})
         for key, value in context.items():
-            if item.get(key) in (None, "", []):
+            if missing(item.get(key)):
                 item[key] = copy.deepcopy(value)
         output.append(item)
     return output
@@ -667,15 +681,29 @@ def evaluate_preclose_main_candidates(
     """Attach intraday position evidence and apply decision_engine_v1 fail-closed."""
 
     evaluator = evaluator or evaluate_decision_stock
+    try:
+        parameters = inspect.signature(evaluator).parameters.values()
+        accepts_keyword = any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
+            or (
+                parameter.name == "market_context"
+                and parameter.kind
+                in (
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    inspect.Parameter.KEYWORD_ONLY,
+                )
+            )
+            for parameter in parameters
+        )
+    except (TypeError, ValueError):
+        accepts_keyword = True
     evaluated = []
     for raw in candidates or []:
         item = _attach_intraday_position_evidence(raw, trade_date)
-        try:
+        if accepts_keyword:
             decision = evaluator(item, market_context=market_context)
-        except TypeError:
+        else:
             decision = evaluator(item, market_context)
-        except Exception:
-            decision = {"decision_code": "observe", "decision": "观察"}
         item["decision_engine_v1"] = dict(decision or {})
         evaluated.append(item)
     main = [
@@ -736,12 +764,29 @@ def _reference_price(candidate):
     return None
 
 
+def _public_reference_price(candidate):
+    price = _reference_price(candidate)
+    if price is None:
+        return None
+    basis = candidate.get("price_basis") if isinstance(candidate, dict) else None
+    basis = basis if isinstance(basis, dict) else {}
+    factor = _finite(basis.get("factor_vs_raw"))
+    if factor is None:
+        return price
+    if factor <= 0:
+        return None
+    try:
+        return scale_price(price, 1.0 / factor)
+    except ValueError:
+        return None
+
+
 def _public_pool(candidates):
     output = []
     for item in candidates or []:
         if not isinstance(item, dict):
             continue
-        price = _reference_price(item)
+        price = _public_reference_price(item)
         if not str(item.get("code") or "").strip() or not str(
             item.get("name") or ""
         ).strip() or price is None:
@@ -763,7 +808,13 @@ def _pool_evidence(pool_name, candidates, as_of):
             "code": str(item.get("code") or ""),
             "pool": pool_name,
             "rank": rank,
-            "reference_price": _reference_price(item),
+            "reference_price": _public_reference_price(item),
+            "strategy_reference_price": _reference_price(item),
+            "strategy_adjustment": str(
+                ((item.get("price_basis") or {}).get("adjustment") or "")
+                if isinstance(item.get("price_basis"), dict)
+                else ""
+            ),
             "signal_type": str(
                 best.get("type") or item.get("source_type") or item.get("type") or ""
             ),
@@ -801,6 +852,7 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
             "is_final": market_inputs.get("is_final"),
             "as_of": market_inputs.get("as_of"),
         },
+        "input_health": {},
     }
     started_at = float(config.monotonic())
 
@@ -813,6 +865,15 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
             daily_results, rows_by_code, failures = _analyze_daily_inputs(
                 market_inputs, components
             )
+            daily_input_count = sum(
+                1
+                for row in (market_inputs.get("daily") or [])
+                if isinstance(row, dict) and row.get("status") == "available"
+            )
+            daily_coverage = (
+                len(daily_results) / float(daily_input_count)
+                if daily_input_count else 0.0
+            )
             sector_context = _sector_stocks(rows_by_code)
             state = _build_daily_state(
                 daily_results, sector_context, components
@@ -823,9 +884,28 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 "sector_stocks": sector_context,
             })
             diagnostics["daily_analysis"] = {
+                "input_count": daily_input_count,
                 "available_count": len(daily_results),
+                "coverage": round(daily_coverage, 6),
+                "minimum_coverage": MINIMUM_DAILY_ANALYSIS_COVERAGE,
                 "failed": failures,
             }
+            diagnostics["input_health"]["daily"] = {
+                "status": (
+                    "verified"
+                    if daily_coverage >= MINIMUM_DAILY_ANALYSIS_COVERAGE
+                    else "unavailable"
+                ),
+                "input_count": daily_input_count,
+                "available_count": len(daily_results),
+                "coverage": round(daily_coverage, 6),
+            }
+            if daily_coverage < MINIMUM_DAILY_ANALYSIS_COVERAGE:
+                raise RuntimeError(
+                    "daily analysis coverage below minimum: {:.2%} < {:.2%}".format(
+                        daily_coverage, MINIMUM_DAILY_ANALYSIS_COVERAGE
+                    )
+                )
             return state
 
         daily_state = _stage_clock(
@@ -836,10 +916,31 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
             min30_results, unavailable = _analyze_30m_inputs(
                 market_inputs, daily_state["rows_by_code"], components
             )
+            requested_count = len(market_inputs.get("target_codes") or [])
+            available_count = len(min30_results)
+            coverage = (
+                available_count / float(requested_count)
+                if requested_count else 1.0
+            )
             diagnostics["min30"] = {
-                "available_count": len(min30_results),
+                "available_count": available_count,
                 "unavailable_codes": unavailable,
                 "is_final": False,
+            }
+            diagnostics["input_health"]["min30"] = {
+                "status": (
+                    "not_requested"
+                    if requested_count == 0
+                    else "verified"
+                    if available_count == requested_count
+                    else "unavailable"
+                    if available_count == 0
+                    else "partial"
+                ),
+                "requested_count": requested_count,
+                "available_count": available_count,
+                "coverage": round(coverage, 6),
+                "unavailable_codes": unavailable,
             }
             return _finish_main_state(
                 daily_state,

@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -16,6 +17,8 @@ from chanlun.preclose_pipeline import (
     build_preclose_main_pool,
     build_preclose_market_context,
     evaluate_preclose_main_candidates,
+    _public_pool,
+    _merge_sector_metadata,
     run_preclose_pipeline,
 )
 from chanlun.report_view_model import build_workspace
@@ -329,6 +332,106 @@ def _config(clock=None, run_id="run-a"):
 
 
 class PreclosePipelineTests(unittest.TestCase):
+    def test_sector_merge_does_not_compare_numpy_arrays_by_truth_value(self):
+        amounts = np.array([100.0, 200.0], dtype=float)
+
+        merged = _merge_sector_metadata(
+            [{"code": "300900", "amounts": amounts}],
+            {
+                "300900": {
+                    "sector": "航空装备",
+                    "amounts": np.array([1.0, 2.0], dtype=float),
+                }
+            },
+        )
+
+        self.assertIs(merged[0]["amounts"], amounts)
+        self.assertEqual(merged[0]["sector"], "航空装备")
+
+    def test_public_reference_price_uses_raw_tradeable_basis(self):
+        candidate = _candidate("300900", "广联航空")
+        candidate["reference_price"] = 5.0
+        candidate["price_basis"] = {
+            "adjustment": "qfq",
+            "factor_vs_raw": 0.5,
+        }
+
+        public = _public_pool([candidate])
+
+        self.assertEqual(public[0]["reference_price"], 10.0)
+
+    def test_decision_engine_exception_is_not_disguised_as_empty_pool(self):
+        def broken_evaluator(_stock, market_context=None):
+            del market_context
+            raise RuntimeError("decision engine unavailable")
+
+        with self.assertRaisesRegex(RuntimeError, "decision engine unavailable"):
+            evaluate_preclose_main_candidates(
+                [_candidate("300998", "宁波方正")],
+                market_context={"market_sentiment": {"score": 61}},
+                trade_date=TRADE_DATE,
+                evaluator=broken_evaluator,
+            )
+
+    def test_internal_decision_engine_type_error_is_not_retried_or_hidden(self):
+        calls = []
+
+        def broken_evaluator(_stock, market_context=None):
+            calls.append(market_context)
+            raise TypeError("broken score arithmetic")
+
+        with self.assertRaisesRegex(TypeError, "broken score arithmetic"):
+            evaluate_preclose_main_candidates(
+                [_candidate("300998", "宁波方正")],
+                market_context={"market_sentiment": {"score": 61}},
+                trade_date=TRADE_DATE,
+                evaluator=broken_evaluator,
+            )
+
+        self.assertEqual(len(calls), 1)
+
+    def test_systemic_daily_analysis_failure_marks_snapshot_failed(self):
+        def broken_analyzer(**_kwargs):
+            raise ValueError("broken daily analyzer")
+
+        result = run_preclose_pipeline(
+            _market_inputs(),
+            config=_config(),
+            components=replace(_components(), analyze=broken_analyzer),
+        )
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(
+            result["diagnostics"]["failure"]["stage"], "daily_structure"
+        )
+
+    def test_unavailable_30m_is_explicit_in_internal_input_health(self):
+        inputs = _market_inputs()
+        inputs["min30"] = {
+            code: {
+                "status": "unavailable",
+                "reason_code": "insufficient_bars",
+            }
+            for code in inputs["target_codes"]
+        }
+
+        result = run_preclose_pipeline(
+            inputs,
+            config=_config(),
+            components=_components(),
+        )
+
+        self.assertEqual(
+            result["diagnostics"]["input_health"]["min30"],
+            {
+                "status": "unavailable",
+                "requested_count": 2,
+                "available_count": 0,
+                "coverage": 0.0,
+                "unavailable_codes": ["300998", "002328"],
+            },
+        )
+
     def test_pipeline_executes_only_three_pools_in_fixed_stage_order(self):
         events = []
         forbidden = AssertionError("forbidden dependency entered the 14:47 path")

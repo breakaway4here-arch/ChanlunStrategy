@@ -56,6 +56,34 @@ def _minute_payload(report_date, count=40, source="remote", final=True):
 
 class KLineRepositoryTests(unittest.TestCase):
 
+    def test_loaded_kline_preserves_canonical_adjustment_metadata(self):
+        payload = KLineRepository._rows_to_kline(
+            [_bar("2026-08-26 15:00:00")],
+            status="verified",
+            stale=False,
+        )
+
+        self.assertEqual(payload["adjustment"], "qfq")
+        self.assertEqual(payload["_data_status"]["adjustment"], "qfq")
+
+    def test_sublevel_evidence_preserves_adjustment_metadata(self):
+        payload = {
+            "dates": ["2026-08-26 15:00:00"],
+            "adjustment": "qfq",
+            "_data_status": {
+                "daily": "verified",
+                "latest_date": "2026-08-26",
+                "source": "market_history_db",
+                "bars": 1,
+                "stale": False,
+                "is_final": True,
+            },
+        }
+
+        evidence = data_fetcher._sublevel_input_evidence("30m", payload)
+
+        self.assertEqual(evidence["adjustment"], "qfq")
+
     def test_minute_fetch_retries_three_times_and_alternates_providers(self):
         calls = []
         sleeps = []
@@ -695,6 +723,55 @@ class KLineRepositoryTests(unittest.TestCase):
 
         self.assertEqual(len(rows), 3)
         repository.get_many.assert_called_once()
+
+    def test_daily_batch_exposes_factor_from_raw_close_to_qfq_basis(self):
+        dates = [
+            "2026-05-{:02d}".format(index) for index in range(1, 29)
+        ] + [
+            "2026-06-{:02d}".format(index) for index in range(1, 31)
+        ] + ["2026-07-01", "2026-07-02"]
+        kline = _payload(dates)
+        kline["closes"][-1] = 5.0
+        kline["adjustment"] = "qfq"
+        kline["_data_status"] = {
+            "daily": "verified",
+            "latest_date": "2026-07-02",
+            "source": "market_history_db",
+            "bars": 60,
+            "stale": False,
+            "is_final": True,
+            "adjustment": "qfq",
+        }
+        repository = MagicMock()
+        repository.get_many.return_value = {
+            "600000": KLineResult(
+                kline=kline,
+                status="verified",
+                source="market_history_db",
+                stale=False,
+            )
+        }
+        previous = data_fetcher._KLINE_REPOSITORY
+        try:
+            data_fetcher._KLINE_REPOSITORY = repository
+            rows = data_fetcher.batch_fetch_daily_klines(
+                [{
+                    "code": "600000",
+                    "name": "浦发银行",
+                    "raw_current_price": 10.0,
+                }],
+                required_date="2026-07-02",
+            )
+        finally:
+            data_fetcher._KLINE_REPOSITORY = previous
+
+        self.assertEqual(rows[0]["price_basis"], {
+            "adjustment": "qfq",
+            "factor_vs_raw": 0.5,
+            "raw_current_price": 10.0,
+            "adjusted_current_price": 5.0,
+            "as_of": "2026-07-02",
+        })
 
     def test_sublevel_batches_require_same_day_verified_final_input(self):
         def kline(interval, latest, final, bars):

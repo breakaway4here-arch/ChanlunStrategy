@@ -7,6 +7,7 @@ confirming evidence to upgrade it to a candidate recommendation.
 
 import numpy as np
 from config import ENABLE_RELAXED_30MIN_CONFIRM
+from .price_basis import align_intraday_price
 from .signal_policy import is_recommendable_buy
 
 NEAR_PRICE_PCT = 0.03
@@ -297,6 +298,11 @@ def _check_key_level(daily_stock, source_bp, min30_result):
         return False
 
     recent_low = float(np.min(lows_30[-RECENT_30MIN_BARS:]))
+    recent_low = align_intraday_price(
+        recent_low, daily_stock, min30_result
+    )
+    if recent_low is None:
+        return False
 
     if src_type == "二买待确认":
         # Daily first-buy price is the key level

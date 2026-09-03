@@ -13,6 +13,7 @@ from config import (
 )
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
+from .price_basis import align_intraday_price
 from .signal_quality_classifier import build_signal_context, tag_signal_quality_in_place
 
 
@@ -190,11 +191,18 @@ def screen_30min_pure(daily_pool, chan_results_30min):
                     last_bottom = bottom_fractals[-1]
                     # 检查底分型价格是否在日线买点价格附近（±3%）
                     daily_bp_price = stock["best_buy_point"]["price"]
-                    if abs(last_bottom.price - daily_bp_price) / daily_bp_price < 0.05:
+                    aligned_bottom_price = align_intraday_price(
+                        last_bottom.price, stock, min30_result
+                    )
+                    if (
+                        aligned_bottom_price is not None
+                        and abs(aligned_bottom_price - daily_bp_price)
+                        / daily_bp_price < 0.05
+                    ):
                         buy_points_30 = [{
                             "type": "底分型确认",
                             "index": last_bottom.index,
-                            "price": round(last_bottom.price, 2),
+                            "price": round(aligned_bottom_price, 2),
                             "date": str(min30_result.dates[last_bottom.index]) if last_bottom.index < len(min30_result.dates) else "",
                             "reason": "30分钟形成底分型+MACD金叉/底背驰确认",
                             "strength": "中",

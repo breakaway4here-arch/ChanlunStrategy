@@ -258,6 +258,7 @@ class KLineRepository:
             "volumes": np.array([row["volume"] for row in rows], dtype=float),
             "amounts": np.array([row["amount"] for row in rows], dtype=float),
             "source": "market_history_db",
+            "adjustment": str(rows[-1]["adjustment"]),
         }
         result["_data_status"] = {
             "daily": status,
@@ -266,6 +267,7 @@ class KLineRepository:
             "bars": len(rows),
             "stale": bool(stale),
             "is_final": latest_final,
+            "adjustment": str(rows[-1]["adjustment"]),
         }
         return result
 

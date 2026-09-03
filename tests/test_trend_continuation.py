@@ -7,6 +7,7 @@ import numpy as np
 
 from chanlun.engine_types import Pivot
 from chanlun.trend_continuation import (
+    _confirm_30min,
     build_trend_continuation_pool,
     normalize_trend_candidate,
     upgrade_trend_continuation_with_30min,
@@ -43,6 +44,7 @@ def _result(
         volumes=volumes,
         buy_points=[{"price": 7.0, "source_price": 6.5}],
         pivots=[],
+        price_basis={"adjustment": "qfq", "factor_vs_raw": 1.0},
     )
 
 
@@ -93,6 +95,10 @@ def _fixture_result(code, interval="daily"):
         buy_points=[],
         pivots=[],
         strategy_input_evidence=(evidence if interval == "min30" else None),
+        price_basis=(
+            {"adjustment": "qfq", "factor_vs_raw": 1.0}
+            if interval == "daily" else None
+        ),
     )
 
 
@@ -147,6 +153,35 @@ def _min30_result(
 
 
 class TrendContinuationTests(unittest.TestCase):
+    def test_reference_hold_aligns_30m_prices_to_daily_basis(self):
+        min30 = _min30_result(
+            [10.0] * 15 + [9.9] * 5,
+            trade_date="2026-07-14",
+        )
+
+        evidence = _confirm_30min(
+            min30,
+            reference_price=5.0,
+            expected_date="2026-07-14",
+            factor_vs_raw=0.5,
+        )
+
+        self.assertFalse(evidence["mandatory"]["reference_hold"])
+
+    def test_reference_hold_without_price_basis_fails_closed(self):
+        min30 = _min30_result(
+            [10.0] * 20,
+            trade_date="2026-07-14",
+        )
+
+        evidence = _confirm_30min(
+            min30,
+            reference_price=10.0,
+            expected_date="2026-07-14",
+            daily_current_price=10.0,
+        )
+
+        self.assertFalse(evidence["mandatory"]["reference_hold"])
     def test_20260831_right_side_regression_contract(self):
         fixture = _fixture()
         daily_results = [

@@ -2,6 +2,7 @@
 import unittest
 import numpy as np
 from chanlun.sublevel_confirm import (
+    _check_key_level,
     build_30min_confirmation_evidence,
     classify_30min_confirmation,
 )
@@ -12,6 +13,7 @@ def make_daily_stock_with_swing_seed(source_price=10.0):
         "code": "000001",
         "buy_points": [{"type": "swing底背驰参考", "price": source_price}],
         "pivots": {"ZG": None, "ZD": None, "count": 0},
+        "price_basis": {"adjustment": "qfq", "factor_vs_raw": 1.0},
     }
 
 
@@ -37,6 +39,18 @@ def make_min30_result(lows, closes, opens=None, highs=None, divergence=None,
 
 
 class TestSublevelConfirm(unittest.TestCase):
+
+    def test_key_level_aligns_raw_30m_low_to_daily_qfq_basis(self):
+        daily_stock = make_daily_stock_with_swing_seed(source_price=5.0)
+        daily_stock["closes"] = np.array([5.0] * 20, dtype=float)
+        daily_stock["price_basis"]["factor_vs_raw"] = 0.5
+        source_bp = {"type": "swing底背驰候选种子", "price": 5.0}
+        min30 = make_min30_result(
+            lows=[9.6] * 8,
+            closes=[10.0] * 8,
+        )
+
+        self.assertFalse(_check_key_level(daily_stock, source_bp, min30))
 
     def test_key_level_and_ema5_reclaim_is_medium_confirmation(self):
         daily_stock = make_daily_stock_with_swing_seed(source_price=10.0)

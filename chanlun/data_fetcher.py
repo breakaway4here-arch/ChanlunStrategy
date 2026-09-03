@@ -44,6 +44,7 @@ from .kline_cache import (
     CACHE_STATS,
 )
 from .kline_repository import KLineRepository
+from .price_basis import adjustment_factor
 
 # ------------------------------------------------------------
 # 路径
@@ -1809,6 +1810,42 @@ def batch_fetch_daily_klines(
         if amounts is None and isinstance(klines, dict):
             amounts = klines.get("amounts")
 
+        price_basis = None
+        raw_current_price = _safe_float(stock.get("raw_current_price"))
+        closes = (klines or {}).get("closes")
+        adjusted_current_price = None
+        try:
+            if closes is not None and len(closes):
+                adjusted_current_price = float(closes[-1])
+        except (TypeError, ValueError, IndexError):
+            adjusted_current_price = None
+        adjustment = str(
+            (klines or {}).get("adjustment")
+            or status.get("adjustment")
+            or ""
+        )
+        if (
+            raw_current_price is not None
+            and raw_current_price > 0
+            and adjusted_current_price is not None
+            and adjusted_current_price > 0
+            and adjustment
+            and status.get("daily") == "verified"
+            and (
+                required_date is None
+                or status.get("latest_date") == str(required_date)
+            )
+        ):
+            price_basis = {
+                "adjustment": adjustment,
+                "factor_vs_raw": adjustment_factor(
+                    adjusted_current_price, raw_current_price
+                ),
+                "raw_current_price": raw_current_price,
+                "adjusted_current_price": adjusted_current_price,
+                "as_of": str(status.get("latest_date") or required_date or ""),
+            }
+
         return {
             "code": code,
             "name": stock.get("name", ""),
@@ -1825,6 +1862,8 @@ def batch_fetch_daily_klines(
             "amounts": amounts,
             "klines": klines,
             "data_status": status,
+            "raw_current_price": raw_current_price,
+            "price_basis": price_basis,
         }
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -1865,6 +1904,9 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
         ),
         "stale": repository_stale,
         "is_final": status.get("is_final") is True,
+        "adjustment": str(
+            status.get("adjustment") or payload.get("adjustment") or ""
+        ),
     }
 
 
@@ -2140,6 +2182,7 @@ def collect_daily_data(
                     "code": code,
                     "name": st.get("name", ""),
                     "change_pct": st.get("change_pct", 0),
+                    "raw_current_price": st.get("close"),
                     "sector": sector["name"],
                     "sector_tags": [sector["name"]],
                     "sector_rank": sector_rank,

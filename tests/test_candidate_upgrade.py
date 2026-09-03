@@ -1,7 +1,10 @@
 """Tests for candidate_upgrade — swing seed → 底背驰候选 upgrade path."""
 import unittest
 import numpy as np
-from chanlun.candidate_upgrade import upgrade_daily_candidates_with_30min
+from chanlun.candidate_upgrade import (
+    _passes_upgrade_risk_guard,
+    upgrade_daily_candidates_with_30min,
+)
 
 
 def make_stock(code, buy_points, closes=None):
@@ -26,6 +29,7 @@ def make_stock(code, buy_points, closes=None):
         "macd_hist": np.zeros(20),
         "sector": "",
         "version": "pure",
+        "price_basis": {"adjustment": "qfq", "factor_vs_raw": 1.0},
     }
 
 
@@ -61,6 +65,16 @@ def make_min30_result(code, medium_confirm=True):
 
 
 class TestCandidateUpgrade(unittest.TestCase):
+
+    def test_risk_guard_aligns_raw_30m_low_to_daily_qfq_basis(self):
+        stock = make_stock("000001", [], closes=[5.0] * 20)
+        stock["price_basis"]["factor_vs_raw"] = 0.5
+        source_bp = {"price": 5.0}
+        min30 = make_min30_result("000001", medium_confirm=True)
+        min30.closes = np.array([10.0] * 8, dtype=float)
+        min30.lows = np.array([9.6] * 8, dtype=float)
+
+        self.assertFalse(_passes_upgrade_risk_guard(stock, source_bp, min30))
 
     def test_swing_seed_upgrades_to_bottom_divergence_candidate_with_medium_confirmation(self):
         daily_pool = [make_stock(

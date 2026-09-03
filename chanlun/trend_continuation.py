@@ -9,6 +9,7 @@ import numpy as np
 import config
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
+from .price_basis import adjustment_factor
 from .sublevel_confirm import build_30min_confirmation_evidence
 
 
@@ -141,6 +142,11 @@ def _base_payload(
         "lows": lows,
         "volumes": volumes,
         "dates": dates,
+        "price_basis": (
+            dict(sector.get("price_basis") or {})
+            if isinstance(sector.get("price_basis"), Mapping)
+            else dict(getattr(result, "price_basis", {}) or {})
+        ),
         "startup_index": startup_index,
         "startup_date": str(dates[-1]) if dates else "",
         "startup_age_days": 0,
@@ -352,16 +358,26 @@ def _confirm_30min(
     result: Any,
     reference_price: float,
     expected_date: str,
+    daily_current_price: Optional[float] = None,
+    factor_vs_raw: Optional[float] = None,
 ) -> Dict[str, Any]:
     closes = _float_array(getattr(result, "closes", None))
     volumes = _float_array(getattr(result, "volumes", None))
     data = _input_evidence(result, expected_date)
     base = build_30min_confirmation_evidence(result)
     sufficient = bool(base.get("sufficient_bars") and len(closes) >= 10)
+    price_factor = None
+    try:
+        if factor_vs_raw is not None:
+            price_factor = adjustment_factor(factor_vs_raw, 1.0)
+    except ValueError:
+        price_factor = None
+    aligned_closes = closes * price_factor if price_factor is not None else np.asarray([])
     reference_hold = bool(
         sufficient
+        and len(aligned_closes) >= 5
         and float(reference_price) > 0
-        and float(np.min(closes[-5:])) >= float(reference_price) * 0.995
+        and float(np.min(aligned_closes[-5:])) >= float(reference_price) * 0.995
     )
 
     structure_labels = []
@@ -487,6 +503,12 @@ def upgrade_trend_continuation_with_30min(
             result,
             float(seed["reference_price"]),
             str(seed.get("startup_date") or "").split(" ", 1)[0],
+            daily_current_price=seed.get("close"),
+            factor_vs_raw=(
+                (seed.get("price_basis") or {}).get("factor_vs_raw")
+                if isinstance(seed.get("price_basis"), Mapping)
+                else None
+            ),
         )
         seed["confirmation_evidence"] = confirmation_evidence
         confirmations = list(

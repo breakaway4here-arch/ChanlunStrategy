@@ -14,6 +14,7 @@ from urllib.parse import quote
 
 _CN_TZ = timezone(timedelta(hours=8))
 _CORE_ARRAY_KEYS = ("opens", "highs", "lows", "closes", "volumes")
+MINIMUM_PRECLOSE_30M_BARS = 40
 _FORBIDDEN_OUTPUT_NAMES = {
     "recommendation_ledger.jsonl",
     "market_history.sqlite",
@@ -83,6 +84,9 @@ def _normalize_kline(payload):
     source = str(payload.get("source") or "").strip()
     if source:
         result["source"] = source
+    adjustment = str(payload.get("adjustment") or "").strip()
+    if adjustment:
+        result["adjustment"] = adjustment
     return result
 
 
@@ -110,7 +114,61 @@ def _truncate_kline_at(payload, as_of):
             result[optional] = [payload[optional][index] for index in keep]
     if "source" in payload:
         result["source"] = payload["source"]
+    if "adjustment" in payload:
+        result["adjustment"] = payload["adjustment"]
     return result
+
+
+def validate_preclose_30m_payload(
+    payload,
+    *,
+    trade_date,
+    as_of,
+    min_bars=MINIMUM_PRECLOSE_30M_BARS
+):
+    """Validate and truncate a provider payload for the live pre-close window."""
+
+    normalized = _normalize_kline(payload)
+    if normalized is None:
+        return None, "data_missing"
+    as_of_dt = _parse_datetime(as_of)
+    truncated = _truncate_kline_at(normalized, as_of_dt)
+    if truncated is None:
+        return None, "current_trade_date_missing"
+    latest_ts = truncated["dates"][-1]
+    if _date_part(latest_ts) != _validated_trade_date(trade_date):
+        return None, "current_trade_date_missing"
+    bars = len(truncated["dates"])
+    if bars < int(min_bars):
+        return None, "insufficient_bars"
+    previous = None
+    for index, raw_timestamp in enumerate(truncated["dates"]):
+        try:
+            current = _parse_datetime(raw_timestamp)
+        except (TypeError, ValueError):
+            return None, "invalid_timestamp"
+        if previous is not None and current <= previous:
+            return None, "timestamps_not_strictly_increasing"
+        previous = current
+        values = []
+        for key in _CORE_ARRAY_KEYS:
+            try:
+                value = float(truncated[key][index])
+            except (TypeError, ValueError, IndexError):
+                return None, "nonnumeric_ohlcv"
+            if not math.isfinite(value):
+                return None, "nonfinite_ohlcv"
+            values.append(value)
+        open_price, high_price, low_price, close_price, volume = values
+        if min(open_price, high_price, low_price, close_price) <= 0:
+            return None, "nonpositive_price"
+        if volume < 0:
+            return None, "negative_volume"
+        if high_price < max(open_price, low_price, close_price):
+            return None, "invalid_high"
+        if low_price > min(open_price, high_price, close_price):
+            return None, "invalid_low"
+    return truncated, ""
 
 
 def _kline_rows(payload, default_final):
@@ -133,6 +191,14 @@ def _kline_rows(payload, default_final):
 
 
 def _merge_daily_klines(history, live, trade_date):
+    history_adjustment = str((history or {}).get("adjustment") or "").strip()
+    live_adjustment = str((live or {}).get("adjustment") or "").strip()
+    if (
+        history_adjustment
+        and live_adjustment
+        and history_adjustment != live_adjustment
+    ):
+        return None
     rows = {}
     for row in _kline_rows(history, default_final=True):
         if _date_part(row["date"]) != trade_date:
@@ -151,6 +217,9 @@ def _merge_daily_klines(history, live, trade_date):
         result["amounts"] = [row.get("amounts") for row in ordered]
     result["finals"] = [bool(row["final"]) for row in ordered]
     result["source"] = str((live or {}).get("source") or (history or {}).get("source") or "")
+    adjustment = live_adjustment or history_adjustment
+    if adjustment:
+        result["adjustment"] = adjustment
     return result
 
 
@@ -257,7 +326,17 @@ def build_intraday_daily_snapshot(
         code = str(stock.get("code") or "").strip()
         history = fetcher.fetch_daily_history(code, int(history_count))
         intraday = fetcher.fetch_intraday_daily(code, as_of_text)
+        normalized_history = _normalize_kline(history)
         normalized_live = _normalize_kline(intraday)
+        history_adjustment = str(
+            (normalized_history or {}).get("adjustment") or ""
+        )
+        live_adjustment = str((normalized_live or {}).get("adjustment") or "")
+        adjustment_mismatch = bool(
+            history_adjustment
+            and live_adjustment
+            and history_adjustment != live_adjustment
+        )
         latest_date = (
             _date_part(normalized_live["dates"][-1]) if normalized_live else ""
         )
@@ -275,7 +354,11 @@ def build_intraday_daily_snapshot(
             row["klines"] = merged
         else:
             row["reason_code"] = (
-                "current_trade_date_missing" if normalized_live else "daily_data_missing"
+                "adjustment_mismatch"
+                if adjustment_mismatch
+                else "current_trade_date_missing"
+                if normalized_live
+                else "daily_data_missing"
             )
         rows.append(row)
     return rows
@@ -298,16 +381,22 @@ def fetch_target_30m_snapshots(
     for target in targets or []:
         code = str((target or {}).get("code") or "").strip()
         normalized = _normalize_kline(fetcher.fetch_30m(code, int(count), as_of_text))
-        payload = _truncate_kline_at(normalized, as_of_dt)
+        payload, validation_reason = validate_preclose_30m_payload(
+            normalized,
+            trade_date=date,
+            as_of=as_of_text,
+        )
         latest_ts = payload["dates"][-1] if payload else ""
         latest_date = _date_part(latest_ts)
-        if not payload or latest_date != date:
+        if not payload:
+            normalized_dates = normalized.get("dates") if normalized else []
+            observed_ts = normalized_dates[-1] if normalized_dates else ""
+            observed_date = _date_part(observed_ts)
             output[code] = {
                 "status": "unavailable",
-                "reason_code": (
-                    "current_trade_date_missing" if normalized else "data_missing"
-                ),
-                "latest_date": latest_date,
+                "reason_code": validation_reason,
+                "latest_date": observed_date,
+                "bars": len(normalized_dates),
                 "bar_state": "intraday",
                 "is_final": False,
                 "as_of": as_of_text,
@@ -326,6 +415,7 @@ def fetch_target_30m_snapshots(
             "status": "available",
             "latest_date": latest_date,
             "latest_ts": latest_ts,
+            "bars": len(payload["dates"]),
             "bar_state": "intraday",
             "is_final": False,
             "as_of": as_of_text,

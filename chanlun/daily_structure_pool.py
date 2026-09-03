@@ -187,6 +187,9 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
             "macd_hist": result.macd_hist,
             "sector": sector_name,
             "version": mode,
+            "price_basis": dict(
+                (sector_stocks or {}).get(code, {}).get("price_basis") or {}
+            ),
         }
         pool.append(stock_entry)
 

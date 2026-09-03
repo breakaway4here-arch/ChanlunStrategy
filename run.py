@@ -2215,6 +2215,7 @@ def main(debug=False, preview=False, generated_at=None):
             "float_market_cap": stock.get("float_market_cap"),
             "amount": stock.get("amount"),
             "amounts": stock.get("amounts"),
+            "price_basis": stock.get("price_basis"),
         }
     print(f"  板块映射: {len(sector_stocks)} 只")
 
@@ -2322,6 +2323,9 @@ def main(debug=False, preview=False, generated_at=None):
 
         if not isinstance(merged.get("data_status"), dict) or not merged.get("data_status"):
             merged["data_status"] = sector_meta.get("data_status", {})
+
+        if not isinstance(merged.get("price_basis"), dict) or not merged.get("price_basis"):
+            merged["price_basis"] = sector_meta.get("price_basis", {})
 
         return merged
 

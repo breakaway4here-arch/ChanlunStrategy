@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
-from collections import defaultdict
+from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +24,7 @@ from config import (
 from .market_history_store import MarketHistoryStore
 from .preclose_data import fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
+from .price_basis import adjustment_factor, scale_price
 from .right_side_startup import (
     resolve_right_side_startup_mode,
     select_classic_startup_inputs,
@@ -156,10 +157,13 @@ def _valid_quote(quote):
     return values
 
 
-def _append_intraday_quote(candidate, quote, trade_date, as_of):
+MINIMUM_DAILY_SPLICE_COVERAGE = 0.90
+
+
+def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
     values = _valid_quote(quote)
     if not values:
-        return None
+        return None, "invalid_quote"
     source_kline = candidate.get("klines")
     source_kline = source_kline if isinstance(source_kline, dict) else {}
     arrays = {key: _as_list(source_kline.get(key)) for key in _ARRAY_KEYS}
@@ -167,29 +171,37 @@ def _append_intraday_quote(candidate, quote, trade_date, as_of):
         len(arrays[key]) != len(arrays["dates"])
         for key in _ARRAY_KEYS[1:]
     ):
-        return None
+        return None, "invalid_history"
     last_date = str(arrays["dates"][-1]).split(" ", 1)[0]
     if last_date >= str(trade_date):
-        return None
+        return None, "history_not_previous"
     last_close = _finite(arrays["closes"][-1])
-    if last_close is None or abs(last_close - values["prev_close"]) > max(
-        0.05, abs(last_close) * 0.01
-    ):
-        return None
+    try:
+        factor = adjustment_factor(last_close, values["prev_close"])
+    except ValueError:
+        return None, "invalid_adjustment_factor"
     amounts = _as_list(source_kline.get("amounts"))
     if len(amounts) != len(arrays["dates"]):
         amounts = [None] * len(arrays["dates"])
     arrays["dates"].append(str(trade_date))
-    arrays["opens"].append(values["open"])
-    arrays["highs"].append(values["high"])
-    arrays["lows"].append(values["low"])
-    arrays["closes"].append(values["current_price"])
+    arrays["opens"].append(scale_price(values["open"], factor))
+    arrays["highs"].append(scale_price(values["high"], factor))
+    arrays["lows"].append(scale_price(values["low"], factor))
+    arrays["closes"].append(scale_price(values["current_price"], factor))
     arrays["volumes"].append(values["volume"])
     amounts.append(values["amount"])
     output_kline = {key: values_list[-120:] for key, values_list in arrays.items()}
     output_kline["amounts"] = amounts[-120:]
     output_kline["finals"] = [True] * (len(output_kline["dates"]) - 1) + [False]
     output_kline["source"] = "formal_history+eastmoney_intraday"
+    data_status = candidate.get("data_status")
+    data_status = data_status if isinstance(data_status, dict) else {}
+    adjustment = str(
+        source_kline.get("adjustment")
+        or data_status.get("adjustment")
+        or "qfq"
+    )
+    output_kline["adjustment"] = adjustment
 
     row = dict(candidate)
     row.update({
@@ -205,7 +217,22 @@ def _append_intraday_quote(candidate, quote, trade_date, as_of):
         "as_of": str(as_of),
         "latest_date": str(trade_date),
         "klines": output_kline,
+        "price_basis": {
+            "adjustment": adjustment,
+            "factor_vs_raw": factor,
+            "adjusted_previous_close": last_close,
+            "raw_previous_close": values["prev_close"],
+            "adjusted_current_price": output_kline["closes"][-1],
+            "raw_current_price": values["current_price"],
+        },
     })
+    return row, ""
+
+
+def _append_intraday_quote(candidate, quote, trade_date, as_of):
+    row, _reason = _append_intraday_quote_with_reason(
+        candidate, quote, trade_date, as_of
+    )
     return row
 
 
@@ -321,13 +348,24 @@ def fetch_preclose_30m(targets, trade_date, as_of, max_workers=20):
         _fetch_sina_minute_kline_remote,
     )
 
+    from .preclose_data import validate_preclose_30m_payload
+
     def fetch_remote(code):
-        return (
-            _fetch_sina_minute_kline_remote(code, scale=30, count=80)
-            or _fetch_eastmoney_minute_kline_remote(
-                code, scale=30, count=80
+        for source, fetcher in (
+            ("sina", _fetch_sina_minute_kline_remote),
+            ("eastmoney", _fetch_eastmoney_minute_kline_remote),
+        ):
+            payload = fetcher(code, scale=30, count=80)
+            validated, _reason = validate_preclose_30m_payload(
+                payload,
+                trade_date=str(trade_date),
+                as_of=str(as_of),
             )
-        )
+            if validated is not None:
+                validated["source"] = source
+                validated["adjustment"] = "qfq"
+                return validated
+        return None
 
     targets = list(targets or [])
     values = {}
@@ -506,23 +544,48 @@ def build_scheduled_preclose_input(
     sectors = _sector_context(quotes)
     sector_by_name = {row["name"]: row for row in sectors}
     daily = []
+    excluded = Counter()
+    excluded_codes = []
     for candidate in universe or []:
         code = str((candidate or {}).get("code") or "")
         quote = quotes_by_code.get(code)
         if not quote:
+            excluded["missing_quote"] += 1
+            excluded_codes.append({"code": code, "reason": "missing_quote"})
             continue
-        row = _append_intraday_quote(
+        row, reason = _append_intraday_quote_with_reason(
             candidate, quote, str(trade_date), str(as_of)
         )
         if not row:
+            reason = reason or "daily_splice_failed"
+            excluded[reason] += 1
+            excluded_codes.append({"code": code, "reason": reason})
             continue
         context = sector_by_name.get(str(row.get("sector") or ""), {})
         for key in ("sector_rank", "sector_strength_label"):
             if context.get(key) is not None:
                 row[key] = context[key]
         daily.append(row)
+    requested_daily = len(universe or [])
+    daily_coverage = (
+        len(daily) / float(requested_daily) if requested_daily else 0.0
+    )
+    daily_splice_diagnostics = {
+        "requested_count": requested_daily,
+        "available_count": len(daily),
+        "coverage": round(daily_coverage, 6),
+        "minimum_coverage": MINIMUM_DAILY_SPLICE_COVERAGE,
+        "excluded_by_reason": dict(sorted(excluded.items())),
+        "excluded_codes": excluded_codes,
+    }
     if not daily:
         raise RuntimeError("no eligible intraday daily rows")
+    if daily_coverage < MINIMUM_DAILY_SPLICE_COVERAGE:
+        raise RuntimeError(
+            "daily splice coverage below minimum: {:.2%} < {:.2%}".format(
+                daily_coverage, MINIMUM_DAILY_SPLICE_COVERAGE
+            )
+        )
 
     targets = list(target_selector(daily) or [])
     target_codes = [str(row.get("code") or "") for row in targets]
@@ -568,6 +631,7 @@ def build_scheduled_preclose_input(
             "universe": universe_diagnostics,
             "quote_snapshot": quote_diagnostics,
             "daily_count": len(daily),
+            "daily_splice": daily_splice_diagnostics,
             "target_30m_count": len(target_codes),
             "full_market_bar_count": len(stock_bars),
             "forbidden_dependencies": {

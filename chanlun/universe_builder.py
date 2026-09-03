@@ -131,6 +131,7 @@ def _rows_to_kline(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "volumes": np.array([row["volume"] for row in rows], dtype=float),
         "amounts": np.array([row["amount"] for row in rows], dtype=float),
         "source": "market_history_db",
+        "adjustment": str(rows[-1]["adjustment"]),
         "_data_status": {
             "daily": "verified",
             "latest_date": str(rows[-1]["ts"]).split(" ")[0],
@@ -138,6 +139,7 @@ def _rows_to_kline(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
             "bars": len(rows),
             "stale": False,
             "is_final": bool(rows[-1]["is_final"]),
+            "adjustment": str(rows[-1]["adjustment"]),
         },
     }
 
