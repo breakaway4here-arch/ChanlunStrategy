@@ -9,9 +9,11 @@ from chanlun.recommendation_ledger import build_recommendation_entries
 from chanlun.strategy_review import (
     SCORECARD_THRESHOLDS,
     _card_evaluation_status,
+    _sample_exclusion,
     build_strategy_run_manifest,
     build_strategy_scorecards,
     evaluate_recommendation_entry,
+    load_strategy_sample_exclusions,
     load_review_klines_from_store,
     load_review_market_context_from_store,
     persist_review_benchmark_kline,
@@ -454,6 +456,46 @@ class StrategyReviewEvaluationTests(unittest.TestCase):
 
 
 class StrategyScorecardTests(unittest.TestCase):
+    def test_price_basis_incident_excludes_exact_20260903_baseline_rows(self):
+        exclusions = load_strategy_sample_exclusions()
+        incident_id = "price-basis-mismatch-2026-09-03-daily-pure"
+        incident = next(
+            row for row in exclusions
+            if row.get("incident_id") == incident_id
+        )
+        invalid_codes = {
+            "000935", "300115", "300308", "600350", "601100",
+            "603271", "603341", "688006", "688525", "688800",
+        }
+
+        self.assertEqual(set(incident["codes"]), invalid_codes)
+        contribution = {
+            "strategy_name": "daily_pure",
+            "source_pool": "picks_pure",
+        }
+        for code in invalid_codes:
+            self.assertEqual(
+                _sample_exclusion(
+                    {"report_date": "2026-09-03", "code": code},
+                    contribution,
+                    exclusions,
+                ),
+                {
+                    "incident_id": incident_id,
+                    "reason": "strategy_input_stale_or_unverified",
+                },
+            )
+        self.assertIsNone(_sample_exclusion(
+            {"report_date": "2026-09-03", "code": "002272"},
+            contribution,
+            exclusions,
+        ))
+        self.assertIsNone(_sample_exclusion(
+            {"report_date": "2026-09-02", "code": "300115"},
+            contribution,
+            exclusions,
+        ))
+
     def test_explicit_input_incident_excludes_sample_without_rewriting_ledger(self):
         valid = _entry(
             report_date="2026-08-20",

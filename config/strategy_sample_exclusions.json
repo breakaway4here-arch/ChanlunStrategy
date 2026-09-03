@@ -34,6 +34,26 @@
       "source_pools": ["h4_t3_pool"],
       "reason": "strategy_upstream_contract_mismatch",
       "evidence": "The historical H4 run used picks_fusion before picks_pure became the required common upstream"
+    },
+    {
+      "incident_id": "price-basis-mismatch-2026-09-03-daily-pure",
+      "report_dates": ["2026-09-03"],
+      "strategy_names": ["daily_pure"],
+      "source_pools": ["picks_pure"],
+      "codes": [
+        "000935",
+        "300115",
+        "300308",
+        "600350",
+        "601100",
+        "603271",
+        "603341",
+        "688006",
+        "688525",
+        "688800"
+      ],
+      "reason": "strategy_input_stale_or_unverified",
+      "evidence": "The original close run compared qfq daily prices with raw 30m prices before the explicit price-basis contract was deployed"
     }
   ]
 }
