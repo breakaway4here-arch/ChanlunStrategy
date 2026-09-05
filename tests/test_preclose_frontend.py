@@ -46,6 +46,36 @@ run().catch(function (error) { console.error(error.stack || error); process.exit
 
 
 class PrecloseFrontendTests(unittest.TestCase):
+    def test_archive_report_fallback_uses_path_date_without_bootstrap(self):
+        _assert_node_contract(
+            self,
+            "({ resolve: resolveInitialData })",
+            r"""
+window.CHANLUN_BOOTSTRAP = undefined;
+window.location.pathname = '/ChanlunStrategy/2026-09-04/';
+const RealDate = Date;
+global.Date = class extends RealDate {
+  constructor(value) {
+    super(value === undefined ? '2030-01-02T00:00:00Z' : value);
+  }
+};
+const urls = [];
+window.fetch = function (url) {
+  urls.push(url);
+  return Promise.resolve({
+    ok: true,
+    json: function () {
+      return Promise.resolve({ date: '2026-09-04' });
+    }
+  });
+};
+const report = await globalThis.__precloseTest.resolve();
+assert(urls.length === 1, 'archive fallback did not request one report');
+assert(urls[0] === '../data/2026-09-04.json', 'archive fallback ignored path date: ' + urls[0]);
+assert(report.date === '2026-09-04', 'archive fallback loaded the wrong report');
+""",
+        )
+
     def test_reads_independent_api_and_same_date_snapshot_and_reconciliation(self):
         _assert_node_contract(
             self,

@@ -7783,7 +7783,7 @@
     if (window.INLINE_REPORT_DATA) {
       return Promise.resolve(window.INLINE_REPORT_DATA);
     }
-    var date = bootstrap.pageDate || formatDateLabel(new Date().toISOString());
+    var date = bootstrap.pageDate || getPreclosePageDate();
     var url = detectDataUrl(date);
     if (!window.fetch) {
       return Promise.reject(new Error('当前环境不支持 fetch，且无内联 REPORT_DATA。'));
