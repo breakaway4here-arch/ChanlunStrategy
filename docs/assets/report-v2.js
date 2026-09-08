@@ -1362,7 +1362,29 @@
       ? '较前期：新增 ' + asArray(changes.added).length + ' · 移出 ' + asArray(changes.removed).length + ' · 条件变化 ' + asArray(changes.changed).length
       : '暂无同口径完整前期记录';
     mount.innerHTML = '<div class="decision-overview-main"><h2>' + escapeHtml(summary.title) + '</h2><p>'
-      + escapeHtml(summary.reason) + '</p></div><small class="decision-overview-note">' + escapeHtml(changesText) + '</small>';
+      + escapeHtml(summary.reason) + '</p>' + buildFormalOutcomeExplanation(summary, state.data || {})
+      + '</div><small class="decision-overview-note">' + escapeHtml(changesText) + '</small>';
+  }
+
+  function buildFormalOutcomeExplanation(summary, data) {
+    var admission = ((data || {}).diagnostics || {}).fusion_admission || {};
+    return '<dl class="formal-outcome-explanation">' + [['main', '正式主推'], ['h4_t3', 'H4 T+3']].map(function (entry) {
+      var result = (summary || {})[entry[0]];
+      if (!result) return '';
+      var reason;
+      if (result.state === 'verified_empty') {
+        reason = entry[0] === 'main' ? '本期没有通过全部条件的正式结果。' : '本期没有候选通过 H4 T+3 全部门槛。';
+        if (entry[0] === 'main' && admission.kept_formal === 0
+            && isFormalMarketNumber(admission.kept_candidate, 1, Infinity)) {
+          reason = '留下的 ' + admission.kept_candidate + ' 只仍处于候选阶段，尚未形成正式买点；继续观察个股确认条件。';
+        }
+      } else if (result.state === 'unavailable') {
+        reason = normalizeString(result.reason) || '本期数据未通过核验，暂不能判断。';
+      } else {
+        reason = '本期 ' + (isFormalMarketNumber(result.count, 0, Infinity) ? result.count : '--') + ' 只正式结果，执行条件见个股详情。';
+      }
+      return '<div><dt>' + escapeHtml(entry[1]) + '</dt><dd>' + escapeHtml(reason) + '</dd></div>';
+    }).join('') + '</dl>';
   }
 
   function getCandidateViews() {
@@ -1637,12 +1659,14 @@
       + '  <section class="primary-view today-decision-view" id="todayDecisionView" role="tabpanel" aria-labelledby="primary-mode-tab-today">'
       + '    <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
       + '    <section class="workspace today-workspace">'
-      + '      <section id="decisionOverview" class="decision-overview" aria-label="本期结论" hidden></section>'
       + '      <section class="market-decision-bar" id="marketDecisionBar" aria-label="大盘正式证据">'
+      + '        <header class="market-evidence-heading"><div><h2>大盘证据</h2><p>先看市场环境，再核对个股条件</p></div><a href="#decisionOverview">看本期选股结论 ↓</a></header>'
       + '        <div class="market-decision-summary" id="marketDecisionSummary"></div>'
+      + '        <div class="market-evidence" id="marketEvidence"></div>'
       + '        <section class="sector-strip" id="sectorStrip" aria-label="资金主线"><strong>资金主线</strong><span>正在整理板块证据…</span></section>'
       + '        <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
       + '      </section>'
+      + '      <section id="decisionOverview" class="decision-overview" aria-label="本期结论" tabindex="-1" hidden></section>'
       + '      <div class="workspace-tabs" id="workspaceTabs" role="group" aria-label="候选视图"></div>'
       + '      <div class="workspace-body">'
       + '        <div class="candidate-list-shell">'
@@ -1672,7 +1696,6 @@
       + '    <section class="supporting-decisions-stack" id="supportingDecisionsStack"></section>'
       + '  </section>'
       + '  <section class="primary-view research-validation-view hidden" id="researchValidationView" role="tabpanel" aria-labelledby="primary-mode-tab-research">'
-      + '    <div class="market-evidence" id="marketEvidence"></div>'
       + '    <section class="aux-center decision-center">'
       + '      <details id="auxCenter" open>'
       + '        <summary>'
@@ -1855,17 +1878,15 @@
     var asOf = normalizeString(quality.as_of || quality.generated_at);
     var timeMatch = asOf.match(/T(\d{2}:\d{2})/);
     setTextNode(nodes.headerTitle, '缠论决策工作台');
-    setTextNode(nodes.headerSubtitle, '先看本期结论，再核对关注条件与K线');
+    setTextNode(nodes.headerSubtitle, '大盘证据 → 本期选股结论 → 个股条件与K线');
     nodes.headerMetrics.innerHTML = '<div class="compact-header-facts">'
       + '<span><small>交易日</small><strong>' + escapeHtml(dateLabel) + '</strong></span>'
       + '<span><small>版本</small><strong>' + escapeHtml(formal ? '正式收盘版' : '盘中预览') + '</strong></span>'
       + '<span><small>更新时间</small><strong>' + escapeHtml(timeMatch ? timeMatch[1] : '--:--') + '</strong></span>'
       + '<span><small>行情</small><strong>' + escapeHtml(marketStatus) + '</strong></span>'
-      + '<span><small>节奏</small><strong>' + escapeHtml(normalizeString(summary.regime || summary.label || '待确认')) + '</strong></span>'
       + '</div>';
     if (nodes.marketEvidence) {
-      nodes.marketEvidence.innerHTML = '<details class="market-header-details"><summary>大盘证据</summary>'
-        + renderMarketRegime(summary) + renderMarketIndexCards(summary.items) + '</details>';
+      nodes.marketEvidence.innerHTML = buildExpandedMarketEvidence(data);
     }
     renderDecisionMarketBar(data);
   }
@@ -1873,7 +1894,6 @@
   function buildDecisionMarketSummary(data) {
     var source = data || {};
     var temperature = buildMarketTemperature(source);
-    var components = temperature.components || {};
     var quality = source.data_quality || {};
     var reportDate = normalizeString(source.date || getBootstrap().pageDate).trim() || '日期未提供';
     var asOf = normalizeString(quality.as_of || quality.generated_at).trim();
@@ -1883,26 +1903,12 @@
     var marketStatus = normalizeString(quality.market_status) === 'verified'
       ? '行情已核验' : '行情待核验';
     var degraded = quality.fallback_used === true || asArray(quality.warnings).length > 0;
-    var componentRows = [
-      ['广度', components.breadth_score],
-      ['涨停生态', components.limit_score],
-      ['指数', components.index_score],
-      ['成交', components.volume_score],
-      ['趋势', components.trend_score],
-    ];
-    var componentHtml = componentRows.map(function (entry) {
-      return '<span><b>' + escapeHtml(entry[0]) + '</b><strong>'
-        + escapeHtml(isRecommendationEvidenceFiniteNumber(entry[1])
-          ? recommendationEvidenceNumber(entry[1]) : '--')
-        + '</strong></span>';
-    }).join('');
     var scoreText = isRecommendationEvidenceFiniteNumber(temperature.score)
       ? recommendationEvidenceNumber(temperature.score) : '--';
     return '<div class="market-decision-state is-' + escapeHtml(temperature.tone || 'neutral') + '">'
-      + '<span>市场状态</span><strong>' + escapeHtml(temperature.label || '数据不足') + '</strong>'
+      + '<span>综合情绪 / 100</span><strong>' + escapeHtml(temperature.label || '数据不足') + '</strong>'
       + '<em>' + escapeHtml(scoreText) + '</em></div>'
-      + '<div class="market-decision-components" role="group" aria-label="正式市场五项组成">'
-      + componentHtml + '</div>'
+      + '<p class="market-score-explanation">由全 A 广度、涨跌停生态、指数、成交与趋势共同衡量。市场状态不等于个股满足买入条件。</p>'
       + '<div class="market-decision-quality"><span>' + escapeHtml(reportDate) + '</span>'
       + '<strong>' + escapeHtml(timeMatch ? timeMatch[1] : '--:--') + '</strong>'
       + '<small>' + escapeHtml(
@@ -1914,6 +1920,43 @@
     var html = buildDecisionMarketSummary(data);
     if (nodes.marketDecisionSummary) nodes.marketDecisionSummary.innerHTML = html;
     return html;
+  }
+
+  function buildExpandedMarketEvidence(data) {
+    var source = data || {};
+    // Use the same dated, validated formal contract as the headline score.
+    var contract = getFormalMarketSentimentContract(source);
+    var evidence = contract ? contract.evidence : {};
+    function value(key, field, decimals, scale, suffix) {
+      var item = evidence[key] || {};
+      var number = item[field];
+      if (item.available !== true || !isRecommendationEvidenceFiniteNumber(number)) return '--';
+      return formatNumber(number * (scale || 1), decimals) + (suffix || '');
+    }
+    var rows = [
+      ['breadth', '全 A 广度', '上涨 ' + value('breadth', 'advance_count', 0) + ' · 下跌 ' + value('breadth', 'decline_count', 0)
+        + ' · 平盘 ' + value('breadth', 'flat_count', 0), '上涨占比 ' + value('breadth', 'advance_ratio', 2, 1, '%')],
+      ['limit_ecology', '涨跌停生态', '涨停 ' + value('limit_ecology', 'limit_up_count', 0) + ' · 跌停 ' + value('limit_ecology', 'limit_down_count', 0), '采用正式情绪统计口径'],
+      ['index', '主要指数', value('index', 'valid_count', 0) + ' 个指数平均涨跌 ' + value('index', 'average_change_pct', 2, 1, '%'), '指数明细见上方'],
+      ['turnover', '成交量能', '较 5 日均量 ' + value('turnover', 'ratio_to_ma5', 2, 1, ' 倍') + ' · 较 20 日均量 ' + value('turnover', 'ratio_to_ma20', 2, 1, ' 倍'), '1 倍表示与对应均量持平'],
+      ['trend', '趋势结构', '站上 20 日均线占比 ' + value('trend', 'above_ma20_ratio', 2, 100, '%'), '用于观察上涨结构的覆盖范围'],
+    ];
+    var facts = rows.map(function (row) {
+      var score = contract ? contract.components[row[0]] : null;
+      return '<div class="market-fact-row"><dt>' + escapeHtml(row[1]) + '</dt><dd><strong>' + escapeHtml(row[2])
+        + '</strong><span>' + escapeHtml(row[3]) + '</span></dd><dd class="market-fact-score"><small>分项得分</small><b>'
+        + escapeHtml(isRecommendationEvidenceFiniteNumber(score) ? formatNumber(score, 2) : '--') + '</b></dd></div>';
+    }).join('');
+    var reading = contract
+      ? '综合情绪' + contract.label + '（' + contract.score + '分）；全 A 上涨占比 ' + value('breadth', 'advance_ratio', 2, 1, '%')
+        + '，主要指数平均涨跌 ' + value('index', 'average_change_pct', 2, 1, '%') + '。两者统计范围不同，请结合下方依据阅读。'
+      : '综合情绪数据不足：本期正式证据未通过完整性与日期核验，不显示替代分数。';
+    return '<p class="market-evidence-reading">' + escapeHtml(reading) + '</p>'
+      + renderMarketIndexCards(getMarketItems(source.market || {}))
+      + '<div class="market-evidence-body"><section aria-labelledby="marketFactsTitle"><h3 id="marketFactsTitle">判断依据</h3><dl class="market-facts">' + facts + '</dl></section>'
+      + '<section class="market-evidence-trend" aria-labelledby="marketTrendTitle"><h3 id="marketTrendTitle">最近 20 个交易日情绪</h3>'
+      + '<p>每日情绪与 3 日均线，观察强弱变化。</p><div id="marketSentimentChart" class="market-sentiment-chart" role="img" aria-label="最近20个交易日市场情绪折线图"></div>'
+      + '<p class="market-evidence-coverage">正式组件覆盖 ' + escapeHtml(contract ? formatNumber(contract.coverage * 100, 0) + '%' : '--') + ' · 分数仅描述市场环境</p></section></div>';
   }
 
   function getDirectionBriefSourceLabel(brief) {
@@ -5542,7 +5585,7 @@
       + '    </div>'
       + '  </div>'
       + '  <div class="market-temp-trend">'
-      + '    <div id="marketSentimentChart" class="market-sentiment-chart" aria-label="最近20个交易日市场情绪折线图"></div>'
+      + '    <div id="marketSentimentChart" class="market-sentiment-chart" role="img" aria-label="最近20个交易日市场情绪折线图"></div>'
       + '  </div>'
       + '</div>'
       + renderPsy12ShadowSubpanel(data || {});
@@ -7986,7 +8029,7 @@
         + renderPersonalWatchlist(source)
         + renderHoldingRiskSection(source),
       research: ''
-        + renderMarketTemperatureCard(source)
+        + renderDecisionCard({ title: 'PSY12 影子验证', subtitle: '独立观察，不参与正式市场评分与推荐', className: 'psy12-research-card', bodyHtml: renderPsy12ShadowSubpanel(source) })
         + renderSectorFlowCard(source)
         + renderLimitUpEcologyCard(source)
         + renderStrategyDisagreementAudit(source)

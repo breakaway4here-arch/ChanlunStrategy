@@ -7,7 +7,7 @@ from tests.test_auxiliary_frontend import CSS, JS, _assert_node_contract
 
 
 class TestChartCenteredDecisionWorkbench(unittest.TestCase):
-    def test_market_bar_is_sticky_inside_today_workspace(self):
+    def test_full_market_evidence_stays_in_document_flow_inside_today_workspace(self):
         shell_start = JS.index("function buildAppShell")
         shell_end = JS.index("function getReportDataStatus", shell_start)
         shell = JS[shell_start:shell_end]
@@ -32,7 +32,7 @@ class TestChartCenteredDecisionWorkbench(unittest.TestCase):
             r"\.market-decision-bar\s*\{(?P<body>[^}]*)\}", CSS, re.DOTALL
         )
         self.assertIsNotNone(sticky)
-        self.assertRegex(sticky.group("body"), r"position:\s*sticky\s*;")
+        self.assertRegex(sticky.group("body"), r"position:\s*static\s*;")
 
     def test_formal_market_summary_uses_real_contract_and_quality(self):
         _assert_node_contract(
@@ -66,7 +66,7 @@ const html = globalThis.__auxTest.build({
     as_of: '2026-09-01T15:08:00+08:00'
   }
 });
-['市场状态', '偏强', '68', '广度', '涨停生态', '指数', '成交', '趋势',
+['市场状态', '偏强', '68', '广度', '涨跌停生态', '指数', '成交', '趋势',
  '2026-09-01', '15:08', '正式收盘版', '行情已核验'].forEach(function (text) {
   assert(html.includes(text), 'market summary missing real fact: ' + text);
 });
