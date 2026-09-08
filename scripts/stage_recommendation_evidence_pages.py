@@ -30,6 +30,7 @@ if os.fspath(ROOT_DIR) not in sys.path:
 from chanlun.recommendation_evidence import (  # noqa: E402
     build_recommendation_evidence_projection,
 )
+from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
     _escape_inline_json,
     replace_report_asset_versions,
@@ -304,9 +305,11 @@ def _parse_top_level_key_span(raw: str, key: str):
     return None
 
 
-def _insert_or_replace_evidence(raw_json: str, evidence: dict) -> str:
+def _insert_or_replace_evidence(raw_json: str, evidence: dict, key="recommendationEvidence") -> str:
+    if key not in ("recommendationEvidence", "decisionWorkbench"):
+        raise StageRecommendationEvidenceError("non-whitelist projection key")
     encoded = _escape_inline_json(evidence)
-    span = _parse_top_level_key_span(raw_json, "recommendationEvidence")
+    span = _parse_top_level_key_span(raw_json, key)
     if span is not None:
         _, start, end = span
         return raw_json[:start] + encoded + raw_json[end:]
@@ -322,7 +325,7 @@ def _insert_or_replace_evidence(raw_json: str, evidence: dict) -> str:
     separator = "," if has_members else ""
     insertion = (
         separator
-        + '"recommendationEvidence":'
+        + json.dumps(key) + ':'
         + encoded
     )
     return raw_json[:content_end] + insertion + raw_json[content_end:]
@@ -353,6 +356,9 @@ def _inject_evidence(html: str, path: Path, evidence: dict, asset_version: str) 
     info = _read_bootstrap_info(html, path)
     raw_json = html[info["json_start"] : info["json_end"]]
     updated_raw = _insert_or_replace_evidence(raw_json, evidence)
+    daily = info['payload']['inlineReportData']
+    workbench = build_decision_workbench(daily, daily.get('workspace', {}), evidence)
+    updated_raw = _insert_or_replace_evidence(updated_raw, workbench, 'decisionWorkbench')
     updated = (
         html[: info["json_start"]]
         + updated_raw
@@ -435,7 +441,7 @@ def _non_evidence_payload(payload: dict) -> dict:
     return {
         key: value
         for key, value in payload.items()
-        if key != "recommendationEvidence"
+        if key not in ("recommendationEvidence", "decisionWorkbench")
     }
 
 
@@ -492,12 +498,12 @@ def _assert_html_allowlist_equivalent(
         ]
         before_skeleton = (
             baseline[: before_info["json_start"]]
-            + _remove_top_level_key(before_json, "recommendationEvidence")
+            + _remove_top_level_key(_remove_top_level_key(before_json, "recommendationEvidence"), "decisionWorkbench")
             + baseline[before_info["json_end"] :]
         )
         current_skeleton = (
             current[: current_info["json_start"]]
-            + _remove_top_level_key(current_json, "recommendationEvidence")
+            + _remove_top_level_key(_remove_top_level_key(current_json, "recommendationEvidence"), "decisionWorkbench")
             + current[current_info["json_end"] :]
         )
     else:
@@ -758,6 +764,9 @@ def stage_recommendation_evidence_pages(
             raise StageRecommendationEvidenceError(
                 "staged recommendation evidence mismatch: {}".format(path)
             )
+        expected_workbench = build_decision_workbench(daily_data, daily_data.get('workspace', {}), evidence)
+        if payload.get('decisionWorkbench') != expected_workbench:
+            raise StageRecommendationEvidenceError('staged decision workbench mismatch')
         if _non_evidence_payload(payload) != _non_evidence_payload(original_info["payload"]):
             raise StageRecommendationEvidenceError(
                 "staged bootstrap changed outside evidence: {}".format(path)

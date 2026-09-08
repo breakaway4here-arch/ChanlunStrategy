@@ -35,7 +35,7 @@
     growth_quality: { role: 'research', source_pool: 'picks_fusion + next_day_boom + luojie_pool + startup_watchlist', action_semantics: 'watch_only' },
     baseline: { role: 'baseline', source_pool: 'picks_pure', action_semantics: 'upstream_only' },
   };
-  var CHART_EMPTY_TEXT = '暂无图表数据，但保留推荐原因和来源。请检查原始池子数据或 K 线数据。';
+  var CHART_EMPTY_TEXT = '无法展示可验证 K 线：本期未提供真实日 K 数据；推荐原因和来源仍保留。';
   var TOP10_POLL_INTERVAL_MS = 2200;
   var TOP10_MAX_POLL_ATTEMPTS = 52;
 
@@ -49,6 +49,7 @@
     chartInstance: null,
     chartMount: null,
     chartAnnotationLane: null,
+    chartLayerSwitcher: null,
     sentimentChartInstance: null,
     chartLayer: 'decision',
     rawPoolCandidates: null,
@@ -99,6 +100,8 @@
     todayDecisionView: null,
     researchValidationView: null,
     marketEvidence: null,
+    marketDecisionBar: null,
+    marketDecisionSummary: null,
     sectorStrip: null,
     supportingStack: null,
     researchStack: null,
@@ -439,7 +442,10 @@
   }
 
   function getDecisionScore(decision) {
-    return safeNumber(decision && decision.total_score, null);
+    var value = decision && decision.total_score;
+    if (!isRecommendationEvidenceFiniteNumber(value)) return null;
+    var score = Number(value);
+    return score >= 0 && score <= 100 ? score : null;
   }
 
   function renderDecisionBadge(decision) {
@@ -1203,7 +1209,18 @@
     var highs = asArray(item.highs);
     var lows = asArray(item.lows);
     var closes = asArray(item.closes);
-    return Math.min(dates.length, opens.length, highs.length, lows.length, closes.length) >= 2;
+    var length = Math.min(dates.length, opens.length, highs.length, lows.length, closes.length);
+    if (length < 2) return false;
+    for (var index = 0; index < length; index += 1) {
+      var date = dates[index];
+      var values = [opens[index], highs[index], lows[index], closes[index]];
+      if (typeof date !== 'string' || !date.trim()) return false;
+      if (!values.every(function (value) {
+        return isRecommendationEvidenceFiniteNumber(value) && Number(value) > 0;
+      })) return false;
+      if (Number(highs[index]) < Number(lows[index])) return false;
+    }
+    return true;
   }
 
   function mergeChartCandidate(primary, chartSource) {
@@ -1295,6 +1312,59 @@
     el.innerHTML = escapeHtml(value);
   }
 
+  function getDecisionWorkbench(data) {
+    var report = data || state.data || {};
+    var bootstrap = getBootstrap();
+    var value = bootstrap.decisionWorkbench;
+    var expected = normalizeString(report.date || bootstrap.pageDate);
+    return value && value.schema_version === 'decision-workbench-v1'
+      && value.phase === 'formal' && value.report_date === expected
+      && Array.isArray(value.items) ? value : null;
+  }
+
+  function isDecisionView(key) {
+    return normalizeString(key).indexOf('decision_') === 0;
+  }
+
+  function decisionRows(projection, key) {
+    return projection.items.filter(function (item) {
+      if (key === 'decision_focus') return asArray(projection.featured_ids).indexOf(item.id) !== -1;
+      if (key === 'decision_formal') return item.formal_action || item.page_status === 'strategy_disagreement';
+      if (key === 'decision_wait') return ['waiting_trigger', 'formal_incomplete'].indexOf(item.page_status) !== -1;
+      if (key === 'decision_blocked') return ['evidence_blocked', 'strategy_disagreement', 'invalidated'].indexOf(item.page_status) !== -1 || asArray(item.risk_flags).length > 0;
+      return true;
+    }).map(function (item, index) {
+      return Object.assign({}, item.candidate || {}, {
+        code: item.code, name: item.name, view_rank: index + 1,
+        evidence_view: item.evidence_view, workbench_item: item,
+      });
+    });
+  }
+
+  function decisionNavigation() {
+    return [{ key: 'decision_focus', label: '优先关注' }, { key: 'decision_all', label: '全部' },
+      { key: 'decision_formal', label: '正式结果' }, { key: 'decision_wait', label: '等条件' },
+      { key: 'decision_blocked', label: '待核验 / 风险' }];
+  }
+
+  function renderDecisionOverview() {
+    var projection = getDecisionWorkbench();
+    var mount = document.getElementById('decisionOverview');
+    if (!mount) return;
+    mount.hidden = false;
+    if (!projection) {
+      mount.innerHTML = '<strong>旧版报告</strong><p>本期未生成统一清单，按原始策略视图展示；证据能力以本期记录为准。</p>';
+      return;
+    }
+    var summary = projection.summary || {};
+    var changes = projection.changes || {};
+    var changesText = changes.status === 'available'
+      ? '较前期：新增 ' + asArray(changes.added).length + ' · 移出 ' + asArray(changes.removed).length + ' · 条件变化 ' + asArray(changes.changed).length
+      : '暂无同口径完整前期记录';
+    mount.innerHTML = '<strong>' + escapeHtml(summary.title) + '</strong><p>'
+      + escapeHtml(summary.reason) + '</p><small>' + escapeHtml(changesText) + '</small>';
+  }
+
   function getCandidateViews() {
     var workspace = state.workspace || {};
     var rawViews = workspace.views || {};
@@ -1319,6 +1389,12 @@
         );
       }
       meta[viewKey] = resolved;
+    });
+    var projection = getDecisionWorkbench();
+    if (projection) decisionNavigation().forEach(function (entry) {
+      views[entry.key] = decisionRows(projection, entry.key);
+      meta[entry.key] = { label: entry.label, role: 'presentation', action_semantics: 'mixed',
+        availability: { state: views[entry.key].length ? 'available' : 'verified_empty' } };
     });
     return {
       meta: meta,
@@ -1348,7 +1424,7 @@
       ],
     };
     return {
-      primary: asArray(supplied.primary).length ? asArray(supplied.primary) : fallback.primary,
+      primary: getDecisionWorkbench() ? decisionNavigation() : (asArray(supplied.primary).length ? asArray(supplied.primary) : fallback.primary),
       research: asArray(supplied.research).length ? asArray(supplied.research) : fallback.research,
     };
   }
@@ -1463,6 +1539,14 @@
 
   function buildCandidateEmptyState(viewKey, availability, context) {
     var ctx = context || {};
+    if (isDecisionView(viewKey) && !ctx.filtered) {
+      var projection = getDecisionWorkbench() || {};
+      var summary = projection.summary || {};
+      return '<div class="candidate-empty"><strong>' + escapeHtml(viewKey === 'decision_focus'
+        ? '暂无条件明确的优先候选' : '此状态下暂无候选') + '</strong><span>'
+        + escapeHtml(summary.reason || '可在全部清单中查看观察对象及待补充条件。')
+        + '</span><small>完整观察对象与待核验信息保留在“全部”。</small></div>';
+    }
     if (ctx.filtered) {
       var filterLabel = normalizeString(ctx.filterLabel || '当前筛选');
       return '<div class="candidate-empty is-filtered"><strong>'
@@ -1550,23 +1634,15 @@
       + '    <button type="button" id="primary-mode-tab-research" data-primary-mode="research" role="tab" aria-controls="researchValidationView" aria-selected="false" tabindex="-1">研究验证</button>'
       + '  </nav>'
       + '  <section class="primary-view today-decision-view" id="todayDecisionView" role="tabpanel" aria-labelledby="primary-mode-tab-today">'
-      + '    <section class="sector-strip" id="sectorStrip" aria-label="资金主线"><strong>资金主线</strong><span>正在整理板块证据…</span></section>'
-      + '    <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
-      + '    <section class="preclose-advisory hidden" id="precloseAdvisory" aria-labelledby="precloseAdvisoryTitle">'
-      + '      <header class="preclose-advisory-head">'
-      + '        <span><strong id="precloseAdvisoryTitle">14:45预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
-      + '      </header>'
-      + '      <div class="preclose-body" id="precloseBody" aria-live="polite"></div>'
-      + '      <div class="preclose-reconciliation hidden" id="precloseReconciliation" aria-live="polite"></div>'
-      + '    </section>'
       + '    <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
       + '    <section class="workspace today-workspace">'
+      + '      <section id="decisionOverview" class="decision-overview" aria-label="本期结论" hidden></section>'
+      + '      <section class="market-decision-bar" id="marketDecisionBar" aria-label="大盘正式证据">'
+      + '        <div class="market-decision-summary" id="marketDecisionSummary"></div>'
+      + '        <section class="sector-strip" id="sectorStrip" aria-label="资金主线"><strong>资金主线</strong><span>正在整理板块证据…</span></section>'
+      + '        <section class="direction-quick" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
+      + '      </section>'
       + '      <nav class="workspace-tabs" id="workspaceTabs" role="tablist" aria-label="候选导航"></nav>'
-      + '      <div class="view-description" id="viewDescription"></div>'
-      + '      <details class="candidate-evidence-comparison" id="candidateEvidenceComparison">'
-      + '        <summary>候选横向比较</summary>'
-      + '        <div class="candidate-evidence-comparison-body"></div>'
-      + '      </details>'
       + '      <div class="workspace-body">'
       + '        <div class="candidate-list-shell">'
       + '          <div class="candidate-list-tools">'
@@ -1579,6 +1655,18 @@
       + '        </div>'
       + '        <aside class="detail-panel workspace-detail" id="detailPanel"></aside>'
       + '      </div>'
+      + '      <div class="view-description" id="viewDescription"></div>'
+      + '      <details class="candidate-evidence-comparison" id="candidateEvidenceComparison">'
+      + '        <summary>候选横向比较</summary>'
+      + '        <div class="candidate-evidence-comparison-body"></div>'
+      + '      </details>'
+      + '    </section>'
+      + '    <section class="preclose-advisory hidden" id="precloseAdvisory" aria-labelledby="precloseAdvisoryTitle">'
+      + '      <header class="preclose-advisory-head">'
+      + '        <span><strong id="precloseAdvisoryTitle">14:45预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
+      + '      </header>'
+      + '      <div class="preclose-body" id="precloseBody" aria-live="polite"></div>'
+      + '      <div class="preclose-reconciliation hidden" id="precloseReconciliation" aria-live="polite"></div>'
       + '    </section>'
       + '    <section class="supporting-decisions-stack" id="supportingDecisionsStack"></section>'
       + '  </section>'
@@ -1615,6 +1703,8 @@
     nodes.todayDecisionView = app.querySelector('#todayDecisionView');
     nodes.researchValidationView = app.querySelector('#researchValidationView');
     nodes.marketEvidence = app.querySelector('#marketEvidence');
+    nodes.marketDecisionBar = app.querySelector('#marketDecisionBar');
+    nodes.marketDecisionSummary = app.querySelector('#marketDecisionSummary');
     nodes.sectorStrip = app.querySelector('#sectorStrip');
     nodes.supportingStack = app.querySelector('#supportingDecisionsStack');
     nodes.researchStack = app.querySelector('#auxGrid');
@@ -1763,7 +1853,7 @@
     var asOf = normalizeString(quality.as_of || quality.generated_at);
     var timeMatch = asOf.match(/T(\d{2}:\d{2})/);
     setTextNode(nodes.headerTitle, '缠论决策工作台');
-    setTextNode(nodes.headerSubtitle, '把正式动作放在第一屏，研究证据收进第二层');
+    setTextNode(nodes.headerSubtitle, '先看本期结论，再核对关注条件与K线');
     nodes.headerMetrics.innerHTML = '<div class="compact-header-facts">'
       + '<span><small>交易日</small><strong>' + escapeHtml(dateLabel) + '</strong></span>'
       + '<span><small>版本</small><strong>' + escapeHtml(formal ? '正式收盘版' : '盘中预览') + '</strong></span>'
@@ -1775,6 +1865,53 @@
       nodes.marketEvidence.innerHTML = '<details class="market-header-details"><summary>大盘证据</summary>'
         + renderMarketRegime(summary) + renderMarketIndexCards(summary.items) + '</details>';
     }
+    renderDecisionMarketBar(data);
+  }
+
+  function buildDecisionMarketSummary(data) {
+    var source = data || {};
+    var temperature = buildMarketTemperature(source);
+    var components = temperature.components || {};
+    var quality = source.data_quality || {};
+    var reportDate = normalizeString(source.date || getBootstrap().pageDate).trim() || '日期未提供';
+    var asOf = normalizeString(quality.as_of || quality.generated_at).trim();
+    var timeMatch = asOf.match(/(?:T|\s)(\d{2}:\d{2})/);
+    var versionText = quality.is_official === true && normalizeString(quality.bar_state) === 'closed'
+      ? '正式收盘版' : '盘中预览';
+    var marketStatus = normalizeString(quality.market_status) === 'verified'
+      ? '行情已核验' : '行情待核验';
+    var degraded = quality.fallback_used === true || asArray(quality.warnings).length > 0;
+    var componentRows = [
+      ['广度', components.breadth_score],
+      ['涨停生态', components.limit_score],
+      ['指数', components.index_score],
+      ['成交', components.volume_score],
+      ['趋势', components.trend_score],
+    ];
+    var componentHtml = componentRows.map(function (entry) {
+      return '<span><b>' + escapeHtml(entry[0]) + '</b><strong>'
+        + escapeHtml(isRecommendationEvidenceFiniteNumber(entry[1])
+          ? recommendationEvidenceNumber(entry[1]) : '--')
+        + '</strong></span>';
+    }).join('');
+    var scoreText = isRecommendationEvidenceFiniteNumber(temperature.score)
+      ? recommendationEvidenceNumber(temperature.score) : '--';
+    return '<div class="market-decision-state is-' + escapeHtml(temperature.tone || 'neutral') + '">'
+      + '<span>市场状态</span><strong>' + escapeHtml(temperature.label || '数据不足') + '</strong>'
+      + '<em>' + escapeHtml(scoreText) + '</em></div>'
+      + '<div class="market-decision-components" aria-label="正式市场五项组成">'
+      + componentHtml + '</div>'
+      + '<div class="market-decision-quality"><span>' + escapeHtml(reportDate) + '</span>'
+      + '<strong>' + escapeHtml(timeMatch ? timeMatch[1] : '--:--') + '</strong>'
+      + '<small>' + escapeHtml(
+        versionText + ' · ' + marketStatus + (degraded ? ' · 数据降级' : '')
+      ) + '</small></div>';
+  }
+
+  function renderDecisionMarketBar(data) {
+    var html = buildDecisionMarketSummary(data);
+    if (nodes.marketDecisionSummary) nodes.marketDecisionSummary.innerHTML = html;
+    return html;
   }
 
   function getDirectionBriefSourceLabel(brief) {
@@ -2450,6 +2587,10 @@
 
   function renderViewDescription() {
     if (!nodes.description) return;
+    if (isDecisionView(state.currentView)) {
+      nodes.description.innerHTML = '<div class="view-description-copy">同股仅展示一次；来源策略及各自条件可在详情中查看。当前显示的是本期快照判断。</div>';
+      return;
+    }
     var viewDef = getCandidateViews();
     var meta = resolveViewDisplayContract(
       state.currentView,
@@ -2869,6 +3010,50 @@
     return current;
   }
 
+  function buildCandidateRowSummary(item, viewKey) {
+    var rec = item && typeof item === 'object' ? item : {};
+    if (rec.workbench_item) {
+      var unified = rec.workbench_item;
+      return { action: unified.status_label,
+        reason: normalizeString(unified.primary_reason)
+          + (asArray(unified.risk_flags)[0] ? ' · ' + unified.risk_flags[0] : ''),
+        scoreText: unified.formal_action && isRecommendationEvidenceFiniteNumber(unified.score)
+          ? '决策分 ' + formatNumber(unified.score, 0) : '' };
+    }
+    var key = normalizeString(viewKey || state.currentView).trim();
+    var evidence = getCandidateRecommendationEvidence(rec, state.data, key);
+    var evidenceSummary = evidence && typeof evidence.summary === 'object'
+      ? evidence.summary : {};
+    var decision = resolveDecisionEngine(rec, null);
+    var score = getDecisionScore(decision);
+    var viewContract = resolveViewDisplayContract(key, {});
+    var actionSemantics = normalizeString(viewContract.action_semantics).trim();
+    var formalContext = actionSemantics === 'formal';
+    var rowAction = resolvePageAction(
+      Object.assign({}, rec, { action_semantics: actionSemantics }),
+      key,
+    );
+    if (isIncidentReviewItem(rec)) {
+      return {
+        action: '仅追溯',
+        reason: userFacingEvidenceText(
+          evidenceScalarText(rec.page_action_reason) || '策略输入过期或未核验，仅供事故复盘。',
+          true,
+        ),
+        scoreText: '暂无正式决策分',
+      };
+    }
+    return {
+      action: rowAction,
+      reason: formalContext
+        ? getCandidatePublicReason(rec, evidenceSummary, key)
+        : userFacingEvidenceText(evidenceScalarText(rec.page_action_reason), false),
+      scoreText: score === null
+        ? '暂无正式决策分'
+        : '决策分 ' + formatNumber(score, 0),
+    };
+  }
+
   function renderCandidateList() {
     if (!nodes.candidateList) return;
     nodes.candidateList.innerHTML = '';
@@ -2890,7 +3075,7 @@
       });
     });
     var visibleItems = items.slice(0, state.candidateLimit);
-    var unifiedMainEmpty = state.currentView === 'main'
+    var unifiedMainEmpty = (state.currentView === 'main' || state.currentView === 'decision_focus')
       && !query
       && !state.sectorFilter
       && items.length === 0;
@@ -2931,26 +3116,9 @@
     for (var i = 0; i < visibleItems.length; i += 1) {
       var item = visibleItems[i] || {};
       var row = document.createElement('button');
-      var rankValue = safeNumber(item.view_rank, i + 1);
-      var rank = (safeNumber(rankValue, i + 1) || i + 1);
       var code = normalizeString(item.code || '');
       var name = normalizeString(item.name || '');
-      var sector = normalizeString(item.sector || '');
-      var change = getCandidateChangePct(item);
-      var rankClass = getRankClass(rank);
-      var changeCls = '';
-      if (change === null) {
-        changeCls = '';
-      } else if (change > 0) {
-        changeCls = 'is-up';
-      } else if (change < 0) {
-        changeCls = 'is-down';
-      }
-
-      var selectedTags = selectCandidateRowTags(item, state.currentView);
-      var tagHtml = selectedTags.map(function (tag) {
-        return makeChip(tag.text, tag.className);
-      }).join('');
+      var rowSummary = buildCandidateRowSummary(item, state.currentView);
 
       row.type = 'button';
       row.className = 'candidate-row';
@@ -2962,17 +3130,18 @@
       );
       row.innerHTML = ''
         + '<div class="candidate-row-main">'
-        + '  <span class="' + escapeHtml(rankClass) + '">' + escapeHtml((rank || i + 1).toString().padStart(2, '0')) + '</span>'
         + '  <div class="candidate-identity">'
         + '    <span class="candidate-name">' + escapeHtml(name || ('未命名 ' + String(code))) + '</span>'
         + '    <span class="candidate-code"> ' + escapeHtml(code) + '</span>'
-        + (sector ? ' <span class="candidate-code">· ' + escapeHtml(sector) + '</span>' : '')
         + '  </div>'
         + '</div>'
         + '<div class="candidate-row-meta">'
-        + '  <div class="candidate-tags">' + tagHtml + '</div>'
-        + '  <div class="candidate-price' + (changeCls ? ' ' + changeCls : '') + '">' + escapeHtml('当日 ' + (change === null ? '--' : formatPct(change, true))) + '</div>'
+        + '  <span class="candidate-row-action">' + escapeHtml(rowSummary.action) + '</span>'
+        + '  <span class="candidate-row-score">' + escapeHtml(rowSummary.scoreText) + '</span>'
         + '</div>'
+        + (rowSummary.reason
+          ? '<p class="candidate-row-reason">' + escapeHtml(rowSummary.reason) + '</p>'
+          : '')
       ;
       if (state.activeItem && state.activeItem.code === code) {
         row.classList.add('is-selected');
@@ -3514,7 +3683,13 @@
   function getCandidateRecommendationEvidence(item, data, viewKey) {
     var code = toCodeKey(item && item.code);
     if (!code) return null;
-    var rows = getEvidenceRowsForView(viewKey || state.currentView, data);
+    if (item && item.workbench_item) {
+      var selected = asArray(item.workbench_item.strategy_results).find(function (result) {
+        return result.strategy_id === item.workbench_item.evidence_view;
+      });
+      if (selected && selected.evidence) return selected.evidence;
+    }
+    var rows = getEvidenceRowsForView((item && item.evidence_view) || viewKey || state.currentView, data);
     for (var index = 0; index < rows.length; index += 1) {
       var row = rows[index];
       var summary = row && typeof row.summary === 'object' ? row.summary : {};
@@ -3559,13 +3734,13 @@
       + '</div>';
   }
 
-  function renderRecommendationEvidenceModule(number, title, section, body, fallbackDate, statusContext) {
+  function renderRecommendationEvidenceModule(number, title, section, body, fallbackDate, statusContext, hideMeta) {
     var titleId = 'evidence-module-' + normalizeString(number).trim();
     return '<section class="detail-section recommendation-evidence-module" data-evidence-module="'
       + escapeHtml(number) + '" aria-labelledby="' + escapeHtml(titleId) + '">'
       + '<h3 id="' + escapeHtml(titleId) + '" class="detail-section-title">' + escapeHtml(number + ' ' + title) + '</h3>'
       + '<div class="detail-section-body">' + body + '</div>'
-      + renderRecommendationEvidenceMeta(section, fallbackDate, statusContext)
+      + (hideMeta ? '' : renderRecommendationEvidenceMeta(section, fallbackDate, statusContext))
       + '</section>';
   }
 
@@ -3623,24 +3798,34 @@
     return age === 0 ? '当日' : recommendationEvidenceNumber(age) + ' 个交易日';
   }
 
-  function renderRecommendationEvidenceHeader(evidence, incidentReview) {
+  function renderRecommendationEvidenceHeader(evidence, incidentReview, actionSemantics) {
     var summary = evidence && typeof evidence.summary === 'object' ? evidence.summary : {};
     var code = normalizeString(evidence && (evidence.code || summary.code)).trim();
     var name = normalizeString(summary.name).trim() || code || '未命名';
     var sector = normalizeString(summary.sector).trim();
+    var semantics = normalizeString(actionSemantics || 'formal').trim();
     var action = incidentReview
       ? '仅追溯 · 评分不生效'
-      : (normalizeString(summary.formal_action).trim() || '本期未声明正式动作');
+      : (semantics === 'watch_only'
+        ? '仅观察'
+        : (semantics === 'upstream_only'
+          ? '仅作为上游候选'
+          : (normalizeString(summary.formal_action).trim() || '本期未声明正式动作')));
+    var actionPrefix = semantics === 'formal'
+      ? '正式动作：'
+      : (semantics === 'upstream_only' ? '页面身份：' : '页面动作：');
     return '<div class="detail-header recommendation-evidence-header">'
       + '<div><h2 class="detail-title">' + escapeHtml(name) + '</h2>'
       + '<p class="detail-subtitle">' + escapeHtml([code, sector].filter(Boolean).join(' · ')) + '</p></div>'
       + '<div class="decision-header-action"><span class="formal-action '
       + escapeHtml(incidentReview ? 'is-neutral' : getActionPillClass(action)) + '">'
-      + escapeHtml(incidentReview ? action : '正式动作：' + action) + '</span></div>'
+      + escapeHtml(incidentReview ? action : actionPrefix + action) + '</span></div>'
       + '</div>';
   }
 
   function renderRecommendationConclusion(evidence, incidentReview) {
+    var displayMode = normalizeString(arguments[2]).trim();
+    var actionSemantics = normalizeString(arguments[3] || 'formal').trim();
     var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
     var decision = evidence.decision_score && typeof evidence.decision_score === 'object' ? evidence.decision_score : {};
     var components = decision.components && typeof decision.components === 'object' ? decision.components : {};
@@ -3709,13 +3894,20 @@
       ['终局状态', evidenceBooleanText(summary.data_is_final, '已终局', '非终局', '终局状态未提供')],
       ['陈旧状态', evidenceBooleanText(summary.data_stale, '已陈旧', '未陈旧', '陈旧状态未提供')],
     ]);
-    var metaHtml = '<details class="evidence-meta-details">'
-      + '<summary class="evidence-meta-summary">数据存证与审计凭证</summary>'
-      + metaFacts
-      + '</details>';
-    var body = renderRecommendationEvidenceHeader(evidence, incidentReview)
-      + (normalizeString(summary.formal_action_reason).trim()
-        ? '<p class="recommendation-conclusion-reason">' + escapeHtml(summary.formal_action_reason) + '</p>' : '')
+    var primaryReasonPills = ['structure', 'position', 'sentiment'].reduce(function (result, key) {
+      var component = components[key] && typeof components[key] === 'object' ? components[key] : {};
+      recommendationEvidenceList(component.reasons).forEach(function (reason) {
+        if (result.indexOf(reason) === -1 && result.length < 3) result.push(reason);
+      });
+      return result;
+    }, []);
+    var primaryReasonHtml = primaryReasonPills.length
+      ? '<div class="reason-pills recommendation-primary-reasons">'
+        + primaryReasonPills.map(function (reason) {
+          return '<span class="reason-pill">' + escapeHtml(reason.trim()) + '</span>';
+        }).join('') + '</div>'
+      : '';
+    var scoreAuditHtml = '<div class="decision-score-audit">'
       + '<div class="recommendation-score-split">'
       + '<section><span>决策分</span><strong>'
       + escapeHtml(!incidentReview && isRecommendationEvidenceFiniteNumber(decisionScore) ? recommendationEvidenceNumber(decisionScore) : '本期未提供')
@@ -3726,11 +3918,27 @@
       + '</strong><small>'
       + escapeHtml(isRecommendationEvidenceFiniteNumber(rankScore) ? '排序分 ' + recommendationEvidenceNumber(rankScore) : '排序分未提供')
       + '</small><p>' + escapeHtml(normalizeString(rank.note).trim() || '仅用于当前池内排序') + '</p></section>'
-      + '</div>'
-      + primaryFacts
-      + (riskFacts
-        ? '<aside class="recommendation-evidence-risk-facts" aria-label="数据风险提示">' + riskFacts + '</aside>'
-        : '')
+      + '</div>' + primaryFacts + '</div>';
+    var metaHtml = '<details class="evidence-meta-details">'
+      + '<summary class="evidence-meta-summary">决策分构成与数据审计</summary>'
+      + scoreAuditHtml + metaFacts
+      + '</details>';
+    var headerHtml = renderRecommendationEvidenceHeader(
+      evidence, incidentReview, actionSemantics
+    );
+    var riskHtml = riskFacts
+      ? '<aside class="recommendation-evidence-risk-facts" aria-label="数据风险提示">' + riskFacts + '</aside>'
+      : '';
+    if (displayMode === 'primary') return headerHtml + riskHtml;
+    var body = (displayMode === 'audit' ? '' : headerHtml)
+      + (normalizeString(summary.formal_action_reason).trim()
+        ? '<p class="recommendation-conclusion-reason">' + escapeHtml(summary.formal_action_reason) + '</p>' : '')
+      + primaryReasonHtml
+      + '<div class="decision-score-inline"><span>决策分</span><strong>'
+      + escapeHtml(!incidentReview && isRecommendationEvidenceFiniteNumber(decisionScore)
+        ? recommendationEvidenceNumber(decisionScore) : '本期未提供')
+      + '</strong></div>'
+      + (displayMode === 'audit' ? '' : riskHtml)
       + metaHtml;
     return body;
   }
@@ -4241,6 +4449,128 @@
       }).join('') + '</div></details>';
   }
 
+  function renderDecisionWorkbenchBrief(evidence, incidentReview, actionSemantics, item) {
+    var value = evidence && typeof evidence === 'object' ? evidence : {};
+    var summary = value.summary && typeof value.summary === 'object' ? value.summary : {};
+    var prices = value.price_evidence && typeof value.price_evidence === 'object'
+      ? value.price_evidence : {};
+    var daily = value.daily_structure && typeof value.daily_structure === 'object'
+      ? value.daily_structure : {};
+    var sublevel = value.sublevel_30m && typeof value.sublevel_30m === 'object'
+      ? value.sublevel_30m : {};
+    var market = value.market_and_sector && typeof value.market_and_sector === 'object'
+      ? value.market_and_sector : {};
+    var risk = value.risk_and_next && typeof value.risk_and_next === 'object'
+      ? value.risk_and_next : {};
+    var semantics = normalizeString(actionSemantics || 'formal').trim();
+    var detailItem = item && typeof item === 'object' ? item : {};
+    var action = incidentReview
+      ? '仅追溯'
+      : (semantics === 'watch_only'
+        ? '仅观察'
+        : (semantics === 'upstream_only'
+          ? '仅作为上游候选'
+          : (evidenceScalarText(summary.formal_action) || '本期未声明正式动作')));
+    var isRecommendation = semantics === 'formal'
+      && /推荐|可上车|买入/.test(action) && !/不推荐|拒绝/.test(action);
+    var isRejection = semantics === 'formal' && (/不推荐|拒绝|排除/.test(action)
+      || normalizeString(action).toLowerCase() === 'reject');
+    var why = [];
+    function addWhy(label, text, target) {
+      var normalized = evidenceScalarText(text);
+      if (!normalized || why.some(function (item) { return item.text === normalized; })) return;
+      why.push({ label: label, text: normalized, target: target });
+    }
+    if (semantics === 'formal') {
+      addWhy('正式理由', summary.formal_action_reason, 'formal-action');
+    } else {
+      addWhy('研究说明', detailItem.page_action_reason, 'page-action');
+    }
+    addWhy('日线', daily.summary, 'daily-chart');
+    addWhy('30分钟', sublevel.reason || sublevel.summary, 'sublevel-summary');
+    addWhy('大盘/板块', market.summary, 'market-decision-bar');
+    why = why.slice(0, 3);
+    if (incidentReview) {
+      why = [{
+        label: '事故复盘',
+        text: '原始判定和评分不生效，仅用于追溯数据故障影响。',
+        target: 'formal-action',
+      }];
+    }
+    if (!why.length && isRejection) {
+      why.push({ label: '正式理由', text: '拒绝原因待核验', target: 'formal-action' });
+    }
+
+    var missingPrices = [];
+    if (evidencePositiveNumber(prices.reference_price) === null) missingPrices.push('参考价');
+    if (evidencePositiveNumber(prices.invalidation_price) === null) missingPrices.push('失效位');
+    var dataRisks = [];
+    var summaryStatus = evidenceScalarText(summary.status).toLowerCase();
+    if (!summaryStatus) dataRisks.push('证据状态未提供');
+    else if (summaryStatus !== 'available') dataRisks.push('证据状态异常：' + summaryStatus);
+    if (summary.data_stale === true) dataRisks.push('数据陈旧');
+    else if (summary.data_stale !== false) dataRisks.push('陈旧状态未提供');
+    if (summary.data_is_final === false) dataRisks.push('非终局');
+    else if (summary.data_is_final !== true) dataRisks.push('终局状态未提供');
+    var health = evidenceScalarText(summary.data_health);
+    if (!health) {
+      dataRisks.push('数据健康未提供');
+    } else if (['verified', 'fresh', 'available'].indexOf(health.toLowerCase()) === -1) {
+      dataRisks.push('数据健康异常：' + health);
+    }
+    var executionText = '';
+    if (incidentReview) {
+      executionText = '事故复盘不形成当前执行边界';
+    } else if (semantics === 'watch_only') {
+      executionText = '研究观察，不形成正式执行边界';
+    } else if (semantics === 'upstream_only') {
+      executionText = '上游候选身份，不形成正式执行边界';
+    } else if (dataRisks.length) {
+      executionText = '当前不可作为正式可执行结果：' + dataRisks.join('、');
+    } else if (isRecommendation && missingPrices.length) {
+      executionText = '关键价格待确认：缺少' + missingPrices.join('、');
+    } else if (isRecommendation) {
+      executionText = '关键价格完整，可按正式动作核验执行';
+    } else if (isRejection) {
+      executionText = '正式动作为不推荐，不形成上车边界';
+    } else {
+      executionText = '等待正式确认，不按推荐动作执行';
+    }
+
+    var nextItems = recommendationEvidenceList(
+      risk.next_confirmation && risk.next_confirmation.items
+    ).slice(0, 3);
+    var invalidationItems = recommendationEvidenceList(
+      risk.invalidation_conditions && risk.invalidation_conditions.items
+    ).slice(0, 3);
+    function renderItems(items, emptyText) {
+      return items.length
+        ? '<ul>' + items.map(function (item) {
+          return '<li>' + escapeHtml(item) + '</li>';
+        }).join('') + '</ul>'
+        : '<p>' + escapeHtml(emptyText) + '</p>';
+    }
+    var whyHtml = why.length
+      ? '<ul>' + why.map(function (item) {
+        return '<li data-evidence-target="' + escapeHtml(item.target) + '"><b>'
+          + escapeHtml(item.label) + '</b><span>' + escapeHtml(item.text) + '</span></li>';
+      }).join('') + '</ul>'
+      : '<p>本期未提供可核验的推荐理由</p>';
+    var actionPrefix = semantics === 'formal'
+      ? '正式动作：'
+      : (semantics === 'upstream_only' ? '页面身份：' : '页面动作：');
+    return '<section class="decision-workbench-brief" aria-label="单股决策链">'
+      + '<section><span class="decision-workbench-brief-label">为什么</span>' + whyHtml + '</section>'
+      + '<section><span class="decision-workbench-brief-label">可执行性</span>'
+      + '<strong>' + escapeHtml(actionPrefix + action) + '</strong><p>'
+      + escapeHtml(executionText) + '</p></section>'
+      + '<section><span class="decision-workbench-brief-label">下一确认</span>'
+      + renderItems(nextItems, '下一确认待补充') + '</section>'
+      + '<section><span class="decision-workbench-brief-label">失效</span>'
+      + renderItems(invalidationItems, '失效条件待补充') + '</section>'
+      + '</section>';
+  }
+
   function buildChartPlaceholder(item) {
     var helpText = isIncidentReviewItem(item)
       ? '图钉、信号与参考线均为事故前原始证据，仅供追溯；信号日收盘仍使用已核验日线。'
@@ -4250,14 +4580,79 @@
       + '  <h3 class="detail-section-title">K线图表</h3>'
       + '  <div class="chart-panel">'
       + '    <div class="chart-toolbar"><div class="chart-help">' + escapeHtml(helpText) + '</div>'
-      + '      <div class="chart-layer-switcher" id="chartLayerSwitcher" aria-label="K线图层"></div></div>'
+      + '      <div class="chart-layer-switcher" data-chart-layer-switcher aria-label="K线图层"></div></div>'
       + '    <div class="chart-annotation-lane hidden" id="chartAnnotationLane" aria-live="polite"></div>'
       + '    <div id="chartCanvas" class="chart-canvas"></div>'
       + '  </div>'
       + '</div>';
   }
 
+  function renderStrategyEvidence(strategy) {
+    var evidence = strategy.evidence || {};
+    var reportDate = getBootstrap().pageDate;
+    var body = renderRecommendationEvidenceModule('01', '决策与数据审计', evidence.summary || {},
+      renderRecommendationConclusion(evidence, !!(strategy.candidate || {}).incident_review_only, 'audit', strategy.action_semantics), reportDate);
+    var modules = [
+      ['02', '价格与关键位置', 'price_evidence', function () { return renderRecommendationPriceEvidence(evidence); }],
+      ['03', '日线结构', 'daily_structure', renderDailyStructureEvidence],
+      ['04', '30分钟确认', 'sublevel_30m', renderSublevelEvidence],
+      ['05', '量价与资金', 'volume_and_capital', renderVolumeCapitalEvidence],
+      ['06', '市场与板块共振', 'market_and_sector', renderMarketSectorEvidence],
+      ['07', '风险与下一步', 'risk_and_next', renderRiskAndNextEvidence],
+      ['08', '历史验证与回测提醒', 'historical_validation', renderHistoricalValidation],
+    ];
+    modules.forEach(function (module) {
+      var section = evidence[module[2]] || {};
+      body += renderRecommendationEvidenceModule(module[0], module[1], section, module[3](section), reportDate,
+        module[2] === 'historical_validation' ? 'historical_validation' : undefined);
+    });
+    return '<details class="candidate-research-details"><summary>查看本策略完整证据</summary>'
+      + body + renderMainRiseClue(evidence.main_rise_clue || {})
+      + renderRecommendationEvidenceAudit(evidence, reportDate) + '</details>';
+  }
+
+  function buildUnifiedCandidateDetail(item) {
+    var value = item.workbench_item;
+    function list(values, fallback) {
+      return asArray(values).length ? '<ul>' + values.slice(0, 3).map(function (v) {
+        return '<li>' + escapeHtml(v) + '</li>';
+      }).join('') + '</ul>' : '<p>' + escapeHtml(fallback) + '</p>';
+    }
+    var blockers = asArray(value.blocking_reasons || value.blocked_reasons);
+    var execution = value.is_executable
+      ? '本期条件已完整；盘后仅供后续核验，交易前需重新确认有效性。'
+      : (blockers.length ? blockers.join('、') : '仅作观察，等待明确条件。');
+    if (value.watch_reference_price) execution += ' 观察参考位：' + value.watch_reference_price;
+    var strategies = asArray(value.strategy_results).map(function (strategy) {
+      var contract = strategy.contract || {};
+      return '<section><strong>' + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
+        + ' · ' + escapeHtml(strategy.formal_action || '研究观察') + '</strong>'
+        + '<p>' + escapeHtml(strategy.primary_reason || '') + '</p>'
+        + (strategy.role === 'formal' ? '<p>参考价 ' + escapeHtml(contract.reference_price || '待补充')
+          + ' · 失效位 ' + escapeHtml(contract.invalidation_price || '待补充')
+          + ' · 周期 ' + escapeHtml(contract.intended_horizon || '未声明') + '</p>' : '')
+        + renderStrategyEvidence(strategy) + '</section>';
+    }).join('');
+    var evidence = getCandidateRecommendationEvidence(item, state.data) || {};
+    return '<div class="merged-candidate-detail unified-candidate-detail"><header class="unified-stock-head">'
+      + '<h2>' + escapeHtml(value.name) + ' <small>' + escapeHtml(value.code) + '</small></h2>'
+      + '<strong>' + escapeHtml(value.status_label) + '</strong>'
+      + (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>'
+        : '<span>' + (asArray(value.strategy_results).some(function (s) { return s.role === 'formal'; })
+          ? '正式策略意见待核验' : '页面身份：研究观察') + '</span>')
+      + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
+      + '</header>' + buildChartPlaceholder(item)
+      + '<section class="decision-workbench-brief" aria-label="单股决策链">'
+      + '<section><strong>为什么关注</strong><p>' + escapeHtml(value.primary_reason) + '</p></section>'
+      + '<section><strong>当前能否执行</strong><p>' + escapeHtml(execution) + '</p></section>'
+      + '<section><strong>下一确认</strong>' + list(value.next_confirmation, '具体确认条件待补充') + '</section>'
+      + '<section><strong>失效条件</strong>' + list(value.invalidation, '具体失效条件待补充') + '</section></section>'
+      + '<details class="candidate-research-details"><summary>来源策略与完整证据</summary>'
+      + strategies + renderRecommendationEvidenceAudit(evidence, getBootstrap().pageDate) + '</details></div>';
+  }
+
   function buildMergedCandidateDetail(item, raw) {
+    if (item && item.workbench_item) return buildUnifiedCandidateDetail(item);
     var evidence = getCandidateRecommendationEvidence(item, state.data);
     if (!evidence) {
       return '<div class="detail-empty-wrap merged-candidate-detail">'
@@ -4268,6 +4663,9 @@
     var projection = getRecommendationEvidenceProjection(state.data) || {};
     var reportDate = normalizeString(projection.report_date).trim();
     var incidentReview = isIncidentReviewItem(item);
+    var actionSemantics = resolveViewDisplayContract(
+      state.currentView, {}
+    ).action_semantics;
     var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
     var price = evidence.price_evidence && typeof evidence.price_evidence === 'object' ? evidence.price_evidence : {};
     var daily = evidence.daily_structure && typeof evidence.daily_structure === 'object' ? evidence.daily_structure : {};
@@ -4278,9 +4676,28 @@
     var risk = evidence.risk_and_next && typeof evidence.risk_and_next === 'object' ? evidence.risk_and_next : {};
     var validation = evidence.historical_validation && typeof evidence.historical_validation === 'object' ? evidence.historical_validation : {};
     return '<div class="detail-empty-wrap merged-candidate-detail">'
-      + renderRecommendationEvidenceModule('01', '推荐结论', summary, renderRecommendationConclusion(evidence, incidentReview), reportDate)
-      + renderRecommendationEvidenceModule('02', '价格与关键位置', price, renderRecommendationPriceEvidence(evidence), reportDate)
+      + renderRecommendationEvidenceModule(
+        '01', '推荐结论', summary,
+        renderRecommendationConclusion(
+          evidence, incidentReview, 'primary', actionSemantics
+        ), reportDate,
+        null, true,
+      )
       + buildChartPlaceholder(item)
+      + renderDecisionWorkbenchBrief(
+        evidence, incidentReview, actionSemantics, item
+      )
+      + '<details class="candidate-research-details">'
+      + '<summary><span>完整证据与审计</span><small>价格、结构、30分钟、量价、市场、风险与历史验证</small></summary>'
+      + '<div class="candidate-research-details-body">'
+      + renderRecommendationEvidenceModule(
+        '01A', '决策分与数据审计', summary,
+        renderRecommendationConclusion(
+          evidence, incidentReview, 'audit', actionSemantics
+        ), reportDate,
+        null, true,
+      )
+      + renderRecommendationEvidenceModule('02', '价格与关键位置', price, renderRecommendationPriceEvidence(evidence), reportDate)
       + renderRecommendationEvidenceModule('03', '日线结构', daily,
         renderDailyStructureEvidence(daily) + renderMainRiseClue(mainRise), reportDate)
       + renderRecommendationEvidenceModule('04', '30分钟确认', sublevel, renderSublevelEvidence(sublevel), reportDate)
@@ -4298,6 +4715,7 @@
         'historical_validation',
       )
       + renderRecommendationEvidenceAudit(evidence, reportDate)
+      + '</div></details>'
       + '</div>';
   }
 
@@ -4306,6 +4724,7 @@
     if (!target) return;
 
     if (!item) {
+      if (state.currentView === 'decision_focus') { target.innerHTML = ''; return; }
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       target.innerHTML = state.currentView === 'main'
         ? '<div class="detail-empty"><strong>本期未选出推荐票</strong></div>'
@@ -4317,6 +4736,7 @@
     target.innerHTML = buildMergedCandidateDetail(item, raw);
     state.chartMount = target.querySelector('#chartCanvas');
     state.chartAnnotationLane = target.querySelector('#chartAnnotationLane');
+    state.chartLayerSwitcher = target.querySelector('[data-chart-layer-switcher]');
     renderChart(raw, item);
   }
 
@@ -4637,7 +5057,7 @@
   }
 
   function renderChartLayerSwitcher(raw, workspaceItem, chartEvidence) {
-    var mount = document.getElementById('chartLayerSwitcher');
+    var mount = state.chartLayerSwitcher;
     if (!mount) return;
     var labels = { decision: '决策位', structure: '结构', trend: '趋势' };
     var layers = getAvailableChartLayers(raw, chartEvidence);
@@ -4687,7 +5107,7 @@
     var volumes = asArray(raw.volumes);
     var macd = asArray(raw.macd_hist);
     var minLen = Math.min(dates.length, opens.length, highs.length, lows.length, closes.length);
-    if (minLen < 2) {
+    if (!hasChartData(raw)) {
       renderChartAnnotationLane([]);
       state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
       return;
@@ -7702,7 +8122,12 @@
   }
 
   function syncViewport() {
+    var wasMobile = state.isMobile;
     state.isMobile = isMobileViewport();
+    if (wasMobile && !state.isMobile && nodes.detailPanel && state.activeItem) {
+      closeMobileDetailDrawer();
+      renderCandidateDetail(state.activeItem);
+    }
   }
 
   function getQueryParam(name) {
@@ -7808,7 +8233,8 @@
       return;
     }
 
-    state.workspace = ws;
+    state.workspace = Object.assign({}, ws);
+    if (getDecisionWorkbench(data)) state.workspace.default_view = 'decision_focus';
     state.currentView = ws.default_view || state.currentView;
     if (!state.currentView) state.currentView = 'main';
   }
@@ -7836,6 +8262,7 @@
       normalizeWorkspace(state.data);
       state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
       renderHeader();
+      renderDecisionOverview();
       renderFundingMainlineStrip();
       renderDirectionQuickSummary(state.data);
       renderHistoricalReconstruction(state.data);

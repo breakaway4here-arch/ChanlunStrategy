@@ -11,7 +11,7 @@ from chanlun.preclose_notify import (
 )
 from preclose_run import run_preclose_once
 from scripts.preclose_reconcile import run_reconciliation_once
-from tests.test_preclose_compare import _formal_report
+from tests.test_preclose_compare import _formal_report, _preclose_snapshot
 from tests.test_preclose_pipeline import _components, _config, _market_inputs
 
 
@@ -70,6 +70,72 @@ def _fingerprint(path):
 
 
 class PrecloseEndToEndTests(unittest.TestCase):
+    def test_reconciliation_formal_pending_publish_no_notification(self):
+        worker = MemoryPrecloseWorker()
+        post_calls = []
+
+        def post(_url, *, json, timeout):
+            del timeout
+            post_calls.append(dict(json))
+            return FakeResponse({"success": True, "code": 1000})
+
+        def publisher(reconciliation, **kwargs):
+            return publish_reconciliation_and_notify(
+                reconciliation,
+                api_base=kwargs["api_base"],
+                write_token=kwargs["write_token"],
+                wxpusher_app_token=kwargs["wxpusher_app_token"],
+                wxpusher_uid=kwargs["wxpusher_uid"],
+                wecom_webhook=kwargs["wecom_webhook"],
+                outbox=kwargs["outbox"],
+                notify=kwargs["notify"],
+                put=worker.put,
+                get=worker.get,
+                post=post,
+            )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            preclose_root = base / "preclose"
+            day_root = preclose_root / TRADE_DATE
+            day_root.mkdir(parents=True)
+            snapshot = _preclose_snapshot()
+            (day_root / "snapshot.json").write_text(
+                json.dumps(snapshot, ensure_ascii=False, sort_keys=True),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.test\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n"
+                "WECOM_BOT_WEBHOOK=https://wecom.test/example\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+
+            result = run_reconciliation_once(
+                TRADE_DATE,
+                root=preclose_root,
+                docs_dir=docs,
+                env_file=env_file,
+                notify=True,
+                validator=lambda *_args: True,
+                publisher=publisher,
+            )
+
+            self.assertEqual(result["status"], "formal_pending")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(worker.reconciliation["snapshot_id"], snapshot["snapshot_id"])
+            self.assertEqual(
+                worker.reconciliation["preclose_content_hash"],
+                snapshot["content_hash"],
+            )
+            self.assertEqual(len(post_calls), 0)
+            self.assertFalse((day_root / "reconciliation-outbox.jsonl").exists())
+
     def test_frozen_snapshot_publish_reconcile_and_notify_preserve_formal_files(self):
         worker = MemoryPrecloseWorker()
         provider_calls = []

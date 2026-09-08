@@ -347,6 +347,7 @@ class PrecloseCompareTests(unittest.TestCase):
 
             self.assertLess(elapsed, 0.18)
             self.assertEqual(result["status"], "formal_pending_timeout")
+            self.assertEqual(result.get('notification_status'), 'not_sent_deadline')
             self.assertEqual(result["exit_code"], 0)
             self.assertEqual(published, [])
             self.assertFalse((day_root / "reconcile.lock").exists())
@@ -422,6 +423,95 @@ class PrecloseCompareTests(unittest.TestCase):
         self.assertEqual(len(publisher_budgets), 1)
         self.assertGreater(publisher_budgets[0], 0)
         self.assertLess(publisher_budgets[0], validator_budgets[0])
+
+    def test_reconcile_skips_notifications_when_formal_pending(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            (docs / "data").mkdir(parents=True)
+            cache = base / "preclose"
+            day_root = cache / TRADE_DATE
+            day_root.mkdir(parents=True)
+            (day_root / "snapshot.json").write_text(
+                json.dumps(_preclose_snapshot(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.example\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+            publishes = []
+
+            def publisher(reconciliation, **kwargs):
+                publishes.append(kwargs)
+                return {"publish": {"success": True}, "notifications": {}}
+
+            result = run_reconciliation_once(
+                TRADE_DATE,
+                root=cache,
+                docs_dir=docs,
+                env_file=env_file,
+                validator=lambda *_args: True,
+                publisher=publisher,
+                notify=True,
+            )
+
+            self.assertEqual(result["status"], "formal_pending")
+            self.assertEqual(result["exit_code"], 0)
+            self.assertEqual(len(publishes), 1)
+            self.assertFalse(publishes[0]["notify"])
+
+    def test_reconcile_requires_all_configured_channels_for_notify_success(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            (docs / "data").mkdir(parents=True)
+            (docs / "data" / (TRADE_DATE + ".json")).write_text(
+                json.dumps(_formal_report(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            cache = base / "preclose"
+            day_root = cache / TRADE_DATE
+            day_root.mkdir(parents=True)
+            (day_root / "snapshot.json").write_text(
+                json.dumps(_preclose_snapshot(), ensure_ascii=False),
+                encoding="utf-8",
+            )
+            env_file = base / "preclose.env"
+            env_file.write_text(
+                "PRECLOSE_API_BASE=https://preclose.example\n"
+                "PRECLOSE_WRITE_TOKEN=write-token\n"
+                "WXPUSHER_APP_TOKEN=app-token\n"
+                "WXPUSHER_UID=uid-1\n",
+                encoding="utf-8",
+            )
+            env_file.chmod(0o600)
+
+            def publisher(reconciliation, **_kwargs):
+                return {
+                    "publish": {"success": True},
+                    "notifications": {
+                        "wxpusher": {"success": True},
+                        "wecom": {"success": False},
+                    },
+                }
+
+            result = run_reconciliation_once(
+                TRADE_DATE,
+                root=cache,
+                docs_dir=docs,
+                env_file=env_file,
+                validator=lambda *_args: True,
+                publisher=publisher,
+                notify=True,
+            )
+
+            self.assertEqual(result["exit_code"], 1)
 
     def test_reconcile_publisher_error_records_failure_and_releases_lock(self):
         with tempfile.TemporaryDirectory() as temp_dir:

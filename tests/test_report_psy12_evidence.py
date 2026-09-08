@@ -4,6 +4,7 @@ import copy
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -64,6 +65,29 @@ def _report(trade_date="2026-08-28"):
 
 class ReportPsy12EvidenceTests(unittest.TestCase):
 
+    def _build_ws_payload(self, code, action="可上车"):
+        return {
+            "views": {
+                "main": [
+                    {
+                        "code": code,
+                        "name": "样例{}".format(code),
+                        "opportunity_score": 88,
+                        "formal_decision_contract": {
+                            "action": action,
+                            "action_reason": "可执行动作",
+                            "reference_price": 10.0,
+                            "intended_horizon": 2,
+                            "position_band": 0.2,
+                            "pressure_price": 9.5,
+                            "invalidation_price": 8.5,
+                        },
+                    }
+                ]
+            },
+            "as_of": "2026-08-27T15:30:00+08:00",
+        }
+
     def test_bootstrap_computes_real_progress_without_changing_formal_payload(self):
         report = _report()
         daily = build_full_daily_projection(report)
@@ -98,6 +122,69 @@ class ReportPsy12EvidenceTests(unittest.TestCase):
         self.assertEqual(
             production_digest(build_formal_output_projection(report)),
             digest_before,
+        )
+
+    def test_bootstrap_previous_comparison_uses_full_projection_when_available(self):
+        from tests.test_unified_workbench_contract import inputs
+        def fixture(day, code):
+            report, workspace, evidence = inputs()
+            report['date'] = day
+            report['data_quality']['as_of'] = day + 'T15:05:00+08:00'
+            workspace['views']['main'][0]['code'] = code
+            workspace['views']['main'][0]['data_status']['latest_date'] = day
+            evidence['report_date'] = day
+            evidence['views']['main'][0]['code'] = code
+            for section in evidence['views']['main'][0].values():
+                if isinstance(section, dict): section['as_of'] = day
+            return dict(report, workspace=workspace), evidence
+        daily, current_evidence = fixture('2026-08-28', '600100')
+        report = daily
+        previous_payload, previous_evidence = fixture('2026-08-27', '600200')
+        previous_date = "2026-08-27"
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            (data_dir / f"{previous_date}.json").write_text(
+                json.dumps(previous_payload, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            with patch('chanlun.report_generator.build_recommendation_evidence_projection',
+                       side_effect=lambda source, *_args, **_kwargs: current_evidence if source['date'] == '2026-08-28' else previous_evidence) as builder:
+                bootstrap = _build_report_bootstrap(report, daily, '', '', '', '',
+                    historical_reports={'2026-08-27': {}}, output_dir=tmpdir)
+                self.assertEqual([call.args[0]['date'] for call in builder.call_args_list],
+                                 ['2026-08-28', '2026-08-27'])
+
+        changes = bootstrap["decisionWorkbench"]["changes"]
+        self.assertEqual(changes["status"], "available")
+        self.assertEqual(changes["previous_report_date"], previous_date)
+        self.assertEqual(changes["previous_phase"], "formal")
+        self.assertEqual(changes["added"], ["600100"])
+        self.assertEqual(changes["removed"], ["600200"])
+
+    def test_bootstrap_previous_comparison_unavailable_without_full_projection(self):
+        report = _report("2026-08-28")
+        daily = {
+            "date": "2026-08-28",
+            "workspace": self._build_ws_payload("600100", "可上车"),
+        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            bootstrap = _build_report_bootstrap(
+                report,
+                daily,
+                "",
+                "",
+                "",
+                "",
+                historical_reports={"2026-08-27": {}},
+                output_dir=tmpdir,
+            )
+
+        self.assertEqual(
+            bootstrap["decisionWorkbench"]["changes"].get("status"),
+            "comparison_unavailable",
         )
 
     def test_legacy_shadow_gets_html_only_non_promotion_contract(self):

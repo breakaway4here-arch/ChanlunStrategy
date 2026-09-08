@@ -663,15 +663,15 @@ assert(!tags.some(function (tag) { return tag.text.includes('internal_reason_cod
 """,
         )
 
-    def test_candidate_row_meta_separates_price_from_identity(self):
+    def test_candidate_row_meta_separates_formal_action_and_score_from_identity(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)
         renderer = JS[start:end]
         self.assertIn('class="candidate-row-meta"', renderer)
-        self.assertLess(
-            renderer.index('class="candidate-row-meta"'),
-            renderer.index('candidate-price'),
-        )
+        self.assertIn('class="candidate-row-action"', renderer)
+        self.assertIn('class="candidate-row-score"', renderer)
+        self.assertIn('class="candidate-row-reason"', renderer)
+        self.assertNotIn('candidate-price', renderer)
         desktop_start = CSS.index(".candidate-row {")
         desktop_end = CSS.index(".candidate-row:hover", desktop_start)
         desktop_rules = CSS[desktop_start:desktop_end]
@@ -807,7 +807,12 @@ const html = globalThis.__auxTest.build({
 }, {});
 assert((html.match(/formal-action/g) || []).length === 1, 'merged detail duplicated the formal action');
 assert(html.includes('class="chart-panel"'), 'K-line workspace missing');
-assert((html.match(/data-evidence-module=/g) || []).length === 8, 'eight evidence modules missing');
+assert((html.match(/data-evidence-module=/g) || []).length === 9,
+  'primary conclusion plus eight research evidence modules missing');
+assert(html.includes('data-evidence-module="01A"'), 'decision score audit module missing from research layer');
+assert(html.includes('class="candidate-research-details"')
+  && !html.includes('class="candidate-research-details" open'),
+  'full evidence layer is not closed by default');
 assert(html.includes('下一确认') && html.includes('取消或降级'), 'risk and next-step semantics incomplete');
 assert(html.includes('class="evidence-audit-drawer"'), 'evidence and audit drawer missing');
 """,
@@ -2917,10 +2922,13 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         start = JS.index("function buildAppShell")
         end = JS.index("function getReportDataStatus", start)
         shell = JS[start:end]
-        self.assertLess(
-            shell.index('id="directionQuickSummary"'),
-            shell.index('class="workspace today-workspace"'),
-        )
+        workspace = shell.index('class="workspace today-workspace"')
+        market_bar = shell.index('id="marketDecisionBar"')
+        direction = shell.index('id="directionQuickSummary"')
+        tabs = shell.index('id="workspaceTabs"')
+        self.assertLess(workspace, market_bar)
+        self.assertLess(market_bar, direction)
+        self.assertLess(direction, tabs)
         for token in (
             'id="candidateSearch"',
             'id="candidateCount"',

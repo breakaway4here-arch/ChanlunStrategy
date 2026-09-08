@@ -1740,7 +1740,7 @@ def _project_daily_structure(
     summary = consistent(
         "summary",
         bp_and_sources,
-        ("summary", "reason", "primary_reason", "startup_reason"),
+        ("summary", "reason", "structural_reason", "startup_reason"),
         _normalize_text_declaration,
     )
     stage = consistent(

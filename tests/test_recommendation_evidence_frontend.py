@@ -1,4 +1,4 @@
-"""RED contracts for the eight-module recommendation evidence detail.
+"""Contracts for the chart-centered recommendation evidence detail.
 
 These tests intentionally target the HTML-only evidence surface before the
 production renderer is implemented.  Keep them separate from the existing
@@ -12,7 +12,7 @@ from tests.test_auxiliary_frontend import _assert_node_contract
 
 
 class TestRecommendationEvidenceDetailContract(unittest.TestCase):
-    def test_detail_renders_eight_modules_in_order_with_chart_between_price_and_daily(self):
+    def test_detail_renders_chart_and_decision_brief_before_research_modules(self):
         _assert_node_contract(
             self,
             "{ detail: buildMergedCandidateDetail, state: state }",
@@ -73,7 +73,13 @@ assert(positions.every(function (position, index) {
   return index === 0 || position > positions[index - 1];
 }), '八模块顺序未按 01-08 固定');
 const chart = html.indexOf('class="chart-panel"');
-assert(chart > positions[1] && chart < positions[2], '图表没有位于 02 与 03 之间');
+const brief = html.indexOf('class="decision-workbench-brief"');
+const research = html.indexOf('class="candidate-research-details"');
+const audit = html.indexOf('data-evidence-module="01A"');
+assert(positions[0] < chart && chart < brief && brief < research,
+  '首层结论、图表、决策链和研究层顺序不正确');
+assert(research < audit && audit < positions[1] && positions[1] < positions[2],
+  '决策分审计与 02-08 模块没有留在研究层');
 """,
         )
 
