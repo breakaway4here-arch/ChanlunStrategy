@@ -58,30 +58,30 @@ class FakeResponse:
 
 
 class PrecloseNotifyTests(unittest.TestCase):
-    def test_simple_message_contract_and_three_per_pool_cap(self):
+    def test_simple_message_contract_and_three_total_cap(self):
         message = format_preclose_message(_snapshot())
 
-        self.assertEqual(message, "\n".join([
-            "【14:45预跑】14:56:30前有效",
-            "主推：宁波方正 300998｜参考26.86；第四只不展示 600001｜参考10.00；第二只 600002｜参考11.00",
-            "H4 T+3：本期未选出推荐票",
-            "加速：新朋股份 002328｜参考7.61",
-            "14:57后不再下单",
-        ]))
+        self.assertIn('14:45预跑', message)
+        self.assertIn('主推预跑参考26.86', message)
+        self.assertIn('14:56:30前有效', message)
+        self.assertIn('14:57后不再下单', message)
+        self.assertEqual(message.count('300998'), 1)
+        self.assertNotIn('002328', message)
         self.assertNotIn("第三只", message)
         for forbidden in (
             "评分", "PSY", "新闻", "reason_code", "校验", "仓位", "最高可买价", "internal"
         ):
             self.assertNotIn(forbidden, message)
 
-    def test_empty_failed_and_timeout_all_use_one_empty_message(self):
+    def test_empty_and_failed_snapshots_have_distinct_messages(self):
         for status in ("empty", "failed", "deadline_exceeded"):
             snapshot = _snapshot()
             snapshot["status"] = status
             snapshot["pools"] = {"main": [], "h4_t3": [], "acceleration": []}
             self.assertEqual(
                 format_preclose_message(snapshot),
-                "【14:45预跑】\n本期未选出推荐票",
+                "【14:45预跑】\n本期未选出推荐票" if status == 'empty' else
+                '【14:45预跑】\n预跑结果暂不可用，本次不提供候选；请查看页面状态。',
             )
 
     def test_wxpusher_requires_http_and_business_success(self):
@@ -263,17 +263,40 @@ class PrecloseNotifyTests(unittest.TestCase):
             "今日正式结果尚未生成，暂不继续参考预跑清单",
         ]))
 
-    def test_reconciliation_idempotency_uses_trade_date_formal_hash_and_channel(self):
+    def test_reconciliation_idempotency_ignores_snapshot_and_hash_noise(self):
         reconciliation = {
             "trade_date": "2026-08-27",
             "snapshot_id": "preclose:2026-08-27:abc",
             "preclose_content_hash": "a" * 64,
             "formal_content_hash": "f" * 64,
+            "content_hash": "c" * 64,
             "status": "unchanged",
             "pools": {
-                "main": {"retained": []},
+                "main": {
+                    "retained": [
+                        {"name": "A股", "code": "600001", "decision": "observe"},
+                        {"name": "B股", "code": "600002", "decision": "recommend"},
+                    ]
+                },
                 "h4_t3": {"retained": []},
-                "acceleration": {"retained": []},
+                "acceleration": {"retained": [{"name": "C股", "code": "600003", "decision": "recommend"}]},
+            },
+        }
+        reordered = {
+            **reconciliation,
+            "snapshot_id": "preclose:2026-08-27:def",
+            "preclose_content_hash": "a" * 63 + "b",
+            "formal_content_hash": "f" * 63 + "b",
+            "content_hash": "c" * 63 + "d",
+            "pools": {
+                "main": {
+                    "retained": [
+                        {"name": "B股", "code": "600002", "decision": "recommend"},
+                        {"name": "A股", "code": "600001", "decision": "observe"},
+                    ]
+                },
+                "h4_t3": {"retained": []},
+                "acceleration": {"retained": [{"name": "C股", "code": "600003", "decision": "recommend"}]},
             },
         }
         calls = []
@@ -298,9 +321,8 @@ class PrecloseNotifyTests(unittest.TestCase):
                 wxpusher_uid="uid-1",
                 post=post,
             )
-            changed_hash = dict(reconciliation, formal_content_hash="e" * 64)
             changed = send_reconciliation_notifications(
-                changed_hash,
+                reordered,
                 outbox=outbox,
                 wxpusher_app_token="app-token",
                 wxpusher_uid="uid-1",
@@ -309,8 +331,194 @@ class PrecloseNotifyTests(unittest.TestCase):
 
         self.assertTrue(first["wxpusher"]["success"])
         self.assertEqual(repeated["wxpusher"]["status"], "already_sent")
-        self.assertTrue(changed["wxpusher"]["success"])
+        self.assertEqual(changed["wxpusher"]["status"], "already_sent")
+        self.assertEqual(len(calls), 1)
+
+    def test_reconciliation_idempotency_uses_phase_event_type_and_summary_hash(self):
+        reconciliation = {
+            "trade_date": "2026-08-27",
+            "snapshot_id": "preclose:2026-08-27:abc",
+            "preclose_content_hash": "a" * 64,
+            "formal_content_hash": "f" * 64,
+            "status": "changed",
+            "pools": {
+                "main": {
+                    "retained": [{"name": "A股", "code": "600001", "decision": "observe"}],
+                    "added_after_close": [{"name": "B股", "code": "600002", "decision": "recommend"}],
+                    "removed_after_close": [{"name": "C股", "code": "600003", "decision": "observe"}],
+                },
+                "h4_t3": {"retained": [], "added_after_close": [], "removed_after_close": []},
+                "acceleration": {"retained": [], "added_after_close": [], "removed_after_close": []},
+            },
+        }
+        calls = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outbox = NotificationOutbox(Path(temp_dir) / "outbox.jsonl")
+
+            def post(*args, **kwargs):
+                calls.append((args, kwargs))
+                return FakeResponse(payload={"success": True, "code": 1000})
+
+            first = send_reconciliation_notifications(
+                reconciliation,
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                post=post,
+            )
+            second = send_reconciliation_notifications(
+                dict(reconciliation, status="unchanged"),
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                post=post,
+            )
+            third = send_reconciliation_notifications(
+                reconciliation,
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                post=post,
+            )
+
+        self.assertTrue(first["wxpusher"]["success"])
+        self.assertTrue(second["wxpusher"]["success"])
+        self.assertEqual(third["wxpusher"]["status"], "already_sent")
         self.assertEqual(len(calls), 2)
+
+    def test_legacy_outbox_records_can_be_read_for_backward_compatibility(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outbox = NotificationOutbox(Path(temp_dir) / "outbox.jsonl")
+            outbox.path.write_text(
+                json.dumps({
+                    "content_hash": "f" * 64,
+                    "channel": "wxpusher",
+                    "success": True,
+                    "response": {},
+                    "key": "legacy-key",
+                }, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+            outbox.path.write_text(
+                outbox.path.read_text(encoding="utf-8")
+                + json.dumps({
+                    "content_hash": "g" * 64,
+                    "channel": "wxpusher",
+                    "success": True,
+                    "response": {},
+                    "event_key": "legacy-event-key",
+                }, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+            outbox.path.write_text(
+                outbox.path.read_text(encoding="utf-8")
+                + json.dumps({
+                    "content_hash": "f" * 64,
+                    "channel": "wxpusher",
+                    "success": True,
+                    "response": {},
+                    "idempotency_key": "2026-08-27:{}".format("f" * 64),
+                }, ensure_ascii=False)
+                + "\n",
+                encoding="utf-8",
+            )
+            self.assertTrue(outbox.was_successful("f" * 64, "wxpusher", "legacy-key"))
+            self.assertTrue(outbox.was_successful("g" * 64, "wxpusher", "legacy-event-key"))
+            outbox.record(
+                content_hash="f" * 64,
+                channel="wxpusher",
+                success=True,
+                response={},
+                idempotency_key=None,
+            )
+            self.assertTrue(outbox.was_successful("f" * 64, "wxpusher", "new-key"))
+            self.assertTrue(
+                outbox.was_successful(
+                    "s" * 64,
+                    "wxpusher",
+                    "2026-08-27:reconciliation:reconciled:{}".format("s" * 40),
+                    formal_hash="f" * 64,
+                )
+            )
+
+    def test_reconciliation_pending_does_not_send_or_record(self):
+        reconciliation = {
+            "trade_date": "2026-08-27",
+            "snapshot_id": "preclose:2026-08-27:abc",
+            "preclose_content_hash": "a" * 64,
+            "formal_content_hash": "f" * 64,
+            "status": "formal_pending",
+        }
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outbox = NotificationOutbox(Path(temp_dir) / "outbox.jsonl")
+            result = send_reconciliation_notifications(
+                reconciliation,
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                post=lambda *args, **kwargs: calls.append((args, kwargs)),
+            )
+            rows = (
+                outbox.path.read_text(encoding="utf-8").splitlines()
+                if outbox.path.exists()
+                else []
+            )
+        self.assertEqual(result, {})
+        self.assertEqual(calls, [])
+        self.assertEqual(rows, [])
+
+    def test_reconciliation_channels_retry_only_the_failed_channel(self):
+        reconciliation = {
+            "trade_date": "2026-08-27",
+            "snapshot_id": "preclose:2026-08-27:abc",
+            "preclose_content_hash": "a" * 64,
+            "formal_content_hash": "f" * 64,
+            "status": "changed",
+            "pools": {
+                "main": {"retained": []},
+                "h4_t3": {"retained": []},
+                "acceleration": {"retained": []},
+            },
+        }
+
+        calls = []
+
+        def post(url, **kwargs):
+            calls.append(url)
+            if "wxpusher.zjiecode.com" in url:
+                return FakeResponse(payload={"success": True, "code": 1000})
+            return FakeResponse(payload={"errcode": 1})
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outbox = NotificationOutbox(Path(temp_dir) / "outbox.jsonl")
+            first = send_reconciliation_notifications(
+                reconciliation,
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                wecom_webhook="https://wecom.example/hook",
+                post=post,
+            )
+            second = send_reconciliation_notifications(
+                reconciliation,
+                outbox=outbox,
+                wxpusher_app_token="app-token",
+                wxpusher_uid="uid-1",
+                wecom_webhook="https://wecom.example/hook",
+                post=post,
+            )
+
+        self.assertTrue(first["wxpusher"]["success"])
+        self.assertFalse(first["wecom"]["success"])
+        self.assertEqual(first["wecom"]["business_code"], 1)
+        self.assertTrue(first["wecom"]["success"] is False)
+        self.assertFalse(second["wecom"]["success"])
+        self.assertEqual(second["wecom"]["business_code"], 1)
+        self.assertEqual(len(calls), 3)
 
     def test_reconciliation_publish_retries_changed_hash_with_worker_revision(self):
         reconciliation = {

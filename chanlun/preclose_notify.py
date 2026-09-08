@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import stat
@@ -9,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+from chanlun.decision_workbench import build_preclose_workbench, format_decision_notification, notification_semantics
 
 
 WXPUSHER_SEND_URL = "https://wxpusher.zjiecode.com/api/send/message"
@@ -49,20 +51,22 @@ def format_preclose_message(snapshot):
     source = snapshot if isinstance(snapshot, dict) else {}
     pools = source.get("pools") if isinstance(source.get("pools"), dict) else {}
     has_rows = any(pools.get(key) for key, _label in POOL_LABELS)
+    if source.get('status') not in ('available', 'empty'):
+        return '【14:45预跑】\n预跑结果暂不可用，本次不提供候选；请查看页面状态。'
     if source.get("status") != "available" or not has_rows:
         return "【14:45预跑】\n本期未选出推荐票"
-    return "\n".join(
-        ["【14:45预跑】14:56:30前有效"]
-        + _pool_lines(source)
-        + ["14:57后不再下单"]
-    )
+    return format_decision_notification(build_preclose_workbench(source), heading='14:45预跑')
 
 
-def format_reconciliation_message(reconciliation):
+def format_reconciliation_message(reconciliation, *, decision_projection=None):
     """Render the compact user-facing post-close comparison."""
 
     source = reconciliation if isinstance(reconciliation, dict) else {}
     status = source.get("status")
+    if (status != 'formal_pending' and isinstance(decision_projection, dict)
+            and decision_projection.get('phase') == 'formal'
+            and decision_projection.get('report_date') == source.get('trade_date')):
+        return format_decision_notification(decision_projection)
     if status == "formal_pending":
         return "【盘后复核】\n今日正式结果尚未生成，暂不继续参考预跑清单"
     pools = source.get("pools") if isinstance(source.get("pools"), dict) else {}
@@ -222,6 +226,15 @@ def load_preclose_env(path="~/.config/chanlun-strategy/preclose.env"):
 class NotificationOutbox:
     """Append-only provider results used for content-hash/channel idempotency."""
 
+    @staticmethod
+    def _row_idempotency_key(row):
+        for key in ("idempotency_key", "key", "event_key"):
+            if key in row and row.get(key) is not None:
+                value = str(row.get(key)).strip()
+                if value:
+                    return value
+        return ""
+
     def __init__(self, path):
         self.path = Path(path).expanduser()
 
@@ -238,17 +251,42 @@ class NotificationOutbox:
                 rows.append(value)
         return rows
 
-    def was_successful(self, content_hash, channel, idempotency_key=None):
-        return any(
-            row.get("content_hash") == content_hash
-            and row.get("channel") == channel
-            and (
-                idempotency_key is None
-                or row.get("idempotency_key") == idempotency_key
-            )
-            and row.get("success") is True
-            for row in self._rows()
+    def was_successful(
+        self,
+        content_hash,
+        channel,
+        idempotency_key=None,
+        formal_hash=None,
+    ):
+        idempotency_key = (
+            str(idempotency_key).strip() if idempotency_key is not None else None
         )
+        formal_hash = str(formal_hash).strip() if formal_hash is not None else ""
+        rows = self._rows()
+        date_prefix = (idempotency_key or '').split(':', 1)[0] + ':'
+        legacy_mapped = any(row.get('event_type') == 'legacy_migration'
+            and row.get('formal_content_hash') == formal_hash
+            and row.get('channel') == channel and row.get('success') is True
+            and self._row_idempotency_key(row).startswith(date_prefix) for row in rows)
+        for row in rows:
+            if row.get("channel") != channel or row.get("success") is not True:
+                continue
+
+            if row.get("content_hash") != content_hash and (
+                not formal_hash or row.get("content_hash") != formal_hash
+            ):
+                continue
+
+            row_key = self._row_idempotency_key(row)
+            if idempotency_key is None or row_key in ("", idempotency_key):
+                return True
+
+            if formal_hash and idempotency_key:
+                row_key = self._row_idempotency_key(row)
+                trade_date = idempotency_key.split(":", 1)[0]
+                if not legacy_mapped and row_key == "{}:{}".format(trade_date, formal_hash):
+                    return True
+        return False
 
     def record(
         self,
@@ -260,6 +298,9 @@ class NotificationOutbox:
         snapshot_id=None,
         idempotency_key=None,
         formal_content_hash=None,
+        phase=None,
+        event_type=None,
+        summary_hash=None,
     ):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         record = {
@@ -273,6 +314,12 @@ class NotificationOutbox:
             record["snapshot_id"] = str(snapshot_id)
         if idempotency_key is not None:
             record["idempotency_key"] = str(idempotency_key)
+        if phase is not None:
+            record["phase"] = str(phase)
+        if event_type is not None:
+            record["event_type"] = str(event_type)
+        if summary_hash is not None:
+            record["summary_hash"] = str(summary_hash)
         if formal_content_hash is not None:
             record["formal_content_hash"] = str(formal_content_hash)
         encoded = json.dumps(
@@ -295,6 +342,61 @@ class NotificationOutbox:
 
 def _request_result_error(exc):
     return {"success": False, "error": type(exc).__name__}
+
+
+def _normalize_reconciliation_row(item):
+    if not isinstance(item, dict):
+        return {"value": str(item or "").strip()}
+    normalized = {
+        "code": str(item.get("code") or item.get("id") or "").strip(),
+        "name": str(item.get("name") or "").strip(),
+        "action": str(item.get("action") or item.get("decision") or "").strip(),
+        "reason": str(item.get("reason") or "").strip(),
+    }
+    if item.get("reference_price") is not None:
+        normalized["reference_price"] = str(item.get("reference_price"))
+    return {k: v for k, v in normalized.items() if v}
+
+
+def _reconciliation_signature_hash(reconciliation, *, decision_projection=None):
+    if not isinstance(reconciliation, dict):
+        return hashlib.sha256(b"").hexdigest()
+
+    def _normalize_pool_rows(field_rows):
+        rows = []
+        for item in field_rows or []:
+            if isinstance(item, (dict, str)):
+                rows.append(_normalize_reconciliation_row(item))
+        rows.sort(key=lambda row: json.dumps(row, ensure_ascii=False, sort_keys=True))
+        return rows
+
+    pools = reconciliation.get("pools") if isinstance(reconciliation.get("pools"), dict) else {}
+    event = {
+        "trade_date": str(reconciliation.get("trade_date") or ""),
+        "status": str(reconciliation.get("status") or ""),
+        "event_type": str(
+            reconciliation.get("event_type")
+            or reconciliation.get("status")
+            or "reconciled"
+        ),
+    }
+    signature = {"event": event, "pools": {}}
+    if (isinstance(decision_projection, dict)
+            and decision_projection.get('report_date') == reconciliation.get('trade_date')
+            and decision_projection.get('phase') == 'formal'):
+        signature['decision'] = notification_semantics(decision_projection)
+    for pool_name, _label in POOL_LABELS:
+        pool = pools.get(pool_name) if isinstance(pools.get(pool_name), dict) else {}
+        signature["pools"][pool_name] = {}
+        for field in ("retained", "added_after_close", "removed_after_close"):
+            signature["pools"][pool_name][field] = _normalize_pool_rows(pool.get(field))
+    material = json.dumps(
+        signature,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
 
 
 def publish_preclose_snapshot(
@@ -503,24 +605,50 @@ def send_reconciliation_notifications(
     wecom_webhook=None,
     post=None,
     timeout=10,
+    decision_projection=None,
 ):
-    """Notify once per trade_date + formal hash + channel."""
+    """Notify once per trade-date + phase + event type + summary hash + channel."""
+
+    if reconciliation.get("status") == "formal_pending":
+        return {}
 
     trade_date = str(reconciliation.get("trade_date") or "")
     formal_hash = str(reconciliation.get("formal_content_hash") or "")
-    idempotency_key = trade_date + ":" + formal_hash
-    message = format_reconciliation_message(reconciliation)
+    summary_hash = _reconciliation_signature_hash(reconciliation, decision_projection=decision_projection)
+    event_type = str(
+        reconciliation.get("event_type") or reconciliation.get("status") or "reconciled"
+    )
+    phase = "reconciliation"
+    correction = (isinstance(decision_projection, dict)
+        and decision_projection.get('report_date') == trade_date
+        and decision_projection.get('phase') == 'formal') and any(
+        row.get('success') is True and row.get('phase') == phase
+        and outbox._row_idempotency_key(row).startswith(trade_date + ':')
+        and row.get('summary_hash') and row.get('summary_hash') != summary_hash
+        for row in outbox._rows()
+    )
+    if correction:
+        event_type = 'correction'
+    idempotency_key = "{}:{}:{}:{}".format(trade_date, phase, event_type, summary_hash)
+    message = format_reconciliation_message(reconciliation, decision_projection=decision_projection)
+    if correction:
+        message = '【盘后结果更正】\n' + message
     result = {}
     channels = [("wxpusher", wxpusher_app_token and wxpusher_uid)]
     if wecom_webhook:
         channels.append(("wecom", True))
     for channel, configured in channels:
         if outbox.was_successful(
-            formal_hash,
+            summary_hash,
             channel,
             idempotency_key=idempotency_key,
+            formal_hash=formal_hash,
         ):
             delivery = {"success": True, "status": "already_sent"}
+            if not outbox.was_successful(summary_hash, channel, idempotency_key=idempotency_key):
+                outbox.record(content_hash=summary_hash, channel=channel, success=True,
+                    response={'status': 'mapped_legacy_success'}, idempotency_key=idempotency_key,
+                    formal_content_hash=formal_hash, phase=phase, event_type='legacy_migration', summary_hash=summary_hash)
         elif not configured:
             delivery = {"success": False, "error": "missing_channel_configuration"}
         elif channel == "wxpusher":
@@ -541,13 +669,16 @@ def send_reconciliation_notifications(
             )
         if delivery.get("status") != "already_sent":
             outbox.record(
-                content_hash=formal_hash,
+                content_hash=summary_hash,
                 channel=channel,
                 success=delivery.get("success") is True,
                 response=delivery,
                 snapshot_id=reconciliation.get("snapshot_id"),
                 idempotency_key=idempotency_key,
                 formal_content_hash=formal_hash,
+                phase=phase,
+                event_type=event_type,
+                summary_hash=summary_hash,
             )
         result[channel] = delivery
     return result
@@ -567,6 +698,7 @@ def publish_reconciliation_and_notify(
     get=None,
     post=None,
     timeout=10,
+    decision_projection=None,
 ):
     publish = publish_reconciliation(
         reconciliation,
@@ -586,5 +718,6 @@ def publish_reconciliation_and_notify(
             wecom_webhook=wecom_webhook,
             post=post,
             timeout=timeout,
+            decision_projection=decision_projection,
         )
     return result

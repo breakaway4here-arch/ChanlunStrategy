@@ -684,9 +684,6 @@ const switcher = {
   innerHTML: '',
   querySelectorAll: function () { return []; }
 };
-global.document.getElementById = function (id) {
-  return id === 'chartLayerSwitcher' ? switcher : null;
-};
 global.window.echarts = { init: function () { return {
   setOption: function (option) { chartOption = option; },
   dispose: function () {}, resize: function () {}
@@ -707,6 +704,7 @@ const raw = {
 const before = JSON.stringify(raw);
 globalThis.__auxTest.state.chartMount = { innerHTML: '' };
 globalThis.__auxTest.state.chartAnnotationLane = null;
+globalThis.__auxTest.state.chartLayerSwitcher = switcher;
 globalThis.__auxTest.state.isMobile = false;
 globalThis.__auxTest.state.chartLayer = 'decision';
 assert(!globalThis.__auxTest.layers(raw).includes('trend'),

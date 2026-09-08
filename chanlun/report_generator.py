@@ -24,6 +24,7 @@ from chanlun.report_comparison import write_comparison_index
 from chanlun.report_view_model import build_workspace
 from chanlun.right_side_startup import build_right_side_startup_evidence
 from chanlun.personal_watchlist import resolve_decision_watchlist_url
+from chanlun.decision_workbench import build_decision_workbench
 from chanlun.recommendation_evidence import (
     build_recommendation_evidence_projection,
 )
@@ -2229,6 +2230,28 @@ def _load_psy12_shadow_history(output_dir):
     return reports if isinstance(reports, Mapping) else None
 
 
+def _load_previous_full_projection(output_dir, historical_reports, date_str):
+    if not output_dir or not date_str or not isinstance(historical_reports, Mapping):
+        return None
+    previous_dates = sorted(
+        str(candidate_date)
+        for candidate_date in historical_reports
+        if isinstance(candidate_date, str) and candidate_date < date_str
+    )
+    for candidate_date in reversed(previous_dates):
+        candidate_path = os.path.join(output_dir, "data", f"{candidate_date}.json")
+        if not os.path.isfile(candidate_path):
+            continue
+        try:
+            with open(candidate_path, "r", encoding="utf-8") as handle:
+                candidate_payload = json.load(handle)
+        except (OSError, ValueError, TypeError):
+            continue
+        if isinstance(candidate_payload, Mapping) and candidate_payload.get('date') == candidate_date:
+            return dict(candidate_payload)
+    return None
+
+
 def _build_psy12_shadow_audit(daily_data, historical_reports, date_str):
     """Compute truthful progress without mutating any formal report surface."""
     normalized = normalize_historical_reports(
@@ -2247,6 +2270,7 @@ def _build_report_bootstrap(
     decision_watchlist_url,
     access_key_hash,
     historical_reports=None,
+    output_dir=None,
 ):
     """Build the HTML envelope without changing the formal daily payload."""
     date_str = daily_data.get(
@@ -2258,13 +2282,36 @@ def _build_report_bootstrap(
         historical_reports,
         date_str,
     )
+    recommendation_evidence = build_recommendation_evidence_projection(
+        report_data,
+        daily_data,
+        psy12_shadow_audit=psy12_shadow_audit,
+    )
+    previous = None
+    previous_payload = _load_previous_full_projection(
+        output_dir,
+        historical_reports,
+        date_str,
+    )
+    if isinstance(previous_payload, Mapping):
+        previous = build_decision_workbench(
+            previous_payload,
+            previous_payload.get("workspace", {}),
+            build_recommendation_evidence_projection(previous_payload, previous_payload),
+            phase="formal",
+            snapshot_id=previous_payload.get("snapshot_id", ""),
+        )
     return {
         "pageDate": date_str,
         "inlineReportData": daily_data,
-        "recommendationEvidence": build_recommendation_evidence_projection(
+        "recommendationEvidence": recommendation_evidence,
+        "decisionWorkbench": build_decision_workbench(
             report_data,
-            daily_data,
-            psy12_shadow_audit=psy12_shadow_audit,
+            daily_data.get("workspace", {}),
+            recommendation_evidence,
+            phase="formal",
+            snapshot_id=daily_data.get("snapshot_id", ""),
+            previous=previous,
         ),
         "top10ApiBase": top10_api_base,
         "precloseApiBase": preclose_api_base,
@@ -2321,6 +2368,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         decision_watchlist_url,
         access_key_hash,
         historical_reports=_load_psy12_shadow_history(output_dir),
+        output_dir=output_dir,
     )
     bootstrap_data_json = _escape_inline_json(bootstrap)
 

@@ -719,6 +719,51 @@ class TestFormalReportProjection(unittest.TestCase):
             daily_data.get("workspace", {}),
         )
 
+    def test_report_bootstrap_contains_decision_workbench_and_daily_payload_does_not(self):
+        report_data = _make_minimal_report_data()
+        pick = make_pick()
+        pick.update({
+            "reference_price": 50.0,
+            "intended_horizon": "T+3",
+            "position_band": "10%-30%",
+            "invalidation_price": 47.5,
+            "pressure_price": 56.0,
+            "decision_engine_v1": {
+                "decision_code": "recommend",
+                "decision": "推荐",
+            },
+        })
+        report_data["picks_fusion"] = [pick]
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            generate_report(report_data, output_dir=tmpdir)
+            with open(
+                os.path.join(tmpdir, "index.html"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                bootstrap = _extract_bootstrap(handle.read())
+            with open(
+                os.path.join(tmpdir, "data", "2026-05-26.json"),
+                "r",
+                encoding="utf-8",
+            ) as handle:
+                daily_data = json.load(handle)
+
+        decision_workbench = bootstrap["decisionWorkbench"]
+        self.assertIn("schema_version", decision_workbench)
+        self.assertIn("phase", decision_workbench)
+        self.assertEqual(decision_workbench["phase"], "formal")
+        self.assertIn("as_of", decision_workbench)
+        self.assertIn("health", decision_workbench)
+        self.assertIn("items", decision_workbench)
+        self.assertIsInstance(decision_workbench["health"], dict)
+        self.assertNotIn("decisionWorkbench", daily_data)
+
+        formal = report_generator.build_formal_output_projection(report_data)
+        self.assertNotIn("decisionWorkbench", formal["daily"])
+        self.assertNotIn("decisionWorkbench", formal["aggregate"])
+
     def test_projection_preserves_pool_presence_and_selection_input_health(self):
         report_data = _make_minimal_report_data()
         report_data.pop("picks_fusion")
@@ -2760,19 +2805,22 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertNotIn("riskFlags = ['无新增'];", self.asset_js)
         self.assertIn("normalizeString(flag) !== '仅观察';", self.asset_js)
 
-    def test_candidate_rows_use_change_pct_fallback_helper(self):
+    def test_candidate_change_pct_fallback_helper_remains_available_to_detail(self):
         self.assertIn("function getCandidateChangePct", self.asset_js)
-        self.assertIn("var change = getCandidateChangePct(item);", self.asset_js)
         self.assertIn("function getCandidateChangePctFromRecord", self.asset_js)
         self.assertIn("var raw = findRawCandidate(rec.ref || {});", self.asset_js)
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
+        self.assertIn("getCandidateChangePct(rec)", self.asset_js)
 
-    def test_candidate_rows_keep_only_bounded_decision_tags(self):
+    def test_candidate_rows_keep_only_action_reason_and_formal_decision_score(self):
         self.assertIn("function renderDecisionBadge", self.asset_js)
         self.assertIn("function renderCandidateDecisionBadge", self.asset_js)
-        self.assertIn("function selectCandidateRowTags", self.asset_js)
-        self.assertIn("return tags.slice(0, 2);", self.asset_js)
-        self.assertIn("var selectedTags = selectCandidateRowTags(item, state.currentView);", self.asset_js)
+        self.assertIn("function buildCandidateRowSummary", self.asset_js)
+        self.assertIn("var rowSummary = buildCandidateRowSummary(item, state.currentView);", self.asset_js)
+        self.assertIn('class="candidate-row-action"', self.asset_js)
+        self.assertIn('class="candidate-row-score"', self.asset_js)
+        self.assertIn('class="candidate-row-reason"', self.asset_js)
+        self.assertIn("'暂无正式决策分'", self.asset_js)
         self.assertIn("事故前原始判定·仅追溯", self.asset_js)
         self.assertIn("正式动作：", self.asset_js)
         self.assertIn("规则判定：", self.asset_js)
@@ -2784,7 +2832,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("decision-score-grid", self.asset_js)
         self.assertIn("+ buildDecisionEngineSection(item, raw)", self.asset_js)
 
-    def test_candidate_list_uses_view_rank_without_raw_score_fallback_sort(self):
+    def test_candidate_list_preserves_view_order_without_raw_score_fallback_sort(self):
         self.assertIn("validChanges.slice().sort(function (a, b) {", self.asset_js)
         self.assertIn("return b.change_pct - a.change_pct;", self.asset_js)
         match = re.search(
@@ -2798,7 +2846,8 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertNotIn("boom_score", candidate_list)
         self.assertNotIn("watch_score", candidate_list)
         self.assertNotIn("opportunity_score", candidate_list)
-        self.assertIn("var rankValue = safeNumber(item.view_rank, i + 1);", candidate_list)
+        self.assertIn("var rowSummary = buildCandidateRowSummary(item, state.currentView);", candidate_list)
+        self.assertNotIn("getRankClass", candidate_list)
 
     def test_candidate_price_section_uses_raw_best_buy_point_and_closes_fallback(self):
         self.assertIn("function getCandidateCurrentPriceFromRecord", self.asset_js)

@@ -30,6 +30,8 @@ from chanlun.preclose_notify import (  # noqa: E402
 )
 from chanlun.preclose_schedule import is_trading_day  # noqa: E402
 from chanlun.report_view_model import build_workspace  # noqa: E402
+from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
+from chanlun.recommendation_evidence import build_recommendation_evidence_projection  # noqa: E402
 
 
 FORMAL_POOL_CONTRACTS = (
@@ -155,13 +157,17 @@ def load_formal_workspace(
     if valid is not True:
         return _pending("formal_report_validation_failed")
     try:
-        views = normalize_formal_workspace_views(build_workspace(report))
+        workspace = build_workspace(report)
+        views = normalize_formal_workspace_views(workspace)
+        evidence = build_recommendation_evidence_projection(report, dict(report, workspace=workspace))
+        decision_projection = build_decision_workbench(report, workspace, evidence)
     except Exception:
         return _pending("formal_workspace_contract_invalid")
     return {
         "status": "ready",
         "views": views,
         "report_path": str(path),
+        "decision_projection": decision_projection,
     }
 
 
@@ -286,6 +292,8 @@ def run_reconciliation_once(
             "stage": stage,
             "error_type": str(error_type),
         }
+        if status == 'formal_pending_timeout':
+            payload['notification_status'] = 'not_sent_deadline'
         evidence_error = None
         try:
             _atomic_json(failure_path, payload)
@@ -299,6 +307,8 @@ def run_reconciliation_once(
         }
         if evidence_error:
             result["failure_evidence_error"] = evidence_error
+        if status == 'formal_pending_timeout':
+            result['notification_status'] = 'not_sent_deadline'
         return result
 
     def remaining_budget():
@@ -357,6 +367,7 @@ def run_reconciliation_once(
             0.001, min(10.0, publisher_budget / 5.0)
         )
         stage = "publisher"
+        should_notify = notify and reconciliation.get("status") != "formal_pending"
         delivery = publisher(
             reconciliation,
             api_base=values.get("PRECLOSE_API_BASE"),
@@ -365,8 +376,9 @@ def run_reconciliation_once(
             wxpusher_uid=values.get("WXPUSHER_UID"),
             wecom_webhook=values.get("WECOM_BOT_WEBHOOK"),
             outbox=outbox,
-            notify=notify,
+            notify=should_notify,
             timeout=request_timeout,
+            decision_projection=formal.get('decision_projection'),
         )
         stage = "delivery_evidence"
         _atomic_json(day_root / "reconciliation-delivery.json", {
@@ -376,12 +388,28 @@ def run_reconciliation_once(
             "delivery": delivery,
         })
         publish_ok = delivery.get("publish", {}).get("success") is True
-        notify_ok = (
-            not notify
-            or delivery.get("notifications", {}).get("wxpusher", {}).get(
-                "success"
-            ) is True
-        )
+        if not should_notify:
+            notify_ok = True
+        else:
+            configured_channels = delivery.get("notifications") or {}
+            expected = []
+            if values.get('WXPUSHER_APP_TOKEN') and values.get('WXPUSHER_UID'):
+                expected.append('wxpusher')
+            if values.get('WECOM_BOT_WEBHOOK'):
+                expected.append('wecom')
+            notify_ok = bool(expected) and all(
+                configured_channels.get(channel, {}).get('success') is True for channel in expected
+            ) and all(
+                bool(result.get("success"))
+                if isinstance(result, dict)
+                else False
+                for result in configured_channels.values()
+                if not (
+                    isinstance(result, dict)
+                    and result.get("error")
+                    == "missing_channel_configuration"
+                )
+            )
         return {
             "status": reconciliation.get("status"),
             "snapshot_id": reconciliation.get("snapshot_id"),
@@ -456,6 +484,7 @@ def poll_reconciliation(
         if remaining <= 0:
             result = dict(result or {})
             result["status"] = "formal_pending_timeout"
+            result['notification_status'] = 'not_sent_deadline'
             result.setdefault("exit_code", 0)
             record(current, result)
             return result

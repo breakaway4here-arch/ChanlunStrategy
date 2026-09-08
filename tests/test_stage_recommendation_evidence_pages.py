@@ -226,7 +226,7 @@ class TestStageRecommendationEvidencePages(unittest.TestCase):
                 self.assertEqual(staged["recommendationEvidence"], expected)
                 self.assertEqual(staged["inlineReportData"], baseline["inlineReportData"])
                 self.assertEqual(
-                    {key: value for key, value in staged.items() if key != "recommendationEvidence"},
+                    {key: value for key, value in staged.items() if key not in ("recommendationEvidence", "decisionWorkbench")},
                     baseline,
                 )
                 self.assertIn("正文/注释/嵌入字符串必须保留", staged_html)
