@@ -153,8 +153,12 @@ class ReportPsy12EvidenceTests(unittest.TestCase):
             with patch('chanlun.report_generator.build_recommendation_evidence_projection',
                        side_effect=lambda source, *_args, **_kwargs: current_evidence if source['date'] == '2026-08-28' else previous_evidence) as builder:
                 bootstrap = _build_report_bootstrap(report, daily, '', '', '', '',
-                    historical_reports={'2026-08-27': {}}, output_dir=tmpdir)
-                self.assertEqual([call.args[0]['date'] for call in builder.call_args_list],
+                    historical_reports=[{
+                        'trade_date': previous_date,
+                        'report': previous_payload,
+                        'source': 'daily_file',
+                    }], output_dir=tmpdir)
+                self.assertEqual([item[0][0]['date'] for item in builder.call_args_list],
                                  ['2026-08-28', '2026-08-27'])
 
         changes = bootstrap["decisionWorkbench"]["changes"]
@@ -298,6 +302,64 @@ class ReportPsy12EvidenceTests(unittest.TestCase):
             production_digest(build_formal_output_projection(report)),
             formal_before,
         )
+
+    def test_generate_report_audit_matches_cli_when_aggregate_history_is_truncated(self):
+        historical_dates = [
+            "2026-08-20",
+            "2026-08-21",
+            "2026-08-24",
+            "2026-08-25",
+            "2026-08-26",
+            "2026-08-27",
+            "2026-08-28",
+        ]
+        current = _report("2026-08-31")
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            data_dir = root / "data"
+            data_dir.mkdir()
+            for trade_date in historical_dates:
+                (data_dir / (trade_date + ".json")).write_text(
+                    json.dumps(_report(trade_date), ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            retained_dates = historical_dates[-5:]
+            aggregate = {
+                "dates": retained_dates,
+                "reports": {
+                    trade_date: build_aggregate_day_projection(
+                        _report(trade_date)
+                    )
+                    for trade_date in retained_dates
+                },
+            }
+            aggregate_path = root / "data.json"
+            aggregate_path.write_text(
+                json.dumps(aggregate, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            aggregate_before = aggregate_path.read_bytes()
+
+            html_path = Path(generate_report(
+                current,
+                output_dir=tmpdir,
+                comparison_db_path="",
+            ))
+            html = html_path.read_text(encoding="utf-8")
+            marker = "window.CHANLUN_BOOTSTRAP = "
+            bootstrap = json.loads(html.split(marker, 1)[1].split(";", 1)[0])
+            page_audit = bootstrap["recommendationEvidence"][
+                "market_sentiment"
+            ]["psy12_shadow_audit"]
+            cli_audit = cli_evaluator(
+                _load_reports(data_dir, as_of=current["date"]),
+                required_days=20,
+                as_of_date=current["date"],
+            )
+
+            self.assertEqual(page_audit, cli_audit)
+            self.assertEqual(page_audit["stored_complete_days"], 8)
+            self.assertEqual(aggregate_path.read_bytes(), aggregate_before)
 
     def test_cli_and_page_import_the_same_pure_evaluator(self):
         self.assertIs(cli_evaluator, core_evaluator)

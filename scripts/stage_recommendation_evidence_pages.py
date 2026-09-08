@@ -31,6 +31,10 @@ from chanlun.recommendation_evidence import (  # noqa: E402
     build_recommendation_evidence_projection,
 )
 from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
+from chanlun.psy12_shadow_audit import evaluate_shadow_reports  # noqa: E402
+from chanlun.psy12_shadow_history import (  # noqa: E402
+    load_daily_report_envelopes,
+)
 from chanlun.report_generator import (  # noqa: E402
     _escape_inline_json,
     replace_report_asset_versions,
@@ -681,13 +685,15 @@ def stage_recommendation_evidence_pages(
             )
         _validate_existing_evidence(payload, report_date, path)
 
-    # Home and archive are expected to carry one identical display projection.
-    audit = None
-    existing_market = home_info["payload"].get("recommendationEvidence")
-    if isinstance(existing_market, dict):
-        market = existing_market.get("market_sentiment")
-        if isinstance(market, dict) and isinstance(market.get("psy12_shadow_audit"), dict):
-            audit = market["psy12_shadow_audit"]
+    # Home, archive, and the read-only CLI must audit the same dated files.
+    audit = evaluate_shadow_reports(
+        load_daily_report_envelopes(
+            daily_path.parent,
+            as_of_date=report_date,
+        ),
+        required_days=20,
+        as_of_date=report_date,
+    )
     evidence = build_recommendation_evidence_projection(
         home_info["payload"]["inlineReportData"],
         daily_data,

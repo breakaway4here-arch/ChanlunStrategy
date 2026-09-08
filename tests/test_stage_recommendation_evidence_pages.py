@@ -19,9 +19,13 @@ import unittest
 from chanlun.recommendation_evidence import (
     build_recommendation_evidence_projection,
 )
+from chanlun.psy12_shadow_audit import evaluate_shadow_reports
+from chanlun.psy12_shadow_history import load_daily_report_envelopes
+from chanlun.report_generator import build_aggregate_day_projection
 from scripts.stage_recommendation_evidence_pages import (
     stage_recommendation_evidence_pages,
 )
+from tests.test_report_psy12_evidence import _report as _psy12_report
 
 
 REPORT_DATE = "2026-08-28"
@@ -214,8 +218,18 @@ class TestStageRecommendationEvidencePages(unittest.TestCase):
                 {str(path): _sha256(path) for path in fixture.protected},
             )
 
+            expected_audit = evaluate_shadow_reports(
+                load_daily_report_envelopes(
+                    fixture.docs / "data",
+                    as_of_date=REPORT_DATE,
+                ),
+                required_days=20,
+                as_of_date=REPORT_DATE,
+            )
             expected = build_recommendation_evidence_projection(
-                fixture.data, fixture.data
+                fixture.data,
+                fixture.data,
+                psy12_shadow_audit=expected_audit,
             )
             for relative in ("index.html", f"{REPORT_DATE}/index.html"):
                 baseline = _bootstrap_from_html(
@@ -256,6 +270,78 @@ class TestStageRecommendationEvidencePages(unittest.TestCase):
                     _sha256(fixture.source_assets / name),
                     _sha256(stage / "assets" / name),
                 )
+        finally:
+            tmp.cleanup()
+
+    def test_stage_refreshes_psy12_audit_from_all_daily_files(self):
+        tmp, fixture = self._fixture()
+        try:
+            historical_dates = [
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+            ]
+            current = _psy12_report(REPORT_DATE)
+            current["workspace"] = fixture.data["workspace"]
+            current["picks_fusion"] = []
+            fixture.data = current
+            data_dir = fixture.docs / "data"
+            for trade_date in historical_dates:
+                (data_dir / (trade_date + ".json")).write_text(
+                    json.dumps(_psy12_report(trade_date), ensure_ascii=False),
+                    encoding="utf-8",
+                )
+            (data_dir / (REPORT_DATE + ".json")).write_text(
+                json.dumps(current, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            retained_dates = historical_dates[-5:]
+            (fixture.docs / "data.json").write_text(
+                json.dumps({
+                    "dates": retained_dates,
+                    "reports": {
+                        trade_date: build_aggregate_day_projection(
+                            _psy12_report(trade_date)
+                        )
+                        for trade_date in retained_dates
+                    },
+                }, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            (fixture.docs / "index.html").write_text(
+                _html_for(current, archive=False), encoding="utf-8"
+            )
+            (fixture.docs / REPORT_DATE / "index.html").write_text(
+                _html_for(current, archive=True), encoding="utf-8"
+            )
+            subprocess.run(["git", "add", "-A"], cwd=fixture.root, check=True)
+            subprocess.run(
+                ["git", "commit", "-qm", "psy12 history fixture"],
+                cwd=fixture.root,
+                check=True,
+            )
+
+            result = self._stage(fixture)
+            bootstrap = _bootstrap_from_html(
+                (Path(result["stage_dir"]) / "index.html").read_text(
+                    encoding="utf-8"
+                )
+            )
+            page_audit = bootstrap["recommendationEvidence"][
+                "market_sentiment"
+            ]["psy12_shadow_audit"]
+            cli_audit = evaluate_shadow_reports(
+                load_daily_report_envelopes(data_dir, as_of_date=REPORT_DATE),
+                required_days=20,
+                as_of_date=REPORT_DATE,
+            )
+
+            self.assertEqual(page_audit, cli_audit)
+            self.assertEqual(page_audit["stored_complete_days"], 8)
         finally:
             tmp.cleanup()
 

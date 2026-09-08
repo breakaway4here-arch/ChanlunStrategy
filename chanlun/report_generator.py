@@ -32,6 +32,7 @@ from chanlun.psy12_shadow_audit import (
     evaluate_psy12_shadow_audit,
     normalize_historical_reports,
 )
+from chanlun.psy12_shadow_history import load_daily_report_envelopes
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
@@ -2214,30 +2215,32 @@ def build_formal_output_projection(report_data):
     }
 
 
-def _load_psy12_shadow_history(output_dir):
-    """Read the existing aggregate only for the HTML shadow-audit plane."""
-    path = os.path.join(output_dir, "data.json")
-    if not os.path.isfile(path):
-        return None
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, ValueError, TypeError):
-        return None
-    if not isinstance(payload, Mapping):
-        return None
-    reports = payload.get("reports")
-    return reports if isinstance(reports, Mapping) else None
+def _load_psy12_shadow_history(output_dir, as_of_date=None):
+    """Load the same dated report history used by the read-only audit CLI."""
+    return load_daily_report_envelopes(
+        os.path.join(output_dir, "data"),
+        as_of_date=as_of_date,
+    )
 
 
 def _load_previous_full_projection(output_dir, historical_reports, date_str):
-    if not output_dir or not date_str or not isinstance(historical_reports, Mapping):
+    if not output_dir or not date_str:
         return None
-    previous_dates = sorted(
+    if isinstance(historical_reports, Mapping):
+        candidates = historical_reports.keys()
+    elif isinstance(historical_reports, (list, tuple)):
+        candidates = [
+            item.get("trade_date", item.get("date"))
+            for item in historical_reports
+            if isinstance(item, Mapping)
+        ]
+    else:
+        return None
+    previous_dates = sorted({
         str(candidate_date)
-        for candidate_date in historical_reports
+        for candidate_date in candidates
         if isinstance(candidate_date, str) and candidate_date < date_str
-    )
+    })
     for candidate_date in reversed(previous_dates):
         candidate_path = os.path.join(output_dir, "data", f"{candidate_date}.json")
         if not os.path.isfile(candidate_path):
@@ -2367,7 +2370,10 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         preclose_api_base,
         decision_watchlist_url,
         access_key_hash,
-        historical_reports=_load_psy12_shadow_history(output_dir),
+        historical_reports=_load_psy12_shadow_history(
+            output_dir,
+            as_of_date=date_str,
+        ),
         output_dir=output_dir,
     )
     bootstrap_data_json = _escape_inline_json(bootstrap)

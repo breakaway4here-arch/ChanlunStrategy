@@ -14,24 +14,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from chanlun.psy12_shadow_audit import evaluate_shadow_reports
+from chanlun.psy12_shadow_history import load_daily_report_envelopes
 
 
 def _load_reports(data_dir, as_of=None):
-    """Envelope every selected file so any bad input fails the whole audit."""
-    reports = []
-    for path in sorted(Path(data_dir).glob("????-??-??.json")):
-        if as_of and path.stem > as_of:
-            continue
-        try:
-            report = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError, TypeError):
-            report = None
-        reports.append({
-            "trade_date": path.stem,
-            "report": report,
-            "source": "daily_file",
-        })
-    return reports
+    """Keep the CLI adapter stable while sharing the page history loader."""
+    return load_daily_report_envelopes(data_dir, as_of_date=as_of)
 
 
 def main(argv=None):
