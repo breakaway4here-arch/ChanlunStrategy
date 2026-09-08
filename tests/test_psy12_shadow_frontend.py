@@ -131,7 +131,7 @@ def _audit_literal(**overrides):
 
 
 class TestPsy12ShadowFrontend(unittest.TestCase):
-    def test_psy12_is_nested_in_market_temperature_and_not_a_research_sibling(self):
+    def test_psy12_is_nested_once_in_its_research_card(self):
         fixture = _valid_market_fixture(audit=_audit_literal())
         _assert_node_contract(
             self,
@@ -148,7 +148,8 @@ assert(market.indexOf('psy12-shadow-card', marketStart) < marketEnd, 'PSY12 shad
 const research = globalThis.__auxTest.stacks(base).research;
 const shadowMatches = research.match(/psy12-shadow-card/g) || [];
 assert(shadowMatches.length === 1, 'PSY12 shadow card remained as a duplicate sibling');
-const researchStart = research.indexOf('<section class="decision-card market-temperature-card"');
+assert(!research.includes('id="marketSentimentChart"'), 'formal chart duplicated in research');
+const researchStart = research.indexOf('<section class="decision-card psy12-research-card"');
 const nestedStart = research.indexOf('psy12-shadow-card', researchStart);
 let depth = 0;
 let researchEnd = -1;

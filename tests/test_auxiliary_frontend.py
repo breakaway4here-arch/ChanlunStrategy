@@ -1381,7 +1381,7 @@ const stacks = globalThis.__auxTest.build({ diagnostics: {} });
   assert(stacks.today.includes(className), 'today decision stack missing ' + className);
   assert(!stacks.research.includes(className), 'today-only module leaked into research: ' + className);
 });
-['market-temperature-card', 'strategy-scorecards-card', 'shadow-card', 'diagnostics-card'].forEach(function (className) {
+['psy12-research-card', 'strategy-scorecards-card', 'shadow-card', 'diagnostics-card'].forEach(function (className) {
   assert(stacks.research.includes(className), 'research validation stack missing ' + className);
   assert(!stacks.today.includes(className), 'research-only module leaked into today decision: ' + className);
 });
@@ -2898,7 +2898,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
             primary.index("renderPersonalWatchlist(source)"),
         )
         self.assertLess(
-            primary.index("renderMarketTemperatureCard(source)"),
+            primary.index("renderPsy12ShadowSubpanel(source)"),
             primary.index("renderSectorFlowCard(source)"),
         )
 
