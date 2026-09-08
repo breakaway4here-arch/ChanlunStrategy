@@ -2933,7 +2933,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
             'id="candidateSearch"',
             'id="candidateCount"',
             'id="candidateMore"',
-            "代码 / 名称 / 板块",
+            "代码、名称或板块…",
             "加载更多",
         ):
             self.assertIn(token, shell)

@@ -3,6 +3,37 @@ from tests.test_auxiliary_frontend import _assert_node_contract
 
 
 class UnifiedWorkbenchFrontend(unittest.TestCase):
+    def test_closing_drawer_releases_its_chart_and_markup(self):
+        _assert_node_contract(self, "{ close:closeMobileDetailDrawer,state:state,nodes:nodes,setup:function(){setDrawerBackgroundInert=function(){};} }", r'''
+const t=globalThis.__auxTest;t.setup();let disposed=0;
+document.body={style:{}};
+t.nodes.drawer={classList:{remove(){}},setAttribute(){}};
+t.nodes.drawerContent={innerHTML:'duplicate detail',contains(){return true;}};
+t.state.chartMount={};t.state.chartInstance={dispose(){disposed++;}};
+t.close();
+if(t.nodes.drawerContent.innerHTML || disposed!==1 || t.state.chartInstance!==null)throw Error('hidden drawer retained chart and duplicate markup');
+''')
+
+    def test_each_strategy_evidence_has_unique_accessible_heading_ids(self):
+        _assert_node_contract(self, "{ evidence:renderStrategyEvidence }", r'''
+window.CHANLUN_BOOTSTRAP={pageDate:'2026-09-08'};
+const s={strategy_id:'confirming',role:'research',action_semantics:'watch_only',evidence:{}};
+const html=globalThis.__auxTest.evidence(s,0)+globalThis.__auxTest.evidence(s,1);
+const ids=[...html.matchAll(/\bid="([^"]+)"/g)].map(x=>x[1]);
+if(ids.length!==new Set(ids).size)throw Error('strategy heading IDs collide');
+for(const label of [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map(x=>x[1]))if(!ids.includes(label))throw Error('heading reference missing');
+''')
+
+    def test_empty_focus_has_action_without_repeating_screen_summary(self):
+        _assert_node_contract(self, "{ empty:buildCandidateEmptyState }", r'''
+window.CHANLUN_BOOTSTRAP={pageDate:'2026-09-08',decisionWorkbench:{schema_version:'decision-workbench-v1',report_date:'2026-09-08',phase:'formal',items:[{code:'600001'}],summary:{reason:'已在顶部说明筛选过程'}}};
+const html=globalThis.__auxTest.empty('decision_focus',{},{});
+if(html.includes('已在顶部说明筛选过程'))throw Error('empty state repeats overview');
+if(!html.includes('data-workbench-open-all') || !html.includes('查看全部 1 只'))throw Error('no route to remaining candidates');
+const filtered=globalThis.__auxTest.empty('decision_focus',{}, {filtered:true,filterLabel:'测试'});
+if(!filtered.includes('已保留筛选条件'))throw Error('filter empty state was lost');
+''')
+
     def test_legacy_report_explains_projection_capability(self):
         _assert_node_contract(self, "{ render:renderDecisionOverview }", r'''
 const mount={hidden:true,innerHTML:''};
