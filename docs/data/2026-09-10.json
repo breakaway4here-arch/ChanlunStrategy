@@ -44,7 +44,958 @@
     "key_signal": "未出现明显背驰信号",
     "conclusion": "无中枢"
   },
-  "picks_pure": [],
+  "picks_pure": [
+    {
+      "code": "002552",
+      "name": "宝鼎科技",
+      "signal_tier": "candidate",
+      "source_channel": "low_position",
+      "tier": "candidate",
+      "category": "A",
+      "quality_tier": "",
+      "view": "main",
+      "reference_type": "",
+      "change_pct": 5.96,
+      "best_buy_point": {
+        "type": "强势启动候选",
+        "tier": "candidate",
+        "index": 69,
+        "price": 50.35,
+        "reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅6.0%",
+        "strength": "中",
+        "source_type": "日线强势启动",
+        "confirmed_by": "30min确认",
+        "confirmations": [
+          "30min两阳夹一阴确认"
+        ],
+        "confirmation_evidence": {
+          "schema_version": 1,
+          "sufficient_bars": true,
+          "ema_bullish_alignment": true,
+          "close_above_ema5": true,
+          "ema5_rising_bars": 3,
+          "recent_peak_drawdown_pct": 3.673235,
+          "macd_hist_direction": "weakening",
+          "ema5_reclaim": true,
+          "stop_fall": false,
+          "buy_point": null,
+          "fresh_yang_pattern": "two_yang_one_yin",
+          "recovery_bundle_match": false
+        },
+        "startup_reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅6.0%",
+        "startup_signals": [
+          "涨幅≥4.0%",
+          "close_above_ma5",
+          "close_above_ma10",
+          "实体阳线≥3%"
+        ],
+        "startup_index": 119,
+        "startup_date": "2026-09-10",
+        "startup_age_days": 0,
+        "confirm_index": 79,
+        "confirm_date": "2026-09-10 15:00:00",
+        "confirm_age_days": 0,
+        "change_pct": 5.96,
+        "volume_ratio": 2.4,
+        "daily_startup_grade": "strong",
+        "daily_startup_label": "强启动",
+        "sublevel_confirm_grade": "A",
+        "sublevel_confirm_label": "A级确认",
+        "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+        "signal_age_days": 0,
+        "is_recent": true,
+        "signal_date": "2026-09-10",
+        "recency_reason": "信号发生在最近0个交易日内",
+        "reference_price": 50.35,
+        "current_price": 50.35,
+        "distance_from_reference_pct": 0.0
+      },
+      "buy_points_30min": [],
+      "pivots": {},
+      "trend_type": "",
+      "sector_tags": [
+        "印制电路板",
+        "元件"
+      ],
+      "sector_rank": 1,
+      "sector_flow": 3017472512.0,
+      "sector_strength_label": "资金流入TOP1",
+      "market_cap": 195.3506,
+      "circulating_market_cap": 185.5414,
+      "float_market_cap": 185.5414,
+      "money20": 1807322799.5,
+      "industry": "",
+      "data_status": {
+        "daily": "verified",
+        "latest_date": "2026-09-10",
+        "source": "market_history_db",
+        "bars": 120,
+        "stale": false,
+        "is_final": true,
+        "adjustment": "qfq"
+      },
+      "gf_dma_health": {
+        "code": "002552",
+        "name": "宝鼎科技",
+        "label": "中性观察",
+        "score": 60.0,
+        "trend_stage": "neutral",
+        "ma": {
+          "ma20": 52.844,
+          "ma50": 50.0332,
+          "ma100": 48.567,
+          "ma200": null
+        },
+        "distance_pct": {
+          "vs_ma20": -4.72,
+          "vs_ma50": 0.63,
+          "vs_ma100": 3.67,
+          "vs_ma200": null
+        },
+        "alignment": "neutral",
+        "extension_level": "normal",
+        "pullback_health": "cautionary",
+        "fomo_risk": "low",
+        "risk_flags": [],
+        "positive_flags": [
+          "趋势结构尚未触发明显风险"
+        ],
+        "summary": "短线波动中，未见明显短线异动，回撤cautionary。",
+        "data_quality": "insufficient_200"
+      },
+      "score": 35.2,
+      "decision_engine_v1": {
+        "version": "1",
+        "code": "002552",
+        "name": "宝鼎科技",
+        "decision": "观察",
+        "decision_code": "observe",
+        "total_score": 76,
+        "structure": {
+          "score": 20,
+          "reasons": [
+            "震荡结构",
+            "回踩确认"
+          ]
+        },
+        "position": {
+          "score": 15,
+          "reasons": [
+            "120日收盘分位中位"
+          ]
+        },
+        "sentiment": {
+          "score": 41,
+          "reasons": [
+            "板块热点",
+            "放量启动",
+            "震荡市",
+            "动能积极"
+          ]
+        },
+        "risk_reasons": [
+          "市场情绪偏冷",
+          "市场情绪转弱"
+        ]
+      },
+      "position_distance_pct": 0.0,
+      "position_reference_price": 50.35,
+      "position_reference_type": "low_position_channel:日线强势启动",
+      "position_data_status": "verified",
+      "position_evidence_date": "2026-09-10",
+      "position_absolute_percentile": 56.25,
+      "position_absolute_window": 120,
+      "sector": "印制电路板",
+      "resonance": {},
+      "ma_bullish": false,
+      "stop_loss": null,
+      "stop_loss_pct": null,
+      "trailing_targets": [],
+      "is_active": false,
+      "market_trend": "",
+      "version": "",
+      "market_regime": "",
+      "fusion_admission": {},
+      "dates": [
+        "2026-06-04",
+        "2026-06-05",
+        "2026-06-08",
+        "2026-06-09",
+        "2026-06-10",
+        "2026-06-11",
+        "2026-06-12",
+        "2026-06-15",
+        "2026-06-16",
+        "2026-06-17",
+        "2026-06-18",
+        "2026-06-22",
+        "2026-06-23",
+        "2026-06-24",
+        "2026-06-25",
+        "2026-06-26",
+        "2026-06-29",
+        "2026-06-30",
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03",
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-13",
+        "2026-07-14",
+        "2026-07-15",
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-20",
+        "2026-07-21",
+        "2026-07-22",
+        "2026-07-23",
+        "2026-07-24",
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-10",
+        "2026-08-11",
+        "2026-08-12",
+        "2026-08-13",
+        "2026-08-14",
+        "2026-08-17",
+        "2026-08-18",
+        "2026-08-19",
+        "2026-08-20",
+        "2026-08-21",
+        "2026-08-24",
+        "2026-08-25",
+        "2026-08-26",
+        "2026-08-27",
+        "2026-08-28",
+        "2026-08-31",
+        "2026-09-01",
+        "2026-09-02",
+        "2026-09-03",
+        "2026-09-04",
+        "2026-09-07",
+        "2026-09-08",
+        "2026-09-09",
+        "2026-09-10"
+      ],
+      "closes": [
+        59.0,
+        58.32,
+        60.66,
+        64.96,
+        59.3,
+        53.37,
+        58.62,
+        64.48,
+        70.93,
+        72.16,
+        72.39,
+        76.68,
+        69.08,
+        75.99,
+        72.72,
+        66.8,
+        60.12,
+        61.0,
+        60.2,
+        61.26,
+        65.38,
+        58.84,
+        56.61,
+        58.67,
+        64.54,
+        60.34,
+        54.31,
+        58.2,
+        55.66,
+        54.25,
+        48.83,
+        43.95,
+        44.2,
+        41.05,
+        39.9,
+        37.54,
+        39.66,
+        36.55,
+        35.21,
+        31.86,
+        35.05,
+        32.51,
+        35.76,
+        39.34,
+        43.27,
+        47.6,
+        52.36,
+        54.61,
+        60.07,
+        58.66,
+        60.65,
+        62.0,
+        57.6,
+        51.85,
+        57.04,
+        55.14,
+        57.85,
+        55.6,
+        51.9,
+        56.0,
+        53.19,
+        52.83,
+        50.05,
+        47.92,
+        47.95,
+        45.96,
+        48.01,
+        47.47,
+        47.52,
+        50.35
+      ],
+      "opens": [
+        59.74,
+        58.0,
+        54.7,
+        62.0,
+        58.58,
+        58.99,
+        55.8,
+        62.7,
+        66.4,
+        71.0,
+        69.5,
+        75.11,
+        76.67,
+        68.82,
+        74.34,
+        70.55,
+        67.09,
+        58.0,
+        59.0,
+        57.01,
+        62.29,
+        66.0,
+        58.13,
+        58.0,
+        60.57,
+        68.0,
+        59.14,
+        53.64,
+        59.94,
+        53.71,
+        53.34,
+        49.93,
+        42.4,
+        43.68,
+        41.78,
+        38.84,
+        37.85,
+        38.88,
+        36.5,
+        35.23,
+        35.05,
+        34.99,
+        33.85,
+        37.54,
+        40.81,
+        47.0,
+        52.36,
+        53.01,
+        54.63,
+        62.0,
+        59.59,
+        59.79,
+        61.45,
+        55.73,
+        53.28,
+        57.0,
+        57.83,
+        55.99,
+        54.42,
+        52.31,
+        55.76,
+        51.8,
+        53.0,
+        48.96,
+        48.65,
+        48.4,
+        47.0,
+        47.92,
+        48.02,
+        46.51
+      ],
+      "highs": [
+        59.96,
+        61.58,
+        62.98,
+        66.68,
+        65.0,
+        59.3,
+        58.71,
+        64.48,
+        70.93,
+        76.99,
+        74.48,
+        78.98,
+        76.68,
+        75.99,
+        78.0,
+        71.0,
+        68.15,
+        62.79,
+        63.7,
+        64.68,
+        66.46,
+        68.88,
+        59.95,
+        60.66,
+        64.54,
+        70.99,
+        61.88,
+        59.74,
+        60.5,
+        57.19,
+        53.88,
+        50.1,
+        45.26,
+        44.53,
+        42.9,
+        40.09,
+        39.8,
+        39.44,
+        36.95,
+        36.03,
+        35.05,
+        35.03,
+        35.76,
+        39.34,
+        43.27,
+        47.6,
+        52.36,
+        57.6,
+        60.07,
+        62.77,
+        60.8,
+        62.0,
+        62.35,
+        60.19,
+        57.04,
+        57.04,
+        58.5,
+        58.45,
+        55.0,
+        57.09,
+        56.6,
+        54.42,
+        53.0,
+        49.16,
+        48.84,
+        49.77,
+        48.87,
+        48.85,
+        49.52,
+        52.27
+      ],
+      "lows": [
+        58.38,
+        57.35,
+        54.6,
+        60.1,
+        58.57,
+        53.37,
+        55.05,
+        60.21,
+        65.98,
+        66.88,
+        67.56,
+        72.3,
+        69.01,
+        66.68,
+        70.0,
+        66.0,
+        60.12,
+        54.11,
+        58.89,
+        55.66,
+        62.29,
+        58.84,
+        54.09,
+        54.41,
+        60.57,
+        60.05,
+        54.31,
+        50.91,
+        54.28,
+        52.5,
+        48.83,
+        43.95,
+        39.56,
+        40.3,
+        39.27,
+        37.24,
+        36.71,
+        36.0,
+        33.58,
+        31.69,
+        33.33,
+        32.17,
+        32.18,
+        36.09,
+        40.81,
+        47.0,
+        50.53,
+        53.01,
+        53.49,
+        57.6,
+        57.3,
+        58.01,
+        56.55,
+        51.84,
+        50.02,
+        52.5,
+        52.5,
+        53.36,
+        50.92,
+        50.23,
+        53.1,
+        51.26,
+        49.1,
+        47.08,
+        46.61,
+        45.48,
+        46.0,
+        46.3,
+        47.08,
+        46.51
+      ],
+      "volumes": [
+        20302401.0,
+        20834500.0,
+        28925820.0,
+        33470422.0,
+        25224812.0,
+        19884006.0,
+        14404548.0,
+        6679678.0,
+        4123201.0,
+        22446148.0,
+        17453401.0,
+        18667900.0,
+        18693164.0,
+        20659626.0,
+        21608508.0,
+        14453550.0,
+        12951700.0,
+        17857022.0,
+        12286100.0,
+        13517702.0,
+        15131113.0,
+        14047803.0,
+        13819483.0,
+        13268250.0,
+        12338680.0,
+        34521330.0,
+        24676300.0,
+        29483400.0,
+        19273500.0,
+        16300650.0,
+        15370300.0,
+        11518815.0,
+        251753.0,
+        245242.0,
+        197470.0,
+        155056.0,
+        210601.0,
+        142428.0,
+        14693913.0,
+        19927900.0,
+        99118.0,
+        246765.0,
+        142353.0,
+        187920.0,
+        177286.0,
+        44482.0,
+        237859.0,
+        553829.0,
+        364254.0,
+        501672.0,
+        423843.0,
+        394214.0,
+        387243.0,
+        425243.0,
+        385100.0,
+        384805.0,
+        422517.0,
+        385390.0,
+        349618.0,
+        518809.0,
+        389712.0,
+        278678.0,
+        263243.0,
+        221305.0,
+        166398.0,
+        190619.0,
+        219288.0,
+        190682.0,
+        231831.0,
+        479496.0
+      ],
+      "macd_hist": [
+        2.7895217152967113,
+        1.97048588183263,
+        1.501497136554974,
+        1.523239316077536,
+        0.5767027374803533,
+        -0.9628891571570932,
+        -1.3643311012014117,
+        -0.9503913193714517,
+        0.03038550166694165,
+        0.6487051908461225,
+        0.8783165739210474,
+        1.3684540822077835,
+        0.47548747120209,
+        0.6133336505702012,
+        0.08932164549787913,
+        -1.1604978723948634,
+        -2.894079713345576,
+        -3.8684779116426533,
+        -4.521565253638412,
+        -4.69131798685372,
+        -4.147970667042422,
+        -4.537287741775396,
+        -4.9303224872526314,
+        -4.746291108106373,
+        -3.7131047348650537,
+        -3.478670631648912,
+        -3.9828124554965845,
+        -3.6482313290047728,
+        -3.617874301058725,
+        -3.6273166222677378,
+        -4.164759697909946,
+        -4.926554356529814,
+        -5.123035861449575,
+        -5.3771738273559055,
+        -5.386601091787828,
+        -5.3843158295435645,
+        -4.790730966994156,
+        -4.514261388291432,
+        -4.214843073360113,
+        -4.163677466593354,
+        -3.4265691275970642,
+        -3.021706193287276,
+        -2.1004161993412964,
+        -0.856828341603773,
+        0.5702038925583928,
+        2.0871626412242428,
+        3.631090227788608,
+        4.782345462679613,
+        6.025940042128263,
+        6.3716308139048765,
+        6.555849071323488,
+        6.532573743692748,
+        5.631673397038068,
+        4.042777960570138,
+        3.4930692303803794,
+        2.7106233509951334,
+        2.4055402427690966,
+        1.7770978942358546,
+        0.7898026341072892,
+        0.6230964056827473,
+        0.0960782241338296,
+        -0.3166617742987601,
+        -0.9442936653917813,
+        -1.5885989315755857,
+        -1.9302661535341343,
+        -2.3177588468988914,
+        -2.1927316857734196,
+        -2.078598958916446,
+        -1.8972352877463794,
+        -1.3240895526744647
+      ],
+      "chart_annotations": {
+        "markLines": [
+          {
+            "name": "source",
+            "yAxis": 50.35,
+            "lineStyle": {
+              "color": "rgba(116,185,255,0.5)",
+              "type": "dotted"
+            },
+            "label": {
+              "formatter": "参考 50.35",
+              "color": "#74b9ff",
+              "fontSize": 10
+            }
+          },
+          {
+            "name": "current",
+            "yAxis": 50.35,
+            "lineStyle": {
+              "color": "rgba(0,255,136,0.5)",
+              "type": "dotted"
+            },
+            "label": {
+              "formatter": "现价 50.35",
+              "color": "#00ff88",
+              "fontSize": 10
+            }
+          }
+        ],
+        "markPoints": [
+          {
+            "name": "强势启动候选",
+            "coord": [
+              "2026-09-10",
+              50.35
+            ],
+            "symbol": "pin",
+            "symbolSize": 30,
+            "itemStyle": {
+              "color": "#ff4757"
+            },
+            "label": {
+              "formatter": "强势启动候选",
+              "color": "#ff4757",
+              "fontSize": 10
+            }
+          },
+          {
+            "name": "startup",
+            "coord": [
+              "2026-09-10",
+              50.35
+            ],
+            "symbol": "triangle",
+            "symbolSize": 20,
+            "itemStyle": {
+              "color": "#00ff88"
+            },
+            "label": {
+              "formatter": "启动日",
+              "color": "#00ff88",
+              "fontSize": 10
+            }
+          }
+        ],
+        "labels": [
+          "确认日: 2026-09-10 15:00:00"
+        ]
+      },
+      "buy_points": [
+        {
+          "type": "强势启动候选",
+          "tier": "candidate",
+          "index": 69,
+          "price": 50.35,
+          "reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅6.0%",
+          "strength": "中",
+          "source_type": "日线强势启动",
+          "confirmed_by": "30min确认",
+          "confirmations": [
+            "30min两阳夹一阴确认"
+          ]
+        }
+      ],
+      "reference_buy_points": [
+        {
+          "type": "swing底背驰参考",
+          "tier": "reference",
+          "index": 55,
+          "price": 53.37,
+          "date": "2026-06-11",
+          "reason": "swing笔底背驰(力度比=40.90%)，仅供参考",
+          "strength": "弱",
+          "source_type": "",
+          "confirmed_by": "",
+          "confirmations": [],
+          "confirmation_evidence": {},
+          "daily_startup_grade": "",
+          "daily_startup_label": "",
+          "daily_startup_warning": "",
+          "sublevel_confirm_grade": "",
+          "sublevel_confirm_label": "",
+          "sublevel_confirm_reason": "",
+          "seed_type": "",
+          "seed_reason": "",
+          "signal_age_days": null,
+          "is_recent": true,
+          "recency_reason": "",
+          "signal_date": "",
+          "startup_index": null,
+          "startup_date": "",
+          "startup_age_days": null,
+          "confirm_index": null,
+          "confirm_date": "",
+          "confirm_age_days": null,
+          "reference_price": null,
+          "current_price": null,
+          "distance_from_reference_pct": null,
+          "startup_reason": "",
+          "startup_signals": [],
+          "change_pct": null,
+          "volume_ratio": null
+        }
+      ],
+      "blocked_buy_points": [],
+      "pivot_zg": null,
+      "pivot_zd": null,
+      "opportunity_score": 39,
+      "watch_score": 39,
+      "view_rank": 1,
+      "rank_trace": {
+        "base_source": "baseline",
+        "source_count": 1,
+        "signal_score": 2.82,
+        "entry_score": 16.0,
+        "momentum_score": 8.94,
+        "market_score": 6.0,
+        "risk_penalty": 0.0,
+        "data_penalty": 0.0,
+        "alpha_features": {
+          "market_regime_factor": {},
+          "sector_strength_factor": {
+            "sector_flow": 3017472512.0,
+            "sector_rank": 1.0,
+            "sector_strength_factor": null
+          },
+          "momentum_persistence": null,
+          "breakout_quality": {
+            "volume_ratio": null,
+            "confirmed_by": "30min确认",
+            "ma_bullish": false,
+            "confirmations": [
+              "30min两阳夹一阴确认"
+            ],
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "实体阳线≥3%"
+            ],
+            "distance": 0.0
+          },
+          "alpha_multiplier": null,
+          "pool_quality": {
+            "volume20": 335401.7,
+            "volume_ratio20": 1.4627,
+            "liquidity_label": "高流动性",
+            "liquidity_score": 100.0,
+            "code_style_score": 75.0,
+            "growth_board_score": 74.2702,
+            "growth_board_label": "中小成长",
+            "market_cap_score": 100.0,
+            "market_cap_label": "强弹性流通市值",
+            "market_cap_source": "circulating_market_cap",
+            "ret20": -14.1664,
+            "ret20_score": 15.1012,
+            "industry_key": "印制电路板",
+            "sector_quality_score": 100.0,
+            "pool_quality_tier": "elite",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 74.2702,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 100.0,
+                "source": "circulating_market_cap"
+              },
+              {
+                "name": "ret20",
+                "score": 15.1012
+              },
+              {
+                "name": "sector",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 90.9946,
+            "pool_quality_tags": [
+              "高流动性",
+              "中小成长",
+              "强弹性流通市值",
+              "板块质量上行"
+            ],
+            "market_cap": 195.3506,
+            "circulating_market_cap": 185.5414,
+            "float_market_cap": 185.5414,
+            "liquidity_source": "amounts",
+            "money20": 1807322799.5,
+            "quality_evidence_eligible": true,
+            "quality_evidence_status": "eligible"
+          },
+          "ma_bullish": false,
+          "confirmed_by": "30min确认",
+          "confirmations": [
+            "30min两阳夹一阴确认"
+          ],
+          "startup_signals": [
+            "涨幅≥4.0%",
+            "close_above_ma5",
+            "close_above_ma10",
+            "实体阳线≥3%"
+          ]
+        },
+        "alpha_bonus": 5.0,
+        "pool_quality_bonus": 2.7427,
+        "pool_quality_score": 90.9946,
+        "pool_quality_tags": [
+          "高流动性",
+          "中小成长",
+          "强弹性流通市值",
+          "板块质量上行"
+        ],
+        "pool_quality_tier": "elite",
+        "pool_quality_components": [
+          {
+            "name": "liquidity",
+            "score": 100.0,
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0
+          },
+          {
+            "name": "growth",
+            "score": 74.2702,
+            "threshold_elite": 55.0,
+            "threshold_strong": 55.0
+          },
+          {
+            "name": "sector",
+            "score": 100.0,
+            "threshold_elite": 70.0,
+            "threshold_strong": 55.0
+          }
+        ],
+        "alpha_multiplier": 1.0126,
+        "base_opportunity_score": 34,
+        "risk_flags": [],
+        "opportunity_score": 39,
+        "distance_from_reference_pct": 0.0,
+        "change_pct": 5.96,
+        "source:baseline": 1,
+        "selected_reason": "基准池单源入榜"
+      }
+    }
+  ],
   "picks_fusion": [],
   "sector_flow": [
     {
@@ -147,7 +1098,7 @@
   "sector_heat": {
     "schema_version": 1,
     "date": "2026-09-10",
-    "as_of": "2026-09-10T15:05:10+08:00",
+    "as_of": "2026-09-10T15:20:14+08:00",
     "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
     "status": "verified_partial",
     "items": [
@@ -173,7 +1124,7 @@
         "limit_up_count": 0,
         "net_flow": 487502080.0,
         "net_flow_text": "4.88亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_complete"
       },
@@ -237,7 +1188,7 @@
         "limit_up_count": 2,
         "net_flow": 3017472512.0,
         "net_flow_text": "30.17亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -333,7 +1284,7 @@
         "limit_up_count": 2,
         "net_flow": 1289976576.0,
         "net_flow_text": "12.90亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -492,7 +1443,7 @@
         "limit_up_count": 7,
         "net_flow": 2030780160.0,
         "net_flow_text": "20.31亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -586,7 +1537,7 @@
         "limit_up_count": 2,
         "net_flow": 1701689984.0,
         "net_flow_text": "17.02亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -760,7 +1711,7 @@
         "limit_up_count": 2,
         "net_flow": 1801276544.0,
         "net_flow_text": "18.01亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -809,7 +1760,7 @@
         "limit_up_count": 0,
         "net_flow": 922411680.0,
         "net_flow_text": "9.22亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -890,7 +1841,7 @@
         "limit_up_count": 0,
         "net_flow": 1029927968.0,
         "net_flow_text": "10.30亿",
-        "as_of": "2026-09-10T15:05:10+08:00",
+        "as_of": "2026-09-10T15:20:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       }
@@ -962,7 +1913,7 @@
       "sector": "多元金融",
       "lianban": 1,
       "first_time": "09:25",
-      "fund": 5882239,
+      "fund": 5569965,
       "zhaban": 6
     },
     {
@@ -973,7 +1924,7 @@
       "sector": "种植业",
       "lianban": 2,
       "first_time": "09:25",
-      "fund": 5357912,
+      "fund": 4267628,
       "zhaban": 1
     },
     {
@@ -984,7 +1935,7 @@
       "sector": "化学制药",
       "lianban": 1,
       "first_time": "09:25",
-      "fund": 8860030,
+      "fund": 8870060,
       "zhaban": 7
     },
     {
@@ -1006,7 +1957,7 @@
       "sector": "焦炭Ⅱ",
       "lianban": 3,
       "first_time": "09:30",
-      "fund": 5485199,
+      "fund": 5370507,
       "zhaban": 1
     },
     {
@@ -1017,7 +1968,7 @@
       "sector": "电网设备",
       "lianban": 2,
       "first_time": "09:30",
-      "fund": 4721920,
+      "fund": 4702824,
       "zhaban": 3
     },
     {
@@ -1050,7 +2001,7 @@
       "sector": "工程咨询",
       "lianban": 1,
       "first_time": "09:36",
-      "fund": 21016962,
+      "fund": 22011966,
       "zhaban": 0
     },
     {
@@ -1072,7 +2023,7 @@
       "sector": "燃气Ⅱ",
       "lianban": 1,
       "first_time": "09:38",
-      "fund": 2390850,
+      "fund": 2218005,
       "zhaban": 2
     },
     {
@@ -1094,7 +2045,7 @@
       "sector": "通信设备",
       "lianban": 2,
       "first_time": "09:41",
-      "fund": 6658686,
+      "fund": 6565374,
       "zhaban": 0
     },
     {
@@ -1116,7 +2067,7 @@
       "sector": "半导体",
       "lianban": 1,
       "first_time": "09:41",
-      "fund": 2144208,
+      "fund": 2178792,
       "zhaban": 2
     },
     {
@@ -1127,7 +2078,7 @@
       "sector": "玻璃玻纤",
       "lianban": 1,
       "first_time": "09:46",
-      "fund": 1697486,
+      "fund": 2282826,
       "zhaban": 1
     },
     {
@@ -1138,7 +2089,7 @@
       "sector": "消费电子",
       "lianban": 1,
       "first_time": "09:48",
-      "fund": 4347144,
+      "fund": 4718480,
       "zhaban": 0
     },
     {
@@ -1149,7 +2100,7 @@
       "sector": "电力",
       "lianban": 1,
       "first_time": "09:48",
-      "fund": 2170420,
+      "fund": 2459530,
       "zhaban": 2
     },
     {
@@ -1204,7 +2155,7 @@
       "sector": "电力",
       "lianban": 1,
       "first_time": "10:09",
-      "fund": 6126400,
+      "fund": 6776700,
       "zhaban": 0
     },
     {
@@ -1248,7 +2199,7 @@
       "sector": "专业工程",
       "lianban": 1,
       "first_time": "10:37",
-      "fund": 2944176,
+      "fund": 3147360,
       "zhaban": 1
     },
     {
@@ -1281,7 +2232,7 @@
       "sector": "一般零售",
       "lianban": 1,
       "first_time": "13:08",
-      "fund": 4960629,
+      "fund": 4817199,
       "zhaban": 0
     },
     {
@@ -1292,7 +2243,7 @@
       "sector": "电力",
       "lianban": 1,
       "first_time": "13:17",
-      "fund": 2357960,
+      "fund": 2016916,
       "zhaban": 0
     },
     {
@@ -1320,8 +2271,8 @@
   ],
   "limit_up_snapshot": {
     "date": "2026-09-10",
-    "as_of": "2026-09-10T15:09:17+08:00",
-    "generated_at": "2026-09-10T15:10:17+08:00",
+    "as_of": "2026-09-10T15:23:20+08:00",
+    "generated_at": "2026-09-10T15:24:14+08:00",
     "source": "eastmoney_limit_pools",
     "status": "verified_complete",
     "raw_total": 35,
@@ -1360,7 +2311,7 @@
         "sector": "多元金融",
         "lianban": 1,
         "first_time": "09:25",
-        "fund": 5882239,
+        "fund": 5569965,
         "zhaban": 6
       },
       {
@@ -1371,7 +2322,7 @@
         "sector": "种植业",
         "lianban": 2,
         "first_time": "09:25",
-        "fund": 5357912,
+        "fund": 4267628,
         "zhaban": 1
       },
       {
@@ -1382,7 +2333,7 @@
         "sector": "化学制药",
         "lianban": 1,
         "first_time": "09:25",
-        "fund": 8860030,
+        "fund": 8870060,
         "zhaban": 7
       },
       {
@@ -1404,7 +2355,7 @@
         "sector": "焦炭Ⅱ",
         "lianban": 3,
         "first_time": "09:30",
-        "fund": 5485199,
+        "fund": 5370507,
         "zhaban": 1
       },
       {
@@ -1415,7 +2366,7 @@
         "sector": "电网设备",
         "lianban": 2,
         "first_time": "09:30",
-        "fund": 4721920,
+        "fund": 4702824,
         "zhaban": 3
       },
       {
@@ -1448,7 +2399,7 @@
         "sector": "工程咨询",
         "lianban": 1,
         "first_time": "09:36",
-        "fund": 21016962,
+        "fund": 22011966,
         "zhaban": 0
       },
       {
@@ -1470,7 +2421,7 @@
         "sector": "燃气Ⅱ",
         "lianban": 1,
         "first_time": "09:38",
-        "fund": 2390850,
+        "fund": 2218005,
         "zhaban": 2
       },
       {
@@ -1492,7 +2443,7 @@
         "sector": "通信设备",
         "lianban": 2,
         "first_time": "09:41",
-        "fund": 6658686,
+        "fund": 6565374,
         "zhaban": 0
       },
       {
@@ -1514,7 +2465,7 @@
         "sector": "半导体",
         "lianban": 1,
         "first_time": "09:41",
-        "fund": 2144208,
+        "fund": 2178792,
         "zhaban": 2
       },
       {
@@ -1525,7 +2476,7 @@
         "sector": "玻璃玻纤",
         "lianban": 1,
         "first_time": "09:46",
-        "fund": 1697486,
+        "fund": 2282826,
         "zhaban": 1
       },
       {
@@ -1536,7 +2487,7 @@
         "sector": "消费电子",
         "lianban": 1,
         "first_time": "09:48",
-        "fund": 4347144,
+        "fund": 4718480,
         "zhaban": 0
       },
       {
@@ -1547,7 +2498,7 @@
         "sector": "电力",
         "lianban": 1,
         "first_time": "09:48",
-        "fund": 2170420,
+        "fund": 2459530,
         "zhaban": 2
       },
       {
@@ -1602,7 +2553,7 @@
         "sector": "电力",
         "lianban": 1,
         "first_time": "10:09",
-        "fund": 6126400,
+        "fund": 6776700,
         "zhaban": 0
       },
       {
@@ -1646,7 +2597,7 @@
         "sector": "专业工程",
         "lianban": 1,
         "first_time": "10:37",
-        "fund": 2944176,
+        "fund": 3147360,
         "zhaban": 1
       },
       {
@@ -1679,7 +2630,7 @@
         "sector": "一般零售",
         "lianban": 1,
         "first_time": "13:08",
-        "fund": 4960629,
+        "fund": 4817199,
         "zhaban": 0
       },
       {
@@ -1690,7 +2641,7 @@
         "sector": "电力",
         "lianban": 1,
         "first_time": "13:17",
-        "fund": 2357960,
+        "fund": 2016916,
         "zhaban": 0
       },
       {
@@ -1978,8 +2929,8 @@
     "config_revision": "watchlist-20260820-01",
     "analysis_revision": "watchlist-20260820-01:2026-09-10:9ea4ce189cd8",
     "date": "2026-09-10",
-    "as_of": "2026-09-10T15:05:10+08:00",
-    "generated_at": "2026-09-10T15:05:10+08:00",
+    "as_of": "2026-09-10T15:20:14+08:00",
+    "generated_at": "2026-09-10T15:20:14+08:00",
     "status": "ok",
     "fresh_count": 5,
     "stale_count": 0,
@@ -2164,7 +3115,7 @@
     "model": "gpt-5.6-luna",
     "prompt_version": "decision-brief-v4",
     "schema_version": "1",
-    "generated_at": "2026-09-10T15:05:10+08:00",
+    "generated_at": "2026-09-10T15:20:14+08:00",
     "evidence_registry": [
       {
         "evidence_ref": "event:2026-09-10:2f7d6cb77ca7",
@@ -2661,7 +3612,7 @@
         "watchlist_impacts": [],
         "risk_reasons": [],
         "rule_summary": "电力出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "电力板块出现事件催化并形成涨停梯队，但个人重点池暂无对应标的。",
+        "llm_summary": "电力板块出现事件催化并形成涨停梯队，方向获得板块强度确认。",
         "next_trigger": [
           "电力资金与涨停梯队继续共振"
         ],
@@ -2718,7 +3669,7 @@
         ],
         "risk_reasons": [],
         "rule_summary": "光模块出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "光电展会与产业景气形成事件催化，通信设备出现涨停映射，重点池中的光通信标的构成跟踪交集。",
+        "llm_summary": "光电展会与产业高景气形成事件催化，通信设备出现涨停，重点池个股纳入跟踪但仍需强度确认。",
         "next_trigger": [
           "光模块资金与涨停梯队继续共振"
         ],
@@ -2747,72 +3698,43 @@
         ]
       },
       {
-        "thesis_id": "thesis:2026-09-10:b363e78153c0",
-        "theme": "半导体",
+        "thesis_id": "thesis:2026-09-10:3bda496a21eb",
+        "theme": "消费电子",
         "direction": "positive",
         "stage": "confirmed",
         "confidence": "high",
-        "rule_score": 65.0,
+        "rule_score": 56.0,
         "evidence_refs": [
-          "event:2026-09-10:fc1d41f8454f",
-          "limit-theme:2026-09-10:dcc56252e4af",
-          "watch-fact:2026-09-10:300139",
-          "watch-fact:2026-09-10:688525"
+          "event:2026-09-10:233810eb6af6",
+          "limit-theme:2026-09-10:1782fefe353a"
         ],
         "sector_links": [
           {
-            "name": "半导体",
+            "name": "消费电子",
             "link_type": "limit_up_theme",
-            "evidence_ref": "limit-theme:2026-09-10:dcc56252e4af"
+            "evidence_ref": "limit-theme:2026-09-10:1782fefe353a"
           }
         ],
-        "stock_links": [
-          {
-            "code": "300139",
-            "name": "晓程科技",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-09-10:300139"
-          },
-          {
-            "code": "688525",
-            "name": "佰维存储",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-09-10:688525"
-          }
-        ],
-        "watchlist_impacts": [
-          "300139",
-          "688525"
-        ],
+        "stock_links": [],
+        "watchlist_impacts": [],
         "risk_reasons": [],
-        "rule_summary": "半导体出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "光电产业催化与半导体涨停映射形成正向方向，但重点池中晓程科技的贵金属标签与半导体主题存在语义偏差，需继续观察共振。",
+        "rule_summary": "消费电子出现催化，需由资金、涨停梯队与重点股共同确认。",
+        "llm_summary": "折叠屏供应链事件带动消费电子形成板块催化，但涨停梯队仍偏弱。",
         "next_trigger": [
-          "半导体资金与涨停梯队继续共振"
+          "消费电子资金与涨停梯队继续共振"
         ],
         "invalidation": [
-          "半导体资金转弱或重点股结构失效"
+          "消费电子资金转弱或重点股结构失效"
         ],
         "confirmation_conditions": [
-          "半导体资金与涨停梯队继续共振"
+          "消费电子资金与涨停梯队继续共振"
         ],
         "invalidation_conditions": [
-          "半导体资金转弱或重点股结构失效"
+          "消费电子资金转弱或重点股结构失效"
         ],
         "llm_stage": "confirmed",
         "llm_confidence": "high",
-        "llm_stock_mentions": [
-          {
-            "code": "300139",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-09-10:300139"
-          },
-          {
-            "code": "688525",
-            "link_type": "watchlist_intersection",
-            "evidence_ref": "watch-fact:2026-09-10:688525"
-          }
-        ]
+        "llm_stock_mentions": []
       }
     ],
     "arbitration": [
@@ -2965,8 +3887,8 @@
       {
         "record_type": "direction",
         "event_ref": "",
-        "thesis_id": "thesis:2026-09-10:b363e78153c0",
-        "rule_score": 65.0,
+        "thesis_id": "thesis:2026-09-10:3bda496a21eb",
+        "rule_score": 56.0,
         "rule_result": "positive",
         "llm_result": "positive",
         "arbitration_result": "positive",
@@ -4578,21 +5500,21 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "上海加码新能源建设，光伏风电储能氢能获政策支持",
+        "headline": "上海加码新能源建设，光伏风电储能板块获政策催化",
         "analysis": [
-          "上海新能源规划持续推进，带动相关项目投资加速落地",
-          "光伏、海上风电与储能规模化应用预期进一步增强",
-          "氢基燃料示范布局有望培育新的产业增长点"
+          "上海规划明确加快光伏风电和储能项目建设",
+          "氢基燃料示范布局有望带动相关产业投资",
+          "区域政策利好新能源设备及电力基础设施需求"
         ],
         "positive_sectors": [
           "光伏",
           "风电",
-          "氢能源"
+          "储能"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "上海加码新能源建设，光伏风电储能氢能获政策支持",
+        "summary": "上海加码新能源建设，光伏风电储能板块获政策催化",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -4605,8 +5527,8 @@
     },
     {
       "title": "9月10日收评：北证50指数跌2.81%，全市场成交仅1.66万亿",
-      "content": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电路、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
-      "brief": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电路、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
+      "content": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电力、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
+      "brief": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电力、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
       "ctime": 1789023654,
       "stock_list": [],
       "plate_list": [],
@@ -4649,7 +5571,7 @@
       },
       "display_title": "9月10日收评：北证50指数跌2.81%，全市场成交仅1.66万亿",
       "display_body": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板",
-      "raw_content": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电路、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
+      "raw_content": "1、市场全天震荡调整，三大指数集体下挫，北证50跌超2.8%。电力股表现活跃，华银电力、闽东电力、乐山电力等涨停。玻纤概念股走强，再升科技、九鼎新材、凯盛新能涨停。银行板块逆势拉升，南京银行、江苏银行、杭州银行、成都银行均创历史新高。下跌方面，农业股集体调整，中粮糖业、海南橡胶跌停。个股跌多涨少，沪深京三市超4500股飘绿，今日成交1.66万亿。截止收盘沪指跌0.43%，深成指跌0.77%，创业板指跌0.49%。\n2、板块概念方面，玻纤、银行、电力、PCB等板块涨幅居前，农业、培育钻石、医药医疗、白酒等板块跌幅居前。\n3、两市共932只个股上涨，39只个股涨停，4192只个股下跌，13只个股跌停，22只股票炸板，炸板率37%。",
       "has_redundant_content": true
     },
     {
@@ -4829,11 +5751,11 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "电力板块持续走强，多只电力股涨停推动市场热点升温",
+        "headline": "电力板块盘中异动走强，多只电力股获得短线资金关注",
         "analysis": [
-          "电力股集体异动显示资金持续聚焦高股息方向",
-          "连续涨停强化板块短线情绪，或吸引增量资金跟随",
-          "个股快速拉升后波动加大，需警惕高位分化风险"
+          "电力板块集体拉升显示资金避险与主题偏好升温",
+          "闽东电力连续涨停强化板块短线示范效应",
+          "板块持续性仍需观察成交量和龙头溢价变化"
         ],
         "positive_sectors": [
           "电力"
@@ -4843,36 +5765,36 @@
           {
             "name": "闽东电力",
             "code": "000993",
-            "reason": "电力板块异动并实现两连板"
+            "reason": "电力板块拉升并实现两连板"
           },
           {
             "name": "芯能科技",
             "code": "603105",
-            "reason": "电力板块拉升中涨停"
+            "reason": "电力板块异动中涨停"
           },
           {
             "name": "湖南发展",
             "code": "000722",
-            "reason": "电力板块异动跟涨"
+            "reason": "电力板块异动中跟涨"
           },
           {
             "name": "豫能控股",
             "code": "001896",
-            "reason": "电力板块异动跟涨"
+            "reason": "电力板块异动中跟涨"
           },
           {
             "name": "华银电力",
             "code": "600744",
-            "reason": "电力板块异动跟涨"
+            "reason": "电力板块异动中跟涨"
           },
           {
             "name": "金开新能",
             "code": "600821",
-            "reason": "电力板块异动跟涨"
+            "reason": "电力板块异动中跟涨"
           }
         ],
         "negative_stocks": [],
-        "summary": "电力板块持续走强，多只电力股涨停推动市场热点升温",
+        "summary": "电力板块盘中异动走强，多只电力股获得短线资金关注",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -4962,21 +5884,21 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "光博会聚焦AI算力，光通信及上游产业链景气度获提振",
+        "headline": "光博会聚焦AI算力，光通信及配套产业链景气度获强化",
         "analysis": [
-          "AI算力扩张持续提升光模块与光纤光缆需求预期",
-          "CPO、NPO等技术迭代推动光通信产业升级",
-          "PCB和MLCC等配套环节有望受益于算力建设扩容"
+          "AI算力扩张持续提升光模块和光纤光缆需求",
+          "CPO等技术迭代有望推动光通信产业升级",
+          "PCB和MLCC等上游配套环节或同步受益"
         ],
         "positive_sectors": [
           "光通信",
           "PCB",
-          "半导体"
+          "电子元件"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "光博会聚焦AI算力，光通信及上游产业链景气度获提振",
+        "summary": "光博会聚焦AI算力，光通信及配套产业链景气度获强化",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -5058,26 +5980,26 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "领益智造获苹果折叠屏订单，精密结构件量产预期升温",
+        "headline": "领益智造获曝供应苹果折叠屏，精密结构件需求预期升温",
         "analysis": [
-          "苹果折叠屏供应链落地提升公司消费电子业务预期",
-          "铰链结构件等高价值产品有望提高单机贡献",
-          "量产爬坡和客户交付或推动后续业绩逐步兑现"
+          "苹果折叠屏供应链消息提升领益智造订单预期",
+          "铰链结构件和散热产品单机价值量高于直板机",
+          "量产爬坡若顺利将改善公司消费电子盈利预期"
         ],
         "positive_sectors": [
           "消费电子",
-          "苹果概念"
+          "折叠屏"
         ],
         "negative_sectors": [],
         "positive_stocks": [
           {
             "name": "领益智造",
             "code": "002600",
-            "reason": "供应苹果折叠屏核心精密件"
+            "reason": "被报道为苹果折叠屏供应商"
           }
         ],
         "negative_stocks": [],
-        "summary": "领益智造获苹果折叠屏订单，精密结构件量产预期升温",
+        "summary": "领益智造获曝供应苹果折叠屏，精密结构件需求预期升温",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -5090,19 +6012,18 @@
     }
   ],
   "forecast": {
-    "core_judgment": "指数处于无中枢调整，权重抗跌，题材分化，暂未确认趋势反转",
-    "volume_note": "成交量较5日均量低5.3%，反弹缺乏量能确认",
+    "core_judgment": "指数缩量调整，缠论中枢未成，暂属结构性弱势震荡",
+    "volume_note": "较5日均量缩5.3%，突破确认度不足",
     "short_term": [
-      "若上证放量站上3950点并连续两日守稳，关注向上试探4000点；否则仍属弱反抽",
-      "若上证跌破3900点且成交放大，调整可能延伸至3850点附近",
-      "电力、光伏风电、光通信获政策与事件催化，但需观察资金能否持续集中",
-      "创业板3338点、科创501569点若继续弱于上证，市场仍以防御和结构性行情为主"
+      "若上证放量站上3950点，且成交额明显回升，短线可看向4000点；否则仍以震荡为主",
+      "若上证跌破3900点且个股跌幅扩大，调整可能延伸，暂不宜追高",
+      "PCB、光通信获事件催化但指数未共振，宜观察强势板块能否持续两日并带量"
     ],
-    "mid_term": "目前日线无可识别中枢且未见明显背驰，暂不能定义一买或二买。若指数在3900至3950点缩量企稳、随后放量突破3950点，可视为中枢构建并尝试向上离开；若跌破3900点，则需防止向下寻找新支撑。",
+    "mid_term": "当前尚未形成清晰日线中枢，暂不能确认二买或三买。后续若在3900至4000点间完成中枢并向上放量，可演化为向上离开；若跌破3900点并伴随资金面恶化，则可能转为向下离开。重点观察量能、银行护盘持续性及科技主线扩散。",
     "risks": [
-      "沪深京约4300股下跌，指数跌幅有限但个股亏钱效应明显，追高题材风险较大",
-      "资金虽集中流入电力、PCB等板块，但锂电池等方向资金流入仍下跌，存在冲高回落风险",
-      "成交量低于5日均值且主要指数同步收跌，若3950点附近无法放量突破，可能形成假突破"
+      "指数缩量而超4300股下跌，市场广度恶化，权重护盘可能掩盖个股风险",
+      "PCB、光通信及电力若仅受消息脉冲推动，无法持续放量，容易出现冲高回落",
+      "跌破3900点后若成交放大，日线中枢下沿未形成，不能贸然按缠论二买介入"
     ]
   },
   "sell_signals": [],
@@ -5112,7 +6033,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3516b54ffedef7e3",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "000532",
       "name": "华金资本",
       "reference_close": 12.453018518518517,
@@ -5190,7 +6111,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:548839784a082c45",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "000722",
       "name": "湖南发展",
       "reference_close": 14.718130563798221,
@@ -5268,7 +6189,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:c006c688677cd27d",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "000823",
       "name": "超声电子",
       "reference_close": 18.7,
@@ -5346,7 +6267,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5b0b2e779427a19d",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "000993",
       "name": "闽东电力",
       "reference_close": 12.781635467980294,
@@ -5424,7 +6345,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:76a787f79557924f",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "002204",
       "name": "大连重工",
       "reference_close": 5.89,
@@ -5501,7 +6422,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:208130d7a3478ec0",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "002531",
       "name": "天顺风能",
       "reference_close": 7.1697744360902265,
@@ -5576,9 +6497,138 @@
     },
     {
       "schema_version": "1",
+      "recommendation_id": "rec:1fd8545826a88b24",
+      "report_date": "2026-09-10",
+      "generated_at": "2026-09-10T15:20:14+08:00",
+      "code": "002552",
+      "name": "宝鼎科技",
+      "reference_close": 50.35,
+      "reference_close_source": "closes[-1]",
+      "policy_version": "decision-v1",
+      "config_revision": "sha256:d68dfdafb274b3a6",
+      "code_version": "unknown",
+      "strategy_contributions": [
+        {
+          "contribution_id": "contrib:4855732466cdc47c",
+          "strategy_name": "daily_pure",
+          "display_name": "日线纯净策略",
+          "strategy_version": "daily-pure-close-v1",
+          "version_status": "verified",
+          "source_pool": "picks_pure",
+          "decision_code": "observe",
+          "decision_label": "观察",
+          "decision_engine_version": "1",
+          "entry_mode": "immediate_close",
+          "intended_horizon": null,
+          "publication_status": "published",
+          "user_action": "watch",
+          "cohort_eligible": false,
+          "evaluation_role": "baseline",
+          "publication_surface": "baseline_candidates",
+          "evaluation_eligible": true,
+          "eligibility_reason": "baseline_candidate",
+          "attribution_status": "verified",
+          "reason_snapshot": {
+            "decision_engine_v1": {
+              "version": "1",
+              "code": "002552",
+              "name": "宝鼎科技",
+              "decision": "观察",
+              "decision_code": "observe",
+              "total_score": 76,
+              "structure": {
+                "score": 20,
+                "reasons": [
+                  "震荡结构",
+                  "回踩确认"
+                ]
+              },
+              "position": {
+                "score": 15,
+                "reasons": [
+                  "120日收盘分位中位"
+                ]
+              },
+              "sentiment": {
+                "score": 41,
+                "reasons": [
+                  "板块热点",
+                  "放量启动",
+                  "震荡市",
+                  "动能积极"
+                ]
+              },
+              "risk_reasons": [
+                "市场情绪偏冷",
+                "市场情绪转弱"
+              ]
+            },
+            "best_buy_point": {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 119,
+              "price": 50.35,
+              "reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅6.0%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "confirmation_evidence": {
+                "schema_version": 1,
+                "sufficient_bars": true,
+                "ema_bullish_alignment": true,
+                "close_above_ema5": true,
+                "ema5_rising_bars": 3,
+                "recent_peak_drawdown_pct": 3.673235,
+                "macd_hist_direction": "weakening",
+                "ema5_reclaim": true,
+                "stop_fall": false,
+                "buy_point": null,
+                "fresh_yang_pattern": "two_yang_one_yin",
+                "recovery_bundle_match": false
+              },
+              "startup_reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；涨幅6.0%",
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "实体阳线≥3%"
+              ],
+              "startup_index": 119,
+              "startup_date": "2026-09-10",
+              "startup_age_days": 0,
+              "confirm_index": 79,
+              "confirm_date": "2026-09-10 15:00:00",
+              "confirm_age_days": 0,
+              "change_pct": 5.96,
+              "volume_ratio": 2.4,
+              "daily_startup_grade": "strong",
+              "daily_startup_label": "强启动",
+              "sublevel_confirm_grade": "A",
+              "sublevel_confirm_label": "A级确认",
+              "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+              "signal_age_days": 0,
+              "is_recent": true,
+              "signal_date": "2026-09-10",
+              "recency_reason": "信号发生在最近0个交易日内"
+            },
+            "opportunity_score": null,
+            "watch_score": null,
+            "score": 35.2,
+            "source_channel": "low_position",
+            "trend_type": "",
+            "sector": "印制电路板"
+          }
+        }
+      ]
+    },
+    {
+      "schema_version": "1",
       "recommendation_id": "rec:e5b00b30413ddba2",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "002912",
       "name": "中新赛克",
       "reference_close": 21.37,
@@ -5655,7 +6705,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f1d2422e9bfc76d2",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "600644",
       "name": "乐山电力",
       "reference_close": 10.07111111111111,
@@ -5733,7 +6783,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b2adc62ce1ff9af6",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "601231",
       "name": "环旭电子",
       "reference_close": 27.92,
@@ -5810,7 +6860,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:303f12b19d007481",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "603105",
       "name": "芯能科技",
       "reference_close": 8.508205841446454,
@@ -5888,7 +6938,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:99cb2de4c08932a2",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "603316",
       "name": "诚邦股份",
       "reference_close": 15.72,
@@ -5965,7 +7015,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:832626843a6979b5",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "603318",
       "name": "水发燃气",
       "reference_close": 10.037041036717067,
@@ -6043,7 +7093,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:68c2f51a76f89ad0",
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
       "code": "603421",
       "name": "鼎信通讯",
       "reference_close": 6.6303744149766,
@@ -6856,16 +7906,16 @@
         },
         "classification_status": "explicit",
         "classification_status_counts": {
-          "explicit": 134
+          "explicit": 135
         },
-        "signal_count": 134,
-        "evaluation_contract_signal_count": 134,
+        "signal_count": 135,
+        "evaluation_contract_signal_count": 135,
         "non_evaluation_signal_count": 0,
-        "eligible_signal_count": 124,
+        "eligible_signal_count": 125,
         "excluded_signal_count": 10,
-        "ledger_active_dates": 10,
+        "ledger_active_dates": 11,
         "ledger_date_start": "2026-08-27",
-        "ledger_date_end": "2026-09-09",
+        "ledger_date_end": "2026-09-10",
         "sample_exclusions": [
           {
             "incident_id": "price-basis-mismatch-2026-09-03-daily-pure",
@@ -6874,30 +7924,30 @@
           }
         ],
         "gate_outcomes": {
-          "observe": 59,
+          "observe": 60,
           "recommend": 61,
           "reject": 14
         },
         "publication_outcomes": {
-          "watch": 59,
+          "watch": 60,
           "recommendation": 61,
           "none": 14
         },
         "attribution_status_counts": {
-          "verified": 134
+          "verified": 135
         },
         "attribution_status": "verified",
         "evidence_tier": "prospective_ledger",
-        "latest_run_status": "verified_empty",
-        "latest_run_reason": "策略运行正常，今日没有信号",
+        "latest_run_status": "ran",
+        "latest_run_reason": "策略已运行并产生信号",
         "latest_run_blocking_reason": "",
-        "latest_signal_count": 0,
-        "latest_source_candidate_count": 0,
+        "latest_signal_count": 1,
+        "latest_source_candidate_count": 1,
         "latest_published_count": null,
         "latest_report_date": "2026-09-10",
-        "active_dates": 10,
+        "active_dates": 11,
         "active_months": 2,
-        "episode_count": 118,
+        "episode_count": 119,
         "evaluable_episode_count": 117,
         "sample_size": null,
         "matured_by_horizon": {
@@ -6908,17 +7958,17 @@
         "maturity_by_horizon": {
           "t1": {
             "mature": 117,
-            "waiting": 0,
+            "waiting": 1,
             "unavailable": 1
           },
           "t3": {
             "mature": 103,
-            "waiting": 14,
+            "waiting": 15,
             "unavailable": 1
           },
           "t5": {
             "mature": 89,
-            "waiting": 28,
+            "waiting": 29,
             "unavailable": 1
           }
         },
@@ -6931,7 +7981,7 @@
           "t1": {
             "status": "collecting",
             "mature_samples": 117,
-            "waiting_samples": 0,
+            "waiting_samples": 1,
             "unavailable_samples": 1,
             "required_mature_samples": 100,
             "active_dates": 10,
@@ -6942,7 +7992,7 @@
           "t3": {
             "status": "collecting",
             "mature_samples": 103,
-            "waiting_samples": 14,
+            "waiting_samples": 15,
             "unavailable_samples": 1,
             "required_mature_samples": 100,
             "active_dates": 8,
@@ -6953,7 +8003,7 @@
           "t5": {
             "status": "collecting",
             "mature_samples": 89,
-            "waiting_samples": 28,
+            "waiting_samples": 29,
             "unavailable_samples": 1,
             "required_mature_samples": 100,
             "active_dates": 6,
@@ -6978,7 +8028,7 @@
         "evaluation_statuses": {
           "evaluated": 89,
           "partial": 28,
-          "right_censored": 1
+          "right_censored": 2
         },
         "overall_verdict": null,
         "returns": {
@@ -7693,22 +8743,22 @@
     },
     "sublevel_upgrade_pure": {
       "requested_30min": 336,
-      "fetched_30min": 27,
+      "fetched_30min": 75,
       "formal_kept": 0,
       "candidate_upgraded": 0,
-      "dropped_no_confirm": 27,
-      "dropped_no_30min": 309,
-      "dropped_risk_guard": 16,
-      "dropped_diverge_far": 11
+      "dropped_no_confirm": 75,
+      "dropped_no_30min": 261,
+      "dropped_risk_guard": 38,
+      "dropped_diverge_far": 37
     },
     "sublevel_upgrade_fusion": {
       "requested_30min": 336,
-      "fetched_30min": 27,
+      "fetched_30min": 75,
       "formal_kept": 0,
       "candidate_upgraded": 0,
-      "dropped_no_confirm": 27,
-      "dropped_no_30min": 309,
-      "dropped_risk_guard": 16
+      "dropped_no_confirm": 75,
+      "dropped_no_30min": 261,
+      "dropped_risk_guard": 38
     },
     "kline_cache": {
       "day_hit": 0,
@@ -7721,31 +8771,39 @@
     },
     "fusion_admission": {
       "market_regime": "weak",
-      "input_count": 0,
-      "dropped_by_ma": 0,
+      "input_count": 1,
+      "dropped_by_ma": 1,
       "dropped_by_market_regime": 0,
       "dropped_by_signal_gate": 0,
       "kept_formal": 0,
       "kept_candidate": 0,
-      "drop_details": [],
+      "drop_details": [
+        {
+          "code": "002552",
+          "name": "宝鼎科技",
+          "type": "强势启动候选",
+          "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
+        }
+      ],
       "output_count": 0,
-      "pure_fusion_identical": true,
-      "identical_reason": "pure无推荐"
+      "pure_fusion_identical": false
     },
-    "signal_distribution": {},
+    "signal_distribution": {
+      "强势启动候选": 1
+    },
     "event_analysis_status_counts": {
       "ok": 10,
       "failed": 0,
       "skipped": 0
     },
     "chart_annotation_coverage": {
-      "total_picks": 0,
-      "with_annotations": 0
+      "total_picks": 1,
+      "with_annotations": 1
     },
     "data_quality": {
       "report_date": "2026-09-10",
-      "generated_at": "2026-09-10T15:05:10+08:00",
-      "as_of": "2026-09-10T15:05:10+08:00",
+      "generated_at": "2026-09-10T15:20:14+08:00",
+      "as_of": "2026-09-10T15:20:14+08:00",
       "bar_state": "closed",
       "is_trading_day": true,
       "is_official": true,
@@ -7857,7 +8915,7 @@
         "920961",
         "920981"
       ],
-      "daily_refresh_mode": "db_first",
+      "daily_refresh_mode": "missing_only",
       "missing_30min_count": 0,
       "stock_pool_incomplete": false,
       "sector_component_diagnostics": [
@@ -8072,20 +9130,21 @@
         "remote_error": "",
         "name_resolution_missing_codes": []
       },
-      "daily_run_mode": "db_first",
+      "daily_run_mode": "missing_only",
       "market_close_snapshot": {
         "status": "complete",
         "report_date": "2026-09-10",
-        "requested": 5912,
-        "unique": 5912,
-        "valid_a_rows": 5912,
-        "quoted_rows": 5549,
-        "written": 5198,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 351,
-        "history_eligible_rows": 5532,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5532,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "coverage": 0.939624,
-        "remote_calls": 1,
+        "remote_calls": 0,
+        "source": "db",
         "valid_bar_count": 5198
       },
       "runtime_policy": {
@@ -8180,9 +9239,9 @@
       },
       "market_cap_evidence": {
         "requested": 946,
-        "db_hits": 938,
-        "remote_requested": 8,
-        "remote_hits": 8,
+        "db_hits": 946,
+        "remote_requested": 0,
+        "remote_hits": 0,
         "hydrated": 946,
         "max_workers": 20
       },
@@ -8224,7 +9283,7 @@
         "h4_t3": {
           "status": "verified",
           "required_date": "2026-09-10",
-          "dependent_candidate_count": 0,
+          "dependent_candidate_count": 1,
           "invalid_count": 0,
           "invalid_codes": [],
           "formal_actions_allowed": true,
@@ -8309,36 +9368,84 @@
           "required_date": "2026-09-10",
           "status": "partial",
           "requested_count": 336,
-          "verified_count": 27,
-          "missing_count": 309,
+          "verified_count": 75,
+          "missing_count": 261,
           "verified_codes": [
+            "000513",
+            "000591",
             "000600",
+            "000603",
+            "000767",
             "000786",
+            "001280",
+            "001309",
             "002010",
+            "002049",
+            "002057",
+            "002183",
+            "002233",
+            "002245",
+            "002340",
+            "002459",
+            "002475",
+            "002552",
+            "002797",
             "002849",
             "002992",
+            "300007",
             "300033",
+            "300130",
+            "300184",
+            "300223",
+            "300251",
             "300259",
             "300264",
+            "300283",
+            "300393",
+            "300418",
             "300499",
+            "300511",
+            "300557",
+            "300568",
             "300696",
             "300900",
+            "301070",
+            "301095",
+            "301099",
+            "301568",
             "301632",
             "600062",
             "600157",
             "600262",
             "600350",
             "600449",
+            "600502",
+            "600726",
+            "600816",
+            "600879",
+            "600909",
             "600970",
+            "601001",
             "601100",
+            "601117",
+            "601126",
             "601226",
             "601881",
+            "603155",
             "603179",
             "603301",
+            "603345",
+            "603386",
+            "603693",
+            "603885",
             "605088",
             "605090",
+            "605358",
+            "688155",
             "688327",
-            "688525"
+            "688403",
+            "688525",
+            "688772"
           ],
           "missing_codes": [
             "000065",
@@ -8346,16 +9453,12 @@
             "000099",
             "000157",
             "000426",
-            "000513",
             "000534",
             "000539",
-            "000591",
-            "000603",
             "000630",
             "000682",
             "000720",
             "000762",
-            "000767",
             "000777",
             "000778",
             "000783",
@@ -8370,20 +9473,16 @@
             "001212",
             "001215",
             "001258",
-            "001280",
             "001286",
             "001287",
             "001289",
-            "001309",
             "001331",
             "001391",
             "001393",
             "001896",
             "002027",
-            "002049",
             "002050",
             "002052",
-            "002057",
             "002074",
             "002077",
             "002135",
@@ -8391,40 +9490,31 @@
             "002152",
             "002176",
             "002179",
-            "002183",
             "002185",
             "002202",
             "002225",
             "002230",
-            "002233",
-            "002245",
             "002249",
             "002266",
             "002271",
             "002272",
             "002273",
-            "002340",
             "002379",
             "002384",
             "002429",
             "002439",
             "002456",
-            "002459",
-            "002475",
             "002506",
-            "002552",
             "002559",
             "002565",
             "002654",
             "002730",
             "002755",
-            "002797",
             "002843",
             "002850",
             "002851",
             "002939",
             "003022",
-            "300007",
             "300014",
             "300015",
             "300036",
@@ -8433,23 +9523,16 @@
             "300059",
             "300088",
             "300129",
-            "300130",
             "300139",
             "300182",
-            "300184",
             "300207",
-            "300223",
-            "300251",
             "300257",
-            "300283",
             "300296",
             "300302",
             "300308",
             "300315",
             "300364",
             "300377",
-            "300393",
-            "300418",
             "300435",
             "300438",
             "300443",
@@ -8457,13 +9540,10 @@
             "300476",
             "300488",
             "300494",
-            "300511",
             "300522",
             "300529",
             "300541",
             "300553",
-            "300557",
-            "300568",
             "300572",
             "300604",
             "300632",
@@ -8490,9 +9570,6 @@
             "300964",
             "300972",
             "300991",
-            "301070",
-            "301095",
-            "301099",
             "301150",
             "301155",
             "301161",
@@ -8502,7 +9579,6 @@
             "301263",
             "301338",
             "301468",
-            "301568",
             "301577",
             "301588",
             "301626",
@@ -8536,33 +9612,25 @@
             "600456",
             "600478",
             "600499",
-            "600502",
             "600509",
             "600519",
             "600642",
             "600681",
-            "600726",
             "600757",
             "600761",
             "600773",
-            "600816",
             "600835",
             "600863",
             "600875",
-            "600879",
             "600884",
             "600888",
             "600906",
-            "600909",
             "600930",
             "600977",
-            "601001",
             "601016",
             "601021",
             "601077",
             "601096",
-            "601117",
-            "601126",
             "601138",
             "601238",
             "601360",
@@ -8582,13 +9650,10 @@
             "603019",
             "603038",
             "603066",
-            "603155",
             "603160",
             "603203",
             "603279",
             "603308",
-            "603345",
-            "603386",
             "603418",
             "603501",
             "603568",
@@ -8597,16 +9662,13 @@
             "603662",
             "603666",
             "603678",
-            "603693",
             "603698",
             "603733",
             "603801",
-            "603885",
             "603916",
             "603929",
             "605011",
             "605305",
-            "605358",
             "605366",
             "605598",
             "688008",
@@ -8618,7 +9680,6 @@
             "688122",
             "688135",
             "688150",
-            "688155",
             "688181",
             "688187",
             "688225",
@@ -8631,7 +9692,6 @@
             "688359",
             "688388",
             "688396",
-            "688403",
             "688416",
             "688486",
             "688523",
@@ -8647,7 +9707,6 @@
             "688711",
             "688757",
             "688766",
-            "688772",
             "688788",
             "688820"
           ],
@@ -8658,7 +9717,7 @@
     "common_upstream": {
       "picks_fusion": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
+        "upstream_count": 1,
         "input_count": 0,
         "kept_count": 0,
         "excluded_count": 0,
@@ -8666,10 +9725,10 @@
       },
       "startup_watchlist": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
-        "input_count": 52,
+        "upstream_count": 1,
+        "input_count": 51,
         "kept_count": 13,
-        "excluded_count": 39,
+        "excluded_count": 38,
         "excluded_codes": [
           "000539",
           "000767",
@@ -8681,7 +9740,6 @@
           "001896",
           "002077",
           "002202",
-          "002552",
           "002559",
           "300051",
           "300129",
@@ -8730,7 +9788,7 @@
       },
       "trend_watchlist": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
+        "upstream_count": 1,
         "input_count": 0,
         "kept_count": 0,
         "excluded_count": 0,
@@ -8740,7 +9798,7 @@
       },
       "luojie_pool": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
+        "upstream_count": 1,
         "input_count": 9,
         "kept_count": 0,
         "excluded_count": 9,
@@ -9391,16 +10449,16 @@
         }
       },
       "upgrade": {
-        "startup_candidate": 0,
+        "startup_candidate": 1,
         "startup_watch": 0,
         "dropped_no_30min_confirm": 0,
-        "watch_due_to_no_30min_confirm": 39
+        "watch_due_to_no_30min_confirm": 38
       },
-      "startup_candidates": 0,
+      "startup_candidates": 1,
       "startup_watchlist": 13
     },
     "candidate_funnel": {
-      "run_id": "20260910-f9839604bb7c",
+      "run_id": "20260910-96104da00e38",
       "report_date": "2026-09-10",
       "as_of": "2026-09-10",
       "candidate_count": 5912,
@@ -9411,19 +10469,19 @@
         "daily_channel": 346,
         "minute30": 39,
         "fusion": 0,
-        "display": 13
+        "display": 14
       },
       "terminal_counts": {
-        "main": 0,
+        "main": 1,
         "observe": 13,
-        "reject": 5899
+        "reject": 5898
       },
       "first_failure_counts": {
         "eligible": 2402,
         "daily_channel": 609,
         "retrieval": 2568,
         "minute30": 294,
-        "fusion": 39
+        "fusion": 38
       },
       "persist_status": "saved",
       "db_path": "/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/market_history.sqlite"
@@ -9431,9 +10489,9 @@
     "recall_shadow": {
       "mode": "active",
       "new_strategy_controls_publish": true,
-      "potential_pure_count": 0,
+      "potential_pure_count": 1,
       "potential_fusion_count": 0,
-      "published_pure_count": 0,
+      "published_pure_count": 1,
       "published_fusion_count": 0,
       "suppressed_codes": []
     },
@@ -10069,7 +11127,7 @@
       },
       "final_common_upstream": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
+        "upstream_count": 1,
         "input_count": 9,
         "kept_count": 0,
         "excluded_count": 9,
@@ -10088,14 +11146,14 @@
     },
     "signal_recency": {
       "max_age_trading_days": 10,
-      "pure_input": 0,
-      "pure_kept": 0,
+      "pure_input": 1,
+      "pure_kept": 1,
       "pure_dropped_expired": 0,
       "fusion_input": 0,
       "fusion_kept": 0,
       "fusion_dropped_expired": 0,
-      "watch_input": 52,
-      "watch_kept": 52,
+      "watch_input": 51,
+      "watch_kept": 51,
       "watch_dropped_expired": 0,
       "trend_watch_input": 0,
       "trend_watch_kept": 0,
@@ -10116,24 +11174,24 @@
     "recommendation_ledger": {
       "status": "finalized",
       "report_date": "2026-09-10",
-      "today_entries": 13,
-      "finalized_today_entries": 13,
+      "today_entries": 14,
+      "finalized_today_entries": 14,
       "missing_today_entries": 0,
-      "finalized_entries": 1184,
-      "evaluation_entries": 1184,
+      "finalized_entries": 1185,
+      "evaluation_entries": 1185,
       "evidence": "immutable_ledger_membership"
     },
     "strategy_review_benchmark_ingest": {
       "status": "ok",
       "code": "000300",
       "bars": 101,
-      "rows_written": 1,
+      "rows_written": 0,
       "latest_date": "2026-09-10"
     },
     "strategy_review": {
       "status": "ok",
-      "requested_codes": 874,
-      "resolved_codes": 874,
+      "requested_codes": 875,
+      "resolved_codes": 875,
       "missing_codes": [],
       "adjustment": "qfq",
       "calendar_source": "canonical_stock_market_dates",
@@ -10144,8 +11202,8 @@
   },
   "data_quality": {
     "report_date": "2026-09-10",
-    "generated_at": "2026-09-10T15:05:10+08:00",
-    "as_of": "2026-09-10T15:05:10+08:00",
+    "generated_at": "2026-09-10T15:20:14+08:00",
+    "as_of": "2026-09-10T15:20:14+08:00",
     "bar_state": "closed",
     "is_trading_day": true,
     "is_official": true,
@@ -10257,7 +11315,7 @@
       "920961",
       "920981"
     ],
-    "daily_refresh_mode": "db_first",
+    "daily_refresh_mode": "missing_only",
     "missing_30min_count": 0,
     "stock_pool_incomplete": false,
     "sector_component_diagnostics": [
@@ -10472,20 +11530,21 @@
       "remote_error": "",
       "name_resolution_missing_codes": []
     },
-    "daily_run_mode": "db_first",
+    "daily_run_mode": "missing_only",
     "market_close_snapshot": {
       "status": "complete",
       "report_date": "2026-09-10",
-      "requested": 5912,
-      "unique": 5912,
-      "valid_a_rows": 5912,
-      "quoted_rows": 5549,
-      "written": 5198,
-      "skipped_unquoted": 363,
-      "skipped_missing_factor": 351,
-      "history_eligible_rows": 5532,
+      "requested": 0,
+      "unique": 0,
+      "valid_a_rows": 5532,
+      "quoted_rows": 0,
+      "written": 0,
+      "skipped_unquoted": 0,
+      "skipped_missing_factor": 0,
+      "history_eligible_rows": 0,
       "coverage": 0.939624,
-      "remote_calls": 1,
+      "remote_calls": 0,
+      "source": "db",
       "valid_bar_count": 5198
     },
     "runtime_policy": {
@@ -10580,9 +11639,9 @@
     },
     "market_cap_evidence": {
       "requested": 946,
-      "db_hits": 938,
-      "remote_requested": 8,
-      "remote_hits": 8,
+      "db_hits": 946,
+      "remote_requested": 0,
+      "remote_hits": 0,
       "hydrated": 946,
       "max_workers": 20
     },
@@ -10624,7 +11683,7 @@
       "h4_t3": {
         "status": "verified",
         "required_date": "2026-09-10",
-        "dependent_candidate_count": 0,
+        "dependent_candidate_count": 1,
         "invalid_count": 0,
         "invalid_codes": [],
         "formal_actions_allowed": true,
@@ -10709,36 +11768,84 @@
         "required_date": "2026-09-10",
         "status": "partial",
         "requested_count": 336,
-        "verified_count": 27,
-        "missing_count": 309,
+        "verified_count": 75,
+        "missing_count": 261,
         "verified_codes": [
+          "000513",
+          "000591",
           "000600",
+          "000603",
+          "000767",
           "000786",
+          "001280",
+          "001309",
           "002010",
+          "002049",
+          "002057",
+          "002183",
+          "002233",
+          "002245",
+          "002340",
+          "002459",
+          "002475",
+          "002552",
+          "002797",
           "002849",
           "002992",
+          "300007",
           "300033",
+          "300130",
+          "300184",
+          "300223",
+          "300251",
           "300259",
           "300264",
+          "300283",
+          "300393",
+          "300418",
           "300499",
+          "300511",
+          "300557",
+          "300568",
           "300696",
           "300900",
+          "301070",
+          "301095",
+          "301099",
+          "301568",
           "301632",
           "600062",
           "600157",
           "600262",
           "600350",
           "600449",
+          "600502",
+          "600726",
+          "600816",
+          "600879",
+          "600909",
           "600970",
+          "601001",
           "601100",
+          "601117",
+          "601126",
           "601226",
           "601881",
+          "603155",
           "603179",
           "603301",
+          "603345",
+          "603386",
+          "603693",
+          "603885",
           "605088",
           "605090",
+          "605358",
+          "688155",
           "688327",
-          "688525"
+          "688403",
+          "688525",
+          "688772"
         ],
         "missing_codes": [
           "000065",
@@ -10746,16 +11853,12 @@
           "000099",
           "000157",
           "000426",
-          "000513",
           "000534",
           "000539",
-          "000591",
-          "000603",
           "000630",
           "000682",
           "000720",
           "000762",
-          "000767",
           "000777",
           "000778",
           "000783",
@@ -10770,20 +11873,16 @@
           "001212",
           "001215",
           "001258",
-          "001280",
           "001286",
           "001287",
           "001289",
-          "001309",
           "001331",
           "001391",
           "001393",
           "001896",
           "002027",
-          "002049",
           "002050",
           "002052",
-          "002057",
           "002074",
           "002077",
           "002135",
@@ -10791,40 +11890,31 @@
           "002152",
           "002176",
           "002179",
-          "002183",
           "002185",
           "002202",
           "002225",
           "002230",
-          "002233",
-          "002245",
           "002249",
           "002266",
           "002271",
           "002272",
           "002273",
-          "002340",
           "002379",
           "002384",
           "002429",
           "002439",
           "002456",
-          "002459",
-          "002475",
           "002506",
-          "002552",
           "002559",
           "002565",
           "002654",
           "002730",
           "002755",
-          "002797",
           "002843",
           "002850",
           "002851",
           "002939",
           "003022",
-          "300007",
           "300014",
           "300015",
           "300036",
@@ -10833,23 +11923,16 @@
           "300059",
           "300088",
           "300129",
-          "300130",
           "300139",
           "300182",
-          "300184",
           "300207",
-          "300223",
-          "300251",
           "300257",
-          "300283",
           "300296",
           "300302",
           "300308",
           "300315",
           "300364",
           "300377",
-          "300393",
-          "300418",
           "300435",
           "300438",
           "300443",
@@ -10857,13 +11940,10 @@
           "300476",
           "300488",
           "300494",
-          "300511",
           "300522",
           "300529",
           "300541",
           "300553",
-          "300557",
-          "300568",
           "300572",
           "300604",
           "300632",
@@ -10890,9 +11970,6 @@
           "300964",
           "300972",
           "300991",
-          "301070",
-          "301095",
-          "301099",
           "301150",
           "301155",
           "301161",
@@ -10902,7 +11979,6 @@
           "301263",
           "301338",
           "301468",
-          "301568",
           "301577",
           "301588",
           "301626",
@@ -10936,33 +12012,25 @@
           "600456",
           "600478",
           "600499",
-          "600502",
           "600509",
           "600519",
           "600642",
           "600681",
-          "600726",
           "600757",
           "600761",
           "600773",
-          "600816",
           "600835",
           "600863",
           "600875",
-          "600879",
           "600884",
           "600888",
           "600906",
-          "600909",
           "600930",
           "600977",
-          "601001",
           "601016",
           "601021",
           "601077",
           "601096",
-          "601117",
-          "601126",
           "601138",
           "601238",
           "601360",
@@ -10982,13 +12050,10 @@
           "603019",
           "603038",
           "603066",
-          "603155",
           "603160",
           "603203",
           "603279",
           "603308",
-          "603345",
-          "603386",
           "603418",
           "603501",
           "603568",
@@ -10997,16 +12062,13 @@
           "603662",
           "603666",
           "603678",
-          "603693",
           "603698",
           "603733",
           "603801",
-          "603885",
           "603916",
           "603929",
           "605011",
           "605305",
-          "605358",
           "605366",
           "605598",
           "688008",
@@ -11018,7 +12080,6 @@
           "688122",
           "688135",
           "688150",
-          "688155",
           "688181",
           "688187",
           "688225",
@@ -11031,7 +12092,6 @@
           "688359",
           "688388",
           "688396",
-          "688403",
           "688416",
           "688486",
           "688523",
@@ -11047,7 +12107,6 @@
           "688711",
           "688757",
           "688766",
-          "688772",
           "688788",
           "688820"
         ],
@@ -27446,7 +28505,7 @@
       },
       "final_common_upstream": {
         "upstream_pool": "picks_pure",
-        "upstream_count": 0,
+        "upstream_count": 1,
         "input_count": 9,
         "kept_count": 0,
         "excluded_count": 9,
@@ -27486,10 +28545,10 @@
     },
     "diagnostics": {
       "upstream_pool": "picks_pure",
-      "input_upstream_count": 0,
-      "upstream_count": 0,
-      "fusion_count": 0,
-      "input_count": 0,
+      "input_upstream_count": 1,
+      "upstream_count": 1,
+      "fusion_count": 1,
+      "input_count": 1,
       "right_side_excluded_count": 0,
       "right_side_excluded_codes": [],
       "microstate_count": 0,
@@ -27557,8 +28616,8 @@
     },
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "6ba7379d48d0bf25bc2f6e9884b9f4da448763ceffc83de71885fbc4e2e4caa5",
-      "after_sha256": "6ba7379d48d0bf25bc2f6e9884b9f4da448763ceffc83de71885fbc4e2e4caa5"
+      "before_sha256": "84c724a5b8602ca9cfc553d9ffd80102bf9d771245de57ad92e5e5b321047242",
+      "after_sha256": "84c724a5b8602ca9cfc553d9ffd80102bf9d771245de57ad92e5e5b321047242"
     },
     "production_reference": {
       "pool": "picks_fusion",
@@ -27871,8 +28930,8 @@
         "source_pool": "picks_pure",
         "action_semantics": "upstream_only",
         "availability": {
-          "state": "verified_empty",
-          "reason": "基础候选池已校验，今日没有候选。"
+          "state": "available",
+          "reason": "基础候选池结果已生成。"
         }
       }
     },
@@ -32272,7 +33331,357 @@
           "is_formal_recommendation": false
         }
       ],
-      "baseline": [],
+      "baseline": [
+        {
+          "code": "002552",
+          "name": "宝鼎科技",
+          "sector": "印制电路板",
+          "sources": [
+            "baseline"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "印制电路板"
+            },
+            {
+              "type": "sector",
+              "label": "元件"
+            },
+            {
+              "type": "source",
+              "label": "基础候选"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动候选"
+            },
+            {
+              "type": "confirm",
+              "label": "30min A级确认"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-09-10",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "基础候选"
+          ],
+          "resonance_label": "",
+          "view_rank": 1,
+          "watch_score": 39,
+          "opportunity_score": 39,
+          "action": "仅观察",
+          "action_reason": "暂不满足交易条件，仅观察。",
+          "pool_quality": {
+            "volume20": 335401.7,
+            "volume_ratio20": 1.4627,
+            "liquidity_label": "高流动性",
+            "liquidity_score": 100.0,
+            "code_style_score": 75.0,
+            "growth_board_score": 74.2702,
+            "growth_board_label": "中小成长",
+            "market_cap_score": 100.0,
+            "market_cap_label": "强弹性流通市值",
+            "market_cap_source": "circulating_market_cap",
+            "ret20": -14.1664,
+            "ret20_score": 15.1012,
+            "industry_key": "印制电路板",
+            "sector_quality_score": 100.0,
+            "pool_quality_tier": "elite",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 74.2702,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 100.0,
+                "source": "circulating_market_cap"
+              },
+              {
+                "name": "ret20",
+                "score": 15.1012
+              },
+              {
+                "name": "sector",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 90.9946,
+            "pool_quality_tags": [
+              "高流动性",
+              "中小成长",
+              "强弹性流通市值",
+              "板块质量上行"
+            ],
+            "market_cap": 195.3506,
+            "circulating_market_cap": 185.5414,
+            "float_market_cap": 185.5414,
+            "liquidity_source": "amounts",
+            "money20": 1807322799.5,
+            "quality_evidence_eligible": true,
+            "quality_evidence_status": "eligible"
+          },
+          "change_pct": 5.96,
+          "reference_price": 50.35,
+          "current_price": 50.35,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "",
+          "risk_flags": [],
+          "rank_trace": {
+            "base_source": "baseline",
+            "source_count": 1,
+            "signal_score": 2.82,
+            "entry_score": 16.0,
+            "momentum_score": 8.94,
+            "market_score": 6.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 0.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": 3017472512.0,
+                "sector_rank": 1.0,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "30min确认",
+                "ma_bullish": false,
+                "confirmations": [
+                  "30min两阳夹一阴确认"
+                ],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "实体阳线≥3%"
+                ],
+                "distance": 0.0
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 335401.7,
+                "volume_ratio20": 1.4627,
+                "liquidity_label": "高流动性",
+                "liquidity_score": 100.0,
+                "code_style_score": 75.0,
+                "growth_board_score": 74.2702,
+                "growth_board_label": "中小成长",
+                "market_cap_score": 100.0,
+                "market_cap_label": "强弹性流通市值",
+                "market_cap_source": "circulating_market_cap",
+                "ret20": -14.1664,
+                "ret20_score": 15.1012,
+                "industry_key": "印制电路板",
+                "sector_quality_score": 100.0,
+                "pool_quality_tier": "elite",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 100.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 74.2702,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 100.0,
+                    "source": "circulating_market_cap"
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 15.1012
+                  },
+                  {
+                    "name": "sector",
+                    "score": 100.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 90.9946,
+                "pool_quality_tags": [
+                  "高流动性",
+                  "中小成长",
+                  "强弹性流通市值",
+                  "板块质量上行"
+                ],
+                "market_cap": 195.3506,
+                "circulating_market_cap": 185.5414,
+                "float_market_cap": 185.5414,
+                "liquidity_source": "amounts",
+                "money20": 1807322799.5,
+                "quality_evidence_eligible": true,
+                "quality_evidence_status": "eligible"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 5.0,
+            "pool_quality_bonus": 2.7427,
+            "pool_quality_score": 90.9946,
+            "pool_quality_tags": [
+              "高流动性",
+              "中小成长",
+              "强弹性流通市值",
+              "板块质量上行"
+            ],
+            "pool_quality_tier": "elite",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 74.2702,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 100.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0126,
+            "base_opportunity_score": 34,
+            "risk_flags": [],
+            "opportunity_score": 39,
+            "distance_from_reference_pct": 0.0,
+            "change_pct": 5.96,
+            "source:baseline": 1,
+            "selected_reason": "基准池单源入榜"
+          },
+          "decision_engine_v1": {
+            "version": "1",
+            "code": "002552",
+            "name": "宝鼎科技",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 76,
+            "structure": {
+              "score": 20,
+              "reasons": [
+                "震荡结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 41,
+              "reasons": [
+                "板块热点",
+                "放量启动",
+                "震荡市",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷",
+              "市场情绪转弱"
+            ]
+          },
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "",
+          "tier": "candidate",
+          "category": "A",
+          "quality_tier": "",
+          "view": "main",
+          "ref": {
+            "pool": "picks_pure",
+            "code": "002552"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "暂不满足交易条件，仅观察。",
+          "page_action": "仅作为上游候选",
+          "page_action_reason": "原始缠论结构候选；等待各独立策略继续筛选。",
+          "effective_action": "仅作为上游候选",
+          "action_semantics": "upstream_only",
+          "scoring_decision": {
+            "version": "1",
+            "code": "002552",
+            "name": "宝鼎科技",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 76,
+            "structure": {
+              "score": 20,
+              "reasons": [
+                "震荡结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 41,
+              "reasons": [
+                "板块热点",
+                "放量启动",
+                "震荡市",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷",
+              "市场情绪转弱"
+            ]
+          },
+          "is_formal_recommendation": false
+        }
+      ],
       "h4_t3": [],
       "highlights": [
         {
@@ -35645,7 +37054,7 @@
       "acceleration": 0,
       "luojie": 0,
       "confirming": 13,
-      "baseline": 0,
+      "baseline": 1,
       "h4_t3": 0,
       "highlights": 8,
       "growth_quality": 0,
@@ -35658,7 +37067,7 @@
         "acceleration": 0,
         "luojie": 0,
         "confirming": 13,
-        "baseline": 0
+        "baseline": 1
       },
       "highlights": {
         "input_counts": {
@@ -35703,10 +37112,10 @@
       },
       "h4_t3": {
         "upstream_pool": "picks_pure",
-        "input_upstream_count": 0,
-        "upstream_count": 0,
-        "fusion_count": 0,
-        "input_count": 0,
+        "input_upstream_count": 1,
+        "upstream_count": 1,
+        "fusion_count": 1,
+        "input_count": 1,
         "right_side_excluded_count": 0,
         "right_side_excluded_codes": [],
         "microstate_count": 0,
