@@ -1,5 +1,6 @@
 """Tests for signal_recency — annotate, filter picks, filter watchlist."""
 import unittest
+import numpy as np
 
 from chanlun.signal_recency import (
     annotate_buy_point_recency,
@@ -64,6 +65,14 @@ class TestAnnotateBuyPointRecency(unittest.TestCase):
         annotated = annotate_buy_point_recency(bp, closes, dates, max_age=10)
         self.assertEqual(annotated["signal_date"], "2026-05-96")
 
+    def test_numpy_dates_adds_signal_date(self):
+        bp = {"index": 1, "type": "二买候选", "price": 10.0}
+        dates = np.asarray(["2026-05-01", "2026-05-02", "2026-05-03"])
+        annotated = annotate_buy_point_recency(
+            bp, [1.0, 1.1, 1.2], dates, max_age=10
+        )
+        self.assertEqual(annotated["signal_date"], "2026-05-02")
+
     def test_recency_reason_recent(self):
         bp = {"index": 97, "type": "盘整低吸候选", "price": 10.0}
         closes = [1.0] * 100
@@ -83,6 +92,17 @@ class TestAnnotateBuyPointRecency(unittest.TestCase):
         self.assertIsNone(annotated["signal_age_days"])
         self.assertFalse(annotated["is_recent"])
         self.assertIn("越界", annotated["recency_reason"])
+
+    def test_invalid_buy_point_indexes_fail_closed(self):
+        for value in ("bad", True, 1.5, float("inf"), -1):
+            with self.subTest(value=value):
+                annotated = annotate_buy_point_recency(
+                    {"index": value, "type": "二买"},
+                    [1.0, 1.1, 1.2],
+                    max_age=10,
+                )
+                self.assertFalse(annotated["is_recent"])
+                self.assertIsNone(annotated["signal_age_days"])
 
 
 class TestFilterRecentPicks(unittest.TestCase):
@@ -231,6 +251,49 @@ class TestFilterRecentWatchlist(unittest.TestCase):
         wl = [self._make_watch("000001", startup_age_days=11)]
         kept, diag = filter_recent_watchlist(wl, 10)
         self.assertEqual(len(kept), 0)
+
+    def test_future_startup_index_is_not_clamped_to_today(self):
+        wl = [self._make_watch(
+            "000001", closes=[1.0] * 10, startup_index=10
+        )]
+        kept, diag = filter_recent_watchlist(wl, 10)
+        self.assertEqual(kept, [])
+        self.assertEqual(diag["dropped_invalid"], 1)
+        self.assertIn("超过当前K线范围", diag["dropped_details"][0]["reason"])
+
+    def test_negative_startup_age_is_not_recent(self):
+        wl = [self._make_watch("000001", startup_age_days=-1)]
+        kept, diag = filter_recent_watchlist(wl, 10)
+        self.assertEqual(kept, [])
+        self.assertEqual(diag["dropped_invalid"], 1)
+        self.assertIn("不能为负数", diag["dropped_details"][0]["reason"])
+
+    def test_non_numeric_startup_age_is_rejected(self):
+        wl = [self._make_watch("000001", startup_age_days="3")]
+        kept, diag = filter_recent_watchlist(wl, 10)
+        self.assertEqual(kept, [])
+        self.assertEqual(diag["dropped_invalid"], 1)
+
+    def test_source_index_contract_rejects_non_finite_fractional_and_bool(self):
+        for value in ("bad", True, 1.5, float("inf")):
+            with self.subTest(value=value):
+                wl = [self._make_watch(
+                    "000001", closes=[1.0] * 10, startup_index=value
+                )]
+                kept, diag = filter_recent_watchlist(wl, 10)
+                self.assertEqual(kept, [])
+                self.assertEqual(diag["dropped_invalid"], 1)
+
+    def test_source_index_contract_keeps_integer_values(self):
+        for value in (1, np.int64(1), 1.0):
+            with self.subTest(value=value):
+                wl = [self._make_watch(
+                    "000001", closes=[1.0] * 10, startup_index=value
+                )]
+                kept, diag = filter_recent_watchlist(wl, 10)
+                self.assertEqual(len(kept), 1)
+                self.assertEqual(kept[0]["startup_age_days"], 8)
+                self.assertEqual(diag["dropped_invalid"], 0)
 
 
 if __name__ == "__main__":

@@ -6,12 +6,14 @@ from types import SimpleNamespace
 import numpy as np
 
 from chanlun.engine_types import Pivot
+from chanlun.sublevel_confirm import build_30min_confirmation_evidence
 from chanlun.trend_continuation import (
     _confirm_30min,
     build_trend_continuation_pool,
     normalize_trend_candidate,
     upgrade_trend_continuation_with_30min,
 )
+from chanlun.signal_recency import filter_recent_picks
 
 
 def _result(
@@ -407,6 +409,81 @@ class TrendContinuationTests(unittest.TestCase):
         )
         self.assertNotEqual(pick["best_buy_point"]["price"], 7.0)
 
+    def test_30min_upgrade_preserves_expired_daily_source_index(self):
+        seeds, _, _ = build_trend_continuation_pool([_result()])
+        seeds[0]["startup_index"] = 0
+        seeds[0]["startup_date"] = seeds[0]["dates"][0]
+        closes = np.linspace(12.0, 12.8, 20)
+        opens = closes - 0.05
+        opens[-3:-1] = closes[-3:-1] + 0.05
+        min30 = _min30_result(
+            closes,
+            opens=opens,
+            volumes=[1_000_000] * 15 + [500_000] * 5,
+            trade_date="2026-07-01",
+        )
+
+        candidates, watchlist, _ = upgrade_trend_continuation_with_30min(
+            seeds, [min30]
+        )
+        self.assertEqual(watchlist, [])
+        normalized = normalize_trend_candidate(candidates[0])
+        self.assertEqual(normalized["best_buy_point"]["index"], 0)
+        kept, diag = filter_recent_picks([normalized], 10)
+        self.assertEqual(kept, [])
+        self.assertEqual(diag["dropped_expired"], 1)
+
+    def test_normalize_trend_candidate_does_not_invent_missing_source_index(self):
+        seeds, _, _ = build_trend_continuation_pool([_result()])
+        closes = np.linspace(12.0, 12.8, 20)
+        opens = closes - 0.05
+        opens[-3:-1] = closes[-3:-1] + 0.05
+        min30 = _min30_result(
+            closes,
+            opens=opens,
+            volumes=[1_000_000] * 15 + [500_000] * 5,
+            trade_date="2026-07-14",
+        )
+        candidates, watchlist, _ = upgrade_trend_continuation_with_30min(
+            seeds, [min30]
+        )
+        self.assertEqual(watchlist, [])
+        candidate = candidates[0]
+
+        cases = (
+            ("missing", None, None),
+            ("invalid", "unknown", None),
+            ("infinite", float("inf"), None),
+            ("fractional", 1.5, None),
+            ("bool", True, None),
+            ("expired", 0, 0),
+            ("valid", len(candidate["closes"]) - 1, len(candidate["closes"]) - 1),
+            ("python_integer", 1, 1),
+            ("numpy_integer", np.int64(1), 1),
+            ("integer_float", 1.0, 1),
+        )
+        for label, source_index, expected_index in cases:
+            with self.subTest(case=label):
+                row = dict(candidate)
+                if label == "missing":
+                    row.pop("startup_index", None)
+                else:
+                    row["startup_index"] = source_index
+                normalized = normalize_trend_candidate(row)
+                self.assertEqual(
+                    normalized["best_buy_point"]["index"], expected_index
+                )
+                kept, _ = filter_recent_picks([normalized], 10)
+                if label in {
+                    "missing", "invalid", "infinite", "fractional", "bool", "expired",
+                    "python_integer", "numpy_integer", "integer_float",
+                }:
+                    if label in {"python_integer", "numpy_integer", "integer_float"}:
+                        self.assertEqual(expected_index, 1)
+                    self.assertEqual(kept, [])
+                else:
+                    self.assertEqual([item["code"] for item in kept], ["600000"])
+
     def test_30min_ema_state_without_fresh_structure_stays_watch(self):
         seeds, _, _ = build_trend_continuation_pool([_result()])
         closes = np.linspace(12.0, 12.8, 20)
@@ -442,6 +519,66 @@ class TrendContinuationTests(unittest.TestCase):
         evidence = watchlist[0]["confirmation_evidence"]
         self.assertTrue(evidence["structure"]["fresh_event"])
         self.assertFalse(evidence["quality"]["independent_confirm"])
+
+    def test_30min_ema_reclaim_quality_requires_current_close_above_ema5(self):
+        closes = [11.8] * 16 + [11.0, 12.2, 12.0, 11.7]
+        opens = [value - 0.05 for value in closes]
+        opens[-3:] = [12.0, 12.1, 11.6]
+        min30 = _min30_result(closes, opens=opens)
+
+        base = build_30min_confirmation_evidence(min30)
+        evidence = _confirm_30min(
+            min30,
+            reference_price=11.0,
+            expected_date="2026-07-14",
+            factor_vs_raw=1.0,
+        )
+
+        self.assertTrue(base["ema5_reclaim"])
+        self.assertFalse(base["close_above_ema5"])
+        self.assertEqual(base["fresh_yang_pattern"], "two_yang_one_yin")
+        self.assertEqual(evidence["quality"]["labels"], [])
+        self.assertFalse(evidence["quality"]["independent_confirm"])
+        self.assertFalse(evidence["passed"])
+
+    def test_30min_ema_reclaim_and_independent_quality_controls_remain(self):
+        above_closes = [11.8] * 16 + [11.0, 12.2, 12.0, 11.9]
+        above_opens = [value - 0.05 for value in above_closes]
+        above_opens[-3:] = [12.0, 12.1, 11.8]
+        above = _min30_result(above_closes, opens=above_opens)
+        above_base = build_30min_confirmation_evidence(above)
+        above_evidence = _confirm_30min(
+            above,
+            reference_price=11.0,
+            expected_date="2026-07-14",
+            factor_vs_raw=1.0,
+        )
+
+        self.assertTrue(above_base["ema5_reclaim"])
+        self.assertTrue(above_base["close_above_ema5"])
+        self.assertIn("30min EMA5收复", above_evidence["quality"]["labels"])
+        self.assertTrue(above_evidence["passed"])
+
+        below_closes = [11.8] * 16 + [11.0, 12.2, 12.0, 11.7]
+        below_opens = [value - 0.05 for value in below_closes]
+        below_opens[-3:] = [12.0, 12.1, 11.6]
+        macd = _min30_result(
+            below_closes,
+            opens=below_opens,
+            evidence=None,
+        )
+        macd.macd_hist = [-0.3, -0.2, -0.1]
+        macd_evidence = _confirm_30min(
+            macd,
+            reference_price=11.0,
+            expected_date="2026-07-14",
+            factor_vs_raw=1.0,
+        )
+
+        self.assertIn("30min MACD改善", macd_evidence["quality"]["labels"])
+        self.assertNotIn("30min EMA5收复", macd_evidence["quality"]["labels"])
+        self.assertTrue(macd_evidence["quality"]["independent_confirm"])
+        self.assertTrue(macd_evidence["passed"])
 
     def test_30min_stale_or_wrong_date_evidence_fails_closed(self):
         seeds, _, _ = build_trend_continuation_pool([_result()])

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, time as wall_time
 
 import numpy as np
+from config import SIGNAL_MAX_AGE_TRADING_DAYS
 
 from .candidate_upgrade import upgrade_daily_candidates_with_30min
 from .chan_engine import analyze as analyze_chanlun
@@ -22,6 +23,7 @@ from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
 from .price_basis import scale_price
 from .scorer import apply_scores
+from .signal_recency import filter_recent_picks, filter_recent_watchlist
 from .right_side_startup import (
     apply_right_side_startup_mode,
     resolve_right_side_startup_mode,
@@ -204,6 +206,68 @@ def _analyze_daily_inputs(market_inputs, components):
     return results, rows_by_code, failures
 
 
+_MIN30_PROVIDER_NAMES = frozenset(("sina", "eastmoney"))
+_MIN30_REASON_CODES = frozenset((
+    "data_missing",
+    "current_trade_date_missing",
+    "insufficient_bars",
+    "invalid_timestamp",
+    "timestamps_not_strictly_increasing",
+    "nonnumeric_ohlcv",
+    "nonfinite_ohlcv",
+    "nonpositive_price",
+    "negative_volume",
+    "invalid_high",
+    "invalid_low",
+    "all_sources_unavailable",
+))
+
+
+def _min30_unavailable_details(market_inputs, unavailable):
+    """Project only safe provider failure fields into internal diagnostics."""
+
+    by_code = market_inputs.get("min30")
+    by_code = by_code if isinstance(by_code, dict) else {}
+    details = {}
+    for raw_code in unavailable or []:
+        code = str(raw_code or "").strip()
+        evidence = by_code.get(code)
+        if not code or not isinstance(evidence, dict):
+            continue
+        detail = {}
+        reason_code = str(evidence.get("reason_code") or "").strip()
+        if reason_code in _MIN30_REASON_CODES:
+            detail["reason_code"] = reason_code
+        raw_failures = evidence.get("source_failures")
+        if isinstance(raw_failures, (list, tuple)):
+            source_failures = []
+            for raw_failure in raw_failures:
+                if not isinstance(raw_failure, dict):
+                    continue
+                source = str(raw_failure.get("source") or "").strip()
+                if source not in _MIN30_PROVIDER_NAMES:
+                    continue
+                failure = {"source": source}
+                source_reason = str(
+                    raw_failure.get("reason_code") or ""
+                ).strip()
+                exception_type = str(
+                    raw_failure.get("exception_type") or ""
+                ).strip()
+                if source_reason in _MIN30_REASON_CODES:
+                    failure["reason_code"] = source_reason
+                elif exception_type.isidentifier():
+                    failure["exception_type"] = exception_type
+                else:
+                    continue
+                source_failures.append(failure)
+            if source_failures:
+                detail["source_failures"] = source_failures
+        if detail:
+            details[code] = detail
+    return details
+
+
 def _analyze_30m_inputs(market_inputs, rows_by_code, components):
     results = []
     unavailable = []
@@ -332,6 +396,17 @@ def _dedupe_candidates(candidates):
     return output
 
 
+def _empty_recency_diag():
+    return {
+        "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
+        "input": 0,
+        "kept": 0,
+        "dropped_expired": 0,
+        "dropped_invalid": 0,
+        "dropped_details": [],
+    }
+
+
 def _build_daily_state(daily_results, sector_stocks, components):
     pure_pool, daily_diagnostics = components.build_daily_structure_pool(
         daily_results, sector_stocks, mode="pure"
@@ -412,11 +487,20 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
     fusion_ready, fusion_diagnostics = components.apply_fusion_admission(
         copy.deepcopy(pure_ready), sh_closes, sector_stocks
     )
+    # Keep the pre-close path on the same ten-trading-day source-date gate as
+    # run.py.  Apply it after upgrade/admission (so an upgraded minute event
+    # cannot replace the original daily source index/date) and before scoring.
+    pure_recent, recency_pure_diag = filter_recent_picks(
+        pure_ready, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    fusion_recent, recency_fusion_diag = filter_recent_picks(
+        fusion_ready, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
     pure_scored = components.apply_scores(
-        copy.deepcopy(pure_ready), version="pure"
+        copy.deepcopy(pure_recent), version="pure"
     )
     fusion_scored = components.apply_scores(
-        copy.deepcopy(fusion_ready),
+        copy.deepcopy(fusion_recent),
         version="fusion",
         sector_rank_map=[
             {"name": value.get("sector")}
@@ -436,17 +520,25 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
     right_fusion_scored = []
     right_pure_scored = []
     right_fusion_diagnostics = {"input_count": 0, "output_count": 0}
+    recency_right_pure_diag = _empty_recency_diag()
+    recency_right_fusion_diag = _empty_recency_diag()
     if right_ready:
         right_fusion_ready, right_fusion_diagnostics = (
             components.apply_fusion_admission(
                 copy.deepcopy(right_ready), sh_closes, sector_stocks
             )
         )
+        right_pure_recent, recency_right_pure_diag = filter_recent_picks(
+            right_ready, SIGNAL_MAX_AGE_TRADING_DAYS
+        )
+        right_fusion_recent, recency_right_fusion_diag = filter_recent_picks(
+            right_fusion_ready, SIGNAL_MAX_AGE_TRADING_DAYS
+        )
         right_pure_scored = components.apply_scores(
-            copy.deepcopy(right_ready), version="pure"
+            copy.deepcopy(right_pure_recent), version="pure"
         )
         right_fusion_scored = components.apply_scores(
-            copy.deepcopy(right_fusion_ready),
+            copy.deepcopy(right_fusion_recent),
             version="fusion",
             sector_rank_map=[
                 {"name": value.get("sector")}
@@ -478,6 +570,61 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
         "waiting_count": len(right_waiting),
         "daily_watch_count": len(daily_state["right_watchlist"]),
     }
+    startup_watchlist_input = _dedupe_candidates(
+        _merge_sector_metadata(
+            list(daily_state["startup_watchlist"]) + list(startup_waiting),
+            sector_stocks,
+        )
+    )
+    right_watchlist_input = _dedupe_candidates(
+        _merge_sector_metadata(
+            list(daily_state["right_watchlist"]) + list(right_waiting),
+            sector_stocks,
+        )
+    )
+    startup_watchlist, recency_watch_diag = filter_recent_watchlist(
+        startup_watchlist_input, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    right_watchlist, recency_right_watch_diag = filter_recent_watchlist(
+        right_watchlist_input, SIGNAL_MAX_AGE_TRADING_DAYS
+    )
+    # Preserve the existing pre-close acceleration input contract.  The right
+    # side watch lane is filtered and exposed for diagnostics, but it is not
+    # merged into the classic startup watch input here.
+    public_watchlist = startup_watchlist
+    recency_diagnostics = {
+        "max_age_trading_days": SIGNAL_MAX_AGE_TRADING_DAYS,
+        "picks_pure": recency_pure_diag,
+        "picks_fusion": recency_fusion_diag,
+        "right_side_pure": recency_right_pure_diag,
+        "right_side_fusion": recency_right_fusion_diag,
+        "watchlist": recency_watch_diag,
+        "right_side_watchlist": recency_right_watch_diag,
+        # Keep the public counters aligned with run.py while retaining the
+        # per-channel detail needed to explain a pre-close drop.
+        "pure_input": recency_pure_diag["input"],
+        "pure_kept": recency_pure_diag["kept"],
+        "pure_dropped_expired": recency_pure_diag["dropped_expired"],
+        "fusion_input": recency_fusion_diag["input"],
+        "fusion_kept": recency_fusion_diag["kept"],
+        "fusion_dropped_expired": recency_fusion_diag["dropped_expired"],
+        "watch_input": recency_watch_diag["input"],
+        "watch_kept": recency_watch_diag["kept"],
+        "watch_dropped_expired": recency_watch_diag["dropped_expired"],
+        "trend_watch_input": recency_right_watch_diag["input"],
+        "trend_watch_kept": recency_right_watch_diag["kept"],
+        "trend_watch_dropped_expired": recency_right_watch_diag[
+            "dropped_expired"
+        ],
+        "dropped_details": (
+            recency_pure_diag["dropped_details"]
+            + recency_fusion_diag["dropped_details"]
+            + recency_right_pure_diag["dropped_details"]
+            + recency_right_fusion_diag["dropped_details"]
+            + recency_watch_diag["dropped_details"]
+            + recency_right_watch_diag["dropped_details"]
+        ),
+    }
     return {
         "picks_pure": _merge_sector_metadata(
             list(pure_scored) + published_right_pure, sector_stocks
@@ -485,18 +632,15 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
         "picks_fusion": _merge_sector_metadata(
             list(fusion_scored) + published_right_fusion, sector_stocks
         ),
-        "startup_watchlist": _dedupe_candidates(
-            _merge_sector_metadata(
-                list(daily_state["startup_watchlist"]) + list(startup_waiting),
-                sector_stocks,
-            )
-        ),
+        "startup_watchlist": _dedupe_candidates(public_watchlist),
+        "right_side_watchlist": right_watchlist,
         "diagnostics": {
             **dict(daily_state.get("diagnostics") or {}),
             "candidate_upgrade": upgrade_diagnostics,
             "startup_upgrade": startup_upgrade_diagnostics,
             "fusion_admission": fusion_diagnostics,
             "right_side_startup": right_diagnostics,
+            "signal_recency": recency_diagnostics,
         },
     }
 
@@ -922,11 +1066,17 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 available_count / float(requested_count)
                 if requested_count else 1.0
             )
-            diagnostics["min30"] = {
+            min30_diagnostics = {
                 "available_count": available_count,
                 "unavailable_codes": unavailable,
                 "is_final": False,
             }
+            unavailable_details = _min30_unavailable_details(
+                market_inputs, unavailable
+            )
+            if unavailable_details:
+                min30_diagnostics["unavailable_details"] = unavailable_details
+            diagnostics["min30"] = min30_diagnostics
             diagnostics["input_health"]["min30"] = {
                 "status": (
                     "not_requested"

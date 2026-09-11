@@ -31,3 +31,9 @@ python3 scripts/run_recall_walkforward.py \
 ```
 
 日报推送前，`daily_run.sh` 会调用 `scripts/validate_today_report.py`，要求正式收盘数据、SQLite 模式、候选漏斗成功落库，并验证 active 模式下新策略确实接管正式主池。
+
+## 选股优化与后续修改
+
+[2026-09-11 正确性修复验收](docs/plans/2026-09-11-selection-quality-release.md)记录本批共享市场口径、真实确认、预跑时效及分钟失败诊断的修改、11日对照和遗留项；不表示扩大正式召回或证明收益提高。
+
+后续相关改动先读`AGENTS.md`与[总方案第12—14节](docs/plans/2026-09-10-preclose-selection-quality-repair-plan.md)，保留固定输入回测、真实负例及B01—B10保护。模型在任务开始确认，任务内沿用；用户已授权独立验收发布的范围不重复等待人工确认。新增研究召回与既有active检索基线分开，不因基线已上线就自动转正式。

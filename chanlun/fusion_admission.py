@@ -44,7 +44,11 @@ def apply_fusion_admission(picks, sh_closes, sector_stocks=None):
     regime = "strong" if market_strong else "weak"
 
     diag = {
+        # This is an admission diagnostic.  It is deliberately kept separate
+        # from the candidate's market phase, which is supplied by the shared
+        # decision context later in the pipeline.
         "market_regime": regime,
+        "admission_regime": regime,
         "input_count": len(picks),
         "dropped_by_ma": 0,
         "dropped_by_market_regime": 0,
@@ -67,19 +71,29 @@ def apply_fusion_admission(picks, sh_closes, sector_stocks=None):
             confirmed_by = "+".join(stock.get("confirmations") or [])
 
         stock["ma_bullish"] = ma_ok
+        # Keep the historical top-level bucket for H4/policy analytics and
+        # report compatibility.  The decision engine treats it as an
+        # admission bucket (see its shared-context precedence), never as the
+        # authoritative market phase.
         stock["market_regime"] = regime
 
         decision, reason = _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by)
 
+        admission = {
+            "passed": bool(decision),
+            "reason": reason,
+            "admission_regime": regime,
+            "market_regime": regime,
+        }
         if decision:
-            stock["fusion_admission"] = {"passed": True, "reason": reason}
+            stock["fusion_admission"] = admission
             fusion_picks.append(stock)
             if tier == "formal":
                 diag["kept_formal"] += 1
             else:
                 diag["kept_candidate"] += 1
         else:
-            stock["fusion_admission"] = {"passed": False, "reason": reason}
+            stock["fusion_admission"] = admission
             diag["drop_details"].append({
                 "code": stock.get("code", ""),
                 "name": stock.get("name", ""),

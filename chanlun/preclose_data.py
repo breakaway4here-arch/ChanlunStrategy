@@ -171,6 +171,52 @@ def validate_preclose_30m_payload(
     return truncated, ""
 
 
+def _source_failure_details(fetcher, code):
+    """Read optional isolated diagnostics from a prefetching adapter."""
+
+    reader = getattr(fetcher, "fetch_30m_diagnostics", None)
+    if not callable(reader):
+        return []
+    try:
+        raw_details = reader(code)
+    except Exception:
+        # Diagnostics must never change the ordinary fetcher's behavior.
+        return []
+    if not isinstance(raw_details, (list, tuple)):
+        return []
+    details = []
+    for raw in raw_details:
+        if not isinstance(raw, dict):
+            continue
+        source = str(raw.get("source") or "").strip()
+        reason_code = str(raw.get("reason_code") or "").strip()
+        exception_type = str(raw.get("exception_type") or "").strip()
+        if not source:
+            continue
+        item = {"source": source}
+        if reason_code:
+            item["reason_code"] = reason_code
+        elif exception_type:
+            item["exception_type"] = exception_type
+        else:
+            continue
+        details.append(item)
+    return details
+
+
+def _summarize_source_failures(details):
+    """Keep one precise reason, or mark mixed/exception failures explicitly."""
+
+    reason_codes = [
+        item.get("reason_code")
+        for item in details
+        if item.get("reason_code")
+    ]
+    if len(reason_codes) == len(details) and len(set(reason_codes)) == 1:
+        return reason_codes[0]
+    return "all_sources_unavailable"
+
+
 def _kline_rows(payload, default_final):
     normalized = _normalize_kline(payload)
     if not normalized:
@@ -392,7 +438,7 @@ def fetch_target_30m_snapshots(
             normalized_dates = normalized.get("dates") if normalized else []
             observed_ts = normalized_dates[-1] if normalized_dates else ""
             observed_date = _date_part(observed_ts)
-            output[code] = {
+            evidence = {
                 "status": "unavailable",
                 "reason_code": validation_reason,
                 "latest_date": observed_date,
@@ -401,6 +447,13 @@ def fetch_target_30m_snapshots(
                 "is_final": False,
                 "as_of": as_of_text,
             }
+            source_failures = _source_failure_details(fetcher, code)
+            if source_failures:
+                evidence["reason_code"] = _summarize_source_failures(
+                    source_failures
+                )
+                evidence["source_failures"] = source_failures
+            output[code] = evidence
             continue
         finals = payload.get("finals")
         if finals is None:

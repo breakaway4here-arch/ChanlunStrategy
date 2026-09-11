@@ -21,6 +21,7 @@ from chanlun.preclose_pipeline import (
     _merge_sector_metadata,
     run_preclose_pipeline,
 )
+from chanlun.preclose_contract import build_public_preclose_view
 from chanlun.report_view_model import build_workspace
 from preclose_run import PrecloseRunLock, run_preclose_once
 
@@ -219,6 +220,11 @@ def _components(
             "close": 12.0,
             "change_pct": 4.2,
             "volume_ratio": 1.8,
+            "closes": [12.0],
+            "dates": [TRADE_DATE],
+            "startup_index": 0,
+            "startup_date": TRADE_DATE,
+            "startup_age_days": 0,
         }], {"startup_watch": 1}
 
     def startup_upgrade(seeds, min30_results):
@@ -252,6 +258,8 @@ def _components(
             "source_type": "日线右侧启动",
             "trend_signals": ["平台突破"],
             "confirmations": ["30分钟结构确认", "30分钟量能确认"],
+            "startup_index": len(candidate["closes"]) - 1,
+            "startup_date": candidate["dates"][-1],
         })
         return [candidate], [], {"trend_candidate": 1}
 
@@ -431,6 +439,109 @@ class PreclosePipelineTests(unittest.TestCase):
                 "unavailable_codes": ["300998", "002328"],
             },
         )
+        self.assertEqual(
+            result["diagnostics"]["min30"]["unavailable_details"],
+            {
+                "300998": {"reason_code": "insufficient_bars"},
+                "002328": {"reason_code": "insufficient_bars"},
+            },
+        )
+
+    def test_pipeline_keeps_whitelisted_min30_failure_details_in_isolated_diagnostics(self):
+        inputs = _market_inputs()
+        inputs["min30"] = {
+            "300998": {
+                "status": "unavailable",
+                "reason_code": "current_trade_date_missing",
+                "source_failures": [
+                    {"source": "sina", "reason_code": "current_trade_date_missing"},
+                    {"source": "eastmoney", "reason_code": "current_trade_date_missing"},
+                ],
+            },
+            "002328": {
+                "status": "unavailable",
+                "reason_code": "all_sources_unavailable",
+                "source_failures": [
+                    {"source": "sina", "reason_code": "insufficient_bars"},
+                    {
+                        "source": "eastmoney",
+                        "exception_type": "Timeout",
+                        "exception_text": "token=must-not-leak",
+                    },
+                ],
+                "debug": "must-not-copy",
+            },
+        }
+        control = _market_inputs()
+        control["min30"] = {
+            code: {"status": "unavailable", "reason_code": reason}
+            for code, reason in (
+                ("300998", "current_trade_date_missing"),
+                ("002328", "all_sources_unavailable"),
+            )
+        }
+
+        result = run_preclose_pipeline(
+            inputs,
+            config=_config(run_id="with-diagnostics"),
+            components=_components(),
+        )
+        baseline = run_preclose_pipeline(
+            control,
+            config=_config(run_id="without-diagnostics"),
+            components=_components(),
+        )
+
+        self.assertEqual(result["status"], baseline["status"])
+        self.assertEqual(result["pools"], baseline["pools"])
+        self.assertEqual(result["content_hash"], baseline["content_hash"])
+        self.assertEqual(
+            result["diagnostics"]["input_health"]["min30"],
+            baseline["diagnostics"]["input_health"]["min30"],
+        )
+        self.assertEqual(
+            result["diagnostics"]["min30"]["unavailable_details"],
+            {
+                "300998": {
+                    "reason_code": "current_trade_date_missing",
+                    "source_failures": [
+                        {"source": "sina", "reason_code": "current_trade_date_missing"},
+                        {"source": "eastmoney", "reason_code": "current_trade_date_missing"},
+                    ],
+                },
+                "002328": {
+                    "reason_code": "all_sources_unavailable",
+                    "source_failures": [
+                        {"source": "sina", "reason_code": "insufficient_bars"},
+                        {"source": "eastmoney", "exception_type": "Timeout"},
+                    ],
+                },
+            },
+        )
+        serialized_public = json.dumps(
+            build_public_preclose_view(result, GENERATED_AT),
+            ensure_ascii=False,
+        )
+        self.assertNotIn("unavailable_details", serialized_public)
+        self.assertNotIn("source_failures", serialized_public)
+        self.assertNotIn("must-not-leak", serialized_public)
+
+    def test_legacy_min30_unavailable_input_without_reason_fields_stays_compatible(self):
+        inputs = _market_inputs()
+        inputs["min30"] = {
+            code: {"status": "unavailable"}
+            for code in inputs["target_codes"]
+        }
+
+        result = run_preclose_pipeline(
+            inputs,
+            config=_config(run_id="legacy-min30"),
+            components=_components(),
+        )
+
+        self.assertNotIn(
+            "unavailable_details", result["diagnostics"]["min30"]
+        )
 
     def test_pipeline_executes_only_three_pools_in_fixed_stage_order(self):
         events = []
@@ -497,6 +608,71 @@ class PreclosePipelineTests(unittest.TestCase):
             "daily_pool", "startup_pool", "right_side_pool", "upgrade",
             "startup_upgrade", "right_side_upgrade", "fusion", "score", "score",
         ])
+
+    def test_preclose_recency_filters_pure_fusion_and_right_channels(self):
+        events = []
+
+        def daily_pool_with_stale(results, sector_stocks=None, mode="pure"):
+            del sector_stocks
+            fresh = _candidate(results[0].code, results[0].name)
+            stale = _candidate("000777", "过期票")
+            stale["best_buy_point"]["index"] = 0
+            stale["buy_points"][0]["index"] = 0
+            return [fresh, stale], {"mode": mode}
+
+        def right_upgrade_with_stale(seeds, min30_results):
+            del min30_results
+            if not seeds:
+                return [], [], {"trend_candidate": 0}
+            stale = _candidate("002328", "右侧过期票")
+            stale["source_channel"] = "right_side_startup"
+            stale["startup_index"] = 0
+            stale["startup_date"] = stale["dates"][0]
+            stale["best_buy_point"]["index"] = 0
+            stale["buy_points"][0]["index"] = 0
+            return [stale], [], {"trend_candidate": 1}
+
+        base = _components(
+            events,
+            right_side_mode="active",
+            include_right_side=True,
+        )
+        components = PreclosePipelineComponents(
+            **{
+                **base.__dict__,
+                "build_daily_structure_pool": daily_pool_with_stale,
+                "upgrade_right_side_startup": right_upgrade_with_stale,
+            }
+        )
+        result = build_preclose_main_pool(
+            [_analysis("300998", "宁波方正"), _analysis("000777", "过期票")],
+            [_analysis("300998", "宁波方正"), _analysis("000777", "过期票")],
+            sector_stocks={
+                "300998": {"sector": "汽车零部件"},
+                "000777": {"sector": "汽车零部件"},
+                "002328": {"sector": "汽车零部件"},
+            },
+            sh_closes=[3000, 3036],
+            components=components,
+        )
+
+        self.assertEqual([item["code"] for item in result["picks_pure"]], ["300998"])
+        self.assertEqual([item["code"] for item in result["picks_fusion"]], ["300998"])
+        self.assertEqual(result["diagnostics"]["right_side_startup"]["published_codes"], [])
+        recency = result["diagnostics"]["signal_recency"]
+        self.assertEqual(
+            (recency["picks_pure"]["input"], recency["picks_pure"]["dropped_expired"]),
+            (2, 1),
+        )
+        self.assertEqual(
+            (recency["picks_fusion"]["input"], recency["picks_fusion"]["dropped_expired"]),
+            (2, 1),
+        )
+        self.assertEqual(
+            (recency["right_side_fusion"]["input"], recency["right_side_fusion"]["dropped_expired"]),
+            (1, 1),
+        )
+        self.assertEqual(recency["max_age_trading_days"], 10)
 
     def test_right_side_shadow_scans_full_daily_set_without_changing_formal_picks(self):
         events = []

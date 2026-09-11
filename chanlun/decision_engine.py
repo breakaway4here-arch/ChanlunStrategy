@@ -299,25 +299,50 @@ def _is_iso_date(value: Any) -> bool:
 
 
 def _resolve_market_phase(stock: Mapping[str, Any], context: Mapping[str, Any]) -> str:
-    for key in ("market_phase", "market_regime", "market_trend"):
-        phase = stock.get(key)
-        if isinstance(phase, str) and phase.strip():
-            return _normalize_market_phase(phase)
-
+    # A supplied shared context is authoritative for the market fact.  In
+    # particular, its index payload may be present without a precomputed phase
+    # string.  Do not let a fusion-admission ``strong``/``weak`` field on one
+    # candidate fill that missing shared fact.
     for key in ("market_phase", "market_regime", "market_trend"):
         phase = context.get(key)
         if isinstance(phase, str) and phase.strip():
             return _normalize_market_phase(phase)
 
-    market_indices = _to_dict(context.get("market_indices"))
-    shanghai = _to_dict(market_indices.get("上证指数"))
-    change_pct = _safe_float(shanghai.get("change_pct"), default=None)
-    if change_pct is not None:
-        if change_pct >= 1.0:
-            return "主升"
-        if change_pct <= -1.5:
-            return "退潮"
-        return "震荡"
+    if "market_indices" in context:
+        market_indices = _to_dict(context.get("market_indices"))
+        shanghai = _to_dict(market_indices.get("上证指数"))
+        change_pct = _safe_float(shanghai.get("change_pct"), default=None)
+        if change_pct is not None:
+            if change_pct >= 1.0:
+                return "主升"
+            if change_pct <= -1.5:
+                return "退潮"
+            return "震荡"
+        # Shared market evidence exists but cannot establish a phase.  Keep
+        # the result unknown instead of falling back to the candidate field.
+        return ""
+
+    # Preserve the pure/standalone decision-engine contract for callers that
+    # do not supply a shared market context.  The production run paths pass
+    # ``market_indices`` in that context, so fusion admission cannot leak into
+    # the market-phase score there.
+    fusion_admission = _to_dict(stock.get("fusion_admission"))
+    admission_regime = str(
+        fusion_admission.get("admission_regime") or ""
+    ).strip().lower()
+    for key in ("market_phase", "market_regime", "market_trend"):
+        phase = stock.get(key)
+        if isinstance(phase, str) and phase.strip():
+            # ``market_regime`` is retained as a compatibility bucket for
+            # fusion admission and H4/policy analytics.  Once its provenance
+            # is explicit, it cannot become a stock-level market phase in a
+            # standalone decision call either.
+            if (
+                key == "market_regime"
+                and admission_regime
+            ):
+                continue
+            return _normalize_market_phase(phase)
 
     return ""
 

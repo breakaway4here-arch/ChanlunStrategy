@@ -187,6 +187,40 @@ class PrecloseDataTests(unittest.TestCase):
         self.assertEqual(evidence["reason_code"], "current_trade_date_missing")
         self.assertEqual(evidence["latest_date"], "2026-08-26")
         self.assertNotIn("klines", evidence)
+        self.assertNotIn("source_failures", evidence)
+
+    def test_optional_source_diagnostics_are_consumed_without_changing_validation(self):
+        class DiagnosticFetcher:
+            def fetch_30m(self, code, count, as_of):
+                del code, count, as_of
+                return None
+
+            def fetch_30m_diagnostics(self, code):
+                self.assert_code = code
+                return [
+                    {"source": "sina", "reason_code": "current_trade_date_missing"},
+                    {"source": "eastmoney", "reason_code": "insufficient_bars"},
+                ]
+
+        fetcher = DiagnosticFetcher()
+        result = fetch_target_30m_snapshots(
+            self.universe[:1],
+            fetcher=fetcher,
+            trade_date=TRADE_DATE,
+            as_of=AS_OF,
+        )
+
+        evidence = result["300998"]
+        self.assertEqual(evidence["reason_code"], "all_sources_unavailable")
+        self.assertEqual(
+            evidence["source_failures"],
+            [
+                {"source": "sina", "reason_code": "current_trade_date_missing"},
+                {"source": "eastmoney", "reason_code": "insufficient_bars"},
+            ],
+        )
+        self.assertEqual(fetcher.assert_code, "300998")
+        self.assertNotIn("klines", evidence)
 
     def test_current_day_30m_with_too_few_bars_is_unavailable(self):
         class ShortFetcher(SpyFetcher):

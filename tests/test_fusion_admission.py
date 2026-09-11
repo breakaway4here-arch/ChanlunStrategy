@@ -36,6 +36,49 @@ class TestFusionAdmission(unittest.TestCase):
     def test_is_market_strong_false_short(self):
         self.assertFalse(is_market_strong(list(range(1, 30))))
 
+    def test_admission_regime_does_not_pollute_candidate_market_phase(self):
+        stock = self._make_stock("二买候选", strength="强")
+        picks, diag = apply_fusion_admission(
+            [stock], self._make_sh_closes(True)
+        )
+
+        self.assertEqual(len(picks), 1)
+        self.assertEqual(stock["market_regime"], diag["admission_regime"])
+        self.assertEqual(
+            picks[0]["fusion_admission"]["admission_regime"],
+            diag["admission_regime"],
+        )
+
+    def test_admission_serialization_drops_unknown_existing_metadata(self):
+        stock = self._make_stock("二买候选", strength="强")
+        stock["fusion_admission"] = {
+            "passed": False,
+            "reason": "old",
+            "internal_reason": "SECRET_SENTINEL",
+            "source": "MALFORMED_SENTINEL",
+        }
+        picks, _ = apply_fusion_admission([stock], self._make_sh_closes(True))
+
+        self.assertEqual(
+            set(picks[0]["fusion_admission"]),
+            {"passed", "reason", "admission_regime", "market_regime"},
+        )
+        self.assertNotIn("SECRET_SENTINEL", str(picks[0]["fusion_admission"]))
+
+    def test_malformed_existing_admission_metadata_is_ignored(self):
+        for malformed in ("bad", ["bad"], 7):
+            with self.subTest(malformed=malformed):
+                stock = self._make_stock("二买候选", strength="强")
+                stock["fusion_admission"] = malformed
+                picks, _ = apply_fusion_admission(
+                    [stock], self._make_sh_closes(True)
+                )
+                self.assertEqual(len(picks), 1)
+                self.assertEqual(
+                    set(picks[0]["fusion_admission"]),
+                    {"passed", "reason", "admission_regime", "market_regime"},
+                )
+
     # ---- admission matrix ----
 
     def _make_stock(self, bp_type, tier="candidate", strength="中", confirmed_by="底分型+MACD金叉"):

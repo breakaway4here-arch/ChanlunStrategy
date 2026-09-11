@@ -9,6 +9,7 @@ import numpy as np
 from config import ENABLE_RELAXED_30MIN_CONFIRM
 from .price_basis import align_intraday_price
 from .signal_policy import is_recommendable_buy
+from .signal_recency import _coerce_finite_integer
 
 NEAR_PRICE_PCT = 0.03
 RECENT_30MIN_BARS = 8
@@ -140,19 +141,44 @@ def _macd_hist_direction(values):
 
 
 def _latest_recommendable_buy_point(min30_result, total_bars):
-    recent_start = max(0, int(total_bars) - RECENT_30MIN_BARS)
     for bp in reversed(getattr(min30_result, "buy_points", None) or []):
-        try:
-            signal_index = int(bp.get("index"))
-        except (TypeError, ValueError):
+        if not isinstance(bp, dict):
             continue
+        signal_index = _recent_bar_index(bp.get("index"), total_bars)
         if (
-            recent_start <= signal_index < int(total_bars)
+            signal_index is not None
             and str(bp.get("type") or "") in STRONG_STARTUP_BUY_POINT_TYPES
             and is_recommendable_buy(bp)
         ):
             return str(bp.get("type"))
     return None
+
+
+def _recent_bar_index(value, total_bars):
+    """Return a same-frequency index only when it is in the recent window."""
+    index = _coerce_finite_integer(value)
+    if index is None or index < 0 or index >= int(total_bars):
+        return None
+    if index < max(0, int(total_bars) - RECENT_30MIN_BARS):
+        return None
+    return index
+
+
+def _recent_divergence_event(divergence, total_bars):
+    if not isinstance(divergence, dict):
+        return False
+    if not divergence.get("is_divergence") or "底背驰" not in str(
+        divergence.get("type") or ""
+    ):
+        return False
+    segment = divergence.get("last_segment")
+    if not isinstance(segment, (list, tuple, np.ndarray)) or len(segment) != 2:
+        return False
+    start = _coerce_finite_integer(segment[0])
+    end = _coerce_finite_integer(segment[1])
+    if start is None or end is None or start < 0 or start > end:
+        return False
+    return _recent_bar_index(end, total_bars) is not None
 
 
 def _latest_yang_pattern(min30_result):
@@ -192,16 +218,23 @@ def classify_30min_confirmation(daily_stock, source_bp, min30_result):
     signals = []
     reasons = []
 
+    closes = _finite_array(getattr(min30_result, "closes", None))
+    total_bars = len(closes) if closes is not None else 0
+
     # 1. 30min bottom divergence
     div = min30_result.divergence
-    if div and div.get("is_divergence") and "底背驰" in div.get("type", ""):
+    if _recent_divergence_event(div, total_bars):
         signals.append("30min底背驰")
         reasons.append("30分钟底背驰")
 
     # 2. 30min formal/recommendable buy point
     has_30min_buy = False
     for bp in (min30_result.buy_points or []):
-        if is_recommendable_buy(bp):
+        if (
+            isinstance(bp, dict)
+            and _recent_bar_index(bp.get("index"), total_bars) is not None
+            and is_recommendable_buy(bp)
+        ):
             has_30min_buy = True
             signals.append(f"30min{bp['type']}")
             reasons.append(f"30分钟{bp['type']}信号")
@@ -271,21 +304,44 @@ def _no_confirm(reason):
 
 def _check_bottom_fractal_macd(min30_result):
     """Check for recent bottom fractal + MACD golden cross within 3 bars."""
+    closes = _finite_array(getattr(min30_result, "closes", None))
     fractals = min30_result.fractals or []
     bottoms = [f for f in fractals if f.type == "bottom"]
-    if not bottoms:
+    if closes is None or not bottoms:
         return False
 
     last_bottom = bottoms[-1]
-    dif = min30_result.macd_dif
-    dea = min30_result.macd_dea
-    if dif is None or dea is None or len(dif) < 3:
+    bottom_index = _recent_bar_index(
+        getattr(last_bottom, "index", None), len(closes)
+    )
+    if bottom_index is None:
+        return False
+    try:
+        dif = np.asarray(min30_result.macd_dif, dtype=float)
+        dea = np.asarray(min30_result.macd_dea, dtype=float)
+    except (TypeError, ValueError):
+        return False
+    if (
+        dif.ndim != 1
+        or dea.ndim != 1
+        or len(dif) != len(dea)
+        or len(dif) != len(closes)
+        or len(dif) < 3
+    ):
         return False
 
     n = len(dif)
     # Check MACD golden cross within recent 3 bars after the fractal
-    for i in range(max(last_bottom.index, n - 3), n):
-        if i > 0 and dif[i] > dea[i] and dif[i - 1] <= dea[i - 1]:
+    for i in range(max(bottom_index, n - 3), n):
+        if (
+            i > 0
+            and np.isfinite(dif[i])
+            and np.isfinite(dea[i])
+            and np.isfinite(dif[i - 1])
+            and np.isfinite(dea[i - 1])
+            and dif[i] > dea[i]
+            and dif[i - 1] <= dea[i - 1]
+        ):
             return True
     return False
 
@@ -352,15 +408,30 @@ def _find_first_buy_price(daily_stock):
 
 
 def _check_ema5_reclaim(min30_result):
-    """Check if close reclaimed above 5-period approximate EMA."""
-    closes = min30_result.closes
-    if closes is None or len(closes) < 6:
+    """Check for a recent true EMA5 reclaim with the close still above it.
+
+    ``classify_30min_confirmation`` is a live policy entry point, so it must
+    use the same EMA and crossing semantics as
+    :func:`build_30min_confirmation_evidence`.  Being above a five-bar
+    average is only a state; it is not a new reclaim event.
+    """
+    closes = _finite_array(getattr(min30_result, "closes", None))
+    if closes is None or len(closes) < 5:
         return False
-    recent = np.asarray(closes[-5:], dtype=float)
-    ema5 = float(np.mean(recent))
-    latest_close = float(closes[-1])
-    prev_close = float(closes[-2])
-    return latest_close > ema5 and latest_close >= prev_close
+
+    from .chan_engine import ema
+
+    ema5 = np.asarray(ema(closes, 5), dtype=float)
+    # The EMA implementation intentionally leaves its warm-up prefix as NaN;
+    # only the current value and the candidate crossing bars need to be
+    # finite.  ``_has_recent_ema5_reclaim`` skips invalid transition pairs and
+    # therefore still fails closed for a NaN in the actionable tail.
+    if len(ema5) != len(closes) or not np.isfinite(ema5[-1]):
+        return False
+    return bool(
+        closes[-1] > ema5[-1]
+        and _has_recent_ema5_reclaim(closes, ema5)
+    )
 
 
 def _check_stop_fall_bars(min30_result):

@@ -291,6 +291,60 @@ class DecisionEngineTestCase(unittest.TestCase):
         self.assertIn("主升周期", result["sentiment"]["reasons"])
         self.assertIn("趋势健康度偏弱", result["sentiment"]["reasons"])
 
+    def test_shared_market_context_overrides_fusion_admission_regime(self):
+        stock = {
+            "code": "ADMISSION-REGIME",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_regime": "strong",
+            "fusion_admission": {
+                "passed": True,
+                "admission_regime": "strong",
+            },
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+            "volume_ratio": 1.3,
+        }
+        context = {"market_indices": {"上证指数": {"change_pct": 0.0}}}
+
+        with_admission = evaluate_stock(stock, market_context=context)
+        without_admission = evaluate_stock(
+            {key: value for key, value in stock.items()
+             if key not in {"market_regime", "fusion_admission"}},
+            market_context=context,
+        )
+
+        self.assertEqual(
+            with_admission["sentiment"], without_admission["sentiment"]
+        )
+        self.assertEqual(with_admission["total_score"], without_admission["total_score"])
+        self.assertIn("震荡市", with_admission["sentiment"]["reasons"])
+        self.assertNotIn("主升周期", with_admission["sentiment"]["reasons"])
+
+    def test_shared_market_context_without_phase_does_not_default_to_candidate_strong(self):
+        stock = {
+            "code": "MISSING-MARKET-PHASE",
+            "trend_type": "上升趋势",
+            "breakout_structure": True,
+            "pullback_confirmed": True,
+            "market_regime": "strong",
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-07-16",
+            "position_absolute_percentile": 12.0,
+            "position_absolute_window": 120,
+        }
+
+        result = evaluate_stock(
+            stock,
+            market_context={"market_indices": {"上证指数": {"closes": [1, 2]}}},
+        )
+
+        self.assertNotIn("主升周期", result["sentiment"]["reasons"])
+        self.assertNotIn("震荡市", result["sentiment"]["reasons"])
+
     def test_market_drawdown_adds_sentiment_risk(self):
         result = evaluate_stock(
             {

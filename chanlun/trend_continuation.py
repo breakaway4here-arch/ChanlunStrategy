@@ -10,6 +10,7 @@ import config
 from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
 from .price_basis import adjustment_factor
+from .signal_recency import _coerce_finite_integer
 from .sublevel_confirm import build_30min_confirmation_evidence
 
 
@@ -391,7 +392,7 @@ def _confirm_30min(
         structure_labels.append("30min两阳夹两阴确认")
 
     quality_labels = []
-    if base.get("ema5_reclaim"):
+    if base.get("ema5_reclaim") and base.get("close_above_ema5"):
         quality_labels.append("30min EMA5收复")
     elif (
         base.get("close_above_ema5")
@@ -570,12 +571,16 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
     reference_price = float(row.get("reference_price") or 0.0)
     current_price = float(row.get("close") or 0.0)
     confirmations = list(row.get("confirmations") or [])
-    closes = row.get("closes")
-    close_count = len(closes) if closes is not None else 0
+    # The trend candidate is upgraded with a 30-minute result, but its
+    # recency still belongs to the daily source event.  Do not replace that
+    # source index with the latest bar while adapting the output contract.
+    source_index = _coerce_finite_integer(row.get("startup_index"))
+    if source_index is not None and source_index < 0:
+        source_index = None
     buy_point = {
         "type": "右侧启动候选",
         "tier": "candidate",
-        "index": close_count - 1,
+        "index": source_index,
         "price": reference_price,
         "reference_price": reference_price,
         "current_price": current_price,

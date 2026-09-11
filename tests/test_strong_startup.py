@@ -9,6 +9,7 @@ from chanlun.strong_startup import (
     _check_volume_breakout,
     _check_price_breakout,
     _check_30min_confirmations,
+    _make_watch_item,
 )
 
 
@@ -85,6 +86,32 @@ class TestVolumeBreakout(unittest.TestCase):
 
 class TestPriceBreakout(unittest.TestCase):
 
+    def test_body_signal_requires_positive_entity(self):
+        closes = np.ones(20) * 50.0
+        opens = closes.copy()
+        highs = closes.copy()
+
+        closes[-1] = 54.0
+        opens[-1] = 50.0
+        positive = _check_price_breakout(closes, opens, highs, 4.0)
+
+        opens[-1] = 58.0
+        negative = _check_price_breakout(closes, opens, highs, 4.0)
+
+        self.assertIn("实体阳线≥3%", positive)
+        self.assertNotIn("实体阳线≥3%", negative)
+
+    def test_body_signal_fails_closed_for_misaligned_or_nonfinite_arrays(self):
+        closes = np.ones(20) * 50.0
+        opens = np.ones(19) * 50.0
+        highs = np.ones(20) * 50.0
+        self.assertEqual(_check_price_breakout(closes, opens, highs, 4.0), [])
+
+        closes[-1] = np.nan
+        opens = np.ones(20) * 50.0
+        highs = np.ones(20) * 50.0
+        self.assertEqual(_check_price_breakout(closes, opens, highs, 4.0), [])
+
     def test_two_signals_minimum(self):
         closes = np.ones(20) * 50.0
         closes[-1] = 53.0  # +6%
@@ -102,6 +129,27 @@ class TestPriceBreakout(unittest.TestCase):
         highs = closes * 1.02
         signals = _check_price_breakout(closes, opens, highs, 4.0)
         self.assertLess(len(signals), 2)
+
+
+class TestStartupWatchAge(unittest.TestCase):
+
+    def test_watch_item_keeps_missing_age_unknown(self):
+        watch = _make_watch_item(
+            {"code": "000001", "name": "测试", "startup_index": 4},
+            "启动",
+            "等待确认",
+            ["条件"],
+        )
+        self.assertIsNone(watch["startup_age_days"])
+
+    def test_watch_item_preserves_explicit_zero_age(self):
+        watch = _make_watch_item(
+            {"code": "000001", "name": "测试", "startup_age_days": 0},
+            "启动",
+            "等待确认",
+            ["条件"],
+        )
+        self.assertEqual(watch["startup_age_days"], 0)
 
 
 class TestBuildStrongStartupPool(unittest.TestCase):

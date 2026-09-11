@@ -365,11 +365,27 @@ def _check_volume_breakout(volumes, closes, min_ratio):
 
 def _check_price_breakout(closes, opens, highs, min_change_pct):
     """Check price breakout conditions. Returns list of satisfied signal names."""
+    try:
+        closes = np.asarray(closes, dtype=float)
+        opens = np.asarray(opens, dtype=float)
+        highs = np.asarray(highs, dtype=float)
+    except (TypeError, ValueError):
+        return []
+    if (
+        closes.ndim != 1
+        or opens.ndim != 1
+        or highs.ndim != 1
+        or len(closes) != len(opens)
+        or len(closes) != len(highs)
+        or len(closes) < 2
+        or not np.all(np.isfinite(closes))
+        or not np.all(np.isfinite(opens))
+        or not np.all(np.isfinite(highs))
+    ):
+        return []
+
     signals = []
     n = len(closes)
-
-    if n < 2:
-        return signals
 
     curr_close = closes[-1]
     prev_close = closes[-2]
@@ -399,8 +415,8 @@ def _check_price_breakout(closes, opens, highs, min_change_pct):
 
     # candle body >= 3%
     if n >= 2:
-        body_pct = abs(curr_close - opens[-1]) / prev_close * 100 if prev_close > 0 else 0
-        if body_pct >= 3.0:
+        body_pct = (curr_close - opens[-1]) / prev_close * 100 if prev_close > 0 else 0
+        if curr_close > opens[-1] and body_pct >= 3.0:
             signals.append("实体阳线≥3%")
 
     return signals
@@ -459,7 +475,7 @@ def _make_watch_item(
         "startup_signals": seed.get("startup_signals", []),
         "startup_index": seed.get("startup_index"),
         "startup_date": seed.get("startup_date", ""),
-        "startup_age_days": seed.get("startup_age_days", 0),
+        "startup_age_days": seed.get("startup_age_days"),
         "change_pct": seed.get("change_pct", 0),
         "price_limit_state": seed.get("price_limit_state", "invalid"),
         "volume_ratio": seed.get("volume_ratio", 0),

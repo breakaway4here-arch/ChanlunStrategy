@@ -332,12 +332,22 @@ def select_preclose_30m_targets(rows, components=None):
 
 
 class _Prefetched30m:
-    def __init__(self, values):
+    def __init__(self, values, diagnostics=None):
         self.values = dict(values)
+        self.diagnostics = {
+            str(code): [dict(item) for item in failures]
+            for code, failures in (diagnostics or {}).items()
+            if isinstance(failures, (list, tuple))
+        }
 
     def fetch_30m(self, code, count, as_of):
         del count, as_of
         return self.values.get(str(code))
+
+    def fetch_30m_diagnostics(self, code):
+        """Return isolated provider failures without exposing exception text."""
+
+        return [dict(item) for item in self.diagnostics.get(str(code), [])]
 
 
 def fetch_preclose_30m(targets, trade_date, as_of, max_workers=20):
@@ -350,21 +360,39 @@ def fetch_preclose_30m(targets, trade_date, as_of, max_workers=20):
 
     from .preclose_data import validate_preclose_30m_payload
 
+    diagnostics = {}
+
     def fetch_remote(code):
+        source_failures = []
         for source, fetcher in (
             ("sina", _fetch_sina_minute_kline_remote),
             ("eastmoney", _fetch_eastmoney_minute_kline_remote),
         ):
-            payload = fetcher(code, scale=30, count=80)
-            validated, _reason = validate_preclose_30m_payload(
-                payload,
-                trade_date=str(trade_date),
-                as_of=str(as_of),
-            )
+            try:
+                payload = fetcher(code, scale=30, count=80)
+                validated, reason = validate_preclose_30m_payload(
+                    payload,
+                    trade_date=str(trade_date),
+                    as_of=str(as_of),
+                )
+            except Exception as exc:
+                # Preserve the existing exception path: do not try the next
+                # provider after an exception. Only the type is retained.
+                source_failures.append({
+                    "source": source,
+                    "exception_type": type(exc).__name__,
+                })
+                diagnostics[code] = source_failures
+                raise
             if validated is not None:
                 validated["source"] = source
                 validated["adjustment"] = "qfq"
                 return validated
+            source_failures.append({
+                "source": source,
+                "reason_code": reason or "data_missing",
+            })
+        diagnostics[code] = source_failures
         return None
 
     targets = list(targets or [])
@@ -395,7 +423,7 @@ def fetch_preclose_30m(targets, trade_date, as_of, max_workers=20):
             executor.shutdown(wait=True)
     return fetch_target_30m_snapshots(
         targets,
-        fetcher=_Prefetched30m(values),
+        fetcher=_Prefetched30m(values, diagnostics),
         trade_date=trade_date,
         as_of=as_of,
         count=80,

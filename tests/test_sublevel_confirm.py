@@ -1,8 +1,10 @@
 """Tests for 30min sublevel confirmation classifier."""
 import unittest
 import numpy as np
+from chanlun.engine_types import Fractal
 from chanlun.sublevel_confirm import (
     _check_key_level,
+    _check_ema5_reclaim,
     build_30min_confirmation_evidence,
     classify_30min_confirmation,
 )
@@ -39,6 +41,163 @@ def make_min30_result(lows, closes, opens=None, highs=None, divergence=None,
 
 
 class TestSublevelConfirm(unittest.TestCase):
+
+    def test_classifier_keeps_each_original_recommendable_buy_type(self):
+        daily_stock = make_daily_stock_with_swing_seed(source_price=10.0)
+        for bp_type, tier in (
+            ("一买", "formal"),
+            ("二买", "formal"),
+            ("盘整低吸候选", "candidate"),
+        ):
+            with self.subTest(bp_type=bp_type):
+                min30 = make_min30_result(
+                    lows=[10.0] * 8,
+                    closes=[10.0] * 8,
+                    buy_points=[{
+                        "type": bp_type,
+                        "tier": tier,
+                        "index": 7,
+                    }],
+                )
+                confirmation = classify_30min_confirmation(
+                    daily_stock,
+                    {"type": "swing底背驰候选种子", "price": 10.0},
+                    min30,
+                )
+                self.assertTrue(confirmation["confirmed"])
+                self.assertIn(f"30min{bp_type}", confirmation["signals"])
+
+    def test_classifier_rejects_buy_points_without_recent_valid_coordinates(self):
+        daily_stock = make_daily_stock_with_swing_seed(source_price=10.0)
+        for label, index in (
+            ("missing", None),
+            ("old", 0),
+            ("future", 20),
+            ("bool", True),
+            ("fractional", 1.5),
+        ):
+            with self.subTest(index=label):
+                min30 = make_min30_result(
+                    lows=[10.0] * 20,
+                    closes=[10.0] * 20,
+                    buy_points=[{
+                        "type": "二买",
+                        "tier": "formal",
+                        "index": index,
+                    }],
+                )
+                confirmation = classify_30min_confirmation(
+                    daily_stock,
+                    {"type": "swing底背驰候选种子", "price": 10.0},
+                    min30,
+                )
+                self.assertFalse(confirmation["confirmed"])
+                self.assertNotIn("30min二买", confirmation["signals"])
+
+    def test_classifier_requires_recent_divergence_event_coordinate(self):
+        daily_stock = make_daily_stock_with_swing_seed(source_price=10.0)
+        for label, segment, expected in (
+            ("fresh", (12, 19), True),
+            ("old", (0, 5), False),
+            ("missing", None, False),
+            ("future", (12, 20), False),
+            ("bool", (True, 19), False),
+        ):
+            with self.subTest(segment=label):
+                divergence = {
+                    "is_divergence": True,
+                    "type": "盘整底背驰",
+                }
+                if segment is not None:
+                    divergence["last_segment"] = segment
+                min30 = make_min30_result(
+                    lows=[10.0] * 20,
+                    closes=[10.0] * 20,
+                    divergence=divergence,
+                )
+                confirmation = classify_30min_confirmation(
+                    daily_stock,
+                    {"type": "swing底背驰候选种子", "price": 10.0},
+                    min30,
+                )
+                self.assertEqual(confirmation["confirmed"], expected)
+                self.assertEqual(
+                    "30min底背驰" in confirmation["signals"], expected
+                )
+
+    def test_bottom_fractal_macd_requires_recent_same_frequency_coordinates(self):
+        daily_stock = make_daily_stock_with_swing_seed(source_price=10.0)
+        dif = np.full(20, np.nan, dtype=float)
+        dea = np.full(20, np.nan, dtype=float)
+        dif[4:18] = -0.2
+        dea[4:18] = 0.0
+        dif[18] = -1.0
+        dea[18] = 0.0
+        dif[19] = 1.0
+        dea[19] = 0.0
+        fresh = make_min30_result(
+            lows=[10.0] * 20,
+            closes=[10.0] * 20,
+            fractals=[Fractal(type="bottom", index=17, price=10.0, klines=[17])],
+            dif=dif,
+            dea=dea,
+        )
+        stale = make_min30_result(
+            lows=[10.0] * 20,
+            closes=[10.0] * 20,
+            fractals=[Fractal(type="bottom", index=0, price=10.0, klines=[0])],
+            dif=dif,
+            dea=dea,
+        )
+        mismatched = make_min30_result(
+            lows=[10.0] * 20,
+            closes=[10.0] * 20,
+            fractals=[Fractal(type="bottom", index=17, price=10.0, klines=[17])],
+            dif=dif[:-1],
+            dea=dea[:-1],
+        )
+
+        fresh_confirmation = classify_30min_confirmation(
+            daily_stock,
+            {"type": "swing底背驰候选种子", "price": 10.0},
+            fresh,
+        )
+        stale_confirmation = classify_30min_confirmation(
+            daily_stock,
+            {"type": "swing底背驰候选种子", "price": 10.0},
+            stale,
+        )
+        mismatched_confirmation = classify_30min_confirmation(
+            daily_stock,
+            {"type": "swing底背驰候选种子", "price": 10.0},
+            mismatched,
+        )
+        self.assertTrue(fresh_confirmation["confirmed"])
+        self.assertFalse(stale_confirmation["confirmed"])
+        self.assertFalse(mismatched_confirmation["confirmed"])
+
+    def test_ema5_reclaim_requires_recent_true_cross(self):
+        always_above = make_min30_result(
+            lows=[1.0] * 8,
+            closes=[1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7],
+        )
+        recent_cross = make_min30_result(
+            lows=[9.0] * 8,
+            closes=[10.0, 9.8, 9.7, 9.6, 9.5, 9.4, 9.6, 9.8],
+        )
+
+        self.assertFalse(_check_ema5_reclaim(always_above))
+        self.assertTrue(_check_ema5_reclaim(recent_cross))
+
+    def test_ema5_reclaim_fails_closed_for_equal_or_invalid_tail(self):
+        equal = make_min30_result(lows=[1.0] * 8, closes=[1.0] * 8)
+        invalid = make_min30_result(
+            lows=[1.0] * 8,
+            closes=[1.0, 1.1, 1.2, 1.3, 1.4, float("nan"), 1.6, 1.7],
+        )
+
+        self.assertFalse(_check_ema5_reclaim(equal))
+        self.assertFalse(_check_ema5_reclaim(invalid))
 
     def test_key_level_aligns_raw_30m_low_to_daily_qfq_basis(self):
         daily_stock = make_daily_stock_with_swing_seed(source_price=5.0)

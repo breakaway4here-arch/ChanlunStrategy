@@ -3,6 +3,23 @@
 """
 
 import config
+import math
+import numbers
+
+
+def _coerce_finite_integer(value):
+    """Return a finite integer value, rejecting bools and fractional input."""
+    if isinstance(value, bool) or not isinstance(value, numbers.Real):
+        return None
+    if isinstance(value, numbers.Integral):
+        return int(value)
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(numeric) or numeric != int(numeric):
+        return None
+    return int(numeric)
 
 
 def annotate_buy_point_recency(bp, closes, dates=None, max_age=None):
@@ -22,13 +39,19 @@ def annotate_buy_point_recency(bp, closes, dates=None, max_age=None):
         max_age = config.SIGNAL_MAX_AGE_TRADING_DAYS
 
     bp = dict(bp)
-    signal_index = bp.get("index")
+    signal_index = _coerce_finite_integer(bp.get("index"))
     n_bars = len(closes) if closes is not None else 0
 
     if signal_index is None or n_bars == 0:
         bp["signal_age_days"] = None
         bp["is_recent"] = False
-        bp["recency_reason"] = "无法确定信号日期"
+        bp["recency_reason"] = "无法确定信号日期或信号index无效"
+        return bp
+
+    if signal_index < 0:
+        bp["signal_age_days"] = None
+        bp["is_recent"] = False
+        bp["recency_reason"] = "信号index无效（不能为负数）"
         return bp
 
     current_index = n_bars - 1
@@ -42,7 +65,7 @@ def annotate_buy_point_recency(bp, closes, dates=None, max_age=None):
     bp["signal_age_days"] = age
     bp["is_recent"] = age <= max_age
 
-    if dates and signal_index < len(dates):
+    if dates is not None and signal_index < len(dates):
         bp["signal_date"] = str(dates[signal_index])
 
     if age <= max_age:
@@ -130,6 +153,7 @@ def filter_recent_watchlist(watchlist, max_age=None):
         "input": len(watchlist),
         "kept": 0,
         "dropped_expired": 0,
+        "dropped_invalid": 0,
         "dropped_details": [],
     }
 
@@ -140,15 +164,24 @@ def filter_recent_watchlist(watchlist, max_age=None):
 
         if age is None:
             closes = w.get("closes")
-            startup_index = w.get("startup_index")
-            if closes is not None and startup_index is not None:
+            startup_index = _coerce_finite_integer(w.get("startup_index"))
+            if closes is not None and startup_index is not None and startup_index >= 0:
                 age = len(closes) - 1 - startup_index
                 if age < 0:
-                    age = 0
+                    diag["dropped_expired"] += 1
+                    diag["dropped_invalid"] += 1
+                    diag["dropped_details"].append({
+                        "code": w.get("code", "?"),
+                        "name": w.get("name", "?"),
+                        "type": w.get("type", "?"),
+                        "reason": "startup_index超过当前K线范围，无法确定时效",
+                    })
+                    continue
                 w["startup_age_days"] = age
             else:
                 # 无法确定年龄 → 过滤掉
                 diag["dropped_expired"] += 1
+                diag["dropped_invalid"] += 1
                 diag["dropped_details"].append({
                     "code": w.get("code", "?"),
                     "name": w.get("name", "?"),
@@ -156,6 +189,30 @@ def filter_recent_watchlist(watchlist, max_age=None):
                     "reason": "无法确定信号日期",
                 })
                 continue
+
+        age = _coerce_finite_integer(age)
+        if age is None:
+            diag["dropped_expired"] += 1
+            diag["dropped_invalid"] += 1
+            diag["dropped_details"].append({
+                "code": w.get("code", "?"),
+                "name": w.get("name", "?"),
+                "type": w.get("type", "?"),
+                "reason": "无法确定信号时效",
+            })
+            continue
+        w["startup_age_days"] = age
+        if age < 0:
+            diag["dropped_expired"] += 1
+            diag["dropped_invalid"] += 1
+            diag["dropped_details"].append({
+                "code": w.get("code", "?"),
+                "name": w.get("name", "?"),
+                "type": w.get("type", "?"),
+                "signal_age_days": age,
+                "reason": "信号年龄不能为负数",
+            })
+            continue
 
         if age <= max_age:
             w["is_recent"] = True

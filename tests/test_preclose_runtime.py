@@ -93,6 +93,142 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(
             result["300900"]["klines"]["source"], "eastmoney"
         )
+        self.assertNotIn("source_failures", result["300900"])
+        self.assertEqual(
+            result["300900"]["klines"]["dates"][-1],
+            TRADE_DATE + " 14:30:00",
+        )
+        self.assertEqual(len(result["300900"]["klines"]["dates"]), 47)
+        self.assertEqual(result["300900"]["klines"]["closes"], [10.0] * 47)
+
+    def test_30m_unavailable_keeps_mixed_provider_validation_reasons(self):
+        stale = self._minute_payload("2026-08-27", 10.0, "sina")
+        short = {
+            "dates": [TRADE_DATE + " 14:30:00"],
+            "opens": [10.0],
+            "highs": [10.1],
+            "lows": [9.9],
+            "closes": [10.0],
+            "volumes": [1000.0],
+            "source": "eastmoney",
+        }
+        with patch(
+            "chanlun.data_fetcher._fetch_sina_minute_kline_remote",
+            return_value=stale,
+        ), patch(
+            "chanlun.data_fetcher._fetch_eastmoney_minute_kline_remote",
+            return_value=short,
+        ):
+            result = fetch_preclose_30m(
+                [{"code": "300900", "name": "广联航空"}],
+                TRADE_DATE,
+                AS_OF,
+                max_workers=1,
+            )
+
+        evidence = result["300900"]
+        self.assertEqual(evidence["status"], "unavailable")
+        self.assertEqual(evidence["reason_code"], "all_sources_unavailable")
+        self.assertEqual(
+            evidence["source_failures"],
+            [
+                {"source": "sina", "reason_code": "current_trade_date_missing"},
+                {"source": "eastmoney", "reason_code": "insufficient_bars"},
+            ],
+        )
+        self.assertNotIn("klines", evidence)
+
+    def test_30m_unavailable_preserves_exception_type_without_exception_text(self):
+        stale = self._minute_payload("2026-08-27", 10.0, "sina")
+
+        def rejected(*_args, **_kwargs):
+            raise ValueError("token=should-never-be-recorded")
+
+        with patch(
+            "chanlun.data_fetcher._fetch_sina_minute_kline_remote",
+            return_value=stale,
+        ), patch(
+            "chanlun.data_fetcher._fetch_eastmoney_minute_kline_remote",
+            side_effect=rejected,
+        ):
+            result = fetch_preclose_30m(
+                [{"code": "300900", "name": "广联航空"}],
+                TRADE_DATE,
+                AS_OF,
+                max_workers=1,
+            )
+
+        evidence = result["300900"]
+        self.assertEqual(evidence["status"], "unavailable")
+        self.assertEqual(evidence["reason_code"], "all_sources_unavailable")
+        self.assertEqual(
+            evidence["source_failures"],
+            [
+                {"source": "sina", "reason_code": "current_trade_date_missing"},
+                {"source": "eastmoney", "exception_type": "ValueError"},
+            ],
+        )
+        self.assertNotIn("token=should-never-be-recorded", repr(evidence))
+        self.assertNotIn("klines", evidence)
+
+    def test_30m_provider_exception_keeps_existing_no_fallback_behavior(self):
+        def rejected(*_args, **_kwargs):
+            raise RuntimeError("provider-secret=must-not-be-recorded")
+
+        def unexpected_fallback(*_args, **_kwargs):
+            raise AssertionError("exception must not trigger the next provider")
+
+        with patch(
+            "chanlun.data_fetcher._fetch_sina_minute_kline_remote",
+            side_effect=rejected,
+        ), patch(
+            "chanlun.data_fetcher._fetch_eastmoney_minute_kline_remote",
+            side_effect=unexpected_fallback,
+        ):
+            result = fetch_preclose_30m(
+                [{"code": "300900", "name": "广联航空"}],
+                TRADE_DATE,
+                AS_OF,
+                max_workers=1,
+            )
+
+        evidence = result["300900"]
+        self.assertEqual(evidence["reason_code"], "all_sources_unavailable")
+        self.assertEqual(
+            evidence["source_failures"],
+            [{"source": "sina", "exception_type": "RuntimeError"}],
+        )
+        self.assertNotIn("provider-secret=must-not-be-recorded", repr(evidence))
+        self.assertNotIn("klines", evidence)
+
+    def test_30m_unavailable_same_provider_reason_remains_specific(self):
+        stale_sina = self._minute_payload("2026-08-27", 10.0, "sina")
+        stale_eastmoney = self._minute_payload("2026-08-27", 10.0, "eastmoney")
+        with patch(
+            "chanlun.data_fetcher._fetch_sina_minute_kline_remote",
+            return_value=stale_sina,
+        ), patch(
+            "chanlun.data_fetcher._fetch_eastmoney_minute_kline_remote",
+            return_value=stale_eastmoney,
+        ):
+            result = fetch_preclose_30m(
+                [{"code": "300900", "name": "广联航空"}],
+                TRADE_DATE,
+                AS_OF,
+                max_workers=1,
+            )
+
+        evidence = result["300900"]
+        self.assertEqual(evidence["reason_code"], "current_trade_date_missing")
+        self.assertEqual(
+            evidence["source_failures"],
+            [
+                {"source": "sina", "reason_code": "current_trade_date_missing"},
+                {"source": "eastmoney", "reason_code": "current_trade_date_missing"},
+            ],
+        )
+        self.assertNotIn("klines", evidence)
+
     def test_intraday_quote_is_scaled_into_formal_qfq_basis(self):
         history = _history("300900", "广联航空", 3.81)
         history["klines"]["adjustment"] = "qfq"
