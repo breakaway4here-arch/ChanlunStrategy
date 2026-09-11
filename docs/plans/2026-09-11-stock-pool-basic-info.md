@@ -48,3 +48,14 @@ python3 -m unittest tests.test_candidate_basic_info tests.test_unified_workbench
 ## 后续上线授权
 
 用户随后明确要求“上线”，本次发布不再等待确认。同步最新 `origin/main`，复跑相关回归后提交、合入并发布 GitHub Pages；同时快进实际运行仓库，防止后续日报生成回退资源。部署后验证线上资源字节、真实桌面与手机页面、报告数据与运行保护对象不变。线上验收结果以实际回读为准，不用之前的本地交付替代。
+
+## 实际上线验收
+
+- PR [#10](https://github.com/breakaway4here-arch/ChanlunStrategy/pull/10) 已合入，功能发布提交 `27d01b399dde2c56e1770384edfbb54a70f2f476`。
+- Pages [34590074113](https://github.com/breakaway4here-arch/ChanlunStrategy/actions/runs/34590074113) 对应同一提交，发布成功。线上根页实际加载资源 `0d80f50ccd16`；JS、CSS 与已验收源码逐字节匹配，9月11日公开 JSON 与原文件哈希一致。
+- 桌面 1440×900、1366×768 和手机 390×844 实看通过。完整清单加载为25只；风华高科、领益智造与下跌样本太极实业的板块、价格、正负涨幅、前复权及数据日期清楚可见；量能、市值、参考信息可读，K线、成交量、MACD仍保留。手机与桌面均无横向溢出。
+- 运行目录 `.worktrees/production-runtime` 已快进至功能发布提交且clean；上线前确认无daily/preclose进程。16个行情DB、推荐/影子账本、当日报告、预跑封存和通知状态文件前后SHA256一致。
+- `formal_publish_guard.py preflight` 实际执行通过（generated=0, excluded=0）。旧生成日志的提交身份保留为历史，不伪造当日重新生成记录。
+- 发布前同步后的217项相关回归通过。本任务未启动服务、未重跑选股、未发送新通知。
+
+本节替代本地交付阶段“未上线、新版目视验收未完成”的当前状态；该阶段记录继续保留为历史。
