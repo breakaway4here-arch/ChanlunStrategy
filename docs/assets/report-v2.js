@@ -3106,6 +3106,125 @@
     };
   }
 
+  function stockFactNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  function hasVerifiedBasicFacts(record) {
+    var status = record.data_status;
+    if (status && (status.daily || status.latest_date)) {
+      return status.daily === 'verified' && status.is_final === true && status.stale === false
+        && !!(state.data || {}).date && status.latest_date === state.data.date;
+    }
+    return hasVerifiedSignalCloseEvidence(record);
+  }
+
+  function stockPriceBasis(record) {
+    var basis = record.price_basis;
+    if (basis && typeof basis === 'object') basis = basis.adjustment;
+    basis = normalizeString(basis || (record.data_status || {}).adjustment).toLowerCase();
+    return ['raw', 'qfq', 'hfq'].indexOf(basis) >= 0 ? basis : '';
+  }
+
+  function stockCurrentPrice(record) {
+    // Legacy startup.close is a structure anchor, not the latest daily close.
+    return [record.current_price, asArray(record.closes).slice(-1)[0],
+      (record.best_buy_point || {}).current_price].map(stockFactNumber)
+      .find(function (v) { return v !== null && v > 0; });
+  }
+
+  function candidateBasicFacts(item) {
+    var rec = item || {};
+    var raw = findRawCandidate(rec.ref || {}) || {};
+    var quote = [rec, raw].find(function (record) {
+      return hasVerifiedBasicFacts(record);
+    }) || {};
+    var verified = hasVerifiedBasicFacts(quote);
+    var bp = quote.best_buy_point || {};
+    var price = stockCurrentPrice(quote);
+    var changes = [quote.change_pct, bp.change_pct].map(stockFactNumber);
+    var change = changes.find(function (v) { return v !== null; });
+    var health = quote.data_status || quote.reference_close_evidence || rec.data_status || {};
+    var basis = stockPriceBasis(quote);
+    // The compact workspace drops adjustment; recover only from the same verified price.
+    var rawPrice = stockCurrentPrice(raw);
+    if (!basis && hasVerifiedBasicFacts(raw)
+        && rawPrice !== undefined && rawPrice === price) {
+      basis = stockPriceBasis(raw);
+    }
+    return {
+      sector: normalizeString(rec.sector || (rec.workbench_item || {}).sector || raw.sector || raw.industry).trim(),
+      quote: quote, raw: raw, verified: verified,
+      price: verified && price !== undefined ? price : null,
+      change: verified && change !== undefined ? change : null,
+      date: normalizeString(health.latest_date || health.reference_date || health.date),
+      priceLabel: basis === 'raw' ? '收盘价' : '图表价',
+      basisLabel: { raw: '不复权', qfq: '前复权', hfq: '后复权' }[basis] || '价格口径未提供',
+    };
+  }
+
+  function renderCandidateBasicInfo(item, detail) {
+    var facts = candidateBasicFacts(item);
+    var changeClass = facts.change > 0 ? 'is-up' : facts.change < 0 ? 'is-down' : '';
+    var priceText = facts.price === null ? '未提供' : formatNumber(facts.price, 2);
+    var changeText = facts.change === null ? '未提供' : formatPct(facts.change, true);
+    return '<div class="candidate-basic-info' + (detail ? ' is-detail' : '') + '">'
+      + '<span class="candidate-sector">' + escapeHtml(facts.sector || '板块未提供') + '</span>'
+      + '<div class="candidate-quote-line">'
+      + '<span><small>' + escapeHtml(facts.priceLabel) + '</small><strong>' + escapeHtml(priceText) + '</strong></span>'
+      + '<span class="' + changeClass + '"><small>当日涨跌</small><strong>' + escapeHtml(changeText) + '</strong></span>'
+      + '</div>'
+      + (detail ? '<p class="candidate-quote-note">数据日期 ' + escapeHtml(facts.date || '未提供')
+        + ' · ' + (facts.verified ? '已核验收盘数据' : '数据未核验')
+        + ' · ' + escapeHtml(facts.basisLabel) + '；非实时行情</p>'
+        : (!facts.verified ? '<small class="candidate-quote-note">数据未核验</small>' : ''))
+      + '</div>';
+  }
+
+  function renderCandidateFactPanel(item) {
+    var rec = item || {};
+    var facts = candidateBasicFacts(rec);
+    var quality = hasVerifiedBasicFacts(rec) ? (rec.pool_quality || {}) : {};
+    var raw = facts.verified ? facts.raw : {};
+    var rows = [];
+    function add(label, value, suffix, divisor) {
+      var number = stockFactNumber(value);
+      if (number !== null && number >= 0) rows.push([label, formatNumber(number / (divisor || 1), 2) + (suffix || '')]);
+    }
+    // Upstream volume_ratio20 can contain a 5-day ratio. Use exactly 20 prior bars.
+    var volumeRecord = [facts.quote, raw].find(function (record) {
+      return hasVerifiedBasicFacts(record) && asArray(record.volumes).length >= 21;
+    });
+    var volumes = asArray((volumeRecord || {}).volumes).slice(-21).map(stockFactNumber);
+    if (volumes.length === 21 && volumes.every(function (v) { return v !== null && v >= 0; })) {
+      var mean = volumes.slice(0, 20).reduce(function (sum, v) { return sum + v; }, 0) / 20;
+      if (mean > 0) add('较20日均量', volumes[20] / mean, '倍');
+    }
+    add('20日均成交额', quality.money20 === undefined ? raw.money20 : quality.money20, '亿', 100000000);
+    add('总市值', quality.market_cap, '亿');
+    add('流通市值', quality.circulating_market_cap, '亿');
+    // Keep each reference with its original role; a research anchor is not a stop.
+    var reference = hasVerifiedBasicFacts(rec) ? stockFactNumber(rec.reference_price) : null;
+    if (reference !== null && reference > 0) {
+      rows.push(['结构参考', formatNumber(reference, 2) + '（非失效位）']);
+      var distance = stockFactNumber(rec.distance_from_reference_pct);
+      if (distance !== null) rows.push(['距结构参考', formatPct(distance, true)]);
+    }
+    var value = rec.workbench_item || {};
+    var contract = value.contracts || rec.formal_decision_contract || {};
+    if (value.formal_action || rec.action_semantics === 'formal') {
+      [['正式参考价', 'reference_price'], ['失效位', 'invalidation_price']].forEach(function (field) {
+        var price = stockFactNumber(contract[field[1]]);
+        rows.push([field[0], price !== null && price > 0 ? formatNumber(price, 2) : '未提供']);
+      });
+    }
+    return '<section class="candidate-fact-panel" aria-label="量能与参考位">'
+      + (rows.length ? '<dl>' + rows.map(function (row) {
+        return '<div><dt>' + escapeHtml(row[0]) + '</dt><dd>' + escapeHtml(row[1]) + '</dd></div>';
+      }).join('') + '</dl>' : '<p class="candidate-quote-note">量能与参考位数据未提供</p>')
+      + '<p class="candidate-quote-note">仅展示本期已有数据；未提供的成交额、换手率或市值不作推算。</p></section>';
+  }
+
   function renderCandidateList() {
     if (!nodes.candidateList) return;
     nodes.candidateList.innerHTML = '';
@@ -3192,6 +3311,7 @@
         + '    <span class="candidate-code"> ' + escapeHtml(code) + '</span>'
         + '  </div>'
         + '</div>'
+        + renderCandidateBasicInfo(item, false)
         + '<div class="candidate-row-meta">'
         + '  <span class="candidate-row-action">' + escapeHtml(rowSummary.action) + '</span>'
         + '  <span class="candidate-row-score">' + escapeHtml(rowSummary.scoreText) + '</span>'
@@ -4697,7 +4817,8 @@
       + '<strong>' + escapeHtml(value.status_label) + '</strong>'
       + (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : '')
       + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
-      + '</header>' + buildChartPlaceholder(item)
+      + '</header>' + renderCandidateBasicInfo(item, true) + buildChartPlaceholder(item)
+      + renderCandidateFactPanel(item)
       + '<section class="decision-workbench-brief" aria-label="单股决策链">'
       + '<section><strong>为什么关注</strong><p>' + escapeHtml(value.primary_reason) + '</p></section>'
       + '<section><strong>当前能否执行</strong><p>' + escapeHtml(execution) + '</p></section>'
