@@ -328,17 +328,19 @@ assert(!JSON.stringify(summary).includes('70'), 'incident review leaked invalid 
 """,
         )
 
-    def test_candidate_row_is_limited_to_identity_action_reason_and_decision_score(self):
+    def test_candidate_row_is_limited_to_identity_market_and_reason_lines(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)
         renderer = JS[start:end]
         for token in (
             "buildCandidateRowSummary(",
-            'class="candidate-row-action"',
-            'class="candidate-row-reason"',
-            'class="candidate-row-score"',
+            "renderCandidateRowIdentity(item, state.currentView, rowSummary)",
+            "renderCandidateRowMarket(item, marketContext)",
+            "renderCandidateRowReason(item, state.currentView, rowSummary)",
         ):
             self.assertIn(token, renderer)
+        self.assertNotIn('renderCandidateStatusSummary(item, state.currentView)', renderer)
+        self.assertNotIn('class="candidate-row-score"', renderer)
         for forbidden in (
             'class="candidate-price',
             "getCandidateChangePct(item)",

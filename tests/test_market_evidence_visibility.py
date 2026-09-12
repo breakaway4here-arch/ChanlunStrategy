@@ -6,11 +6,16 @@ class MarketEvidenceVisibility(unittest.TestCase):
     def test_default_today_contains_full_evidence_before_stock_conclusion(self):
         shell = JS[JS.index('function buildAppShell'):JS.index('function getReportDataStatus')]
         today = shell.index('id="todayDecisionView"')
+        summary = shell.index('id="decisionOverview"')
         market = shell.index('id="marketEvidence"')
-        conclusion = shell.index('id="decisionOverview"')
+        candidate = shell.index('id="candidateWorkspace"')
         research = shell.index('id="researchValidationView"')
-        self.assertTrue(today < market < conclusion < research)
+        self.assertTrue(today < summary < market < candidate < research)
         self.assertEqual(shell.count('id="marketEvidence"'), 1)
+        market_flow = shell[shell.index('id="marketDecisionBar"'):candidate]
+        self.assertIn('marketSentimentChart', JS)
+        self.assertIn('id="marketDecisionSummary"', market_flow)
+        self.assertNotIn('<details', market_flow)
 
     def test_formal_evidence_is_visible_and_does_not_borrow_research_counts(self):
         _assert_node_contract(self, '{render:buildExpandedMarketEvidence}', r'''

@@ -8,6 +8,7 @@ HTML 日报生成器 — v2 策略工作台壳子 + 外部静态资源
 """
 
 import hashlib
+import base64
 import json
 import os
 import re
@@ -64,7 +65,9 @@ class NpEncoder(json.JSONEncoder):
 CHART_MAX_BARS = 50  # 图表展示默认K线根数（动态窗口会扩展）
 CHART_MIN_BARS = 50
 CHART_MAX_EXTENDED = 120
-REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js")
+REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js", "echarts-5.4.3.min.js")
+CHART_LIBRARY_ASSET = "echarts-5.4.3.min.js"
+CHART_LIBRARY_VERSION = "5.4.3"
 DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
 DEFAULT_PRECLOSE_API_BASE = (
     "https://chanlun-preclose-worker.breakaway4here.workers.dev"
@@ -2027,9 +2030,25 @@ def _report_asset_version():
     for asset in REPORT_V2_ASSETS:
         digest.update(asset.encode("utf-8"))
         digest.update(b"\0")
-        with open(os.path.join(source_dir, asset), "rb") as f:
+        source_path = os.path.join(source_dir, asset)
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(
+                "required report asset is missing: {}".format(source_path)
+            )
+        with open(source_path, "rb") as f:
             digest.update(f.read())
     return digest.hexdigest()[:12]
+
+
+def _chart_library_integrity():
+    source_path = os.path.join(_report_asset_source_dir(), CHART_LIBRARY_ASSET)
+    if not os.path.isfile(source_path):
+        raise FileNotFoundError(
+            "required report asset is missing: {}".format(source_path)
+        )
+    with open(source_path, "rb") as handle:
+        digest = hashlib.sha256(handle.read()).digest()
+    return "sha256-" + base64.b64encode(digest).decode("ascii")
 
 
 def copy_report_assets(output_dir):
@@ -2040,6 +2059,10 @@ def copy_report_assets(output_dir):
     copied = 0
     for asset in REPORT_V2_ASSETS:
         source_path = os.path.join(source_dir, asset)
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(
+                "required report asset is missing: {}".format(source_path)
+            )
         target_path = os.path.join(target_dir, asset)
         changed = _copy_if_changed(source_path, target_path)
         if changed:
@@ -2221,6 +2244,88 @@ def refresh_report_asset_versions(output_dir, asset_version):
     return changed_paths
 
 
+def _chart_library_shell_tag(asset_prefix="", asset_version=None):
+    asset_query = f"?v={asset_version}" if asset_version else ""
+    config = _escape_inline_json({
+        "url": f"{asset_prefix}assets/{CHART_LIBRARY_ASSET}{asset_query}",
+        "version": CHART_LIBRARY_VERSION,
+        "integrity": _chart_library_integrity(),
+    })
+    return f"<script>window.CHANLUN_CHART_LIBRARY = {config};</script>"
+
+
+def refresh_report_chart_library_references(output_dir, asset_version=None):
+    """Upgrade existing v2 shells without touching inline report/bootstrap data."""
+    output_dir = os.path.realpath(os.path.abspath(output_dir))
+    asset_version = asset_version or _report_asset_version()
+    html_paths = [
+        os.path.join(output_dir, "index.html"),
+        os.path.join(output_dir, "compare", "index.html"),
+    ]
+    if os.path.isdir(output_dir):
+        for entry in sorted(os.listdir(output_dir)):
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", entry):
+                html_paths.append(os.path.join(output_dir, entry, "index.html"))
+
+    external = re.compile(
+        r'<script\s+(?:defer\s+)?src="https://cdn\.bootcdn\.net/ajax/libs/'
+        r'echarts/5\.4\.3/echarts\.min\.js"></script>'
+    )
+    configured = re.compile(
+        r'<script>\s*window\.CHANLUN_CHART_LIBRARY\s*=.*?</script>',
+        re.DOTALL,
+    )
+    changed_paths = []
+    for html_path in html_paths:
+        if not os.path.isfile(html_path):
+            continue
+        with open(html_path, "r", encoding="utf-8") as handle:
+            original = handle.read()
+        if "report-v2.js" not in original:
+            continue
+        report_asset = re.search(
+            r'<script[^>]+src="((?:\.\./)?assets/report-v2\.js)(?:\?v=[^"&]+)?"',
+            original,
+        )
+        if not report_asset:
+            continue
+        asset_prefix = "../" if report_asset.group(1).startswith("../") else ""
+        tag = _chart_library_shell_tag(asset_prefix, asset_version)
+        # Normalize the existing shell before inserting exactly one config tag.
+        # This keeps the helper idempotent when generation and a later release
+        # sync both touch the same already-published v2 entrypoint.
+        updated = configured.sub("", original)
+        updated = external.sub("", updated)
+        markers = list(re.finditer(
+            r'(<script[^>]+src="(?:\.\./)?assets/report-v2\.js(?:\?v=[^"&]+)?"[^>]*></script>)',
+            updated,
+        ))
+        marker = markers[-1] if markers else None
+        if marker:
+            line_start = updated.rfind("\n", 0, marker.start()) + 1
+            line_indent = updated[line_start:marker.start()]
+            if line_indent.strip():
+                # Keep an inline bootstrap/script byte sequence byte-for-byte
+                # stable when the legacy shell had no newline before report-v2.
+                updated = updated[:marker.start()] + tag + updated[marker.start():]
+            else:
+                prefix = updated[:line_start]
+                prefix_lines = prefix.splitlines(True)
+                while len(prefix_lines) > 1 and not prefix_lines[-1].strip():
+                    prefix_lines.pop()
+                prefix = "".join(prefix_lines)
+                updated = (
+                    prefix + line_indent + tag + "\n"
+                    + line_indent + updated[marker.start():]
+                )
+        if updated == original:
+            continue
+        with open(html_path, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        changed_paths.append(html_path)
+    return changed_paths
+
+
 def write_comparison_page(output_dir, top10_api_base, asset_version=None):
     """Render the standalone comparison page with the same quote API config."""
     source_path = os.path.join(_report_asset_source_dir(), "comparison.html")
@@ -2257,6 +2362,11 @@ def write_comparison_page(output_dir, top10_api_base, asset_version=None):
 def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
     """Build the lightweight v2 HTML shell."""
     asset_query = f"?v={asset_version}" if asset_version else ""
+    chart_library_json = _escape_inline_json({
+        "url": f"{asset_prefix}assets/{CHART_LIBRARY_ASSET}{asset_query}",
+        "version": CHART_LIBRARY_VERSION,
+        "integrity": _chart_library_integrity(),
+    })
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2264,7 +2374,6 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>缠论选股日报 — {date_str}</title>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
-<script defer src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
 </head>
 <body>
@@ -2279,6 +2388,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
   window.CHANLUN_BOOTSTRAP.isFileProtocol = (window.location.protocol === 'file:');
 }})();
 </script>
+<script>window.CHANLUN_CHART_LIBRARY = {chart_library_json};</script>
 <script src="{asset_prefix}assets/report-v2.js{asset_query}" defer></script>
 </body>
 </html>"""
@@ -2828,6 +2938,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         ))
 
     refresh_report_asset_versions(output_dir, asset_version)
+    refresh_report_chart_library_references(output_dir, asset_version)
 
     print(f"  日报已生成: {index_path}")
     print(f"  数据已写入: {data_dir}")

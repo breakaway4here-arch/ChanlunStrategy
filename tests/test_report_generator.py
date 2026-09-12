@@ -3146,13 +3146,15 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
         self.assertIn("getCandidateChangePct(rec)", self.asset_js)
 
-    def test_candidate_rows_keep_only_action_reason_and_formal_decision_score(self):
+    def test_candidate_rows_keep_identity_market_and_reason_lines(self):
         self.assertIn("function renderDecisionBadge", self.asset_js)
         self.assertIn("function renderCandidateDecisionBadge", self.asset_js)
         self.assertIn("function buildCandidateRowSummary", self.asset_js)
         self.assertIn("var rowSummary = buildCandidateRowSummary(item, state.currentView);", self.asset_js)
+        self.assertIn("function renderCandidateRowIdentity", self.asset_js)
+        self.assertIn("function renderCandidateRowMarket", self.asset_js)
+        self.assertIn("function renderCandidateRowReason", self.asset_js)
         self.assertIn('class="candidate-row-action"', self.asset_js)
-        self.assertIn('class="candidate-row-score"', self.asset_js)
         self.assertIn('class="candidate-row-reason"', self.asset_js)
         self.assertIn("'暂无正式决策分'", self.asset_js)
         self.assertIn("事故前原始判定·仅追溯", self.asset_js)

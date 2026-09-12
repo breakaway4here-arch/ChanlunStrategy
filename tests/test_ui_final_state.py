@@ -110,7 +110,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
 const html=t.render('decision_all',data);
 if(html.indexOf('600025')<0)throw Error('comparison only used first DOM page');
 if(html.indexOf('本期未选出推荐票')>=0)throw Error('non-empty unified list was rendered as empty');
-if(html.indexOf('main：可上车')<0 || html.indexOf('h4_t3：不推荐')<0 || html.indexOf('confirming：仅观察')<0)
+if(html.indexOf('正式主推：可上车')<0 || html.indexOf('H4 T+3：不推荐')<0 || html.indexOf('等确认：仅观察')<0)
   throw Error('source strategy actions were merged or dropped');
 if(html.indexOf('<dt>唯一正式动作</dt>')>=0)
   throw Error('mobile ticket promoted selected evidence to a unique action');

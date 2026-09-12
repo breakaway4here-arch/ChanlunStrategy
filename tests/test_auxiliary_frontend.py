@@ -664,23 +664,17 @@ assert(!tags.some(function (tag) { return tag.text.includes('internal_reason_cod
 """,
         )
 
-    def test_candidate_row_meta_separates_formal_action_and_score_from_identity(self):
+    def test_candidate_row_render_contract_keeps_three_lines_and_market_metadata(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)
         renderer = JS[start:end]
-        self.assertIn('class="candidate-row-meta"', renderer)
-        self.assertIn('class="candidate-row-action"', renderer)
-        self.assertIn('class="candidate-row-score"', renderer)
-        self.assertIn('class="candidate-row-reason"', renderer)
-        self.assertNotIn('candidate-price', renderer)
-        desktop_start = CSS.index(".candidate-row {")
-        desktop_end = CSS.index(".candidate-row:hover", desktop_start)
-        desktop_rules = CSS[desktop_start:desktop_end]
-        self.assertIn("grid-template-columns: minmax(0, 1fr);", desktop_rules)
-        self.assertIn("grid-template-columns: minmax(0, 1fr) auto;", desktop_rules)
-        self.assertNotIn("84px", desktop_rules)
-        self.assertNotIn("76px", desktop_rules)
-        self.assertIn(".candidate-row-meta {", CSS)
+        self.assertIn('renderCandidateRowIdentity(item, state.currentView, rowSummary)', renderer)
+        self.assertIn('renderCandidateRowMarket(item, marketContext)', renderer)
+        self.assertIn('renderCandidateRowReason(item, state.currentView, rowSummary)', renderer)
+        self.assertNotIn('renderCandidateStatusSummary(item, state.currentView)', renderer)
+        self.assertIn('aria-label="' + "' + escapeHtml(marketLabel)", JS)
+        self.assertIn('title="' + "' + escapeHtml(marketMeta)", JS)
+        self.assertNotIn('candidate-row-score', renderer)
 
     def test_decision_header_has_one_formal_action_and_omits_missing_contract_fields(self):
         _assert_node_contract(
@@ -1372,8 +1366,8 @@ assert(!lineNames.includes('现价') && !lineNames.includes('参考价'), 'decis
             mobile_rules,
             r"\.chart-canvas\s*\{[^}]*\bheight:\s*360px",
         )
-        self.assertIn(".candidate-row-meta {", mobile_rules)
-        self.assertIn("grid-template-columns: minmax(0, 1fr) auto", mobile_rules)
+        self.assertIn(".candidate-row-identity { display: grid;", mobile_rules)
+        self.assertIn(".candidate-row-market { grid-template-columns: minmax(0, 1fr) auto auto;", mobile_rules)
 
     def test_today_and_research_stacks_have_distinct_semantic_ownership(self):
         _assert_node_contract(

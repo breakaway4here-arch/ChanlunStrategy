@@ -129,6 +129,88 @@ async function comparisonCodes(page) {
   }).filter(Boolean));
 }
 
+function strategyContractExpectations(payload) {
+  const labels = { main: '正式主推', h4_t3: 'H4 T+3', confirming: '等确认' };
+  const expectations = [];
+  Object.entries(labels).forEach(([strategyId, label]) => {
+    const item = (payload.workbench?.items || []).find((candidate) =>
+      (candidate.strategy_results || []).some((result) => result.strategy_id === strategyId));
+    const result = (item?.strategy_results || []).find((candidate) => candidate.strategy_id === strategyId);
+    if (!result) return;
+    const contract = result.contract || {};
+    const action = result.formal_action || (result.role === 'research' ? '仅观察' : '本期未声明正式动作');
+    const finiteContractNumber = (value) => {
+      if (value === null || value === undefined || value === '') return null;
+      const number = Number(value);
+      return Number.isFinite(number) ? number : null;
+    };
+    expectations.push({
+      code: item.code,
+      label,
+      action,
+      horizon: contract.intended_horizon,
+      referencePrice: finiteContractNumber(contract.reference_price),
+      invalidationPrice: finiteContractNumber(contract.invalidation_price),
+      score: finiteContractNumber(result.score),
+    });
+  });
+  return expectations;
+}
+
+function normalizeHorizon(value) {
+  const text = String(value ?? '').trim().toUpperCase().replace(/\s+/g, '');
+  if (!text) return '';
+  return text.startsWith('T+') ? text : (/^\d+$/.test(text) ? `T+${text}` : text);
+}
+
+function contractSourceSegment(sourceText, label) {
+  const prefix = `${label}：`;
+  return String(sourceText || '').split('；').find((segment) => segment.startsWith(prefix)) || '';
+}
+
+function contractNumberFromSegment(segment, label) {
+  const match = String(segment || '').match(new RegExp(`${label}\\s*(-?\\d+(?:\\.\\d+)?)`));
+  return match ? Number(match[1]) : null;
+}
+
+function assertEquivalentContractNumber(segment, label, expected, sourceLabel, code) {
+  if (expected === null) return;
+  const actual = contractNumberFromSegment(segment, label);
+  assertCondition(actual !== null && Number.isFinite(actual),
+    `来源策略合同缺少${sourceLabel} ${code} 的${label}`, { sourceLabel, code, segment });
+  assertCondition(Math.abs(actual - expected) < 1e-9,
+    `来源策略合同${sourceLabel} ${code} 的${label}不一致`, { sourceLabel, code, expected, actual, segment });
+}
+
+function assertStrategyContractSegment(sourceText, expected) {
+  const segment = contractSourceSegment(sourceText, expected.label);
+  assertCondition(segment, `来源策略合同缺失: ${expected.label} ${expected.code}`, {
+    sourceLabel: expected.label, code: expected.code, sourceText,
+  });
+  assertCondition(segment.includes(`${expected.label}：${expected.action}`),
+    `来源策略动作不一致: ${expected.label} ${expected.code}`, { expected, segment });
+  if (expected.horizon === undefined || expected.horizon === null || expected.horizon === '') {
+    assertCondition(segment.includes('周期未声明'),
+      `来源策略周期缺失: ${expected.label} ${expected.code}`, { expected, segment });
+  } else {
+    const expectedHorizon = normalizeHorizon(expected.horizon);
+    const actualHorizon = normalizeHorizon(segment.match(/周期\s*([^·；]+)/)?.[1] || '');
+    assertCondition(actualHorizon === expectedHorizon,
+      `来源策略周期不一致: ${expected.label} ${expected.code}`, {
+        expected: expectedHorizon, actual: actualHorizon, segment,
+      });
+  }
+  assertEquivalentContractNumber(segment, '参考价', expected.referencePrice, expected.label, expected.code);
+  assertEquivalentContractNumber(segment, '失效位', expected.invalidationPrice, expected.label, expected.code);
+  if (expected.score !== null) {
+    const actualScore = contractNumberFromSegment(segment, '分数');
+    assertCondition(actualScore !== null && Math.round(actualScore) === Math.round(expected.score),
+      `来源策略分数不一致: ${expected.label} ${expected.code}`, {
+        expected: Math.round(expected.score), actual: actualScore, segment,
+      });
+  }
+}
+
 async function countText(page) {
   return page.locator('#candidateCount').textContent();
 }
@@ -187,13 +269,15 @@ async function checkCandidateContract(page, payload) {
 
   const comparison = page.locator('#candidateEvidenceComparison');
   await comparison.locator('summary').click();
-  const comparisonText = await comparison.innerText();
   const compare = await comparisonCodes(page);
   assertCondition(compare.length === payload.cases.paging_total,
     '全部清单的比较表受分页可见行数影响', { compareLength: compare.length });
-  ['main：可上车', 'h4_t3：不推荐', 'confirming：仅观察'].forEach((text) => {
-    assertCondition(comparisonText.includes(text), '来源策略合同缺失或被合并: ' + text);
-  });
+  for (const expected of strategyContractExpectations(payload)) {
+    const row = page.locator('.candidate-evidence-table tbody tr').filter({ hasText: expected.code }).first();
+    await row.waitFor({ state: 'visible', timeout: 10000 });
+    const sourceText = await row.locator('td').nth(0).innerText();
+    assertStrategyContractSegment(sourceText, expected);
+  }
 
   const initialList = await candidateCodes(page);
   assertCondition(initialList.length === 25, '全部清单未显示25行');
@@ -320,9 +404,9 @@ async function run() {
     checks: [],
     failures: [],
     pending: [
-      { id: 'M3', reason: '本次源版本未提供可验收的新增持仓写入控件，保持 pending。' },
-      { id: 'M4', reason: '本次源版本未提供可验收的外部推送控件，保持 pending。' },
-      { id: 'M5', reason: '本次源版本未提供可验收的预跑/盘后写入控件，保持 pending。' },
+      { id: 'M3', reason: 'M3 待读验收：阅读摘要、同页锚点、候选密度与只读我的关注。' },
+      { id: 'M4', reason: 'M4 待读验收：变化下钻、最多三只比较与历史入口。' },
+      { id: 'M5', reason: 'M5 待读验收：图表库非阻塞加载、延迟/失败/重试。' },
     ],
     network: { abortedExternal: [], unexpected: [] },
   };
