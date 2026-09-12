@@ -30,6 +30,7 @@ def _fake_kline(code):
         "highs": highs,
         "lows": lows,
         "closes": closes,
+        "is_final": [True] * len(closes),
     }
 
 

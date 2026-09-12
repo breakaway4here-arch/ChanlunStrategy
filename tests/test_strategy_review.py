@@ -6,6 +6,13 @@ from unittest import mock
 
 from chanlun.market_history_store import MarketHistoryStore
 from chanlun.recommendation_ledger import build_recommendation_entries
+from chanlun.strategy_identity import (
+    DECISION_POLICY_VERSION,
+    FUSION_STRATEGY_VERSION,
+    LUOJIE_RESEARCH_STRATEGY_VERSION,
+    PRE_CLOSE_STRATEGY_VERSION,
+    PURE_STRATEGY_VERSION,
+)
 from chanlun.strategy_review import (
     SCORECARD_THRESHOLDS,
     _card_evaluation_status,
@@ -678,13 +685,48 @@ class StrategyScorecardTests(unittest.TestCase):
                 set(card["comparison_identity"]),
                 {
                     "strategy", "version", "source_pool", "entry_mode",
-                    "intended_horizon", "research_tier",
+                    "intended_horizon", "research_tier", "policy_version",
+                    "preclose_strategy_version", "upstream_strategy_version",
+                    "upstream_policy_version",
                 },
             )
             self.assertEqual(
                 card["comparison_identity"]["research_tier"],
                 card["research_tier"],
             )
+
+    def test_scorecards_separate_policy_identity_even_when_strategy_version_matches(self):
+        historical = _entry(report_date="2026-08-20")
+        current = _entry(report_date="2026-08-21")
+        historical["strategy_contributions"][0].update({
+            "policy_version": "decision-v1",
+            "preclose_strategy_version": "preclose-1445-v2",
+        })
+        current["strategy_contributions"][0].update({
+            "policy_version": "decision-v2",
+            "preclose_strategy_version": "preclose-1445-v3",
+        })
+
+        cards = build_strategy_scorecards(
+            [historical, current],
+            {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+        )["baselines"]
+
+        self.assertEqual(len(cards), 2)
+        self.assertEqual(
+            {
+                (
+                    card["comparison_identity"]["policy_version"],
+                    card["comparison_identity"]["preclose_strategy_version"],
+                )
+                for card in cards
+            },
+            {
+                ("decision-v1", "preclose-1445-v2"),
+                ("decision-v2", "preclose-1445-v3"),
+            },
+        )
 
     def test_mature_comparison_exposes_only_explainable_metrics(self):
         entry = _entry(intended_horizon=3)
@@ -1243,6 +1285,52 @@ class StrategyScorecardTests(unittest.TestCase):
             ("daily_pure", "pure-v1", "delay1_open", 1),
         })
 
+    def test_run_manifest_carries_quantity_health_for_formal_strategies(self):
+        quantity = {
+            "status": "partial",
+            "required_count": 10,
+            "available_count": 9,
+            "coverage": 0.9,
+            "minimum_coverage": 0.9,
+            "pending_codes": ["300009"],
+        }
+        manifest = build_strategy_run_manifest({
+            "date": "2026-09-11",
+            "selection_input_health": {
+                "schema_version": 2,
+                "formal": {"formal_actions_allowed": True},
+                "by_strategy": {
+                    "daily_fusion": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                        "quantity": quantity,
+                    },
+                    "h4_t3": {
+                        "status": "verified",
+                        "formal_actions_allowed": True,
+                        "quantity": quantity,
+                    },
+                },
+            },
+            "picks_pure": [],
+            "picks_fusion": [],
+            "h4_t3_pool": {
+                "mode": "production", "status": "ok",
+                "candidates": [], "diagnostics": {},
+            },
+        })
+
+        by_strategy = {row["strategy"]: row for row in manifest}
+        for strategy_name in ("daily_fusion", "h4_t3"):
+            self.assertEqual(
+                by_strategy[strategy_name]["quantity_input_health"],
+                {
+                    "status": "partial", "required_count": 10,
+                    "available_count": 9, "pending_count": 1,
+                    "coverage": 0.9, "minimum_coverage": 0.9,
+                },
+            )
+
     def test_run_manifest_keeps_zero_signal_and_disabled_strategies_visible(self):
         manifest = build_strategy_run_manifest({
             "date": "2026-08-26",
@@ -1284,6 +1372,29 @@ class StrategyScorecardTests(unittest.TestCase):
         )
         formal = {card["strategy"]: card for card in cards["formal"]}
         research = {card["strategy"]: card for card in cards["research"]}
+
+        self.assertEqual(
+            {row["strategy"]: row["version"] for row in manifest}["daily_pure"],
+            PURE_STRATEGY_VERSION,
+        )
+        self.assertEqual(
+            {row["strategy"]: row["version"] for row in manifest}["daily_fusion"],
+            FUSION_STRATEGY_VERSION,
+        )
+        self.assertEqual(
+            {row["strategy"]: row["version"] for row in manifest}["luojie_pool"],
+            LUOJIE_RESEARCH_STRATEGY_VERSION,
+        )
+        h4_manifest = next(row for row in manifest if row["strategy"] == "h4_t3")
+        self.assertEqual(h4_manifest["policy_version"], DECISION_POLICY_VERSION)
+        self.assertEqual(
+            h4_manifest["preclose_strategy_version"],
+            PRE_CLOSE_STRATEGY_VERSION,
+        )
+        self.assertEqual(
+            h4_manifest["upstream_strategy_version"],
+            PURE_STRATEGY_VERSION,
+        )
 
         self.assertEqual(formal["h4_t3"]["evaluation_status"], "no_signals")
         self.assertEqual(formal["h4_t3"]["latest_run_status"], "verified_empty")

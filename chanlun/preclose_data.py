@@ -14,6 +14,13 @@ from urllib.parse import quote
 
 _CN_TZ = timezone(timedelta(hours=8))
 _CORE_ARRAY_KEYS = ("opens", "highs", "lows", "closes", "volumes")
+_ROW_METADATA_KEYS = (
+    ("volume_units", "volume_unit", "unknown"),
+    ("volume_raw_units", "volume_raw_unit", "unknown"),
+    ("volume_sources", "volume_source", ""),
+    ("amount_units", "amount_unit", "unknown"),
+    ("amount_sources", "amount_source", ""),
+)
 MINIMUM_PRECLOSE_30M_BARS = 40
 _FORBIDDEN_OUTPUT_NAMES = {
     "recommendation_ledger.jsonl",
@@ -74,13 +81,26 @@ def _normalize_kline(payload):
         return None
     result = {"dates": dates}
     result.update({key: _json_safe(values) for key, values in arrays.items()})
-    for optional in ("amounts", "finals"):
+    for optional in (
+        "amounts", "amount_available", "finals",
+        "volume_units", "volume_raw_units", "volume_sources",
+        "amount_units", "amount_sources",
+    ):
         raw = payload.get(optional)
         if raw is None:
             continue
-        values = _plain_list(raw)
+        try:
+            values = _plain_list(raw)
+        except TypeError:
+            values = []
         if len(values) == len(dates):
             result[optional] = _json_safe(values)
+    for scalar in (
+        "volume_unit", "volume_raw_unit", "volume_source",
+        "amount_unit", "amount_source",
+    ):
+        if payload.get(scalar) is not None:
+            result[scalar] = str(payload.get(scalar))
     source = str(payload.get("source") or "").strip()
     if source:
         result["source"] = source
@@ -109,9 +129,19 @@ def _truncate_kline_at(payload, as_of):
     }
     for key in _CORE_ARRAY_KEYS:
         result[key] = [payload[key][index] for index in keep]
-    for optional in ("amounts", "finals"):
+    for optional in (
+        "amounts", "amount_available", "finals",
+        "volume_units", "volume_raw_units", "volume_sources",
+        "amount_units", "amount_sources",
+    ):
         if optional in payload:
             result[optional] = [payload[optional][index] for index in keep]
+    for scalar in (
+        "volume_unit", "volume_raw_unit", "volume_source",
+        "amount_unit", "amount_source",
+    ):
+        if scalar in payload:
+            result[scalar] = payload[scalar]
     if "source" in payload:
         result["source"] = payload["source"]
     if "adjustment" in payload:
@@ -229,6 +259,23 @@ def _kline_rows(payload, default_final):
             row[key] = normalized[key][index]
         if "amounts" in normalized:
             row["amounts"] = normalized["amounts"][index]
+            if "amount_available" in normalized:
+                row["amount_available"] = bool(normalized["amount_available"][index])
+            else:
+                # A positive amount without an explicit marker is not evidence.
+                row["amount_available"] = False
+        elif "amount_available" in normalized:
+            row["amount_available"] = bool(normalized["amount_available"][index])
+        else:
+            row["amount_available"] = False
+        for plural_key, scalar_key, default in _ROW_METADATA_KEYS:
+            values = normalized.get(plural_key)
+            if values is not None and len(values) == len(normalized["dates"]):
+                row[plural_key[:-1]] = values[index]
+            elif len(normalized["dates"]) == 1 and scalar_key in normalized:
+                row[plural_key[:-1]] = normalized[scalar_key]
+            else:
+                row[plural_key[:-1]] = default
         row["final"] = (
             bool(finals[index]) if finals is not None else bool(default_final)
         )
@@ -261,6 +308,17 @@ def _merge_daily_klines(history, live, trade_date):
         result[key] = [row[key] for row in ordered]
     if any("amounts" in row for row in ordered):
         result["amounts"] = [row.get("amounts") for row in ordered]
+    if any("amount_available" in row for row in ordered):
+        result["amount_available"] = [
+            bool(row.get("amount_available", False)) for row in ordered
+        ]
+    for plural_key, scalar_key, default in _ROW_METADATA_KEYS:
+        row_key = plural_key[:-1]
+        if not any(row_key in row for row in ordered):
+            continue
+        values = [str(row.get(row_key, default)) for row in ordered]
+        result[plural_key] = values
+        result[scalar_key] = values[0] if len(set(values)) == 1 else "mixed"
     result["finals"] = [bool(row["final"]) for row in ordered]
     result["source"] = str((live or {}).get("source") or (history or {}).get("source") or "")
     adjustment = live_adjustment or history_adjustment

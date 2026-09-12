@@ -19,6 +19,7 @@ if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
 from chanlun import data_fetcher  # noqa: E402
+from chanlun.identity import normalize_identity  # noqa: E402
 from chanlun.market_history_store import MarketHistoryStore  # noqa: E402
 from config import MARKET_HISTORY_DB_PATH, MIN15_LOOKBACK_BARS  # noqa: E402
 
@@ -34,11 +35,13 @@ class BackfillIncomplete(RuntimeError):
 
 
 def _normalized_codes(codes: Iterable[Any]) -> List[str]:
-    normalized = {
-        str(code).strip()
-        for code in codes
-        if str(code).strip().isdigit() and len(str(code).strip()) == 6
-    }
+    normalized = set()
+    for code in codes:
+        text = str(code).strip()
+        if len(text) != 6 or any(char < "0" or char > "9" for char in text):
+            continue
+        identity = normalize_identity(text)
+        normalized.add(identity.code)
     return sorted(normalized)
 
 
@@ -76,7 +79,7 @@ def _code_checksum(
 
 
 def _exchange_for_code(code: str) -> str:
-    return "SH" if data_fetcher._is_sh(code) else "SZ"
+    return normalize_identity(code).exchange
 
 
 def _listed_days(listed_date: Any, as_of: str) -> Optional[int]:
@@ -157,6 +160,13 @@ def kline_payload_to_bars(
     if any(len(values) != len(dates) for values in required.values()):
         raise ValueError("kline arrays must have identical lengths")
     amounts = _safe_sequence(payload.get("amounts"))
+    volume_unit = str(payload.get("volume_unit") or "unknown").strip().lower()
+    volume_raw_unit = str(
+        payload.get("volume_raw_unit") or volume_unit or "unknown"
+    ).strip().lower()
+    volume_source = str(payload.get("volume_source") or payload.get("source") or "").strip()
+    amount_unit = str(payload.get("amount_unit") or "unknown").strip().upper()
+    amount_source = str(payload.get("amount_source") or "").strip()
     current = now or datetime.now(_CN_TZ)
     bars = []
     seen_timestamps = set()
@@ -190,6 +200,12 @@ def kline_payload_to_bars(
                 "close": close,
                 "volume": volume,
                 "amount": amount,
+                "amount_available": bool(reported_amount > 0),
+                "volume_unit": volume_unit,
+                "volume_raw_unit": volume_raw_unit,
+                "volume_source": volume_source,
+                "amount_unit": amount_unit if reported_amount > 0 else "unknown",
+                "amount_source": amount_source if reported_amount > 0 else "",
                 "amount_is_estimated": amount_is_estimated,
                 "adjustment": adjustment,
                 "is_final": _is_final_bar(interval, ts, current),

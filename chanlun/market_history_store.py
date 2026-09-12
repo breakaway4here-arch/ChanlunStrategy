@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import quote
 
+from .identity import normalize_identity
+
 
 BAR_TABLES = {
     "day": "bars_day",
@@ -61,6 +63,70 @@ def _sqlite_real(value: Any) -> Optional[float]:
 
 def _row_dict(row: Optional[sqlite3.Row]) -> Optional[Dict[str, Any]]:
     return dict(row) if row is not None else None
+
+
+def _decorate_legacy_bar(row: Mapping[str, Any]) -> Dict[str, Any]:
+    """Normalize only legacy rows whose source contract is already known.
+
+    Old databases predate the unit columns.  Sina daily/minute rows carry
+    shares, while Eastmoney rows carry hands; Tencent and opaque historical
+    batches remain unknown and are never scaled by appearance.
+    """
+    result = dict(row)
+    volume_unit = str(result.get("volume_unit") or "unknown").strip().lower()
+    source_batch = str(result.get("source_batch") or "").strip().lower()
+    if volume_unit == "unknown":
+        try:
+            volume = float(result.get("volume"))
+        except (TypeError, ValueError):
+            volume = None
+        if volume is not None and math.isfinite(volume) and volume >= 0:
+            if source_batch.endswith(":sina") or source_batch == "sina":
+                result["volume"] = volume / 100.0
+                result["volume_unit"] = "hands"
+                result["volume_raw_unit"] = "shares"
+                result["volume_source"] = "sina:legacy_source_batch"
+            elif "eastmoney" in source_batch:
+                result["volume_unit"] = "hands"
+                result["volume_raw_unit"] = "hands"
+                result["volume_source"] = "eastmoney:legacy_source_batch"
+            else:
+                result["volume_unit"] = "unknown"
+                result["volume_raw_unit"] = "unknown"
+                result["volume_source"] = source_batch
+    if "amount_available" not in result or result.get("amount_available") is None:
+        try:
+            amount = float(result.get("amount"))
+        except (TypeError, ValueError):
+            amount = None
+        has_amount = amount is not None and math.isfinite(amount) and amount > 0
+        result["amount_available"] = int(has_amount)
+        result["amount_unit"] = "CNY" if has_amount else "unknown"
+        result["amount_source"] = (
+            "{}:legacy_source_batch".format(source_batch)
+            if has_amount and source_batch
+            else ""
+        )
+    elif result.get("amount_available") in (True, 1):
+        try:
+            amount = float(result.get("amount"))
+        except (TypeError, ValueError):
+            amount = None
+        if amount is not None and math.isfinite(amount) and amount > 0:
+            if str(result.get("amount_unit") or "unknown").upper() == "UNKNOWN":
+                result["amount_unit"] = "CNY"
+            if not str(result.get("amount_source") or "").strip() and source_batch:
+                result["amount_source"] = "{}:legacy_source_batch".format(
+                    source_batch
+                )
+        else:
+            # A legacy schema could have defaulted the marker to 1 while the
+            # stored amount was zero.  Correct the marker at read time so a
+            # zero never becomes a usable turnover observation.
+            result["amount_available"] = 0
+            result["amount_unit"] = "unknown"
+            result["amount_source"] = ""
+    return result
 
 
 class MarketHistoryStore:
@@ -122,6 +188,12 @@ class MarketHistoryStore:
             close REAL NOT NULL,
             volume REAL NOT NULL,
             amount REAL NOT NULL,
+            volume_unit TEXT NOT NULL DEFAULT 'unknown',
+            volume_raw_unit TEXT NOT NULL DEFAULT 'unknown',
+            volume_source TEXT NOT NULL DEFAULT '',
+            amount_unit TEXT NOT NULL DEFAULT 'unknown',
+            amount_source TEXT NOT NULL DEFAULT '',
+            amount_available INTEGER NOT NULL DEFAULT 1 CHECK (amount_available IN (0, 1)),
             adjustment TEXT NOT NULL,
             is_final INTEGER NOT NULL DEFAULT 0 CHECK (is_final IN (0, 1)),
             source_batch TEXT NOT NULL DEFAULT '',
@@ -266,6 +338,17 @@ class MarketHistoryStore:
                 self.connection.execute(
                     "CREATE TABLE IF NOT EXISTS {} ({})".format(table, bar_schema)
                 )
+                self._ensure_table_columns(
+                    table,
+                    {
+                        "volume_unit": "TEXT NOT NULL DEFAULT 'unknown'",
+                        "volume_raw_unit": "TEXT NOT NULL DEFAULT 'unknown'",
+                        "volume_source": "TEXT NOT NULL DEFAULT ''",
+                        "amount_unit": "TEXT NOT NULL DEFAULT 'unknown'",
+                        "amount_source": "TEXT NOT NULL DEFAULT ''",
+                        "amount_available": "INTEGER NOT NULL DEFAULT 1",
+                    },
+                )
                 self.connection.execute(
                     "CREATE INDEX IF NOT EXISTS idx_{}_ts_instrument "
                     "ON {} (ts, instrument_id)".format(table, table)
@@ -346,6 +429,14 @@ class MarketHistoryStore:
                 )
             )
 
+    def _table_columns(self, table_name: str) -> set:
+        return {
+            str(row["name"])
+            for row in self.connection.execute(
+                "PRAGMA table_info({})".format(table_name)
+            ).fetchall()
+        }
+
     @staticmethod
     def _table(interval: str) -> str:
         try:
@@ -361,9 +452,18 @@ class MarketHistoryStore:
         name: str = "",
     ) -> int:
         self._require_writable()
-        identity = tuple(str(value).strip() for value in (asset_type, exchange, code))
-        if not all(identity):
-            raise ValueError("asset_type, exchange and code are required")
+        canonical = normalize_identity(
+            {
+                "asset_type": asset_type,
+                "exchange": exchange,
+                "code": code,
+            }
+        )
+        identity = (
+            canonical.asset_type,
+            canonical.exchange,
+            canonical.code,
+        )
         now = _utc_now()
         with self._write_scope():
             self.connection.execute(
@@ -382,12 +482,23 @@ class MarketHistoryStore:
     def resolve_instrument(
         self, asset_type: str, exchange: str, code: str
     ) -> Optional[Dict[str, Any]]:
+        canonical = normalize_identity(
+            {
+                "asset_type": asset_type,
+                "exchange": exchange,
+                "code": code,
+            }
+        )
         row = self.connection.execute(
             """
             SELECT instrument_id, asset_type, exchange, code, name, updated_at
             FROM instruments WHERE asset_type=? AND exchange=? AND code=?
             """,
-            (str(asset_type).strip(), str(exchange).strip(), str(code).strip()),
+            (
+                canonical.asset_type,
+                canonical.exchange,
+                canonical.code,
+            ),
         ).fetchone()
         return _row_dict(row)
 
@@ -397,17 +508,36 @@ class MarketHistoryStore:
         exchange_codes: Sequence[Sequence[str]],
     ) -> Dict[Any, Dict[str, Any]]:
         """Resolve logical identities in fixed-size SQL batches."""
-        identities = list(dict.fromkeys(
-            (str(exchange).strip(), str(code).strip())
-            for exchange, code in exchange_codes
-        ))
+        normalized_asset = str(asset_type).strip().lower()
+        identities = []
+        seen = set()
+        for pair in exchange_codes:
+            try:
+                exchange, code = pair
+                canonical = normalize_identity(
+                    {
+                        "asset_type": normalized_asset,
+                        "exchange": exchange,
+                        "code": code,
+                    }
+                )
+            except (TypeError, ValueError):
+                # A legacy row may carry a contradictory exchange (for
+                # example old 92xxxx records stored as SZ).  Skip that one
+                # identity so a single invalid row cannot block valid peers;
+                # repair requires an explicit BJ identity and source proof.
+                continue
+            key = (canonical.exchange, canonical.code)
+            if key not in seen:
+                seen.add(key)
+                identities.append(key)
         result = {}
         for offset in range(0, len(identities), 400):
             chunk = identities[offset:offset + 400]
             if not chunk:
                 continue
             predicates = " OR ".join("(exchange=? AND code=?)" for _ in chunk)
-            params = [str(asset_type).strip()]
+            params = [normalized_asset]
             for exchange, code in chunk:
                 params.extend((exchange, code))
             rows = self.connection.execute(
@@ -657,15 +787,44 @@ class MarketHistoryStore:
         ).fetchall()
         dates = sorted(str(row["trade_date"]) for row in date_rows)
         if not dates:
-            return {"dates": [], "rows": []}
+            return {"dates": [], "rows": [], "invalid_identity_rows": 0}
 
         placeholders = ",".join("?" for _ in dates)
         params: List[Any] = [str(asset_type)]
         params.extend(dates)
+        columns = self._table_columns("bars_day")
+        optional_select = {
+            "volume_unit": (
+                "b.volume_unit" if "volume_unit" in columns else "'unknown'"
+            ),
+            "volume_raw_unit": (
+                "b.volume_raw_unit" if "volume_raw_unit" in columns else "'unknown'"
+            ),
+            "volume_source": (
+                "b.volume_source" if "volume_source" in columns else "''"
+            ),
+            "amount_unit": (
+                "b.amount_unit" if "amount_unit" in columns else "'unknown'"
+            ),
+            "amount_source": (
+                "b.amount_source" if "amount_source" in columns else "''"
+            ),
+            "amount_available": (
+                "b.amount_available"
+                if "amount_available" in columns
+                else "CASE WHEN b.amount>0 THEN 1 ELSE 0 END"
+            ),
+        }
         bar_rows = self.connection.execute(
             """
             SELECT i.instrument_id, i.code, i.name, i.exchange, i.asset_type,
                    b.ts, b.open, b.high, b.low, b.close, b.volume, b.amount,
+                   {volume_unit} AS volume_unit,
+                   {volume_raw_unit} AS volume_raw_unit,
+                   {volume_source} AS volume_source,
+                   {amount_unit} AS amount_unit,
+                   {amount_source} AS amount_source,
+                   {amount_available} AS amount_available,
                    b.adjustment, b.is_final, b.source_batch,
                    m.as_of AS stock_meta_date,
                    m.metadata_json AS stock_meta_json
@@ -680,14 +839,29 @@ class MarketHistoryStore:
                    AND m2.as_of<=substr(b.ts, 1, 10)
              )
             WHERE i.asset_type=? AND b.is_final=1
-              AND substr(b.ts, 1, 10) IN ({})
+              AND substr(b.ts, 1, 10) IN ({placeholders})
             ORDER BY b.ts, i.code
-            """.format(placeholders),
+            """.format(placeholders=placeholders, **optional_select),
             params,
         ).fetchall()
         rows = []
+        invalid_identity_rows = 0
         for row in bar_rows:
-            item = dict(row)
+            try:
+                normalize_identity(
+                    {
+                        "asset_type": row["asset_type"],
+                        "exchange": row["exchange"],
+                        "code": row["code"],
+                    }
+                )
+            except (TypeError, ValueError):
+                # Preserve the legacy row for an explicit migration manifest,
+                # but never expose a contradictory stock identity to a market
+                # wide consumer (for example old 92xxxx rows stored as SZ).
+                invalid_identity_rows += 1
+                continue
+            item = _decorate_legacy_bar(row)
             metadata_json = item.pop("stock_meta_json", None)
             metadata_date = item.pop("stock_meta_date", None)
             metadata = json.loads(metadata_json) if metadata_json else {}
@@ -695,7 +869,11 @@ class MarketHistoryStore:
                 metadata["as_of"] = metadata_date
             item["stock_meta_asof"] = metadata
             rows.append(item)
-        return {"dates": dates, "rows": rows}
+        return {
+            "dates": dates,
+            "rows": rows,
+            "invalid_identity_rows": invalid_identity_rows,
+        }
 
     @staticmethod
     def _finite_number(value: Any, field: str, positive: bool = False) -> float:
@@ -730,6 +908,28 @@ class MarketHistoryStore:
         amount = cls._finite_number(bar.get("amount", 0), "amount")
         if volume < 0 or amount < 0:
             raise ValueError("volume and amount must be non-negative")
+        volume_unit = str(bar.get("volume_unit") or "unknown").strip().lower()
+        volume_raw_unit = str(
+            bar.get("volume_raw_unit") or volume_unit or "unknown"
+        ).strip().lower()
+        if volume_unit not in ("hands", "unknown"):
+            raise ValueError("volume_unit must be canonical hands or unknown")
+        if volume_raw_unit not in ("hands", "shares", "unknown"):
+            raise ValueError("unsupported volume_raw_unit")
+        amount_unit = str(bar.get("amount_unit") or "unknown").strip().upper()
+        if amount_unit not in ("CNY", "UNKNOWN"):
+            raise ValueError("amount_unit must be CNY or unknown")
+        raw_available = bar.get("amount_available")
+        if raw_available is None:
+            amount_available = int(amount > 0)
+        elif isinstance(raw_available, bool):
+            amount_available = int(raw_available)
+        elif type(raw_available) is int and raw_available in (0, 1):
+            amount_available = raw_available
+        else:
+            raise ValueError("amount_available must be bool or integer 0/1")
+        if amount_available and amount <= 0:
+            raise ValueError("available amount must be positive")
         adjustment = str(bar.get("adjustment") or default_adjustment or "").strip()
         if not adjustment:
             raise ValueError("bar adjustment is required")
@@ -751,6 +951,12 @@ class MarketHistoryStore:
             "close": values["close"],
             "volume": volume,
             "amount": amount,
+            "volume_unit": volume_unit,
+            "volume_raw_unit": volume_raw_unit,
+            "volume_source": str(bar.get("volume_source") or "").strip(),
+            "amount_unit": amount_unit,
+            "amount_source": str(bar.get("amount_source") or "").strip(),
+            "amount_available": amount_available,
             "adjustment": adjustment,
             "is_final": is_final,
             "source_batch": str(bar.get("source_batch") or ""),
@@ -786,11 +992,19 @@ class MarketHistoryStore:
         sql = """
             INSERT INTO {table}(
                 instrument_id, ts, open, high, low, close, volume, amount,
+                volume_unit, volume_raw_unit, volume_source,
+                amount_unit, amount_source, amount_available,
                 adjustment, is_final, source_batch, ingest_run_id, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(instrument_id, ts) DO UPDATE SET
                 open=excluded.open, high=excluded.high, low=excluded.low,
                 close=excluded.close, volume=excluded.volume, amount=excluded.amount,
+                volume_unit=excluded.volume_unit,
+                volume_raw_unit=excluded.volume_raw_unit,
+                volume_source=excluded.volume_source,
+                amount_unit=excluded.amount_unit,
+                amount_source=excluded.amount_source,
+                amount_available=excluded.amount_available,
                 adjustment=excluded.adjustment, is_final=excluded.is_final,
                 source_batch=excluded.source_batch,
                 ingest_run_id=excluded.ingest_run_id, updated_at=excluded.updated_at
@@ -802,6 +1016,12 @@ class MarketHistoryStore:
                 {table}.close IS NOT excluded.close OR
                 {table}.volume IS NOT excluded.volume OR
                 {table}.amount IS NOT excluded.amount OR
+                {table}.volume_unit IS NOT excluded.volume_unit OR
+                {table}.volume_raw_unit IS NOT excluded.volume_raw_unit OR
+                {table}.volume_source IS NOT excluded.volume_source OR
+                {table}.amount_unit IS NOT excluded.amount_unit OR
+                {table}.amount_source IS NOT excluded.amount_source OR
+                {table}.amount_available IS NOT excluded.amount_available OR
                 {table}.adjustment IS NOT excluded.adjustment OR
                 {table}.is_final IS NOT excluded.is_final OR
                 {table}.source_batch IS NOT excluded.source_batch OR
@@ -835,6 +1055,9 @@ class MarketHistoryStore:
                     (
                         instrument_id, bar["ts"], bar["open"], bar["high"],
                         bar["low"], bar["close"], bar["volume"], bar["amount"],
+                        bar["volume_unit"], bar["volume_raw_unit"],
+                        bar["volume_source"], bar["amount_unit"],
+                        bar["amount_source"], bar["amount_available"],
                         bar["adjustment"], bar["is_final"], bar["source_batch"],
                         ingest_run_id or bar["ingest_run_id"], now,
                     ),
@@ -868,8 +1091,11 @@ class MarketHistoryStore:
             sql = "SELECT * FROM ({}) ORDER BY ts DESC LIMIT ?".format(sql)
             params.append(int(limit))
             rows = self.connection.execute(sql, params).fetchall()
-            return [dict(row) for row in reversed(rows)]
-        return [dict(row) for row in self.connection.execute(sql, params).fetchall()]
+            return [_decorate_legacy_bar(row) for row in reversed(rows)]
+        return [
+            _decorate_legacy_bar(row)
+            for row in self.connection.execute(sql, params).fetchall()
+        ]
 
     def query_bars_many(
         self,
@@ -920,7 +1146,7 @@ class MarketHistoryStore:
                 """.format(table=table, where_sql=where_sql)
                 params.append(int(limit))
             for raw in self.connection.execute(sql, params).fetchall():
-                row = dict(raw)
+                row = _decorate_legacy_bar(raw)
                 row.pop("_row_number", None)
                 result[int(row["instrument_id"])].append(row)
         return result
@@ -947,7 +1173,10 @@ class MarketHistoryStore:
         sql = "SELECT * FROM {} WHERE {} ORDER BY instrument_id".format(
             table, " AND ".join(clauses)
         )
-        return [dict(row) for row in self.connection.execute(sql, params).fetchall()]
+        return [
+            _decorate_legacy_bar(row)
+            for row in self.connection.execute(sql, params).fetchall()
+        ]
 
     def start_ingest_run(
         self,

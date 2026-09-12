@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import re
 import shutil
@@ -34,6 +35,22 @@ def _strip_shadow_from_html(path):
         + text[match.end(1):],
         encoding="utf-8",
     )
+
+
+def _approved_asset_fixture():
+    """Materialize a tiny self-contained bundle and its test-only allowlist."""
+    temporary = Path(tempfile.mkdtemp(prefix="approved_report_assets_"))
+    source = temporary / "chanlun" / "report_assets"
+    source.mkdir(parents=True)
+    payloads = {
+        "report-v2.js": b"window.__CHANLUN_TEST_ASSET__ = true;\n",
+        "report-v2.css": b"body { color: #123456; }\n",
+    }
+    allowlist = {}
+    for asset_name, payload in payloads.items():
+        (source / asset_name).write_bytes(payload)
+        allowlist[asset_name] = hashlib.sha256(payload).hexdigest()
+    return temporary, source, allowlist
 
 
 def _publication_fixture():
@@ -141,6 +158,10 @@ class RepairAuxiliaryDecisionSnapshotTests(unittest.TestCase):
     def test_publishes_same_repair_to_all_public_planes_atomically(self):
         tmpdir = tempfile.mkdtemp(prefix="auxiliary_snapshot_repair_")
         self.addCleanup(shutil.rmtree, tmpdir)
+        approved_root, approved_assets, approved_allowlist = (
+            _approved_asset_fixture()
+        )
+        self.addCleanup(shutil.rmtree, approved_root)
         docs = Path(tmpdir) / "docs"
         report = _publication_fixture()
         generate_report(report, output_dir=docs, comparison_db_path="")
@@ -172,10 +193,16 @@ class RepairAuxiliaryDecisionSnapshotTests(unittest.TestCase):
             for name, payload in before_planes.items()
         }
 
-        result = publish_auxiliary_decision_snapshot(
-            docs_dir=docs,
-            report_date="2026-08-21",
-        )
+        with mock.patch.object(repair, "ROOT_DIR", approved_root), mock.patch.object(
+            repair, "APPROVED_ASSET_SHA256", approved_allowlist
+        ), mock.patch(
+            "chanlun.report_generator._report_asset_source_dir",
+            return_value=str(approved_assets),
+        ):
+            result = publish_auxiliary_decision_snapshot(
+                docs_dir=docs,
+                report_date="2026-08-21",
+            )
 
         after_planes = snapshot._load_public_planes(docs, "2026-08-21")
         briefs = []

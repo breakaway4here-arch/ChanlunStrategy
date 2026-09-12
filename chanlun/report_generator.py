@@ -625,6 +625,14 @@ def _serialize_picks(picks):
 
         dates_sliced = _slice(raw_dates)
         closes_sliced = _slice(p.get("closes", []))
+        volumes_sliced = _slice(p.get("volumes", []))
+        volume_units_sliced = _slice(p.get("volume_units", []))
+        volume_raw_units_sliced = _slice(p.get("volume_raw_units", []))
+        volume_sources_sliced = _slice(p.get("volume_sources", []))
+        amounts_sliced = _slice(p.get("amounts", []))
+        amount_available_sliced = _slice(p.get("amount_available", []))
+        amount_units_sliced = _slice(p.get("amount_units", []))
+        amount_sources_sliced = _slice(p.get("amount_sources", []))
 
         # Compute reference / current price
         bp = p.get("best_buy_point", {})
@@ -653,6 +661,16 @@ def _serialize_picks(picks):
             "quality_tier": p.get("quality_tier", ""),
             "view": p.get("view", "main"),
             "reference_type": p.get("reference_type", ""),
+            "price_basis": (
+                dict(p.get("price_basis"))
+                if isinstance(p.get("price_basis"), Mapping)
+                else None
+            ),
+            "watch_anchor": (
+                dict(p.get("watch_anchor"))
+                if isinstance(p.get("watch_anchor"), Mapping)
+                else None
+            ),
             "change_pct": change_pct,
             "best_buy_point": _adjust_bp_keep(bp_enhanced),
             "buy_points_30min": [b for b in (_adjust_bp(b) for b in p.get("buy_points_30min", [])) if b is not None],
@@ -666,6 +684,8 @@ def _serialize_picks(picks):
             "circulating_market_cap": p.get("circulating_market_cap"),
             "float_market_cap": p.get("float_market_cap"),
             "money20": p.get("money20"),
+            "liquidity_source": p.get("liquidity_source", ""),
+            "liquidity_window_bars": p.get("liquidity_window_bars", 0),
             "industry": p.get("industry", ""),
             "data_status": p.get("data_status", {}),
             "gf_dma_health": p.get("gf_dma_health", {}),
@@ -697,7 +717,14 @@ def _serialize_picks(picks):
             "opens": _slice(p.get("opens", [])),
             "highs": _slice(p.get("highs", [])),
             "lows": _slice(p.get("lows", [])),
-            "volumes": _slice(p.get("volumes", [])),
+            "volumes": volumes_sliced,
+            "volume_units": volume_units_sliced,
+            "volume_raw_units": volume_raw_units_sliced,
+            "volume_sources": volume_sources_sliced,
+            "amounts": amounts_sliced,
+            "amount_available": amount_available_sliced,
+            "amount_units": amount_units_sliced,
+            "amount_sources": amount_sources_sliced,
             "macd_hist": _serialize_macd(p, _slice, closes_sliced),
             # 图表标注
             "chart_annotations": build_chart_annotations(p, slice_start, dates_sliced, closes_sliced),
@@ -795,6 +822,13 @@ def _serialize_startup_watchlist(watchlist):
         highs_sliced = _slice(w.get("highs", []))
         lows_sliced = _slice(w.get("lows", []))
         volumes_sliced = _slice(w.get("volumes", []))
+        volume_units_sliced = _slice(w.get("volume_units", []))
+        volume_raw_units_sliced = _slice(w.get("volume_raw_units", []))
+        volume_sources_sliced = _slice(w.get("volume_sources", []))
+        amounts_sliced = _slice(w.get("amounts", []))
+        amount_available_sliced = _slice(w.get("amount_available", []))
+        amount_units_sliced = _slice(w.get("amount_units", []))
+        amount_sources_sliced = _slice(w.get("amount_sources", []))
 
         # MACD histogram
         macd_hist_sliced = _slice(w.get("macd_hist", []))
@@ -828,6 +862,11 @@ def _serialize_startup_watchlist(watchlist):
             "source_type": w.get("source_type", ""),
             "reference_type": w.get("reference_type", ""),
             "reference_price": ref_price,
+            "price_basis": (
+                dict(w.get("price_basis"))
+                if isinstance(w.get("price_basis"), Mapping)
+                else None
+            ),
             "startup_reason": w.get("startup_reason", ""),
             "startup_signals": w.get("startup_signals", []),
             "daily_startup_grade": w.get("daily_startup_grade", ""),
@@ -851,6 +890,13 @@ def _serialize_startup_watchlist(watchlist):
             "distance_from_reference_pct": dist_pct,
             "avoid_chase": w.get("avoid_chase", True),
             "watch_reason": w.get("watch_reason", ""),
+            # Observation anchors are provenance-bearing fields.  Keep them
+            # separate from the generic reference/current price chain.
+            "watch_anchor": (
+                dict(w.get("watch_anchor"))
+                if isinstance(w.get("watch_anchor"), Mapping)
+                else None
+            ),
             "reason_code": w.get("reason_code", ""),
             "failure_gate": w.get("failure_gate", ""),
             "actual_value": w.get("actual_value"),
@@ -866,6 +912,13 @@ def _serialize_startup_watchlist(watchlist):
             "highs": highs_sliced,
             "lows": lows_sliced,
             "volumes": volumes_sliced,
+            "volume_units": volume_units_sliced,
+            "volume_raw_units": volume_raw_units_sliced,
+            "volume_sources": volume_sources_sliced,
+            "amounts": amounts_sliced,
+            "amount_available": amount_available_sliced,
+            "amount_units": amount_units_sliced,
+            "amount_sources": amount_sources_sliced,
             "macd_hist": macd_hist_sliced,
             "chart_annotations": chart_annotations,
         }
@@ -941,6 +994,16 @@ def _serialize_next_day_boom(data):
             "data_status": c.get("data_status", {}),
             "source_pool": c.get("source_pool", ""),
             "source_type": c.get("source_type", ""),
+            "price_basis": (
+                dict(c.get("price_basis"))
+                if isinstance(c.get("price_basis"), Mapping)
+                else None
+            ),
+            "watch_anchor": (
+                dict(c.get("watch_anchor"))
+                if isinstance(c.get("watch_anchor"), Mapping)
+                else None
+            ),
             "boom_score": c.get("boom_score", 0),
             "boom_reason": c.get("boom_reason", ""),
             "decision_engine_v1": c.get("decision_engine_v1"),
@@ -1004,6 +1067,16 @@ def _serialize_luojie_pool(data):
             "tier": c.get("tier", ""),
             "score": c.get("score", 0),
             "decision_engine_v1": c.get("decision_engine_v1"),
+            "price_basis": (
+                dict(c.get("price_basis"))
+                if isinstance(c.get("price_basis"), Mapping)
+                else None
+            ),
+            "watch_anchor": (
+                dict(c.get("watch_anchor"))
+                if isinstance(c.get("watch_anchor"), Mapping)
+                else None
+            ),
             "close": c.get("close"),
             "signal_15m_close": c.get("signal_15m_close"),
             "strategy_input_evidence": c.get(
@@ -1026,6 +1099,14 @@ def _serialize_luojie_pool(data):
             "change_pct": change_pct,
             "current_price": current_price,
             "reason": c.get("reason", ""),
+            "next_confirmation": c.get(
+                "next_confirmation",
+                c.get("upgrade_conditions", c.get("next_day_conditions", [])),
+            ),
+            "invalidation": c.get(
+                "invalidation",
+                c.get("invalidation_conditions", c.get("cancel_conditions", [])),
+            ),
             "dates": timeseries["dates"],
             "closes": closes,
             "chart_annotations": timeseries["chart_annotations"],
@@ -1388,6 +1469,16 @@ def _serialize_picks_light(picks):
             "quality_tier": p.get("quality_tier", ""),
             "view": p.get("view", "main"),
             "reference_type": p.get("reference_type", ""),
+            "price_basis": (
+                dict(p.get("price_basis"))
+                if isinstance(p.get("price_basis"), Mapping)
+                else None
+            ),
+            "watch_anchor": (
+                dict(p.get("watch_anchor"))
+                if isinstance(p.get("watch_anchor"), Mapping)
+                else None
+            ),
             "change_pct": _compute_pick_change_pct(p, bp),
             "best_buy_point": _serialize_bp(bp),
             "gf_dma_health": p.get("gf_dma_health", {}),
@@ -1399,6 +1490,8 @@ def _serialize_picks_light(picks):
             "circulating_market_cap": p.get("circulating_market_cap"),
             "float_market_cap": p.get("float_market_cap"),
             "money20": p.get("money20"),
+            "liquidity_source": p.get("liquidity_source", ""),
+            "liquidity_window_bars": p.get("liquidity_window_bars", 0),
             "industry": p.get("industry", ""),
             "decision_engine_v1": p.get("decision_engine_v1"),
             **_project_formal_decision_source_fields(p),
@@ -2064,6 +2157,7 @@ def build_full_daily_projection(
         "strategy_scorecards": _serialize_strategy_scorecards(
             report_data.get("strategy_scorecards", [])
         ),
+        "strategy_run_manifest": report_data.get("strategy_run_manifest", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "selection_input_health": report_data.get(
@@ -2094,6 +2188,7 @@ def build_full_daily_projection(
         "luojie_pool",
         "h4_t3_pool",
         "selection_input_health",
+        "strategy_run_manifest",
     ):
         if optional_pool not in report_data:
             daily_data.pop(optional_pool, None)
@@ -2159,6 +2254,7 @@ def build_aggregate_day_projection(
         "strategy_scorecards": _serialize_strategy_scorecards(
             report_data.get("strategy_scorecards", [])
         ),
+        "strategy_run_manifest": report_data.get("strategy_run_manifest", []),
         "diagnostics": report_data.get("diagnostics", {}),
         "data_quality": report_data.get("data_quality", {}),
         "selection_input_health": report_data.get(
@@ -2177,6 +2273,7 @@ def build_aggregate_day_projection(
         "next_day_boom",
         "luojie_pool",
         "selection_input_health",
+        "strategy_run_manifest",
     ):
         if optional_pool not in report_data:
             day_entry.pop(optional_pool, None)

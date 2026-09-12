@@ -9,6 +9,7 @@ from chanlun.preclose_contract import (
     normalize_preclose_candidate,
     snapshot_content_hash,
 )
+from chanlun.strategy_identity import PRE_CLOSE_STRATEGY_VERSION
 
 
 FIXTURE_ROOT = Path(__file__).resolve().parent / "fixtures" / "preclose"
@@ -25,7 +26,7 @@ class PrecloseContractTests(unittest.TestCase):
 
         self.assertEqual(snapshot["schema_version"], "preclose-selection-v1")
         self.assertEqual(snapshot["mode"], "preclose_advisory")
-        self.assertEqual(snapshot["strategy_version"], "preclose-1445-v2")
+        self.assertEqual(snapshot["strategy_version"], PRE_CLOSE_STRATEGY_VERSION)
         self.assertFalse(snapshot["is_final"])
         self.assertFalse(snapshot["affects_formal"])
         self.assertEqual(snapshot["expires_at"], "2026-08-27T14:56:30+08:00")
@@ -98,7 +99,7 @@ class PrecloseContractTests(unittest.TestCase):
             })
             self.assertNotIn("diagnostics", public)
             self.assertNotIn("reason", public)
-            self.assertEqual(public["strategy_version"], "preclose-1445-v2")
+            self.assertEqual(public["strategy_version"], PRE_CLOSE_STRATEGY_VERSION)
 
     def test_server_and_browser_iso_times_expire_at_the_same_boundary(self):
         fixture = _fixture("expired.json")

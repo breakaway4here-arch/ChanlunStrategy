@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
+from chanlun.decision_engine import evaluate_stock
 from chanlun.luojie_pool import build_luojie_pool, match_luojie_themes
 
 
@@ -11,7 +12,8 @@ def _rising_array(n=220, start=10.0, step=0.03):
 
 
 def _result(code="600001", name="测试通信", closes=None, lows=None,
-            buy_points=None, pivots=None, dif=None, dea=None):
+            buy_points=None, pivots=None, dif=None, dea=None,
+            trend_type=None):
     closes = closes if closes is not None else _rising_array()
     lows = lows if lows is not None else closes * 0.995
     highs = closes * 1.01
@@ -29,6 +31,7 @@ def _result(code="600001", name="测试通信", closes=None, lows=None,
         pivots=pivots or [],
         macd_dif=dif if dif is not None else np.ones(len(closes)) * 0.2,
         macd_dea=dea if dea is not None else np.ones(len(closes)) * 0.1,
+        trend_type=trend_type,
     )
 
 
@@ -46,6 +49,29 @@ class TestLuojieThemeMatching(unittest.TestCase):
 
 
 class TestBuildLuojiePool(unittest.TestCase):
+
+    def test_candidate_preserves_min15_chan_trend_for_decision_engine(self):
+        result = _result(trend_type="上涨趋势")
+        pool = build_luojie_pool(
+            stocks=[{
+                "code": "600001",
+                "name": "测试通信",
+                "sector": "通信设备",
+                "data_status": {"daily": "verified"},
+            }],
+            min15_results=[result],
+        )
+
+        candidate = pool["candidates"][0]
+        self.assertEqual(candidate["trend_type"], "上涨趋势")
+        decision = evaluate_stock({
+            **candidate,
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-09-11",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        }, market_context={"market_trend": "盘整"})
+        self.assertIn("趋势向上", decision["structure"]["reasons"])
 
     def test_keeps_stock_above_lifeline_with_macd_above_zero_and_third_buy(self):
         closes = _rising_array()

@@ -15,6 +15,7 @@ from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
 from .price_basis import align_intraday_price
 from .signal_quality_classifier import build_signal_context, tag_signal_quality_in_place
+from .volume_contract import canonical_volume_window, quantity_evidence_observation
 
 
 def _has_macd_bullish_signal(min30_result):
@@ -34,7 +35,9 @@ def _has_macd_bullish_signal(min30_result):
     return False
 
 
-def screen_daily_pure(chan_results, sector_stocks, sectors):
+def screen_daily_pure(
+    chan_results, sector_stocks, sectors, quantity_diagnostics=None
+):
     """
     纯净版日线初筛。
 
@@ -47,6 +50,8 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
         目标池: [dict, ...]
     """
     target_pool = []
+    if quantity_diagnostics is not None:
+        quantity_diagnostics.setdefault("quantity_evidence", [])
 
     for result in chan_results:
         if result is None:
@@ -54,7 +59,6 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
 
         code = result.code
         name = result.name
-
         # --- 基础过滤 ---
         # ST 过滤
         if is_st_stock(name):
@@ -77,14 +81,6 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
                 })
                 if price_limit_state in ("limit_up", "limit_down"):
                     continue
-
-        # 量能过滤：近5日日均成交额 > MIN_DAILY_AMOUNT
-        # volumes 是成交量（手），需转为成交额（元）= vol * close * 100
-        if len(result.volumes) >= 5 and len(result.closes) >= 5:
-            amounts = result.volumes[-5:] * result.closes[-5:] * 100
-            avg_amount = np.mean(amounts)
-            if avg_amount < MIN_DAILY_AMOUNT:
-                continue
 
         # --- 缠论状态检查 ---
         # 必须有买点信号
@@ -110,6 +106,31 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
             valid_buy_points.append(bp)
 
         if not valid_buy_points:
+            continue
+
+        raw_volumes = getattr(result, "volumes", None)
+        volumes = (
+            canonical_volume_window(result, slice(-5, None))
+            if raw_volumes is not None
+            and len(raw_volumes) == len(result.closes)
+            else None
+        )
+        volume_available = volumes is not None and len(volumes) == 5
+        if quantity_diagnostics is not None:
+            quantity_diagnostics["quantity_evidence"].append(
+                quantity_evidence_observation(
+                    code, "legacy_pure_liquidity", 5, volume_available,
+                    "quantity_price_length_mismatch"
+                    if raw_volumes is None
+                    or len(raw_volumes) != len(result.closes)
+                    else "",
+                )
+            )
+        if not volume_available:
+            continue
+
+        amounts = volumes * result.closes[-5:] * 100
+        if np.mean(amounts) < MIN_DAILY_AMOUNT:
             continue
 
         for bp in valid_buy_points:
@@ -145,7 +166,10 @@ def screen_daily_pure(chan_results, sector_stocks, sectors):
             "highs": result.highs,
             "lows": result.lows,
             "dates": result.dates,
-            "volumes": result.volumes,
+            "volumes": raw_volumes,
+            "volume_units": list(getattr(result, "volume_units", [])),
+            "volume_raw_units": list(getattr(result, "volume_raw_units", [])),
+            "volume_sources": list(getattr(result, "volume_sources", [])),
             "fractals": result.fractals,
             "strokes": result.strokes,
             "segments": result.segments,

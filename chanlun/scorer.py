@@ -2,6 +2,9 @@
 评分模型 — 纯净版和融合版两套评分函数。
 """
 
+import math
+import re
+from collections.abc import Mapping
 import numpy as np
 from config import (
     PURE_WEIGHT_DIVERGENCE, PURE_WEIGHT_RESONANCE, PURE_WEIGHT_POSITION,
@@ -65,13 +68,23 @@ def score_fusion(stock, sector_rank_map=None):
     - 量能配合 (10%)
     返回: 0-100 分
     """
+    normalized_sectors = normalize_sector_rank_map(sector_rank_map)
+    return _score_fusion_with_normalized_sectors(stock, normalized_sectors)
+
+
+def _score_fusion_with_normalized_sectors(stock, normalized_sectors):
+    """Score one fusion row after its sector contract was normalized once."""
     # 1-3: 与纯净版相同
     div_score = _score_divergence_clarity(stock)
     resonance_score = _score_resonance(stock)
     position_score = _score_trend_position(stock)
 
     # 4. 板块强度
-    sector_score = _score_sector_strength(stock, sector_rank_map)
+    sector_score = _score_sector_strength(
+        stock,
+        normalized_sectors,
+        normalized=True,
+    )
 
     # 5. 量能配合
     volume_score = _score_volume_confirmation(stock)
@@ -168,7 +181,7 @@ def _score_trend_position(stock):
         return 20
 
 
-def _score_sector_strength(stock, sector_rank_map=None):
+def _score_sector_strength(stock, sector_rank_map=None, *, normalized=False):
     """
     板块强度评分 (0-100)
     - TOP1板块: 100
@@ -180,11 +193,19 @@ def _score_sector_strength(stock, sector_rank_map=None):
     if not sector or sector_rank_map is None:
         return 40
 
+    normalized_sectors = (
+        sector_rank_map
+        if normalized
+        else normalize_sector_rank_map(sector_rank_map)
+    )
+    if not normalized_sectors:
+        return 40
+
     # 查找板块排名
     rank = None
-    for i, s in enumerate(sector_rank_map):
+    for s in normalized_sectors:
         if s["name"] == sector:
-            rank = i + 1
+            rank = s["sector_rank"]
             break
 
     if rank is None:
@@ -201,6 +222,130 @@ def _score_sector_strength(stock, sector_rank_map=None):
     elif rank <= 20:
         return 40
     return 25
+
+
+def _finite_positive_integer(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(number) or number <= 0 or not number.is_integer():
+        return None
+    return int(number)
+
+
+def normalize_sector_rank_map(sector_rank_map, *, return_diagnostics=False):
+    """Normalize one ordered sector ranking list into unique explicit ranks.
+
+    The market provider's list order is the only fallback order.  Mapping
+    rows without a usable name are ignored.  A later duplicate name replaces
+    an earlier row only when it carries a valid rank where the earlier row did
+    not.  Conflicting valid ranks for the same name are discarded together
+    and assigned a conservative ordered fallback; they are never resolved by
+    choosing the smaller (and potentially more favorable) value.  Set
+    ``return_diagnostics=True`` to retain the conflict records.
+    """
+    return _normalize_sector_rank_map(sector_rank_map, return_diagnostics=return_diagnostics)
+
+
+def _normalize_sector_rank_map(sector_rank_map, *, return_diagnostics=False):
+    """Implementation shared by the scoring path and diagnostic callers."""
+    if sector_rank_map is None:
+        result = None
+        return (result, []) if return_diagnostics else result
+    if not isinstance(sector_rank_map, (list, tuple)):
+        # A mapping/dict has no ranking contract here.  Do not silently turn
+        # its insertion order into strategy evidence.
+        result = None
+        diagnostics = [{
+            "type": "invalid_sector_rank_map",
+            "action": "neutral_score",
+        }]
+        return (result, diagnostics) if return_diagnostics else result
+
+    diagnostics = []
+    selected = []
+    name_to_index = {}
+    for row in sector_rank_map:
+        if not isinstance(row, Mapping):
+            continue
+        name = str(row.get("name") or "").strip()
+        if not name:
+            continue
+        candidate = dict(row)
+        candidate["name"] = name
+        candidate_rank = _finite_positive_integer(candidate.get("sector_rank"))
+        existing_index = name_to_index.get(name)
+        if existing_index is None:
+            selected.append({
+                "row": candidate,
+                "rank": candidate_rank,
+                "conflict": False,
+            })
+            name_to_index[name] = len(selected) - 1
+            continue
+
+        existing = selected[existing_index]
+        existing_rank = existing["rank"]
+        if existing["conflict"]:
+            continue
+        if existing_rank is None and candidate_rank is not None:
+            existing["row"] = candidate
+            existing["rank"] = candidate_rank
+        elif (
+            existing_rank is not None
+            and candidate_rank is not None
+            and candidate_rank != existing_rank
+        ):
+            existing["rank"] = None
+            existing["conflict"] = True
+            diagnostics.append({
+                "type": "duplicate_name_rank_conflict",
+                "name": name,
+                "ranks": [existing_rank, candidate_rank],
+                "action": "ordered_fallback",
+            })
+
+    used = set()
+    unresolved = []
+    rank_owners = {}
+    for index, item in enumerate(selected):
+        row = item["row"]
+        explicit_rank = item["rank"]
+        if explicit_rank is not None and explicit_rank not in used:
+            row["sector_rank"] = explicit_rank
+            row["sector_rank_source"] = "explicit"
+            used.add(explicit_rank)
+            rank_owners[explicit_rank] = row["name"]
+        else:
+            if explicit_rank is not None:
+                diagnostics.append({
+                    "type": "duplicate_explicit_rank",
+                    "name": row["name"],
+                    "rank": explicit_rank,
+                    "kept_name": rank_owners.get(explicit_rank, ""),
+                    "action": "ordered_fallback",
+                })
+            unresolved.append((index, item))
+
+    for index, item in unresolved:
+        row = item["row"]
+        next_rank = index + 1
+        if item["conflict"] and next_rank <= 1:
+            next_rank = 2
+        while next_rank in used:
+            next_rank += 1
+        row["sector_rank"] = next_rank
+        row["sector_rank_source"] = (
+            "ordered_fallback_conflict"
+            if item["conflict"] else "ordered_fallback"
+        )
+        used.add(next_rank)
+
+    result = [item["row"] for item in selected]
+    return (result, diagnostics) if return_diagnostics else result
 
 
 def _score_volume_confirmation(stock):
@@ -238,15 +383,98 @@ def _score_volume_confirmation(stock):
         return 20   # 明显缩量
 
 
+def _sector_rank_diagnostics_for_name(diagnostics, name):
+    return [
+        dict(item) for item in (diagnostics or [])
+        if not name or item.get("name") in (None, "", name)
+    ]
+
+
+def _rewrite_rank_label(label, rank):
+    """Keep generated TOP labels aligned with the rank used for scoring."""
+    if not isinstance(label, str) or not label.strip():
+        return label
+    return re.sub(r"TOP\s*\d+", "TOP{}".format(rank), label, count=1)
+
+
+def _attach_sector_rank_contract(pick, normalized_sectors, diagnostics):
+    """Write the exact normalized ranking contract consumed by fusion score."""
+    if not isinstance(pick, dict):
+        return
+    sector = str(pick.get("sector") or "").strip()
+    matching = next(
+        (
+            row for row in (normalized_sectors or [])
+            if row.get("name") == sector
+        ),
+        None,
+    )
+    if matching is not None:
+        rank = matching.get("sector_rank")
+        pick["sector_rank"] = rank
+        pick["sector_rank_used"] = rank
+        pick["sector_rank_source"] = matching.get(
+            "sector_rank_source", ""
+        )
+        relevant = _sector_rank_diagnostics_for_name(diagnostics, sector)
+        pick["sector_rank_diagnostics"] = relevant
+        label = pick.get("sector_strength_label")
+        if not label:
+            label = matching.get("sector_strength_label", "")
+        rewritten = _rewrite_rank_label(label, rank)
+        if rewritten:
+            pick["sector_strength_label"] = rewritten
+        return
+
+    # The map was supplied but did not contain this stock's sector.  Preserve
+    # any independently verified metadata while making the score's absence
+    # explicit; never manufacture a rank from a stock dictionary's order.
+    pick["sector_rank_used"] = None
+    invalid_map = any(
+        item.get("type") == "invalid_sector_rank_map"
+        for item in diagnostics or []
+        if isinstance(item, dict)
+    )
+    pick["sector_rank_source"] = (
+        "invalid_rank_map" if invalid_map else "not_in_rank_map"
+    )
+    pick["sector_rank_diagnostics"] = (
+        _sector_rank_diagnostics_for_name(diagnostics, sector)
+        + ([{
+            "type": "sector_not_in_rank_map",
+            "name": sector,
+            "action": "neutral_score",
+        }] if not invalid_map else [])
+    )
+
+
 def apply_scores(picks, version="pure", sector_rank_map=None):
     """
     为一组 picks 评分并附加 score 字段。
     排序: formal > candidate, then type priority, then score.
     """
     score_func = score_pure if version == "pure" else score_fusion
+    normalized_sectors = None
+    sector_rank_diagnostics = []
+    if version == "fusion" and sector_rank_map is not None:
+        normalized_sectors, sector_rank_diagnostics = (
+            normalize_sector_rank_map(
+                sector_rank_map,
+                return_diagnostics=True,
+            )
+        )
     for pick in picks:
         if version == "fusion":
-            pick["score"] = score_func(pick, sector_rank_map)
+            if sector_rank_map is not None:
+                _attach_sector_rank_contract(
+                    pick,
+                    normalized_sectors,
+                    sector_rank_diagnostics,
+                )
+            pick["score"] = _score_fusion_with_normalized_sectors(
+                pick,
+                normalized_sectors,
+            )
         else:
             pick["score"] = score_func(pick)
 

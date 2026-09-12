@@ -528,7 +528,10 @@ def load_walkforward_samples(database_path: Any) -> List[Dict[str, Any]]:
                 path = [
                     float(row["low"])
                     for row in bars_by_id[instrument_id]
-                    if signal_date < str(row["ts"]).split(" ", 1)[0] <= t3_date
+                    if (
+                        signal_date < str(row["ts"]).split(" ", 1)[0] <= t3_date
+                        and bool(row.get("is_final"))
+                    )
                 ]
                 t3_return = (
                     float(bars[t3_date]["close"]) / signal_close - 1.0

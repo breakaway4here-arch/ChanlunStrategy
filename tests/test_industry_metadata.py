@@ -33,9 +33,27 @@ class IndustryMetadataHydrationTests(unittest.TestCase):
     def test_complete_industry_coverage_uses_database_without_remote_call(self):
         self._stock("600000", {"industry": "银行", "listed_days": 5000})
         with MarketHistoryStore(self.path) as store:
-            invalid_id = store.upsert_instrument(
-                "stock", "SH", "000002", name="错误交易所历史重复项"
+            # Seed a legacy collision directly so the test covers the audit
+            # path without re-enabling contradictory writes through the store
+            # contract.
+            store.connection.execute(
+                """
+                INSERT INTO instruments(asset_type, exchange, code, name, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    "stock",
+                    "SH",
+                    "000002",
+                    "错误交易所历史重复项",
+                    "2026-07-16T00:00:00Z",
+                ),
             )
+            invalid_id = store.connection.execute(
+                "SELECT instrument_id FROM instruments WHERE asset_type=? AND exchange=? AND code=?",
+                ("stock", "SH", "000002"),
+            ).fetchone()[0]
+            store.connection.commit()
             store.upsert_stock_meta(
                 invalid_id, "2026-07-16", {"listed_days": 5000}
             )

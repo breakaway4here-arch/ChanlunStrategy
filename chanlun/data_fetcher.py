@@ -41,10 +41,16 @@ from .kline_cache import (
     merge_kline_records,
     kline_dict_to_records,
     records_to_kline_dict,
+    read_cached_identity,
     CACHE_STATS,
 )
 from .kline_repository import KLineRepository
 from .price_basis import adjustment_factor
+from .identity import (
+    InstrumentIdentity,
+    normalize_identity,
+    normalize_index_identity,
+)
 
 # ------------------------------------------------------------
 # 路径
@@ -175,45 +181,43 @@ def _fetch_eastmoney_json(params):
 # ============================================================
 # 代码格式转换
 # ============================================================
-# 沪市指数代码（000xxx 区间中属于上证系列的部分）
-_SH_INDEX_CODES = {
-    "000001", "000002", "000003", "000004", "000005", "000006", "000007",
-    "000008", "000009", "000010", "000011", "000012", "000013", "000015",
-    "000016", "000017", "000018", "000019", "000020", "000021", "000022",
-    "000025", "000026", "000027", "000028", "000029", "000030", "000031",
-    "000032", "000033", "000034", "000035", "000036", "000037", "000038",
-    "000039", "000040", "000041", "000042", "000043", "000044", "000045",
-    "000046", "000047", "000048", "000049", "000050",
-    "000051", "000052", "000053", "000054", "000055", "000056", "000057",
-    "000058", "000059", "000060", "000061", "000062", "000063", "000064",
-    "000300",  # 沪深300
-    "000688",  # 科创50
-    "000905",  # 中证500
-}
+def _normalize_identity(value, *, code=None, exchange=None, asset_type=None):
+    return normalize_identity(
+        value,
+        code=code,
+        exchange=exchange,
+        asset_type=asset_type,
+    )
 
 
-def _is_sh(code):
-    """判断是否沪市代码"""
-    if code.startswith(("60", "68", "900")):
-        return True
-    if code in _SH_INDEX_CODES:
-        return True
-    return False
+def _is_sh(value, *, exchange=None, asset_type=None):
+    """Return the exchange from an explicit identity, never from an index list."""
+    identity = _normalize_identity(
+        value, exchange=exchange, asset_type=asset_type
+    )
+    return identity.exchange == "SH"
 
 
-def _tencent_code(code):
-    """纯数字代码 → 腾讯格式: sh600519 / sz000858"""
-    return f"sh{code}" if _is_sh(code) else f"sz{code}"
+def _tencent_code(value, *, exchange=None, asset_type=None):
+    """Return Tencent's route for the complete instrument identity."""
+    identity = _normalize_identity(
+        value, exchange=exchange, asset_type=asset_type
+    )
+    return "{}{}".format(identity.exchange.lower(), identity.code)
 
 
-def _em_secid(code):
-    """纯数字代码 → 东方财富格式: 1.600519 / 0.000858"""
-    return f"1.{code}" if _is_sh(code) else f"0.{code}"
+def _em_secid(value, *, exchange=None, asset_type=None):
+    """Return Eastmoney's secid for the complete instrument identity."""
+    identity = _normalize_identity(
+        value, exchange=exchange, asset_type=asset_type
+    )
+    market = "1" if identity.exchange == "SH" else "0"
+    return "{}.{}".format(market, identity.code)
 
 
-def _sina_code(code):
-    """纯数字代码 → 新浪格式: sh600519 / sz000858"""
-    return _tencent_code(code)
+def _sina_code(value, *, exchange=None, asset_type=None):
+    """Return Sina's route for the complete instrument identity."""
+    return _tencent_code(value, exchange=exchange, asset_type=asset_type)
 
 
 # ============================================================
@@ -323,6 +327,13 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
                 "change_pct": _safe_float(raw.get("f3")),
                 "volume": _safe_float(raw.get("f5")),
                 "amount": _safe_float(raw.get("f6")),
+                "volume_unit": "hands",
+                "volume_raw_unit": "hands",
+                "volume_source": "eastmoney",
+                "amount_unit": "CNY",
+                "amount_source": "eastmoney",
+                "amount_available": _safe_float(raw.get("f6")) is not None
+                and _safe_float(raw.get("f6")) > 0,
                 "high": _safe_float(raw.get("f15")),
                 "low": _safe_float(raw.get("f16")),
                 "open": _safe_float(raw.get("f17")),
@@ -607,10 +618,15 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
                 code = str(it.get("f12") or "").strip()
                 if not code or code in stocks_by_code:
                     continue
+                exchange = _a_share_exchange(code)
+                if not exchange:
+                    continue
                 market_cap = _market_cap_to_yi(it.get("f20"))
                 circulating_market_cap = _market_cap_to_yi(it.get("f21"))
                 stocks_by_code[code] = {
                     "code": code,
+                    "asset_type": "stock",
+                    "exchange": exchange,
                     "name": it.get("f14", "-"),
                     "change_pct": it.get("f3", 0),
                     "close": it.get("f2", 0),
@@ -654,26 +670,39 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
 
 def fetch_stock_market_caps(codes, max_workers=20):
     """Fetch current total/circulating market caps in batched quote requests."""
-    normalized_codes = list(dict.fromkeys(
-        str(code or "").strip()
-        for code in (codes or [])
-        if str(code or "").strip()
-    ))
-    if not normalized_codes:
+    identities = []
+    seen = set()
+    for value in (codes or []):
+        try:
+            identity = _normalize_identity(value)
+        except (TypeError, ValueError):
+            continue
+        if identity.asset_type != "stock" or identity in seen:
+            continue
+        seen.add(identity)
+        identities.append(identity)
+    if not identities:
         return {}
 
     endpoint = "https://push2delay.eastmoney.com/api/qt/ulist.np/get"
     batches = [
-        normalized_codes[offset:offset + 100]
-        for offset in range(0, len(normalized_codes), 100)
+        identities[offset:offset + 100]
+        for offset in range(0, len(identities), 100)
     ]
 
     def _fetch_batch(batch):
+        by_provider_key = {
+            ("1" if identity.exchange == "SH" else "0", identity.code): identity
+            for identity in batch
+        }
+        code_counts = {}
+        for identity in batch:
+            code_counts[identity.code] = code_counts.get(identity.code, 0) + 1
         response = SESSION.get(
             endpoint,
             params={
-                "secids": ",".join(_em_secid(code) for code in batch),
-                "fields": "f12,f14,f20,f21",
+                "secids": ",".join(_em_secid(identity) for identity in batch),
+                "fields": "f12,f13,f14,f20,f21",
                 "fltt": "2",
                 "invt": "2",
             },
@@ -682,8 +711,26 @@ def fetch_stock_market_caps(codes, max_workers=20):
         response.raise_for_status()
         payload = response.json()
         items = (payload.get("data") or {}).get("diff") or []
-        return {
-            str(item.get("f12") or ""): {
+        result = {}
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            code = str(item.get("f12") or "")
+            raw_market = item.get("f13")
+            market = "" if raw_market is None else str(raw_market).strip()
+            identity = by_provider_key.get((market, code))
+            # Eastmoney's f13 is the provider market id (0=SZ/BJ, 1=SH).
+            # A missing market can use the old unique-code compatibility
+            # path, but an explicit market mismatch must never be rebound by
+            # code alone.  That would turn a same-code stock/index or
+            # cross-market response into metadata for the requested stock.
+            if identity is None and not market and code_counts.get(code) == 1:
+                identity = next(
+                    candidate for candidate in batch if candidate.code == code
+                )
+            if identity is None:
+                continue
+            result[identity.key] = {
                 "market_cap": _market_cap_to_yi(item.get("f20")),
                 "circulating_market_cap": _market_cap_to_yi(
                     item.get("f21")
@@ -691,9 +738,10 @@ def fetch_stock_market_caps(codes, max_workers=20):
                 "float_market_cap": _market_cap_to_yi(item.get("f21")),
                 "market_cap_source": "eastmoney_quote",
             }
-            for item in items
-            if isinstance(item, dict) and str(item.get("f12") or "")
-        }
+        for identity in batch:
+            if code_counts.get(identity.code) == 1 and identity.key in result:
+                result[identity.code] = result[identity.key]
+        return result
 
     result = {}
     workers = max(1, min(int(max_workers), len(batches)))
@@ -725,7 +773,23 @@ def set_force_refresh_cache(value):
 # ============================================================
 # 日线 K 线 — 腾讯
 # ============================================================
-def _parse_tencent_kline(raw_lines):
+def _normalize_provider_volume(values, raw_unit):
+    """Return canonical hands while retaining the provider's raw unit."""
+    unit = str(raw_unit or "unknown").strip().lower()
+    array = np.asarray(values, dtype=float)
+    if unit == "shares":
+        return array / 100.0, "hands", "shares"
+    if unit == "hands":
+        return array, "hands", "hands"
+    return array, "unknown", "unknown"
+
+
+def _parse_tencent_kline(
+    raw_lines,
+    *,
+    volume_unit="unknown",
+    volume_source="tencent",
+):
     """
     解析腾讯K线数据。
     格式: [日期, 开盘, 收盘, 最高, 最低, 成交量]
@@ -740,13 +804,21 @@ def _parse_tencent_kline(raw_lines):
         highs.append(float(line[3]))
         lows.append(float(line[4]))
         volumes.append(float(line[5]))
+    volumes_array, canonical_unit, raw_unit = _normalize_provider_volume(
+        volumes, volume_unit
+    )
     return {
         "dates": dates,
         "opens": np.array(opens),
         "highs": np.array(highs),
         "lows": np.array(lows),
         "closes": np.array(closes),
-        "volumes": np.array(volumes),
+        "volumes": volumes_array,
+        "volume_unit": canonical_unit,
+        "volume_raw_unit": raw_unit,
+        "volume_source": str(volume_source),
+        "amount_unit": "unknown",
+        "amount_source": "",
     }
 
 
@@ -798,7 +870,8 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
     获取日线K线（前复权）。腾讯 API。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
     """
-    tc = _tencent_code(code)
+    identity = _normalize_identity(code)
+    tc = _tencent_code(identity)
     url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},day,,,{count},qfq"
     try:
         resp = SESSION.get(url, timeout=15)
@@ -808,7 +881,7 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
         klines = stock_data.get("qfqday", stock_data.get("day", []))
         if not klines:
             return None
-        return _parse_tencent_kline(klines)
+        return _parse_tencent_kline(klines, volume_source="tencent")
     except Exception as e:
         print(f"[ERROR] 获取日线失败 {code}: {e}")
         return None
@@ -816,7 +889,8 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
 
 def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
     """Fetch unadjusted daily kline from Tencent. Indexes do not need qfq."""
-    tc = _tencent_code(code)
+    identity = _normalize_identity(code)
+    tc = _tencent_code(identity)
     url = f"https://web.ifzq.gtimg.cn/appstock/app/kline/kline?param={tc},day,,,{count}"
     try:
         resp = SESSION.get(url, timeout=15)
@@ -825,7 +899,9 @@ def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
         klines = stock_data.get("day", [])
         if not klines:
             return None
-        return _parse_tencent_kline(klines[-count:])
+        return _parse_tencent_kline(
+            klines[-count:], volume_source="tencent_plain"
+        )
     except Exception as e:
         print(f"[ERROR] 腾讯非复权日线失败 {code}: {e}")
         return None
@@ -833,8 +909,9 @@ def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
 
 def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
     """获取日线K线。东方财富历史K线 API。"""
+    identity = _normalize_identity(code)
     params = {
-        "secid": _em_secid(code),
+        "secid": _em_secid(identity),
         "ut": "7eea3edcaed734bea9cbfc24409ed989",
         "fields1": "f1,f2,f3,f4,f5,f6",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
@@ -861,10 +938,17 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
             amounts.append(_extract_eastmoney_amount(parts))
         if not raw_lines:
             return None
-        kline = _parse_tencent_kline(raw_lines)
+        kline = _parse_tencent_kline(
+            raw_lines,
+            volume_unit="hands" if identity.asset_type == "stock" else "unknown",
+            volume_source="eastmoney",
+        )
         amount_array = _ensure_amounts_array(amounts)
         if amount_array is not None:
             kline["amounts"] = amount_array
+            kline["amount_available"] = np.isfinite(amount_array) & (amount_array > 0)
+            kline["amount_unit"] = "CNY"
+            kline["amount_source"] = "eastmoney"
         return kline
     except Exception as e:
         print(f"[ERROR] 东方财富日线失败 {code}: {e}")
@@ -873,7 +957,8 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
 
 def _fetch_daily_kline_sina_daily_remote(code, count=DAY_LOOKBACK):
     """Fetch daily kline from Sina daily endpoint."""
-    sc = _sina_code(code)
+    identity = _normalize_identity(code)
+    sc = _sina_code(identity)
     url = (
         "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
         f"CN_MarketData.getKLineData?symbol={sc}&scale=240&datalen={count}"
@@ -900,7 +985,11 @@ def _fetch_daily_kline_sina_daily_remote(code, count=DAY_LOOKBACK):
             ])
         if not raw_lines:
             return None
-        return _parse_tencent_kline(raw_lines[-count:])
+        return _parse_tencent_kline(
+            raw_lines[-count:],
+            volume_unit="shares" if identity.asset_type == "stock" else "unknown",
+            volume_source="sina",
+        )
     except Exception as e:
         print(f"[ERROR] 新浪日线失败 {code}: {e}")
         return None
@@ -908,7 +997,7 @@ def _fetch_daily_kline_sina_daily_remote(code, count=DAY_LOOKBACK):
 
 def _fetch_daily_kline_sina_quote_remote(code, count=DAY_LOOKBACK):
     """Fetch latest index quote from Sina and synthesize a 2-bar kline."""
-    sc = _sina_code(code)
+    sc = _sina_code(_normalize_identity(code))
     url = f"https://hq.sinajs.cn/list={sc}"
     try:
         resp = SESSION.get(
@@ -942,6 +1031,11 @@ def _fetch_daily_kline_sina_quote_remote(code, count=DAY_LOOKBACK):
             "lows": np.array([prev_close, low]),
             "closes": np.array([prev_close, current]),
             "volumes": np.array([0.0, volume]),
+            "volume_unit": "unknown",
+            "volume_raw_unit": "unknown",
+            "volume_source": "sina_quote",
+            "amount_unit": "unknown",
+            "amount_source": "",
         }
     except Exception as e:
         print(f"[ERROR] 新浪实时指数失败 {code}: {e}")
@@ -1062,8 +1156,14 @@ def _validate_index_kline(code, source, kline, required_date=None, min_bars=2):
     return chg
 
 
-def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
-    """Fetch index daily kline from live sources only; stale cache is not accepted."""
+def fetch_verified_index_kline(code=None, count=DAY_LOOKBACK, required_date=None, *, identity=None, exchange=None):
+    """Fetch an explicit index identity; stale cache is not accepted."""
+    identity = normalize_index_identity(
+        identity if identity is not None else code,
+        code=code if identity is not None else None,
+        exchange=exchange,
+    )
+    code = identity.code
     min_bars = 2 if count <= 3 else min(20, count)
     sources = [
         ("tencent", _fetch_daily_kline_remote),
@@ -1078,7 +1178,7 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
     errors = []
     fetched = {}
     for source, fetcher in sources:
-        kline = fetcher(code, count=count)
+        kline = fetcher(identity, count=count)
         fetched[source] = kline
         try:
             chg = _validate_index_kline(
@@ -1090,7 +1190,7 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
         valid.append((source, kline, chg))
 
     if count > 3 and required_date:
-        quote = _fetch_daily_kline_sina_quote_remote(code, count=2)
+        quote = _fetch_daily_kline_sina_quote_remote(identity, count=2)
         splice_sources = [
             ("sina_daily+sina_quote", fetched.get("sina_daily")),
         ]
@@ -1122,10 +1222,12 @@ def fetch_verified_index_kline(code, count=DAY_LOOKBACK, required_date=None):
     return result
 
 
-def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=False):
+def _fetch_daily_kline_legacy_cache(
+    code, count=DAY_LOOKBACK, force_refresh=False, identity=None
+):
     """Fetch daily kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
-    cached_records = read_cached_records("day", code)
+    cached_records = read_cached_records("day", code, identity=identity)
     cached_enough = len(cached_records) >= count
 
     if force:
@@ -1142,11 +1244,12 @@ def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=Fals
         merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
         write_cached_records(
             "day", code, merged,
-            source="tencent",
+            source=remote.get("source") or remote.get("volume_source") or "tencent",
             keep_trading_days=DAY_KLINE_CACHE_RETENTION_TRADING_DAYS,
+            identity=identity,
         )
         CACHE_STATS["day_write"] += 1
-        cached = cached_kline_if_sufficient("day", code, count)
+        cached = cached_kline_if_sufficient("day", code, count, identity=identity)
         if cached is not None:
             cached["source"] = "tencent"
             CACHE_STATS["day_hit"] += 1
@@ -1154,7 +1257,7 @@ def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=Fals
         CACHE_STATS["day_miss"] += 1
         return remote
 
-    cached = cached_kline_if_sufficient("day", code, count)
+    cached = cached_kline_if_sufficient("day", code, count, identity=identity)
     if cached is not None:
         cached["source"] = "kline_cache"
         CACHE_STATS["day_hit"] += 1
@@ -1165,8 +1268,12 @@ def _fetch_daily_kline_legacy_cache(code, count=DAY_LOOKBACK, force_refresh=Fals
 
 
 def fetch_shanghai_index(required_date=None):
-    """获取上证指数日线"""
-    return fetch_verified_index_kline("000001", count=DAY_LOOKBACK, required_date=required_date)
+    """获取上证指数日线（显式 index/SH/000001 身份）。"""
+    return fetch_verified_index_kline(
+        count=DAY_LOOKBACK,
+        required_date=required_date,
+        identity=InstrumentIdentity("index", "SH", "000001"),
+    )
 
 
 # ============================================================
@@ -1174,7 +1281,8 @@ def fetch_shanghai_index(required_date=None):
 # ============================================================
 def _fetch_sina_minute_kline_remote(code, scale, count):
     """Fetch minute kline from Sina."""
-    sc = _sina_code(code)
+    identity = _normalize_identity(code)
+    sc = _sina_code(identity)
     datalen = min(count, 240)
     url = (
         "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
@@ -1195,13 +1303,23 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
             closes.append(float(k["close"]))
             volumes.append(float(k["volume"]))
 
+        volumes_array, canonical_unit, raw_unit = _normalize_provider_volume(
+            volumes,
+            "shares" if identity.asset_type == "stock" else "unknown",
+        )
+
         return {
             "dates": dates,
             "opens": np.array(opens),
             "highs": np.array(highs),
             "lows": np.array(lows),
             "closes": np.array(closes),
-            "volumes": np.array(volumes),
+            "volumes": volumes_array,
+            "volume_unit": canonical_unit,
+            "volume_raw_unit": raw_unit,
+            "volume_source": "sina",
+            "amount_unit": "unknown",
+            "amount_source": "",
         }
     except Exception as e:
         print(f"[ERROR] 获取{scale}分钟K线失败 {code}: {e}")
@@ -1210,8 +1328,9 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
 
 def _fetch_eastmoney_minute_kline_remote(code, scale, count):
     """Fetch adjusted intraday bars without Sina's 240-record cap."""
+    identity = _normalize_identity(code)
     params = {
-        "secid": _em_secid(code),
+        "secid": _em_secid(identity),
         "ut": "7eea3edcaed734bea9cbfc24409ed989",
         "fields1": "f1,f2,f3,f4,f5,f6",
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
@@ -1251,10 +1370,18 @@ def _fetch_eastmoney_minute_kline_remote(code, scale, count):
             "closes": np.array(closes, dtype=float),
             "volumes": np.array(volumes, dtype=float),
             "source": "eastmoney",
+            "volume_unit": "hands" if identity.asset_type == "stock" else "unknown",
+            "volume_raw_unit": "hands" if identity.asset_type == "stock" else "unknown",
+            "volume_source": "eastmoney",
+            "amount_unit": "unknown",
+            "amount_source": "",
         }
         amount_array = _ensure_amounts_array(amounts)
         if amount_array is not None:
             result["amounts"] = amount_array
+            result["amount_available"] = np.isfinite(amount_array) & (amount_array > 0)
+            result["amount_unit"] = "CNY"
+            result["amount_source"] = "eastmoney"
         return result
     except Exception as exc:
         print("[ERROR] 东方财富{}分钟K线失败 {}: {}".format(scale, code, exc))
@@ -1282,10 +1409,12 @@ def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
     )
 
 
-def _fetch_30min_kline_legacy_cache(code, count=80, force_refresh=False):
+def _fetch_30min_kline_legacy_cache(
+    code, count=80, force_refresh=False, identity=None
+):
     """Fetch 30min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
-    cached_records = read_cached_records("30min", code)
+    cached_records = read_cached_records("30min", code, identity=identity)
     cached_enough = len(cached_records) >= count
 
     if force:
@@ -1301,18 +1430,19 @@ def _fetch_30min_kline_legacy_cache(code, count=80, force_refresh=False):
         merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
         write_cached_records(
             "30min", code, merged,
-            source="sina",
+            source=remote.get("source") or remote.get("volume_source") or "unknown",
             keep_trading_days=MIN30_KLINE_CACHE_RETENTION_TRADING_DAYS,
+            identity=identity,
         )
         CACHE_STATS["30min_write"] += 1
-        cached = cached_kline_if_sufficient("30min", code, count)
+        cached = cached_kline_if_sufficient("30min", code, count, identity=identity)
         if cached is not None:
             CACHE_STATS["30min_hit"] += 1
             return cached
         CACHE_STATS["30min_miss"] += 1
         return remote
 
-    cached = cached_kline_if_sufficient("30min", code, count)
+    cached = cached_kline_if_sufficient("30min", code, count, identity=identity)
     if cached is not None:
         CACHE_STATS["30min_hit"] += 1
         print(f"  [CACHE FALLBACK] 30min {code} remote failed, using cache")
@@ -1322,11 +1452,11 @@ def _fetch_30min_kline_legacy_cache(code, count=80, force_refresh=False):
 
 
 def _fetch_15min_kline_legacy_cache(
-    code, count=MIN15_LOOKBACK_BARS, force_refresh=False
+    code, count=MIN15_LOOKBACK_BARS, force_refresh=False, identity=None
 ):
     """Fetch 15min kline with incremental cache support."""
     force = force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
-    cached_records = read_cached_records("15min", code)
+    cached_records = read_cached_records("15min", code, identity=identity)
     cached_enough = len(cached_records) >= count
 
     if force:
@@ -1342,18 +1472,19 @@ def _fetch_15min_kline_legacy_cache(
         merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
         write_cached_records(
             "15min", code, merged,
-            source="sina",
+            source=remote.get("source") or remote.get("volume_source") or "unknown",
             keep_trading_days=MIN15_KLINE_CACHE_RETENTION_TRADING_DAYS,
+            identity=identity,
         )
         CACHE_STATS["15min_write"] = CACHE_STATS.get("15min_write", 0) + 1
-        cached = cached_kline_if_sufficient("15min", code, count)
+        cached = cached_kline_if_sufficient("15min", code, count, identity=identity)
         if cached is not None:
             CACHE_STATS["15min_hit"] = CACHE_STATS.get("15min_hit", 0) + 1
             return cached
         CACHE_STATS["15min_miss"] = CACHE_STATS.get("15min_miss", 0) + 1
         return remote
 
-    cached = cached_kline_if_sufficient("15min", code, count)
+    cached = cached_kline_if_sufficient("15min", code, count, identity=identity)
     if cached is not None:
         CACHE_STATS["15min_hit"] = CACHE_STATS.get("15min_hit", 0) + 1
         print(f"  [CACHE FALLBACK] 15min {code} remote failed, using cache")
@@ -1367,18 +1498,102 @@ def _with_source(kline, source):
         return None
     result = dict(kline)
     result["source"] = result.get("source") or source
+    result["volume_source"] = result.get("volume_source") or source
+    if "volume_unit" not in result:
+        result["volume_unit"] = "unknown"
+    if "volume_raw_unit" not in result:
+        result["volume_raw_unit"] = result["volume_unit"]
+    if "amount_unit" not in result:
+        result["amount_unit"] = "CNY" if result.get("amounts") is not None else "unknown"
+    if "amount_source" not in result:
+        result["amount_source"] = source if result.get("amounts") is not None else ""
+    if "amounts" in result and "amount_available" not in result:
+        values = np.asarray(result["amounts"], dtype=float)
+        result["amount_available"] = np.isfinite(values) & (values > 0)
     return result
 
 
-def _fetch_daily_for_repository(code, count):
+def _daily_payload_validation_error(
+    payload,
+    *,
+    count,
+    required_date=None,
+    as_of=None,
+):
+    """Reject stale/short daily sources before applying unit-based ranking."""
+    if not isinstance(payload, dict):
+        return "payload_not_mapping"
+    try:
+        raw_dates = payload.get("dates")
+        dates = list(raw_dates) if raw_dates is not None else []
+        arrays = {
+            key: (
+                list(payload.get(key))
+                if payload.get(key) is not None
+                else []
+            )
+            for key in ("opens", "highs", "lows", "closes", "volumes")
+        }
+    except (TypeError, ValueError):
+        return "payload_arrays_invalid"
+    if not dates:
+        return "empty_dates"
+    if len(dates) < int(count):
+        return "insufficient_bars"
+    if any(len(values) != len(dates) for values in arrays.values()):
+        return "array_length_mismatch"
+    previous = None
+    for index, raw_date in enumerate(dates):
+        date_text = str(raw_date).strip().replace("T", " ").split(" ", 1)[0]
+        try:
+            parsed = datetime.strptime(date_text, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            return "invalid_date"
+        if previous is not None and parsed <= previous:
+            return "dates_not_strictly_increasing"
+        previous = parsed
+        try:
+            values = [float(arrays[key][index]) for key in arrays]
+        except (TypeError, ValueError):
+            return "nonnumeric_ohlcv"
+        if not all(math.isfinite(value) for value in values):
+            return "nonfinite_ohlcv"
+        open_price, high_price, low_price, close_price, volume = values
+        if min(open_price, high_price, low_price, close_price) <= 0:
+            return "nonpositive_price"
+        if volume < 0:
+            return "negative_volume"
+        if high_price < max(open_price, low_price, close_price):
+            return "invalid_high"
+        if low_price > min(open_price, high_price, close_price):
+            return "invalid_low"
+    latest_date = str(dates[-1]).strip().replace("T", " ").split(" ", 1)[0]
+    if required_date and latest_date != str(required_date):
+        return "latest_date_mismatch"
+    if as_of:
+        as_of_date = str(as_of).strip().replace("T", " ").split(" ", 1)[0]
+        if latest_date > as_of_date:
+            return "latest_date_exceeds_as_of"
+    return ""
+
+
+def _fetch_daily_for_repository(
+    code,
+    count,
+    required_date=None,
+    as_of=None,
+):
+    identity = _normalize_identity(code)
     sources = (
         ("tencent", _fetch_daily_kline_remote),
         ("eastmoney", _fetch_daily_kline_eastmoney_remote),
         ("sina", _fetch_daily_kline_sina_daily_remote),
     )
+    candidates = []
+    rejected = []
     with ThreadPoolExecutor(max_workers=len(sources)) as pool:
         futures = {
-            pool.submit(fetcher, code, count=count): source
+            pool.submit(fetcher, identity, count=count): source
             for source, fetcher in sources
         }
         for future in as_completed(futures):
@@ -1388,8 +1603,42 @@ def _fetch_daily_for_repository(code, count):
             except Exception:
                 kline = None
             if kline:
-                return _with_source(kline, source)
-    return None
+                reason = _daily_payload_validation_error(
+                    kline,
+                    count=count,
+                    required_date=required_date,
+                    as_of=as_of,
+                )
+                if reason:
+                    rejected.append({"source": source, "reason": reason})
+                    continue
+                candidates.append((source, _with_source(kline, source)))
+    if not candidates:
+        return None
+    priority = {"eastmoney": 0, "sina": 1, "tencent": 2}
+
+    def _freshness_rank(item):
+        """Prefer the latest valid cutoff before source/unit preference."""
+        _source, payload = item
+        latest = _latest_date(payload)
+        try:
+            latest_ordinal = datetime.strptime(latest, "%Y-%m-%d").toordinal()
+        except (TypeError, ValueError):
+            latest_ordinal = -1
+        return latest_ordinal, len(payload.get("dates", []))
+
+    candidates.sort(
+        key=lambda item: (
+            -_freshness_rank(item)[0],
+            -_freshness_rank(item)[1],
+            0 if item[1].get("volume_unit") == "hands" else 1,
+            priority.get(item[0], 9),
+        )
+    )
+    selected = candidates[0][1]
+    if rejected:
+        selected["_provider_rejections"] = rejected
+    return selected
 
 
 def _minute_context_datetime(value=None):
@@ -1525,11 +1774,12 @@ def _fetch_minute_for_repository(
     base_delay=0.5,
     sleep_fn=time.sleep,
 ):
+    identity = _normalize_identity(code)
     providers = [
         (
             "eastmoney",
             lambda: _fetch_eastmoney_minute_kline_remote(
-                code, scale, count
+                identity, scale, count
             ),
         )
     ]
@@ -1538,7 +1788,7 @@ def _fetch_minute_for_repository(
             (
                 "sina",
                 lambda: _fetch_sina_minute_kline_remote(
-                    code, scale, count
+                    identity, scale, count
                 ),
             )
         )
@@ -1586,8 +1836,50 @@ def _fetch_minute_for_repository(
     return None
 
 
-def _legacy_shadow_reader(interval, code, count):
-    return cached_kline_if_sufficient(interval, code, count)
+def _legacy_shadow_reader(interval, identity, count):
+    """Read a legacy cache only when its complete identity is recorded."""
+    cache_period = {"30m": "30min", "15m": "15min"}.get(interval, interval)
+    try:
+        canonical = _normalize_identity(identity)
+    except (TypeError, ValueError) as exc:
+        return {
+            "_shadow_comparable": False,
+            "_shadow_reason": "invalid_identity: {}".format(exc),
+        }
+    cached_identity = read_cached_identity(cache_period, canonical.code)
+    if cached_identity is None:
+        return {
+            "_shadow_comparable": False,
+            "_shadow_reason": "legacy_cache_identity_missing",
+            "_shadow_identity": canonical.key,
+        }
+    try:
+        cached_canonical = _normalize_identity(cached_identity)
+    except (TypeError, ValueError) as exc:
+        return {
+            "_shadow_comparable": False,
+            "_shadow_reason": "legacy_cache_identity_invalid: {}".format(exc),
+            "_shadow_identity": canonical.key,
+        }
+    if cached_canonical != canonical:
+        return {
+            "_shadow_comparable": False,
+            "_shadow_reason": "legacy_cache_identity_mismatch",
+            "_shadow_identity": cached_canonical.key,
+            "_shadow_expected_identity": canonical.key,
+        }
+    cached = cached_kline_if_sufficient(
+        cache_period, canonical.code, count, identity=canonical
+    )
+    if cached is None:
+        return {
+            "_shadow_comparable": False,
+            "_shadow_reason": "legacy_cache_insufficient",
+            "_shadow_identity": canonical.key,
+        }
+    cached["_shadow_comparable"] = True
+    cached["_shadow_identity"] = canonical.key
+    return cached
 
 
 def reset_kline_repository():
@@ -1622,10 +1914,15 @@ def _fetch_from_repository(
     force_refresh=False,
     required_date=None,
     as_of=None,
+    identity=None,
 ):
+    target = _normalize_identity(
+        identity if identity is not None else code,
+        code=code if identity is not None else None,
+    )
     result = _get_kline_repository().get(
         interval,
-        code,
+        target,
         count=count,
         required_date=required_date,
         as_of=as_of,
@@ -1635,82 +1932,115 @@ def _fetch_from_repository(
 
 
 def fetch_daily_kline(
-    code,
+    code=None,
     count=DAY_LOOKBACK,
     force_refresh=False,
     required_date=None,
     as_of=None,
+    *,
+    identity=None,
+    exchange=None,
+    asset_type=None,
 ):
+    target = _normalize_identity(
+        identity if identity is not None else code,
+        code=code if identity is not None else None,
+        exchange=exchange,
+        asset_type=asset_type,
+    )
     effective_force = (
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if not KLINE_REPOSITORY_ENABLED:
+        if target.asset_type != "stock":
+            return None
         return _fetch_daily_kline_legacy_cache(
-            code, count=count, force_refresh=effective_force
+            target.code, count=count, force_refresh=effective_force, identity=target
         )
     return _fetch_from_repository(
         "day",
-        code,
+        target.code,
         count,
         force_refresh=effective_force,
         required_date=required_date,
         as_of=as_of,
+        identity=target,
     )
 
 
 def fetch_30min_kline(
-    code, count=80, force_refresh=False, required_date=None, as_of=None
+    code=None, count=80, force_refresh=False, required_date=None, as_of=None,
+    *, identity=None, exchange=None, asset_type=None
 ):
+    target = _normalize_identity(
+        identity if identity is not None else code,
+        code=code if identity is not None else None,
+        exchange=exchange,
+        asset_type=asset_type,
+    )
     effective_force = (
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if not KLINE_REPOSITORY_ENABLED:
+        if target.asset_type != "stock":
+            return None
         if required_date or as_of:
             print(
                 "  [FAIL CLOSED] 30min {} formal context requires "
-                "canonical repository".format(code)
+                "canonical repository".format(target.code)
             )
             return None
         return _fetch_30min_kline_legacy_cache(
-            code, count=count, force_refresh=effective_force
+            target.code, count=count, force_refresh=effective_force, identity=target
         )
     return _fetch_from_repository(
         "30m",
-        code,
+        target.code,
         count,
         force_refresh=effective_force,
         required_date=required_date,
         as_of=as_of,
+        identity=target,
     )
 
 
 def fetch_15min_kline(
-    code,
+    code=None,
     count=MIN15_LOOKBACK_BARS,
     force_refresh=False,
     required_date=None,
     as_of=None,
+    *, identity=None, exchange=None, asset_type=None
 ):
+    target = _normalize_identity(
+        identity if identity is not None else code,
+        code=code if identity is not None else None,
+        exchange=exchange,
+        asset_type=asset_type,
+    )
     effective_force = (
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
     )
     if not KLINE_REPOSITORY_ENABLED:
+        if target.asset_type != "stock":
+            return None
         if required_date or as_of:
             print(
                 "  [FAIL CLOSED] 15min {} formal context requires "
-                "canonical repository".format(code)
+                "canonical repository".format(target.code)
             )
             return None
         return _fetch_15min_kline_legacy_cache(
-            code, count=count, force_refresh=effective_force
+            target.code, count=count, force_refresh=effective_force, identity=target
         )
     return _fetch_from_repository(
         "15m",
-        code,
+        target.code,
         count,
         force_refresh=effective_force,
         required_date=required_date,
         as_of=as_of,
+        identity=target,
     )
 
 
@@ -1722,24 +2052,76 @@ _PUBLIC_FETCH_15MIN_IMPL = fetch_15min_kline
 # ============================================================
 # K 线通用入口（用于 market indices 等场景）
 # ============================================================
-def fetch_kline(code, klt="101", count=DAY_LOOKBACK, fqt="1"):
+def fetch_kline(
+    code=None,
+    klt="101",
+    count=DAY_LOOKBACK,
+    fqt="1",
+    *,
+    identity=None,
+    exchange=None,
+    asset_type=None,
+):
     """
     通用K线获取入口。
     klt: 101=日线, 30=30分钟, 15=15分钟 (兼容旧接口)
     """
     if klt in ("101", "day", "1d"):
-        return fetch_daily_kline(code, count=count)
+        return fetch_daily_kline(
+            code,
+            count=count,
+            identity=identity,
+            exchange=exchange,
+            asset_type=asset_type,
+        )
     elif klt in ("30", "min30", "30min"):
-        return fetch_30min_kline(code, count=count)
+        return fetch_30min_kline(
+            code,
+            count=count,
+            identity=identity,
+            exchange=exchange,
+            asset_type=asset_type,
+        )
     elif klt in ("15", "min15", "15min"):
-        return fetch_15min_kline(code, count=count)
+        return fetch_15min_kline(
+            code,
+            count=count,
+            identity=identity,
+            exchange=exchange,
+            asset_type=asset_type,
+        )
     else:
-        return fetch_daily_kline(code, count=count)
+        return fetch_daily_kline(
+            code,
+            count=count,
+            identity=identity,
+            exchange=exchange,
+            asset_type=asset_type,
+        )
 
 
 # ============================================================
 # 批量获取
 # ============================================================
+def _row_identity(row):
+    """Resolve a stock row without letting code-only keys choose an index."""
+    if not isinstance(row, dict):
+        raise ValueError("market row must be a mapping")
+    return _normalize_identity(row)
+
+
+def _repository_result(results, identity):
+    """Read modern identity keys and keep compatibility with injected code maps."""
+    if results is None:
+        return None
+    for key in (identity, identity.key, identity.code):
+        try:
+            return results[key]
+        except (KeyError, TypeError):
+            continue
+    raise KeyError(identity)
+
+
 def batch_fetch_daily_klines(
     stocks,
     max_workers=10,
@@ -1754,6 +2136,20 @@ def batch_fetch_daily_klines(
     返回: [{"code": ..., "name": ..., "sector": ..., "sector_tags": [...], "klines": {...}, "data_status": {...}}, ...]
     """
     results = []
+    row_identities = {}
+    valid_identities = []
+    for stock in stocks:
+        try:
+            identity = _row_identity(stock)
+        except (TypeError, ValueError) as exc:
+            stock["data_status"] = {
+                "daily": "missing",
+                "stale": True,
+                "identity_error": str(exc),
+            }
+            continue
+        row_identities[id(stock)] = identity
+        valid_identities.append(identity)
     repository_results = None
     effective_force = False if missing_only else (
         force_refresh or KLINE_CACHE_FORCE_REFRESH or _FORCE_REFRESH_CACHE
@@ -1764,7 +2160,7 @@ def batch_fetch_daily_klines(
     ):
         repository_results = _get_kline_repository().get_many(
             "day",
-            [stock["code"] for stock in stocks],
+            valid_identities,
             count=DAY_LOOKBACK,
             required_date=required_date,
             force_refresh=effective_force,
@@ -1772,17 +2168,29 @@ def batch_fetch_daily_klines(
 
     def _fetch_one(stock):
         code = stock["code"]
+        identity = row_identities.get(id(stock))
+        if identity is None:
+            return None
         klines = (
-            repository_results[code].kline
+            _repository_result(repository_results, identity).kline
             if repository_results is not None
-            else fetch_daily_kline(code, force_refresh=effective_force)
+            else (
+                fetch_daily_kline(code, force_refresh=effective_force)
+                if not ("exchange" in stock or "asset_type" in stock)
+                else fetch_daily_kline(
+                    code,
+                    force_refresh=effective_force,
+                    exchange=identity.exchange,
+                    asset_type=identity.asset_type,
+                )
+            )
         )
         kline_source = (klines or {}).get("source") or stock.get("source") or "tencent"
         status = build_kline_status(
             klines, required_date=required_date, source=kline_source,
         )
         if repository_results is not None:
-            result = repository_results[code]
+            result = _repository_result(repository_results, identity)
             status["remote_refreshed"] = bool(result.fetched_remote)
             status["remote_refresh_failed"] = bool(
                 result.diagnostics.get("remote_failed")
@@ -1847,6 +2255,9 @@ def batch_fetch_daily_klines(
             }
 
         return {
+            "asset_type": identity.asset_type,
+            "exchange": identity.exchange,
+            "identity_key": identity.key,
             "code": code,
             "name": stock.get("name", ""),
             "sector": stock.get("sector", ""),
@@ -1860,6 +2271,17 @@ def batch_fetch_daily_klines(
             "float_market_cap": stock.get("float_market_cap"),
             "amount": stock.get("amount"),
             "amounts": amounts,
+            "amount_available": (klines or {}).get("amount_available") if isinstance(klines, dict) else None,
+            "amount_units": (klines or {}).get("amount_units") if isinstance(klines, dict) else None,
+            "amount_sources": (klines or {}).get("amount_sources") if isinstance(klines, dict) else None,
+            "amount_unit": (klines or {}).get("amount_unit", "unknown") if isinstance(klines, dict) else "unknown",
+            "amount_source": (klines or {}).get("amount_source", "") if isinstance(klines, dict) else "",
+            "volume_units": (klines or {}).get("volume_units") if isinstance(klines, dict) else None,
+            "volume_raw_units": (klines or {}).get("volume_raw_units") if isinstance(klines, dict) else None,
+            "volume_sources": (klines or {}).get("volume_sources") if isinstance(klines, dict) else None,
+            "volume_unit": (klines or {}).get("volume_unit", "unknown") if isinstance(klines, dict) else "unknown",
+            "volume_raw_unit": (klines or {}).get("volume_raw_unit", "unknown") if isinstance(klines, dict) else "unknown",
+            "volume_source": (klines or {}).get("volume_source", "") if isinstance(klines, dict) else "",
             "klines": klines,
             "data_status": status,
             "raw_current_price": raw_current_price,
@@ -1939,6 +2361,19 @@ def batch_fetch_30min_klines(
     并发批量获取30分钟K线。
     """
     results = []
+    row_identities = {}
+    valid_identities = []
+    for stock in stocks:
+        try:
+            identity = _row_identity(stock)
+        except (TypeError, ValueError) as exc:
+            stock["data_status"] = {
+                "30min": "missing",
+                "identity_error": str(exc),
+            }
+            continue
+        row_identities[id(stock)] = identity
+        valid_identities.append(identity)
     repository_results = None
     if (
         KLINE_REPOSITORY_ENABLED
@@ -1946,7 +2381,7 @@ def batch_fetch_30min_klines(
     ):
         repository_results = _get_kline_repository().get_many(
             "30m",
-            [stock["code"] for stock in stocks],
+            valid_identities,
             count=80,
             required_date=required_date,
             as_of=as_of,
@@ -1955,15 +2390,22 @@ def batch_fetch_30min_klines(
 
     def _fetch_one(stock):
         code = stock["code"]
+        identity = row_identities.get(id(stock))
+        if identity is None:
+            return None
         repository_result = (
-            repository_results[code]
+            _repository_result(repository_results, identity)
             if repository_results is not None else None
         )
         klines = (
             repository_result.kline
             if repository_results is not None
             else fetch_30min_kline(
-                code, required_date=required_date, as_of=as_of
+                code,
+                required_date=required_date,
+                as_of=as_of,
+                exchange=identity.exchange,
+                asset_type=identity.asset_type,
             )
         )
         evidence = _sublevel_input_evidence(
@@ -1981,8 +2423,21 @@ def batch_fetch_30min_klines(
             )
         ):
             return {
+                "asset_type": identity.asset_type,
+                "exchange": identity.exchange,
+                "identity_key": identity.key,
                 "code": code,
                 "name": stock.get("name", ""),
+                "volume_unit": klines.get("volume_unit", "unknown"),
+                "volume_raw_unit": klines.get("volume_raw_unit", "unknown"),
+                "volume_source": klines.get("volume_source", ""),
+                "volume_units": klines.get("volume_units"),
+                "volume_raw_units": klines.get("volume_raw_units"),
+                "volume_sources": klines.get("volume_sources"),
+                "amount_unit": klines.get("amount_unit", "unknown"),
+                "amount_source": klines.get("amount_source", ""),
+                "amount_units": klines.get("amount_units"),
+                "amount_sources": klines.get("amount_sources"),
                 "klines": klines,
                 "input_evidence": evidence,
             }
@@ -2004,6 +2459,19 @@ def batch_fetch_15min_klines(
     并发批量获取15分钟K线。
     """
     results = []
+    row_identities = {}
+    valid_identities = []
+    for stock in stocks:
+        try:
+            identity = _row_identity(stock)
+        except (TypeError, ValueError) as exc:
+            stock["data_status"] = {
+                "15min": "missing",
+                "identity_error": str(exc),
+            }
+            continue
+        row_identities[id(stock)] = identity
+        valid_identities.append(identity)
     repository_results = None
     if (
         KLINE_REPOSITORY_ENABLED
@@ -2011,7 +2479,7 @@ def batch_fetch_15min_klines(
     ):
         repository_results = _get_kline_repository().get_many(
             "15m",
-            [stock["code"] for stock in stocks],
+            valid_identities,
             count=MIN15_LOOKBACK_BARS,
             required_date=required_date,
             as_of=as_of,
@@ -2020,15 +2488,22 @@ def batch_fetch_15min_klines(
 
     def _fetch_one(stock):
         code = stock["code"]
+        identity = row_identities.get(id(stock))
+        if identity is None:
+            return None
         repository_result = (
-            repository_results[code]
+            _repository_result(repository_results, identity)
             if repository_results is not None else None
         )
         klines = (
             repository_result.kline
             if repository_results is not None
             else fetch_15min_kline(
-                code, required_date=required_date, as_of=as_of
+                code,
+                required_date=required_date,
+                as_of=as_of,
+                exchange=identity.exchange,
+                asset_type=identity.asset_type,
             )
         )
         evidence = _sublevel_input_evidence(
@@ -2046,8 +2521,21 @@ def batch_fetch_15min_klines(
             )
         ):
             return {
+                "asset_type": identity.asset_type,
+                "exchange": identity.exchange,
+                "identity_key": identity.key,
                 "code": code,
                 "name": stock.get("name", ""),
+                "volume_unit": klines.get("volume_unit", "unknown"),
+                "volume_raw_unit": klines.get("volume_raw_unit", "unknown"),
+                "volume_source": klines.get("volume_source", ""),
+                "volume_units": klines.get("volume_units"),
+                "volume_raw_units": klines.get("volume_raw_units"),
+                "volume_sources": klines.get("volume_sources"),
+                "amount_unit": klines.get("amount_unit", "unknown"),
+                "amount_source": klines.get("amount_source", ""),
+                "amount_units": klines.get("amount_units"),
+                "amount_sources": klines.get("amount_sources"),
                 "klines": klines,
                 "input_evidence": evidence,
             }
@@ -2406,9 +2894,10 @@ def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
         mode="backtest",
         immutable_backtest=False,
     )
-    by_code = repository.get_many(
+    identities = [_row_identity(stock) for stock in target_stocks]
+    by_identity = repository.get_many(
         "30m",
-        [stock["code"] for stock in target_stocks],
+        identities,
         count=80,
         required_date=required_date,
         as_of=as_of,
@@ -2416,7 +2905,8 @@ def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
     output = []
     for stock in target_stocks:
         code = stock["code"]
-        result = by_code[code]
+        identity = _row_identity(stock)
+        result = _repository_result(by_identity, identity)
         evidence = _sublevel_input_evidence("30m", result.kline, result)
         if not (
             result.kline
@@ -2431,6 +2921,9 @@ def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
         ):
             continue
         output.append({
+            "asset_type": identity.asset_type,
+            "exchange": identity.exchange,
+            "identity_key": identity.key,
             "code": code,
             "name": stock.get("name", ""),
             "klines": result.kline,

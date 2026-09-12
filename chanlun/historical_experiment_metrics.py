@@ -6,7 +6,7 @@ from numbers import Integral, Real
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from config import DAY_LOOKBACK
-from chanlun.backtest_execution import evaluate_forward_returns
+from chanlun.backtest_execution import evaluate_forward_returns, normalize_backtest_kline
 from chanlun.backtest_metrics import summarize_return_samples
 from chanlun.data_fetcher import fetch_daily_kline
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
@@ -175,34 +175,7 @@ def entry_mode_for_pick(experiment_name: str, pick: dict) -> str:
 
 
 def _normalize_kline(kline):
-    if kline is None:
-        return None
-
-    dates = kline.get("dates", [])
-    opens = kline.get("opens", [])
-    highs = kline.get("highs", [])
-    lows = kline.get("lows", [])
-    closes = kline.get("closes", [])
-
-    norm_dates = [str(d).split(" ")[0] for d in list(dates)]
-    norm_opens = [float(v) for v in list(opens)]
-    norm_highs = [float(v) for v in list(highs)]
-    norm_lows = [float(v) for v in list(lows)]
-    norm_closes = [float(v) for v in list(closes)]
-
-    if not (len(norm_dates) == len(norm_opens) == len(norm_highs) == len(norm_lows) == len(norm_closes)):
-        return None
-
-    if not norm_dates:
-        return None
-
-    return {
-        "dates": norm_dates,
-        "opens": norm_opens,
-        "highs": norm_highs,
-        "lows": norm_lows,
-        "closes": norm_closes,
-    }
+    return normalize_backtest_kline(kline)
 
 
 def _fetch_daily_kline_cached(code: str, kline_cache: Dict[str, Optional[dict]]) -> Optional[dict]:

@@ -12,6 +12,7 @@ from .market_sentiment import classify_price_limit
 from .price_basis import adjustment_factor
 from .signal_recency import _coerce_finite_integer
 from .sublevel_confirm import build_30min_confirmation_evidence
+from .volume_contract import canonical_volume_window, quantity_evidence_observation
 
 
 def _float_array(value: Any) -> np.ndarray:
@@ -47,23 +48,19 @@ def _latest_pivot_upper(result: Any) -> Optional[float]:
 def _base_payload(
     result: Any,
     sector_stocks: Optional[Mapping[str, Mapping[str, Any]]],
+    diagnostics: Optional[Dict[str, Any]] = None,
 ) -> Optional[Dict[str, Any]]:
     closes = _float_array(getattr(result, "closes", None))
     highs = _float_array(getattr(result, "highs", None))
     lows = _float_array(getattr(result, "lows", None))
     opens = _float_array(getattr(result, "opens", None))
-    volumes = _float_array(getattr(result, "volumes", None))
-    if min(len(closes), len(highs), len(lows), len(opens), len(volumes)) < 60:
+    if min(len(closes), len(highs), len(lows), len(opens)) < 60:
         return None
     if is_st_stock(str(getattr(result, "name", "") or "")):
         return None
 
     code = str(getattr(result, "code", "") or "")
     sector = (sector_stocks or {}).get(code, {})
-    average_amount = float(np.mean(volumes[-5:] * closes[-5:] * 100.0))
-    if average_amount < float(config.MIN_DAILY_AMOUNT):
-        return None
-
     close = float(closes[-1])
     previous_close = float(closes[-2])
     platform_high = float(np.max(highs[-21:-1]))
@@ -85,8 +82,6 @@ def _base_payload(
         if previous_close > 0
         else 0.0
     )
-    previous_volume = float(np.mean(volumes[-6:-1]))
-    volume_ratio = float(volumes[-1] / previous_volume) if previous_volume > 0 else 0.0
     pivot_upper = _latest_pivot_upper(result)
     platform_breakout = close > platform_high
     pivot_breakout = bool(pivot_upper and close > pivot_upper)
@@ -105,11 +100,42 @@ def _base_payload(
 
     distance = (close / reference_price - 1.0) * 100.0
     strong_structure = bool(ma_hold and (platform_breakout or pivot_breakout))
+    raw_volumes = getattr(result, "volumes", None)
+    if raw_volumes is None or len(raw_volumes) != len(closes):
+        if diagnostics is not None:
+            diagnostics["quantity_evidence"].append(
+                quantity_evidence_observation(
+                    code, "trend_continuation_volume", 6, False,
+                    "quantity_price_length_mismatch",
+                )
+            )
+        return None
+    volumes = canonical_volume_window(result, slice(-6, None))
+    if volumes is None or len(volumes) != 6:
+        if diagnostics is not None:
+            diagnostics["quantity_evidence"].append(
+                quantity_evidence_observation(
+                    code, "trend_continuation_volume", 6, False,
+                )
+            )
+        return None
+    if diagnostics is not None:
+        diagnostics["quantity_evidence"].append(
+            quantity_evidence_observation(
+                code, "trend_continuation_volume", 6, True,
+            )
+        )
+    average_amount = float(np.mean(volumes[-5:] * closes[-5:] * 100.0))
+    if average_amount < float(config.MIN_DAILY_AMOUNT):
+        return None
+    previous_volume = float(np.mean(volumes[-6:-1]))
+    volume_ratio = float(volumes[-1] / previous_volume) if previous_volume > 0 else 0.0
     dates = list(getattr(result, "dates", None) or [])
     startup_index = len(closes) - 1
     return {
         "code": code,
         "name": str(getattr(result, "name", "") or code),
+        "trend_type": str(getattr(result, "trend_type", "") or ""),
         "sector": sector.get("sector", ""),
         "sector_tags": list(sector.get("sector_tags", []) or []),
         "source_channel": "right_side_startup",
@@ -141,7 +167,10 @@ def _base_payload(
         "opens": opens,
         "highs": highs,
         "lows": lows,
-        "volumes": volumes,
+        "volumes": raw_volumes,
+        "volume_units": list(getattr(result, "volume_units", [])),
+        "volume_raw_units": list(getattr(result, "volume_raw_units", [])),
+        "volume_sources": list(getattr(result, "volume_sources", [])),
         "dates": dates,
         "price_basis": (
             dict(sector.get("price_basis") or {})
@@ -197,6 +226,7 @@ def build_trend_continuation_pool(
         "dropped_base_filter": 0,
         "dropped_structure": 0,
         "dropped_volume": 0,
+        "quantity_evidence": [],
     }
     if not config.ENABLE_TREND_CONTINUATION:
         return [], [], diagnostics
@@ -207,7 +237,7 @@ def build_trend_continuation_pool(
         if result is None:
             diagnostics["dropped_base_filter"] += 1
             continue
-        seed = _base_payload(result, sector_stocks)
+        seed = _base_payload(result, sector_stocks, diagnostics)
         if seed is None:
             diagnostics["dropped_base_filter"] += 1
             continue
@@ -363,7 +393,14 @@ def _confirm_30min(
     factor_vs_raw: Optional[float] = None,
 ) -> Dict[str, Any]:
     closes = _float_array(getattr(result, "closes", None))
-    volumes = _float_array(getattr(result, "volumes", None))
+    raw_volumes = getattr(result, "volumes", None)
+    volumes = (
+        canonical_volume_window(result, slice(-10, None))
+        if raw_volumes is not None and len(raw_volumes) == len(closes)
+        else None
+    )
+    if volumes is not None and len(volumes) != 10:
+        volumes = None
     data = _input_evidence(result, expected_date)
     base = build_30min_confirmation_evidence(result)
     sufficient = bool(base.get("sufficient_bars") and len(closes) >= 10)
@@ -399,7 +436,7 @@ def _confirm_30min(
         and int(base.get("ema5_rising_bars") or 0) >= 2
     ):
         quality_labels.append("30min EMA5持续上行")
-    if _volume_contraction(volumes):
+    if volumes is not None and _volume_contraction(volumes):
         quality_labels.append("30min缩量回踩")
     if base.get("stop_fall"):
         quality_labels.append("30min止跌结构")
@@ -604,7 +641,7 @@ def normalize_trend_candidate(candidate: Mapping[str, Any]) -> Dict[str, Any]:
         "reference_buy_points": [],
         "blocked_buy_points": [],
         "pivots": {},
-        "trend_type": "up",
+        "trend_type": str(row.get("trend_type") or ""),
         "resonance": {},
         "ma_bullish": True,
         "fusion_admission": {},

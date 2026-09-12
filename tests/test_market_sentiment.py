@@ -159,6 +159,60 @@ class PriceLimitClassificationTests(unittest.TestCase):
 
 
 class SentimentEvidenceTests(unittest.TestCase):
+    def test_daily_inputs_keep_explicit_same_code_identities_separate_and_skip_invalid(self):
+        dates = ["2026-08-10", "2026-08-11"]
+        rows = []
+        for trade_date in dates:
+            rows.extend([
+                {
+                    "asset_type": "stock",
+                    "exchange": "SZ",
+                    "code": "000001",
+                    "ts": trade_date,
+                    "close": 10.0,
+                    "amount": 100.0,
+                    "amount_available": True,
+                    "amount_unit": "CNY",
+                    "amount_source": "fixture",
+                    "stock_meta_asof": {},
+                },
+                {
+                    "asset_type": "stock",
+                    "exchange": "SH",
+                    "code": "000001",
+                    "ts": trade_date,
+                    "close": 3000.0,
+                    "amount": 999999.0,
+                    "amount_available": True,
+                    "amount_unit": "CNY",
+                    "amount_source": "fixture",
+                    "stock_meta_asof": {},
+                },
+            ])
+
+        daily = build_daily_inputs_from_windows({"dates": dates, "rows": rows})
+
+        self.assertEqual(len(daily[-1]["stock_bars"]), 1)
+        self.assertEqual(daily[-1]["stock_bars"][0]["close"], 10.0)
+        self.assertEqual(daily[-1]["turnover"], 100.0)
+
+    def test_daily_inputs_do_not_turn_partial_amounts_into_zero_turnover(self):
+        daily = build_daily_inputs_from_windows({
+            "dates": ["2026-08-10"],
+            "rows": [{
+                "asset_type": "stock",
+                "exchange": "SZ",
+                "code": "000001",
+                "ts": "2026-08-10",
+                "close": 10.0,
+                "amount": 0.0,
+                "amount_available": False,
+            }],
+        })
+
+        self.assertIsNone(daily[0]["turnover"])
+        self.assertEqual(daily[0]["turnover_quality"], "missing_amount_evidence")
+
     def test_daily_inputs_derive_listing_trade_days_without_misclassifying_old_stocks(self):
         dates = [
             "2026-07-01",
@@ -180,6 +234,9 @@ class SentimentEvidenceTests(unittest.TestCase):
                     "ts": trade_date,
                     "close": 10.0,
                     "amount": 100.0,
+                    "amount_available": True,
+                    "amount_unit": "CNY",
+                    "amount_source": "fixture",
                     "stock_meta_asof": {
                         "listed_date": listed_date,
                         "is_st": False,
@@ -368,6 +425,9 @@ class SentimentHistoryTests(unittest.TestCase):
                     "ts": trade_date,
                     "close": 10 + index * 0.1,
                     "amount": 100 + index,
+                    "amount_available": True,
+                    "amount_unit": "CNY",
+                    "amount_source": "fixture",
                     "stock_meta_asof": {},
                 },
                 {
@@ -376,6 +436,9 @@ class SentimentHistoryTests(unittest.TestCase):
                     "ts": trade_date,
                     "close": 20 - index * 0.1,
                     "amount": 200 + index,
+                    "amount_available": True,
+                    "amount_unit": "CNY",
+                    "amount_source": "fixture",
                     "stock_meta_asof": {},
                 },
             ])
@@ -433,6 +496,9 @@ class SentimentHistoryTests(unittest.TestCase):
                 "ts": trade_date,
                 "close": 10 + index * 0.1,
                 "amount": 1000000 if index < 6 else 100,
+                "amount_available": True,
+                "amount_unit": "CNY",
+                "amount_source": "fixture",
                 "stock_meta_asof": {},
             })
 

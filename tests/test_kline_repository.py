@@ -8,8 +8,10 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from chanlun import data_fetcher
+from chanlun.identity import InstrumentIdentity
 from chanlun.kline_repository import KLineRepository, KLineResult
 from chanlun.market_history_store import MarketHistoryStore
+from chanlun.kline_cache import write_cached_records
 
 
 def _bar(ts, close=10.0, final=True):
@@ -65,6 +67,14 @@ class KLineRepositoryTests(unittest.TestCase):
 
         self.assertEqual(payload["adjustment"], "qfq")
         self.assertEqual(payload["_data_status"]["adjustment"], "qfq")
+
+    def test_loaded_kline_preserves_row_finality(self):
+        payload = KLineRepository._rows_to_kline(
+            [_bar("2026-08-26 15:00:00", final=True), _bar("2026-08-27 15:00:00", final=False)],
+            status="preview",
+            stale=False,
+        )
+        self.assertEqual(payload["is_final"], [True, False])
 
     def test_sublevel_evidence_preserves_adjustment_metadata(self):
         payload = {
@@ -607,9 +617,38 @@ class KLineRepositoryTests(unittest.TestCase):
             "day", "600000", count=2, required_date="2026-07-02"
         )
 
-        self.assertEqual(shadow_calls, ["600000"])
+        self.assertEqual(
+            shadow_calls,
+            [InstrumentIdentity("stock", "SH", "600000")],
+        )
         self.assertEqual(result.kline["dates"][-1], "2026-07-02")
+        self.assertTrue(result.diagnostics["shadow_comparable"])
+        self.assertFalse(result.diagnostics["shadow_price_comparable"])
         self.assertTrue(result.diagnostics["shadow_mismatch"])
+
+    def test_code_only_legacy_shadow_cache_is_not_comparable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
+                write_cached_records(
+                    "day",
+                    "000001",
+                    [{
+                        "date": "2026-07-02",
+                        "open": 10.0,
+                        "high": 10.0,
+                        "low": 10.0,
+                        "close": 10.0,
+                        "volume": 100.0,
+                    }],
+                    "legacy",
+                    keep_trading_days=10,
+                )
+                result = data_fetcher._legacy_shadow_reader(
+                    "day", InstrumentIdentity("index", "SH", "000001"), 1
+                )
+
+        self.assertFalse(result["_shadow_comparable"])
+        self.assertEqual(result["_shadow_reason"], "legacy_cache_identity_missing")
 
     def test_public_fetch_wrapper_keeps_array_shape_and_repository_status(self):
         self.seed(

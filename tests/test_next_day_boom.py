@@ -1,6 +1,14 @@
 import unittest
 
-from chanlun.next_day_boom import build_next_day_boom_candidates
+import numpy as np
+
+from chanlun.decision_engine import evaluate_stock
+from chanlun.next_day_boom import (
+    _build_candidate_from_fusion,
+    _build_candidate_from_watch,
+    build_next_day_boom_candidates,
+)
+from run import _merge_next_day_source_fields
 
 
 def _fusion_pick(code, name, change_pct=5.0, volume_ratio=1.5, ma_bullish=True):
@@ -49,6 +57,77 @@ def _watch_item(code, name, change_pct=10.0, volume_ratio=1.5):
 
 
 class TestNextDayBoomCandidates(unittest.TestCase):
+
+    def test_run_merge_preserves_real_trend_when_source_is_empty(self):
+        merged = _merge_next_day_source_fields(
+            {"code": "600001", "trend_type": "上涨趋势"},
+            {"code": "600001", "trend_type": "", "closes": [10.0]},
+        )
+        self.assertEqual(merged["trend_type"], "上涨趋势")
+        self.assertEqual(merged["closes"], [10.0])
+
+    def test_run_merge_can_carry_source_trend_when_builder_has_no_value(self):
+        merged = _merge_next_day_source_fields(
+            {"code": "600002", "trend_type": ""},
+            {"code": "600002", "trend_type": "上涨趋势"},
+        )
+        self.assertEqual(merged["trend_type"], "上涨趋势")
+
+    def test_run_merge_accepts_ndarray_amounts_and_closes(self):
+        amounts = np.array([100.0, 120.0])
+        closes = np.array([10.0, 10.5])
+
+        merged = _merge_next_day_source_fields(
+            {"code": "600003"},
+            {"code": "600003", "amounts": amounts, "closes": closes},
+        )
+
+        np.testing.assert_array_equal(merged["amounts"], amounts)
+        np.testing.assert_array_equal(merged["closes"], closes)
+
+    @staticmethod
+    def _decision(candidate):
+        enriched = dict(candidate)
+        enriched.update({
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-09-11",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        })
+        return evaluate_stock(
+            enriched,
+            market_context={"market_trend": "上涨趋势"},
+        )
+
+    def test_builder_preserves_trend_for_downstream_decision(self):
+        fusion = _fusion_pick("600001", "融合启动")
+        fusion["trend_type"] = "上涨趋势"
+        fusion_candidate = _build_candidate_from_fusion(
+            fusion,
+            fusion["best_buy_point"],
+            1.2,
+        )
+        self.assertEqual(fusion_candidate["trend_type"], "上涨趋势")
+        self.assertIn("趋势向上", self._decision(fusion_candidate)["structure"]["reasons"])
+
+        watch = _watch_item("600002", "涨停观察")
+        watch["trend_type"] = "上涨趋势"
+        watch_candidate = _build_candidate_from_watch(watch, 1.2)
+        self.assertEqual(watch_candidate["trend_type"], "上涨趋势")
+        self.assertIn("趋势向上", self._decision(watch_candidate)["structure"]["reasons"])
+
+    def test_missing_trend_stays_unknown_and_does_not_borrow_market_trend(self):
+        candidate = _build_candidate_from_fusion(
+            _fusion_pick("600003", "缺失趋势"),
+            _fusion_pick("600003", "缺失趋势")["best_buy_point"],
+            1.2,
+        )
+        self.assertEqual(candidate.get("trend_type", ""), "")
+        decision = self._decision(candidate)
+        # The confirmation evidence still contributes its own +15; only the
+        # missing stock trend must remain without the +20 structure fact.
+        self.assertEqual(decision["structure"]["score"], 10)
+        self.assertIn("趋势信息不足", decision["structure"]["reasons"])
 
     def test_disabled_when_shanghai_not_strong(self):
         result = build_next_day_boom_candidates(

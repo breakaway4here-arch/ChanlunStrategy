@@ -1,5 +1,7 @@
 import { DurableObject } from "cloudflare:workers";
 
+import { isSupportedPrecloseStrategyVersion } from "./strategy_version";
+
 const POOL_KEYS = ["main", "h4_t3", "acceleration"] as const;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const HASH_PATTERN = /^[a-f0-9]{64}$/;
@@ -119,7 +121,7 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
   const statuses = new Set(["available", "empty", "failed", "deadline_exceeded", "not_run"]);
   if (
     value.schema_version !== "preclose-selection-v1"
-    || value.strategy_version !== "preclose-1445-v2"
+    || !isSupportedPrecloseStrategyVersion(value.strategy_version)
     || value.mode !== "preclose_advisory"
     || typeof value.snapshot_id !== "string"
     || typeof value.content_hash !== "string"
@@ -139,7 +141,7 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
   return {
     ...value,
     schema_version: "preclose-selection-v1",
-    strategy_version: "preclose-1445-v2",
+    strategy_version: value.strategy_version,
     mode: "preclose_advisory",
     trade_date: tradeDate,
     snapshot_id: value.snapshot_id,

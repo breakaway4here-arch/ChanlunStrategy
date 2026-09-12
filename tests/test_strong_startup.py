@@ -26,6 +26,9 @@ def _make_chan_result(code, name, closes, opens=None, highs=None, lows=None,
     r.highs = np.array(highs, dtype=float) if highs is not None else r.closes * 1.02
     r.lows = np.array(lows, dtype=float) if lows is not None else r.closes * 0.98
     r.volumes = np.array(volumes, dtype=float) if volumes is not None else np.ones(len(closes)) * 10000000
+    r.volume_units = ["hands"] * len(closes)
+    r.volume_raw_units = ["hands"] * len(closes)
+    r.volume_sources = ["fixture"] * len(closes)
     r.buy_points = buy_points or []
     r.dates = dates if dates is not None else [f"2026-05-{i:02d}" for i in range(1, len(closes) + 1)]
     return r
@@ -133,6 +136,28 @@ class TestPriceBreakout(unittest.TestCase):
 
 class TestStartupWatchAge(unittest.TestCase):
 
+    def test_watch_item_preserves_canonical_trend_type(self):
+        watch = _make_watch_item(
+            {
+                "code": "000001",
+                "name": "测试",
+                "trend_type": "盘整",
+            },
+            "启动",
+            "等待确认",
+            ["条件"],
+        )
+        self.assertEqual(watch["trend_type"], "盘整")
+
+    def test_watch_item_does_not_invent_missing_trend_type(self):
+        watch = _make_watch_item(
+            {"code": "000001", "name": "测试"},
+            "启动",
+            "等待确认",
+            ["条件"],
+        )
+        self.assertEqual(watch.get("trend_type", ""), "")
+
     def test_watch_item_keeps_missing_age_unknown(self):
         watch = _make_watch_item(
             {"code": "000001", "name": "测试", "startup_index": 4},
@@ -154,6 +179,34 @@ class TestStartupWatchAge(unittest.TestCase):
 
 class TestBuildStrongStartupPool(unittest.TestCase):
 
+    def test_only_the_six_bar_volume_window_controls_startup_eligibility(self):
+        closes = _make_low_position_closes(120)
+        closes[-2] = 52.0
+        closes[-1] = 55.0
+        volumes = _make_volume_spike(120)
+        clean = _make_chan_result("000099", "窗口测试", closes, volumes=volumes)
+        outside = _make_chan_result("000099", "窗口测试", closes, volumes=volumes)
+        outside.volume_units[0] = "unknown"
+        outside.volume_raw_units[0] = "unknown"
+        outside.volume_sources[0] = "tencent"
+        outside.volumes[0] = 999999999.0
+
+        clean_seeds, _, _ = build_strong_startup_pool([clean])
+        outside_seeds, _, _ = build_strong_startup_pool([outside])
+        self.assertEqual([row["code"] for row in outside_seeds], ["000099"])
+        self.assertEqual(
+            outside_seeds[0]["volume_ratio"], clean_seeds[0]["volume_ratio"]
+        )
+
+        inside = _make_chan_result("000099", "窗口测试", closes, volumes=volumes)
+        inside.volume_units[-6] = "unknown"
+        inside.volume_raw_units[-6] = "unknown"
+        inside.volume_sources[-6] = "tencent"
+        inside_seeds, inside_watch, diag = build_strong_startup_pool([inside])
+        self.assertEqual(inside_seeds, [])
+        self.assertEqual(inside_watch, [])
+        self.assertEqual(diag["dropped_volume_evidence"], 1)
+
     def test_chinext_large_gain_below_real_limit_remains_seed(self):
         closes = _make_low_position_closes(120)
         closes[-2] = 50.0
@@ -171,6 +224,24 @@ class TestBuildStrongStartupPool(unittest.TestCase):
         self.assertEqual([row["code"] for row in seeds], ["301629"])
         self.assertEqual(watchlist, [])
         self.assertEqual(diag["daily_startup_seed"], 1)
+
+    def test_startup_seed_preserves_daily_chan_trend_type(self):
+        closes = _make_low_position_closes(120)
+        closes[-2] = 50.0
+        closes[-1] = 56.85
+        opens = closes * 0.98
+        highs = closes * 1.02
+        lows = closes * 0.97
+        result = _make_chan_result(
+            "301629", "矽电股份", closes, opens, highs, lows,
+            _make_volume_spike(120),
+        )
+        result.trend_type = "盘整"
+
+        seeds, _watchlist, _diag = build_strong_startup_pool([result])
+
+        self.assertEqual(len(seeds), 1)
+        self.assertEqual(seeds[0]["trend_type"], "盘整")
 
     def test_actual_chinext_limit_up_stays_in_observation(self):
         closes = _make_low_position_closes(120)

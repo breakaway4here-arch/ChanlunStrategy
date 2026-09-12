@@ -265,8 +265,19 @@ def _build_candidate(stock, min15, themes):
         "code": stock.get("code", ""),
         "name": stock.get("name", ""),
         "sector": stock.get("sector", ""),
+        # Preserve the actual 15min ChanResult fact.  The daily source is a
+        # compatible fallback when this independent result has no label; an
+        # absent value stays absent and is never borrowed from market state.
+        "trend_type": str(
+            getattr(min15, "trend_type", "")
+            or stock.get("trend_type", "")
+            or ""
+        ),
         "sector_tags": stock.get("sector_tags", []),
         "sector_rank": stock.get("sector_rank"),
+        "sector_rank_used": stock.get("sector_rank_used"),
+        "sector_rank_source": stock.get("sector_rank_source", ""),
+        "sector_rank_diagnostics": stock.get("sector_rank_diagnostics", []),
         "sector_flow": stock.get("sector_flow"),
         "sector_strength_label": stock.get("sector_strength_label", ""),
         "data_status": stock.get("data_status", {}),

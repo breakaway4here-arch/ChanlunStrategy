@@ -16,7 +16,7 @@ from chanlun.historical_experiment_metrics import (
     should_drop_pick_for_experiment,
 )
 from chanlun.backtest_execution import evaluate_exit_returns
-from chanlun.backtest_metrics import summarize_return_samples
+from chanlun.backtest_metrics import _mature_value, summarize_return_samples
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
 from chanlun.signal_quality_classifier import (
     build_signal_context,
@@ -433,6 +433,11 @@ def _sample_severe_drawdown(sample: Optional[dict]) -> bool:
     return value is not None and float(value) <= -5.0
 
 
+def _sample_t3_evaluable(sample: Optional[dict]) -> bool:
+    """Return whether a sample has a mature, valid T+3 close result."""
+    return _mature_value(sample, "t3_close_pct", "t3", 3) is not None
+
+
 def _confirmations_bucket(pick: Optional[dict]) -> str:
     bbp = (pick or {}).get("best_buy_point")
     values = sorted(_as_str_list((bbp or {}).get("confirmations")))
@@ -619,6 +624,7 @@ def _build_shared_baseline_context(
         "snapshot_days": len(snapshot_index_map),
         "picks_seen": picks_seen,
         "baseline_evaluated": baseline_evaluated,
+        "baseline_rows_processed": baseline_evaluated,
         "baseline_filtered": baseline_filtered,
     }
     execution = {
@@ -707,6 +713,7 @@ def _build_fusion_baseline_context(
         "snapshot_days": len(snapshot_index_map),
         "picks_seen": picks_seen,
         "baseline_evaluated": baseline_evaluated,
+        "baseline_rows_processed": baseline_evaluated,
         "baseline_filtered": 0,
         "version": "picks_fusion",
     }
@@ -937,7 +944,8 @@ def _summarize_fusion_variant(
         }
 
     profile_summary = summarize_return_samples(profile_samples)
-    samples_after = profile_summary.get("n") if profile_summary else 0
+    rows_processed = profile_summary.get("n") if profile_summary else 0
+    samples_after = profile_summary.get("n_t3_evaluable") if profile_summary else 0
     coverage = _to_ratio(samples_after, baseline_n)
     coverage_pct = _to_pct(samples_after, baseline_n)
     t3_mean_after = profile_summary.get("t3_mean") if profile_summary else None
@@ -949,6 +957,7 @@ def _summarize_fusion_variant(
         "variant": variant_name,
         "samples_before": baseline_n,
         "samples_after": samples_after,
+        "rows_processed": rows_processed,
         "coverage": coverage,
         "coverage_pct": coverage_pct,
         "t3_mean_before": t3_mean_before,
@@ -972,7 +981,13 @@ def _summarize_fusion_variant(
         "top_reject_reason": (
             reject_reasons.most_common(1)[0][0] if reject_reasons else None
         ),
-        "failure_sample_audit": _build_failure_sample_audit(accepted_audit_rows),
+        "failure_sample_audit": _build_failure_sample_audit(
+            [
+                row
+                for row in accepted_audit_rows
+                if _sample_t3_evaluable(row.get("sample"))
+            ]
+        ),
     }
     row["accepted"] = _is_fusion_profile_accepted(row)
     return row
@@ -989,7 +1004,7 @@ def _run_fusion_threshold_scan(profile_names: List[str]) -> Dict[str, object]:
     execution = cast(Dict[str, object], baseline_context.get("execution", {}))
 
     baseline_summary = summarize_return_samples(baseline_samples)
-    baseline_n = baseline_summary.get("n") if baseline_summary else 0
+    baseline_n = baseline_summary.get("n_t3_evaluable") if baseline_summary else 0
     t3_mean_before = baseline_summary.get("t3_mean") if baseline_summary else None
     t3_win_rate_before = baseline_summary.get("t3_win_rate") if baseline_summary else None
     drawdown_before = baseline_summary.get("max_dd_3d_mean") if baseline_summary else None
@@ -1021,6 +1036,8 @@ def _run_fusion_threshold_scan(profile_names: List[str]) -> Dict[str, object]:
 
     baseline_metrics = {
         "samples": baseline_n,
+        "rows_processed": len(baseline_rows),
+        "n_t3_evaluable": baseline_n,
         "t3_mean_before": t3_mean_before,
         "t3_win_rate_before": t3_win_rate_before,
         "drawdown_mean_before": drawdown_before,
@@ -1185,10 +1202,14 @@ def _run_one_policy(
     }
 
     picks_seen = baseline_coverage.get("picks_seen", 0)
-    baseline_evaluated = baseline_coverage.get("baseline_evaluated", 0)
+    baseline_rows_processed = baseline_coverage.get(
+        "baseline_rows_processed",
+        baseline_coverage.get("baseline_evaluated", 0),
+    )
     baseline_filtered = baseline_coverage.get("baseline_filtered", 0)
 
-    policy_evaluated = 0
+    policy_rows_processed = 0
+    policy_right_censored = 0
     policy_filtered = 0
     policy_filtered_by_reason = Counter()
     policy_filtered_detail_by_reason = Counter()
@@ -1248,13 +1269,27 @@ def _run_one_policy(
 
         if policy_sample is not None:
             policy_samples.append(policy_sample)
-            policy_evaluated += 1
+            policy_rows_processed += 1
+            if not _sample_t3_evaluable(policy_sample):
+                policy_right_censored += 1
 
         _record_cooldown_accept(name, pick, state)
 
     policy_summary = summarize_return_samples(policy_samples)
+    baseline_t3_evaluable = (
+        baseline_summary.get("n_t3_evaluable", 0)
+        if baseline_summary
+        else 0
+    )
+    policy_t3_evaluable = (
+        policy_summary.get("n_t3_evaluable", 0)
+        if policy_summary
+        else 0
+    )
     retained_ratio = (
-        round(policy_evaluated / baseline_evaluated * 100, 2) if baseline_evaluated else 0.0
+        round(policy_t3_evaluable / baseline_t3_evaluable * 100, 2)
+        if baseline_t3_evaluable
+        else 0.0
     )
 
     return {
@@ -1262,8 +1297,14 @@ def _run_one_policy(
         "coverage": {
             "snapshot_days": len(snapshot_index_map),
             "picks_seen": picks_seen,
-            "baseline_evaluated": baseline_evaluated,
-            "policy_evaluated": policy_evaluated,
+            "baseline_evaluated": baseline_t3_evaluable,
+            "policy_evaluated": policy_t3_evaluable,
+            "baseline_rows_processed": baseline_rows_processed,
+            "policy_rows_processed": policy_rows_processed,
+            "baseline_t3_evaluable": baseline_t3_evaluable,
+            "policy_t3_evaluable": policy_t3_evaluable,
+            "policy_right_censored": policy_right_censored,
+            "evaluated": policy_t3_evaluable,
             "baseline_filtered": baseline_filtered,
             "policy_filtered": policy_filtered,
             "policy_filtered_by_reason": dict(policy_filtered_by_reason),

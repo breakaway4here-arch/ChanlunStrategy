@@ -1,6 +1,9 @@
 """User-visible stock facts must preserve dates, units and strategy identity."""
+import json
 import unittest
 
+from chanlun.report_generator import _serialize_picks
+from chanlun.report_view_model import build_workspace
 from tests.test_auxiliary_frontend import _assert_node_contract
 
 
@@ -71,7 +74,8 @@ const t=globalThis.__auxTest;t.state.data={date:'2026-09-11'};
 const item={current_price:11,reference_price:10,distance_from_reference_pct:10,
  data_status:{daily:'verified',latest_date:'2026-09-11',is_final:true,stale:false},
  volumes:[...Array(20).fill(20),40],
- pool_quality:{volume_ratio20:2,money20:1321736781.95,market_cap:1006.9068,circulating_market_cap:892.7889},
+ volume_units:Array(21).fill('hands'),volume_raw_units:Array(21).fill('hands'),volume_sources:Array(21).fill('fixture'),
+ pool_quality:{volume_ratio20:2,money20:1321736781.95,liquidity_source:'amounts',liquidity_window_bars:20,market_cap:1006.9068,circulating_market_cap:892.7889},
  workbench_item:{formal_action:null,contracts:{},strategy_results:[]}};
 const html=t.render(item);
 for(const s of ['较20日均量','2.00倍','20日均成交额','13.22亿','总市值','1006.91亿','结构参考','10.00','+10.00%'])assert(html.includes(s),'missing '+s);
@@ -81,15 +85,110 @@ const missing=t.render({workbench_item:{contracts:{},strategy_results:[]}});
 assert(!missing.includes('0.00'),'absent data became zero');
 ''')
 
+    def test_money20_labels_distinguish_actual_estimate_unverified_and_missing(self):
+        _assert_node_contract(self, "{render:renderCandidateFactPanel,state:state}", r'''
+const t=globalThis.__auxTest;t.state.data={date:'2026-09-11'};
+const status={daily:'verified',latest_date:'2026-09-11',is_final:true,stale:false};
+function renderQuality(poolQuality){
+ return t.render({data_status:status,pool_quality:poolQuality,workbench_item:{contracts:{},strategy_results:[]}});
+}
+const actual=renderQuality({money20:150000000,liquidity_source:'amounts',liquidity_window_bars:20});
+assert(actual.includes('20日均成交额')&&actual.includes('1.50亿'),'real turnover label/value missing');
+assert(!actual.includes('估算20日均成交额')&&!actual.includes('来源未核验'),'real turnover mislabeled');
+const proxy=renderQuality({money20:150000000,liquidity_source:'volume_price_proxy',liquidity_window_bars:20});
+assert(proxy.includes('估算20日均成交额')&&proxy.includes('1.50亿'),'proxy was not labeled estimated');
+const legacy=renderQuality({money20:150000000,liquidity_source:'amounts'});
+assert(legacy.includes('成交额来源未核验'),'old positive money20 was silently verified');
+assert(!legacy.includes('1.50亿'),'unattested old money20 value leaked');
+const missing=renderQuality({money20:null,liquidity_source:'missing',liquidity_window_bars:0});
+assert(!missing.includes('低流动性')&&!missing.includes('0.00亿'),'missing quantity became a negative fact');
+''')
+
+    def test_serialized_report_to_workspace_to_js_preserves_money20_provenance(self):
+        base = {
+            "code": "600001",
+            "name": "数量口径样本",
+            "best_buy_point": {"type": "候选", "index": 1, "price": 10.0},
+            "dates": ["2026-09-10", "2026-09-11"],
+            "opens": [9.8, 10.0],
+            "highs": [10.2, 10.5],
+            "lows": [9.7, 9.9],
+            "closes": [10.0, 10.4],
+            "volumes": [100.0, 120.0],
+            "data_status": {
+                "daily": "verified", "latest_date": "2026-09-11",
+                "is_final": True, "stale": False,
+            },
+            "market_cap": 100,
+            "ret20": 10,
+            "industry": "测试行业",
+            "decision_engine_v1": {
+                "decision_code": "recommend", "decision": "推荐",
+            },
+        }
+        cases = [
+            ("amounts", 20, "20日均成交额", "估算20日均成交额", False),
+            ("volume_price_proxy", 20, "估算20日均成交额", "成交额来源未核验", False),
+            ("amounts", None, "成交额来源未核验", "1.50亿", False),
+            ("missing", 0, "仅展示本期已有数据", "低流动性", True),
+        ]
+        for index, (source, window, expected, forbidden, missing) in enumerate(cases):
+            raw = dict(base, code=f"60000{index + 1}")
+            raw["money20"] = None if missing else 150_000_000
+            raw["liquidity_source"] = source
+            if window is not None:
+                raw["liquidity_window_bars"] = window
+            serialized = _serialize_picks([raw])[0]
+            workspace = build_workspace({
+                "date": "2026-09-11", "picks_fusion": [serialized],
+                "picks_pure": [], "startup_watchlist": [],
+                "next_day_boom": {"candidates": []},
+                "luojie_pool": {"candidates": []},
+                "selection_input_health": {
+                    "schema_version": 2, "status": "verified",
+                    "formal": {
+                        "status": "verified", "formal_actions_allowed": True,
+                        "all_formal_actions_allowed": True,
+                    },
+                    "by_strategy": {
+                        "daily_fusion": {
+                            "status": "verified", "formal_actions_allowed": True,
+                        },
+                    },
+                },
+            })
+            item = workspace["views"]["main"][0]
+            script = f"""
+const t=globalThis.__auxTest;
+t.state.data={json.dumps({'date': '2026-09-11', 'picks_fusion': [serialized]}, ensure_ascii=False)};
+const html=t.render({json.dumps(item, ensure_ascii=False)});
+assert(html.includes({json.dumps(expected, ensure_ascii=False)}),'missing expected provenance label: {source}/{window}');
+assert(!html.includes({json.dumps(forbidden, ensure_ascii=False)}),'forbidden provenance claim leaked: {source}/{window}');
+"""
+            _assert_node_contract(
+                self,
+                "{render:renderCandidateFactPanel,state:state}",
+                script,
+            )
+
     def test_twenty_day_volume_does_not_relabel_an_upstream_five_day_ratio(self):
         _assert_node_contract(self, "{render:renderCandidateFactPanel,state:state}", r'''
 const t=globalThis.__auxTest;t.state.data={date:'2026-09-11'};
 const item={data_status:{daily:'verified',latest_date:'2026-09-11',is_final:true,stale:false},
- volumes:[...Array(20).fill(100),200],pool_quality:{volume_ratio20:9.99}};
+ volumes:[...Array(20).fill(100),200],volume_units:Array(21).fill('hands'),
+ volume_raw_units:Array(21).fill('hands'),volume_sources:Array(21).fill('fixture'),pool_quality:{volume_ratio20:9.99}};
 const html=t.render(item);
 assert(html.includes('2.00倍')&&!html.includes('9.99倍'),'upstream ratio mislabelled as 20-day');
 for(const volumes of [[100,200],[...Array(20).fill(0),200],[...Array(19).fill(100),null,200]]){
  assert(!t.render({...item,volumes}).includes('较20日均量'),'insufficient volume fabricated a ratio');
+}
+for(const patch of [
+ {volume_units:[...Array(8).fill('unknown'),...Array(13).fill('hands')]},
+ {volume_raw_units:Array(21).fill('unknown')},
+ {volume_sources:Array(21).fill('')},
+ {volume_units:undefined,volume_unit:'hands'}
+]){
+ assert(!t.render({...item,...patch}).includes('较20日均量'),'unverified volume window fabricated a ratio');
 }
 ''')
 

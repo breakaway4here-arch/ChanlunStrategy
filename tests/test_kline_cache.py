@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 import numpy as np
 import chanlun.data_fetcher as data_fetcher
+from chanlun.identity import InstrumentIdentity
 
 from chanlun.kline_cache import (
     kline_dict_to_records,
@@ -71,6 +72,67 @@ class KlineCacheTest(unittest.TestCase):
         self.assertEqual(restored["dates"], kline["dates"])
         self.assertTrue(np.array_equal(restored["closes"], kline["closes"]))
 
+    def test_roundtrip_preserves_per_bar_units_and_amount_availability(self):
+        kline = {
+            "dates": ["2026-05-25", "2026-05-26"],
+            "opens": np.array([1.0, 2.0]),
+            "highs": np.array([2.0, 3.0]),
+            "lows": np.array([0.8, 1.8]),
+            "closes": np.array([1.5, 2.5]),
+            "volumes": np.array([24332.51, 200.0]),
+            "volume_units": ["hands", "unknown"],
+            "volume_raw_units": ["shares", "unknown"],
+            "volume_sources": ["sina", "tencent"],
+            "amounts": np.array([100.5, np.nan]),
+            "amount_available": np.array([True, False]),
+            "amount_units": ["CNY", "unknown"],
+            "amount_sources": ["eastmoney", ""],
+        }
+        records = kline_dict_to_records(kline)
+        restored = records_to_kline_dict(records)
+        self.assertEqual(records[0]["volume_unit"], "hands")
+        self.assertEqual(records[0]["volume_raw_unit"], "shares")
+        self.assertEqual(records[1]["volume_unit"], "unknown")
+        self.assertEqual(records[0]["amount"], 100.5)
+        self.assertTrue(records[0]["amount_available"])
+        self.assertFalse(records[1]["amount_available"])
+        self.assertEqual(restored["volume_unit"], "mixed")
+        self.assertEqual(list(restored["volume_units"]), ["hands", "unknown"])
+        self.assertEqual(restored["amount_available"].tolist(), [True, False])
+        self.assertTrue(np.isnan(restored["amounts"][1]))
+
+    def test_roundtrip_preserves_row_finality(self):
+        kline = {
+            "dates": ["2026-05-25", "2026-05-26"],
+            "opens": np.array([1.0, 2.0]),
+            "highs": np.array([2.0, 3.0]),
+            "lows": np.array([0.8, 1.8]),
+            "closes": np.array([1.5, 2.5]),
+            "volumes": np.array([100.0, 200.0]),
+            "is_final": [True, False],
+        }
+        records = kline_dict_to_records(kline)
+        restored = records_to_kline_dict(records)
+        self.assertEqual(restored["is_final"], [True, False])
+
+    def test_numpy_boolean_finality_records_are_json_serializable(self):
+        records = kline_dict_to_records({
+            "dates": ["2026-05-25", "2026-05-26"],
+            "opens": np.array([1.0, 2.0]),
+            "highs": np.array([2.0, 3.0]),
+            "lows": np.array([0.8, 1.8]),
+            "closes": np.array([1.5, 2.5]),
+            "volumes": np.array([100.0, 200.0]),
+            "is_final": np.array([True, False], dtype=bool),
+        })
+        self.assertIs(type(records[0]["is_final"]), bool)
+        json.dumps(records)
+        restored = records_to_kline_dict([
+            {**record, "is_final": np.bool_(record["is_final"])}
+            for record in records
+        ])
+        self.assertEqual(restored["is_final"], [True, False])
+
     # ---- file I/O ----
 
     def test_write_and_read_cache(self):
@@ -80,7 +142,7 @@ class KlineCacheTest(unittest.TestCase):
         ]
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
-                write_cached_records("day", "600519", records, "test", keep_trading_days=120)
+                write_cached_records("day", "600519", records, "test", keep_trading_days=120, identity=InstrumentIdentity("stock", "SH", "600519"))
                 loaded = read_cached_records("day", "600519")
                 self.assertEqual(len(loaded), 2)
                 self.assertEqual(loaded[0]["date"], "2026-05-25")
@@ -96,6 +158,33 @@ class KlineCacheTest(unittest.TestCase):
                 self.assertEqual(len(kline["dates"]), 10)
                 kline_none = cached_kline_if_sufficient("day", "600519", count=50)
                 self.assertIsNone(kline_none)
+
+    def test_identity_aware_cache_read_rejects_code_only_and_mismatched_envelopes(self):
+        records = [{
+            "date": "2026-05-26", "open": 1, "high": 2,
+            "low": 1, "close": 2, "volume": 10,
+        }]
+        identity = InstrumentIdentity("stock", "SH", "600519")
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
+                write_cached_records(
+                    "day", "600519", records, "legacy", keep_trading_days=10
+                )
+                self.assertIsNone(
+                    cached_kline_if_sufficient(
+                        "day", "600519", count=1, identity=identity
+                    )
+                )
+                write_cached_records(
+                    "day", "600519", records, "test", keep_trading_days=10,
+                    identity=InstrumentIdentity("stock", "SH", "600519"),
+                )
+                self.assertIsNone(
+                    cached_kline_if_sufficient(
+                        "day", "600519", count=1,
+                        identity=InstrumentIdentity("stock", "SH", "600001"),
+                    )
+                )
 
     def test_fetch_daily_uses_incremental_remote_count_when_cache_sufficient(self):
         records = []
@@ -119,7 +208,10 @@ class KlineCacheTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
-                write_cached_records("day", "600519", records, "test", keep_trading_days=120)
+                write_cached_records(
+                    "day", "600519", records, "test", keep_trading_days=120,
+                    identity=InstrumentIdentity("stock", "SH", "600519"),
+                )
                 with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
                     with patch.object(data_fetcher, "_fetch_daily_kline_remote", fake_remote):
                         kline = data_fetcher.fetch_daily_kline("600519", count=100)
@@ -146,7 +238,7 @@ class KlineCacheTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
-                write_cached_records("30min", "600519", records, "test", keep_trading_days=10)
+                write_cached_records("30min", "600519", records, "test", keep_trading_days=10, identity=InstrumentIdentity("stock", "SH", "600519"))
                 with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
                     with patch.object(data_fetcher, "_fetch_30min_kline_remote", fake_remote):
                         kline = data_fetcher.fetch_30min_kline("600519", count=80)
@@ -173,7 +265,7 @@ class KlineCacheTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             with patch("chanlun.kline_cache.KLINE_CACHE_DIR", tmp):
-                write_cached_records("15min", "600519", records, "test", keep_trading_days=10)
+                write_cached_records("15min", "600519", records, "test", keep_trading_days=10, identity=InstrumentIdentity("stock", "SH", "600519"))
                 with patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
                     with patch.object(data_fetcher, "_fetch_15min_kline_remote", fake_remote):
                         kline = data_fetcher.fetch_15min_kline("600519", count=220)

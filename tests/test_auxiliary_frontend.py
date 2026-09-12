@@ -1226,6 +1226,9 @@ globalThis.__auxTest.chart({
   lows: opens.map(function (value) { return value - 0.4; }),
   closes: closes,
   volumes: dates.slice(1).map(function (_, index) { return 1000 + index; }),
+  volume_units: dates.slice(1).map(function () { return 'hands'; }),
+  volume_raw_units: dates.slice(1).map(function () { return 'hands'; }),
+  volume_sources: dates.slice(1).map(function () { return 'fixture'; }),
   macd_hist: dates.map(function (_, index) { return index % 2 === 0 ? 1 : -1; }),
   chart_annotations: { markPoints: [], markLines: [] }
 }, {});
@@ -1934,6 +1937,22 @@ const partialFormal = globalThis.__auxTest.status({
   }
 });
 assert(partialFormal.includes('部分正式策略输入不可用'), 'partial formal closure was hidden');
+const partialQuantity = globalThis.__auxTest.status({
+  data_quality: {
+    is_official: true, bar_state: 'closed', as_of: '2026-08-26T15:05:10+08:00',
+    market_status: 'verified', fallback_used: false, warnings: []
+  },
+  selection_input_health: {
+    schema_version: 2, status: 'partial',
+    formal: { formal_actions_allowed: true, all_formal_actions_allowed: true },
+    by_strategy: { daily_fusion: { quantity: {
+      status: 'partial', available_count: 9, required_count: 10,
+      pending_codes: ['300009']
+    } } }
+  }
+});
+assert(partialQuantity.includes('数量输入部分核验'), 'partial quantity health was mislabeled');
+assert(partialQuantity.includes('其余待数据核验'), 'pending quantity peers were hidden');
 const degraded = globalThis.__auxTest.status({ data_quality: {
   is_official: false, bar_state: 'intraday', fallback_used: true
 } });

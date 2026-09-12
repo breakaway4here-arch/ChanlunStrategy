@@ -1239,6 +1239,12 @@
       lows: chartSource.lows,
       closes: chartSource.closes,
       volumes: chartSource.volumes,
+      volume_units: chartSource.volume_units,
+      volume_raw_units: chartSource.volume_raw_units,
+      volume_sources: chartSource.volume_sources,
+      volume_unit: chartSource.volume_unit,
+      volume_raw_unit: chartSource.volume_raw_unit,
+      volume_source: chartSource.volume_source,
       macd_hist: chartSource.macd_hist,
       chart_annotations: primary.chart_annotations || chartSource.chart_annotations,
       buy_points: primary.buy_points || chartSource.buy_points,
@@ -1354,16 +1360,127 @@
     mount.hidden = false;
     if (!projection) {
       mount.innerHTML = '<strong>旧版报告</strong><p>本期未生成统一清单，按原始策略视图展示；证据能力以本期记录为准。</p>';
+      renderMobileDecisionSummary(null);
       return;
     }
     var summary = projection.summary || {};
     var changes = projection.changes || {};
-    var changesText = changes.status === 'available'
-      ? '较前期：新增 ' + asArray(changes.added).length + ' · 移出 ' + asArray(changes.removed).length + ' · 条件变化 ' + asArray(changes.changed).length
-      : '暂无同口径完整前期记录';
+    var changesText = renderDecisionChangesSummary(changes, false);
+    var coverage = summary.coverage || {};
+    var coverageText = renderCoverageSummary(coverage);
     mount.innerHTML = '<div class="decision-overview-main"><h2>' + escapeHtml(summary.title) + '</h2><p>'
       + escapeHtml(summary.reason) + '</p>' + buildFormalOutcomeExplanation(summary, state.data || {})
+      + '<p class="decision-overview-coverage">' + escapeHtml(coverageText) + '</p>'
       + '</div><small class="decision-overview-note">' + escapeHtml(changesText) + '</small>';
+    renderMobileDecisionSummary(projection);
+  }
+
+  function renderMobileDecisionSummary(projection) {
+    var mount = nodes.mobileDecisionSummary;
+    if (!mount) return;
+    mount.hidden = false;
+    if (!projection) {
+      mount.innerHTML = '<strong>旧版报告</strong><span>本期未生成统一清单</span>';
+      return;
+    }
+    var summary = projection.summary || {};
+    var changes = projection.changes || {};
+    var coverageText = renderCoverageSummary(summary.coverage || {});
+    var changesText = renderDecisionChangesSummary(changes, true);
+    mount.innerHTML = '<div class="mobile-decision-summary-copy"><strong>' + escapeHtml(summary.title || '本期结论未提供') + '</strong>'
+      + '<span>' + escapeHtml(summary.reason || '结论说明未提供') + '</span>'
+      + '<small>' + escapeHtml(coverageText + ' · ' + changesText) + '</small></div>'
+      + '<a href="#decisionOverview">查看完整结论与策略拆解 ↓</a>';
+  }
+
+  function renderDecisionChangesSummary(changes, compact) {
+    var value = changes && typeof changes === 'object' ? changes : {};
+    var status = normalizeString(value.status).trim();
+    var counts = '新增 ' + asArray(value.added).length + ' · 移出 '
+      + asArray(value.removed).length + ' · 条件变化 ' + asArray(value.changed).length;
+    if (status === 'available') return '较前期：' + counts;
+    if (status === 'partial') {
+      var suffix = value.value_comparison_status === 'unavailable_price_basis_missing'
+        ? '；部分标的价基缺失或换基，相关数值未比较' : '；部分项目不可比较';
+      return (compact ? '较前期（成员级）：' : '较前期（部分可比）：') + counts + suffix;
+    }
+    var reasons = {
+      comparison_identity_changed: '策略身份变化，未比较',
+      price_basis_changed: '价基变化，未比较',
+      price_basis_invalid: '价基声明无效，未比较',
+      previous_comparison_contract_unavailable: '前期身份合同缺失，未比较',
+      comparison_contract_unavailable_or_changed: '身份合同缺失，未比较',
+      comparison_health_unavailable: '事实健康度不足，未比较',
+    };
+    return reasons[normalizeString(value.reason).trim()] || '跨期暂无同口径结论';
+  }
+
+  function renderCoverageSummary(coverage) {
+    var value = coverage && typeof coverage === 'object' ? coverage : {};
+    var status = normalizeString(value.status).trim();
+    var statusLabel = {
+      verified: '覆盖已核验',
+      partial: '覆盖部分缺失',
+      blocked: '正式输入已阻断',
+      unknown: '覆盖记录未提供',
+    }[status] || '覆盖记录未提供';
+    function isCoverageCount(count) {
+      return isFormalMarketNumber(count, 0, Infinity) && Number.isInteger(count);
+    }
+    var projectedFacts = [];
+    var snapshot = value.market_close_snapshot && typeof value.market_close_snapshot === 'object'
+      ? value.market_close_snapshot : {};
+    var snapshotStatus = normalizeString(snapshot.status).trim();
+    var snapshotHasCounts = isCoverageCount(snapshot.available) && isCoverageCount(snapshot.required);
+    if (snapshotHasCounts) {
+      projectedFacts.push('收盘核验 ' + snapshot.available + '/' + snapshot.required);
+    } else if (snapshotStatus === 'partial') {
+      projectedFacts.push('收盘核验部分缺失');
+    } else if (snapshotStatus && snapshotStatus !== 'complete' && snapshotStatus !== 'unknown') {
+      projectedFacts.push('收盘核验不可用');
+    }
+    if (isCoverageCount(snapshot.pending) && snapshot.pending > 0) {
+      projectedFacts.push('身份待核验 ' + snapshot.pending);
+    }
+    var quantity = value.quantity && typeof value.quantity === 'object' ? value.quantity : {};
+    var quantityStatus = normalizeString(quantity.status).trim();
+    if (quantityStatus === 'partial' || quantityStatus === 'unavailable') {
+      var quantityText = quantityStatus === 'partial' ? '量能部分核验' : '量能不可用';
+      if (isCoverageCount(quantity.available) && isCoverageCount(quantity.required)) {
+        quantityText += ' ' + quantity.available + '/' + quantity.required;
+      }
+      projectedFacts.push(quantityText);
+      if (isCoverageCount(quantity.pending) && quantity.pending > 0) {
+        projectedFacts.push('待核验 ' + quantity.pending);
+      }
+    }
+    var minute = value.minute30 && typeof value.minute30 === 'object' ? value.minute30 : {};
+    var minuteText = (isFormalMarketNumber(minute.requested, 0, Infinity)
+      && isFormalMarketNumber(minute.verified, 0, Infinity))
+      ? '30分钟已核验 ' + minute.verified + '/请求 ' + minute.requested
+        + (isFormalMarketNumber(minute.missing, 0, Infinity)
+          && minute.missing > 0 ? ' · 缺 ' + minute.missing : '')
+      : '30分钟未记录';
+    var retrieval = value.retrieval && typeof value.retrieval === 'object' ? value.retrieval : {};
+    var retrievalMode = normalizeString(retrieval.mode).trim();
+    var retrievalText = (isFormalMarketNumber(retrieval.full_a, 0, Infinity)
+      && isFormalMarketNumber(retrieval.retrieval, 0, Infinity))
+      ? (retrievalMode === 'base_plus_overlay'
+        ? '日线检索 ' + retrieval.retrieval + '/登记候选 ' + retrieval.full_a
+        : '日线检索记录 ' + retrieval.retrieval + '/登记候选 ' + retrieval.full_a)
+        + (isFormalMarketNumber(retrieval.first_failure, 0, Infinity)
+          ? (retrievalMode === 'base_plus_overlay'
+            ? '；检索筛选未入 ' + retrieval.first_failure
+            : '；前置筛选未入 ' + retrieval.first_failure) : '')
+      : '日线检索未记录';
+    var eligibility = value.eligibility && typeof value.eligibility === 'object' ? value.eligibility : {};
+    var excluded = eligibility.excluded && typeof eligibility.excluded === 'object' ? eligibility.excluded : {};
+    var excludedText = (isFormalMarketNumber(excluded.nonfinal_bars, 0, Infinity)
+      || isFormalMarketNumber(excluded.stale_latest_bar, 0, Infinity))
+      ? '日线未定稿 ' + (isFormalMarketNumber(excluded.nonfinal_bars, 0, Infinity) ? excluded.nonfinal_bars : '--')
+        + ' · 历史过期 ' + (isFormalMarketNumber(excluded.stale_latest_bar, 0, Infinity) ? excluded.stale_latest_bar : '--')
+      : '日线定稿/过期未记录';
+    return [statusLabel].concat(projectedFacts, [retrievalText, minuteText, excludedText]).join(' · ');
   }
 
   function buildFormalOutcomeExplanation(summary, data) {
@@ -1659,6 +1776,7 @@
       + '  <section class="primary-view today-decision-view" id="todayDecisionView" role="tabpanel" aria-labelledby="primary-mode-tab-today">'
       + '    <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
       + '    <section class="workspace today-workspace">'
+      + '      <section id="mobileDecisionSummary" class="mobile-decision-summary" aria-label="手机首屏结论" hidden></section>'
       + '      <section class="market-decision-bar" id="marketDecisionBar" aria-label="大盘正式证据">'
       + '        <header class="market-evidence-heading"><div><h2>大盘证据</h2><p>先看市场环境，再核对个股条件</p></div><a href="#decisionOverview">看本期选股结论 ↓</a></header>'
       + '        <div class="market-decision-summary" id="marketDecisionSummary"></div>'
@@ -1727,6 +1845,7 @@
     nodes.todayDecisionView = app.querySelector('#todayDecisionView');
     nodes.researchValidationView = app.querySelector('#researchValidationView');
     nodes.marketEvidence = app.querySelector('#marketEvidence');
+    nodes.mobileDecisionSummary = app.querySelector('#mobileDecisionSummary');
     nodes.marketDecisionBar = app.querySelector('#marketDecisionBar');
     nodes.marketDecisionSummary = app.querySelector('#marketDecisionSummary');
     nodes.sectorStrip = app.querySelector('#sectorStrip');
@@ -1854,7 +1973,19 @@
       } else if (!formalAny) {
         selectionText = '选股输入未通过核验，本期未选出推荐票';
       } else if (normalizeString(selection.status) === 'partial') {
-        selectionText = '正式策略输入已核验，部分研究池输入缺失';
+        var byStrategy = selection.by_strategy || {};
+        var dailyQuantity = (byStrategy.daily_fusion || {}).quantity || {};
+        if (normalizeString(dailyQuantity.status) === 'partial') {
+          var quantityAvailable = safeNumber(dailyQuantity.available_count, null);
+          var quantityRequired = safeNumber(dailyQuantity.required_count, null);
+          var quantityCount = quantityAvailable !== null && quantityRequired !== null
+            ? ' ' + formatNumber(quantityAvailable, 0) + '/' + formatNumber(quantityRequired, 0)
+            : '';
+          selectionText = '正式策略数量输入部分核验' + quantityCount
+            + '，保留已核验标的，其余待数据核验';
+        } else {
+          selectionText = '正式策略输入已核验，部分研究池输入缺失';
+        }
       } else if (normalizeString(selection.status) === 'verified') {
         selectionText = '行情与选股输入健康';
       } else {
@@ -3191,16 +3322,55 @@
       var number = stockFactNumber(value);
       if (number !== null && number >= 0) rows.push([label, formatNumber(number / (divisor || 1), 2) + (suffix || '')]);
     }
+    function canonicalVolumeWindow(record, length) {
+      var units = asArray(record && record.volume_units);
+      var rawUnits = asArray(record && record.volume_raw_units);
+      var sources = asArray(record && record.volume_sources);
+      if (units.length < length || rawUnits.length < length || sources.length < length) return false;
+      units = units.slice(-length);
+      rawUnits = rawUnits.slice(-length);
+      sources = sources.slice(-length);
+      return units.every(function (unit) {
+        return normalizeString(unit).trim().toLowerCase() === 'hands';
+      }) && rawUnits.every(function (unit) {
+        unit = normalizeString(unit).trim().toLowerCase();
+        return unit === 'hands' || unit === 'shares';
+      }) && sources.every(function (source) {
+        return normalizeString(source).trim() !== '';
+      });
+    }
     // Upstream volume_ratio20 can contain a 5-day ratio. Use exactly 20 prior bars.
     var volumeRecord = [facts.quote, raw].find(function (record) {
-      return hasVerifiedBasicFacts(record) && asArray(record.volumes).length >= 21;
+      return hasVerifiedBasicFacts(record)
+        && asArray(record.volumes).length >= 21
+        && canonicalVolumeWindow(record, 21);
     });
     var volumes = asArray((volumeRecord || {}).volumes).slice(-21).map(stockFactNumber);
-    if (volumes.length === 21 && volumes.every(function (v) { return v !== null && v >= 0; })) {
+    if (volumes.length === 21
+        && canonicalVolumeWindow(volumeRecord || {}, 21)
+        && volumes.every(function (v) { return v !== null && v >= 0; })) {
       var mean = volumes.slice(0, 20).reduce(function (sum, v) { return sum + v; }, 0) / 20;
       if (mean > 0) add('较20日均量', volumes[20] / mean, '倍');
     }
-    add('20日均成交额', quality.money20 === undefined ? raw.money20 : quality.money20, '亿', 100000000);
+    var money20 = quality.money20 === undefined ? raw.money20 : quality.money20;
+    var money20Number = stockFactNumber(money20);
+    var liquiditySource = normalizeString(
+      quality.liquidity_source === undefined ? raw.liquidity_source : quality.liquidity_source
+    ).trim();
+    var liquidityWindow = stockFactNumber(
+      quality.liquidity_window_bars === undefined
+        ? raw.liquidity_window_bars
+        : quality.liquidity_window_bars
+    );
+    if (money20Number !== null && money20Number > 0) {
+      if (liquidityWindow === 20 && liquiditySource === 'amounts') {
+        add('20日均成交额', money20Number, '亿', 100000000);
+      } else if (liquidityWindow === 20 && liquiditySource === 'volume_price_proxy') {
+        add('估算20日均成交额', money20Number, '亿', 100000000);
+      } else {
+        rows.push(['20日均成交额', '成交额来源未核验']);
+      }
+    }
     add('总市值', quality.market_cap, '亿');
     add('流通市值', quality.circulating_market_cap, '亿');
     // Keep each reference with its original role; a research anchor is not a stop.
@@ -4800,7 +4970,19 @@
     var execution = value.is_executable
       ? '本期条件已完整；盘后仅供后续核验，交易前需重新确认有效性。'
       : (blockers.length ? blockers.join('、') : '仅作观察，等待明确条件。');
-    if (value.watch_reference_price) execution += ' 观察参考位：' + value.watch_reference_price;
+    var watchAnchor = value.watch_anchor && typeof value.watch_anchor === 'object'
+      ? value.watch_anchor : null;
+    if (watchAnchor && watchAnchor.status === 'verified') {
+      var anchorBasis = watchAnchor.price_basis && typeof watchAnchor.price_basis === 'object'
+        ? watchAnchor.price_basis : {};
+      execution += ' 观察锚点：' + watchAnchor.value + '（'
+        + (watchAnchor.purpose || '用途未提供') + '；来源 '
+        + (watchAnchor.source || '未提供') + '；日期 '
+        + (watchAnchor.reference_date || '未提供') + '；价基 '
+        + (anchorBasis.adjustment || '未提供') + '）';
+    } else if (watchAnchor && watchAnchor.reason) {
+      execution += ' ' + watchAnchor.reason;
+    }
     var strategies = asArray(value.strategy_results).map(function (strategy, index) {
       var contract = strategy.contract || {};
       return '<section><strong>' + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
@@ -5234,7 +5416,7 @@
     return layers;
   }
 
-  function renderChartLayerSwitcher(raw, workspaceItem, chartEvidence) {
+  function renderChartLayerSwitcher(raw, workspaceItem, chartEvidence, quantityProjection) {
     var mount = state.chartLayerSwitcher;
     if (!mount) return;
     var labels = { decision: '决策位', structure: '结构', trend: '趋势' };
@@ -5249,7 +5431,13 @@
     var missingTrend = layers.indexOf('trend') === -1
       ? '<span class="chart-layer-status" data-chart-layer-unavailable="trend">本期未提供真实均线序列</span>'
       : '';
-    mount.innerHTML = controls + missingTrend;
+    var quantityStatus = '';
+    if (quantityProjection && quantityProjection.status === 'missing') {
+      quantityStatus = '<span class="chart-layer-status" data-chart-quantity-status="missing">成交量证据未核验，价格图保持可用</span>';
+    } else if (quantityProjection && quantityProjection.status === 'partial') {
+      quantityStatus = '<span class="chart-layer-status" data-chart-quantity-status="partial">部分成交量口径未核验，缺口已留空</span>';
+    }
+    mount.innerHTML = controls + missingTrend + quantityStatus;
     var buttons = mount.querySelectorAll('[data-chart-layer]');
     for (var i = 0; i < buttons.length; i += 1) {
       buttons[i].addEventListener('click', function (event) {
@@ -5282,7 +5470,6 @@
     var highs = asArray(raw.highs);
     var lows = asArray(raw.lows);
     var closes = asArray(raw.closes);
-    var volumes = asArray(raw.volumes);
     var macd = asArray(raw.macd_hist);
     var minLen = Math.min(dates.length, opens.length, highs.length, lows.length, closes.length);
     if (!hasChartData(raw)) {
@@ -5311,7 +5498,51 @@
       return source;
     }
 
-    var volumeSlice = tailAlignChartSeries(volumes, minLen, null);
+    function projectChartVolumes(record, targetLength) {
+      var rawChartVolumes = asArray(record && record.volumes);
+      var rawUnits = asArray(record && record.volume_units);
+      var rawRawUnits = asArray(record && record.volume_raw_units);
+      var rawSources = asArray(record && record.volume_sources);
+      if (!rawChartVolumes.length
+          || rawUnits.length !== rawChartVolumes.length
+          || rawRawUnits.length !== rawChartVolumes.length
+          || rawSources.length !== rawChartVolumes.length) {
+        return {
+          data: Array(targetLength).fill(null),
+          available: 0,
+          total: targetLength,
+          status: 'missing',
+        };
+      }
+      var alignedVolumes = tailAlignChartSeries(rawChartVolumes, targetLength, null);
+      function tailAlignMetadata(values) {
+        var aligned = asArray(values).slice(-targetLength);
+        while (aligned.length < targetLength) aligned.unshift(null);
+        return aligned;
+      }
+      var units = tailAlignMetadata(rawUnits);
+      var rawUnitsAligned = tailAlignMetadata(rawRawUnits);
+      var sources = tailAlignMetadata(rawSources);
+      var available = 0;
+      var data = alignedVolumes.map(function (value, index) {
+        var unit = normalizeString(units[index]).trim().toLowerCase();
+        var rawUnit = normalizeString(rawUnitsAligned[index]).trim().toLowerCase();
+        var source = normalizeString(sources[index]).trim();
+        if (value === null || unit !== 'hands'
+            || ['hands', 'shares'].indexOf(rawUnit) === -1 || !source) return null;
+        available += 1;
+        return value;
+      });
+      return {
+        data: data,
+        available: available,
+        total: targetLength,
+        status: available === 0 ? 'missing' : (available === targetLength ? 'available' : 'partial'),
+      };
+    }
+
+    var quantityProjection = projectChartVolumes(raw, minLen);
+    var volumeSlice = quantityProjection.data;
     var recommendationEvidence = getCandidateRecommendationEvidence(workspaceItem, state.data);
     var priceEvidence = recommendationEvidence && recommendationEvidence.price_evidence;
     var allowSublevelConfirmationAnnotations = hasFreshConfirmedSublevelEvidence(
@@ -5332,7 +5563,7 @@
     var annotations = raw.chart_annotations || {};
     var availableLayers = getAvailableChartLayers(raw, chartEvidence);
     if (availableLayers.indexOf(state.chartLayer) === -1) state.chartLayer = availableLayers[0];
-    renderChartLayerSwitcher(raw, workspaceItem, chartEvidence);
+    renderChartLayerSwitcher(raw, workspaceItem, chartEvidence, quantityProjection);
     var rawMarkPoints = asArray(annotations.markPoints).filter(function (point) {
       return allowSublevelConfirmationAnnotations || !isSublevelConfirmationChartAnnotation(point);
     });

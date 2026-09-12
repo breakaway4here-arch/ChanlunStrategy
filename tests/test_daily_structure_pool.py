@@ -17,6 +17,9 @@ def make_result(code, closes, buy_points, volumes=None):
     r.lows = np.asarray(closes, dtype=float)
     r.dates = ["2026-01-01"] * len(closes)
     r.volumes = np.asarray(volumes, dtype=float) if volumes else np.ones(len(closes)) * 1e6
+    r.volume_units = ["hands"] * len(closes)
+    r.volume_raw_units = ["hands"] * len(closes)
+    r.volume_sources = ["fixture"] * len(closes)
     r.buy_points = buy_points
     r.trend_type = "盘整"
     r.divergence = None

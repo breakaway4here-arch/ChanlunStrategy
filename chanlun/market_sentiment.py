@@ -13,6 +13,8 @@ from datetime import date as calendar_date
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from statistics import median
 
+from .identity import normalize_identity
+
 
 COMPONENT_WEIGHTS = {
     "breadth": 0.30,
@@ -664,20 +666,52 @@ def build_daily_inputs_from_windows(
     )
     date_set = set(dates)
 
-    def _group_rows(rows):
+    def _group_rows(rows, expected_asset_type):
         grouped = {}
         for row in rows or []:
             if not isinstance(row, dict):
                 continue
-            code = str(row.get("code") or "")
             trade_date = str(row.get("ts") or "")[:10]
-            if not code or trade_date not in date_set:
+            if trade_date not in date_set:
                 continue
-            grouped.setdefault(code, {})[trade_date] = row
+            has_identity_fields = any(
+                row.get(field) is not None
+                for field in ("identity", "asset_type", "exchange")
+            )
+            try:
+                identity = normalize_identity(
+                    row,
+                    asset_type=expected_asset_type,
+                )
+            except (TypeError, ValueError):
+                # Keep compatibility with old pure fixtures that only carry a
+                # code; explicit but contradictory identities are discarded.
+                if has_identity_fields:
+                    continue
+                code = str(row.get("code") or "").strip()
+                if not code:
+                    continue
+                key = "{}|legacy|{}".format(expected_asset_type, code)
+            else:
+                key = identity.key
+            grouped.setdefault(key, {})[trade_date] = row
         return grouped
 
-    stock_by_code = _group_rows(stock_window.get("rows"))
-    index_by_code = _group_rows(index_window.get("rows"))
+    stock_by_identity = _group_rows(stock_window.get("rows"), "stock")
+    index_by_identity = _group_rows(index_window.get("rows"), "index")
+
+    def _usable_amount(row):
+        value = _number(row.get("amount"))
+        if value is None or value <= 0:
+            return None
+        marker = row.get("amount_available")
+        if marker not in (True, 1):
+            return None
+        if str(row.get("amount_unit") or "unknown").strip().upper() != "CNY":
+            return None
+        if not str(row.get("amount_source") or "").strip():
+            return None
+        return value
 
     def _listing_trade_days(listed_date, trade_date):
         normalized = str(listed_date or "").replace("-", "")[:8]
@@ -698,10 +732,18 @@ def build_daily_inputs_from_windows(
 
     raw_turnover_by_date = {}
     for trade_date in dates:
-        raw_turnover_by_date[trade_date] = sum(
-            _number(rows[trade_date].get("amount")) or 0.0
-            for rows in stock_by_code.values()
-            if trade_date in rows
+        current_rows = [
+            rows_by_date[trade_date]
+            for rows_by_date in stock_by_identity.values()
+            if trade_date in rows_by_date
+        ]
+        usable_amounts = [
+            _usable_amount(row) for row in current_rows
+        ]
+        raw_turnover_by_date[trade_date] = (
+            sum(usable_amounts)
+            if current_rows and all(value is not None for value in usable_amounts)
+            else None
         )
 
     # Amount provenance can change at a provider cutover (for example an old
@@ -712,6 +754,15 @@ def build_daily_inputs_from_windows(
     turnover_segment = []
     for trade_date in dates:
         current_turnover = raw_turnover_by_date[trade_date]
+        if current_turnover is None:
+            turnover_inputs[trade_date] = {
+                "turnover": None,
+                "turnover_ma5": None,
+                "turnover_ma20": None,
+                "turnover_quality": "missing_amount_evidence",
+            }
+            turnover_segment = []
+            continue
         quality = "comparable"
         if turnover_segment:
             reference = median(turnover_segment[-5:])
@@ -744,8 +795,8 @@ def build_daily_inputs_from_windows(
         stock_bars = []
         trend_total = 0
         trend_above = 0
-        for code in sorted(stock_by_code):
-            rows_by_date = stock_by_code[code]
+        for identity_key in sorted(stock_by_identity):
+            rows_by_date = stock_by_identity[identity_key]
             current = rows_by_date.get(trade_date)
             if current is None:
                 continue
@@ -769,7 +820,7 @@ def build_daily_inputs_from_windows(
             meta = current.get("stock_meta_asof")
             meta = meta if isinstance(meta, dict) else {}
             stock_bars.append({
-                "code": code,
+                "code": str(current.get("code") or ""),
                 "name": current.get("name") or meta.get("name") or "",
                 "prev_close": previous.get("close"),
                 "close": current.get("close"),
@@ -783,8 +834,8 @@ def build_daily_inputs_from_windows(
         turnover_input = turnover_inputs[trade_date]
 
         index_bars = []
-        for code in sorted(index_by_code):
-            rows_by_date = index_by_code[code]
+        for identity_key in sorted(index_by_identity):
+            rows_by_date = index_by_identity[identity_key]
             current = rows_by_date.get(trade_date)
             if current is None:
                 continue
@@ -801,7 +852,7 @@ def build_daily_inputs_from_windows(
             if previous_close in (None, 0) or current_close is None:
                 continue
             index_bars.append({
-                "code": code,
+                "code": str(current.get("code") or ""),
                 "change_pct": (
                     current_close / previous_close - 1.0
                 ) * 100.0,

@@ -12,6 +12,7 @@ from .sublevel_confirm import (
     STRONG_STARTUP_BUY_POINT_TYPES,
     build_30min_confirmation_evidence,
 )
+from .volume_contract import canonical_volume_window, quantity_evidence_observation
 
 
 def build_strong_startup_pool(chan_results, sector_stocks=None):
@@ -37,6 +38,8 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         "dropped_no_breakout": 0,
         "dropped_base_filter": 0,
         "watch_due_to_limit_up": 0,
+        "dropped_volume_evidence": 0,
+        "quantity_evidence": [],
     }
 
     for result in chan_results:
@@ -54,7 +57,6 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         opens = result.opens
         highs = result.highs
         lows = result.lows
-        volumes = result.volumes
         dates = result.dates if hasattr(result, 'dates') else []
 
         # --- Base filters ---
@@ -80,13 +82,6 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
                     diag["dropped_base_filter"] += 1
                     continue
 
-        # Liquidity
-        if len(volumes) >= 5 and len(closes) >= 5:
-            amounts = volumes[-5:] * closes[-5:] * 100
-            if np.mean(amounts) < config.MIN_DAILY_AMOUNT:
-                diag["dropped_base_filter"] += 1
-                continue
-
         # --- Step 1: 日线低位检测 ---
         is_low = _check_low_position(
             closes, highs, lows,
@@ -98,18 +93,43 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             diag["dropped_high_position"] += 1
             continue
 
-        # --- Step 2: 放量检测 ---
-        is_volume_ok = _check_volume_breakout(volumes, closes, config.STRONG_STARTUP_MIN_VOLUME_RATIO)
-        if not is_volume_ok:
-            diag["dropped_no_volume"] += 1
-            continue
-
         # --- Step 3: 价格启动检测 ---
         startup_signals = _check_price_breakout(
             closes, opens, highs, config.STRONG_STARTUP_MIN_CHANGE_PCT
         )
         if len(startup_signals) < 2:
             diag["dropped_no_breakout"] += 1
+            continue
+
+        raw_volumes = getattr(result, "volumes", None)
+        if raw_volumes is None or len(raw_volumes) != len(closes):
+            diag["dropped_volume_evidence"] += 1
+            diag["quantity_evidence"].append(quantity_evidence_observation(
+                code, "strong_startup_volume", 6, False,
+                "quantity_price_length_mismatch",
+            ))
+            continue
+        volumes = canonical_volume_window(result, slice(-6, None))
+        if volumes is None or len(volumes) != 6:
+            diag["dropped_volume_evidence"] += 1
+            diag["quantity_evidence"].append(quantity_evidence_observation(
+                code, "strong_startup_volume", 6, False,
+            ))
+            continue
+        diag["quantity_evidence"].append(quantity_evidence_observation(
+            code, "strong_startup_volume", 6, True,
+        ))
+
+        # Liquidity and breakout volume are evaluated only after price gates.
+        amounts = volumes[-5:] * closes[-5:] * 100
+        if np.mean(amounts) < config.MIN_DAILY_AMOUNT:
+            diag["dropped_base_filter"] += 1
+            continue
+        is_volume_ok = _check_volume_breakout(
+            volumes, closes, config.STRONG_STARTUP_MIN_VOLUME_RATIO
+        )
+        if not is_volume_ok:
+            diag["dropped_no_volume"] += 1
             continue
 
         # --- Build startup seed ---
@@ -165,6 +185,7 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
         seed = {
             "code": code,
             "name": name,
+            "trend_type": str(getattr(result, "trend_type", "") or ""),
             "sector": sector_name,
             "type": "强势启动候选",
             "tier": "candidate",
@@ -187,7 +208,10 @@ def build_strong_startup_pool(chan_results, sector_stocks=None):
             "opens": opens,
             "highs": highs,
             "lows": lows,
-            "volumes": volumes,
+            "volumes": raw_volumes,
+            "volume_units": list(getattr(result, "volume_units", [])),
+            "volume_raw_units": list(getattr(result, "volume_raw_units", [])),
+            "volume_sources": list(getattr(result, "volume_sources", [])),
             "dates": dates,
             "buy_points": list(result.buy_points) if hasattr(result, 'buy_points') and result.buy_points else [],
             "result_30min": None,
@@ -471,6 +495,10 @@ def _make_watch_item(
         "source_channel": "low_position",
         "view": "observation",
         "source_type": "日线强势启动",
+        # Preserve the canonical daily ChanResult fact through the manually
+        # rebuilt watch item.  An absent value stays absent/empty; this layer
+        # must not infer a stock trend from the market context.
+        "trend_type": seed.get("trend_type", ""),
         "startup_reason": startup_reason,
         "startup_signals": seed.get("startup_signals", []),
         "startup_index": seed.get("startup_index"),
@@ -500,6 +528,9 @@ def _make_watch_item(
         "highs": seed.get("highs", []),
         "lows": seed.get("lows", []),
         "volumes": seed.get("volumes", []),
+        "volume_units": seed.get("volume_units", []),
+        "volume_raw_units": seed.get("volume_raw_units", []),
+        "volume_sources": seed.get("volume_sources", []),
         "dates": seed.get("dates", []),
         "result_30min": None,
     }

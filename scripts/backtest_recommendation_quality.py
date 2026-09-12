@@ -22,6 +22,7 @@ from chanlun.backtest_metrics import summarize_return_samples  # noqa: E402
 from chanlun.backtest_execution import (  # noqa: E402
     evaluate_forward_returns,
     execute_signal,
+    normalize_backtest_kline,
 )
 from chanlun.signal_quality_classifier import build_signal_context  # noqa: E402
 
@@ -137,19 +138,19 @@ def _pick_local_kline(pick):
     highs = pick.get("highs")
     lows = pick.get("lows")
     closes = pick.get("closes")
-    if not (dates and opens and highs and lows and closes):
+    if any(value is None for value in (dates, opens, highs, lows, closes)):
         return None
 
-    try:
-        return {
-            "dates": [str(d).split(" ")[0] for d in _as_list(dates)],
-            "opens": [float(x) for x in _as_list(opens)],
-            "highs": [float(x) for x in _as_list(highs)],
-            "lows": [float(x) for x in _as_list(lows)],
-            "closes": [float(x) for x in _as_list(closes)],
-        }
-    except (TypeError, ValueError):
-        return None
+    return normalize_backtest_kline({
+        "dates": dates,
+        "opens": opens,
+        "highs": highs,
+        "lows": lows,
+        "closes": closes,
+        "is_final": pick.get("is_final"),
+        "finals": pick.get("finals"),
+        "finality_contract": pick.get("finality_contract"),
+    })
 
 
 def daily_kline_after(code, snap_date, horizon=5):
@@ -157,16 +158,15 @@ def daily_kline_after(code, snap_date, horizon=5):
     k = fetch_daily_kline(code, count=DAY_LOOKBACK)
     if not k:
         return None
-    dates = list(k["dates"])
+    if not isinstance(k, dict):
+        return None
+    try:
+        dates = list(k.get("dates") or [])
+    except (TypeError, ValueError):
+        return None
     if str(snap_date) not in [str(d).split(" ")[0] for d in dates]:
         return None
-    return {
-        "dates": [str(d).split(" ")[0] for d in dates],
-        "opens": [float(x) for x in k["opens"]],
-        "highs": [float(x) for x in k["highs"]],
-        "lows": [float(x) for x in k["lows"]],
-        "closes": [float(x) for x in k["closes"]],
-    }
+    return normalize_backtest_kline(k)
 
 
 def evaluate(pick, snap_date):

@@ -46,12 +46,33 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
     entry_mode = execution_model.get("entry_mode", "-")
     exit_model = execution_model.get("exit_model", "-")
     not_evaluable = coverage.get("policy_not_evaluable", "-")
+    right_censored = coverage.get("policy_right_censored", "-")
+    baseline_rows = coverage.get(
+        "baseline_rows_processed",
+        baseline.get("n", "n/a") if baseline is not None else "n/a",
+    )
+    baseline_t3 = coverage.get(
+        "baseline_t3_evaluable",
+        baseline.get("n_t3_evaluable", "n/a") if baseline is not None else "n/a",
+    )
+    policy_rows = coverage.get(
+        "policy_rows_processed",
+        policy.get("n", "n/a") if policy is not None else "n/a",
+    )
+    policy_t3 = coverage.get(
+        "policy_t3_evaluable",
+        policy.get("n_t3_evaluable", "n/a") if policy is not None else "n/a",
+    )
     return (
         f"| {name}"
         f"| {coverage.get('snapshot_days', 'n/a')}"
         f"| {coverage.get('picks_seen', 'n/a')}"
+        f"| {baseline_rows}"
+        f"| {baseline_t3}"
         f"| {baseline.get('n') if baseline is not None else 'n/a'}"
         f"| {baseline.get('t3_mean') if baseline is not None else 'n/a'}"
+        f"| {policy_rows}"
+        f"| {policy_t3}"
         f"| {policy.get('n') if policy is not None else 'n/a'}"
         f"| {policy.get('t3_mean') if policy is not None else 'n/a'}"
         f"| {delta.get('t3_mean_delta') if delta else 'n/a'}"
@@ -61,6 +82,7 @@ def _table_row(name: str, result: Dict[str, Any]) -> str:
         f"| {entry_mode}"
         f"| {exit_model}"
         f"| {not_evaluable}"
+        f"| {right_censored}"
         f"| {coverage.get('retained_ratio_pct', 'n/a')}"
         f"| {reasons or '-'} |"
     )
@@ -128,18 +150,19 @@ def _render_fusion_threshold_section(scan: Dict[str, Any]) -> List[str]:
     lines: List[str] = [
         "## Fusion Threshold Scan",
         "",
-        "| Candidate | Variant | samples_before | samples_after | coverage | coverage_pct | "
+        "| Candidate | Variant | rows_processed | samples_before | samples_after | coverage | coverage_pct | "
         "t3_mean_before | t3_mean_after | t3_win_rate_before | t3_win_rate_after | "
         "drawdown_mean_before | drawdown_mean_after | accepted |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     for profile in profiles:
         lines.append(
-            "| {candidate} | {variant} | {samples_before} | {samples_after} | {coverage} | {coverage_pct} | "
+            "| {candidate} | {variant} | {rows_processed} | {samples_before} | {samples_after} | {coverage} | {coverage_pct} | "
             "{t3_mean_before} | {t3_mean_after} | {t3_win_rate_before} | {t3_win_rate_after} | "
             "{drawdown_mean_before} | {drawdown_mean_after} | {accepted} |".format(
                 candidate=profile.get("candidate", "-"),
                 variant=profile.get("variant", "-"),
+                rows_processed=profile.get("rows_processed", "n/a"),
                 samples_before=profile.get("samples_before", "n/a"),
                 samples_after=profile.get("samples_after", "n/a"),
                 coverage=profile.get("coverage", "n/a"),
@@ -214,8 +237,8 @@ def _render_markdown(payload: Dict[str, Any]) -> str:
         "",
         f"- Generated: {datetime.now().isoformat()}",
         "",
-        "| Policy | Snapshot Days | Picks Seen | Baseline n | Baseline T+3 | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Entry Model | Entry Mode | Exit Model | Not Evaluable | Retained % | Filtered By Reason |",
-        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        "| Policy | Snapshot Days | Picks Seen | Baseline Rows | Baseline T+3 n | Baseline n | Baseline T+3 | Policy Rows | Policy T+3 n | Policy n | Policy T+3 | ΔT+3 | ΔT+3 Win Rate | Filtered | Entry Model | Entry Mode | Exit Model | Not Evaluable | Right Censored | Retained % | Filtered By Reason |",
+        "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
     ]
     lines.extend(_table_row(item.get("policy"), item) for item in results)
     lines.append("")

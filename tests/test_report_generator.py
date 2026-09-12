@@ -85,6 +85,27 @@ def make_pick(bp_type="底背驰候选", bp_tier="candidate", with_30min=True):
 
 
 class TestReportGenerator(unittest.TestCase):
+    def test_serialize_picks_keeps_row_aligned_volume_evidence_for_frontend_window(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "volume_units": ["hands"] * size,
+            "volume_raw_units": ["shares"] * size,
+            "volume_sources": ["sina"] * size,
+            "amounts": [1000.0] * size,
+            "amount_available": [True] * size,
+            "amount_units": ["CNY"] * size,
+            "amount_sources": ["sina"] * size,
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(len(serialized["volume_units"]), len(serialized["volumes"]))
+        self.assertEqual(serialized["volume_units"], ["hands"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["volume_raw_units"], ["shares"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["volume_sources"], ["sina"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["amount_available"], [True] * len(serialized["volumes"]))
+
     def test_right_side_evidence_and_shadow_diagnostics_are_serialized_without_second_score(self):
         pick = make_pick()
         pick.update({
@@ -437,6 +458,8 @@ class TestReportGenerator(unittest.TestCase):
             "circulating_market_cap": 85,
             "float_market_cap": 85,
             "money20": 150_000_000,
+            "liquidity_source": "amounts",
+            "liquidity_window_bars": 20,
             "industry": "医药生物",
         })
 
@@ -448,6 +471,8 @@ class TestReportGenerator(unittest.TestCase):
             self.assertEqual(serialized["circulating_market_cap"], 85)
             self.assertEqual(serialized["float_market_cap"], 85)
             self.assertEqual(serialized["money20"], 150_000_000)
+            self.assertEqual(serialized["liquidity_source"], "amounts")
+            self.assertEqual(serialized["liquidity_window_bars"], 20)
             self.assertEqual(serialized["industry"], "医药生物")
 
     def test_serialize_picks_light_carries_decision_engine_payload(self):

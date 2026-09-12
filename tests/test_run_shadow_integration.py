@@ -4,7 +4,7 @@ import json
 import tempfile
 import unittest
 from contextlib import ExitStack, redirect_stdout
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -16,8 +16,15 @@ import chanlun.report_generator as report_generator
 import chanlun.shadow_evaluation as shadow_evaluation
 import chanlun.strategy_review as strategy_review
 import run
+from chanlun.decision_workbench import build_decision_workbench
 from chanlun.h4_t3_pool import STRATEGY_VERSION
+from chanlun.recommendation_evidence import build_recommendation_evidence_projection
+from chanlun.report_view_model import build_workspace
 from chanlun.shadow_evaluation import load_shadow_evaluation_entries
+from chanlun.volume_contract import (
+    canonical_volume_window,
+    quantity_evidence_observation,
+)
 from scripts.finalize_recommendation_ledger import finalize_for_date
 
 
@@ -151,6 +158,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         startup_seeds=None,
         right_side_seeds=None,
         shadow_min30_rows=None,
+        patch_overrides=None,
     ):
         candidate = _candidate(0)
         candidate.update({
@@ -395,6 +403,8 @@ class DailyShadowIntegrationTests(unittest.TestCase):
                 }
             ),
         }
+        if callable(patch_overrides):
+            patch_values.update(patch_overrides(dict(patch_values)))
         with ExitStack() as stack:
             for name, value in patch_values.items():
                 stack.enter_context(mock.patch.object(run, name, value))
@@ -424,6 +434,222 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         self.assertEqual(len(reports), 1)
         self._last_right_side_audit_calls = audit_calls
         return reports[0]
+
+    def test_real_main_quantity_floor_controls_ledger_and_shadow_publication(self):
+        cases = {}
+        for missing_count in (0, 1, 2):
+            quantity_sources = {}
+            captured = {}
+
+            def overrides(original):
+                def daily(**kwargs):
+                    value = original["collect_daily_data"](**kwargs)
+                    seed = value["stocks"][0]
+                    value["stocks"] = []
+                    value["data_quality"]["is_official"] = True
+                    for index in range(11):
+                        row = copy.deepcopy(seed)
+                        row["code"] = "300{:03d}".format(index)
+                        row["name"] = "quantity-sample-{}".format(index)
+                        kline = row["klines"]
+                        kline.update({
+                            "dates": [
+                                (datetime(2026, 8, 22) - timedelta(days=59 - offset)).date().isoformat()
+                                for offset in range(60)
+                            ],
+                            "opens": [10.0] * 59 + [10.8],
+                            "closes": [10.0] * 59 + [11.0],
+                            "highs": [10.2] * 59 + [11.2],
+                            "lows": [9.8] * 59 + [10.7],
+                            "volumes": [10_000_000.0] * 60,
+                            "volume_units": ["hands"] * 60,
+                            "volume_raw_units": ["hands"] * 60,
+                            "volume_sources": ["actual-main-fixture"] * 60,
+                        })
+                        if index >= 11 - missing_count:
+                            kline["volume_units"][-1] = "unknown"
+                        quantity_sources[row["code"]] = copy.deepcopy(kline)
+                        value["stocks"].append(row)
+                    return value
+
+                def analyze(**kwargs):
+                    result = copy.deepcopy(original["analyze"](**kwargs))
+                    result.code = kwargs["code"]
+                    result.name = kwargs["name"]
+                    return result
+
+                def daily_pool(*args, **kwargs):
+                    rows, diagnostics = original["build_daily_structure_pool"](
+                        *args, **kwargs
+                    )
+                    diagnostics["quantity_evidence"] = [
+                        quantity_evidence_observation(
+                            code,
+                            "daily_structure_liquidity",
+                            5,
+                            canonical_volume_window(source, slice(-5, None))
+                            is not None,
+                        )
+                        for code, source in quantity_sources.items()
+                    ]
+                    return rows, diagnostics
+
+                def history(_ledger, _pending, entries, **kwargs):
+                    captured["ledger"] = {
+                        "publication_eligible": kwargs.get("publication_eligible"),
+                        "entries": copy.deepcopy(entries),
+                    }
+                    return copy.deepcopy(entries), {"status": "captured_not_written"}
+
+                def shadow(_report, **kwargs):
+                    captured["shadow_publication_eligible"] = kwargs.get(
+                        "publication_eligible"
+                    )
+                    return {"mode": "off"}
+
+                return {
+                    "collect_daily_data": daily,
+                    "analyze": analyze,
+                    "build_daily_structure_pool": daily_pool,
+                    "prepare_recommendation_history": history,
+                    "build_daily_shadow_evaluations": shadow,
+                    "persist_review_benchmark_kline": (
+                        lambda *_args, **_kwargs: {"status": "captured_not_written"}
+                    ),
+                }
+
+            report = self._capture_real_main_report(
+                "off", patch_overrides=overrides
+            )
+            formal_contributions = [
+                contribution
+                for entry in captured["ledger"]["entries"]
+                for contribution in entry.get("strategy_contributions", [])
+                if contribution.get("evaluation_role") == "formal"
+            ]
+            cases[missing_count] = {
+                "health": report["selection_input_health"],
+                "formal_contributions": formal_contributions,
+                "ledger_publication_eligible": captured["ledger"][
+                    "publication_eligible"
+                ],
+                "shadow_publication_eligible": captured[
+                    "shadow_publication_eligible"
+                ],
+            }
+
+        self.assertTrue(cases[0]["formal_contributions"])
+        self.assertTrue(cases[1]["formal_contributions"])
+        self.assertTrue(cases[1]["ledger_publication_eligible"])
+        self.assertFalse(
+            cases[2]["health"]["formal"]["formal_actions_allowed"]
+        )
+        self.assertEqual(cases[2]["formal_contributions"], [])
+        self.assertFalse(cases[2]["ledger_publication_eligible"])
+        self.assertFalse(cases[2]["shadow_publication_eligible"])
+
+    def test_real_main_shadow_quantity_failure_does_not_change_formal_health(self):
+        cases = {}
+        for right_mode in ("off", "shadow", "active"):
+            quantity_sources = {}
+
+            def overrides(original):
+                def daily(**kwargs):
+                    value = original["collect_daily_data"](**kwargs)
+                    seed = value["stocks"][0]
+                    value["stocks"] = []
+                    for index in range(2):
+                        row = copy.deepcopy(seed)
+                        row["code"] = "300{:03d}".format(index)
+                        row["name"] = "role-sample-{}".format(index)
+                        kline = row["klines"]
+                        kline.update({
+                            "dates": [
+                                (datetime(2026, 8, 22) - timedelta(days=59 - offset)).date().isoformat()
+                                for offset in range(60)
+                            ],
+                            "opens": [10.0] * 59 + [10.8],
+                            "closes": [10.0] * 59 + [11.0],
+                            "highs": [10.2] * 59 + [11.2],
+                            "lows": [9.8] * 59 + [10.7],
+                            "volumes": [10_000_000.0] * 60,
+                            "volume_units": ["hands"] * 60,
+                            "volume_raw_units": ["hands"] * 60,
+                            "volume_sources": ["actual-main-fixture"] * 60,
+                        })
+                        if index == 1:
+                            kline["volume_units"][-1] = "unknown"
+                        quantity_sources[row["code"]] = copy.deepcopy(kline)
+                        value["stocks"].append(row)
+                    return value
+
+                def analyze(**kwargs):
+                    result = copy.deepcopy(original["analyze"](**kwargs))
+                    result.code = kwargs["code"]
+                    result.name = kwargs["name"]
+                    return result
+
+                def daily_pool(*args, **kwargs):
+                    rows, diagnostics = original["build_daily_structure_pool"](
+                        *args, **kwargs
+                    )
+                    source = quantity_sources["300000"]
+                    diagnostics["quantity_evidence"] = [
+                        quantity_evidence_observation(
+                            "300000",
+                            "daily_structure_liquidity",
+                            5,
+                            canonical_volume_window(source, slice(-5, None))
+                            is not None,
+                        )
+                    ]
+                    return rows, diagnostics
+
+                def trend_pool(*_args, **_kwargs):
+                    source = quantity_sources["300001"]
+                    return [], [], {
+                        "quantity_evidence": [
+                            quantity_evidence_observation(
+                                "300001",
+                                "trend_continuation_volume",
+                                6,
+                                canonical_volume_window(source, slice(-6, None))
+                                is not None,
+                            )
+                        ]
+                    }
+
+                return {
+                    "collect_daily_data": daily,
+                    "analyze": analyze,
+                    "build_daily_structure_pool": daily_pool,
+                    "build_trend_continuation_pool": trend_pool,
+                }
+
+            with mock.patch.object(run, "RIGHT_SIDE_STARTUP_MODE", right_mode):
+                report = self._capture_real_main_report(
+                    "off", patch_overrides=overrides
+                )
+            cases[right_mode] = {
+                "formal": report["selection_input_health"]["formal"],
+                "pure_codes": [row["code"] for row in report["picks_pure"]],
+                "fusion_codes": [row["code"] for row in report["picks_fusion"]],
+                "right_diagnostics": report["right_side_startup"]["diagnostics"][
+                    "daily"
+                ],
+            }
+
+        self.assertTrue(cases["off"]["formal"]["formal_actions_allowed"])
+        self.assertEqual(cases["off"]["pure_codes"], cases["shadow"]["pure_codes"])
+        self.assertEqual(
+            cases["off"]["fusion_codes"], cases["shadow"]["fusion_codes"]
+        )
+        self.assertTrue(cases["shadow"]["formal"]["formal_actions_allowed"])
+        self.assertFalse(cases["active"]["formal"]["formal_actions_allowed"])
+        self.assertEqual(
+            cases["shadow"]["right_diagnostics"]["quantity_evidence"][0]["code"],
+            "300001",
+        )
 
     def test_real_main_off_and_shadow_preserve_every_formal_consumer(self):
         off = self._capture_real_main_report("off")
@@ -479,6 +705,30 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         }
         self.assertTrue(shadow_codes.issubset(pure_codes))
         self.assertTrue(all(value not in formal_consumers for value in shadow_ids))
+
+    def test_real_main_manifest_reaches_public_projections_and_comparison(self):
+        report = self._capture_real_main_report("off")
+        manifest = report.get("strategy_run_manifest")
+        self.assertIsInstance(manifest, list)
+        self.assertTrue(manifest)
+
+        daily = report_generator.build_full_daily_projection(
+            report, include_shadow=False
+        )
+        aggregate = report_generator.build_aggregate_day_projection(
+            report, include_shadow=False
+        )
+        self.assertEqual(daily.get("strategy_run_manifest"), manifest)
+        self.assertEqual(aggregate.get("strategy_run_manifest"), manifest)
+
+        workspace = build_workspace(daily)
+        evidence = build_recommendation_evidence_projection(daily, daily)
+        projection = build_decision_workbench(
+            daily, workspace, evidence
+        )
+        self.assertTrue(
+            projection["comparison_contract"]["strategy_identities"]
+        )
 
     def test_shadow_only_30min_hit_cannot_change_formal_empty_fetch_branch(self):
         right_seed = _candidate(709)
@@ -648,10 +898,10 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         source = Path(run.__file__).read_text(encoding="utf-8")
         self.assertIn(
             "collect_15min_data(\n"
-            "        luojie_theme_stocks,\n"
-            "        required_date=today,\n"
-            "        as_of=time_metadata.get(\"as_of\"),\n"
-            "    )",
+            "            selected_luojie_stocks,\n"
+            "            required_date=today,\n"
+            "            as_of=time_metadata.get(\"as_of\"),\n"
+            "        )",
             source,
         )
         self.assertGreaterEqual(

@@ -7,11 +7,15 @@ import { handleRequest, type PrecloseSnapshotBody } from "../src/index";
 const PAGE_ORIGIN = "https://breakaway4here-arch.github.io";
 const TOKEN = "test-write-token";
 
-function snapshot(date: string, suffix = "a"): PrecloseSnapshotBody {
+function snapshot(
+  date: string,
+  suffix = "a",
+  strategyVersion = "preclose-1445-v2",
+): PrecloseSnapshotBody {
   const contentHash = suffix.repeat(64).slice(0, 64);
   return {
     schema_version: "preclose-selection-v1",
-    strategy_version: "preclose-1445-v2",
+    strategy_version: strategyVersion,
     mode: "preclose_advisory",
     trade_date: date,
     snapshot_id: `preclose:${date}:${contentHash.slice(0, 16)}`,
@@ -79,6 +83,32 @@ describe("pre-close worker", () => {
     const repeated = await put(body);
     expect(repeated.status).toBe(200);
     expect(await repeated.json()).toMatchObject({ status: "idempotent", revision: 1 });
+  });
+
+  it("accepts archived v2 and current v3 while preserving the declared identity", async () => {
+    const archived = snapshot("2026-09-22", "a", "preclose-1445-v2");
+    expect((await put(archived)).status).toBe(201);
+    const archivedRead = await SELF.fetch(
+      request("/api/preclose/latest?date=2026-09-22"),
+    );
+    expect(await archivedRead.json()).toMatchObject({
+      strategy_version: "preclose-1445-v2",
+    });
+
+    const current = snapshot("2026-09-23", "a", "preclose-1445-v3");
+    expect((await put(current)).status).toBe(201);
+    const currentRead = await SELF.fetch(
+      request("/api/preclose/latest?date=2026-09-23"),
+    );
+    expect(await currentRead.json()).toMatchObject({
+      strategy_version: "preclose-1445-v3",
+    });
+  });
+
+  it("rejects an unknown strategy identity", async () => {
+    expect(
+      (await put(snapshot("2026-09-24", "a", "preclose-1445-v4"))).status,
+    ).toBe(400);
   });
 
   it("rejects a changed content projection that reuses the same snapshot id and hash", async () => {

@@ -44,6 +44,9 @@ def _result(
         lows=lows,
         opens=opens,
         volumes=volumes,
+        volume_units=["hands"] * len(volumes),
+        volume_raw_units=["hands"] * len(volumes),
+        volume_sources=["fixture"] * len(volumes),
         buy_points=[{"price": 7.0, "source_price": 6.5}],
         pivots=[],
         price_basis={"adjustment": "qfq", "factor_vs_raw": 1.0},
@@ -94,6 +97,9 @@ def _fixture_result(code, interval="daily"):
         lows=values("lows"),
         closes=values("closes"),
         volumes=values("volumes"),
+        volume_units=["hands"] * len(values("volumes")),
+        volume_raw_units=["hands"] * len(values("volumes")),
+        volume_sources=["fixture"] * len(values("volumes")),
         buy_points=[],
         pivots=[],
         strategy_input_evidence=(evidence if interval == "min30" else None),
@@ -145,6 +151,9 @@ def _min30_result(
         highs=np.maximum(opens, closes) + 0.05,
         lows=np.minimum(opens, closes) - 0.05,
         volumes=volumes,
+        volume_units=["hands"] * len(volumes),
+        volume_raw_units=["hands"] * len(volumes),
+        volume_sources=["fixture"] * len(volumes),
         dates=[trade_date + " 14:30:00"] * len(closes),
         buy_points=[],
         macd_hist=None,
@@ -155,6 +164,30 @@ def _min30_result(
 
 
 class TrendContinuationTests(unittest.TestCase):
+    def test_only_the_six_bar_daily_volume_window_controls_trend_eligibility(self):
+        clean = _result(code="600099")
+        outside = _result(code="600099")
+        outside.volume_units[0] = "unknown"
+        outside.volume_raw_units[0] = "unknown"
+        outside.volume_sources[0] = "tencent"
+        outside.volumes[0] = 999999999.0
+
+        clean_seeds, clean_watch, _ = build_trend_continuation_pool([clean])
+        outside_seeds, outside_watch, _ = build_trend_continuation_pool([outside])
+        self.assertEqual(
+            [row["code"] for row in outside_seeds + outside_watch],
+            [row["code"] for row in clean_seeds + clean_watch],
+        )
+
+        inside = _result(code="600099")
+        inside.volume_units[-6] = "unknown"
+        inside.volume_raw_units[-6] = "unknown"
+        inside.volume_sources[-6] = "tencent"
+        seeds, watchlist, diag = build_trend_continuation_pool([inside])
+        self.assertEqual(seeds, [])
+        self.assertEqual(watchlist, [])
+        self.assertEqual(diag["dropped_base_filter"], 1)
+
     def test_reference_hold_aligns_30m_prices_to_daily_basis(self):
         min30 = _min30_result(
             [10.0] * 15 + [9.9] * 5,
@@ -169,6 +202,20 @@ class TrendContinuationTests(unittest.TestCase):
         )
 
         self.assertFalse(evidence["mandatory"]["reference_hold"])
+
+    def test_normalize_trend_candidate_preserves_canonical_daily_trend(self):
+        candidate = normalize_trend_candidate({
+            "code": "600000",
+            "name": "趋势票",
+            "reference_price": 10.0,
+            "close": 10.2,
+            "trend_type": "上涨趋势",
+            "startup_index": 69,
+            "confirmations": ["30分钟结构确认"],
+            "trend_signals": ["20日平台突破"],
+        })
+
+        self.assertEqual(candidate["trend_type"], "上涨趋势")
 
     def test_reference_hold_without_price_basis_fails_closed(self):
         min30 = _min30_result(

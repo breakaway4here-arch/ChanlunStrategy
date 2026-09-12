@@ -92,7 +92,7 @@ class PromotionGateTests(unittest.TestCase):
         self.assertEqual(result["final_decision"], "insufficient_data")
         self.assertIn("missing metrics", result["reason"][0])
 
-    def test_sample_count_accepts_n_alias(self):
+    def test_raw_n_without_mature_t3_count_cannot_pass_sample_gate(self):
         before = {
             "n": 120,
             "t3_mean": 1.0,
@@ -110,9 +110,37 @@ class PromotionGateTests(unittest.TestCase):
         coverage = {"evaluated": 10}
         result = evaluate_promotion_gates(before, after, coverage)
 
-        self.assertEqual(result["final_decision"], "pass")
-        self.assertEqual(result["gates"]["sample_count"]["status"], "pass")
-        self.assertNotEqual(result["gates"]["coverage_evaluated"]["status"], "insufficient")
+        self.assertEqual(result["final_decision"], "insufficient_data")
+        self.assertEqual(result["gates"]["sample_count"]["status"], "insufficient")
+        self.assertIn("sample_count", result["reason"][0])
+
+    def test_sample_count_uses_mature_t3_rows_when_available(self):
+        before = {
+            "n": 120,
+            "n_evaluable": 1,
+            "t3_mean": 1.0,
+            "t3_win_rate": 15.0,
+            "t3_loss_5pct_rate": -4.0,
+            "big_drop_5pct_rate": -8.0,
+        }
+        after = {
+            "n": 150,
+            "n_evaluable": 2,
+            "t3_mean": 2.5,
+            "t3_win_rate": 20.0,
+            "t3_loss_5pct_rate": -15.0,
+            "big_drop_5pct_rate": -15.0,
+        }
+
+        result = evaluate_promotion_gates(
+            before,
+            after,
+            coverage={"evaluated": 150},
+        )
+
+        self.assertEqual(result["gates"]["sample_count"]["status"], "fail")
+        self.assertEqual(result["gates"]["sample_count"]["before"], 1.0)
+        self.assertEqual(result["gates"]["sample_count"]["after"], 2.0)
 
 
 if __name__ == "__main__":

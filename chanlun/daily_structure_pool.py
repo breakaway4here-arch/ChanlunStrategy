@@ -21,6 +21,7 @@ from .signal_quality_classifier import (
     tag_signal_quality_in_place,
 )
 from .screener_pure import _get_pivot_info, _pick_best_buy_point
+from .volume_contract import canonical_volume_window, quantity_evidence_observation
 
 
 def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
@@ -43,6 +44,8 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
         "swing_seed_count": 0,
         "reference_only_count": 0,
         "blocked_only_count": 0,
+        "dropped_volume_evidence": 0,
+        "quantity_evidence": [],
         "buy_point_type_counts": {},
         "structure_pool_reasons": {
             "formal": 0,
@@ -79,18 +82,36 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
                 if price_limit_state in ("limit_up", "limit_down"):
                     continue
 
+        if not result.buy_points:
+            continue
+
+        raw_volumes = getattr(result, "volumes", None)
+        if raw_volumes is None or len(raw_volumes) != len(result.closes):
+            diag["dropped_volume_evidence"] += 1
+            diag["quantity_evidence"].append(quantity_evidence_observation(
+                code, "daily_structure_liquidity", 5, False,
+                "quantity_price_length_mismatch",
+            ))
+            continue
+        liquidity_volumes = canonical_volume_window(result, slice(-5, None))
+        if liquidity_volumes is None or len(liquidity_volumes) != 5:
+            diag["dropped_volume_evidence"] += 1
+            diag["quantity_evidence"].append(quantity_evidence_observation(
+                code, "daily_structure_liquidity", 5, False,
+            ))
+            continue
+        diag["quantity_evidence"].append(quantity_evidence_observation(
+            code, "daily_structure_liquidity", 5, True,
+        ))
+
         # Liquidity
-        if len(result.volumes) >= 5 and len(result.closes) >= 5:
-            amounts = result.volumes[-5:] * result.closes[-5:] * 100
-            if np.mean(amounts) < MIN_DAILY_AMOUNT:
-                continue
+        amounts = liquidity_volumes * result.closes[-5:] * 100
+        if np.mean(amounts) < MIN_DAILY_AMOUNT:
+            continue
 
         diag["base_pass"] += 1
 
         # --- Signal classification ---
-        if not result.buy_points:
-            continue
-
         diag["with_buy_points"] += 1
 
         formal_bps = [bp for bp in result.buy_points if is_formal_buy(bp)]
@@ -117,7 +138,31 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
         remaining_reference = []
         if ENABLE_SWING_POSITION_SEEDS:
             for bp in reference_bps:
-                seed = _build_swing_position_seed(bp, result, pivot_info)
+                seed = None
+                if bp.get("type") == "swing底背驰参考":
+                    position_ok, position_reason = _passes_daily_position_guard(
+                        bp, result, pivot_info
+                    )
+                    if position_reason != "最近13根成交量单位证据不足":
+                        diag["quantity_evidence"].append(
+                            quantity_evidence_observation(
+                                code, "swing_selloff_guard", 13, True,
+                            )
+                        )
+                    if position_ok:
+                        seed = {
+                            **bp,
+                            "type": "swing底背驰候选种子",
+                            "tier": "seed",
+                            "source_type": "swing底背驰参考",
+                            "seed_reason": position_reason,
+                        }
+                    elif position_reason == "最近13根成交量单位证据不足":
+                        diag["quantity_evidence"].append(
+                            quantity_evidence_observation(
+                                code, "swing_selloff_guard", 13, False,
+                            )
+                        )
                 if seed:
                     swing_seeds.append(seed)
                 else:
@@ -180,7 +225,10 @@ def build_daily_structure_pool(chan_results, sector_stocks=None, mode="pure"):
             "highs": result.highs,
             "lows": result.lows,
             "dates": result.dates,
-            "volumes": result.volumes,
+            "volumes": raw_volumes,
+            "volume_units": list(getattr(result, "volume_units", [])),
+            "volume_raw_units": list(getattr(result, "volume_raw_units", [])),
+            "volume_sources": list(getattr(result, "volume_sources", [])),
             "fractals": result.fractals,
             "strokes": result.strokes,
             "segments": result.segments,
@@ -222,9 +270,14 @@ def _passes_daily_position_guard(bp, result, pivot_info):
     Returns (ok: bool, reason: str).
     """
     closes = result.closes
-    volumes = result.volumes
     if closes is None or len(closes) < 20:
         return False, "日线样本少于20根"
+    raw_volumes = getattr(result, "volumes", None)
+    if raw_volumes is None or len(raw_volumes) != len(closes):
+        return False, "成交量与价格窗口未对齐"
+    volumes = canonical_volume_window(result, slice(-13, None))
+    if volumes is None or len(volumes) != 13:
+        return False, "最近13根成交量单位证据不足"
 
     close = float(closes[-1])
     recent = np.asarray(closes[-20:], dtype=float)

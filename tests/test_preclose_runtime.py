@@ -15,6 +15,7 @@ from chanlun.preclose_pipeline import PreclosePipelineComponents
 from chanlun.preclose_runtime import (
     MARKET_INDICES,
     _append_intraday_quote,
+    _append_intraday_quote_with_reason,
     build_scheduled_preclose_input,
     fetch_preclose_30m,
     select_preclose_30m_targets,
@@ -40,6 +41,12 @@ def _history(code, name, start):
             "closes": closes,
             "volumes": [1000.0] * 120,
             "amounts": [value * 100000 for value in closes],
+            "amount_available": [True] * 120,
+            "volume_units": ["hands"] * 120,
+            "volume_raw_units": ["hands"] * 120,
+            "volume_sources": ["fixture"] * 120,
+            "amount_units": ["CNY"] * 120,
+            "amount_sources": ["fixture"] * 120,
             "finals": [True] * 120,
         },
     }
@@ -69,6 +76,13 @@ class PrecloseRuntimeTests(unittest.TestCase):
             "lows": [value - 0.1 for value in values],
             "closes": values,
             "volumes": [1000.0] * len(values),
+            "volume_units": ["hands"] * len(values),
+            "volume_raw_units": ["hands"] * len(values),
+            "volume_sources": [source] * len(values),
+            "amounts": [100000.0] * len(values),
+            "amount_available": [True] * len(values),
+            "amount_units": ["CNY"] * len(values),
+            "amount_sources": [source] * len(values),
             "source": source,
         }
 
@@ -247,6 +261,12 @@ class PrecloseRuntimeTests(unittest.TestCase):
             "current_price": raw_previous_close * 1.02,
             "volume": 2000,
             "amount": 20000000,
+            "volume_unit": "hands",
+            "volume_raw_unit": "hands",
+            "volume_source": "eastmoney",
+            "amount_available": True,
+            "amount_unit": "CNY",
+            "amount_source": "eastmoney",
             "change_pct": 2.0,
         }
 
@@ -259,6 +279,42 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertAlmostEqual(row["price_basis"]["factor_vs_raw"], 0.5)
         self.assertEqual(row["price_basis"]["adjustment"], "qfq")
         self.assertEqual(row["klines"]["adjustment"], "qfq")
+
+    def test_intraday_append_preserves_mixed_history_provenance(self):
+        history = _history("300900", "广联航空", 3.81)
+        history["klines"].update({
+            "amount_available": [False] * 119 + [True],
+            "volume_units": ["unknown"] * 119 + ["hands"],
+            "volume_raw_units": ["unknown"] * 119 + ["hands"],
+            "volume_sources": [""] * 119 + ["eastmoney"],
+            "amount_units": ["unknown"] * 119 + ["CNY"],
+            "amount_sources": [""] * 119 + ["eastmoney"],
+        })
+        quote = {
+            "code": "300900",
+            "prev_close": history["klines"]["closes"][-1] * 2.0,
+            "open": history["klines"]["closes"][-1] * 1.96,
+            "high": history["klines"]["closes"][-1] * 2.10,
+            "low": history["klines"]["closes"][-1] * 1.94,
+            "current_price": history["klines"]["closes"][-1] * 2.02,
+            "volume": 2000,
+            "amount": 20000000,
+            "amount_available": True,
+            "volume_unit": "hands",
+            "volume_raw_unit": "hands",
+            "volume_source": "eastmoney",
+            "amount_unit": "CNY",
+            "amount_source": "eastmoney",
+        }
+        row, reason = _append_intraday_quote_with_reason(
+            history, quote, TRADE_DATE, AS_OF
+        )
+        self.assertEqual(reason, "")
+        self.assertEqual(sum(row["klines"]["amount_available"]), 2)
+        self.assertEqual(row["klines"]["volume_unit"], "mixed")
+        self.assertEqual(row["klines"]["amount_unit"], "mixed")
+        self.assertEqual(row["volume_unit"], "hands")
+        self.assertEqual(row["amount_available"], True)
 
     def test_default_daily_target_selector_accepts_json_lists(self):
         rows = [_history("300998", "宁波方正", 10.0)]
@@ -335,9 +391,15 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 "high": previous + 0.2,
                 "low": previous - 0.2,
                 "current_price": previous + 0.1,
-                "volume": 2000,
-                "amount": 20000000,
-                "change_pct": 1.0,
+            "volume": 2000,
+            "amount": 20000000,
+            "volume_unit": "hands",
+            "volume_raw_unit": "hands",
+            "volume_source": "eastmoney",
+            "amount_available": True,
+            "amount_unit": "CNY",
+            "amount_source": "eastmoney",
+            "change_pct": 1.0,
             })
         min30_calls = []
 
@@ -441,6 +503,12 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 "current_price": previous + 0.1,
                 "volume": 2000,
                 "amount": 20000000,
+                "volume_unit": "hands",
+                "volume_raw_unit": "hands",
+                "volume_source": "eastmoney",
+                "amount_available": True,
+                "amount_unit": "CNY",
+                "amount_source": "eastmoney",
                 "change_pct": 1.0,
             })
         with tempfile.TemporaryDirectory() as temp_dir:

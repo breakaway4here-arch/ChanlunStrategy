@@ -8,6 +8,7 @@ from typing import Any, Callable, Dict, Mapping, Optional
 
 from .industry_metadata import _is_a_share_identity
 from .market_history_store import MarketHistoryStore
+from .identity import normalize_identity
 
 
 _CN_TZ = timezone(timedelta(hours=8))
@@ -68,7 +69,10 @@ def _previous_final_closes(
         (str(report_date),),
     ).fetchall()
     return {
-        (str(row["exchange"]), str(row["code"])): float(row["close"])
+        "stock|{}|{}".format(
+            str(row["exchange"]),
+            str(row["code"]),
+        ): float(row["close"])
         for row in rows
         if float(row["close"]) > 0
     }
@@ -93,12 +97,24 @@ def ingest_market_close_snapshot(
         "requested": 0,
         "unique": 0,
         "valid_a_rows": 0,
+        "valid_bar_count": 0,
         "quoted_rows": 0,
         "written": 0,
         "skipped_unquoted": 0,
         "skipped_missing_factor": 0,
         "history_eligible_rows": 0,
+        "identity_pending_rows": 0,
+        "identity_pending_codes": [],
+        "identity_pending_identity_keys": [],
+        "identity_invalid_rows": 0,
+        "registered_non_a_rows_ignored": 0,
         "coverage": 0.0,
+        "coverage_numerator": 0,
+        "coverage_denominator": 0,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
+        "minimum_coverage": float(min_coverage),
+        "meets_minimum_coverage": False,
         "remote_calls": 0,
     }
     if str(report_date) != now_cn.date().isoformat() or now_cn.hour < 15:
@@ -106,16 +122,59 @@ def ingest_market_close_snapshot(
 
     path = Path(db_path)
     with MarketHistoryStore(path) as store:
-        instruments = [
-            row
-            for row in store.list_instruments(asset_type="stock")
-            if _is_a_share_identity(row)
+        all_instruments = store.list_instruments(asset_type="stock")
+        instruments = []
+        pending_identity_rows = []
+        for row in all_instruments:
+            if _is_a_share_identity(row):
+                instruments.append(row)
+                continue
+            # A legacy DB can store a genuine BJ code under SZ. Keep it in
+            # the denominator and pending set until an explicit migration is
+            # sourced; never silently relabel it here.
+            try:
+                code = str(row.get("code") or "").strip()
+                exchange = str(row.get("exchange") or "").strip().upper()
+                asset_type = str(row.get("asset_type") or "stock").strip().lower()
+            except (AttributeError, TypeError):
+                continue
+            if (
+                asset_type == "stock"
+                and exchange == "SZ"
+                and code.startswith(("4", "8", "92"))
+            ):
+                pending_identity_rows.append(row)
+        diagnostics["identity_pending_rows"] = len(pending_identity_rows)
+        diagnostics["identity_pending_codes"] = sorted(
+            str(row.get("code") or "") for row in pending_identity_rows
+        )
+        diagnostics["identity_pending_identity_keys"] = sorted(
+            "stock|{}|{}".format(
+                str(row.get("exchange") or "").upper(),
+                str(row.get("code") or ""),
+            )
+            for row in pending_identity_rows
+        )
+        diagnostics["identity_invalid_rows"] = max(
+            0,
+            len(all_instruments)
+            - len(instruments)
+            - len(pending_identity_rows),
+        )
+        diagnostics["registered_non_a_rows_ignored"] = diagnostics[
+            "identity_invalid_rows"
         ]
+        expected_instrument_count = len(instruments) + len(pending_identity_rows)
+        diagnostics["coverage_denominator"] = expected_instrument_count
         final_identities = {
-            (str(row["exchange"]), str(row["code"]))
+            (
+                str(row["asset_type"]),
+                str(row["exchange"]),
+                str(row["code"]),
+            )
             for row in store.connection.execute(
                 """
-                SELECT i.exchange, i.code
+                SELECT i.asset_type, i.exchange, i.code
                 FROM instruments i
                 JOIN bars_day b ON b.instrument_id=i.instrument_id
                 WHERE i.asset_type='stock' AND b.ts=? AND b.is_final=1
@@ -124,11 +183,21 @@ def ingest_market_close_snapshot(
             ).fetchall()
         }
         final_count = sum(
-            (str(row["exchange"]), str(row["code"])) in final_identities
+            (
+                str(row.get("asset_type") or "stock"),
+                str(row["exchange"]),
+                str(row["code"]),
+            ) in final_identities
             for row in instruments
         )
         db_coverage = (
-            final_count / float(len(instruments)) if instruments else 0.0
+            final_count / float(expected_instrument_count)
+            if expected_instrument_count
+            else 0.0
+        )
+        diagnostics["coverage_numerator"] = final_count
+        diagnostics["meets_minimum_coverage"] = bool(
+            db_coverage >= float(min_coverage)
         )
         if (
             not force_remote
@@ -136,7 +205,10 @@ def ingest_market_close_snapshot(
             and db_coverage >= float(min_coverage)
         ):
             diagnostics.update(
-                status="complete",
+                status=("partial" if pending_identity_rows else "complete"),
+                reason=(
+                    "identity_migration_pending" if pending_identity_rows else ""
+                ),
                 source="db",
                 valid_a_rows=len(instruments),
                 valid_bar_count=final_count,
@@ -175,24 +247,41 @@ def ingest_market_close_snapshot(
     if not valid_rows:
         diagnostics.update(status="incomplete", reason="no_valid_a_rows")
         return diagnostics
+    if len(valid_rows) != unique:
+        diagnostics.update(
+            status="incomplete", reason="provider_identity_incomplete"
+        )
+        return diagnostics
 
     with MarketHistoryStore(path) as store:
         previous_closes = _previous_final_closes(store, str(report_date))
         prepared = []
-        valid_identities = {
-            (str(row.get("exchange")), str(row.get("code")))
-            for row in valid_rows
-        }
-        history_eligible = valid_identities.intersection(previous_closes)
-        diagnostics["history_eligible_rows"] = len(history_eligible)
+        valid_identities = set()
+        normalized_rows = []
         for row in valid_rows:
+            identity = normalize_identity(
+                row,
+                asset_type=str(row.get("asset_type") or "stock"),
+            )
+            normalized_rows.append((row, identity))
+            valid_identities.add(identity.key)
+        if len(valid_identities) != len(normalized_rows):
+            diagnostics.update(
+                status="incomplete", reason="provider_identity_incomplete"
+            )
+            return diagnostics
+        history_eligible = {
+            key for key in valid_identities if key in previous_closes
+        }
+        diagnostics["history_eligible_rows"] = len(history_eligible)
+        diagnostics["eligible_coverage_denominator"] = len(history_eligible)
+        for row, identity in normalized_rows:
             quote = _raw_quote(row)
             if quote is None:
                 diagnostics["skipped_unquoted"] += 1
                 continue
             diagnostics["quoted_rows"] += 1
-            identity = (str(row.get("exchange")), str(row.get("code")))
-            previous_close = previous_closes.get(identity)
+            previous_close = previous_closes.get(identity.key)
             if previous_close is None or previous_close <= 0:
                 diagnostics["skipped_missing_factor"] += 1
                 continue
@@ -203,6 +292,7 @@ def ingest_market_close_snapshot(
             prepared.append(
                 (
                     row,
+                    identity,
                     {
                         "ts": str(report_date),
                         "open": quote["open"] * factor,
@@ -211,6 +301,12 @@ def ingest_market_close_snapshot(
                         "close": quote["close"] * factor,
                         "volume": quote["volume"],
                         "amount": quote["amount"],
+                        "amount_available": quote["amount"] > 0,
+                        "volume_unit": "hands",
+                        "volume_raw_unit": "hands",
+                        "volume_source": "eastmoney",
+                        "amount_unit": "CNY",
+                        "amount_source": "eastmoney",
                         "adjustment": "qfq",
                         "is_final": True,
                         "source_batch": "official_close_snapshot:eastmoney",
@@ -218,12 +314,25 @@ def ingest_market_close_snapshot(
                 )
             )
 
-        diagnostics["coverage"] = round(
-            len(prepared) / float(len(history_eligible)), 6
+        write_coverage = (
+            len(prepared) / float(len(history_eligible))
             if history_eligible
             else 0.0
         )
-        if diagnostics["coverage"] < float(min_coverage):
+        total_coverage = (
+            len(prepared) / float(expected_instrument_count)
+            if expected_instrument_count
+            else 0.0
+        )
+        diagnostics["coverage_numerator"] = len(prepared)
+        diagnostics["valid_bar_count"] = len(prepared)
+        diagnostics["coverage"] = round(total_coverage, 6)
+        diagnostics["eligible_coverage_numerator"] = len(prepared)
+        diagnostics["eligible_coverage"] = round(write_coverage, 6)
+        diagnostics["meets_minimum_coverage"] = bool(
+            total_coverage >= float(min_coverage)
+        )
+        if total_coverage < float(min_coverage):
             diagnostics.update(
                 status="insufficient_coverage",
                 reason="valid_bar_coverage_below_floor",
@@ -232,18 +341,19 @@ def ingest_market_close_snapshot(
 
         changed = 0
         with store.connection:
-            for row, bar in prepared:
+            for row, identity, bar in prepared:
                 instrument_id = store.upsert_instrument(
-                    "stock",
-                    str(row.get("exchange")),
-                    str(row.get("code")),
+                    identity.asset_type,
+                    identity.exchange,
+                    identity.code,
                     name=str(row.get("name") or ""),
                 )
                 changed += store.upsert_bars(
                     "day", instrument_id, [bar], adjustment="qfq"
                 )
         diagnostics.update(
-            status="complete",
+            status=("partial" if pending_identity_rows else "complete"),
+            reason=("identity_migration_pending" if pending_identity_rows else ""),
             valid_bar_count=len(prepared),
             written=changed,
         )

@@ -31,6 +31,9 @@ const raw = {
   lows: opens.map(function (value) { return value - 0.2; }),
   closes: closes,
   volumes: dates.map(function (_, index) { return 1000 + index * 10; }),
+  volume_units: dates.map(function () { return 'hands'; }),
+  volume_raw_units: dates.map(function () { return 'hands'; }),
+  volume_sources: dates.map(function () { return 'fixture'; }),
   macd_hist: MACD_EXPR,
   chart_annotations: { markLines: [], markPoints: [], labels: [] }
 };
@@ -300,6 +303,91 @@ assert(volume.data[24] === 1240, 'volume evidence changed before rendering');
 chartOption.dataZoom.forEach(function (zoom) {
   assert(zoom.startValue === 'D06' && zoom.endValue === 'D25', 'default view is not the latest twenty bars');
 });
+""",
+        )
+
+    def test_chart_keeps_only_row_aligned_canonical_volume_evidence(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.volume_units[3] = 'unknown';
+raw.volume_raw_units[7] = 'unknown';
+raw.volume_sources[11] = '';
+const beforeDates = JSON.stringify(raw.dates);
+const beforeOhlc = JSON.stringify([raw.opens, raw.highs, raw.lows, raw.closes]);
+globalThis.__auxTest.chart(raw, {});
+const volume = chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(volume.data.length === raw.dates.length, 'volume projection reindexed the chart');
+assert(volume.data[2] === 1020 && volume.data[4] === 1040, 'known adjacent bars changed');
+assert(volume.data[3] === null && volume.data[7] === null && volume.data[11] === null,
+  'mixed or missing provenance was plotted as comparable volume');
+assert(!volume.data.some(function (value, index) {
+  return [3, 7, 11].includes(index) && value === 0;
+}), 'unproven volume became a zero bar');
+assert(JSON.stringify(raw.dates) === beforeDates, 'dates changed during quantity projection');
+assert(JSON.stringify([raw.opens, raw.highs, raw.lows, raw.closes]) === beforeOhlc,
+  'OHLC changed during quantity projection');
+""",
+        )
+
+    def test_chart_with_all_unproven_volume_keeps_price_chart_and_explains_gap(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.volume_units = Array(raw.dates.length).fill('unknown');
+globalThis.__auxTest.state.chartLayerSwitcher = {
+  innerHTML: '', querySelectorAll: function () { return []; }
+};
+globalThis.__auxTest.chart(raw, {});
+const candle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+const volume = chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(candle.data.length === raw.dates.length, 'unproven volume removed the price chart');
+assert(volume.data.every(function (value) { return value === null; }), 'unproven volume was plotted');
+assert(globalThis.__auxTest.state.chartLayerSwitcher.innerHTML.includes('成交量证据未核验'),
+  'missing quantity evidence was not explained');
+""",
+        )
+
+    def test_chart_rejects_shifted_volume_metadata_lengths(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.volume_sources = raw.volume_sources.slice(1);
+globalThis.__auxTest.chart(raw, {});
+const volume = chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(volume.data.every(function (value) { return value === null; }),
+  'shifted metadata was tail-aligned onto different volume rows');
+""",
+        )
+
+    def test_borrowed_chart_uses_actual_chart_source_volume_metadata(self):
+        _assert_node_contract(
+            self,
+            "({ merge: mergeChartCandidate, chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + r"""
+const chartOwner={dates:['D1','D2'],opens:[10,11],highs:[11,12],lows:[9,10],closes:[10.5,11.5],
+ volumes:[100,200],volume_units:['hands','unknown'],volume_raw_units:['hands','hands'],
+ volume_sources:['actual-source','actual-source'],chart_annotations:{markLines:[],markPoints:[],labels:[]}};
+const primary={code:'600001',volumes:[999,999],volume_units:['hands','hands'],
+ volume_raw_units:['hands','hands'],volume_sources:['wrong-primary','wrong-primary']};
+const merged=globalThis.__auxTest.merge(primary,chartOwner);
+assert(merged.volumes===chartOwner.volumes&&merged.volume_units===chartOwner.volume_units
+ && merged.volume_raw_units===chartOwner.volume_raw_units&&merged.volume_sources===chartOwner.volume_sources,
+ 'borrowed chart did not keep quantity metadata ownership');
+globalThis.__auxTest.chart(merged, {});
+const volume=chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(volume.data[0]===100&&volume.data[1]===null,
+ 'metadata-source mismatch made borrowed volume comparable');
 """,
         )
 

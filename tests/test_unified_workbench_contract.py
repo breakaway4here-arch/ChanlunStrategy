@@ -14,10 +14,12 @@ def inputs():
         'data_quality': {'as_of': DAY + 'T15:05:00+08:00', 'is_official': True,
                          'bar_state': 'closed', 'market_status': 'verified'},
         'selection_input_health': {'formal': {'status': 'verified', 'formal_actions_allowed': True}},
-        'price_basis': 'qfq', 'strategy_version': 'v1',
+        'price_basis': {'adjustment': 'qfq', 'factor_vs_raw': 1.0},
+        'strategy_version': 'v1',
     }
     row = {'code': '600001', 'name': '样本', 'view_rank': 1,
            'action_semantics': 'formal', 'opportunity_score': 99,
+           'price_basis': {'adjustment': 'qfq', 'factor_vs_raw': 1.0},
            'decision_engine_v1': {'total_score': 62},
            'ref': {'pool': 'picks_fusion', 'code': '600001'},
            'data_status': {'daily': 'verified', 'latest_date': DAY, 'stale': False, 'is_final': True},
@@ -90,6 +92,45 @@ class UnifiedWorkbenchContracts(unittest.TestCase):
         r['selection_input_health']['formal']['blocked_strategies'] = ['daily_fusion']
         self.assertFalse(self.build((r, w, e))['items'][0]['is_executable'])
 
+    def test_partial_quantity_coverage_keeps_valid_peer_and_is_visible(self):
+        r, w, e = inputs()
+        quantity = {
+            'status': 'partial', 'required_count': 10,
+            'available_count': 9, 'coverage': 0.9,
+            'minimum_coverage': 0.9, 'pending_codes': ['300009'],
+        }
+        r['selection_input_health'] = {
+            'schema_version': 2,
+            'status': 'partial',
+            'formal': {
+                'status': 'verified', 'formal_actions_allowed': True,
+                'all_formal_actions_allowed': True,
+                'blocked_strategies': [],
+            },
+            'by_strategy': {
+                'daily_fusion': {
+                    'status': 'verified', 'formal_actions_allowed': True,
+                    'quantity': quantity,
+                },
+                'h4_t3': {
+                    'status': 'verified', 'formal_actions_allowed': True,
+                    'quantity': quantity,
+                },
+            },
+        }
+
+        result = self.build((r, w, e))
+
+        self.assertEqual(result['items'][0]['page_status'], 'formal_ready')
+        self.assertEqual(result['summary']['coverage']['quantity'], {
+            'status': 'partial', 'required': 10, 'available': 9,
+            'pending': 1, 'coverage': 0.9, 'minimum_coverage': 0.9,
+        })
+        self.assertIn(
+            'quantity_coverage_partial',
+            result['summary']['coverage']['reasons'],
+        )
+
     def test_declared_bad_input_status_cannot_be_overridden_by_true_flag(self):
         r, w, e = inputs()
         r['selection_input_health']['formal']['status'] = 'unavailable'
@@ -156,13 +197,23 @@ class UnifiedWorkbenchContracts(unittest.TestCase):
         r, w, e = inputs()
         row = w['views'].pop('main')[0]
         row.pop('formal_decision_contract')
-        row.update(action_semantics='watch_only', reference_price=10, primary_reason='等待回踩')
+        row.update(
+            action_semantics='watch_only', reference_price=10,
+            price_basis={'adjustment': 'qfq', 'factor_vs_raw': 1.02},
+            primary_reason='等待回踩',
+        )
         w['views']['confirming'] = [row]
         e['views']['confirming'] = e['views'].pop('main')
         p = self.build((r, w, e))
         self.assertEqual(p['items'][0]['page_status'], 'watch_only')
         self.assertEqual(p['featured_ids'], [])
-        row['watch_reference_price'] = 9.5
+        row['watch_anchor'] = {
+            'value': 9.5,
+            'source': 'test.breakout',
+            'reference_date': DAY,
+            'price_basis': {'adjustment': 'qfq', 'factor_vs_raw': 1.02},
+            'purpose': '观察回踩',
+        }
         p = self.build((r, w, e))
         self.assertEqual(p['items'][0]['page_status'], 'waiting_trigger')
 
@@ -189,7 +240,11 @@ class UnifiedWorkbenchContracts(unittest.TestCase):
             if isinstance(block, dict) and 'as_of' in block: block['as_of'] = '2026-09-08'
         self.assertEqual(self.build((r, w, e), previous=previous)['changes']['status'], 'available')
         r['price_basis'] = 'raw'
-        self.assertEqual(self.build((r, w, e), previous=previous)['changes']['status'], 'comparison_unavailable')
+        self.assertEqual(self.build((r, w, e), previous=previous)['changes']['status'], 'partial')
+        self.assertEqual(
+            self.build((r, w, e), previous=previous)['changes']['value_comparison_status'],
+            'unavailable_price_basis_missing',
+        )
 
     def test_does_not_mutate_inputs_and_has_stable_snapshot_identity(self):
         args = inputs(); before = copy.deepcopy(args)

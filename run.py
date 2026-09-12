@@ -113,6 +113,13 @@ from chanlun.strategy_review import (
     load_review_market_context_from_store,
     persist_review_benchmark_kline,
 )
+from chanlun.strategy_identity import (
+    DECISION_POLICY_VERSION,
+    FUSION_STRATEGY_VERSION,
+    LUOJIE_RESEARCH_STRATEGY_VERSION,
+    PRE_CLOSE_STRATEGY_VERSION,
+    PURE_STRATEGY_VERSION,
+)
 from chanlun.strong_startup import build_strong_startup_pool, upgrade_strong_startup_with_30min, annotate_startup_quality
 from chanlun.trend_continuation import (
     build_trend_continuation_pool,
@@ -150,6 +157,15 @@ from chanlun.universe_builder import (
     build_sector_groups,
     load_eligible_candidates,
 )
+from chanlun.volume_contract import (
+    build_quantity_input_health,
+    canonical_amount_window,
+    canonical_volume_window,
+    formal_quantity_diagnostics,
+)
+
+
+MINIMUM_DAILY_QUANTITY_COVERAGE = 0.90
 
 
 def _build_daily_h4_t3_pool(pure_candidates, trade_date):
@@ -159,6 +175,21 @@ def _build_daily_h4_t3_pool(pure_candidates, trade_date):
         trade_date,
         upstream_pool="picks_pure",
     )
+
+
+def _attach_kline_evidence(result, kline):
+    """Carry row-level unit/availability evidence into bare-array analyzers."""
+    if result is None:
+        return None
+    for key in (
+        "volume_units", "volume_raw_units", "volume_sources",
+        "volume_unit", "volume_raw_unit", "volume_source",
+        "amount_available", "amount_units", "amount_sources",
+        "amount_unit", "amount_source",
+    ):
+        if isinstance(kline, dict) and key in kline:
+            setattr(result, key, kline[key])
+    return result
 
 
 def _candidate_code(item):
@@ -187,6 +218,221 @@ def _restrict_to_common_upstream(items, upstream_candidates):
         "excluded_count": len(rows) - len(kept),
         "excluded_codes": excluded_codes,
     }
+
+
+DEFAULT_LUOJIE_15M_BUDGET = 60
+SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT = "shared_daily_admitted_v1"
+_NEXT_DAY_SOURCE_FIELDS = (
+    "trend_type", "market_cap", "circulating_market_cap",
+    "float_market_cap", "amounts", "amount", "closes", "volumes",
+)
+
+
+def _merge_next_day_source_fields(candidate, source):
+    """Enrich a research candidate without erasing non-empty source facts."""
+    merged = dict(candidate or {})
+    if not isinstance(source, dict):
+        return merged
+    for key in _NEXT_DAY_SOURCE_FIELDS:
+        value = source.get(key)
+        # ``amounts`` and ``closes`` are commonly numpy arrays.  Comparing an
+        # array to ``""`` creates an elementwise result whose truth value is
+        # undefined; only strings have an empty-string representation here.
+        if value is not None and not (isinstance(value, str) and value == ""):
+            merged[key] = value
+    return merged
+
+
+def _resolve_luojie_15m_budget(value=None):
+    """Return a finite positive research budget and its source diagnostic."""
+    raw = value
+    source = "argument"
+    if raw is None:
+        raw = os.environ.get("CHANLUN_LUOJIE_15M_BUDGET")
+        source = "environment" if raw not in (None, "") else "default"
+    if raw in (None, ""):
+        return DEFAULT_LUOJIE_15M_BUDGET, source, ""
+    try:
+        numeric = float(raw)
+    except (TypeError, ValueError, OverflowError):
+        return (
+            DEFAULT_LUOJIE_15M_BUDGET,
+            source,
+            "invalid_budget_fallback_to_default",
+        )
+    if not math.isfinite(numeric) or numeric < 0 or not numeric.is_integer():
+        return (
+            DEFAULT_LUOJIE_15M_BUDGET,
+            source,
+            "invalid_budget_fallback_to_default",
+        )
+    return int(numeric), source, ""
+
+
+def _luojie_target_priority(row):
+    """Rank research requests using facts independent of input dict order."""
+    themes = row.get("luojie_themes") or {}
+    theme_count = sum(
+        len(values) for values in themes.values() if isinstance(values, list)
+    ) if isinstance(themes, dict) else 0
+    daily_status = row.get("data_status")
+    daily_verified = int(
+        isinstance(daily_status, dict)
+        and daily_status.get("daily") == "verified"
+        and daily_status.get("is_final") is True
+        and daily_status.get("stale") is False
+    )
+    amount = _safe_number(row.get("amount"), default=0.0)
+    if amount is None:
+        amount = 0.0
+    return (-theme_count, -daily_verified, -amount, _candidate_code(row))
+
+
+def _shared_luojie_row_is_healthy(row):
+    """Accept only rows already admitted by the shared daily input gate."""
+    status = row.get("data_status")
+    if isinstance(status, dict) and status:
+        return bool(
+            status.get("daily") == "verified"
+            and status.get("stale") is False
+        )
+    # Frozen pre-close metadata uses the public ``status``/``klines`` shape;
+    # its 14:45 daily bar is intentionally provisional but still a valid
+    # shared input for research target planning.
+    public_status = row.get("status")
+    if public_status is not None:
+        return bool(
+            public_status == "available"
+            and isinstance(row.get("klines"), dict)
+        )
+    # Test/replay callers may provide rows after an upstream gate has already
+    # admitted them.  That boundary must be explicit; an unmarked row with no
+    # status metadata remains unknown and cannot enter the shared target set.
+    return (
+        row.get("shared_health_contract")
+        == SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT
+    )
+
+
+def _build_luojie_research_target_plan(stocks, pure_pool, budget=None):
+    """Plan an independent, bounded 15m request set from shared healthy rows."""
+    input_rows = [
+        dict(row) for row in (stocks or [])
+        if isinstance(row, dict) and _candidate_code(row)
+    ]
+    shared_rows = [row for row in input_rows if _shared_luojie_row_is_healthy(row)]
+    shared_unhealthy_rows = [
+        row for row in input_rows if not _shared_luojie_row_is_healthy(row)
+    ]
+    themed_rows = prefilter_luojie_theme_candidates(shared_rows)
+    resolved_budget, budget_source, budget_error = (
+        _resolve_luojie_15m_budget(budget)
+    )
+    ordered_rows = sorted(themed_rows, key=_luojie_target_priority)
+    selected_rows = ordered_rows[:resolved_budget]
+    excluded_rows = ordered_rows[resolved_budget:]
+    _common_rows, common_diagnostics = _restrict_to_common_upstream(
+        themed_rows, pure_pool
+    )
+    common_diagnostics = dict(common_diagnostics)
+    common_diagnostics.update({
+        "enforced": False,
+        "reason": "research_independent_candidate_set",
+    })
+    diagnostics = {
+        "shared_input_count": len(input_rows),
+        "shared_health_count": len(shared_rows),
+        "shared_unhealthy_count": len(shared_unhealthy_rows),
+        "shared_unhealthy_codes": [
+            _candidate_code(row) for row in shared_unhealthy_rows
+        ],
+        "theme_target_count": len(themed_rows),
+        "budget": resolved_budget,
+        "budget_source": budget_source,
+        "budget_error": budget_error,
+        "selected_count": len(selected_rows),
+        "selected_codes": [
+            _candidate_code(row) for row in selected_rows
+        ],
+        "budget_excluded_count": len(excluded_rows),
+        "budget_excluded_codes": [
+            _candidate_code(row) for row in excluded_rows
+        ],
+        "common_upstream_diagnostics": common_diagnostics,
+    }
+    return {
+        "shared_rows": shared_rows,
+        "theme_rows": themed_rows,
+        "selected_rows": selected_rows,
+        "diagnostics": diagnostics,
+        **diagnostics,
+    }
+
+
+def _finalize_luojie_research_pool(pool, input_health):
+    """Keep verified research rows visible while preserving partial health."""
+    result = dict(pool or {})
+    diagnostics = dict(result.get("diagnostics") or {})
+    health = input_health if isinstance(input_health, dict) else {}
+    status = str(health.get("status") or "unavailable")
+    raw_verified_codes = health.get("verified_codes")
+    has_verified_code_contract = isinstance(
+        raw_verified_codes, (list, tuple, set, frozenset)
+    )
+    verified_codes = {
+        str(code) for code in raw_verified_codes or [] if str(code)
+    }
+    if has_verified_code_contract:
+        candidates = [
+            row for row in result.get("candidates") or []
+            if isinstance(row, dict)
+            and _candidate_code(row) in verified_codes
+        ]
+        dropped_codes = sorted({
+            _candidate_code(row)
+            for row in result.get("candidates") or []
+            if isinstance(row, dict)
+            and _candidate_code(row)
+            and _candidate_code(row) not in verified_codes
+        })
+        result["candidates"] = candidates
+        if dropped_codes:
+            diagnostics["unverified_candidate_codes"] = dropped_codes
+    missing_codes = sorted({
+        str(code) for code in health.get("missing_codes") or [] if str(code)
+    })
+    diagnostics.update({
+        "requested_count": int(health.get("requested_count") or 0),
+        "verified_count": int(health.get("verified_count") or 0),
+        "missing_codes": missing_codes,
+        "partial_candidate_output_allowed": bool(
+            status in {"verified", "partial"}
+            and int(health.get("verified_count") or 0) > 0
+            and result.get("candidates")
+        ),
+    })
+    if status == "unavailable":
+        result["candidates"] = []
+        result["status"] = "unavailable"
+        result["mode"] = "enabled"
+        result["reason"] = "15分钟研究输入不可用，未生成候选"
+    elif status == "partial":
+        result["status"] = "partial"
+        result["mode"] = "partial"
+        result["reason"] = (
+            "15分钟研究输入部分核验，保留已核验候选并标注缺口"
+        )
+    elif status == "not_required":
+        result["candidates"] = []
+        result["status"] = "not_requested"
+        result["mode"] = "disabled"
+        result["reason"] = "15分钟研究预算未请求"
+    else:
+        result["status"] = "verified"
+        result["mode"] = "enabled"
+        result["reason"] = result.get("reason") or "罗姐研究候选已生成"
+    result["diagnostics"] = diagnostics
+    return result
 
 
 def _result_price_limit_state(item):
@@ -366,6 +612,7 @@ def _analyze_30min_rows(rows):
             closes=kline["closes"],
             volumes=kline["volumes"],
         )
+        _attach_kline_evidence(result, kline)
         setattr(
             result,
             "strategy_input_evidence",
@@ -373,6 +620,11 @@ def _analyze_30min_rows(rows):
         )
         results.append(result)
     return results
+
+
+def _analyze_15min_rows(rows):
+    """Analyze the bounded research-owned 15m row set."""
+    return _analyze_30min_rows(rows)
 
 
 def _eligible_acceleration_inputs(rows):
@@ -560,13 +812,66 @@ def _build_research_input_health(sublevel_health):
     value = sublevel_health if isinstance(sublevel_health, dict) else {}
     status = str(value.get("status") or "unavailable")
     usable = status in {"verified", "not_required"}
+
+    def _count(raw):
+        if isinstance(raw, bool):
+            return None
+        try:
+            number = float(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if not math.isfinite(number) or number < 0 or not number.is_integer():
+            return None
+        return int(number)
+
+    def _codes(raw):
+        if not isinstance(raw, (list, tuple, set, frozenset)):
+            return []
+        return sorted({str(code) for code in raw if str(code)})
+
+    requested_count = _count(value.get("requested_count"))
+    verified_count = _count(value.get("verified_count"))
+    missing_count = _count(value.get("missing_count"))
+    verified_codes = _codes(value.get("verified_codes"))
+    missing_codes = _codes(value.get("missing_codes"))
+    budget_excluded_count = _count(value.get("budget_excluded_count"))
+    budget_excluded_codes = _codes(value.get("budget_excluded_codes"))
+    attestation_counts_match = bool(
+        requested_count is not None
+        and verified_count is not None
+        and verified_count <= requested_count
+        and verified_count == len(verified_codes)
+        and (
+            missing_count is None
+            or missing_count == requested_count - verified_count
+        )
+        and (
+            not missing_codes
+            or len(missing_codes) == requested_count - verified_count
+        )
+    )
     return {
         "status": "verified" if usable else status,
         "required_date": str(value.get("required_date") or ""),
-        "invalid_count": int(value.get("missing_count") or 0),
-        "invalid_codes": list(value.get("missing_codes") or []),
+        "invalid_count": missing_count,
+        "invalid_codes": missing_codes,
+        # R06 requires a per-code attestation before a research partial can
+        # remain visible.  These fields are copied from the current run's
+        # health payload; no candidate code is inferred here.
+        "requested_count": requested_count,
+        "verified_count": verified_count,
+        "verified_codes": verified_codes,
+        "missing_count": missing_count,
+        "missing_codes": missing_codes,
+        "budget_excluded_count": budget_excluded_count,
+        "budget_excluded_codes": budget_excluded_codes,
         "formal_actions_allowed": False,
         "research_output_trusted": usable,
+        "research_candidate_output_allowed": bool(
+            status in {"verified", "partial"}
+            and attestation_counts_match
+            and verified_count > 0
+        ),
         "blocking_reason": (
             "" if usable else "strategy_input_stale_or_unverified"
         ),
@@ -580,10 +885,43 @@ def _build_selection_input_health(
     h4_t3,
     luojie_pool,
     sublevels,
+    daily_quantity=None,
+    market_close_snapshot=None,
 ):
+    quantity = dict(daily_quantity or {})
+    quantity_status = str(quantity.get("status") or "verified")
+    quantity_pending_codes = sorted({
+        str(code) for code in quantity.get("pending_codes") or [] if str(code)
+    })
+    quantity_unavailable = bool(
+        quantity.get("below_minimum_coverage") is True
+        or quantity_status == "unavailable"
+    )
+    quantity_partial = quantity_status == "partial"
+    snapshot = dict(market_close_snapshot or {})
+    snapshot_partial = bool(
+        snapshot.get("status") == "partial"
+        and snapshot.get("reason") == "identity_migration_pending"
+    )
+    daily_fusion = dict(daily_fusion or {})
+    h4_t3 = dict(h4_t3 or {})
+    for strategy in (daily_fusion, h4_t3):
+        if quantity:
+            strategy["quantity"] = dict(quantity)
+            strategy["quantity_pending_codes"] = quantity_pending_codes
+        if snapshot:
+            strategy["market_close_snapshot"] = dict(snapshot)
+        if quantity_unavailable:
+            strategy["status"] = "unavailable"
+            strategy["formal_actions_allowed"] = False
+            strategy["blocking_reason"] = "quantity_coverage_below_minimum"
+            strategy["invalid_codes"] = sorted(set(
+                list(strategy.get("invalid_codes") or [])
+                + list(quantity.get("unavailable_codes") or [])
+            ))
     by_strategy = {
-        "daily_fusion": dict(daily_fusion or {}),
-        "h4_t3": dict(h4_t3 or {}),
+        "daily_fusion": daily_fusion,
+        "h4_t3": h4_t3,
         "luojie_pool": dict(luojie_pool or {}),
     }
     formal_names = ("daily_fusion", "h4_t3")
@@ -615,6 +953,8 @@ def _build_selection_input_health(
             "strategy_input_stale_or_unverified" if blocked else ""
         ),
     }
+    if snapshot:
+        formal["market_close_snapshot"] = dict(snapshot)
     sublevel_values = dict(sublevels or {})
     research_degraded = any(
         str((value or {}).get("status") or "") in {"partial", "unavailable"}
@@ -622,9 +962,11 @@ def _build_selection_input_health(
         if isinstance(value, dict)
     )
     status = formal_status
-    if status == "verified" and research_degraded:
+    if status == "verified" and (
+        research_degraded or quantity_partial or snapshot_partial
+    ):
         status = "partial"
-    return {
+    result = {
         "schema_version": 2,
         "required_date": str(report_date),
         "status": status,
@@ -632,6 +974,116 @@ def _build_selection_input_health(
         "by_strategy": by_strategy,
         "sublevels": sublevel_values,
     }
+    if snapshot:
+        result["market_close_snapshot"] = dict(snapshot)
+    return result
+
+
+def _close_snapshot_allows_daily_run(diagnostics):
+    value = diagnostics if isinstance(diagnostics, dict) else {}
+    if value.get("status") == "complete":
+        return True
+    if (
+        value.get("status") != "partial"
+        or value.get("reason") != "identity_migration_pending"
+    ):
+        return False
+
+    def _finite_number(raw):
+        try:
+            number = float(raw)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        return number if math.isfinite(number) else None
+
+    def _nonnegative_integer(raw):
+        number = _finite_number(raw)
+        if number is None or number < 0 or not number.is_integer():
+            return None
+        return int(number)
+
+    numerator = _nonnegative_integer(value.get("coverage_numerator"))
+    denominator = _nonnegative_integer(value.get("coverage_denominator"))
+    pending_count = _nonnegative_integer(value.get("identity_pending_rows"))
+    minimum = _finite_number(value.get("minimum_coverage"))
+    pending_codes = value.get("identity_pending_codes")
+    if (
+        numerator is None
+        or denominator is None
+        or denominator <= 0
+        or numerator > denominator
+        or pending_count is None
+        or pending_count <= 0
+        or minimum is None
+        or minimum < 0.90
+        or minimum > 1.0
+        or not isinstance(pending_codes, list)
+    ):
+        return False
+    unique_pending_codes = {
+        str(code) for code in pending_codes if str(code)
+    }
+    if (
+        len(unique_pending_codes) != pending_count
+        or numerator + pending_count > denominator
+    ):
+        return False
+    actual_coverage = numerator / float(denominator)
+    return bool(
+        actual_coverage >= minimum
+        and value.get("meets_minimum_coverage") is True
+    )
+
+
+def _exclude_identity_pending_stocks(stocks, diagnostics):
+    value = diagnostics if isinstance(diagnostics, dict) else {}
+    pending_codes = {
+        str(code) for code in value.get("identity_pending_codes") or []
+        if str(code)
+    }
+    rows = list(stocks or [])
+    if not pending_codes:
+        return rows, []
+    excluded = sorted({
+        str(row.get("code") or "")
+        for row in rows
+        if isinstance(row, dict)
+        and str(row.get("code") or "") in pending_codes
+    })
+    return [
+        row for row in rows
+        if not isinstance(row, dict)
+        or str(row.get("code") or "") not in pending_codes
+    ], excluded
+
+
+def _mark_pending_watchlist_unavailable(acquisition, pending_codes):
+    value = acquisition if isinstance(acquisition, dict) else {}
+    pending = sorted({str(code) for code in pending_codes if str(code)})
+    if not pending:
+        return value
+    value["added_codes"] = [
+        code for code in value.get("added_codes") or []
+        if str(code) not in pending
+    ]
+    unavailable = set(
+        str(code) for code in value.get("unavailable_codes") or []
+        if str(code)
+    )
+    unavailable.update(pending)
+    value["unavailable_codes"] = sorted(unavailable)
+    by_code = value.setdefault("by_code", {})
+    if not isinstance(by_code, dict):
+        by_code = {}
+        value["by_code"] = by_code
+    for code in pending:
+        by_code[code] = {
+            "code": code,
+            "evidence_date": "",
+            "data_status": "unavailable",
+            "error": "identity_migration_pending",
+        }
+    return value
 
 
 # ============================================================
@@ -710,7 +1162,7 @@ def _safe_number(value, default=None):
         if isinstance(value, bool):
             return default
         number = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return default
     if not math.isfinite(number):
         return default
@@ -1196,36 +1648,46 @@ def _hydrate_market_cap_evidence(
 ):
     """Read market caps from the shared DB and remotely fill only misses."""
     rows = [row for row in (stocks or []) if isinstance(row, dict)]
-    codes = list(dict.fromkeys(
-        str(row.get("code") or "").strip()
-        for row in rows
-        if str(row.get("code") or "").strip()
-    ))
+    from chanlun.identity import normalize_identity
+
+    identities = []
+    row_identities = {}
+    for row in rows:
+        try:
+            identity = normalize_identity(row)
+        except (TypeError, ValueError) as exc:
+            row["market_cap_identity_error"] = str(exc)
+            continue
+        if identity.asset_type != "stock":
+            row["market_cap_identity_error"] = (
+                "market cap lookup only supports stock identities"
+            )
+            continue
+        row_identities[id(row)] = identity
+        if identity not in identities:
+            identities.append(identity)
+    code_counts = {}
+    for identity in identities:
+        code_counts[identity.code] = code_counts.get(identity.code, 0) + 1
     evidence = {}
-    instruments_by_code = {}
+    instruments_by_key = {}
     if os.path.exists(db_path):
         with MarketHistoryStore(db_path) as store:
-            for offset in range(0, len(codes), 900):
-                chunk = codes[offset:offset + 900]
-                if not chunk:
-                    continue
-                found = store.connection.execute(
-                    """
-                    SELECT instrument_id, code
-                    FROM instruments
-                    WHERE asset_type='stock' AND code IN ({})
-                    """.format(",".join("?" for _ in chunk)),
-                    chunk,
-                ).fetchall()
-                for instrument in found:
-                    instruments_by_code[str(instrument["code"])] = int(
+            resolved = store.resolve_instruments(
+                "stock",
+                [(identity.exchange, identity.code) for identity in identities],
+            )
+            for identity in identities:
+                instrument = resolved.get((identity.exchange, identity.code))
+                if instrument is not None:
+                    instruments_by_key[identity.key] = int(
                         instrument["instrument_id"]
                     )
             metadata = store.query_stock_meta_many(
-                list(instruments_by_code.values()),
+                list(instruments_by_key.values()),
                 as_of=report_date,
             )
-            for code, instrument_id in instruments_by_code.items():
+            for key, instrument_id in instruments_by_key.items():
                 meta = metadata.get(instrument_id) or {}
                 if (
                     _safe_number(meta.get("market_cap"), None) is not None
@@ -1233,15 +1695,30 @@ def _hydrate_market_cap_evidence(
                         meta.get("circulating_market_cap"), None
                     ) is not None
                 ):
-                    evidence[code] = dict(meta)
+                    evidence[key] = dict(meta)
 
-    missing = [code for code in codes if code not in evidence]
-    fetched = fetcher(missing, max_workers=max_workers) if missing else {}
+    missing = [identity for identity in identities if identity.key not in evidence]
+    fetch_targets = [identity.as_dict() for identity in missing]
+    fetched = fetcher(fetch_targets, max_workers=max_workers) if missing else {}
+    fetched = fetched if isinstance(fetched, dict) else {}
+
+    def _fetched_for(identity):
+        if identity.key in fetched:
+            return fetched[identity.key]
+        if identity in fetched:
+            return fetched[identity]
+        if code_counts.get(identity.code) == 1:
+            return fetched.get(identity.code)
+        return None
+
     if fetched and os.path.exists(db_path):
         with MarketHistoryStore(db_path) as store:
-            for code, cap_evidence in fetched.items():
-                instrument_id = instruments_by_code.get(str(code))
+            for identity in missing:
+                cap_evidence = _fetched_for(identity)
+                instrument_id = instruments_by_key.get(identity.key)
                 if instrument_id is None:
+                    continue
+                if not isinstance(cap_evidence, dict):
                     continue
                 merged = store.query_stock_meta(
                     instrument_id, as_of=report_date
@@ -1253,11 +1730,20 @@ def _hydrate_market_cap_evidence(
                     report_date,
                     merged,
                 )
-    evidence.update(fetched)
+    for identity in missing:
+        cap_evidence = _fetched_for(identity)
+        if isinstance(cap_evidence, dict):
+            evidence[identity.key] = dict(cap_evidence)
 
+    remote_hit_identities = sum(
+        1
+        for identity in missing
+        if isinstance(_fetched_for(identity), dict)
+    )
     hydrated = 0
     for row in rows:
-        cap_evidence = evidence.get(str(row.get("code") or ""), {})
+        identity = row_identities.get(id(row))
+        cap_evidence = evidence.get(identity.key, {}) if identity else {}
         for field in (
             "market_cap",
             "circulating_market_cap",
@@ -1271,10 +1757,10 @@ def _hydrate_market_cap_evidence(
         ):
             hydrated += 1
     return {
-        "requested": len(codes),
-        "db_hits": len(codes) - len(missing),
+        "requested": len(identities),
+        "db_hits": len(identities) - len(missing),
         "remote_requested": len(missing),
-        "remote_hits": len(fetched),
+        "remote_hits": remote_hit_identities,
         "hydrated": hydrated,
         "max_workers": max_workers,
     }
@@ -1760,6 +2246,8 @@ def _serialize_amount_list(amounts):
             continue
         if not math.isfinite(value):
             serial.append(None)
+        elif value <= 0:
+            serial.append(None)
         else:
             serial.append(float(value))
     if not serial:
@@ -1780,7 +2268,9 @@ def _money20_from_amounts(values):
     return round(sum(valid) / len(valid), 2)
 
 
-def _money20_from_volume_price_proxy(closes, volumes):
+def _money20_from_volume_price_proxy(closes, volumes, volume_unit="hands"):
+    if str(volume_unit or "hands").strip().lower() != "hands":
+        return None
     close_arr = _as_list(closes)
     vol_arr = _as_list(volumes)
     if not close_arr or not vol_arr:
@@ -1811,29 +2301,54 @@ def _attach_liquidity(row):
     if not isinstance(row, dict):
         return row
 
-    amounts = row.get("amounts")
-    if amounts is None:
-        kline = row.get("klines")
-        if isinstance(kline, dict):
-            amounts = kline.get("amounts")
+    kline = row.get("klines")
+    evidence = dict(kline) if isinstance(kline, dict) else {}
+    for key in (
+        "amounts", "amount_available", "amount_units", "amount_unit", "amount_sources", "amount_source",
+        "volumes", "volume_units", "volume_unit", "volume_raw_units", "volume_raw_unit",
+        "volume_sources", "volume_source",
+    ):
+        if row.get(key) is not None:
+            evidence[key] = row[key]
 
+    amounts = evidence.get("amounts")
+    canonical_amounts = canonical_amount_window(evidence, slice(-20, None), amounts)
+    if canonical_amounts is not None and len(canonical_amounts) != 20:
+        canonical_amounts = None
     serialized_amounts = _serialize_amount_list(amounts)
-    money20 = _money20_from_amounts(serialized_amounts)
+    money20 = _money20_from_amounts(
+        canonical_amounts.tolist() if canonical_amounts is not None else None
+    )
     source = "missing"
 
+    raw_volumes = evidence.get("volumes")
+    canonical_volumes = canonical_volume_window(
+        evidence, slice(-20, None), raw_volumes
+    )
+    if canonical_volumes is not None and len(canonical_volumes) != 20:
+        canonical_volumes = None
+    volume_unit = str(evidence.get("volume_unit") or "unknown")
     if money20 is None:
         closes = row.get("closes")
-        if closes is None:
-            kline = row.get("klines")
-            if isinstance(kline, dict):
-                closes = kline.get("closes")
-        volumes = row.get("volumes")
-        if volumes is None:
-            kline = row.get("klines")
-            if isinstance(kline, dict):
-                volumes = kline.get("volumes")
-
-        money20_proxy = _money20_from_volume_price_proxy(closes, volumes)
+        if closes is None and isinstance(kline, dict):
+            closes = kline.get("closes")
+        if (
+            closes is None
+            or raw_volumes is None
+            or len(_as_list(closes)) != len(_as_list(raw_volumes))
+        ):
+            canonical_volumes = None
+        close_tail = [
+            _safe_number(value, None) for value in _as_list(closes)[-20:]
+        ] if closes is not None else []
+        if (
+            len(close_tail) != 20
+            or any(value is None or value <= 0 for value in close_tail)
+        ):
+            canonical_volumes = None
+        money20_proxy = _money20_from_volume_price_proxy(
+            closes, canonical_volumes, "hands" if canonical_volumes is not None else "unknown"
+        )
         if money20_proxy is not None:
             money20 = money20_proxy
             source = "volume_price_proxy"
@@ -1843,6 +2358,7 @@ def _attach_liquidity(row):
 
     row["money20"] = money20
     row["amounts"] = serialized_amounts
+    row["volume_unit"] = str(volume_unit or "unknown")
     row["market_cap"] = _safe_number(row.get("market_cap"), None)
     circulating_market_cap = _safe_number(row.get("circulating_market_cap"), None)
     float_market_cap = _safe_number(row.get("float_market_cap"), None)
@@ -1853,6 +2369,7 @@ def _attach_liquidity(row):
     row["circulating_market_cap"] = circulating_market_cap
     row["float_market_cap"] = float_market_cap
     row["liquidity_source"] = source
+    row["liquidity_window_bars"] = 20 if money20 is not None else 0
     return row
 
 
@@ -2043,7 +2560,9 @@ def main(debug=False, preview=False, generated_at=None):
                 fetch_all_a_stocks=fetch_all_a_stocks,
                 generated_at=generated_at,
             )
-            if close_snapshot_diagnostics.get("status") != "complete":
+            if not _close_snapshot_allows_daily_run(
+                close_snapshot_diagnostics
+            ):
                 raise MarketDataUnavailable(
                     "全A收盘快照未通过门禁: {}".format(
                         close_snapshot_diagnostics
@@ -2127,6 +2646,35 @@ def main(debug=False, preview=False, generated_at=None):
             as_of=time_metadata.get("as_of"),
         )
     )
+    stocks_with_kline, identity_pending_excluded = (
+        _exclude_identity_pending_stocks(
+            stocks_with_kline, close_snapshot_diagnostics
+        )
+    )
+    configured_watch_codes = {
+        str(item.get("code") or "")
+        for item in personal_watchlist_config.get("items") or []
+        if isinstance(item, dict) and item.get("enabled", True)
+    }
+    snapshot_pending_codes = {
+        str(code)
+        for code in (close_snapshot_diagnostics or {}).get(
+            "identity_pending_codes"
+        ) or []
+        if str(code)
+    }
+    personal_watchlist_acquisition = (
+        _mark_pending_watchlist_unavailable(
+            personal_watchlist_acquisition,
+            snapshot_pending_codes & configured_watch_codes,
+        )
+    )
+    data_quality["identity_pending_excluded_codes"] = list(
+        identity_pending_excluded
+    )
+    data_quality["identity_pending_excluded_count"] = len(
+        identity_pending_excluded
+    )
     data_quality["personal_watchlist_acquisition"] = {
         key: value
         for key, value in personal_watchlist_acquisition.items()
@@ -2179,6 +2727,7 @@ def main(debug=False, preview=False, generated_at=None):
             closes=kline["closes"],
             volumes=kline["volumes"],
         )
+        _attach_kline_evidence(result, kline)
         chan_results.append(result)
         if (i + 1) % 50 == 0:
             print(f"  已分析 {i + 1}/{len(stocks_with_kline)} ...")
@@ -2264,15 +2813,25 @@ def main(debug=False, preview=False, generated_at=None):
     else:
         # Rollback: old behavior
         print("[纯净版]")
-        pure_pool = screen_daily_pure(chan_results, sector_stocks, sectors)
+        pure_diag = {}
+        pure_pool = screen_daily_pure(
+            chan_results,
+            sector_stocks,
+            sectors,
+            quantity_diagnostics=pure_diag,
+        )
         print(f"  日线初筛: {len(pure_pool)} 只进入目标池")
 
         print("[融合版]")
         sh_closes = sh_kline["closes"] if sh_kline else None
-        fusion_pool = screen_daily_fusion(chan_results, sh_closes, sector_stocks)
-        print(f"  日线初筛: {len(fusion_pool)} 只进入目标池")
-        pure_diag = {}
         fusion_diag = {}
+        fusion_pool = screen_daily_fusion(
+            chan_results,
+            sh_closes,
+            sector_stocks,
+            quantity_diagnostics=fusion_diag,
+        )
+        print(f"  日线初筛: {len(fusion_pool)} 只进入目标池")
 
     # ================================================================
     # Phase 4.5: Strong startup scan (independent rules on picks_pure upstream)
@@ -2346,6 +2905,17 @@ def main(debug=False, preview=False, generated_at=None):
     trend_seeds = daily_channels["right_seeds"]
     trend_watchlist = daily_channels["right_watchlist"]
     trend_diag = daily_channels["right_diagnostics"]
+    daily_quantity_health = build_quantity_input_health(
+        [result.code for result in chan_results if result is not None],
+        formal_quantity_diagnostics(
+            pure_diag,
+            fusion_diag,
+            startup_diag,
+            trend_diag,
+            right_side_mode=RIGHT_SIDE_STARTUP_MODE,
+        ),
+        MINIMUM_DAILY_QUANTITY_COVERAGE,
+    )
     trend_seeds = [_attach_liquidity(_attach_sector_metadata(s)) for s in trend_seeds]
     trend_watchlist = [
         _attach_liquidity(_attach_sector_metadata(w)) for w in trend_watchlist
@@ -2397,66 +2967,43 @@ def main(debug=False, preview=False, generated_at=None):
     print("Phase 4.6: 罗姐池")
     print("=" * 60)
 
-    common_structure_stocks, luojie_upstream_diag = (
-        _restrict_to_common_upstream(stocks_with_kline, pure_pool)
+    luojie_research_plan = _build_luojie_research_target_plan(
+        stocks_with_kline,
+        pure_pool,
     )
-    luojie_theme_stocks = prefilter_luojie_theme_candidates(
-        common_structure_stocks
-    )
-    print(f"  国家队硬方向主题预筛: {len(luojie_theme_stocks)} 只")
-    min15_data_list = collect_15min_data(
-        luojie_theme_stocks,
-        required_date=today,
-        as_of=time_metadata.get("as_of"),
-    )
-    min15_input_health = _build_sublevel_input_health(
-        "15m", luojie_theme_stocks, min15_data_list, today
-    )
-    chan_results_15min = []
-    if min15_data_list:
-        seed_map = {s["code"]: s for s in luojie_theme_stocks}
-        print(f"  15分钟数据获取: {len(min15_data_list)} 只, 缠论分析 ...")
-        for d in min15_data_list:
-            kline = d["klines"]
-            seed = seed_map.get(d["code"], {})
-            result = analyze(
-                code=d["code"], name=seed.get("name", d.get("name", "")),
-                dates=kline["dates"], opens=kline["opens"],
-                highs=kline["highs"], lows=kline["lows"],
-                closes=kline["closes"], volumes=kline["volumes"],
-            )
-            setattr(
-                result,
-                "strategy_input_evidence",
-                dict(d.get("input_evidence") or {}),
-            )
-            chan_results_15min.append(result)
-    luojie_pool = build_luojie_pool(luojie_theme_stocks, chan_results_15min)
-    luojie_pool.setdefault("diagnostics", {})["common_upstream"] = (
-        luojie_upstream_diag
-    )
-    luojie_pool["input_health"] = min15_input_health
-    if min15_input_health["status"] in {"partial", "unavailable"}:
-        luojie_pool["status"] = min15_input_health["status"]
-        luojie_pool["mode"] = (
-            "partial"
-            if min15_input_health["status"] == "partial"
-            else "enabled"
-        )
-        luojie_pool["reason"] = (
-            "15分钟策略输入未全部达到当日收盘核验要求，今日停止展示与评分"
-        )
-        luojie_pool["diagnostics"]["withheld_candidates"] = len(
-            luojie_pool.get("candidates", [])
-        )
-        luojie_pool["candidates"] = []
-    print(f"  罗姐池: 主题={luojie_pool.get('diagnostics', {}).get('theme_candidates', 0)} "
-          f"15min={luojie_pool.get('diagnostics', {}).get('with_15min', 0)} "
-          f"入池={len(luojie_pool.get('candidates', []))}")
-    luojie_pool["candidates"] = [
-        _attach_liquidity(_attach_sector_metadata(c))
-        for c in luojie_pool.get("candidates", [])
+    luojie_theme_stocks = luojie_research_plan["theme_rows"]
+    luojie_upstream_diag = luojie_research_plan[
+        "common_upstream_diagnostics"
     ]
+    luojie_pool = {
+        "status": "not_run",
+        "mode": "pending",
+        "strategy_version": LUOJIE_RESEARCH_STRATEGY_VERSION,
+        "candidates": [],
+        "diagnostics": {
+            "target_plan": luojie_research_plan["diagnostics"],
+            "common_upstream": luojie_upstream_diag,
+        },
+    }
+    min15_input_health = {
+        "interval": "15m",
+        "required_date": str(today),
+        "status": "not_required",
+        "requested_count": 0,
+        "verified_count": 0,
+        "missing_count": 0,
+        "verified_codes": [],
+        "missing_codes": [],
+        "blocks_strategy_output": False,
+    }
+    print(
+        "  共享健康候选={}，主题目标={}，15分钟预算={}，待正式30分钟后请求={}".format(
+            luojie_research_plan["shared_health_count"],
+            luojie_research_plan["theme_target_count"],
+            luojie_research_plan["budget"],
+            luojie_research_plan["selected_count"],
+        )
+    )
 
     # ================================================================
     # Phase 5: 30min fetch + analysis + candidate upgrade
@@ -2605,7 +3152,7 @@ def main(debug=False, preview=False, generated_at=None):
                             },
                             "buy_points_30min": [],
                             "pivots": sc.get("pivot_info", {}),
-                            "trend_type": "",
+                            "trend_type": sc.get("trend_type", ""),
                             "score": 0,
                             "resonance": {},
                             "ma_bullish": False,
@@ -2786,6 +3333,110 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     # ================================================================
+    # Phase 5.5: bounded LuoJie research 15m fetch (after formal 30m)
+    # ================================================================
+    print("=" * 60)
+    print("Phase 5.5: 罗姐独立研究 15min 获取")
+    print("=" * 60)
+    selected_luojie_stocks = luojie_research_plan["selected_rows"]
+    min15_data_list = []
+    chan_results_15min = []
+    analyzed_min15_rows = []
+    if selected_luojie_stocks:
+        min15_data_list = collect_15min_data(
+            selected_luojie_stocks,
+            required_date=today,
+            as_of=time_metadata.get("as_of"),
+        ) or []
+        seed_map = {
+            str(row.get("code") or ""): row
+            for row in selected_luojie_stocks
+        }
+        print(
+            "  15分钟研究请求: {} 只，返回 {} 只，逐只缠论分析 ...".format(
+                len(selected_luojie_stocks), len(min15_data_list)
+            )
+        )
+        for data_row in min15_data_list:
+            if not isinstance(data_row, dict):
+                continue
+            kline = data_row.get("klines")
+            if not isinstance(kline, dict):
+                continue
+            try:
+                result = analyze(
+                    code=data_row.get("code", ""),
+                    name=seed_map.get(
+                        str(data_row.get("code") or ""), {}
+                    ).get("name", data_row.get("name", "")),
+                    dates=kline["dates"],
+                    opens=kline["opens"],
+                    highs=kline["highs"],
+                    lows=kline["lows"],
+                    closes=kline["closes"],
+                    volumes=kline["volumes"],
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+            _attach_kline_evidence(result, kline)
+            setattr(
+                result,
+                "strategy_input_evidence",
+                dict(data_row.get("input_evidence") or {}),
+            )
+            analyzed_min15_rows.append(data_row)
+            chan_results_15min.append(result)
+
+    min15_input_health = _build_sublevel_input_health(
+        "15m", selected_luojie_stocks, analyzed_min15_rows, today
+    )
+    budget_excluded_count = luojie_research_plan["budget_excluded_count"]
+    if budget_excluded_count and min15_input_health["status"] == "verified":
+        min15_input_health["status"] = "partial"
+    min15_input_health.update({
+        "budget": luojie_research_plan["budget"],
+        "budget_source": luojie_research_plan["budget_source"],
+        "budget_error": luojie_research_plan["budget_error"],
+        "budget_excluded_count": budget_excluded_count,
+        "budget_excluded_codes": luojie_research_plan[
+            "budget_excluded_codes"
+        ],
+    })
+    luojie_pool = build_luojie_pool(
+        selected_luojie_stocks,
+        chan_results_15min,
+    )
+    luojie_pool["strategy_version"] = LUOJIE_RESEARCH_STRATEGY_VERSION
+    luojie_pool.setdefault("diagnostics", {}).update({
+        "target_plan": luojie_research_plan["diagnostics"],
+        "common_upstream": luojie_upstream_diag,
+        "budget_excluded_count": budget_excluded_count,
+        "budget_excluded_codes": luojie_research_plan[
+            "budget_excluded_codes"
+        ],
+    })
+    luojie_pool = _finalize_luojie_research_pool(
+        luojie_pool,
+        min15_input_health,
+    )
+    luojie_pool["input_health"] = _build_research_input_health(
+        min15_input_health
+    )
+    luojie_pool["candidates"] = [
+        _attach_liquidity(_attach_sector_metadata(candidate))
+        for candidate in luojie_pool.get("candidates", [])
+    ]
+    print(
+        "  罗姐研究: 主题目标={}，预算排除={}，15分钟核验={}，入池={}，状态={}".format(
+            luojie_research_plan["theme_target_count"],
+            budget_excluded_count,
+            min15_input_health["verified_count"],
+            len(luojie_pool.get("candidates", [])),
+            luojie_pool.get("status"),
+        )
+    )
+
+    # ================================================================
     # Phase 6: Score + generate report
     # ================================================================
     print("=" * 60)
@@ -2931,12 +3582,17 @@ def main(debug=False, preview=False, generated_at=None):
         else empty_trend_upstream_diag
     )
     observation_watchlist = startup_watchlist + formal_trend_watchlist
-    luojie_candidates, luojie_final_upstream_diag = (
+    _ignored_luojie_common_rows, luojie_final_upstream_diag = (
         _restrict_to_common_upstream(
             luojie_pool.get("candidates", []), pure_scored
         )
     )
-    luojie_pool["candidates"] = luojie_candidates
+    luojie_final_upstream_diag = dict(luojie_final_upstream_diag)
+    luojie_final_upstream_diag.update({
+        "enforced": False,
+        "reason": "research_independent_candidate_set",
+        "candidate_count": len(luojie_pool.get("candidates", [])),
+    })
     luojie_pool.setdefault("diagnostics", {})[
         "final_common_upstream"
     ] = luojie_final_upstream_diag
@@ -3088,15 +3744,10 @@ def main(debug=False, preview=False, generated_at=None):
     for candidate in next_day_boom.get("candidates", []):
         merged = dict(candidate)
         source = next_day_source_map.get(candidate.get("code"), {})
-        if isinstance(source, dict):
-            merged.update({
-                key: source.get(key)
-                for key in (
-                    "market_cap", "circulating_market_cap",
-                    "float_market_cap", "amounts", "amount", "closes",
-                    "volumes",
-                )
-            })
+        # Preserve the candidate's data contract while enriching it from the
+        # source row.  In particular, an empty source trend must not erase a
+        # real ChanResult trend already carried by the builder.
+        merged = _merge_next_day_source_fields(merged, source)
         merged = _attach_liquidity(_attach_sector_metadata(merged))
         next_day_candidates.append(merged)
     next_day_boom["candidates"] = next_day_candidates
@@ -3124,7 +3775,13 @@ def main(debug=False, preview=False, generated_at=None):
             "15m": min15_input_health,
             "30m": min30_input_health,
         },
+        daily_quantity=daily_quantity_health,
+        market_close_snapshot=close_snapshot_diagnostics,
     )
+    daily_fusion_input_health = selection_input_health["by_strategy"][
+        "daily_fusion"
+    ]
+    h4_input_health = selection_input_health["by_strategy"]["h4_t3"]
     print(
         "  H4 T+3: 微状态{}只，过门{}只".format(
             h4_t3_pool["diagnostics"]["microstate_count"],
@@ -3455,7 +4112,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "daily_pure",
             "display_name": "日线纯净策略",
-            "strategy_version": "daily-pure-close-v1",
+            "strategy_version": PURE_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "picks_pure",
             "evaluation_role": "baseline",
             "publication_surface": "baseline_candidates",
@@ -3468,7 +4127,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "daily_fusion",
             "display_name": "日线融合策略",
-            "strategy_version": "daily-fusion-close-v1",
+            "strategy_version": FUSION_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "picks_fusion",
             "evaluation_role": "formal",
             "publication_surface": "formal_recommendation",
@@ -3486,6 +4147,8 @@ def main(debug=False, preview=False, generated_at=None):
             "strategy_name": "observation_gate",
             "display_name": "观察池门控",
             "strategy_version": "observation-gate-close-v1",
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "observation_watchlist",
             "evaluation_role": "diagnostic",
             "publication_surface": "gate_diagnostics",
@@ -3499,6 +4162,8 @@ def main(debug=False, preview=False, generated_at=None):
             "strategy_name": "next_day_boom",
             "display_name": "次日大涨策略",
             "strategy_version": "next-day-boom-close-v1",
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "next_day_boom",
             "evaluation_role": "research",
             "publication_surface": "research_review",
@@ -3512,7 +4177,9 @@ def main(debug=False, preview=False, generated_at=None):
         {
             "strategy_name": "luojie_pool",
             "display_name": "罗姐主题策略",
-            "strategy_version": "luojie-close-v1",
+            "strategy_version": LUOJIE_RESEARCH_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "luojie_pool",
             "evaluation_role": "research",
             "publication_surface": "research_review",
@@ -3526,6 +4193,10 @@ def main(debug=False, preview=False, generated_at=None):
             "strategy_name": "h4_t3",
             "display_name": "H4 T+3 策略",
             "strategy_version": h4_t3_pool.get("strategy_version", ""),
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
+            "upstream_strategy_version": PURE_STRATEGY_VERSION,
+            "upstream_policy_version": DECISION_POLICY_VERSION,
             "source_pool": "h4_t3_pool",
             "evaluation_role": "formal",
             "publication_surface": "formal_recommendation",
@@ -3545,7 +4216,7 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         time_metadata.get("generated_at"),
         strategy_inputs,
-        policy_version=("decision-v1" if decision_engine else ""),
+        policy_version=(DECISION_POLICY_VERSION if decision_engine else ""),
         # The shadow switch is runtime-only metadata.  Keeping it out of the
         # immutable formal ledger prevents off/shadow runs from forking the
         # production cohort identity or attribution revision.
@@ -3570,6 +4241,9 @@ def main(debug=False, preview=False, generated_at=None):
                     not debug
                     and not preview
                     and data_quality.get("is_official") is True
+                    and selection_input_health["formal"][
+                        "formal_actions_allowed"
+                    ]
                 ),
             )
         )
@@ -3622,6 +4296,12 @@ def main(debug=False, preview=False, generated_at=None):
         "luojie_pool": luojie_pool,
         "h4_t3_pool": h4_t3_pool,
         "selection_input_health": selection_input_health,
+        # The immutable ledger and current strategy inputs carry the actual
+        # per-strategy identity.  Pass them into the manifest so comparison
+        # never reconstructs a version from a daily decision row or a
+        # cumulative historical scorecard.
+        "recommendation_entries": recommendation_entries,
+        "strategy_inputs": strategy_inputs,
     })
     strategy_scorecards = build_strategy_scorecards(
         historical_entries,
@@ -3659,6 +4339,9 @@ def main(debug=False, preview=False, generated_at=None):
         "sell_signals": sell_signals,
         "holding_risks": public_holding_risks,
         "recommendation_ledger": recommendation_entries,
+        # Keep the same current-run identity used to build scorecards on the
+        # public report plane; comparison must not fall back to row versions.
+        "strategy_run_manifest": strategy_run_manifest,
         "strategy_scorecards": strategy_scorecards,
         "data_quality": data_quality,
         "selection_input_health": selection_input_health,

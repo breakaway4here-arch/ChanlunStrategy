@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 
 from config import DAY_LOOKBACK
 from chanlun.backtest_execution import evaluate_forward_returns
+from chanlun.backtest_execution import normalize_backtest_kline
 from chanlun.backtest_metrics import summarize_return_samples
 from chanlun.data_fetcher import fetch_daily_kline
 from chanlun.historical_experiment_metrics import (
@@ -25,27 +26,7 @@ def _as_list(value):
 
 
 def _normalize_kline(kline: dict) -> Dict[str, list]:
-    if kline is None:
-        return {}
-
-    dates = [str(d).split(" ")[0] for d in _as_list(kline.get("dates"))]
-    opens = [float(v) for v in _as_list(kline.get("opens"))]
-    closes = [float(v) for v in _as_list(kline.get("closes"))]
-    highs = [float(v) for v in _as_list(kline.get("highs"))]
-    lows = [float(v) for v in _as_list(kline.get("lows"))]
-
-    if not (len(dates) == len(opens) == len(closes) == len(highs) == len(lows)):
-        return {}
-    if not dates:
-        return {}
-
-    return {
-        "dates": dates,
-        "opens": opens,
-        "closes": closes,
-        "highs": highs,
-        "lows": lows,
-    }
+    return normalize_backtest_kline(kline) or {}
 
 
 def _fetch_daily_kline_cached(code: str, cache: Dict[str, Optional[dict]]) -> Optional[dict]:

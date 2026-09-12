@@ -1,4 +1,4 @@
-"""Lightweight explainable decision engine v1.
+"""Lightweight explainable decision engine v2.
 
 This module is intentionally pure and side-effect free: only pure functions and
 in-memory calculations based on provided stock and market context data.
@@ -9,6 +9,8 @@ from __future__ import annotations
 import math
 from datetime import date
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+
+from .strategy_identity import DECISION_POLICY_VERSION
 
 DecisionResult = Dict[str, Any]
 
@@ -23,7 +25,7 @@ WATCH_MISSING_POSITION = "暂不判断（位置信息不足）"
 REJECT_HIGH = "不推荐（高位风险）"
 REJECT_NORMAL = "不推荐"
 
-DECISION_VERSION = "1"
+DECISION_VERSION = DECISION_POLICY_VERSION
 
 
 def evaluate_stock(
@@ -104,16 +106,24 @@ def _calc_structure_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
         score += 40
         reasons.append("突破结构")
 
-    trend = stock.get("trend_type") or _resolve_market_trend(context)
+    # ``engine_core.classify_trend`` emits ``上涨趋势``/``盘整`` while older
+    # callers use ``上升趋势``/``震荡``.  Consume both canonical spellings.
+    # Shared market context belongs to the sentiment component; it cannot
+    # manufacture a stock-level structure fact when that fact is missing.
+    trend = _normalize_structure_trend(stock.get("trend_type"))
+
     if trend == "上升趋势":
         score += 20
         reasons.append("趋势向上")
     elif trend == "震荡":
         score += 5
         reasons.append("震荡结构")
-    elif trend:
+    elif trend == "下跌趋势":
         score -= 5
-        reasons.append("趋势未定")
+        reasons.append("趋势向下")
+    elif trend == "无中枢":
+        score -= 5
+        reasons.append("未形成中枢/尚无趋势结构")
     else:
         score -= 5
         reasons.append("趋势信息不足")
@@ -146,6 +156,22 @@ def _calc_structure_score(stock: Mapping[str, Any], context: Mapping[str, Any]) 
         reasons.append("结构信息不足")
 
     return score, reasons
+
+
+def _normalize_structure_trend(value: Any) -> str:
+    """Return the small canonical trend vocabulary used by structure scoring."""
+
+    normalized = str(value or "").strip()
+    lowered = normalized.lower()
+    if normalized in {"上升趋势", "上涨趋势"}:
+        return "上升趋势"
+    if normalized == "无中枢":
+        return "无中枢"
+    if normalized in {"盘整", "震荡"}:
+        return "震荡"
+    if normalized == "下跌趋势":
+        return "下跌趋势"
+    return ""
 
 
 def _calc_position_score(stock: Mapping[str, Any]) -> Tuple[int, List[str]]:

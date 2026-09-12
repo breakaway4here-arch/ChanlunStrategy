@@ -240,7 +240,7 @@ def _decision_snapshot(item):
     })
 
 
-def _contribution(report_date, code, item, strategy):
+def _contribution(report_date, code, item, strategy, *, policy_version=""):
     name = str(strategy.get("strategy_name") or "unknown").strip() or "unknown"
     version = str(strategy.get("strategy_version") or "").strip()
     version_status = "verified" if version else "unknown"
@@ -305,14 +305,34 @@ def _contribution(report_date, code, item, strategy):
         user_action=user_action,
         decision_code=decision_code,
     )
+    declared_policy_version = str(
+        strategy.get("policy_version")
+        or policy_version
+        or "unknown"
+    ).strip() or "unknown"
+    upstream_strategy_version = str(
+        strategy.get("upstream_strategy_version") or ""
+    ).strip()
+    upstream_policy_version = str(
+        strategy.get("upstream_policy_version")
+        or (declared_policy_version if upstream_strategy_version else "")
+    ).strip()
     return {
         "contribution_id": "contrib:{}".format(_stable_hash(
-            LEDGER_SCHEMA_VERSION, report_date, code, name, version, source_pool
+            LEDGER_SCHEMA_VERSION, report_date, code, name, version, source_pool,
+            declared_policy_version, upstream_strategy_version,
+            upstream_policy_version,
         )),
         "strategy_name": name,
         "display_name": display_name,
         "strategy_version": version,
         "version_status": version_status,
+        "policy_version": declared_policy_version,
+        "preclose_strategy_version": str(
+            strategy.get("preclose_strategy_version") or "unknown"
+        ),
+        "upstream_strategy_version": upstream_strategy_version or "unknown",
+        "upstream_policy_version": upstream_policy_version or "unknown",
         "source_pool": source_pool,
         "decision_code": decision_code,
         "decision_label": str(decision.get("decision") or ""),
@@ -363,7 +383,13 @@ def build_recommendation_entries(
             code = str(item.get("code") or "").strip()
             if not _valid_code(code):
                 continue
-            contribution = _contribution(report_date, code, item, strategy)
+            contribution = _contribution(
+                report_date,
+                code,
+                item,
+                strategy,
+                policy_version=policy_version,
+            )
             contribution_id = contribution["contribution_id"]
             if contribution_id in seen_contributions:
                 continue

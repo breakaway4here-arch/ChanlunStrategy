@@ -10,7 +10,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
 from config import DAY_LOOKBACK
-from chanlun.backtest_execution import evaluate_forward_returns
+from chanlun.backtest_execution import evaluate_forward_returns, normalize_backtest_kline
 from chanlun.backtest_metrics import summarize_return_samples
 from chanlun.data_fetcher import fetch_daily_kline
 from scripts.backtest_recommendation_quality import iter_snapshot_picks
@@ -113,13 +113,11 @@ def run(limit_days=None):
             continue
 
         # Normalize for forward-return evaluator.
-        normalized_kline = {
-            "dates": [str(d).split(" ")[0] for d in _as_list(kline.get("dates"))],
-            "opens": [float(x) for x in _as_list(kline.get("opens"))],
-            "highs": [float(x) for x in _as_list(kline.get("highs"))],
-            "lows": [float(x) for x in _as_list(kline.get("lows"))],
-            "closes": [float(x) for x in _as_list(kline.get("closes"))],
-        }
+        normalized_kline = normalize_backtest_kline(kline)
+        if normalized_kline is None:
+            summary["skipped_no_kline"] += 1
+            summary["skipped"] += 1
+            continue
 
         samples = evaluate_pick(pick, snap_date, normalized_kline)
         bbp = pick.get("best_buy_point") or {}

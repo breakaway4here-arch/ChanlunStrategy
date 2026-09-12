@@ -17,6 +17,11 @@ from typing import Any, Dict, Iterable, List, Mapping
 from chanlun.scoring_engine import compute_opportunity_score
 from chanlun.pool_contract import resolve_list_pool, resolve_nested_strategy_pool
 from chanlun.right_side_startup import build_right_side_startup_evidence
+from chanlun.volume_contract import (
+    canonical_amount_window,
+    canonical_volume_window,
+    volume_evidence_status as get_volume_evidence_status,
+)
 from config import (
     OBSERVATION_MAX_PER_REASON,
     OBSERVATION_MAX_PER_SECTOR,
@@ -664,14 +669,32 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     row = _to_dict(item)
 
     code = _safe_str(row.get("code"))
-    volumes = _to_float_list(row.get("volumes"))
-    recent = volumes[-20:] if volumes else []
-    volume20 = round(sum(recent) / len(recent), 4) if recent else 0.0
+    raw_volumes = row.get("volumes")
+    if hasattr(raw_volumes, "tolist"):
+        raw_volumes = raw_volumes.tolist()
+    raw_volumes = list(raw_volumes) if isinstance(raw_volumes, (list, tuple)) else []
+    recent_raw = raw_volumes[-20:] if raw_volumes else []
+    recent_source = dict(row)
+    recent_source["volumes"] = recent_raw
+    for key in ("volume_units", "volume_raw_units", "volume_sources"):
+        value = row.get(key)
+        if value is not None and not isinstance(value, (str, bytes)):
+            recent_source[key] = list(value)[-20:]
+    volume_evidence_status = (
+        get_volume_evidence_status(recent_source, recent_raw) if recent_raw else "missing"
+    )
+    canonical_recent = canonical_volume_window(row, slice(-20, None))
+    recent = canonical_recent.tolist() if canonical_recent is not None else []
+    volume20 = (
+        round(sum(recent) / len(recent), 4)
+        if recent and len(recent) >= 20 and volume_evidence_status == "available"
+        else None
+    )
 
     volume_ratio20 = _safe_float(row.get("volume_ratio"), default=0.0)
-    if volume_ratio20 is None:
-        volume_ratio20 = 0.0
-    if volume_ratio20 <= 0 and len(recent) >= 2:
+    if volume_evidence_status != "available" or len(recent) < 20:
+        volume_ratio20 = None
+    if volume_ratio20 is not None and volume_ratio20 <= 0 and len(recent) >= 2:
         prev20 = recent[:-1]
         prev_avg = sum(prev20) / len(prev20) if prev20 else 0.0
         if prev_avg > 0:
@@ -679,9 +702,58 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
 
     money20 = _safe_float(row.get("money20"))
     liquidity_source = _safe_str(row.get("liquidity_source"))
-    liquidity_score = 0.0
-    liquidity_label = "低流动性"
+    declared_window = row.get("liquidity_window_bars")
+    if isinstance(declared_window, bool):
+        declared_window = 0
+    try:
+        liquidity_window_bars = int(declared_window or 0)
+    except (TypeError, ValueError):
+        liquidity_window_bars = 0
+
+    # New producers attest the exact 20-bar calculation explicitly.  Legacy
+    # rows can be recovered only when their aligned per-bar evidence recomputes
+    # the same amount; a bare positive money20 is never upgraded to turnover.
+    liquidity_evidence_status = "missing" if money20 is None else "unverified"
     if money20 is not None and money20 > 0:
+        if liquidity_window_bars == 20 and liquidity_source == "amounts":
+            liquidity_evidence_status = "available"
+        elif liquidity_window_bars == 20 and liquidity_source == "volume_price_proxy":
+            liquidity_evidence_status = "estimated"
+        else:
+            canonical_amounts = canonical_amount_window(row, slice(-20, None))
+            if canonical_amounts is not None and len(canonical_amounts) == 20:
+                recomputed = sum(canonical_amounts.tolist()) / 20.0
+                if math.isclose(recomputed, money20, rel_tol=1e-9, abs_tol=0.01):
+                    liquidity_source = "amounts"
+                    liquidity_window_bars = 20
+                    liquidity_evidence_status = "available"
+            if liquidity_evidence_status == "unverified":
+                closes = row.get("closes")
+                if hasattr(closes, "tolist"):
+                    closes = closes.tolist()
+                close_values = list(closes) if isinstance(closes, (list, tuple)) else []
+                canonical_proxy = canonical_volume_window(row, slice(-20, None))
+                if canonical_proxy is not None and len(canonical_proxy) == 20 and len(close_values) >= 20:
+                    close_tail = [_safe_float(value) for value in close_values[-20:]]
+                    if all(value is not None for value in close_tail):
+                        recomputed = sum(
+                            float(close_value) * float(volume) * 100.0
+                            for close_value, volume in zip(close_tail, canonical_proxy.tolist())
+                        ) / 20.0
+                        if math.isclose(recomputed, money20, rel_tol=1e-9, abs_tol=0.01):
+                            liquidity_source = "volume_price_proxy"
+                            liquidity_window_bars = 20
+                            liquidity_evidence_status = "estimated"
+
+    liquidity_score = 0.0
+    liquidity_label = "待数量核验" if money20 is None else "来源未核验"
+    liquidity_evaluated = False
+    if (
+        money20 is not None
+        and money20 > 0
+        and liquidity_evidence_status in {"available", "estimated"}
+    ):
+        liquidity_evaluated = True
         if money20 < 30_000_000:
             liquidity_score = 0.0
             liquidity_label = "低流动性"
@@ -697,17 +769,19 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         else:
             liquidity_score = 100.0
             liquidity_label = "高流动性"
-        if not liquidity_source:
-            liquidity_source = "amounts"
-    elif volume_ratio20 > 0 and volume20 > 0:
+    elif volume_ratio20 is not None and volume20 is not None and volume_ratio20 > 0 and volume20 > 0:
         # Without real turnover, volume only proves activity and must not become high liquidity.
         liquidity_score = round(_clamp((volume_ratio20 - 0.2) / 2.0 * 25.0, 0.0, 25.0), 4)
         liquidity_label = "量能活跃"
         liquidity_source = liquidity_source or "volume_proxy"
-    elif volume20 > 0:
+        liquidity_evidence_status = "volume_only"
+        liquidity_evaluated = True
+    elif volume20 is not None and volume20 > 0:
         liquidity_score = round(_clamp(volume20 / 2_000_000.0 * 20.0, 0.0, 20.0), 4)
         liquidity_label = "量能活跃"
         liquidity_source = liquidity_source or "volume_proxy"
+        liquidity_evidence_status = "volume_only"
+        liquidity_evaluated = True
 
     code_style_score = 0.0
     growth_board_label = ""
@@ -833,6 +907,7 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         market_cap_for_score is not None
         and money20 is not None
         and money20 > 0
+        and liquidity_evidence_status in {"available", "estimated"}
         and ret20 is not None
         and bool(industry_key)
     )
@@ -840,6 +915,8 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         {
             "name": "liquidity",
             "score": round(_clamp(liquidity_score, 0.0, 100.0), 4),
+            "evaluated": liquidity_evaluated,
+            "status": liquidity_evidence_status,
             "threshold_elite": 70.0,
             "threshold_strong": 55.0,
         },
@@ -884,6 +961,7 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     return {
         "volume20": volume20,
         "volume_ratio20": volume_ratio20,
+        "volume_evidence_status": volume_evidence_status,
         "liquidity_label": liquidity_label,
         "liquidity_score": liquidity_score,
         "code_style_score": code_style_score,
@@ -904,6 +982,8 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         "circulating_market_cap": circulating_market_cap,
         "float_market_cap": circulating_market_cap,
         "liquidity_source": liquidity_source,
+        "liquidity_window_bars": liquidity_window_bars,
+        "liquidity_evidence_status": liquidity_evidence_status,
         "money20": money20,
         "quality_evidence_eligible": quality_evidence_eligible,
         "quality_evidence_status": (
@@ -1250,9 +1330,30 @@ def _build_item(
         "change_pct": metrics.get("change_pct"),
         "reference_price": metrics.get("reference_price"),
         "current_price": metrics.get("current_price"),
+        "price_basis": (
+            dict(_to_dict(preferred_raw.get("price_basis")))
+            if _to_dict(preferred_raw.get("price_basis"))
+            else None
+        ),
         "distance_from_reference_pct": metrics.get("distance"),
         "primary_reason": primary_reason,
         "risk_flags": all_risk_flags,
+        "watch_anchor": (
+            dict(_to_dict(preferred_raw.get("watch_anchor")))
+            if _to_dict(preferred_raw.get("watch_anchor"))
+            else None
+        ),
+        "next_confirmation": list(
+            preferred_raw.get("next_confirmation")
+            or preferred_raw.get("upgrade_conditions")
+            or preferred_raw.get("next_day_conditions")
+            or []
+        ),
+        "invalidation": list(
+            preferred_raw.get("invalidation_conditions")
+            or preferred_raw.get("cancel_conditions")
+            or []
+        ),
         "rank_trace": rank_trace,
         "decision_engine_v1": decision_payload,
         "h4_predictions": _to_dict(preferred_raw.get("h4_predictions")),
@@ -1424,7 +1525,10 @@ def _collect_views(
     luojie_state = resolve_nested_strategy_pool(report_data, "luojie_pool")
     views["luojie"] = _normalize_pool_items(
         luojie_state["candidates"], "luojie"
-    ) if luojie_state["state"] in {"ran", "verified_empty"} else {}
+    ) if luojie_state["state"] in {"ran", "verified_empty"} or (
+        luojie_state["state"] == "partial"
+        and luojie_state.get("contract_valid") is True
+    ) else {}
 
     confirming_state = resolve_list_pool(report_data, "startup_watchlist")
     views["confirming"] = _normalize_pool_items(
@@ -1460,9 +1564,14 @@ def _row_has_untrusted_strategy_input(
         return True
     luojie = _strategy_input_health(report_data, "luojie_pool")
     if "luojie" in sources and luojie and luojie.get("status") != "verified":
+        verified_codes = {
+            _safe_str(value) for value in luojie.get("verified_codes") or []
+        }
         invalid_codes = {
             _safe_str(value) for value in luojie.get("invalid_codes") or []
         }
+        if code and code in verified_codes:
+            return False
         return not invalid_codes or code in invalid_codes
     return False
 
@@ -1639,6 +1748,14 @@ def _build_view_availability(
                 report_data, "luojie_pool"
             )
             if luojie_health and luojie_health.get("status") != "verified":
+                if (
+                    luojie_health.get("research_candidate_output_allowed") is True
+                    or state.get("contract_valid") is True
+                ):
+                    return _availability(
+                        "partial",
+                        "15分钟部分核验；仅展示逐股核验候选，其余候选待数据核验。",
+                    )
                 return _availability(
                     "partial",
                     "15分钟策略输入过期或未核验；候选仅作为事故样本复盘，已排除正式动作和评分。",

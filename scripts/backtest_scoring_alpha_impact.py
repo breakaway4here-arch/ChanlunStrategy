@@ -26,7 +26,10 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
-from chanlun.backtest_execution import evaluate_forward_returns  # noqa: E402
+from chanlun.backtest_execution import (  # noqa: E402
+    evaluate_forward_returns,
+    normalize_backtest_kline,
+)
 from chanlun.report_view_model import _build_pool_quality_features  # noqa: E402
 from chanlun.scoring_engine import compute_opportunity_score  # noqa: E402
 
@@ -189,25 +192,24 @@ def _merge_candidates(
     return merged
 
 
-def _extract_kline(item: Mapping[str, Any]) -> dict[str, dict[str, float]] | None:
-    dates = [str(x).split(" ")[0] for x in _safe_list(item.get("dates"))]
-    opens = [_safe_float(x) for x in _safe_list(item.get("opens"))]
-    highs = [_safe_float(x) for x in _safe_list(item.get("highs"))]
-    lows = [_safe_float(x) for x in _safe_list(item.get("lows"))]
-    closes = [_safe_float(x) for x in _safe_list(item.get("closes"))]
-    if not dates or not (len(dates) == len(opens) == len(highs) == len(lows) == len(closes)):
+def _extract_kline(item: Mapping[str, Any]) -> dict[str, dict[str, Any]] | None:
+    normalized = normalize_backtest_kline(item)
+    if normalized is None:
         return None
 
-    rows: dict[str, dict[str, float]] = {}
-    for idx, date in enumerate(dates):
-        o, h, l, c = opens[idx], highs[idx], lows[idx], closes[idx]
-        if None in (o, h, l, c):
-            continue
-        rows[date] = {"open": o, "high": h, "low": l, "close": c}
+    rows: dict[str, dict[str, Any]] = {}
+    for idx, date in enumerate(normalized["dates"]):
+        rows[date] = {
+            "open": normalized["opens"][idx],
+            "high": normalized["highs"][idx],
+            "low": normalized["lows"][idx],
+            "close": normalized["closes"][idx],
+            "is_final": normalized["is_final"][idx],
+        }
     return rows or None
 
 
-def _build_kline_cache(reports: Iterable[tuple[str, Mapping[str, Any]]]) -> dict[str, dict[str, dict[str, float]]]:
+def _build_kline_cache(reports: Iterable[tuple[str, Mapping[str, Any]]]) -> dict[str, dict[str, dict[str, Any]]]:
     cache: dict[str, dict[str, dict[str, float]]] = defaultdict(dict)
     for _, report in reports:
         for rows in _source_items(report).values():
@@ -219,17 +221,20 @@ def _build_kline_cache(reports: Iterable[tuple[str, Mapping[str, Any]]]) -> dict
     return cache
 
 
-def _kline_for_code(cache: Mapping[str, Mapping[str, Mapping[str, float]]], code: str) -> dict[str, list[Any]] | None:
+def _kline_for_code(cache: Mapping[str, Mapping[str, Mapping[str, Any]]], code: str) -> dict[str, list[Any]] | None:
     rows = cache.get(code)
     if not rows:
         return None
     dates = sorted(rows)
+    if any("is_final" not in rows[date] for date in dates):
+        return None
     return {
         "dates": dates,
         "opens": [rows[d]["open"] for d in dates],
         "highs": [rows[d]["high"] for d in dates],
         "lows": [rows[d]["low"] for d in dates],
         "closes": [rows[d]["close"] for d in dates],
+        "is_final": [rows[d]["is_final"] for d in dates],
     }
 
 

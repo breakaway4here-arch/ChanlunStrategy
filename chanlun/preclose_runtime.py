@@ -22,6 +22,7 @@ from config import (
 )
 
 from .market_history_store import MarketHistoryStore
+from .identity import normalize_index_identity
 from .preclose_data import fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
 from .price_basis import adjustment_factor, scale_price
@@ -45,6 +46,15 @@ MARKET_INDICES = {
     "中证500": "000905",
 }
 _ARRAY_KEYS = ("dates", "opens", "highs", "lows", "closes", "volumes")
+_VOLUME_METADATA_KEYS = (
+    ("volume_units", "volume_unit", "unknown"),
+    ("volume_raw_units", "volume_raw_unit", "unknown"),
+    ("volume_sources", "volume_source", ""),
+)
+_AMOUNT_METADATA_KEYS = (
+    ("amount_units", "amount_unit", "unknown"),
+    ("amount_sources", "amount_source", ""),
+)
 
 
 def _as_list(value):
@@ -63,6 +73,48 @@ def _finite(value):
     except (TypeError, ValueError):
         return None
     return result if math.isfinite(result) else None
+
+
+def _metadata_series(kline, plural_key, scalar_key, length, default):
+    """Expand per-bar metadata without assigning one source to old bars."""
+    raw_value = kline.get(plural_key)
+    try:
+        raw = (
+            _as_list(raw_value)
+            if raw_value is not None and not isinstance(raw_value, (str, bytes))
+            else []
+        )
+    except (TypeError, ValueError):
+        raw = []
+    if len(raw) == length:
+        return [str(value if value is not None else default) for value in raw]
+    scalar = kline.get(scalar_key)
+    if length == 1 and scalar is not None:
+        return [str(scalar)]
+    return [default] * length
+
+
+def _metadata_summary(values, default):
+    normalized = [str(value if value is not None else default) for value in values]
+    return normalized[0] if normalized and len(set(normalized)) == 1 else "mixed"
+
+
+def _amount_available_series(kline, amounts, length):
+    raw_value = kline.get("amount_available")
+    try:
+        raw = (
+            _as_list(raw_value)
+            if raw_value is not None
+            and not isinstance(raw_value, (str, bytes, bool, int, float))
+            else []
+        )
+    except (TypeError, ValueError):
+        raw = []
+    if len(raw) == length:
+        return [value in (True, 1) for value in raw]
+    if length == 1 and isinstance(kline.get("amount_available"), (bool, int)):
+        return [kline["amount_available"] in (True, 1)]
+    return [False] * length
 
 
 def _readonly_connection(path):
@@ -144,7 +196,7 @@ def _valid_quote(quote):
         return None
     if values["volume"] is None or values["volume"] < 0:
         return None
-    if values["amount"] is None or values["amount"] < 0:
+    if values["amount"] is None or values["amount"] <= 0:
         return None
     if values["high"] < max(
         values["open"], values["low"], values["current_price"]
@@ -183,6 +235,47 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
     amounts = _as_list(source_kline.get("amounts"))
     if len(amounts) != len(arrays["dates"]):
         amounts = [None] * len(arrays["dates"])
+    history_length = len(arrays["dates"])
+    amount_available = _amount_available_series(
+        source_kline, amounts, history_length
+    )
+    volume_metadata = {
+        plural: _metadata_series(
+            source_kline, plural, scalar, history_length, default
+        )
+        for plural, scalar, default in _VOLUME_METADATA_KEYS
+    }
+    amount_metadata = {
+        plural: _metadata_series(
+            source_kline, plural, scalar, history_length, default
+        )
+        for plural, scalar, default in _AMOUNT_METADATA_KEYS
+    }
+    quote_volume_unit = str(quote.get("volume_unit") or "unknown").strip().lower()
+    quote_volume_raw_unit = str(
+        quote.get("volume_raw_unit") or "unknown"
+    ).strip().lower()
+    quote_volume_source = str(
+        quote.get("volume_source") or ""
+    ).strip()
+    quote_amount_unit_raw = str(quote.get("amount_unit") or "unknown").strip()
+    quote_amount_unit = (
+        "CNY" if quote_amount_unit_raw.upper() == "CNY" else "unknown"
+    )
+    quote_amount_source = str(
+        quote.get("amount_source") or ""
+    ).strip()
+    if quote_volume_unit not in ("hands", "unknown"):
+        return None, "invalid_volume_metadata"
+    if quote_volume_raw_unit not in ("hands", "shares", "unknown"):
+        return None, "invalid_volume_metadata"
+    if quote_amount_unit_raw.upper() not in ("CNY", "UNKNOWN"):
+        return None, "invalid_amount_metadata"
+    quote_amount_available = bool(
+        quote.get("amount_available") in (True, 1)
+        and quote_amount_unit == "CNY"
+        and quote_amount_source
+    )
     arrays["dates"].append(str(trade_date))
     arrays["opens"].append(scale_price(values["open"], factor))
     arrays["highs"].append(scale_price(values["high"], factor))
@@ -190,8 +283,23 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
     arrays["closes"].append(scale_price(values["current_price"], factor))
     arrays["volumes"].append(values["volume"])
     amounts.append(values["amount"])
+    volume_metadata["volume_units"].append(quote_volume_unit)
+    volume_metadata["volume_raw_units"].append(quote_volume_raw_unit)
+    volume_metadata["volume_sources"].append(quote_volume_source)
+    amount_metadata["amount_units"].append(quote_amount_unit)
+    amount_metadata["amount_sources"].append(quote_amount_source)
+    amount_available.append(quote_amount_available)
     output_kline = {key: values_list[-120:] for key, values_list in arrays.items()}
     output_kline["amounts"] = amounts[-120:]
+    output_kline["amount_available"] = amount_available[-120:]
+    for plural, _scalar, default in _VOLUME_METADATA_KEYS:
+        values_list = volume_metadata[plural][-120:]
+        output_kline[plural] = values_list
+        output_kline[_scalar] = _metadata_summary(values_list, default)
+    for plural, _scalar, default in _AMOUNT_METADATA_KEYS:
+        values_list = amount_metadata[plural][-120:]
+        output_kline[plural] = values_list
+        output_kline[_scalar] = _metadata_summary(values_list, default)
     output_kline["finals"] = [True] * (len(output_kline["dates"]) - 1) + [False]
     output_kline["source"] = "formal_history+eastmoney_intraday"
     data_status = candidate.get("data_status")
@@ -210,7 +318,14 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
         "is_st": bool(quote.get("is_st")),
         "listed_date": str(quote.get("listed_date") or ""),
         "change_pct": _finite(quote.get("change_pct")),
+        "volume": values["volume"],
+        "volume_unit": quote_volume_unit,
+        "volume_raw_unit": quote_volume_raw_unit,
+        "volume_source": quote_volume_source,
         "amount": values["amount"],
+        "amount_available": quote_amount_available,
+        "amount_unit": quote_amount_unit,
+        "amount_source": quote_amount_source,
         "status": "available",
         "bar_state": "intraday",
         "is_final": False,
@@ -246,7 +361,13 @@ def _sector_context(quotes):
             continue
         if change is not None:
             aggregates[name]["changes"].append(change)
-        if amount is not None and amount >= 0:
+        if (
+            amount is not None
+            and amount > 0
+            and row.get("amount_available") in (True, 1)
+            and str(row.get("amount_unit") or "").strip().upper() == "CNY"
+            and bool(str(row.get("amount_source") or "").strip())
+        ):
             aggregates[name]["amount"] += amount
     ranked = []
     for name, value in aggregates.items():
@@ -289,6 +410,14 @@ def select_preclose_30m_targets(rows, components=None):
         except Exception:
             continue
         if analysis is not None:
+            for key in (
+                "volume_units", "volume_raw_units", "volume_sources",
+                "volume_unit", "volume_raw_unit", "volume_source",
+                "amount_available", "amount_units", "amount_sources",
+                "amount_unit", "amount_source",
+            ):
+                if key in kline:
+                    setattr(analysis, key, kline[key])
             analyses.append(analysis)
             sector_stocks[str(row.get("code") or "")] = {
                 key: row.get(key)
@@ -446,9 +575,10 @@ def fetch_preclose_indices(trade_date, max_workers=6):
     executor = ThreadPoolExecutor(max_workers=max(1, int(max_workers)))
     futures = {}
     for name, code in MARKET_INDICES.items():
+        identity = normalize_index_identity(code)
         count = 60 if name == "上证指数" else 3
         for source, fetcher in sources.items():
-            future = executor.submit(fetcher, code, count)
+            future = executor.submit(fetcher, identity, count)
             futures[future] = (name, code, source)
     try:
         for future in as_completed(futures):

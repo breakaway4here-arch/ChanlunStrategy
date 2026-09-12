@@ -45,6 +45,9 @@ def repair_missing_amounts(
                         """
                         UPDATE {table}
                         SET amount=volume * close * 100.0,
+                            amount_available=0,
+                            amount_unit='unknown',
+                            amount_source='volume_close_proxy',
                             updated_at=?
                         WHERE amount<=0 AND volume>=0 AND close>0
                         """.format(table=table),

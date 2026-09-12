@@ -472,6 +472,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -519,6 +520,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -569,6 +571,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "highs": [1, 1, 1, 1, 1, 1, 1],
                 "lows": [1, 1, 1, 1, 1, 1, 1],
                 "closes": [1, 1, 1, 1, 1, 1, 1],
+                "is_final": [True] * 7,
             },
             "000002": {
                 "dates": [
@@ -584,6 +587,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "highs": [1, 1, 1, 1, 1, 1, 1],
                 "lows": [1, 1, 1, 1, 1, 1, 1],
                 "closes": [1, 1, 1, 1, 1, 1, 1],
+                "is_final": [True] * 7,
             },
         }.get(code)
         evaluate_mock.return_value = {
@@ -691,6 +695,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -722,6 +727,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -770,6 +776,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
 
         observed_entry_modes = []
@@ -845,6 +852,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_exit_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -899,6 +907,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_exit_mock.return_value = None
         payload = run_policy_experiment_metrics(
@@ -946,6 +955,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
 
         def evaluate_side_effect(_normalized_kline, _snap_date, entry_mode):
@@ -987,6 +997,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,
@@ -1057,6 +1068,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
                 "highs": [1, 1, 1, 1, 1],
                 "lows": [1, 1, 1, 1, 1],
                 "closes": [1, 1, 1, 1, 1],
+                "is_final": [True] * 5,
             }
         }.get(code)
         evaluate_mock.return_value = {
@@ -1124,6 +1136,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1],
+            "is_final": [True] * 5,
         }
         evaluate_mock.side_effect = [
             {
@@ -1333,6 +1346,7 @@ class PolicyExperimentMetricsTests(unittest.TestCase):
             "highs": [1, 1, 1, 1, 1, 1, 1],
             "lows": [1, 1, 1, 1, 1, 1, 1],
             "closes": [1, 1, 1, 1, 1, 1, 1],
+            "is_final": [True] * 7,
         }
         evaluate_mock.return_value = {
             "t1_close_pct": 1.0,

@@ -8,11 +8,15 @@ import math
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
+from .strategy_identity import (
+    PRE_CLOSE_PUBLIC_SCHEMA_VERSION,
+    PRE_CLOSE_STRATEGY_VERSION,
+)
+
 
 POOL_KEYS = ("main", "h4_t3", "acceleration")
-SNAPSHOT_SCHEMA_VERSION = "preclose-selection-v1"
+SNAPSHOT_SCHEMA_VERSION = PRE_CLOSE_PUBLIC_SCHEMA_VERSION
 SNAPSHOT_MODE = "preclose_advisory"
-PRE_CLOSE_STRATEGY_VERSION = "preclose-1445-v2"
 
 
 def _parse_iso(value):

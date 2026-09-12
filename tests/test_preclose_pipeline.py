@@ -1,3 +1,4 @@
+import copy
 import json
 import tempfile
 import unittest
@@ -17,12 +18,21 @@ from chanlun.preclose_pipeline import (
     build_preclose_main_pool,
     build_preclose_market_context,
     evaluate_preclose_main_candidates,
+    _derive_turnover,
+    _analyze_daily_inputs,
+    _build_daily_state,
     _public_pool,
     _merge_sector_metadata,
+    _sector_stocks,
     run_preclose_pipeline,
 )
 from chanlun.preclose_contract import build_public_preclose_view
 from chanlun.report_view_model import build_workspace
+from chanlun.scorer import apply_scores as apply_real_scores
+from chanlun.volume_contract import (
+    canonical_volume_window,
+    quantity_evidence_observation,
+)
 from preclose_run import PrecloseRunLock, run_preclose_once
 
 
@@ -173,6 +183,115 @@ def _market_inputs(include_psy12=False):
         result["psy12"] = {"score": 100, "status": "available"}
         result["psy12_shadow"] = {"shadow_score_with_psy12": 100}
     return result
+
+
+def _prove_quantity_evidence(inputs, proven_codes=None):
+    proven_codes = (
+        {str(code) for code in proven_codes}
+        if proven_codes is not None else None
+    )
+    for row in inputs.get("daily") or []:
+        if proven_codes is not None and str(row.get("code")) not in proven_codes:
+            continue
+        kline = row["klines"]
+        count = len(kline["volumes"])
+        kline.update({
+            "volume_units": ["hands"] * count,
+            "volume_raw_units": ["hands"] * count,
+            "volume_sources": ["fixture"] * count,
+            "amount_available": [True] * count,
+            "amount_units": ["CNY"] * count,
+            "amount_sources": ["fixture"] * count,
+        })
+    for code, evidence in (inputs.get("min30") or {}).items():
+        if proven_codes is not None and str(code) not in proven_codes:
+            continue
+        kline = evidence.get("klines") if isinstance(evidence, dict) else None
+        if not isinstance(kline, dict):
+            continue
+        count = len(kline["volumes"])
+        kline.update({
+            "volume_units": ["hands"] * count,
+            "volume_raw_units": ["hands"] * count,
+            "volume_sources": ["fixture"] * count,
+        })
+    return inputs
+
+
+def _quantity_chain_components():
+    base = PreclosePipelineComponents()
+
+    def analyze(**kwargs):
+        result = base.analyze(**kwargs)
+        if result is not None and not result.buy_points:
+            result.buy_points = _candidate(
+                kwargs["code"], kwargs.get("name", "")
+            )["buy_points"]
+            result.buy_points[0].update({
+                "trend_strength": 2,
+                "volatility": 0.05,
+            })
+        return result
+
+    return replace(base, analyze=analyze)
+
+
+def _role_quantity_components(right_side_mode):
+    base = _components(right_side_mode=right_side_mode)
+
+    def analyze(**kwargs):
+        result = _analysis(kwargs["code"], kwargs.get("name", ""))
+        for key in ("dates", "opens", "highs", "lows", "closes", "volumes"):
+            setattr(result, key, kwargs[key])
+        return result
+
+    def observation(result, consumer):
+        return quantity_evidence_observation(
+            result.code,
+            consumer,
+            6,
+            canonical_volume_window(result, slice(-6, None)) is not None,
+        )
+
+    def daily_pool(results, sector_stocks=None, mode="pure"):
+        del sector_stocks
+        formal = [result for result in results if result.code == "300998"]
+        return (
+            [_candidate(result.code, result.name) for result in formal],
+            {
+                "mode": mode,
+                "quantity_evidence": [
+                    observation(result, "daily_structure_liquidity")
+                    for result in formal
+                ],
+            },
+        )
+
+    def startup_pool(results, sector_stocks=None):
+        del sector_stocks
+        return [], [], {
+            "quantity_evidence": [
+                observation(result, "strong_startup_volume")
+                for result in results
+            ]
+        }
+
+    def right_pool(results, sector_stocks=None):
+        del sector_stocks
+        return [], [], {
+            "quantity_evidence": [
+                observation(result, "trend_continuation_volume")
+                for result in results
+            ]
+        }
+
+    return replace(
+        base,
+        analyze=analyze,
+        build_daily_structure_pool=daily_pool,
+        build_strong_startup_pool=startup_pool,
+        build_right_side_startup_pool=right_pool,
+    )
 
 
 class FixedClock:
@@ -340,6 +459,162 @@ def _config(clock=None, run_id="run-a"):
 
 
 class PreclosePipelineTests(unittest.TestCase):
+    def test_preclose_quantity_roles_keep_research_and_observation_out_of_formal_gate(self):
+        inputs = _prove_quantity_evidence(_market_inputs(), ["300998"])
+        inputs["target_codes"] = []
+        inputs["min30"] = {}
+        observation = inputs["daily"][1]["klines"]
+        observation["closes"][-2:] = [10.0, 11.0]
+        observation["opens"][-1] = 10.8
+        observation["highs"][-1] = 11.0
+        observation["lows"][-1] = 10.7
+
+        results = {
+            mode: run_preclose_pipeline(
+                copy.deepcopy(inputs),
+                config=_config(run_id="quantity-role-{}".format(mode)),
+                components=_role_quantity_components(mode),
+            )
+            for mode in ("off", "shadow", "active")
+        }
+
+        self.assertNotEqual(results["off"]["status"], "failed")
+        self.assertNotEqual(results["shadow"]["status"], "failed")
+        self.assertEqual(results["active"]["status"], "failed")
+        for mode in ("off", "shadow"):
+            quantity = results[mode]["diagnostics"]["input_health"]["daily"][
+                "quantity"
+            ]
+            self.assertEqual(quantity["available_codes"], ["300998"])
+            self.assertEqual(quantity["unavailable_codes"], [])
+            self.assertEqual(quantity["coverage"], 1.0)
+        research = results["shadow"]["diagnostics"]["pool_build"][
+            "right_side_daily"
+        ]
+        self.assertEqual(
+            [row["code"] for row in research["quantity_evidence"]],
+            ["300998", "002328"],
+        )
+        classic = results["shadow"]["diagnostics"]["pool_build"][
+            "strong_startup"
+        ]
+        self.assertEqual(
+            classic["common_upstream"]["limit_up_observation_codes"],
+            ["002328"],
+        )
+        self.assertIn(
+            "002328",
+            [row["code"] for row in classic["quantity_evidence"]],
+        )
+        active_quantity = results["active"]["diagnostics"]["input_health"][
+            "daily"
+        ]["quantity"]
+        self.assertIn("002328", active_quantity["unavailable_codes"])
+
+    def test_real_chain_all_unknown_quantity_is_data_unavailable_not_healthy_empty(self):
+        result = run_preclose_pipeline(
+            _market_inputs(),
+            config=_config(),
+            components=_quantity_chain_components(),
+        )
+
+        self.assertEqual(result["status"], "failed")
+        daily_health = result["diagnostics"]["input_health"]["daily"]
+        self.assertEqual(daily_health["status"], "unavailable")
+        self.assertEqual(daily_health["quantity"]["coverage"], 0.0)
+        self.assertEqual(
+            daily_health["quantity"]["unavailable_codes"],
+            ["002328", "300998"],
+        )
+        self.assertTrue(all(
+            detail["reason"] == "quantity_evidence_unavailable"
+            and detail["window"] in (5, 6)
+            for details in daily_health["quantity"]["details"].values()
+            for detail in details
+        ))
+
+    def test_real_chain_partial_quantity_keeps_proven_peers_and_exposes_gap(self):
+        inputs = _market_inputs()
+        template = inputs["daily"][0]
+        rows = []
+        for index in range(10):
+            row = copy.deepcopy(template)
+            row["code"] = "300{:03d}".format(index)
+            row["name"] = "数量证据样本{:02d}".format(index)
+            rows.append(row)
+        inputs["daily"] = rows
+        inputs["target_codes"] = []
+        inputs["min30"] = {}
+        inputs["market"]["stock_bars"] = []
+        proven_codes = [row["code"] for row in rows[:9]]
+        _prove_quantity_evidence(inputs, proven_codes)
+
+        result = run_preclose_pipeline(
+            inputs,
+            config=_config(run_id="partial-quantity"),
+            components=_quantity_chain_components(),
+        )
+
+        self.assertNotEqual(
+            result["status"], "failed", msg=result.get("diagnostics")
+        )
+        quantity = result["diagnostics"]["input_health"]["daily"]["quantity"]
+        self.assertEqual(quantity["status"], "partial")
+        self.assertEqual(quantity["coverage"], 0.9)
+        self.assertEqual(quantity["available_codes"], sorted(proven_codes))
+        self.assertEqual(quantity["unavailable_codes"], ["300009"])
+
+    def test_real_chain_fully_proven_quantity_stays_verified(self):
+        inputs = _prove_quantity_evidence(_market_inputs())
+        components = _quantity_chain_components()
+        daily_results, rows_by_code, failures = _analyze_daily_inputs(
+            inputs, components
+        )
+        self.assertEqual(failures, [])
+        _build_daily_state(
+            daily_results, _sector_stocks(rows_by_code), components
+        )
+        result = run_preclose_pipeline(
+            inputs,
+            config=_config(run_id="proven-quantity"),
+            components=components,
+        )
+
+        self.assertNotEqual(
+            result["status"], "failed", msg=result.get("diagnostics")
+        )
+        quantity = result["diagnostics"]["input_health"]["daily"]["quantity"]
+        self.assertEqual(quantity["status"], "verified")
+        self.assertEqual(quantity["coverage"], 1.0)
+        self.assertEqual(quantity["unavailable_codes"], [])
+
+    def test_derive_turnover_reads_batch_amount_availability_as_a_series(self):
+        market_inputs = {
+            "daily": [
+                {
+                    "status": "available",
+                    "amount_available": np.array([False, True]),
+                    "klines": {
+                        "amounts": np.array([np.nan, 125000.0]),
+                        "amount_available": np.array([False, True]),
+                        "amount_units": ["unknown", "CNY"],
+                        "amount_sources": ["", "fixture"],
+                    },
+                },
+                {
+                    "status": "available",
+                    "amount_available": np.array([False]),
+                    "klines": {
+                        "amounts": np.array([np.nan]),
+                        "amount_available": np.array([False]),
+                        "amount_units": ["unknown"],
+                        "amount_sources": [""],
+                    },
+                },
+            ]
+        }
+        self.assertEqual(_derive_turnover(market_inputs), 125000.0)
+
     def test_sector_merge_does_not_compare_numpy_arrays_by_truth_value(self):
         amounts = np.array([100.0, 200.0], dtype=float)
 
@@ -746,6 +1021,91 @@ class PreclosePipelineTests(unittest.TestCase):
             ("right_side_pool", ("300998", "002328")), events
         )
 
+    def test_fusion_scoring_uses_explicit_sector_ranking_contract(self):
+        captured = []
+
+        def score(picks, version="pure", sector_rank_map=None):
+            if version == "fusion":
+                captured.append(list(sector_rank_map or []))
+            return [dict(item, score=0) for item in picks]
+
+        components = replace(_components(), apply_scores=score)
+        sector_stocks = {
+            "300998": {"sector": "甲板块"},
+            "002328": {"sector": "乙板块"},
+        }
+        ranked_sectors = [
+            {"name": "乙板块", "sector_rank": 1},
+            {"name": "甲板块", "sector_rank": 2},
+        ]
+
+        build_preclose_main_pool(
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            sector_stocks=sector_stocks,
+            sh_closes=[3000, 3036],
+            sector_rank_map=ranked_sectors,
+            components=components,
+        )
+
+        self.assertTrue(captured)
+        self.assertEqual(captured[0], ranked_sectors)
+
+    def test_missing_sector_ranking_does_not_use_stock_mapping_order(self):
+        captured = []
+
+        def score(picks, version="pure", sector_rank_map=None):
+            if version == "fusion":
+                captured.append(sector_rank_map)
+            return [dict(item, score=0) for item in picks]
+
+        components = replace(_components(), apply_scores=score)
+        build_preclose_main_pool(
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            [_analysis("300998", "宁波方正"), _analysis("002328", "新朋股份")],
+            sector_stocks={
+                "300998": {"sector": "甲板块"},
+                "002328": {"sector": "乙板块"},
+            },
+            sh_closes=[3000, 3036],
+            components=components,
+        )
+
+        self.assertTrue(captured)
+        self.assertIsNone(captured[0])
+
+    def test_fusion_rank_contract_is_written_to_candidate_and_preclose_diagnostics(self):
+        components = replace(_components(), apply_scores=apply_real_scores)
+        result = build_preclose_main_pool(
+            [_analysis("300998", "宁波方正")],
+            [_analysis("300998", "宁波方正")],
+            sector_stocks={
+                "300998": {
+                    "sector": "汽车零部件",
+                    "sector_rank": 1,
+                    "sector_strength_label": "资金流入TOP1",
+                },
+            },
+            sh_closes=[3000, 3036],
+            sector_rank_map=[
+                {"name": "汽车零部件", "sector_rank": 100},
+                {"name": "汽车零部件", "sector_rank": 1},
+            ],
+            components=components,
+        )
+
+        candidate = result["picks_fusion"][0]
+        self.assertEqual(candidate["sector_rank"], 2)
+        self.assertEqual(candidate["sector_rank_used"], 2)
+        self.assertEqual(candidate["sector_rank_source"], "ordered_fallback_conflict")
+        # A qualitative label such as "强" is independent metadata; generated
+        # TOP labels are rewritten by the scorer when they carry a rank.
+        self.assertEqual(candidate["sector_strength_label"], "强")
+        self.assertEqual(
+            result["diagnostics"]["sector_rank_diagnostics"]["conflict_count"],
+            1,
+        )
+
     def test_market_context_uses_current_deterministic_components_and_ignores_psy12(self):
         plain = build_preclose_market_context(_market_inputs())
         shadow = build_preclose_market_context(_market_inputs(include_psy12=True))
@@ -762,6 +1122,25 @@ class PreclosePipelineTests(unittest.TestCase):
         self.assertEqual(set(plain["deterministic_evidence"]), {
             "breadth", "limit_ecology", "index", "turnover", "trend", "sectors"
         })
+
+    def test_full_preclose_replay_passes_market_sector_ranking_to_fusion_score(self):
+        captured = []
+
+        def score(picks, version="pure", sector_rank_map=None):
+            if version == "fusion":
+                captured.append(list(sector_rank_map or []))
+            return [dict(item, score=0) for item in picks]
+
+        market_inputs = _market_inputs()
+        components = replace(_components(), apply_scores=score)
+        run_preclose_pipeline(
+            market_inputs,
+            config=_config(),
+            components=components,
+        )
+
+        self.assertTrue(captured)
+        self.assertEqual(captured[0], market_inputs["market"]["sectors"])
 
     def test_main_public_filter_matches_formal_workspace_recommend_semantics(self):
         candidates = [

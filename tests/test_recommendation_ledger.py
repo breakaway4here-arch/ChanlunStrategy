@@ -61,6 +61,37 @@ def _strategy(name, version, items, **extra):
 
 
 class RecommendationLedgerTests(unittest.TestCase):
+    def test_new_identity_and_h4_upstream_identity_are_frozen_per_contribution(self):
+        entries = build_recommendation_entries(
+            "2026-09-11",
+            "2026-09-11T15:10:00+08:00",
+            [_strategy(
+                "h4_t3",
+                "h4_t3_k30_tail_safe_v1",
+                [_item()],
+                policy_version="decision-v2",
+                preclose_strategy_version="preclose-1445-v3",
+                upstream_strategy_version="daily-pure-close-v2",
+                upstream_policy_version="decision-v2",
+            )],
+            policy_version="decision-v2",
+        )
+
+        contribution = entries[0]["strategy_contributions"][0]
+        self.assertEqual(contribution["policy_version"], "decision-v2")
+        self.assertEqual(
+            contribution["preclose_strategy_version"],
+            "preclose-1445-v3",
+        )
+        self.assertEqual(
+            contribution["upstream_strategy_version"],
+            "daily-pure-close-v2",
+        )
+        self.assertEqual(
+            contribution["upstream_policy_version"],
+            "decision-v2",
+        )
+
     def test_numpy_vector_fields_are_frozen_as_json_arrays(self):
         item = _item()
         item["dates"] = np.array(["2026-08-19", "2026-08-20"])

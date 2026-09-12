@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import numpy as np
 
 from .market_history_store import MarketHistoryStore
+from .identity import InstrumentIdentity, normalize_identity
 
 
 _CN_TZ = timezone(timedelta(hours=8))
@@ -36,7 +37,7 @@ class KLineRepository:
     def __init__(
         self,
         path: Any,
-        remote_fetchers: Optional[Mapping[str, Callable[[str, int], Any]]] = None,
+        remote_fetchers: Optional[Mapping[str, Callable[[Any, int], Any]]] = None,
         mode: str = "ongoing",
         shadow_reader: Optional[Callable[[str, str, int], Any]] = None,
         overlap_counts: Optional[Mapping[str, int]] = None,
@@ -65,8 +66,8 @@ class KLineRepository:
                 pass
 
     @staticmethod
-    def _exchange(code: str) -> str:
-        return "SH" if str(code).startswith(("60", "68", "900")) else "SZ"
+    def _identity(value: Any) -> InstrumentIdentity:
+        return normalize_identity(value)
 
     def _open(self, readonly: bool) -> MarketHistoryStore:
         store = MarketHistoryStore(
@@ -152,10 +153,28 @@ class KLineRepository:
             return 0.0
         return number if math.isfinite(number) and number >= 0 else 0.0
 
+    @staticmethod
+    def _optional_amount(
+        values: Sequence[Any], index: int, available: Optional[Sequence[Any]] = None
+    ) -> tuple:
+        if available is not None and index < len(available):
+            marker = available[index]
+            if marker not in (True, 1):
+                return 0.0, False
+        if index >= len(values):
+            return 0.0, False
+        try:
+            number = float(values[index])
+        except (TypeError, ValueError):
+            return 0.0, False
+        if not math.isfinite(number) or number <= 0:
+            return 0.0, False
+        return number, True
+
     def _prepare_remote(
         self,
         interval: str,
-        code: str,
+        identity: InstrumentIdentity,
         payload: Mapping[str, Any],
         now: Optional[datetime] = None,
     ) -> Dict[str, Any]:
@@ -173,6 +192,19 @@ class KLineRepository:
             raise ValueError("remote finals length mismatch")
         current = now or datetime.now(_CN_TZ)
         provider = str(payload.get("source") or "remote")
+        volume_unit = str(payload.get("volume_unit") or "unknown").strip().lower()
+        volume_raw_unit = str(
+            payload.get("volume_raw_unit") or volume_unit or "unknown"
+        ).strip().lower()
+        volume_source = str(payload.get("volume_source") or provider).strip()
+        amount_unit = str(payload.get("amount_unit") or "unknown").strip().upper()
+        amount_source = str(payload.get("amount_source") or "").strip()
+        raw_amount_available = payload.get("amount_available")
+        amount_available = None
+        if raw_amount_available is not None:
+            amount_available = self._safe_list(raw_amount_available)
+            if len(amount_available) != len(dates):
+                raise ValueError("remote amount_available length mismatch")
         seen = set()
         bars = []
         for index, raw_ts in enumerate(dates):
@@ -185,6 +217,9 @@ class KLineRepository:
                 if finals
                 else self._infer_final(interval, ts, current)
             )
+            amount, has_amount = self._optional_amount(
+                amounts, index, amount_available
+            )
             bars.append(
                 {
                     "ts": ts,
@@ -193,7 +228,13 @@ class KLineRepository:
                     "low": arrays["lows"][index],
                     "close": arrays["closes"][index],
                     "volume": arrays["volumes"][index],
-                    "amount": self._optional_nonnegative(amounts, index),
+                    "amount": amount,
+                    "amount_available": has_amount,
+                    "volume_unit": volume_unit,
+                    "volume_raw_unit": volume_raw_unit,
+                    "volume_source": volume_source,
+                    "amount_unit": amount_unit if has_amount else "unknown",
+                    "amount_source": amount_source if has_amount else "",
                     "adjustment": self.adjustment,
                     "is_final": final,
                     "source_batch": "ongoing:{}".format(provider),
@@ -204,8 +245,9 @@ class KLineRepository:
             for bar in sorted(bars, key=lambda row: row["ts"])
         ]
         return {
-            "code": code,
-            "exchange": self._exchange(code),
+            "asset_type": identity.asset_type,
+            "code": identity.code,
+            "exchange": identity.exchange,
             "provider": provider,
             "bars": validated_bars,
         }
@@ -213,31 +255,41 @@ class KLineRepository:
     def _load_many(
         self,
         interval: str,
-        codes: Sequence[str],
+        identities: Sequence[InstrumentIdentity],
         count: int,
         as_of: Optional[str],
-    ) -> Dict[str, List[Dict[str, Any]]]:
-        identities = [(self._exchange(code), code) for code in codes]
+    ) -> Dict[InstrumentIdentity, List[Dict[str, Any]]]:
         with self._open(readonly=True) as store:
-            instruments = store.resolve_instruments("stock", identities)
-            id_to_code = {}
+            instruments = {}
+            by_asset = {}
+            for identity in identities:
+                by_asset.setdefault(identity.asset_type, []).append(
+                    (identity.exchange, identity.code)
+                )
+            for asset_type, pairs in by_asset.items():
+                for (exchange, code), payload in store.resolve_instruments(
+                    asset_type, pairs
+                ).items():
+                    instruments[(asset_type, exchange, code)] = payload
             instrument_ids = []
-            for code in codes:
-                identity = (self._exchange(code), code)
-                instrument = instruments.get(identity)
+            id_to_identity = {}
+            for identity in identities:
+                instrument = instruments.get(
+                    (identity.asset_type, identity.exchange, identity.code)
+                )
                 if instrument is not None:
                     instrument_id = int(instrument["instrument_id"])
                     instrument_ids.append(instrument_id)
-                    id_to_code[instrument_id] = code
+                    id_to_identity[instrument_id] = identity
             rows_by_id = store.query_bars_many(
                 interval,
                 instrument_ids,
                 as_of=as_of,
                 limit=count,
             )
-        result = {code: [] for code in codes}
+        result = {identity: [] for identity in identities}
         for instrument_id, rows in rows_by_id.items():
-            result[id_to_code[instrument_id]] = rows
+            result[id_to_identity[instrument_id]] = rows
         return result
 
     @staticmethod
@@ -249,14 +301,53 @@ class KLineRepository:
         if not rows:
             return None
         latest_final = bool(rows[-1]["is_final"])
+        volume_units = [str(row.get("volume_unit") or "unknown") for row in rows]
+        volume_raw_units = [
+            str(row.get("volume_raw_unit") or "unknown") for row in rows
+        ]
+        volume_sources = [str(row.get("volume_source") or "") for row in rows]
+        amount_units = [str(row.get("amount_unit") or "unknown") for row in rows]
+        amount_sources = [str(row.get("amount_source") or "") for row in rows]
+
+        def _summary(values):
+            return values[-1] if values and len(set(values)) == 1 else "mixed"
+
         result = {
             "dates": [row["ts"] for row in rows],
             "opens": np.array([row["open"] for row in rows], dtype=float),
             "highs": np.array([row["high"] for row in rows], dtype=float),
             "lows": np.array([row["low"] for row in rows], dtype=float),
             "closes": np.array([row["close"] for row in rows], dtype=float),
+            "is_final": [bool(row["is_final"]) for row in rows],
             "volumes": np.array([row["volume"] for row in rows], dtype=float),
-            "amounts": np.array([row["amount"] for row in rows], dtype=float),
+            "amounts": np.array(
+                [
+                    row["amount"]
+                    if bool(row.get("amount_available", False))
+                    and float(row["amount"]) > 0
+                    else np.nan
+                    for row in rows
+                ],
+                dtype=float,
+            ),
+            "amount_available": np.array(
+                [
+                    bool(row.get("amount_available", False))
+                    and float(row["amount"]) > 0
+                    for row in rows
+                ],
+                dtype=bool,
+            ),
+            "volume_units": volume_units,
+            "volume_raw_units": volume_raw_units,
+            "volume_sources": volume_sources,
+            "amount_units": amount_units,
+            "amount_sources": amount_sources,
+            "volume_unit": _summary(volume_units),
+            "volume_raw_unit": _summary(volume_raw_units),
+            "volume_source": _summary(volume_sources),
+            "amount_unit": _summary(amount_units),
+            "amount_source": _summary(amount_sources),
             "source": "market_history_db",
             "adjustment": str(rows[-1]["adjustment"]),
         }
@@ -347,7 +438,9 @@ class KLineRepository:
                     store.connection.execute("BEGIN IMMEDIATE")
                     for item in prepared:
                         instrument_id = store.upsert_instrument(
-                            "stock", item["exchange"], item["code"]
+                            item["asset_type"],
+                            item["exchange"],
+                            item["code"],
                         )
                         store.upsert_bars(
                             item["interval"],
@@ -421,22 +514,73 @@ class KLineRepository:
                 raise ValueError("remote kline latest bar exceeds as_of")
 
     def _shadow_diagnostics(
-        self, interval: str, code: str, count: int, kline: Optional[Mapping[str, Any]]
+        self,
+        interval: str,
+        identity: InstrumentIdentity,
+        count: int,
+        kline: Optional[Mapping[str, Any]],
     ) -> Dict[str, Any]:
         if self.shadow_reader is None:
             return {}
         try:
-            shadow = self.shadow_reader(interval, code, count)
+            shadow = self.shadow_reader(interval, identity, count)
+            shadow = shadow if isinstance(shadow, Mapping) else {}
+            shadow_comparable = shadow.get("_shadow_comparable")
+            if shadow_comparable is False:
+                return {
+                    "shadow_checked": True,
+                    "shadow_comparable": False,
+                    "shadow_mismatch": None,
+                    "shadow_reason": str(
+                        shadow.get("_shadow_reason") or "not_comparable"
+                    ),
+                    "shadow_identity": shadow.get("_shadow_identity"),
+                    "shadow_expected_identity": shadow.get(
+                        "_shadow_expected_identity", identity.key
+                    ),
+                }
+            shadow_identity = shadow.get("_shadow_identity")
+            if shadow_identity is not None and str(shadow_identity) != identity.key:
+                return {
+                    "shadow_checked": True,
+                    "shadow_comparable": False,
+                    "shadow_mismatch": None,
+                    "shadow_reason": "identity_mismatch",
+                    "shadow_identity": shadow_identity,
+                    "shadow_expected_identity": identity.key,
+                }
             current_dates = list((kline or {}).get("dates", []))
-            shadow_dates = list((shadow or {}).get("dates", []))
+            shadow_dates = list(shadow.get("dates", []))
+            current_closes = list((kline or {}).get("closes", []))
+            shadow_closes = list(shadow.get("closes", []))
+            price_max_abs_diff = None
+            if len(current_closes) == len(shadow_closes) and current_closes:
+                try:
+                    price_max_abs_diff = max(
+                        abs(float(left) - float(right))
+                        for left, right in zip(current_closes, shadow_closes)
+                    )
+                except (TypeError, ValueError):
+                    price_max_abs_diff = None
+            price_comparable = (
+                price_max_abs_diff is not None
+                and price_max_abs_diff <= 1e-8
+            )
             return {
                 "shadow_checked": True,
-                "shadow_mismatch": current_dates != shadow_dates,
+                "shadow_comparable": True,
+                "shadow_mismatch": (
+                    current_dates != shadow_dates or not price_comparable
+                ),
                 "shadow_bars": len(shadow_dates),
+                "shadow_price_max_abs_diff": price_max_abs_diff,
+                "shadow_price_comparable": price_comparable,
+                "shadow_identity": shadow.get("_shadow_identity", identity.key),
             }
         except Exception as exc:
             return {
                 "shadow_checked": True,
+                "shadow_comparable": False,
                 "shadow_mismatch": True,
                 "shadow_error": str(exc),
             }
@@ -444,43 +588,55 @@ class KLineRepository:
     def get_many(
         self,
         interval: str,
-        codes: Sequence[str],
+        codes: Sequence[Any],
         count: int,
         required_date: Optional[str] = None,
         as_of: Optional[str] = None,
         force_refresh: bool = False,
-    ) -> Dict[str, KLineResult]:
+    ) -> Dict[Any, KLineResult]:
         if interval not in ("day", "30m", "15m"):
             raise ValueError("unsupported interval: {}".format(interval))
         if int(count) <= 0:
             raise ValueError("count must be positive")
         if self.mode == "backtest" and not as_of:
             raise ValueError("backtest mode requires as_of")
-        normalized = list(dict.fromkeys(str(code).strip() for code in codes))
-        local = self._load_many(interval, normalized, int(count), as_of)
+        requested = []
+        seen = set()
+        for value in codes:
+            identity = self._identity(value)
+            if identity in seen:
+                continue
+            seen.add(identity)
+            requested.append(
+                (identity, value if isinstance(value, str) else identity)
+            )
+        identities = [identity for identity, _key in requested]
+        result_keys = {identity: key for identity, key in requested}
+        fetch_values = {identity: key for identity, key in requested}
+        local = self._load_many(interval, identities, int(count), as_of)
         remote_failed = {}
         remote_diagnostics = {}
         fetched_remote = set()
         prepared = []
 
-        refresh_codes = [
-            code
-            for code in normalized
+        refresh_identities = [
+            identity
+            for identity in identities
             if self.mode == "ongoing"
             and self._needs_refresh(
                 interval,
-                local[code],
+                local[identity],
                 int(count),
                 required_date,
                 force_refresh,
             )
         ]
         fetcher = self.remote_fetchers.get(interval)
-        if refresh_codes and fetcher is None:
-            remote_failed.update((code, True) for code in refresh_codes)
-        elif refresh_codes:
-            def _fetch(code):
-                existing = local[code]
+        if refresh_identities and fetcher is None:
+            remote_failed.update((identity, True) for identity in refresh_identities)
+        elif refresh_identities:
+            def _fetch(identity):
+                existing = local[identity]
                 remote_count = (
                     int(count)
                     if force_refresh or len(existing) < int(count)
@@ -489,26 +645,29 @@ class KLineRepository:
                 context = self._fetcher_context_kwargs(
                     fetcher, required_date, as_of
                 )
-                return code, remote_count, fetcher(
-                    code, remote_count, **context
+                return identity, remote_count, fetcher(
+                    fetch_values[identity], remote_count, **context
                 )
 
             with ThreadPoolExecutor(
-                max_workers=min(self.max_workers, len(refresh_codes))
+                max_workers=min(self.max_workers, len(refresh_identities))
             ) as pool:
-                futures = {pool.submit(_fetch, code): code for code in refresh_codes}
+                futures = {
+                    pool.submit(_fetch, identity): identity
+                    for identity in refresh_identities
+                }
                 for future in as_completed(futures):
-                    code = futures[future]
+                    identity = futures[future]
                     try:
-                        _returned_code, remote_count, payload = future.result()
+                        _returned_identity, remote_count, payload = future.result()
                         if not payload:
-                            remote_failed[code] = True
+                            remote_failed[identity] = True
                             continue
                         if isinstance(payload, Mapping):
                             diagnostics = payload.get("_fetch_diagnostics")
                             if isinstance(diagnostics, Mapping):
-                                remote_diagnostics[code] = dict(diagnostics)
-                        item = self._prepare_remote(interval, code, payload)
+                                remote_diagnostics[identity] = dict(diagnostics)
+                        item = self._prepare_remote(interval, identity, payload)
                         item["interval"] = interval
                         self._validate_prepared_remote(
                             item,
@@ -517,75 +676,97 @@ class KLineRepository:
                             as_of=as_of,
                         )
                         prepared.append(item)
-                        fetched_remote.add(code)
+                        fetched_remote.add(identity)
                     except Exception:
-                        remote_failed[code] = True
+                        remote_failed[identity] = True
             if prepared:
                 try:
                     self._write_prepared(prepared)
                 except Exception:
                     for item in prepared:
-                        remote_failed[item["code"]] = True
-                        fetched_remote.discard(item["code"])
+                        identity = InstrumentIdentity(
+                            item["asset_type"],
+                            item["exchange"],
+                            item["code"],
+                        )
+                        remote_failed[identity] = True
+                        fetched_remote.discard(identity)
                 else:
                     local = self._load_many(
-                        interval, normalized, int(count), as_of
+                        interval, identities, int(count), as_of
                     )
 
         results = {}
-        for code in normalized:
-            rows = local[code]
+        for identity in identities:
+            result_key = result_keys[identity]
+            rows = local[identity]
             status, stale = self._status(
                 interval,
                 rows,
                 int(count),
                 required_date,
-                remote_failed=bool(remote_failed.get(code)),
+                remote_failed=bool(remote_failed.get(identity)),
             )
             kline = self._rows_to_kline(rows, status, stale)
             diagnostics = {
-                "remote_failed": bool(remote_failed.get(code)),
+                "remote_failed": bool(remote_failed.get(identity)),
                 "mode": self.mode,
             }
-            diagnostics.update(remote_diagnostics.get(code, {}))
+            diagnostics.update(remote_diagnostics.get(identity, {}))
             diagnostics.update(
-                self._shadow_diagnostics(interval, code, int(count), kline)
+                self._shadow_diagnostics(interval, identity, int(count), kline)
             )
             result = KLineResult(
                 kline=kline,
                 status=status,
                 source="market_history_db" if kline else "missing",
                 stale=stale,
-                fetched_remote=code in fetched_remote,
+                fetched_remote=identity in fetched_remote,
                 diagnostics=diagnostics,
             )
-            results[code] = result
+            results[result_key] = result
             if status == "verified" and not force_refresh:
                 self._memory[
-                    (interval, code, int(count), required_date, as_of, force_refresh)
+                    (
+                        interval,
+                        identity.key,
+                        int(count),
+                        required_date,
+                        as_of,
+                        force_refresh,
+                    )
                 ] = result
         return results
 
     def get(
         self,
         interval: str,
-        code: str,
+        code: Any,
         count: int,
         required_date: Optional[str] = None,
         as_of: Optional[str] = None,
         force_refresh: bool = False,
     ) -> KLineResult:
-        key = (interval, str(code), int(count), required_date, as_of, force_refresh)
+        identity = self._identity(code)
+        result_key = code if isinstance(code, str) else identity
+        key = (
+            interval,
+            identity.key,
+            int(count),
+            required_date,
+            as_of,
+            force_refresh,
+        )
         if key in self._memory:
             return self._memory[key]
         return self.get_many(
             interval,
-            [str(code)],
+            [code],
             count=int(count),
             required_date=required_date,
             as_of=as_of,
             force_refresh=force_refresh,
-        )[str(code)]
+        )[result_key]
 
     def list_instruments(self) -> List[Dict[str, Any]]:
         with self._open(readonly=True) as store:

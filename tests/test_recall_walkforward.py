@@ -51,7 +51,7 @@ def _samples(day_count=53, per_day=8):
     return rows
 
 
-def _bar(ts, close, low=None):
+def _bar(ts, close, low=None, final=True):
     return {
         "ts": ts,
         "open": close,
@@ -61,7 +61,7 @@ def _bar(ts, close, low=None):
         "volume": 1_000_000,
         "amount": 100_000_000,
         "adjustment": "qfq",
-        "is_final": True,
+        "is_final": final,
         "source_batch": "fixture",
     }
 
@@ -166,6 +166,7 @@ class RecallWalkforwardTest(unittest.TestCase):
                         _bar("2026-01-02", 10.0),
                         _bar("2026-01-03", 11.0),
                         _bar("2026-01-04", 10.5, low=9.0),
+                        _bar("2026-01-04 12:00:00", 1.0, low=1.0, final=False),
                         _bar("2026-01-05", 12.0),
                         _bar("2026-01-06", 99.0),
                     ],

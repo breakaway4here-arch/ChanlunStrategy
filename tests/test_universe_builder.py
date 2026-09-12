@@ -34,6 +34,9 @@ def _bar(ts, close, amount=100_000_000):
         "low": close - 0.2,
         "close": close,
         "volume": 1_000_000,
+        "volume_unit": "hands",
+        "volume_raw_unit": "hands",
+        "volume_source": "fixture",
         "amount": amount,
         "adjustment": "qfq",
         "is_final": True,
@@ -401,6 +404,105 @@ class UniverseBuilderTests(unittest.TestCase):
         self.assertEqual(
             "stale_latest_bar", audit_records[0]["eligibility_failure_reason"]
         )
+
+    def test_incomplete_five_day_amount_window_is_pending_not_low_liquidity(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "market.sqlite"
+            with MarketHistoryStore(path) as store:
+                instrument_id = store.upsert_instrument(
+                    "stock", "SH", "600000", name="浦发银行"
+                )
+                end = date(2026, 7, 1)
+                bars = []
+                for index in range(70):
+                    amount = 100_000_000 if index == 65 else 0
+                    bar = _bar(
+                        (end - timedelta(days=69 - index)).isoformat(),
+                        10 + index * 0.01,
+                        amount=amount,
+                    )
+                    bar["amount_available"] = amount > 0
+                    bars.append(bar)
+                store.upsert_bars("day", instrument_id, bars, adjustment="qfq")
+                store.upsert_stock_meta(
+                    instrument_id,
+                    "2026-07-01",
+                    {
+                        "name": "浦发银行",
+                        "is_st": False,
+                        "delisting_risk": False,
+                        "listed_days": 500,
+                    },
+                )
+
+            with MarketHistoryStore(path, readonly=True) as store:
+                audits = []
+                candidates, diagnostics = load_eligible_candidates(
+                    store,
+                    as_of="2026-07-01",
+                    required_date="2026-07-01",
+                    min_listed_days=60,
+                    min_daily_amount=50_000_000,
+                    return_diagnostics=True,
+                    audit_records=audits,
+                )
+
+        self.assertEqual(candidates, [])
+        self.assertEqual(diagnostics["excluded"]["amount_evidence_incomplete"], 1)
+        self.assertEqual(diagnostics["excluded"]["low_liquidity"], 0)
+        self.assertEqual(audits[0]["eligibility_failure_reason"], "amount_evidence_incomplete")
+        self.assertFalse(audits[0]["amount_window_complete"])
+        self.assertEqual(audits[0]["amount_window_missing_count"], 4)
+
+    def test_legacy_volume_source_is_normalized_or_blocked_before_scoring(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "market.sqlite"
+            end = date(2026, 7, 1)
+            with MarketHistoryStore(path) as store:
+                for code, source in (("600000", "ongoing:sina"), ("600001", "ongoing:tencent")):
+                    instrument_id = store.upsert_instrument("stock", "SH", code)
+                    bars = []
+                    for index in range(70):
+                        bar = _bar(
+                            (end - timedelta(days=69 - index)).isoformat(),
+                            10 + index * 0.01,
+                        )
+                        bar.pop("volume_unit")
+                        bar.pop("volume_raw_unit")
+                        bar.pop("volume_source")
+                        bar["volume"] = 100_000
+                        bar["source_batch"] = source
+                        bars.append(bar)
+                    store.upsert_bars("day", instrument_id, bars, adjustment="qfq")
+                    store.upsert_stock_meta(
+                        instrument_id,
+                        "2026-07-01",
+                        {
+                            "name": code,
+                            "is_st": False,
+                            "delisting_risk": False,
+                            "listed_days": 500,
+                        },
+                    )
+
+            with MarketHistoryStore(path, readonly=True) as store:
+                audits = []
+                candidates, diagnostics = load_eligible_candidates(
+                    store,
+                    as_of="2026-07-01",
+                    required_date="2026-07-01",
+                    min_listed_days=60,
+                    min_daily_amount=50_000_000,
+                    return_diagnostics=True,
+                    audit_records=audits,
+                )
+
+        self.assertEqual([row["code"] for row in candidates], ["600000"])
+        self.assertEqual(candidates[0]["klines"]["volume_unit"], "hands")
+        self.assertEqual(float(candidates[0]["klines"]["volumes"][-1]), 1000.0)
+        self.assertEqual(diagnostics["excluded"]["volume_evidence_incomplete"], 1)
+        blocked = [row for row in audits if row["code"] == "600001"][0]
+        self.assertEqual(blocked["eligibility_failure_reason"], "volume_evidence_incomplete")
 
     def test_run_activates_full_a_pool_only_after_coverage_floor(self):
         with tempfile.TemporaryDirectory() as tmp:

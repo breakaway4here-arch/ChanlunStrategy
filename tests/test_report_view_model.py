@@ -45,6 +45,8 @@ def _fusion_pick(
         "blocked_buy_points": [{"type": "拦截"}],
         "sector_tags": list(sector_tags or []),
         "money20": 150_000_000,
+        "liquidity_source": "amounts",
+        "liquidity_window_bars": 20,
         "market_cap": 120,
     }
     pick["decision_engine_v1"] = decision_engine_v1 or {
@@ -910,6 +912,51 @@ class TestReportViewModel(unittest.TestCase):
         pick["volume_ratio20"] = 0.4
         self.assertLess(_build_pool_quality_features(pick)["liquidity_score"], 30.0)
 
+    def test_missing_or_unattested_money20_is_pending_not_low_liquidity(self):
+        missing = _fusion_pick(code="001257", name="缺数量证明", score=50)
+        missing["money20"] = None
+        missing["liquidity_source"] = "missing"
+        missing["liquidity_window_bars"] = 0
+
+        quality = _build_pool_quality_features(missing)
+
+        self.assertEqual(quality["liquidity_score"], 0.0)
+        self.assertEqual(quality["liquidity_label"], "待数量核验")
+        self.assertEqual(quality["liquidity_evidence_status"], "missing")
+        self.assertFalse(quality["quality_evidence_eligible"])
+        self.assertNotIn("低流动性", quality["pool_quality_tags"])
+        liquidity_component = next(
+            item for item in quality["pool_quality_components"]
+            if item["name"] == "liquidity"
+        )
+        self.assertFalse(liquidity_component["evaluated"])
+
+        legacy = _fusion_pick(code="600080", name="旧缓存正数", score=50)
+        legacy.pop("liquidity_source")
+        legacy.pop("liquidity_window_bars")
+        legacy_quality = _build_pool_quality_features(legacy)
+        self.assertEqual(legacy_quality["liquidity_label"], "来源未核验")
+        self.assertEqual(legacy_quality["liquidity_evidence_status"], "unverified")
+        self.assertEqual(legacy_quality["liquidity_score"], 0.0)
+        self.assertFalse(legacy_quality["quality_evidence_eligible"])
+
+    def test_attested_low_and_high_liquidity_keep_existing_formula(self):
+        low = _fusion_pick(code="600081", name="真实低流动性", score=50)
+        low["money20"] = 4_000_000
+        high = _fusion_pick(code="600082", name="真实高流动性", score=50)
+        high["money20"] = 250_000_000
+
+        low_quality = _build_pool_quality_features(low)
+        high_quality = _build_pool_quality_features(high)
+
+        self.assertEqual(low_quality["liquidity_label"], "低流动性")
+        self.assertTrue(next(
+            item for item in low_quality["pool_quality_components"]
+            if item["name"] == "liquidity"
+        )["evaluated"])
+        self.assertEqual(high_quality["liquidity_label"], "高流动性")
+        self.assertEqual(high_quality["liquidity_score"], 100.0)
+
     def test_highlights_dedupe_and_resonance_label(self):
         report_data = _report_data(
             {
@@ -1403,8 +1450,9 @@ class TestReportViewModel(unittest.TestCase):
         workspace = build_workspace(report_data)
         pool_quality = workspace["views"]["main"][0]["pool_quality"]
 
-        self.assertEqual(pool_quality["volume20"], 0.0)
-        self.assertEqual(pool_quality["volume_ratio20"], 0.0)
+        self.assertIsNone(pool_quality["volume20"])
+        self.assertIsNone(pool_quality["volume_ratio20"])
+        self.assertEqual(pool_quality["volume_evidence_status"], "missing")
         self.assertEqual(pool_quality["liquidity_score"], 0.0)
 
     def test_workspace_item_exposes_pool_quality(self):

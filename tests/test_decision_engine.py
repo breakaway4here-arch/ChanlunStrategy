@@ -4,9 +4,101 @@ from unittest.mock import patch
 import config
 
 from chanlun.decision_engine import evaluate_stock
+from chanlun.strategy_identity import DECISION_POLICY_VERSION
 
 
 class DecisionEngineTestCase(unittest.TestCase):
+    def test_engine_core_trend_values_are_consumed_as_structure_facts(self):
+        common = {
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-09-11",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        }
+
+        rising = evaluate_stock(
+            {"code": "RISING", "trend_type": "上涨趋势", **common},
+            market_context={"market_trend": "盘整"},
+        )
+        ranging = evaluate_stock(
+            {"code": "RANGING", "trend_type": "盘整", **common},
+            market_context={"market_trend": "上涨趋势"},
+        )
+
+        self.assertEqual(rising["structure"]["score"], 20)
+        self.assertIn("趋势向上", rising["structure"]["reasons"])
+        self.assertEqual(ranging["structure"]["score"], 5)
+        self.assertIn("震荡结构", ranging["structure"]["reasons"])
+
+    def test_unknown_stock_trend_does_not_borrow_shared_market_structure(self):
+        result = evaluate_stock(
+            {
+                "code": "MARKET-FALLBACK",
+                "trend_type": "未来未知趋势",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-09-11",
+                "position_absolute_percentile": 45.0,
+                "position_absolute_window": 120,
+            },
+            market_context={"market_trend": "上涨趋势"},
+        )
+
+        self.assertEqual(result["structure"]["score"], -5)
+        self.assertIn("趋势信息不足", result["structure"]["reasons"])
+        self.assertIn("结构信息不足", result["structure"]["reasons"])
+
+    def test_missing_stock_trend_does_not_borrow_bullish_or_range_market(self):
+        common = {
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-09-11",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        }
+        for market_trend in ("上涨趋势", "盘整"):
+            with self.subTest(market_trend=market_trend):
+                result = evaluate_stock(
+                    {"code": "MISSING-TREND", **common},
+                    market_context={"market_trend": market_trend},
+                )
+                self.assertEqual(result["structure"]["score"], -5)
+                self.assertIn("趋势信息不足", result["structure"]["reasons"])
+                self.assertIn("结构信息不足", result["structure"]["reasons"])
+
+    def test_market_or_fusion_labels_do_not_count_as_stock_trend(self):
+        common = {
+            "position_data_status": "verified",
+            "position_evidence_date": "2026-09-11",
+            "position_absolute_percentile": 45.0,
+            "position_absolute_window": 120,
+        }
+        for trend_type in ("主升", "强势", "strong", "无中枢"):
+            with self.subTest(trend_type=trend_type):
+                result = evaluate_stock(
+                    {"code": "NON-STOCK-TREND", "trend_type": trend_type, **common},
+                    market_context={"market_phase": "主升"},
+                )
+                self.assertEqual(result["structure"]["score"], -5)
+                if trend_type == "无中枢":
+                    self.assertIn("未形成中枢/尚无趋势结构", result["structure"]["reasons"])
+                else:
+                    self.assertIn("趋势信息不足", result["structure"]["reasons"])
+
+    def test_known_stock_trend_does_not_get_replaced_by_market_fallback(self):
+        result = evaluate_stock(
+            {
+                "code": "STOCK-FACT",
+                "trend_type": "盘整",
+                "position_data_status": "verified",
+                "position_evidence_date": "2026-09-11",
+                "position_absolute_percentile": 45.0,
+                "position_absolute_window": 120,
+            },
+            market_context={"market_trend": "上涨趋势"},
+        )
+
+        self.assertEqual(result["structure"]["score"], 5)
+        self.assertIn("震荡结构", result["structure"]["reasons"])
+
     def test_verified_top_level_position_evidence_is_consumed(self):
         result = evaluate_stock({
             "code": "VERIFIED",
@@ -114,7 +206,7 @@ class DecisionEngineTestCase(unittest.TestCase):
         }
         result = evaluate_stock(stock)
 
-        self.assertEqual(result["version"], "1")
+        self.assertEqual(result["version"], DECISION_POLICY_VERSION)
         self.assertEqual(result["code"], "AAA")
         self.assertEqual(result["name"], "Alpha")
         self.assertEqual(result["decision_code"], "recommend")
@@ -266,7 +358,7 @@ class DecisionEngineTestCase(unittest.TestCase):
         }
         result = evaluate_stock(stock)
 
-        self.assertEqual(result["version"], "1")
+        self.assertEqual(result["version"], DECISION_POLICY_VERSION)
         self.assertEqual(result["decision"], "暂不判断（位置信息不足）")
         self.assertEqual(result["decision_code"], "observe")
         self.assertIsInstance(result["total_score"], (int, float))

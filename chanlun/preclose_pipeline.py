@@ -23,6 +23,7 @@ from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
 from .price_basis import scale_price
 from .scorer import apply_scores
+from .strategy_identity import PRE_CLOSE_STRATEGY_VERSION
 from .signal_recency import filter_recent_picks, filter_recent_watchlist
 from .right_side_startup import (
     apply_right_side_startup_mode,
@@ -38,9 +39,14 @@ from .trend_continuation import (
     normalize_trend_candidate,
     upgrade_trend_continuation_with_30min,
 )
+from .volume_contract import (
+    availability_series,
+    build_quantity_input_health,
+    formal_quantity_diagnostics,
+    metadata_series,
+)
 
 
-PRE_CLOSE_STRATEGY_VERSION = "preclose-1445-v2"
 MINIMUM_DAILY_ANALYSIS_COVERAGE = 0.90
 EXECUTED_STAGES = (
     "daily_structure",
@@ -60,6 +66,10 @@ class PrecloseDeadlineExceeded(RuntimeError):
         super().__init__("pre-close deadline exceeded")
         self.stage = str(stage or "")
         self.elapsed = float(elapsed)
+
+
+class DailyInputUnavailable(RuntimeError):
+    """Raised when required daily evidence falls below the existing floor."""
 
 
 @dataclass(frozen=True)
@@ -202,6 +212,14 @@ def _analyze_daily_inputs(market_inputs, components):
             failures.append({"code": code, "error": type(exc).__name__})
             continue
         if result is not None:
+            for key in (
+                "volume_units", "volume_raw_units", "volume_sources",
+                "volume_unit", "volume_raw_unit", "volume_source",
+                "amount_available", "amount_units", "amount_sources",
+                "amount_unit", "amount_source",
+            ):
+                if key in kline:
+                    setattr(result, key, kline[key])
             results.append(result)
     return results, rows_by_code, failures
 
@@ -296,6 +314,14 @@ def _analyze_30m_inputs(market_inputs, rows_by_code, components):
         if result is None:
             unavailable.append(code)
             continue
+        for key in (
+            "volume_units", "volume_raw_units", "volume_sources",
+            "volume_unit", "volume_raw_unit", "volume_source",
+            "amount_available", "amount_units", "amount_sources",
+            "amount_unit", "amount_source",
+        ):
+            if key in evidence["klines"]:
+                setattr(result, key, evidence["klines"][key])
         setattr(result, "strategy_input_evidence", {
             "interval": "30m",
             "status": "intraday_available",
@@ -357,6 +383,7 @@ def _merge_sector_metadata(candidates, sector_stocks):
 
 def _normalize_startup_candidate(candidate):
     item = dict(candidate or {})
+    item["trend_type"] = str(item.get("trend_type") or "")
     confirmations = list(item.get("confirmations") or [])
     price = _finite(item.get("close"), 0.0)
     best = {
@@ -459,7 +486,14 @@ def _build_daily_state(daily_results, sector_stocks, components):
     }
 
 
-def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, components):
+def _finish_main_state(
+    daily_state,
+    min30_results,
+    sector_stocks,
+    sh_closes,
+    components,
+    sector_rank_map=None,
+):
     pure_confirmed, upgrade_diagnostics = components.upgrade_daily_candidates(
         copy.deepcopy(daily_state["pure_pool"]), min30_results, mode="pure"
     )
@@ -502,11 +536,7 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
     fusion_scored = components.apply_scores(
         copy.deepcopy(fusion_recent),
         version="fusion",
-        sector_rank_map=[
-            {"name": value.get("sector")}
-            for value in sector_stocks.values()
-            if value.get("sector")
-        ],
+        sector_rank_map=sector_rank_map,
     )
     existing_fusion_codes = {
         str(item.get("code") or "") for item in fusion_scored
@@ -540,11 +570,7 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
         right_fusion_scored = components.apply_scores(
             copy.deepcopy(right_fusion_recent),
             version="fusion",
-            sector_rank_map=[
-                {"name": value.get("sector")}
-                for value in sector_stocks.values()
-                if value.get("sector")
-            ],
+            sector_rank_map=sector_rank_map,
         )
     right_mode_state = apply_right_side_startup_mode(
         right_fusion_scored,
@@ -625,6 +651,9 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
             + recency_right_watch_diag["dropped_details"]
         ),
     }
+    sector_rank_contract = _sector_rank_diagnostics(
+        list(fusion_scored) + list(right_fusion_scored)
+    )
     return {
         "picks_pure": _merge_sector_metadata(
             list(pure_scored) + published_right_pure, sector_stocks
@@ -641,6 +670,10 @@ def _finish_main_state(daily_state, min30_results, sector_stocks, sh_closes, com
             "fusion_admission": fusion_diagnostics,
             "right_side_startup": right_diagnostics,
             "signal_recency": recency_diagnostics,
+            # Keep the rank/source/diagnostic contract visible at the
+            # pre-close boundary so an inconsistent candidate cannot be
+            # mistaken for the rank actually used by fusion scoring.
+            "sector_rank_diagnostics": sector_rank_contract,
         },
     }
 
@@ -651,7 +684,8 @@ def build_preclose_main_pool(
     *,
     sector_stocks,
     sh_closes,
-    components=None
+    components=None,
+    sector_rank_map=None,
 ):
     """Reuse the daily pool, 30m upgrade, fusion admission and unified scores."""
 
@@ -665,6 +699,7 @@ def build_preclose_main_pool(
         sector_stocks or {},
         sh_closes,
         components,
+        sector_rank_map=sector_rank_map,
     )
 
 
@@ -708,8 +743,25 @@ def _derive_turnover(market_inputs):
     for row in market_inputs.get("daily") or []:
         kline = row.get("klines") if isinstance(row, dict) else None
         amounts = _as_list((kline or {}).get("amounts")) if isinstance(kline, dict) else []
-        value = _finite(amounts[-1] if amounts else row.get("amount"))
-        if value is not None and value >= 0:
+        source = kline if isinstance(kline, dict) and amounts else row
+        if not amounts:
+            raw_amount = row.get("amount")
+            amounts = [raw_amount] if raw_amount is not None else []
+        if not amounts:
+            continue
+        availability = availability_series(source, len(amounts))
+        units = metadata_series(source, "amount_units", "amount_unit", len(amounts), "unknown")
+        sources = metadata_series(source, "amount_sources", "amount_source", len(amounts), "")
+        if availability is None or units is None or sources is None:
+            continue
+        value = _finite(amounts[-1])
+        if (
+            value is not None
+            and value > 0
+            and availability[-1]
+            and units[-1].upper() == "CNY"
+            and bool(sources[-1])
+        ):
             total += value
             available = True
     return total if available else None
@@ -967,6 +1019,50 @@ def _pool_evidence(pool_name, candidates, as_of):
     return output
 
 
+def _sector_rank_diagnostics(candidates):
+    """Expose the ranking contract used by the internal pre-close pools."""
+    rows = []
+    all_diagnostics = []
+    seen_diagnostics = set()
+    for item in candidates or []:
+        if not isinstance(item, dict):
+            continue
+        diagnostics = item.get("sector_rank_diagnostics")
+        diagnostics = diagnostics if isinstance(diagnostics, list) else []
+        for diagnostic in diagnostics:
+            if not isinstance(diagnostic, dict):
+                continue
+            key = repr(sorted(diagnostic.items()))
+            if key not in seen_diagnostics:
+                seen_diagnostics.add(key)
+                all_diagnostics.append(dict(diagnostic))
+        if (
+            "sector_rank_used" not in item
+            and "sector_rank_source" not in item
+            and not diagnostics
+        ):
+            continue
+        rows.append({
+            "code": str(item.get("code") or ""),
+            "sector": str(item.get("sector") or ""),
+            "sector_rank": item.get("sector_rank"),
+            "sector_rank_used": item.get("sector_rank_used"),
+            "sector_rank_source": str(
+                item.get("sector_rank_source") or ""
+            ),
+            "diagnostics": [dict(diagnostic) for diagnostic in diagnostics],
+        })
+    return {
+        "candidate_count": len(rows),
+        "rows": rows,
+        "diagnostics": all_diagnostics,
+        "conflict_count": sum(
+            1 for diagnostic in all_diagnostics
+            if diagnostic.get("type") == "duplicate_name_rank_conflict"
+        ),
+    }
+
+
 def _shanghai_closes(market_inputs):
     market = market_inputs.get("market")
     market = market if isinstance(market, dict) else {}
@@ -1027,6 +1123,17 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 "rows_by_code": rows_by_code,
                 "sector_stocks": sector_context,
             })
+            quantity_health = build_quantity_input_health(
+                [result.code for result in daily_results if result is not None],
+                formal_quantity_diagnostics(
+                    (state.get("diagnostics") or {}).get("daily_structure"),
+                    None,
+                    (state.get("diagnostics") or {}).get("strong_startup"),
+                    (state.get("diagnostics") or {}).get("right_side_daily"),
+                    right_side_mode=state.get("right_mode"),
+                ),
+                MINIMUM_DAILY_ANALYSIS_COVERAGE,
+            )
             diagnostics["daily_analysis"] = {
                 "input_count": daily_input_count,
                 "available_count": len(daily_results),
@@ -1034,20 +1141,35 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 "minimum_coverage": MINIMUM_DAILY_ANALYSIS_COVERAGE,
                 "failed": failures,
             }
+            daily_health_status = (
+                "unavailable"
+                if daily_coverage < MINIMUM_DAILY_ANALYSIS_COVERAGE
+                or quantity_health["below_minimum_coverage"]
+                else "partial"
+                if quantity_health["status"] == "partial"
+                else "verified"
+            )
             diagnostics["input_health"]["daily"] = {
-                "status": (
-                    "verified"
-                    if daily_coverage >= MINIMUM_DAILY_ANALYSIS_COVERAGE
-                    else "unavailable"
-                ),
+                "status": daily_health_status,
                 "input_count": daily_input_count,
                 "available_count": len(daily_results),
                 "coverage": round(daily_coverage, 6),
+                "quantity": quantity_health,
             }
             if daily_coverage < MINIMUM_DAILY_ANALYSIS_COVERAGE:
                 raise RuntimeError(
                     "daily analysis coverage below minimum: {:.2%} < {:.2%}".format(
                         daily_coverage, MINIMUM_DAILY_ANALYSIS_COVERAGE
+                    )
+                )
+            if quantity_health["below_minimum_coverage"]:
+                diagnostics["input_health"]["daily"]["reason_code"] = (
+                    "quantity_coverage_below_minimum"
+                )
+                raise DailyInputUnavailable(
+                    "daily quantity coverage below minimum: {:.2%} < {:.2%}".format(
+                        quantity_health["coverage"],
+                        MINIMUM_DAILY_ANALYSIS_COVERAGE,
                     )
                 )
             return state
@@ -1098,6 +1220,13 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 daily_state["sector_stocks"],
                 _shanghai_closes(market_inputs),
                 components,
+                sector_rank_map=(
+                    list(
+                        ((market_inputs.get("market") or {}).get("sectors"))
+                        or []
+                    )
+                    or None
+                ),
             )
 
         main_state = _stage_clock(

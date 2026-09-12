@@ -12,6 +12,7 @@ import numpy as np
 
 import run
 from chanlun import data_fetcher
+from chanlun.identity import InstrumentIdentity
 from chanlun.kline_cache import write_cached_records
 from chanlun.report_view_model import build_workspace
 from scripts.validate_today_report import (
@@ -141,6 +142,212 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(2, diagnostics["kept_count"])
         self.assertEqual(["600001"], diagnostics["excluded_codes"])
         self.assertEqual("picks_pure", diagnostics["upstream_pool"])
+
+    def test_luojie_research_target_plan_uses_shared_themes_and_keeps_intersection_diagnostic(self):
+        stocks = [
+            {
+                "code": "000001", "name": "通信龙头", "sector": "通信设备",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+            {
+                "code": "000002", "name": "半导体龙头", "sector": "半导体",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+            {
+                "code": "000003", "name": "普通银行", "sector": "银行",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+        ]
+
+        plan = run._build_luojie_research_target_plan(
+            stocks,
+            [{"code": "000001"}],
+            budget=10,
+        )
+
+        self.assertEqual(plan["shared_health_count"], 3)
+        self.assertEqual(plan["theme_target_count"], 2)
+        self.assertEqual(plan["selected_codes"], ["000001", "000002"])
+        self.assertEqual(
+            plan["common_upstream_diagnostics"]["excluded_codes"],
+            ["000002"],
+        )
+        self.assertEqual(plan["common_upstream_diagnostics"]["kept_count"], 1)
+
+    def test_luojie_research_budget_is_bounded_and_order_independent(self):
+        stocks = [
+            {
+                "code": "000003", "name": "半导体", "sector": "半导体",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+            {
+                "code": "000001", "name": "通信", "sector": "通信设备",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+            {
+                "code": "000002", "name": "通信", "sector": "通信设备",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            },
+        ]
+
+        first = run._build_luojie_research_target_plan(
+            stocks, [], budget=2
+        )
+        second = run._build_luojie_research_target_plan(
+            list(reversed(stocks)), [], budget=2
+        )
+
+        self.assertEqual(first["selected_codes"], ["000001", "000002"])
+        self.assertEqual(first["selected_codes"], second["selected_codes"])
+        self.assertEqual(first["budget_excluded_count"], 1)
+        self.assertEqual(first["budget"], 2)
+
+    def test_luojie_research_target_plan_excludes_unhealthy_shared_rows(self):
+        plan = run._build_luojie_research_target_plan(
+            [
+                {
+                    "code": "000001",
+                    "name": "通信健康",
+                    "sector": "通信设备",
+                    "data_status": {"daily": "verified", "stale": False},
+                },
+                {
+                    "code": "000002",
+                    "name": "算力过期",
+                    "sector": "算力",
+                    "data_status": {"daily": "stale_cache", "stale": True},
+                },
+            ],
+            [],
+            budget=10,
+        )
+
+        self.assertEqual(plan["shared_input_count"], 2)
+        self.assertEqual(plan["shared_health_count"], 1)
+        self.assertEqual(plan["shared_unhealthy_codes"], ["000002"])
+        self.assertEqual(plan["selected_codes"], ["000001"])
+
+    def test_unknown_shared_row_without_health_contract_is_not_admitted(self):
+        self.assertFalse(
+            run._shared_luojie_row_is_healthy(
+                {"code": "000001", "name": "未核验", "sector": "通信设备"}
+            )
+        )
+        self.assertTrue(
+            run._shared_luojie_row_is_healthy(
+                {
+                    "code": "000002",
+                    "name": "测试合同",
+                    "sector": "通信设备",
+                    "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+                }
+            )
+        )
+
+    def test_explicit_zero_research_budget_is_visible_and_does_not_default_to_all(self):
+        plan = run._build_luojie_research_target_plan(
+            [{
+                "code": "000001", "name": "通信", "sector": "通信设备",
+                "shared_health_contract": run.SHARED_LUOJIE_ADMITTED_HEALTH_CONTRACT,
+            }],
+            [],
+            budget=0,
+        )
+
+        self.assertEqual(plan["budget"], 0)
+        self.assertEqual(plan["selected_codes"], [])
+        self.assertEqual(plan["budget_excluded_count"], 1)
+
+    def test_partial_luojie_retrieval_keeps_verified_candidates(self):
+        pool = {
+            "status": "enabled",
+            "mode": "enabled",
+            "candidates": [{"code": "000001"}, {"code": "000002"}],
+            "diagnostics": {},
+        }
+        health = {
+            "status": "partial",
+            "requested_count": 2,
+            "verified_count": 1,
+            "verified_codes": ["000001"],
+            "missing_codes": ["000002"],
+        }
+
+        result = run._finalize_luojie_research_pool(pool, health)
+
+        self.assertEqual(result["status"], "partial")
+        self.assertEqual([row["code"] for row in result["candidates"]], ["000001"])
+        self.assertEqual(result["diagnostics"]["missing_codes"], ["000002"])
+        self.assertEqual(
+            result["diagnostics"]["unverified_candidate_codes"],
+            ["000002"],
+        )
+        self.assertTrue(result["diagnostics"]["partial_candidate_output_allowed"])
+
+    def test_partial_luojie_output_keeps_verified_candidate_outside_formal_pool(self):
+        result = run._finalize_luojie_research_pool(
+            {
+                "status": "enabled",
+                "mode": "enabled",
+                "candidates": [{"code": "000099"}],
+                "diagnostics": {
+                    "common_upstream": {
+                        "upstream_pool": "picks_pure",
+                        "enforced": False,
+                    },
+                },
+            },
+            {
+                "status": "partial",
+                "requested_count": 1,
+                "verified_count": 1,
+                "verified_codes": ["000099"],
+                "missing_codes": [],
+            },
+        )
+
+        self.assertEqual([row["code"] for row in result["candidates"]], ["000099"])
+        self.assertTrue(result["diagnostics"]["partial_candidate_output_allowed"])
+
+    def test_unavailable_luojie_retrieval_does_not_create_candidates(self):
+        pool = {
+            "status": "enabled",
+            "mode": "enabled",
+            "candidates": [{"code": "000001"}],
+            "diagnostics": {},
+        }
+        health = {
+            "status": "unavailable",
+            "requested_count": 1,
+            "verified_count": 0,
+            "missing_codes": ["000001"],
+        }
+
+        result = run._finalize_luojie_research_pool(pool, health)
+
+        self.assertEqual(result["status"], "unavailable")
+        self.assertEqual(result["candidates"], [])
+        self.assertFalse(result["diagnostics"]["partial_candidate_output_allowed"])
+
+    def test_partial_luojie_without_verified_codes_cannot_keep_candidates(self):
+        result = run._finalize_luojie_research_pool(
+            {
+                "status": "enabled",
+                "mode": "enabled",
+                "candidates": [{"code": "000001"}],
+                "diagnostics": {},
+            },
+            {
+                "status": "partial",
+                "requested_count": 1,
+                "verified_count": 0,
+                "verified_codes": [],
+                "missing_codes": ["000001"],
+            },
+        )
+
+        self.assertEqual(result["candidates"], [])
+        self.assertFalse(result["diagnostics"]["partial_candidate_output_allowed"])
 
     def test_only_actual_limit_up_extends_strategy_scan_for_observation(self):
         shared = SimpleNamespace(
@@ -296,6 +503,66 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertTrue(health["formal"]["formal_actions_allowed"])
         self.assertFalse(health["formal"]["all_formal_actions_allowed"])
         self.assertEqual(["daily_fusion"], health["formal"]["blocked_strategies"])
+
+    def test_main_selection_health_blocks_quantity_dependent_formal_strategies(self):
+        allowed = {
+            "status": "verified",
+            "formal_actions_allowed": True,
+            "invalid_codes": [],
+        }
+        result = run._build_selection_input_health(
+            "2026-09-11",
+            daily_fusion=allowed,
+            h4_t3=allowed,
+            luojie_pool={"status": "verified"},
+            sublevels={},
+            daily_quantity={
+                "status": "unavailable",
+                "below_minimum_coverage": True,
+                "unavailable_codes": ["300009"],
+                "pending_codes": ["300009"],
+            },
+        )
+
+        for strategy_name in ("daily_fusion", "h4_t3"):
+            strategy = result["by_strategy"][strategy_name]
+            self.assertFalse(strategy["formal_actions_allowed"])
+            self.assertEqual(
+                strategy["blocking_reason"],
+                "quantity_coverage_below_minimum",
+            )
+            self.assertEqual(strategy["quantity_pending_codes"], ["300009"])
+        self.assertEqual(result["formal"]["status"], "unavailable")
+        self.assertEqual(result["formal"]["allowed_strategies"], [])
+
+    def test_main_selection_health_exposes_partial_quantity_without_dropping_valid_peers(self):
+        allowed = {
+            "status": "verified",
+            "formal_actions_allowed": True,
+            "invalid_codes": [],
+        }
+        result = run._build_selection_input_health(
+            "2026-09-11",
+            daily_fusion=allowed,
+            h4_t3=allowed,
+            luojie_pool={"status": "verified"},
+            sublevels={},
+            daily_quantity={
+                "status": "partial",
+                "below_minimum_coverage": False,
+                "available_codes": ["300001", "300002"],
+                "unavailable_codes": ["300009"],
+                "pending_codes": ["300009"],
+            },
+        )
+
+        daily = result["by_strategy"]["daily_fusion"]
+        self.assertTrue(daily["formal_actions_allowed"])
+        self.assertEqual(daily["status"], "verified")
+        self.assertEqual(daily["quantity"]["status"], "partial")
+        self.assertEqual(daily["quantity_pending_codes"], ["300009"])
+        self.assertEqual(result["status"], "partial")
+        self.assertTrue(result["formal"]["all_formal_actions_allowed"])
 
     def test_partial_industry_hydration_is_visible_in_data_quality_warnings(self):
         quality = {"warnings": []}
@@ -554,7 +821,11 @@ class TestMarketDataGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch(
             "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
         ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
-            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            write_cached_records(
+                "day", "600000", cached_records, "intraday",
+                keep_trading_days=120,
+                identity=InstrumentIdentity("stock", "SH", "600000"),
+            )
             with patch.object(data_fetcher, "_fetch_daily_kline_remote", side_effect=remote):
                 rows = data_fetcher.batch_fetch_daily_klines(
                     [{"code": "600000", "name": "测试股"}],
@@ -579,7 +850,11 @@ class TestMarketDataGuard(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch(
             "chanlun.kline_cache.KLINE_CACHE_DIR", tmp
         ), patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", False):
-            write_cached_records("day", "600000", cached_records, "intraday", keep_trading_days=120)
+            write_cached_records(
+                "day", "600000", cached_records, "intraday",
+                keep_trading_days=120,
+                identity=InstrumentIdentity("stock", "SH", "600000"),
+            )
             with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
                 {"code": "BK0001", "name": "AI", "change_pct": 2.1, "flow": 10_000_000}
             ]), patch.object(

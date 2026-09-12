@@ -23,6 +23,7 @@ from .data_fetcher import is_st_stock
 from .market_sentiment import classify_price_limit
 from .price_basis import align_intraday_price
 from .screener_pure import _get_pivot_info, _has_macd_bullish_signal
+from .volume_contract import canonical_volume_window, quantity_evidence_observation
 
 
 def is_ma_bullish(closes):
@@ -71,7 +72,9 @@ def check_active_flag(closes):
     return False
 
 
-def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
+def screen_daily_fusion(
+    chan_results, sh_closes, sector_stocks=None, quantity_diagnostics=None
+):
     """
     融合版日线初筛。
 
@@ -91,6 +94,8 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
     print(f"  大盘状态: {trend_label}, 背驰阈值={div_threshold}, 优先买卖点={preferred_bp}")
 
     target_pool = []
+    if quantity_diagnostics is not None:
+        quantity_diagnostics.setdefault("quantity_evidence", [])
 
     for result in chan_results:
         if result is None:
@@ -99,7 +104,6 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
         code = result.code
         name = result.name
         closes = result.closes
-
         # --- 基础过滤 ---
         if is_st_stock(name):
             continue
@@ -115,12 +119,6 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
                 "close": closes[-1],
             })
             if price_limit_state in ("limit_up", "limit_down"):
-                continue
-
-        # 量能：成交量（手）→ 成交额（元）
-        if len(result.volumes) >= 5 and len(closes) >= 5:
-            amounts = result.volumes[-5:] * closes[-5:] * 100
-            if np.mean(amounts) < MIN_DAILY_AMOUNT:
                 continue
 
         # --- 缠论买点 ---
@@ -158,6 +156,29 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
         if not valid_buy_points:
             continue
 
+        raw_volumes = getattr(result, "volumes", None)
+        volumes = (
+            canonical_volume_window(result, slice(-5, None))
+            if raw_volumes is not None and len(raw_volumes) == len(closes)
+            else None
+        )
+        volume_available = volumes is not None and len(volumes) == 5
+        if quantity_diagnostics is not None:
+            quantity_diagnostics["quantity_evidence"].append(
+                quantity_evidence_observation(
+                    code, "legacy_fusion_liquidity", 5, volume_available,
+                    "quantity_price_length_mismatch"
+                    if raw_volumes is None or len(raw_volumes) != len(closes)
+                    else "",
+                )
+            )
+        if not volume_available:
+            continue
+
+        amounts = volumes * closes[-5:] * 100
+        if np.mean(amounts) < MIN_DAILY_AMOUNT:
+            continue
+
         # 选最优买点
         best_bp = _pick_best_fusion(valid_buy_points, preferred_bp)
 
@@ -191,7 +212,10 @@ def screen_daily_fusion(chan_results, sh_closes, sector_stocks=None):
             "highs": result.highs,
             "lows": result.lows,
             "dates": result.dates,
-            "volumes": result.volumes,
+            "volumes": raw_volumes,
+            "volume_units": list(getattr(result, "volume_units", [])),
+            "volume_raw_units": list(getattr(result, "volume_raw_units", [])),
+            "volume_sources": list(getattr(result, "volume_sources", [])),
             "fractals": result.fractals,
             "strokes": result.strokes,
             "segments": result.segments,

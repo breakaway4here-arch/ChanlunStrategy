@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from .market_history_store import MarketHistoryStore
+from .identity import normalize_identity
 
 
 @dataclass(frozen=True)
@@ -30,15 +31,71 @@ def _clamp(value: float, low: float = 0.0, high: float = 1.0) -> float:
 
 
 def _mean(values: Sequence[float]) -> float:
-    return float(sum(values) / len(values)) if values else 0.0
+    valid = []
+    for value in values:
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(number):
+            valid.append(number)
+    return float(sum(valid) / len(valid)) if valid else 0.0
+
+
+def _amount_value(row: Mapping[str, Any]) -> Optional[float]:
+    available = row.get("amount_available")
+    if available is not None and available not in (True, 1):
+        return None
+    amount_unit = row.get("amount_unit")
+    if (
+        amount_unit is not None
+        and str(amount_unit).strip()
+        and str(amount_unit).strip().upper() != "CNY"
+    ):
+        return None
+    try:
+        value = float(row.get("amount"))
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def _amount_window(rows: Sequence[Mapping[str, Any]], size: int = 5) -> Tuple[List[Optional[float]], bool]:
+    values = [_amount_value(row) for row in list(rows)[-int(size):]]
+    complete = len(values) == int(size) and all(value is not None for value in values)
+    return values, complete
+
+
+def _volume_value(row: Mapping[str, Any]) -> Optional[float]:
+    if str(row.get("volume_unit") or "unknown").strip().lower() != "hands":
+        return None
+    try:
+        value = float(row.get("volume"))
+    except (TypeError, ValueError):
+        return None
+    return value if math.isfinite(value) and value >= 0 else None
+
+
+def _volume_window(rows: Sequence[Mapping[str, Any]], size: int = 13) -> Tuple[List[Optional[float]], bool]:
+    values = [_volume_value(row) for row in list(rows)[-int(size):]]
+    complete = len(values) == int(size) and all(value is not None for value in values)
+    return values, complete
 
 
 def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     closes = [float(row["close"]) for row in rows]
     highs = [float(row["high"]) for row in rows]
     lows = [float(row["low"]) for row in rows]
-    volumes = [float(row["volume"]) for row in rows]
-    amounts = [float(row["amount"]) for row in rows]
+    volume_values, volume_window_complete = _volume_window(rows)
+    volumes = [
+        value if value is not None else float("nan")
+        for value in (_volume_value(row) for row in rows)
+    ]
+    amount_values, amount_window_complete = _amount_window(rows)
+    amounts = [
+        value if value is not None else float("nan")
+        for value in (_amount_value(row) for row in rows)
+    ]
     close = closes[-1]
     window_low = min(lows[-60:])
     window_high = max(highs[-60:])
@@ -52,12 +109,16 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     ma20 = _mean(closes[-20:])
     previous_ma5 = _mean(closes[-6:-1])
     pullback = 1.0 - _clamp(abs(close / ma20 - 1.0) / 0.10) if ma20 else 0.0
-    recent_volume = _mean(volumes[-3:])
-    prior_volume = _mean(volumes[-13:-3])
+    recent_volume = _mean(volumes[-3:]) if volume_window_complete else 0.0
+    prior_volume = _mean(volumes[-13:-3]) if volume_window_complete else 0.0
     contraction = _clamp(1.5 - recent_volume / prior_volume) if prior_volume else 0.0
-    volume_ratio = recent_volume / prior_volume if prior_volume else 0.0
-    prior_amount = _mean(amounts[-6:-1])
-    amount_ratio = amounts[-1] / prior_amount if prior_amount else 0.0
+    volume_ratio = recent_volume / prior_volume if volume_window_complete and prior_volume else None
+    prior_amount = _mean(amounts[-6:-1]) if amount_window_complete else 0.0
+    amount_ratio = (
+        amounts[-1] / prior_amount
+        if amount_window_complete and math.isfinite(amounts[-1]) and prior_amount
+        else None
+    )
     return5 = close / closes[-6] - 1.0 if len(closes) >= 6 and closes[-6] else 0.0
     return20 = close / closes[-21] - 1.0 if len(closes) >= 21 and closes[-21] else 0.0
     breakout_reference = max(highs[-21:-1]) if len(highs) >= 21 else max(highs[:-1])
@@ -74,8 +135,12 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
     )
     momentum5 = _clamp((return5 + 0.03) / 0.12)
     momentum20 = _clamp((return20 + 0.08) / 0.30)
-    volume_start = _clamp((volume_ratio - 0.8) / 1.2)
-    average_amount = _mean(amounts[-5:])
+    volume_start = (
+        _clamp((volume_ratio - 0.8) / 1.2)
+        if volume_window_complete and volume_ratio is not None
+        else 0.0
+    )
+    average_amount = _mean(amount_values) if amount_window_complete else 0.0
     liquidity = _clamp(
         math.log1p(max(average_amount, 0.0)) / math.log1p(1_000_000_000)
     )
@@ -99,6 +164,16 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
         "trend_retrieval_score": round(trend_score, 6),
         "neutral_retrieval_score": round(neutral_score, 6),
         "average_amount_5d": average_amount,
+        "volume_window_complete": volume_window_complete,
+        "volume_window_missing_count": sum(value is None for value in volume_values),
+        "volume_evidence_status": (
+            "available" if volume_window_complete else "incomplete"
+        ),
+        "amount_window_complete": amount_window_complete,
+        "amount_window_missing_count": sum(value is None for value in amount_values),
+        "amount_evidence_status": (
+            "available" if amount_window_complete else "incomplete"
+        ),
         "position_60d": position,
         "return_5d": return5,
         "return_20d": return20,
@@ -122,6 +197,20 @@ def _feature_scores(rows: Sequence[Mapping[str, Any]]) -> Dict[str, float]:
 
 
 def _rows_to_kline(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
+    amount_available = [
+        _amount_value(row) is not None for row in rows
+    ]
+    volume_units = [str(row.get("volume_unit") or "unknown") for row in rows]
+    volume_raw_units = [
+        str(row.get("volume_raw_unit") or "unknown") for row in rows
+    ]
+    volume_sources = [str(row.get("volume_source") or "") for row in rows]
+    amount_units = [str(row.get("amount_unit") or "unknown") for row in rows]
+    amount_sources = [str(row.get("amount_source") or "") for row in rows]
+
+    def summary(values):
+        return values[0] if values and len(set(values)) == 1 else "mixed"
+
     return {
         "dates": [row["ts"] for row in rows],
         "opens": np.array([row["open"] for row in rows], dtype=float),
@@ -129,7 +218,22 @@ def _rows_to_kline(rows: Sequence[Mapping[str, Any]]) -> Dict[str, Any]:
         "lows": np.array([row["low"] for row in rows], dtype=float),
         "closes": np.array([row["close"] for row in rows], dtype=float),
         "volumes": np.array([row["volume"] for row in rows], dtype=float),
-        "amounts": np.array([row["amount"] for row in rows], dtype=float),
+        "amounts": np.array(
+            [row["amount"] if available else np.nan
+             for row, available in zip(rows, amount_available)],
+            dtype=float,
+        ),
+        "amount_available": np.array(amount_available, dtype=bool),
+        "volume_units": volume_units,
+        "volume_raw_units": volume_raw_units,
+        "volume_sources": volume_sources,
+        "amount_units": amount_units,
+        "amount_sources": amount_sources,
+        "volume_unit": summary(volume_units),
+        "volume_raw_unit": summary(volume_raw_units),
+        "volume_source": summary(volume_sources),
+        "amount_unit": summary(amount_units),
+        "amount_source": summary(amount_sources),
         "source": "market_history_db",
         "adjustment": str(rows[-1]["adjustment"]),
         "_data_status": {
@@ -171,20 +275,39 @@ def load_eligible_candidates(
         "nonfinal_bars": 0,
         "stale_latest_bar": 0,
         "low_liquidity": 0,
+        "amount_evidence_incomplete": 0,
+        "volume_evidence_incomplete": 0,
+        "invalid_identity": 0,
     }
     for instrument in instruments:
+        try:
+            canonical = normalize_identity(instrument)
+        except (TypeError, ValueError) as exc:
+            excluded["invalid_identity"] += 1
+            if audit_records is not None:
+                audit_records.append({
+                    "code": instrument.get("code"),
+                    "name": instrument.get("name") or instrument.get("code"),
+                    "exchange": instrument.get("exchange"),
+                    "asset_type": instrument.get("asset_type"),
+                    "eligibility_passed": False,
+                    "eligibility_failure_reason": "invalid_identity",
+                    "identity_error": str(exc),
+                    "data_quality": {"daily": "blocked", "bars": 0},
+                })
+            continue
         instrument_id = int(instrument["instrument_id"])
         meta = metadata.get(instrument_id)
         rows = rows_by_id.get(instrument_id, [])
         audit = {
-            "code": instrument["code"],
+            "code": canonical.code,
             "name": (
                 (meta or {}).get("name")
                 or instrument.get("name")
                 or instrument["code"]
             ),
-            "exchange": instrument["exchange"],
-            "asset_type": instrument["asset_type"],
+            "exchange": canonical.exchange,
+            "asset_type": canonical.asset_type,
             "stock_meta_asof": meta or {},
             "eligibility_passed": False,
             "eligibility_failure_reason": "",
@@ -241,7 +364,27 @@ def load_eligible_candidates(
             excluded["stale_latest_bar"] += 1
             reject("stale_latest_bar")
             continue
-        average_amount = _mean([float(row["amount"]) for row in rows[-5:]])
+        volume_values, volume_window_complete = _volume_window(rows)
+        if not volume_window_complete:
+            excluded["volume_evidence_incomplete"] += 1
+            audit["volume_evidence_status"] = "incomplete"
+            audit["volume_window_complete"] = False
+            audit["volume_window_missing_count"] = sum(
+                value is None for value in volume_values
+            )
+            reject("volume_evidence_incomplete")
+            continue
+        amount_values, amount_window_complete = _amount_window(rows)
+        if not amount_window_complete:
+            excluded["amount_evidence_incomplete"] += 1
+            audit["amount_evidence_status"] = "incomplete"
+            audit["amount_window_complete"] = False
+            audit["amount_window_missing_count"] = sum(
+                value is None for value in amount_values
+            )
+            reject("amount_evidence_incomplete")
+            continue
+        average_amount = _mean(amount_values)
         if average_amount < float(min_daily_amount):
             excluded["low_liquidity"] += 1
             audit["average_amount_5d"] = average_amount
@@ -256,10 +399,10 @@ def load_eligible_candidates(
             else 0.0
         )
         candidate = {
-            "code": instrument["code"],
+            "code": canonical.code,
             "name": meta.get("name") or instrument.get("name") or instrument["code"],
-            "exchange": instrument["exchange"],
-            "asset_type": instrument["asset_type"],
+            "exchange": canonical.exchange,
+            "asset_type": canonical.asset_type,
             "stock_meta_asof": meta,
             "industry": str(meta.get("industry") or "").strip(),
             "sector": str(meta.get("industry") or "").strip(),
@@ -273,7 +416,14 @@ def load_eligible_candidates(
             "klines": kline,
             "data_status": kline["_data_status"],
             "amount": average_amount,
-            "amounts": np.array([row["amount"] for row in rows], dtype=float),
+            "amounts": np.array(
+                [
+                    value if value is not None else np.nan
+                    for value in (_amount_value(row) for row in rows)
+                ],
+                dtype=float,
+            ),
+            "amount_available": average_amount > 0,
             "change_pct": change_pct,
         }
         candidate.update(scores)

@@ -34,8 +34,8 @@ class RunMarketCapEvidenceTests(unittest.TestCase):
 
             calls = []
 
-            def fetcher(codes, max_workers=20):
-                calls.append((list(codes), max_workers))
+            def fetcher(identities, max_workers=20):
+                calls.append((list(identities), max_workers))
                 return {
                     "000001": {
                         "market_cap": 200,
@@ -58,12 +58,59 @@ class RunMarketCapEvidenceTests(unittest.TestCase):
                     missing_id, as_of="2026-07-16"
                 )
 
-        self.assertEqual(calls, [(["000001"], 20)])
+        self.assertEqual(
+            calls,
+            [
+                (
+                    [{"asset_type": "stock", "exchange": "SZ", "code": "000001"}],
+                    20,
+                )
+            ],
+        )
         self.assertEqual(stocks[0]["market_cap"], 120)
         self.assertEqual(stocks[1]["circulating_market_cap"], 160)
         self.assertEqual(persisted["market_cap"], 200)
         self.assertEqual(diagnostics["db_hits"], 1)
         self.assertEqual(diagnostics["hydrated"], 2)
+
+    def test_rejects_index_market_cap_and_counts_identity_hits_once(self):
+        calls = []
+
+        def fetcher(identities, max_workers=20):
+            calls.append(list(identities))
+            return {
+                "stock|SZ|000001": {
+                    "market_cap": 200,
+                    "circulating_market_cap": 160,
+                    "float_market_cap": 160,
+                },
+                "000001": {
+                    "market_cap": 200,
+                    "circulating_market_cap": 160,
+                    "float_market_cap": 160,
+                },
+            }
+
+        stocks = [
+            {"code": "000001", "asset_type": "stock", "exchange": "SZ"},
+            {"code": "000001", "asset_type": "index", "exchange": "SH"},
+        ]
+        diagnostics = _hydrate_market_cap_evidence(
+            stocks,
+            "2026-07-16",
+            db_path="/path/that/does/not/exist",
+            fetcher=fetcher,
+        )
+
+        self.assertEqual(
+            calls,
+            [[{"asset_type": "stock", "exchange": "SZ", "code": "000001"}]],
+        )
+        self.assertEqual(diagnostics["requested"], 1)
+        self.assertEqual(diagnostics["remote_requested"], 1)
+        self.assertEqual(diagnostics["remote_hits"], 1)
+        self.assertIn("market_cap_identity_error", stocks[1])
+        self.assertNotIn("market_cap", stocks[1])
 
 
 if __name__ == "__main__":

@@ -116,9 +116,13 @@ def evaluate_promotion_gates(
     after_values: Dict[str, Optional[float]] = {}
 
     for key in required_keys:
-        metric_keys = [key, key.replace("_", "")]
         if key == "sample_count":
-            metric_keys.append("n")
+            # T+3 promotion gates require T+3-mature rows.  A raw ``n`` can
+            # include right-censored T+1-only/T+2 rows and must not satisfy
+            # the mature-sample threshold by itself.
+            metric_keys = ["n_t3_evaluable", "n_evaluable", "sample_count"]
+        else:
+            metric_keys = [key, key.replace("_", "")]
         before_value = _pick_metric(before_metrics, metric_keys)
         after_value = _pick_metric(after_metrics, metric_keys)
         before_values[key] = before_value

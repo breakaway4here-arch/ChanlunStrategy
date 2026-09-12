@@ -31,6 +31,7 @@ from chanlun.recommendation_evidence import (  # noqa: E402
     build_recommendation_evidence_projection,
 )
 from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
+from chanlun.report_view_model import build_workspace  # noqa: E402
 from chanlun.psy12_shadow_audit import evaluate_shadow_reports  # noqa: E402
 from chanlun.psy12_shadow_history import (  # noqa: E402
     load_daily_report_envelopes,
@@ -335,6 +336,46 @@ def _insert_or_replace_evidence(raw_json: str, evidence: dict, key="recommendati
     return raw_json[:content_end] + insertion + raw_json[content_end:]
 
 
+def _load_previous_daily_payload(data_dir: Path, report_date: str):
+    """Return the nearest earlier complete daily payload and its path."""
+    for path in sorted(data_dir.glob("*.json"), key=lambda item: item.name, reverse=True):
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}\.json", path.name):
+            continue
+        candidate_date = path.stem
+        if candidate_date >= report_date:
+            continue
+        try:
+            payload = _read_json(path)
+        except StageRecommendationEvidenceError:
+            continue
+        if isinstance(payload, dict) and payload.get("date") == candidate_date:
+            return payload, path
+    return None, None
+
+
+def _build_previous_workbench(payload):
+    """Derive the previous page-only workbench without changing its source."""
+    if not isinstance(payload, dict):
+        return None
+    workspace = payload.get("workspace")
+    if not isinstance(workspace, dict):
+        workspace = build_workspace(payload)
+    evidence = build_recommendation_evidence_projection(payload, payload)
+    return build_decision_workbench(
+        payload,
+        workspace,
+        evidence,
+        phase="formal",
+        snapshot_id=payload.get("snapshot_id", ""),
+    )
+
+
+def _workspace_for(payload):
+    if isinstance(payload, dict) and isinstance(payload.get("workspace"), dict):
+        return payload["workspace"]
+    return build_workspace(payload)
+
+
 def _remove_top_level_key(raw_json: str, key: str) -> str:
     """Remove one root-object member while preserving every other byte."""
     span = _parse_top_level_key_span(raw_json, key)
@@ -356,12 +397,25 @@ def _remove_top_level_key(raw_json: str, key: str) -> str:
     return raw_json[:key_start] + raw_json[value_end:]
 
 
-def _inject_evidence(html: str, path: Path, evidence: dict, asset_version: str) -> str:
+def _inject_evidence(
+    html: str,
+    path: Path,
+    evidence: dict,
+    asset_version: str,
+    previous_workbench=None,
+) -> str:
     info = _read_bootstrap_info(html, path)
     raw_json = html[info["json_start"] : info["json_end"]]
     updated_raw = _insert_or_replace_evidence(raw_json, evidence)
     daily = info['payload']['inlineReportData']
-    workbench = build_decision_workbench(daily, daily.get('workspace', {}), evidence)
+    workbench = build_decision_workbench(
+        daily,
+        _workspace_for(daily),
+        evidence,
+        phase="formal",
+        snapshot_id=daily.get("snapshot_id", ""),
+        previous=previous_workbench,
+    )
     updated_raw = _insert_or_replace_evidence(updated_raw, workbench, 'decisionWorkbench')
     updated = (
         html[: info["json_start"]]
@@ -714,8 +768,23 @@ def stage_recommendation_evidence_pages(
             "recommendation evidence is not strict JSON"
         ) from exc
 
+    previous_data, previous_path = _load_previous_daily_payload(
+        daily_path.parent, report_date
+    )
+    previous_workbench = _build_previous_workbench(previous_data)
+    expected_workbench = build_decision_workbench(
+        daily_data,
+        _workspace_for(daily_data),
+        evidence,
+        phase="formal",
+        snapshot_id=daily_data.get("snapshot_id", ""),
+        previous=previous_workbench,
+    )
+
     asset_version = _asset_version(source_assets_dir)
     input_paths = [home_path, archive_path, compare_path, daily_path, aggregate_path]
+    if previous_path is not None:
+        input_paths.append(previous_path)
     input_paths += [source_assets_dir / name for name in REPORT_ASSETS]
     input_snapshot = _snapshot_inputs(input_paths)
     before_protected = _protected_hashes(
@@ -750,9 +819,19 @@ def stage_recommendation_evidence_pages(
     # Verify real links/scripts before and after the replacement.  This also
     # prevents a comment, data-src, title, or embedded string from being
     # counted as an asset reference.
-    updated_home = _inject_evidence(home_html, home_path, evidence, asset_version)
+    updated_home = _inject_evidence(
+        home_html,
+        home_path,
+        evidence,
+        asset_version,
+        previous_workbench=previous_workbench,
+    )
     updated_archive = _inject_evidence(
-        archive_html, archive_path, evidence, asset_version
+        archive_html,
+        archive_path,
+        evidence,
+        asset_version,
+        previous_workbench=previous_workbench,
     )
     updated_compare = replace_report_asset_versions(compare_html, asset_version)
     _assert_asset_queries(updated_home, asset_version, home_path)
@@ -770,7 +849,6 @@ def stage_recommendation_evidence_pages(
             raise StageRecommendationEvidenceError(
                 "staged recommendation evidence mismatch: {}".format(path)
             )
-        expected_workbench = build_decision_workbench(daily_data, daily_data.get('workspace', {}), evidence)
         if payload.get('decisionWorkbench') != expected_workbench:
             raise StageRecommendationEvidenceError('staged decision workbench mismatch')
         if _non_evidence_payload(payload) != _non_evidence_payload(original_info["payload"]):
@@ -882,6 +960,11 @@ def stage_recommendation_evidence_pages(
     return {
         "status": "staged",
         "report_date": report_date,
+        "previous_report_date": (
+            previous_workbench.get("report_date")
+            if isinstance(previous_workbench, dict)
+            else None
+        ),
         "stage_dir": os.fspath(stage_dir),
         "asset_version": asset_version,
         "staged_files": staged_files,

@@ -1,5 +1,6 @@
 """Deterministic, attributable strategy scorecards from immutable ledger rows."""
 
+import copy
 import math
 import os
 import json
@@ -9,6 +10,13 @@ from statistics import mean, median
 
 from .market_history_store import MarketHistoryStore
 from .pool_contract import resolve_list_pool, resolve_nested_strategy_pool
+from .strategy_identity import (
+    DECISION_POLICY_VERSION,
+    FUSION_STRATEGY_VERSION,
+    LUOJIE_RESEARCH_STRATEGY_VERSION,
+    PRE_CLOSE_STRATEGY_VERSION,
+    PURE_STRATEGY_VERSION,
+)
 
 
 HORIZONS = (1, 3, 5)
@@ -40,12 +48,15 @@ _SURFACE_BY_ROLE = {
 _LEGACY_ROLE_REGISTRY = {
     ("daily_fusion", "fusion-v2", "daily_fusion"): "formal",
     ("daily_fusion", "daily-fusion-close-v1", "picks_fusion"): "formal",
+    ("daily_fusion", FUSION_STRATEGY_VERSION, "picks_fusion"): "formal",
     ("daily_pure", "pure-v1", "daily_pure"): "baseline",
     ("daily_pure", "daily-pure-close-v1", "picks_pure"): "baseline",
+    ("daily_pure", PURE_STRATEGY_VERSION, "picks_pure"): "baseline",
     ("next_day_boom", "boom-v1", "next_day_boom"): "research",
     ("next_day_boom", "next-day-boom-close-v1", "next_day_boom"): "research",
     ("luojie_pool", "luojie-v1", "luojie_pool"): "research",
     ("luojie_pool", "luojie-close-v1", "luojie_pool"): "research",
+    ("luojie_pool", LUOJIE_RESEARCH_STRATEGY_VERSION, "luojie_pool"): "research",
     ("observation_gate", "gate-v1", "observation_gate"): "diagnostic",
     ("observation_gate", "observation-gate-close-v1", "observation_watchlist"): "diagnostic",
     ("h4_t3", "h4_t3_k30_tail_safe_v1", "h4_t3_pool"): "formal",
@@ -103,10 +114,63 @@ def _manifest_list_state(report, field_name):
     return state["state"], state["count"], state["reason"]
 
 
+def _research_partial_output_allowed(health):
+    """Allow only an explicitly attested research subset to remain visible."""
+    value = health if isinstance(health, dict) else {}
+    if str(value.get("status") or "").strip().lower() != "partial":
+        return False
+    raw_codes = value.get("verified_codes")
+    if not isinstance(raw_codes, (list, tuple, set, frozenset)):
+        return False
+    codes = {str(code) for code in raw_codes if str(code)}
+    try:
+        verified_count = float(value.get("verified_count"))
+        requested_count = float(value.get("requested_count"))
+    except (TypeError, ValueError, OverflowError):
+        return False
+    try:
+        missing_count = float(value.get("missing_count"))
+    except (TypeError, ValueError, OverflowError):
+        return False
+    raw_missing_codes = value.get("missing_codes")
+    if not isinstance(raw_missing_codes, (list, tuple, set, frozenset)):
+        return False
+    missing_codes = {str(code) for code in raw_missing_codes if str(code)}
+    if (
+        not math.isfinite(verified_count)
+        or verified_count < 0
+        or not verified_count.is_integer()
+        or not math.isfinite(requested_count)
+        or requested_count < 0
+        or not requested_count.is_integer()
+        or int(verified_count) > int(requested_count)
+        or (
+            not math.isfinite(missing_count)
+            or missing_count < 0
+            or not missing_count.is_integer()
+            or missing_count != requested_count - verified_count
+        )
+        or len(missing_codes) != requested_count - verified_count
+    ):
+        return False
+    return bool(
+        verified_count > 0
+        and int(verified_count) == len(codes)
+    )
+
+
 def _manifest_pool_state(report, field_name, *, formal_h4=False):
     state = resolve_nested_strategy_pool(
         report, field_name, formal_h4=formal_h4
     )
+    if (
+        state["state"] == "partial"
+        and field_name == "luojie_pool"
+        and _research_partial_output_allowed(
+            _strategy_input_health(report, field_name)
+        )
+    ):
+        return "partial", state["count"], state["reason"]
     run_state = "unavailable" if state["state"] == "partial" else state["state"]
     return run_state, state["count"], state["reason"]
 
@@ -125,6 +189,239 @@ def _strategy_input_health(report, strategy_name):
     return {}
 
 
+def _quantity_manifest_health(report, strategy_name):
+    quantity = _strategy_input_health(report, strategy_name).get("quantity")
+    if not isinstance(quantity, dict) or not quantity:
+        return None
+    return {
+        "status": str(quantity.get("status") or "unknown"),
+        "required_count": quantity.get("required_count"),
+        "available_count": quantity.get("available_count"),
+        "pending_count": len(quantity.get("pending_codes") or []),
+        "coverage": quantity.get("coverage"),
+        "minimum_coverage": quantity.get("minimum_coverage"),
+    }
+
+
+def _valid_manifest_price_basis(value):
+    """Validate source-declared basis facts without inventing a common basis."""
+    if not isinstance(value, dict):
+        return None
+    if "by_instrument" in value:
+        entries = value.get("by_instrument")
+        if not isinstance(entries, dict) or not entries:
+            return None
+        normalized = {}
+        for code, entry in entries.items():
+            code = str(code or "").strip()
+            basis = _valid_manifest_price_basis(entry)
+            if not code or basis is None or "by_instrument" in basis:
+                return None
+            normalized[code] = basis
+        result = dict(value)
+        result["scope"] = "per_instrument"
+        result["by_instrument"] = normalized
+        for field_name in ("missing_codes", "invalid_codes", "conflict_codes"):
+            if field_name in result:
+                raw_codes = result[field_name]
+                if not isinstance(raw_codes, (list, tuple, set, frozenset)):
+                    return None
+                result[field_name] = sorted({
+                    str(code) for code in raw_codes if str(code)
+                })
+        return result
+    adjustment = str(value.get("adjustment") or "").strip().lower()
+    if isinstance(value.get("factor_vs_raw"), bool):
+        return None
+    try:
+        factor = float(value.get("factor_vs_raw"))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if (
+        adjustment not in {"raw", "qfq", "hfq"}
+        or not math.isfinite(factor)
+        or factor <= 0
+    ):
+        return None
+    raw_price = value.get("raw_current_price")
+    adjusted_price = value.get("adjusted_current_price")
+    if raw_price is not None or adjusted_price is not None:
+        if isinstance(raw_price, bool) or isinstance(adjusted_price, bool):
+            return None
+        try:
+            raw_price = float(raw_price)
+            adjusted_price = float(adjusted_price)
+        except (TypeError, ValueError, OverflowError):
+            return None
+        if raw_price <= 0 or adjusted_price <= 0:
+            return None
+        expected = adjusted_price / raw_price
+        if (
+            not math.isfinite(expected)
+            or abs(expected - factor) > max(1e-9, abs(factor) * 1e-6)
+        ):
+            return None
+    return dict(value)
+
+
+def _manifest_basis_signature(value):
+    """Compare only stable source factor fields for one instrument."""
+    basis = value if isinstance(value, dict) else {}
+    adjustment = str(basis.get("adjustment") or "").strip().lower()
+    try:
+        factor = float(basis.get("factor_vs_raw"))
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if not math.isfinite(factor):
+        return None
+    return adjustment, round(factor, 12)
+
+
+def _manifest_price_basis(report):
+    """Collect actual basis facts, retaining per-instrument differences."""
+    explicit = report.get("comparison_identity")
+    if isinstance(explicit, dict):
+        declared_explicit = _valid_manifest_price_basis(
+            explicit.get("price_basis")
+        )
+        if declared_explicit:
+            return declared_explicit
+
+    declared = {}
+    missing_codes = set()
+    invalid_codes = set()
+    conflict_codes = set()
+    for pool_name in (
+        "picks_pure", "picks_fusion", "startup_watchlist",
+        "observation_watchlist", "next_day_boom", "luojie_pool",
+        "h4_t3_pool",
+    ):
+        rows = report.get(pool_name) or []
+        if isinstance(rows, dict):
+            rows = rows.get("candidates") or []
+        for row in rows if isinstance(rows, (list, tuple)) else []:
+            if not isinstance(row, dict):
+                continue
+            code = str(
+                row.get("code") or row.get("instrument_id") or ""
+            ).strip()
+            if not code:
+                continue
+            raw_basis = row.get("price_basis")
+            if not raw_basis:
+                missing_codes.add(code)
+                continue
+            basis = _valid_manifest_price_basis(raw_basis)
+            if basis is None:
+                invalid_codes.add(code)
+                continue
+            previous = declared.get(code)
+            if previous is None:
+                declared[code] = basis
+            elif _manifest_basis_signature(previous) != _manifest_basis_signature(basis):
+                conflict_codes.add(code)
+                declared.pop(code, None)
+    if not declared:
+        return None
+    result = {
+        "scope": "per_instrument",
+        "by_instrument": {
+            code: declared[code]
+            for code in sorted(declared)
+            if code not in conflict_codes
+        },
+    }
+    for field_name, values in (
+        ("missing_codes", missing_codes),
+        ("invalid_codes", invalid_codes),
+        ("conflict_codes", conflict_codes),
+    ):
+        if values:
+            result[field_name] = sorted(values)
+    return _valid_manifest_price_basis(result)
+
+
+def _manifest_policy_versions(report):
+    """Collect policy versions declared by the run or immutable ledger."""
+    versions = {}
+    explicit = report.get("strategy_policy_versions")
+    if isinstance(explicit, dict):
+        for strategy, version in explicit.items():
+            value = str(version or "").strip()
+            if value and value.lower() != "unknown":
+                versions[str(strategy)] = value
+    # A current run input is authoritative for that strategy.  Historical
+    # ledger rows may be present in a report for scorecard construction, but
+    # they must not overwrite the current manifest identity.
+    inputs = report.get("strategy_inputs")
+    for item in inputs if isinstance(inputs, (list, tuple)) else []:
+        if not isinstance(item, dict):
+            continue
+        strategy = str(
+            item.get("strategy_name") or item.get("strategy") or ""
+        ).strip()
+        value = str(item.get("policy_version") or "").strip()
+        if (
+            strategy
+            and value
+            and value.lower() != "unknown"
+        ):
+            versions[strategy] = value
+    entries = (
+        report.get("recommendation_entries")
+        or report.get("recommendation_ledger")
+        or []
+    )
+    for entry in entries if isinstance(entries, (list, tuple)) else []:
+        if not isinstance(entry, dict):
+            continue
+        value = str(entry.get("policy_version") or "").strip()
+        if not value or value.lower() == "unknown":
+            continue
+        for contribution in entry.get("strategy_contributions") or []:
+            if not isinstance(contribution, dict):
+                continue
+            strategy = str(
+                contribution.get("strategy_name")
+                or contribution.get("strategy")
+                or ""
+            ).strip()
+            if not strategy:
+                continue
+            if strategy in versions:
+                continue
+            previous = versions.get(strategy)
+            if previous is None:
+                versions[strategy] = value
+            elif previous != value:
+                versions[strategy] = ""
+    return {key: value for key, value in versions.items() if value}
+
+
+def _manifest_strategy_versions(report):
+    """Prefer strategy versions declared by the current run inputs."""
+    versions = {}
+    explicit = report.get("strategy_versions")
+    if isinstance(explicit, dict):
+        for strategy, version in explicit.items():
+            value = str(version or "").strip()
+            if value and value.lower() != "unknown":
+                versions[str(strategy)] = value
+    inputs = report.get("strategy_inputs")
+    for item in inputs if isinstance(inputs, (list, tuple)) else []:
+        if not isinstance(item, dict):
+            continue
+        strategy = str(
+            item.get("strategy_name") or item.get("strategy") or ""
+        ).strip()
+        version = str(
+            item.get("strategy_version") or item.get("version") or ""
+        ).strip()
+        if strategy and version and version.lower() != "unknown":
+            versions[strategy] = version
+    return versions
+
+
 def _blocked_strategy_state(report, strategy_name):
     health = _strategy_input_health(report, strategy_name)
     if strategy_name in {"daily_fusion", "h4_t3"}:
@@ -133,7 +430,13 @@ def _blocked_strategy_state(report, strategy_name):
             and health.get("status") == "verified"
         )
     else:
-        trusted = health.get("status") == "verified"
+        trusted = (
+            health.get("status") == "verified"
+            or (
+                strategy_name == "luojie_pool"
+                and _research_partial_output_allowed(health)
+            )
+        )
     if trusted:
         return None
     blocker = str(health.get("blocking_reason") or "")
@@ -174,7 +477,9 @@ def build_strategy_run_manifest(report_data):
         {
             "strategy": "daily_pure",
             "name": "日线纯净策略",
-            "version": "daily-pure-close-v1",
+            "version": PURE_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "picks_pure",
             "evaluation_role": "baseline",
             "publication_surface": "baseline_candidates",
@@ -185,7 +490,9 @@ def build_strategy_run_manifest(report_data):
         {
             "strategy": "daily_fusion",
             "name": "日线融合策略",
-            "version": "daily-fusion-close-v1",
+            "version": FUSION_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "picks_fusion",
             "evaluation_role": "formal",
             "publication_surface": "formal_recommendation",
@@ -203,11 +510,16 @@ def build_strategy_run_manifest(report_data):
                 _strategy_blocking_reason(report, "daily_fusion")
                 if fusion_blocked_state else ""
             ),
+            "quantity_input_health": _quantity_manifest_health(
+                report, "daily_fusion"
+            ),
         },
         {
             "strategy": "observation_gate",
             "name": "观察池门控",
             "version": "observation-gate-close-v1",
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "observation_watchlist",
             "evaluation_role": "diagnostic",
             "publication_surface": "gate_diagnostics",
@@ -219,6 +531,8 @@ def build_strategy_run_manifest(report_data):
             "strategy": "next_day_boom",
             "name": "次日大涨策略",
             "version": "next-day-boom-close-v1",
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "next_day_boom",
             "evaluation_role": "research",
             "publication_surface": "research_review",
@@ -229,7 +543,9 @@ def build_strategy_run_manifest(report_data):
         {
             "strategy": "luojie_pool",
             "name": "罗姐主题策略",
-            "version": "luojie-close-v1",
+            "version": LUOJIE_RESEARCH_STRATEGY_VERSION,
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
             "source_pool": "luojie_pool",
             "evaluation_role": "research",
             "publication_surface": "research_review",
@@ -251,6 +567,10 @@ def build_strategy_run_manifest(report_data):
                 h4_payload.get("strategy_version")
                 or "unknown"
             ),
+            "policy_version": DECISION_POLICY_VERSION,
+            "preclose_strategy_version": PRE_CLOSE_STRATEGY_VERSION,
+            "upstream_strategy_version": PURE_STRATEGY_VERSION,
+            "upstream_policy_version": DECISION_POLICY_VERSION,
             "source_pool": "h4_t3_pool",
             "evaluation_role": "formal",
             "publication_surface": "formal_recommendation",
@@ -273,11 +593,27 @@ def build_strategy_run_manifest(report_data):
                 _strategy_blocking_reason(report, "h4_t3")
                 if h4_blocked_state else ""
             ),
+            "quantity_input_health": _quantity_manifest_health(
+                report, "h4_t3"
+            ),
         },
     ]
+    manifest_price_basis = _manifest_price_basis(report)
+    market_close_snapshot = copy.deepcopy(
+        (report.get("selection_input_health") or {}).get(
+            "market_close_snapshot"
+        )
+    )
+    policy_versions = _manifest_policy_versions(report)
+    strategy_versions = _manifest_strategy_versions(report)
     manifest = []
     for spec in specs:
         row = dict(spec)
+        strategy_version = strategy_versions.get(
+            str(row.get("strategy") or "")
+        )
+        if strategy_version:
+            row["version"] = strategy_version
         status, count, reason = row.pop("state")
         row.update({
             "report_date": report_date,
@@ -295,6 +631,15 @@ def build_strategy_run_manifest(report_data):
             ),
             "reason": reason,
         })
+        if market_close_snapshot:
+            row["market_close_snapshot"] = copy.deepcopy(
+                market_close_snapshot
+            )
+        if manifest_price_basis:
+            row["price_basis"] = copy.deepcopy(manifest_price_basis)
+        policy_version = policy_versions.get(str(row.get("strategy") or ""))
+        if policy_version:
+            row["policy_version"] = policy_version
         manifest.append(row)
     return manifest
 
@@ -1317,6 +1662,8 @@ def build_strategy_scorecards(
     def empty_card(
         *, role, strategy, version, source_pool, entry_mode,
         intended_horizon, research_tier, publication_surface,
+        policy_version, preclose_strategy_version,
+        upstream_strategy_version, upstream_policy_version,
     ):
         return {
             "evaluation_role": role,
@@ -1327,6 +1674,10 @@ def build_strategy_scorecards(
             "entry_mode": entry_mode,
             "intended_horizon": intended_horizon,
             "research_tier": research_tier,
+            "policy_version": policy_version,
+            "preclose_strategy_version": preclose_strategy_version,
+            "upstream_strategy_version": upstream_strategy_version,
+            "upstream_policy_version": upstream_policy_version,
             "display_names": Counter(),
             "attribution_statuses": Counter(),
             "classification_statuses": Counter(),
@@ -1342,6 +1693,7 @@ def build_strategy_scorecards(
             "latest_source_candidate_count": None,
             "latest_published_count": None,
             "latest_report_date": "",
+            "price_basis": None,
         }
 
     for item in run_manifest or []:
@@ -1356,9 +1708,21 @@ def build_strategy_scorecards(
         entry_mode = str(item.get("entry_mode") or "unknown").strip() or "unknown"
         intended_horizon = _normalized_horizon(item.get("intended_horizon"))
         research_tier = _research_tier(item)
+        policy_version = str(item.get("policy_version") or "unknown").strip() or "unknown"
+        preclose_strategy_version = str(
+            item.get("preclose_strategy_version") or "unknown"
+        ).strip() or "unknown"
+        upstream_strategy_version = str(
+            item.get("upstream_strategy_version") or "unknown"
+        ).strip() or "unknown"
+        upstream_policy_version = str(
+            item.get("upstream_policy_version") or "unknown"
+        ).strip() or "unknown"
         key = (
             role, strategy, version, source_pool, entry_mode,
-            intended_horizon, research_tier,
+            intended_horizon, research_tier, policy_version,
+            preclose_strategy_version, upstream_strategy_version,
+            upstream_policy_version,
         )
         card = cards.setdefault(key, empty_card(
             role=role,
@@ -1369,8 +1733,14 @@ def build_strategy_scorecards(
             intended_horizon=intended_horizon,
             research_tier=research_tier,
             publication_surface=_SURFACE_BY_ROLE[role],
+            policy_version=policy_version,
+            preclose_strategy_version=preclose_strategy_version,
+            upstream_strategy_version=upstream_strategy_version,
+            upstream_policy_version=upstream_policy_version,
         ))
         card["display_names"][str(item.get("name") or strategy)] += 1
+        if isinstance(item.get("price_basis"), dict):
+            card["price_basis"] = dict(item["price_basis"])
         card["latest_run_status"] = str(
             item.get("run_status") or "unavailable"
         )
@@ -1419,6 +1789,20 @@ def build_strategy_scorecards(
                 contribution,
                 legacy=classification["classification_status"] == "legacy_corrected",
             )
+            policy_version = str(
+                contribution.get("policy_version")
+                or entry.get("policy_version")
+                or "unknown"
+            ).strip() or "unknown"
+            preclose_strategy_version = str(
+                contribution.get("preclose_strategy_version") or "unknown"
+            ).strip() or "unknown"
+            upstream_strategy_version = str(
+                contribution.get("upstream_strategy_version") or "unknown"
+            ).strip() or "unknown"
+            upstream_policy_version = str(
+                contribution.get("upstream_policy_version") or "unknown"
+            ).strip() or "unknown"
             key = (
                 role,
                 strategy,
@@ -1427,6 +1811,10 @@ def build_strategy_scorecards(
                 entry_mode,
                 intended_horizon,
                 research_tier,
+                policy_version,
+                preclose_strategy_version,
+                upstream_strategy_version,
+                upstream_policy_version,
             )
             card = cards.setdefault(key, empty_card(
                 role=role,
@@ -1437,6 +1825,10 @@ def build_strategy_scorecards(
                 intended_horizon=intended_horizon,
                 research_tier=research_tier,
                 publication_surface=classification["publication_surface"],
+                policy_version=policy_version,
+                preclose_strategy_version=preclose_strategy_version,
+                upstream_strategy_version=upstream_strategy_version,
+                upstream_policy_version=upstream_policy_version,
             ))
             card["display_names"][
                 str(contribution.get("display_name") or strategy)
@@ -1478,7 +1870,8 @@ def build_strategy_scorecards(
         cards,
         key=lambda value: (
             value[0], value[1], value[2], value[3], value[4],
-            -1 if value[5] is None else value[5], value[6],
+            -1 if value[5] is None else value[5], value[6], value[7],
+            value[8], value[9], value[10],
         ),
     ):
         card = cards[key]
@@ -1521,6 +1914,10 @@ def build_strategy_scorecards(
             "entry_mode": card["entry_mode"],
             "intended_horizon": card["intended_horizon"],
             "research_tier": card["research_tier"],
+            "policy_version": card["policy_version"],
+            "preclose_strategy_version": card["preclose_strategy_version"],
+            "upstream_strategy_version": card["upstream_strategy_version"],
+            "upstream_policy_version": card["upstream_policy_version"],
             "comparison_identity": {
                 "strategy": card["strategy"],
                 "version": card["version"],
@@ -1528,6 +1925,10 @@ def build_strategy_scorecards(
                 "entry_mode": card["entry_mode"],
                 "intended_horizon": card["intended_horizon"],
                 "research_tier": card["research_tier"],
+                "policy_version": card["policy_version"],
+                "preclose_strategy_version": card["preclose_strategy_version"],
+                "upstream_strategy_version": card["upstream_strategy_version"],
+                "upstream_policy_version": card["upstream_policy_version"],
             },
             "classification_status": classification_status,
             "classification_status_counts": classification_statuses,
@@ -1572,7 +1973,16 @@ def build_strategy_scorecards(
             ],
             "latest_published_count": card["latest_published_count"],
             "latest_report_date": card["latest_report_date"],
+            "price_basis": (
+                dict(card["price_basis"])
+                if isinstance(card.get("price_basis"), dict)
+                else None
+            ),
         }
+        if base.get("price_basis"):
+            base["comparison_identity"]["price_basis"] = dict(
+                base["price_basis"]
+            )
         if role == "diagnostic":
             # Gate diagnostics are intentionally not passed through the return
             # evaluator.  The absence of return keys is part of their contract.

@@ -224,8 +224,15 @@ def _score_startup(
 
 def _data_contract_fields(item):
     return {
+        # Keep the stock-level ChanResult fact on every manually rebuilt
+        # candidate.  An absent value remains absent; market context cannot
+        # manufacture a stock structure label downstream.
+        "trend_type": item.get("trend_type", ""),
         "sector_tags": item.get("sector_tags", []),
         "sector_rank": item.get("sector_rank"),
+        "sector_rank_used": item.get("sector_rank_used"),
+        "sector_rank_source": item.get("sector_rank_source", ""),
+        "sector_rank_diagnostics": item.get("sector_rank_diagnostics", []),
         "sector_flow": item.get("sector_flow"),
         "sector_strength_label": item.get("sector_strength_label", ""),
         "data_status": item.get("data_status", {}),

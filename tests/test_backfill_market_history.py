@@ -12,6 +12,7 @@ from chanlun.market_history_store import MarketHistoryStore
 from scripts.backfill_market_history import (
     BackfillIncomplete,
     DEFAULT_WORKERS,
+    _exchange_for_code,
     _remote_fetcher,
     _retry_fetch,
     kline_payload_to_bars,
@@ -54,6 +55,11 @@ class BackfillMarketHistoryTests(unittest.TestCase):
 
     def tearDown(self):
         self.tmp.cleanup()
+
+    def test_backfill_exchange_resolution_fails_closed_for_bj_and_unknown(self):
+        self.assertEqual(_exchange_for_code("920001"), "BJ")
+        with self.assertRaises(ValueError):
+            _exchange_for_code("999999")
 
     def test_stable_twenty_way_shards_are_sorted_unique_and_disjoint(self):
         codes = ["000003", "000001", "000002", "000001"] + [

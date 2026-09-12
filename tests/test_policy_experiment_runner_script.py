@@ -19,6 +19,10 @@ def _fake_payload():
                     "picks_seen": 10,
                     "baseline_evaluated": 10,
                     "policy_evaluated": 8,
+                    "baseline_rows_processed": 10,
+                    "baseline_t3_evaluable": 9,
+                    "policy_rows_processed": 8,
+                    "policy_t3_evaluable": 7,
                     "baseline_filtered": 1,
                     "policy_filtered": 2,
                     "policy_filtered_by_reason": {"cooldown": 1},
@@ -46,6 +50,10 @@ def _fake_payload():
                     "picks_seen": 10,
                     "baseline_evaluated": 10,
                     "policy_evaluated": 7,
+                    "baseline_rows_processed": 10,
+                    "baseline_t3_evaluable": 9,
+                    "policy_rows_processed": 7,
+                    "policy_t3_evaluable": 6,
                     "baseline_filtered": 1,
                     "policy_filtered": 3,
                     "policy_filtered_by_reason": {"bottom_quality_guard": 2},
@@ -167,6 +175,9 @@ class PolicyExperimentRunnerScriptTests(unittest.TestCase):
             self.assertIn("Generated:", text)
             self.assertIn("delay1_v1_cooldown3", text)
             self.assertIn("Filtered By Reason", text)
+            self.assertIn("Baseline T+3 n", text)
+            self.assertIn("Policy T+3 n", text)
+            self.assertIn("Right Censored", text)
             self.assertIn("Execution Summary", text)
             self.assertIn("shared_baseline: True", text)
             self.assertIn("fetch_attempts: 6", text)
