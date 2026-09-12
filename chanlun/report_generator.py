@@ -122,6 +122,244 @@ def build_chart_window(pick):
     return win_start, win_end
 
 
+def _metadata_values(source, plural_key, scalar_key, expected_length):
+    """Return only explicitly row-aligned metadata; never broadcast a scalar."""
+    if not isinstance(source, Mapping):
+        return None
+    raw = source.get(plural_key)
+    if raw is not None:
+        if isinstance(raw, (str, bytes)):
+            values = [raw] if expected_length == 1 else None
+        elif hasattr(raw, "tolist"):
+            values = raw.tolist()
+        else:
+            try:
+                values = list(raw)
+            except TypeError:
+                values = [raw] if expected_length == 1 else None
+        if values is None or len(values) != expected_length:
+            return None
+        return list(values)
+
+    scalar = source.get(scalar_key)
+    if scalar is None or expected_length != 1:
+        return None
+    return [scalar]
+
+
+def _slice_metadata_values(source, plural_key, scalar_key, expected_length, start, end):
+    values = _metadata_values(source, plural_key, scalar_key, expected_length)
+    return values[start:end] if values is not None else []
+
+
+def _slice_metadata_group(source, fields, expected_length, start, end):
+    values = [
+        _metadata_values(source, plural_key, scalar_key, expected_length)
+        for plural_key, scalar_key in fields
+    ]
+    if any(value is None for value in values):
+        return [[] for _ in fields]
+    return [value[start:end] for value in values]
+
+
+def _display_price_basis(source):
+    source = source if isinstance(source, Mapping) else {}
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    if "price_basis" in source:
+        basis = source.get("price_basis")
+        if not isinstance(basis, Mapping):
+            return None
+        basis = dict(basis)
+        adjustment = str(basis.get("adjustment") or "").strip().lower()
+        if adjustment in {"raw", "qfq", "hfq"}:
+            return basis
+        return None
+    adjustment = str(
+        data_status.get("adjustment") or source.get("adjustment") or ""
+    ).strip().lower()
+    if adjustment in {"raw", "qfq", "hfq"}:
+        return {"adjustment": adjustment}
+    return None
+
+
+def _display_price_basis_conflict(source):
+    source = source if isinstance(source, Mapping) else {}
+    explicit = source.get("price_basis")
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    if not isinstance(explicit, Mapping):
+        return False
+    explicit_adjustment = str(explicit.get("adjustment") or "").strip().lower()
+    status_adjustment = str(data_status.get("adjustment") or "").strip().lower()
+    valid = {"raw", "qfq", "hfq"}
+    return (
+        explicit_adjustment in valid
+        and status_adjustment in valid
+        and explicit_adjustment != status_adjustment
+    )
+
+
+def _display_series_values(values):
+    """Keep bool/NaN identity until display-only numeric validation runs."""
+    if values is None:
+        return []
+    if hasattr(values, "tolist"):
+        values = values.tolist()
+    if isinstance(values, (str, bytes)):
+        return [values]
+    try:
+        return list(values)
+    except TypeError:
+        return [values]
+
+
+def _display_ma_number(value):
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def _sanitize_display_ma_series(values):
+    sanitized = []
+    valid_count = 0
+    for value in _display_series_values(values):
+        if value is None:
+            sanitized.append(None)
+            continue
+        number = _display_ma_number(value)
+        sanitized.append(number)
+        if number is not None:
+            valid_count += 1
+    return sanitized, valid_count
+
+
+def _sma_series(values, window):
+    values = _display_series_values(values)
+    result = [None] * len(values)
+    for index in range(int(window) - 1, len(values)):
+        sample = values[index - int(window) + 1:index + 1]
+        numbers = []
+        for value in sample:
+            if isinstance(value, (bool, np.bool_)):
+                numbers = []
+                break
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                numbers = []
+                break
+            if not np.isfinite(number) or number <= 0:
+                numbers = []
+                break
+            numbers.append(number)
+        if len(numbers) == int(window):
+            result[index] = round(sum(numbers) / int(window), 8)
+    return result
+
+
+def _build_display_moving_average(source, dates, closes, start, end):
+    """Project trusted MA arrays or explicitly-labelled display-only SMA arrays."""
+    source = source if isinstance(source, Mapping) else {}
+    dates = _safe_list(dates)
+    closes = _display_series_values(closes)
+    n_orig = len(dates)
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    basis = _display_price_basis(source)
+    basis_conflict = _display_price_basis_conflict(source)
+    daily_verified = (
+        data_status.get("daily") == "verified"
+        and data_status.get("is_final") is True
+        and data_status.get("stale") is False
+    )
+
+    output = {"ma5": [], "ma10": [], "ema5": [], "ema20": []}
+    series = {
+        key: {"status": "missing", "algorithm": "", "window": window}
+        for key, window in (("ma5", 5), ("ma10", 10), ("ema5", 5), ("ema20", 20))
+    }
+    if basis_conflict:
+        return output, {
+            "status": "unavailable",
+            "reason": "price_basis_conflict",
+            "price_basis": None,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+    if n_orig == 0 or len(closes) != n_orig:
+        return output, {
+            "status": "unavailable",
+            "reason": "daily_series_missing_or_misaligned",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    if basis is None:
+        return output, {
+            "status": "unavailable",
+            "reason": "price_basis_missing",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    if not daily_verified:
+        return output, {
+            "status": "unavailable",
+            "reason": "daily_evidence_unverified",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    source_declared = set()
+    for key, window in (("ma5", 5), ("ma10", 10), ("ema5", 5), ("ema20", 20)):
+        values = _metadata_values(source, key, key, n_orig)
+        if values is None:
+            continue
+        sanitized, valid_count = _sanitize_display_ma_series(values)
+        output[key] = sanitized[start:end]
+        source_declared.add(key)
+        if valid_count:
+            series[key] = {
+                "status": "source",
+                "algorithm": "source_declared",
+                "window": window,
+            }
+
+    for key, window in (("ma5", 5), ("ma10", 10)):
+        if key in source_declared:
+            continue
+        if len(closes) < window:
+            continue
+        derived = _sma_series(closes, window)
+        if not any(value is not None for value in derived):
+            continue
+        output[key] = derived[start:end]
+        series[key] = {
+            "status": "derived",
+            "algorithm": "SMA",
+            "window": window,
+        }
+
+    available = any(item["status"] in {"source", "derived"} for item in series.values())
+    return output, {
+        "status": "available" if available else "unavailable",
+        "reason": "" if available else "daily_evidence_unverified",
+        "price_basis": basis,
+        "as_of": data_status.get("latest_date"),
+        "series": series,
+    }
+
+
 def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
     """Build annotation data for chart JS rendering.
 
@@ -626,13 +864,44 @@ def _serialize_picks(picks):
         dates_sliced = _slice(raw_dates)
         closes_sliced = _slice(p.get("closes", []))
         volumes_sliced = _slice(p.get("volumes", []))
-        volume_units_sliced = _slice(p.get("volume_units", []))
-        volume_raw_units_sliced = _slice(p.get("volume_raw_units", []))
-        volume_sources_sliced = _slice(p.get("volume_sources", []))
+        (
+            volume_units_sliced,
+            volume_raw_units_sliced,
+            volume_sources_sliced,
+        ) = _slice_metadata_group(
+            p,
+            (
+                ("volume_units", "volume_unit"),
+                ("volume_raw_units", "volume_raw_unit"),
+                ("volume_sources", "volume_source"),
+            ),
+            n_orig,
+            slice_start,
+            slice_end,
+        )
         amounts_sliced = _slice(p.get("amounts", []))
-        amount_available_sliced = _slice(p.get("amount_available", []))
-        amount_units_sliced = _slice(p.get("amount_units", []))
-        amount_sources_sliced = _slice(p.get("amount_sources", []))
+        (
+            amount_available_sliced,
+            amount_units_sliced,
+            amount_sources_sliced,
+        ) = _slice_metadata_group(
+            p,
+            (
+                ("amount_available", "amount_available"),
+                ("amount_units", "amount_unit"),
+                ("amount_sources", "amount_source"),
+            ),
+            n_orig,
+            slice_start,
+            slice_end,
+        )
+        moving_average_series, chart_ma = _build_display_moving_average(
+            p,
+            raw_dates,
+            p.get("closes", []),
+            slice_start,
+            slice_end,
+        )
 
         # Compute reference / current price
         bp = p.get("best_buy_point", {})
@@ -725,6 +994,11 @@ def _serialize_picks(picks):
             "amount_available": amount_available_sliced,
             "amount_units": amount_units_sliced,
             "amount_sources": amount_sources_sliced,
+            "ma5": moving_average_series["ma5"],
+            "ma10": moving_average_series["ma10"],
+            "ema5": moving_average_series["ema5"],
+            "ema20": moving_average_series["ema20"],
+            "chart_ma": chart_ma,
             "macd_hist": _serialize_macd(p, _slice, closes_sliced),
             # 图表标注
             "chart_annotations": build_chart_annotations(p, slice_start, dates_sliced, closes_sliced),
@@ -822,13 +1096,44 @@ def _serialize_startup_watchlist(watchlist):
         highs_sliced = _slice(w.get("highs", []))
         lows_sliced = _slice(w.get("lows", []))
         volumes_sliced = _slice(w.get("volumes", []))
-        volume_units_sliced = _slice(w.get("volume_units", []))
-        volume_raw_units_sliced = _slice(w.get("volume_raw_units", []))
-        volume_sources_sliced = _slice(w.get("volume_sources", []))
+        (
+            volume_units_sliced,
+            volume_raw_units_sliced,
+            volume_sources_sliced,
+        ) = _slice_metadata_group(
+            w,
+            (
+                ("volume_units", "volume_unit"),
+                ("volume_raw_units", "volume_raw_unit"),
+                ("volume_sources", "volume_source"),
+            ),
+            len(raw_dates),
+            slice_start,
+            slice_end,
+        )
         amounts_sliced = _slice(w.get("amounts", []))
-        amount_available_sliced = _slice(w.get("amount_available", []))
-        amount_units_sliced = _slice(w.get("amount_units", []))
-        amount_sources_sliced = _slice(w.get("amount_sources", []))
+        (
+            amount_available_sliced,
+            amount_units_sliced,
+            amount_sources_sliced,
+        ) = _slice_metadata_group(
+            w,
+            (
+                ("amount_available", "amount_available"),
+                ("amount_units", "amount_unit"),
+                ("amount_sources", "amount_source"),
+            ),
+            len(raw_dates),
+            slice_start,
+            slice_end,
+        )
+        moving_average_series, chart_ma = _build_display_moving_average(
+            w,
+            raw_dates,
+            closes_arr,
+            slice_start,
+            slice_end,
+        )
 
         # MACD histogram
         macd_hist_sliced = _slice(w.get("macd_hist", []))
@@ -919,6 +1224,11 @@ def _serialize_startup_watchlist(watchlist):
             "amount_available": amount_available_sliced,
             "amount_units": amount_units_sliced,
             "amount_sources": amount_sources_sliced,
+            "ma5": moving_average_series["ma5"],
+            "ma10": moving_average_series["ma10"],
+            "ema5": moving_average_series["ema5"],
+            "ema20": moving_average_series["ema20"],
+            "chart_ma": chart_ma,
             "macd_hist": macd_hist_sliced,
             "chart_annotations": chart_annotations,
         }

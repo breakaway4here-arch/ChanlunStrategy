@@ -606,6 +606,16 @@ assert(hiddenDesktop.innerHTML === '', 'hidden desktop switcher was targeted by 
             CSS,
         )
 
+    def test_mobile_chart_controls_wrap_into_touch_sized_rows_without_locking_page_scroll(self):
+        self.assertIn(".chart-layer-status", CSS)
+        self.assertIn("touch-action: pan-y", CSS)
+        mobile_start = CSS.rfind("@media (max-width: 390px)")
+        self.assertGreaterEqual(mobile_start, 0)
+        mobile = CSS[mobile_start:]
+        self.assertRegex(mobile, r"\.chart-layer-switcher[^}]*flex-wrap:\s*wrap\s*;")
+        self.assertRegex(mobile, r"\.chart-layer-switcher button[^}]*min-height:\s*44px\s*;")
+        self.assertRegex(mobile, r"\.chart-window-tools[^}]*border-top:")
+
 
 if __name__ == "__main__":
     unittest.main()

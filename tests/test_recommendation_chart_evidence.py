@@ -354,6 +354,387 @@ assert(globalThis.__auxTest.state.chartLayerSwitcher.innerHTML.includes('成交�
 """,
         )
 
+    def test_all_missing_volume_replaces_empty_volume_grid_with_compact_state(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.volume_units = Array(raw.dates.length).fill('unknown');
+raw.volume_raw_units = Array(raw.dates.length).fill('unknown');
+raw.volume_sources = Array(raw.dates.length).fill('');
+globalThis.__auxTest.state.chartLayerSwitcher = {
+  innerHTML: '', querySelectorAll: function () { return []; }
+};
+globalThis.__auxTest.chart(raw, {});
+assert(chartOption.grid.length === 2, 'all-missing volume kept an empty chart grid');
+const volume = chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
+assert(volume && volume.show === false, 'missing volume was not represented as a hidden series');
+const status = globalThis.__auxTest.state.chartLayerSwitcher.innerHTML;
+assert(status.includes('成交量证据未核验') && status.includes('单位') && status.includes('来源'),
+  'missing volume state did not preserve unit/source reasons');
+""",
+        )
+
+    def test_chart_preserves_zoom_when_switching_layers_for_same_snapshot(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            r"""
+let initCount = 0;
+let disposeCount = 0;
+let chartOption = null;
+global.window.echarts = { init: function () {
+  initCount += 1;
+  return {
+    setOption: function (option) { chartOption = option; },
+    getOption: function () { return { dataZoom: chartOption && chartOption.dataZoom }; },
+    dispose: function () { disposeCount += 1; }, resize: function () {}
+  };
+} };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.chartAnnotationLane = null;
+globalThis.__auxTest.state.chartLayerSwitcher = null;
+globalThis.__auxTest.state.chartWindowMode = '20';
+const raw = {
+  code: '600001', snapshot_id: 'snap-a',
+  dates: Array.from({ length: 25 }, function (_, index) { return 'D' + String(index + 1).padStart(2, '0'); }),
+  opens: Array.from({ length: 25 }, function (_, index) { return 10 + index * 0.1; }),
+  highs: Array.from({ length: 25 }, function (_, index) { return 10.2 + index * 0.1; }),
+  lows: Array.from({ length: 25 }, function (_, index) { return 9.8 + index * 0.1; }),
+  closes: Array.from({ length: 25 }, function (_, index) { return 10.1 + index * 0.1; }),
+  volumes: Array(25).fill(100), volume_units: Array(25).fill('hands'),
+  volume_raw_units: Array(25).fill('hands'), volume_sources: Array(25).fill('fixture'),
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }, pivot_zg: 12.4
+};
+globalThis.__auxTest.chart(raw, { code: '600001', snapshot_id: 'snap-a' });
+chartOption.dataZoom[0].startValue = 'D10';
+chartOption.dataZoom[0].endValue = 'D25';
+globalThis.__auxTest.state.chartLayer = 'structure';
+globalThis.__auxTest.chart(raw, { code: '600001', snapshot_id: 'snap-a' });
+assert(initCount === 1 && disposeCount === 0, 'same snapshot layer switch rebuilt the chart instance');
+assert(chartOption.dataZoom[0].startValue === 'D10' && chartOption.dataZoom[0].endValue === 'D25',
+  'same snapshot layer switch reset the visible date window');
+""",
+        )
+
+    def test_chart_does_not_reuse_zoom_for_same_day_different_snapshot(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            r"""
+let initCount = 0;
+let disposeCount = 0;
+let chartOption = null;
+global.window.echarts = { init: function () {
+  initCount += 1;
+  return {
+    setOption: function (option) { chartOption = option; },
+    getOption: function () { return { dataZoom: chartOption && chartOption.dataZoom }; },
+    dispose: function () { disposeCount += 1; }, resize: function () {}
+  };
+} };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.chartAnnotationLane = null;
+globalThis.__auxTest.state.chartLayerSwitcher = null;
+const raw = {
+  code: '600001', dates: ['D01', 'D02', 'D03', 'D04', 'D05'],
+  opens: [10, 10.1, 10.2, 10.3, 10.4], highs: [10.2, 10.3, 10.4, 10.5, 10.6],
+  lows: [9.8, 9.9, 10, 10.1, 10.2], closes: [10.1, 10.2, 10.3, 10.4, 10.5],
+  volumes: [100, 100, 100, 100, 100], volume_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_raw_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_sources: ['snapshot-a', 'snapshot-a', 'snapshot-a', 'snapshot-a', 'snapshot-a'],
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }
+};
+globalThis.__auxTest.chart(Object.assign({}, raw, { snapshot_id: 'snapshot-a' }), {
+  code: '600001', workbench_item: { snapshot_id: 'snapshot-a', payload_hash: 'hash-a', phase: 'formal', version: 'v1' }
+});
+chartOption.dataZoom[0].startValue = 'D02';
+globalThis.__auxTest.chart(Object.assign({}, raw, { snapshot_id: 'snapshot-b' }), {
+  code: '600001', workbench_item: { snapshot_id: 'snapshot-b', payload_hash: 'hash-b', phase: 'formal', version: 'v2' }
+});
+assert(initCount === 2 && disposeCount === 1, 'same-day snapshot change reused the old ECharts instance');
+assert(chartOption.dataZoom[0].startValue === 'D01', 'same-day snapshot change reused the old date window');
+""",
+        )
+
+    def test_chart_keeps_window_when_mobile_mount_is_recreated_for_same_snapshot(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            r"""
+let chartOption = null;
+global.window.echarts = { init: function () { return {
+  setOption: function (option) { chartOption = option; },
+  getOption: function () { return { dataZoom: chartOption && chartOption.dataZoom }; },
+  dispose: function () {}, resize: function () {}
+}; } };
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.state.chartAnnotationLane = null;
+globalThis.__auxTest.state.chartLayerSwitcher = null;
+const raw = {
+  code: '600001', snapshot_id: 'snap-a', dates: ['D01', 'D02', 'D03', 'D04', 'D05'],
+  opens: [10, 10.1, 10.2, 10.3, 10.4], highs: [10.2, 10.3, 10.4, 10.5, 10.6],
+  lows: [9.8, 9.9, 10, 10.1, 10.2], closes: [10.1, 10.2, 10.3, 10.4, 10.5],
+  volumes: [100, 100, 100, 100, 100], volume_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_raw_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_sources: ['fixture', 'fixture', 'fixture', 'fixture', 'fixture'],
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }
+};
+globalThis.__auxTest.chart(raw, {});
+chartOption.dataZoom[0].startValue = 'D03';
+globalThis.__auxTest.state.chartZoomWindow = { startValue: 'D03', endValue: 'D05' };
+globalThis.__auxTest.state.chartInstance.dispose();
+globalThis.__auxTest.state.chartInstance = null;
+globalThis.__auxTest.state.chartMount = { innerHTML: '' };
+globalThis.__auxTest.chart(raw, {});
+assert(chartOption.dataZoom[0].startValue === 'D03', 'recreated mobile chart lost the saved visible date window');
+""",
+        )
+
+    def test_chart_rebuilds_when_same_snapshot_points_to_a_new_mount(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            r"""
+let initCount = 0;
+let disposeCount = 0;
+let chartOption = null;
+global.window.echarts = { init: function (mount) {
+  initCount += 1;
+  return {
+    getDom: function () { return mount; },
+    setOption: function (option) { chartOption = option; },
+    getOption: function () { return { dataZoom: chartOption && chartOption.dataZoom }; },
+    dispose: function () { disposeCount += 1; }, resize: function () {}
+  };
+} };
+const mountA = { innerHTML: '', isConnected: true };
+const mountB = { innerHTML: '', isConnected: true };
+globalThis.__auxTest.state.chartMount = mountA;
+globalThis.__auxTest.state.chartAnnotationLane = null;
+globalThis.__auxTest.state.chartLayerSwitcher = null;
+const raw = {
+  code: '600001', snapshot_id: 'snap-a', dates: ['D01', 'D02', 'D03', 'D04', 'D05'],
+  opens: [10, 10.1, 10.2, 10.3, 10.4], highs: [10.2, 10.3, 10.4, 10.5, 10.6],
+  lows: [9.8, 9.9, 10, 10.1, 10.2], closes: [10.1, 10.2, 10.3, 10.4, 10.5],
+  volumes: [100, 100, 100, 100, 100], volume_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_raw_units: ['hands', 'hands', 'hands', 'hands', 'hands'],
+  volume_sources: ['fixture', 'fixture', 'fixture', 'fixture', 'fixture'],
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }
+};
+globalThis.__auxTest.chart(raw, {});
+chartOption.dataZoom[0].startValue = 'D03';
+globalThis.__auxTest.state.chartMount = mountB;
+globalThis.__auxTest.chart(raw, {});
+assert(initCount === 2 && disposeCount === 1, 'same snapshot new mount reused the detached ECharts instance');
+assert(globalThis.__auxTest.state.chartInstance.getDom() === mountB,
+  'rebuilt chart did not attach to the current mount');
+assert(chartOption.dataZoom[0].startValue === 'D03', 'new mount lost the saved visible date window');
+""",
+        )
+
+    def test_mixed_volume_units_and_sources_are_not_reported_as_one_provenance(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.volume_units[2] = 'shares';
+raw.volume_sources[5] = 'other-source';
+globalThis.__auxTest.state.chartLayerSwitcher = {
+  innerHTML: '', querySelectorAll: function () { return []; }
+};
+globalThis.__auxTest.chart(raw, {});
+const status = globalThis.__auxTest.state.chartLayerSwitcher.innerHTML;
+assert(status.includes('单位混用') && status.includes('来源冲突'),
+  'mixed volume metadata was collapsed into one trusted unit/source');
+assert(status.includes('混合：hands') && status.includes('shares')
+  && status.includes('混合：fixture') && status.includes('other-source'),
+  'mixed volume values were not retained in the visible evidence status');
+""",
+        )
+
+    def test_chart_overlays_keep_decision_layer_and_add_verified_structure_and_trend(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.code = '600001';
+raw.pivot_zg = 12.4;
+raw.pivot_zd = 10.8;
+raw.ema5 = raw.closes.map(function (value) { return value + 0.1; });
+raw.ema20 = raw.closes.map(function (value) { return value - 0.1; });
+globalThis.__auxTest.state.chartLayer = 'decision';
+globalThis.__auxTest.state.chartOverlays = { structure: true, trend: true };
+globalThis.__auxTest.chart(raw, { code: '600001', snapshot_id: 'snap-a' });
+const candle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(candle.markLine.data.some(function (line) { return line.name === 'ZG'; }),
+  'structure overlay did not preserve verified ZG');
+assert(candle.markLine.data.some(function (line) { return line.name === 'ZD'; }),
+  'structure overlay did not preserve verified ZD');
+assert(chartOption.series.some(function (series) { return series.name === 'EMA5'; }),
+  'trend overlay did not add verified EMA5');
+assert(chartOption.series.some(function (series) { return series.name === 'K线'; }),
+  'decision layer disappeared when overlays were enabled');
+""",
+        )
+
+    def test_trend_overlay_keeps_ma10_distinct_and_shows_chart_ma_declaration(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.ema5 = raw.closes.map(function (value) { return value + 0.1; });
+raw.ma5 = raw.closes.map(function (value) { return value + 0.2; });
+raw.ma10 = raw.closes.map(function (value) { return value + 0.3; });
+raw.ema20 = raw.closes.map(function (value) { return value - 0.1; });
+raw.chart_ma = {
+  ma5: { source: 'derived', derived: true, algorithm: 'SMA', window: 5, price_basis: 'qfq', as_of: 'D25' },
+  ma10: { source: 'derived', derived: true, algorithm: 'SMA', window: 10, price_basis: 'qfq', as_of: 'D25' }
+};
+globalThis.__auxTest.state.chartLayer = 'trend';
+globalThis.__auxTest.state.chartLayerSwitcher = { innerHTML: '', querySelectorAll: function () { return []; } };
+globalThis.__auxTest.chart(raw, {});
+assert(chartOption.series.some(function (series) { return series.name === 'MA10'; }),
+  'MA10 was omitted or aliased to another moving average');
+assert(!chartOption.series.some(function (series) { return series.name === 'MA10' && series.name === 'MA5'; }),
+  'MA10 was merged with MA5');
+const controls = globalThis.__auxTest.state.chartLayerSwitcher.innerHTML;
+assert(controls.includes('MA5') && controls.includes('MA10') && controls.includes('SMA')
+  && controls.includes('窗口 10') && controls.includes('价基 qfq') && controls.includes('截至 D25'),
+  'chart_ma declaration did not disclose derived algorithm/window/basis/as-of');
+""",
+        )
+
+    def test_chart_window_tools_use_real_lengths_and_expose_signal_locator(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.chart_annotations.markPoints = [
+  { coord: ['D05', 10.5], name: '旧信号' },
+  { coord: ['D22', 12.2], name: '最新信号' }
+];
+globalThis.__auxTest.state.chartLayerSwitcher = {
+  innerHTML: '', querySelectorAll: function () { return []; }
+};
+globalThis.__auxTest.state.chartWindowMode = '60';
+globalThis.__auxTest.chart(raw, {});
+assert(chartOption.dataZoom[0].startValue === 'D01' && chartOption.dataZoom[0].endValue === 'D25',
+  '60-bar window exceeded the real 25-bar input');
+const controls = globalThis.__auxTest.state.chartLayerSwitcher.innerHTML;
+assert(controls.includes('最近20根') && controls.includes('最近60根') && controls.includes('全部'),
+  'chart window controls are missing');
+assert(controls.includes('定位信号') && controls.includes('重置'),
+  'signal locator or reset control is missing');
+globalThis.__auxTest.state.chartWindowMode = 'signal';
+globalThis.__auxTest.chart(raw, {});
+assert(chartOption.dataZoom[0].startValue === 'D12' && chartOption.dataZoom[0].endValue === 'D25',
+  'signal locator did not focus the latest real signal window');
+""",
+        )
+
+    def test_structure_geometry_requires_serialized_dates_and_endpoints(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.structure_annotations = {
+  pivots: [{ ZG: 12.4, ZD: 10.8, start_date: 'D03', end_date: 'D12' }],
+  segments: [{ start_date: 'D04', start_price: 10.8, end_date: 'D09', end_price: 12.4,
+    source: 'serialized.segment' }]
+};
+globalThis.__auxTest.state.chartLayer = 'structure';
+globalThis.__auxTest.chart(raw, {});
+const candle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(candle.markArea && candle.markArea.data.length === 1,
+  'verified pivot dates did not produce one shallow structure area');
+const area = candle.markArea.data[0];
+assert(area[0].xAxis === 'D03' && area[1].xAxis === 'D12'
+  && area[0].yAxis === 12.4 && area[1].yAxis === 10.8,
+  'structure area changed serialized boundaries');
+assert(candle.markLine.data.some(function (line) {
+  return Array.isArray(line) && line[0].coord[0] === 'D04' && line[1].coord[0] === 'D09';
+}), 'serialized segment endpoints were not drawn');
+const withoutDates = Object.assign({}, raw, {
+  structure_annotations: { pivots: [{ ZG: 12.4, ZD: 10.8 }] }
+});
+globalThis.__auxTest.chart(withoutDates, {});
+const noAreaCandle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(!noAreaCandle.markArea || noAreaCandle.markArea.data.length === 0,
+  'pivot without dates was turned into a fabricated area');
+const indexed = Object.assign({}, raw, {
+  structure_annotations: { pivots: [{ ZG: 12.4, ZD: 10.8, start_idx: 3, end_idx: 12 }] }
+});
+globalThis.__auxTest.chart(indexed, {});
+const indexedCandle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(!indexedCandle.markArea || indexedCandle.markArea.data.length === 0,
+  'integer full-series indices were applied to the sliced chart window');
+const ordinaryZone = Object.assign({}, raw, {
+  structure_annotations: { zones: [{ upper: 12.4, lower: 10.8, start_date: 'D03', end_date: 'D12' }] }
+});
+globalThis.__auxTest.chart(ordinaryZone, {});
+const ordinaryCandle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(!ordinaryCandle.markArea || ordinaryCandle.markArea.data.length === 0,
+  'ordinary upper/lower interval was presented as a Chan center');
+window.CHANLUN_BOOTSTRAP = {
+  pageDate: '2026-08-28',
+  recommendationEvidence: {
+    schema_version: 1, report_date: '2026-08-28', views: { main: [{
+      code: '600001', summary: { code: '600001' },
+      display_derived: { chart_evidence: {
+        pivots: { status: 'conflict', available: [], ZG: null, ZD: null }
+      } }
+    }] }
+  }
+};
+globalThis.__auxTest.state.data = { date: '2026-08-28' };
+globalThis.__auxTest.state.currentView = 'main';
+const conflictCandleInput = Object.assign({}, raw, {
+  structure_annotations: { pivots: [{ ZG: 12.4, ZD: 10.8, start_date: 'D03', end_date: 'D12' }] }
+});
+globalThis.__auxTest.chart(conflictCandleInput, { code: '600001', evidence_view: 'main' });
+const conflictCandle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(!conflictCandle.markArea || conflictCandle.markArea.data.length === 0,
+  'conflicting projected pivot was bypassed by raw structure annotation');
+""",
+        )
+
+    def test_switching_snapshot_replaces_old_signal_markers(self):
+        _assert_node_contract(
+            self,
+            "({ chart: renderChart, state: state })",
+            _set_up_chart_js()
+            + _chart_fixture_js("dates.map(function (_, index) { return index / 10; })")
+            + r"""
+raw.code = '600001';
+raw.snapshot_id = 'snapshot-a';
+raw.chart_annotations.markPoints = [{ coord: ['D22', 12.2], name: '旧信号' }];
+globalThis.__auxTest.chart(raw, {});
+let candle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(candle.markPoint.data.length === 1 && candle.markPoint.data[0].name === '旧信号',
+  'initial signal fixture was not drawn');
+const next = Object.assign({}, raw, {
+  snapshot_id: 'snapshot-b',
+  chart_annotations: { markLines: [], markPoints: [], labels: [] }
+});
+globalThis.__auxTest.chart(next, {});
+candle = chartOption.series.filter(function (series) { return series.name === 'K线'; })[0];
+assert(candle.markPoint.data.length === 0, 'old snapshot signal marker remained after switching stock data');
+""",
+        )
+
     def test_chart_rejects_shifted_volume_metadata_lengths(self):
         _assert_node_contract(
             self,

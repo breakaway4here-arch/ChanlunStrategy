@@ -20,6 +20,7 @@ from chanlun.right_side_startup import build_right_side_startup_evidence
 from chanlun.volume_contract import (
     canonical_amount_window,
     canonical_volume_window,
+    metadata_series,
     volume_evidence_status as get_volume_evidence_status,
 )
 from config import (
@@ -676,10 +677,13 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     recent_raw = raw_volumes[-20:] if raw_volumes else []
     recent_source = dict(row)
     recent_source["volumes"] = recent_raw
-    for key in ("volume_units", "volume_raw_units", "volume_sources"):
-        value = row.get(key)
-        if value is not None and not isinstance(value, (str, bytes)):
-            recent_source[key] = list(value)[-20:]
+    for key, scalar_key, default in (
+        ("volume_units", "volume_unit", "unknown"),
+        ("volume_raw_units", "volume_raw_unit", "unknown"),
+        ("volume_sources", "volume_source", ""),
+    ):
+        values = metadata_series(row, key, scalar_key, len(raw_volumes), default)
+        recent_source[key] = values[-20:] if values is not None else []
     volume_evidence_status = (
         get_volume_evidence_status(recent_source, recent_raw) if recent_raw else "missing"
     )
@@ -691,14 +695,46 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
         else None
     )
 
+    # Preserve the legacy pool-quality input used by the existing liquidity
+    # score.  The exact 21-bar display ratio below is a separate read-only
+    # field and must not reorder or rescore workspace rows.
     volume_ratio20 = _safe_float(row.get("volume_ratio"), default=0.0)
     if volume_evidence_status != "available" or len(recent) < 20:
         volume_ratio20 = None
     if volume_ratio20 is not None and volume_ratio20 <= 0 and len(recent) >= 2:
-        prev20 = recent[:-1]
-        prev_avg = sum(prev20) / len(prev20) if prev20 else 0.0
-        if prev_avg > 0:
-            volume_ratio20 = round(recent[-1] / prev_avg, 4)
+        previous19 = recent[:-1]
+        previous_average19 = sum(previous19) / len(previous19) if previous19 else 0.0
+        if previous_average19 > 0:
+            volume_ratio20 = round(recent[-1] / previous_average19, 4)
+
+    ratio_raw = raw_volumes[-21:] if raw_volumes else []
+    ratio_source = dict(row)
+    ratio_source["volumes"] = ratio_raw
+    for key, scalar_key, default in (
+        ("volume_units", "volume_unit", "unknown"),
+        ("volume_raw_units", "volume_raw_unit", "unknown"),
+        ("volume_sources", "volume_source", ""),
+    ):
+        values = metadata_series(row, key, scalar_key, len(raw_volumes), default)
+        ratio_source[key] = values[-21:] if values is not None else []
+    ratio_evidence_status = (
+        get_volume_evidence_status(ratio_source, ratio_raw)
+        if ratio_raw
+        else "missing"
+    )
+    display_ratio_series = (
+        canonical_volume_window(ratio_source, slice(-21, None))
+        if ratio_evidence_status == "available"
+        else None
+    )
+    display_volume_ratio20 = None
+    if display_ratio_series is not None and len(display_ratio_series) == 21:
+        previous20 = display_ratio_series[:-1]
+        previous_average20 = sum(previous20) / len(previous20)
+        if previous_average20 > 0:
+            display_volume_ratio20 = round(
+                float(display_ratio_series[-1]) / previous_average20, 4
+            )
 
     money20 = _safe_float(row.get("money20"))
     liquidity_source = _safe_str(row.get("liquidity_source"))
@@ -961,6 +997,14 @@ def _build_pool_quality_features(item: Mapping[str, Any], source: str | None = N
     return {
         "volume20": volume20,
         "volume_ratio20": volume_ratio20,
+        "display_volume_ratio20": display_volume_ratio20,
+        "display_volume_ratio20_window_bars": 21,
+        "display_volume_ratio20_method": "current_div_previous20_mean",
+        "display_volume_ratio20_status": (
+            "available"
+            if display_volume_ratio20 is not None
+            else "unavailable"
+        ),
         "volume_evidence_status": volume_evidence_status,
         "liquidity_label": liquidity_label,
         "liquidity_score": liquidity_score,

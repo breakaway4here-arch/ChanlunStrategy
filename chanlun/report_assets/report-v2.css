@@ -2152,6 +2152,8 @@ body {
 
 .chart-layer-switcher {
   display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
   flex: 0 0 auto;
   gap: 3px;
   padding: 3px;
@@ -2183,6 +2185,82 @@ body {
 .chart-layer-switcher button:hover:not(.is-active) {
   color: var(--primary);
   background: var(--primary-soft);
+}
+
+.chart-layer-presets,
+.chart-layer-overlays,
+.chart-window-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 3px;
+}
+
+.chart-layer-overlays {
+  gap: 6px 10px;
+  padding-left: 6px;
+  color: var(--text-sub);
+  font-size: 11px;
+}
+
+.chart-overlay-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.chart-overlay-toggle input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.chart-window-tools {
+  padding-left: 6px;
+  border-left: 1px solid var(--border-soft);
+}
+
+.chart-window-tools button {
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-sub);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.chart-window-tools button.is-active {
+  color: #fff;
+  background: #3151F4;
+}
+
+.chart-layer-status {
+  flex: 1 1 100%;
+  min-width: 0;
+  margin: 2px 3px 0;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.chart-layer-status summary {
+  color: var(--text-sub);
+  cursor: pointer;
+  font-weight: 650;
+}
+
+.chart-layer-status span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
 }
 
 .evidence-audit-body {
@@ -3206,6 +3284,8 @@ body {
 .chart-canvas {
   width: 100%;
   height: 380px;
+  touch-action: pan-y;
+  overscroll-behavior-x: contain;
 }
 
 .chart-annotation-lane {
@@ -5391,6 +5471,53 @@ body {
     flex-direction: column;
   }
 
+  .chart-layer-switcher {
+    width: 100%;
+    align-items: stretch;
+    gap: 5px;
+    padding: 5px;
+  }
+
+  .chart-layer-presets,
+  .chart-layer-overlays,
+  .chart-window-tools {
+    width: 100%;
+  }
+
+  .chart-layer-switcher button,
+  .chart-window-tools button {
+    min-height: 44px;
+    padding: 8px 10px;
+    white-space: nowrap;
+  }
+
+  .chart-layer-presets {
+    gap: 5px;
+  }
+
+  .chart-layer-presets button {
+    flex: 1 1 auto;
+  }
+
+  .chart-layer-overlays {
+    padding: 4px 2px 0;
+  }
+
+  .chart-overlay-toggle {
+    min-height: 44px;
+  }
+
+  .chart-window-tools {
+    gap: 5px;
+    padding: 5px 0 0;
+    border-top: 1px solid var(--border-soft);
+    border-left: 0;
+  }
+
+  .chart-window-tools button {
+    flex: 1 1 auto;
+  }
+
   .chart-canvas {
     height: 360px;
   }
@@ -6391,6 +6518,20 @@ body {
 
   .chart-signal-list {
     grid-template-columns: 1fr;
+  }
+
+  .chart-layer-switcher {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .chart-layer-switcher button {
+    min-height: 44px;
+    white-space: nowrap;
+  }
+
+  .chart-window-tools {
+    border-top: 1px solid var(--border-soft);
   }
 
   .recommendation-main-rise-clue > header {

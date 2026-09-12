@@ -87,7 +87,8 @@ window.CHANLUN_BOOTSTRAP = { pageDate: '2026-08-28', recommendationEvidence: {
   }] }
 } };
 const html = globalThis.__auxTest.render('main');
-assert(html.includes('唯一正式动作'), 'formal action column missing');
+assert(html.includes('来源策略与合同'), 'source strategy contract column missing');
+assert(!html.includes('<dt>唯一正式动作</dt>'), 'comparison promoted selected evidence to a unique action');
 assert(html.includes('观察'), 'formal action value missing');
 assert(html.includes('决策分'), 'decision score label missing');
 assert(html.includes('62'), 'decision score value missing');
@@ -2970,7 +2971,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         render_start = JS.index("function renderCandidateList")
         render_end = JS.index("function renderCandidateDetail", render_start)
         renderer = JS[render_start:render_end]
-        self.assertIn("items.slice(0, state.candidateLimit)", renderer)
+        self.assertIn("getCandidateSelection(state.currentView)", renderer)
         self.assertIn("显示 ' + visibleItems.length + ' / ' + items.length", renderer)
         self.assertIn("nodes.candidateMore.hidden", renderer)
         self.assertIn("state.candidateLimit += 20", JS)

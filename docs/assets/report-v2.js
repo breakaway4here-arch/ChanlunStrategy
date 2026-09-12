@@ -50,8 +50,18 @@
     chartMount: null,
     chartAnnotationLane: null,
     chartLayerSwitcher: null,
+    detailCandidateKey: '',
+    detailTarget: null,
+    detailRenderToken: 0,
+    candidateSelectionVersion: 0,
+    activeCandidateKey: '',
     sentimentChartInstance: null,
     chartLayer: 'decision',
+    chartOverlays: { decision: false, structure: false, trend: false },
+    chartWindowMode: '20',
+    chartScopeKey: '',
+    chartZoomWindow: null,
+    chartZoomMode: '',
     rawPoolCandidates: null,
     drawerReturnFocus: null,
     drawerReturnCode: '',
@@ -316,6 +326,43 @@
 
   function asArray(value) {
     return Array.isArray(value) ? value : [];
+  }
+
+  function candidateSnapshotIdentity(dataOrId) {
+    if (isString(dataOrId)) return normalizeString(dataOrId).trim();
+    var source = dataOrId && typeof dataOrId === 'object'
+      ? dataOrId : (state.data || {});
+    var bootstrap = getBootstrap();
+    return normalizeString(
+      source.snapshot_id || source.content_hash || bootstrap.snapshotId
+        || source.date || bootstrap.pageDate
+    ).trim() || 'snapshot-unknown';
+  }
+
+  function candidateIdentityKey(item, viewKey, snapshotId) {
+    return [
+      candidateSnapshotIdentity(snapshotId || state.data),
+      normalizeString(viewKey || state.currentView).trim(),
+      toCodeKey(item && item.code),
+    ].join('::');
+  }
+
+  function beginCandidateSelection(item, snapshotId) {
+    state.candidateSelectionVersion = Number(state.candidateSelectionVersion || 0) + 1;
+    state.activeItem = item || null;
+    state.activeCandidateKey = candidateIdentityKey(item, state.currentView, snapshotId);
+    return {
+      version: state.candidateSelectionVersion,
+      key: state.activeCandidateKey,
+      code: toCodeKey(item && item.code),
+      snapshot_id: candidateSnapshotIdentity(snapshotId || state.data),
+    };
+  }
+
+  function isCurrentCandidateSelection(token, item, snapshotId) {
+    if (!token || token.version !== state.candidateSelectionVersion) return false;
+    var key = candidateIdentityKey(item, state.currentView, snapshotId);
+    return token.key === key && state.activeCandidateKey === key;
   }
 
   function clamp(value, min, max) {
@@ -1223,6 +1270,267 @@
     return true;
   }
 
+  function getChartScopeKey(raw, workspaceItem) {
+    var source = raw && typeof raw === 'object' ? raw : {};
+    var item = workspaceItem && typeof workspaceItem === 'object' ? workspaceItem : {};
+    var bootstrap = getBootstrap();
+    var decisionWorkbench = bootstrap.decisionWorkbench && typeof bootstrap.decisionWorkbench === 'object'
+      ? bootstrap.decisionWorkbench : {};
+    var identitySources = [
+      item,
+      item.workbench_item,
+      item.candidate,
+      source,
+      source.workbench_item,
+      decisionWorkbench,
+      bootstrap.recommendationEvidence,
+    ].filter(function (value) { return value && typeof value === 'object'; });
+    var identityParts = [];
+    identitySources.forEach(function (value) {
+      ['snapshot_id', 'payload_hash', 'phase', 'version'].forEach(function (field) {
+        var fieldValue = normalizeString(value[field]).trim();
+        if (fieldValue) identityParts.push(field + ':' + fieldValue);
+      });
+      if (value.snapshot && typeof value.snapshot === 'object') {
+        ['id', 'snapshot_id', 'payload_hash', 'phase', 'version'].forEach(function (field) {
+          var nestedValue = normalizeString(value.snapshot[field]).trim();
+          if (nestedValue) identityParts.push('snapshot.' + field + ':' + nestedValue);
+        });
+      }
+    });
+    var dates = asArray(source.dates);
+    var reportDate = item.report_date || item.reportDate || (item.workbench_item || {}).report_date
+      || source.report_date || source.reportDate || decisionWorkbench.report_date || '';
+    if (!reportDate && state.data && typeof state.data === 'object') {
+      reportDate = state.data.date || state.data.report_date || '';
+    }
+    return [
+      toCodeKey(item.code || (item.workbench_item || {}).code || source.code || ''),
+      identityParts.filter(function (value, index, values) {
+        return values.indexOf(value) === index;
+      }).join(','),
+      normalizeString(reportDate),
+      dates.length,
+      dates.length ? normalizeString(dates[0]) : '',
+      dates.length ? normalizeString(dates[dates.length - 1]) : '',
+    ].join('|');
+  }
+
+  function normalizeChartWindowMode(mode) {
+    var value = normalizeString(mode).trim().toLowerCase();
+    return ['20', '60', 'all', 'signal'].indexOf(value) === -1 ? '20' : value;
+  }
+
+  function readChartZoomWindow(instance) {
+    if (!instance || typeof instance.getOption !== 'function') {
+      return state.chartZoomWindow && typeof state.chartZoomWindow === 'object'
+        ? Object.assign({}, state.chartZoomWindow) : null;
+    }
+    try {
+      var option = instance.getOption() || {};
+      var zooms = asArray(option.dataZoom);
+      var zoom = zooms.find(function (entry) {
+        return entry && (entry.startValue !== undefined || entry.endValue !== undefined);
+      });
+      if (!zoom) return null;
+      return {
+        startValue: zoom.startValue,
+        endValue: zoom.endValue,
+      };
+    } catch (error) {
+      return state.chartZoomWindow && typeof state.chartZoomWindow === 'object'
+        ? Object.assign({}, state.chartZoomWindow) : null;
+    }
+  }
+
+  function chartInstanceMatchesMount(instance, mount) {
+    if (!instance || !mount) return false;
+    if (mount.isConnected === false) return false;
+    if (typeof instance.getDom !== 'function') return true;
+    try {
+      return instance.getDom() === mount;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function chartWindowValues(xAxis, mode, markPoints) {
+    var dates = asArray(xAxis);
+    if (!dates.length) return { startValue: undefined, endValue: undefined };
+    var normalizedMode = normalizeChartWindowMode(mode);
+    var startIndex = 0;
+    var endIndex = dates.length - 1;
+    if (normalizedMode === '20' || normalizedMode === '60') {
+      var count = Number(normalizedMode);
+      startIndex = Math.max(0, dates.length - count);
+    } else if (normalizedMode === 'signal') {
+      var latestSignalIndex = -1;
+      asArray(markPoints).forEach(function (point) {
+        var coord = asArray(point && point.coord);
+        var index = dates.indexOf(coord[0]);
+        if (index >= latestSignalIndex && index >= 0) latestSignalIndex = index;
+      });
+      if (latestSignalIndex >= 0) {
+        startIndex = Math.max(0, latestSignalIndex - 10);
+        endIndex = Math.min(dates.length - 1, latestSignalIndex + 10);
+      } else {
+        startIndex = Math.max(0, dates.length - 20);
+      }
+    }
+    return { startValue: dates[startIndex], endValue: dates[endIndex] };
+  }
+
+  function chartVolumeMetadata(record) {
+    var source = record && typeof record === 'object' ? record : {};
+    var volumes = asArray(source.volumes);
+    var units = asArray(source.volume_units);
+    var rawUnits = asArray(source.volume_raw_units);
+    var sources = asArray(source.volume_sources);
+    var uniqueValues = function (values) {
+      return values.map(function (value) { return normalizeString(value).trim(); })
+        .filter(function (value, index, all) { return value && all.indexOf(value) === index; });
+    };
+    var unitValues = uniqueValues(units);
+    var rawUnitValues = uniqueValues(rawUnits);
+    var sourceValues = uniqueValues(sources);
+    var unit = normalizeString(source.volume_unit || source.volume_display_unit || '').trim();
+    var rawUnit = normalizeString(source.volume_raw_unit || '').trim();
+    var provenance = normalizeString(source.volume_source || '').trim();
+    var reasons = [];
+    if (!volumes.length) reasons.push('本期未输出成交量序列');
+    if (volumes.length && (units.length !== volumes.length
+      || rawUnits.length !== volumes.length || sources.length !== volumes.length)) {
+      reasons.push('成交量序列、单位或来源长度不一致');
+    }
+    if (unitValues.length > 1) {
+      unit = '混合：' + unitValues.join(' / ');
+      reasons.push('单位混用');
+    } else if (!unit && unitValues.length) {
+      unit = unitValues[0];
+    }
+    if (rawUnitValues.length > 1) {
+      rawUnit = '混合：' + rawUnitValues.join(' / ');
+      reasons.push('原单位冲突');
+    } else if (!rawUnit && rawUnitValues.length) {
+      rawUnit = rawUnitValues[0];
+    }
+    if (sourceValues.length > 1) {
+      provenance = '混合：' + sourceValues.join(' / ');
+      reasons.push('来源冲突');
+    } else if (!provenance && sourceValues.length) {
+      provenance = sourceValues[0];
+    }
+    var quality = source.volume_quality && typeof source.volume_quality === 'object'
+      ? source.volume_quality : {};
+    var dataStatus = source._data_status && typeof source._data_status === 'object'
+      ? source._data_status : {};
+    var status = normalizeString(
+      source.volume_status || source.volume_evidence_status || quality.status || dataStatus.volume_status || ''
+    ).trim().toLowerCase();
+    var explicitReason = normalizeString(
+      source.volume_reason || source.volume_unavailable_reason || source.volume_conflict_reason
+      || quality.reason || dataStatus.reason || ''
+    ).trim();
+    if (explicitReason) reasons.push(explicitReason);
+    if (source.volume_stale === true || source.volume_expired === true || quality.stale === true
+        || quality.expired === true || dataStatus.stale === true || status === 'stale') {
+      reasons.push('成交量数据已过期');
+    }
+    if (source.volume_conflict === true || quality.conflict === true
+        || ['conflict', 'mixed'].indexOf(status) !== -1
+        || /^(mixed|conflict)$/i.test(unit) || /^(mixed|conflict)$/i.test(rawUnit)
+        || /^(mixed|conflict)$/i.test(provenance)) {
+      reasons.push('成交量单位或来源冲突');
+    }
+    return {
+      unit: unit,
+      rawUnit: rawUnit,
+      source: provenance,
+      reasons: reasons.filter(function (value, index, values) {
+        return value && values.indexOf(value) === index;
+      }),
+    };
+  }
+
+  function chartVolumeStatusHtml(record, projection) {
+    var metadata = chartVolumeMetadata(record);
+    var status = projection && projection.status;
+    var summary = status === 'partial'
+      ? '部分成交量口径未核验，缺口已留空'
+      : '成交量证据未核验，价格图保持可用';
+    var criticalReasons = metadata.reasons.filter(function (reason) {
+      return /过期|冲突|混用/.test(reason);
+    });
+    if (criticalReasons.length) summary += ' · ' + criticalReasons.join('；');
+    var sequence = status === 'partial'
+      ? '部分序列可用，其他行保留缺口'
+      : '未提供可核验序列';
+    var rawUnitDetail = metadata.rawUnit && metadata.rawUnit !== metadata.unit
+      ? ['原单位：', metadata.rawUnit].join('') : '';
+    var details = [
+      '单位：' + (metadata.unit || metadata.rawUnit || '未核验'),
+      rawUnitDetail,
+      '来源：' + (metadata.source || '未提供'),
+      '序列：' + sequence,
+    ].filter(Boolean).concat(metadata.reasons.map(function (reason) { return '原因：' + reason; }));
+    return '<details class="chart-layer-status" data-chart-quantity-status="'
+      + escapeHtml(status || 'missing') + '"><summary>' + escapeHtml(summary)
+      + '</summary><span>' + details.map(function (detail) {
+        return escapeHtml(detail);
+      }).join(' · ') + '</span></details>';
+  }
+
+  function chartMaDeclaration(record, key) {
+    var source = record && typeof record === 'object' ? record : {};
+    var declarations = source.chart_ma && typeof source.chart_ma === 'object'
+      ? source.chart_ma : {};
+    var value = declarations[key];
+    if (!value && declarations.fields && typeof declarations.fields === 'object') {
+      value = declarations.fields[key];
+    }
+    if (!value && declarations.series && typeof declarations.series === 'object') {
+      value = declarations.series[key];
+    }
+    if (!value && Array.isArray(declarations)) {
+      value = declarations.find(function (item) {
+        return item && (item.key === key || item.name === key);
+      });
+    }
+    return value && typeof value === 'object' ? value : null;
+  }
+
+  function chartMaDeclarationText(record, key) {
+    var declaration = chartMaDeclaration(record, key);
+    if (!declaration) return '';
+    var parts = [];
+    if (declaration.derived === true || normalizeString(declaration.source).trim() === 'derived') {
+      parts.push('展示计算');
+    } else if (normalizeString(declaration.source).trim()) {
+      parts.push(normalizeString(declaration.source).trim());
+    }
+    if (normalizeString(declaration.algorithm).trim()) {
+      parts.push(normalizeString(declaration.algorithm).trim());
+    }
+    if (declaration.window !== undefined && declaration.window !== null && declaration.window !== '') {
+      parts.push('窗口 ' + normalizeString(declaration.window).trim());
+    }
+    var basis = declaration.price_basis || declaration.priceBasis;
+    if (normalizeString(basis).trim()) parts.push('价基 ' + normalizeString(basis).trim());
+    var asOf = declaration.as_of || declaration.asOf || declaration.latest_date;
+    if (normalizeString(asOf).trim()) parts.push('截至 ' + normalizeString(asOf).trim());
+    return parts.length ? key.toUpperCase() + '：' + parts.join(' · ') : '';
+  }
+
+  function chartMaStatusHtml(record) {
+    var keys = ['ema5', 'ma5', 'ma10', 'ema20', 'ma20'];
+    var text = keys.map(function (key) {
+      return chartMaDeclarationText(record, key);
+    }).filter(Boolean);
+    return text.length
+      ? '<span class="chart-layer-status" data-chart-ma-status="declared">均线：'
+        + escapeHtml(text.join('；')) + '</span>' : '';
+  }
+
   function mergeChartCandidate(primary, chartSource) {
     if (!primary) {
       return chartSource || null;
@@ -1335,8 +1643,9 @@
   function decisionRows(projection, key) {
     return projection.items.filter(function (item) {
       if (key === 'decision_focus') return asArray(projection.featured_ids).indexOf(item.id) !== -1;
-      if (key === 'decision_formal') return item.formal_action || item.page_status === 'strategy_disagreement';
-      if (key === 'decision_wait') return ['waiting_trigger', 'formal_incomplete'].indexOf(item.page_status) !== -1;
+      if (key === 'decision_formal') return isFormalWorkbenchItem(item);
+      if (key === 'decision_wait') return isFormalWorkbenchItem(item)
+        && item.page_status === 'formal_incomplete';
       if (key === 'decision_blocked') return ['evidence_blocked', 'strategy_disagreement', 'invalidated'].indexOf(item.page_status) !== -1 || asArray(item.risk_flags).length > 0;
       return true;
     }).map(function (item, index) {
@@ -1349,7 +1658,7 @@
 
   function decisionNavigation() {
     return [{ key: 'decision_focus', label: '优先关注' }, { key: 'decision_all', label: '全部' },
-      { key: 'decision_formal', label: '正式结果' }, { key: 'decision_wait', label: '等条件' },
+      { key: 'decision_formal', label: '正式结果' }, { key: 'decision_wait', label: '正式待确认' },
       { key: 'decision_blocked', label: '待核验 / 风险' }];
   }
 
@@ -1626,6 +1935,139 @@
   function getCurrentViewItems() {
     var views = getCandidateViews().views;
     return asArray(views[state.currentView]);
+  }
+
+  function getCandidateSelection(viewKey, options) {
+    var opts = options || {};
+    var key = normalizeString(viewKey || state.currentView).trim();
+    var viewInfo = getCandidateViews();
+    var poolItems = asArray(viewInfo.views[key]);
+    var sectorName = opts.sectorName === undefined ? state.sectorFilter : opts.sectorName;
+    var sectorCode = opts.sectorCode === undefined ? state.sectorFilterCode : opts.sectorCode;
+    var sectorRefs = opts.sectorRefs === undefined ? state.sectorFilterRefs : opts.sectorRefs;
+    var sectorItems = filterCandidatesBySector(poolItems, sectorName, sectorCode, sectorRefs);
+    var query = opts.query === undefined ? state.candidateQuery : opts.query;
+    query = normalizeString(query).trim().toLowerCase();
+    var items = sectorItems.filter(function (item) {
+      if (!query) return true;
+      return [item && item.code, item && item.name, item && item.sector,
+        item && item.sector_name].some(function (value) {
+        return normalizeString(value).toLowerCase().indexOf(query) !== -1;
+      });
+    });
+    var limit = opts.limit === undefined ? state.candidateLimit : opts.limit;
+    limit = Math.max(0, Number(limit) || 0);
+    var visibleItems = opts.limit === undefined
+      ? items.slice(0, state.candidateLimit)
+      : items.slice(0, limit);
+    return {
+      viewKey: key,
+      poolItems: poolItems,
+      sectorItems: sectorItems,
+      items: items,
+      visibleItems: visibleItems,
+      query: query,
+      sectorName: normalizeSectorName(sectorName),
+      sectorCode: normalizeString(sectorCode).trim(),
+      sectorRefs: asArray(sectorRefs),
+    };
+  }
+
+  function isFormalWorkbenchItem(item) {
+    var rec = item && item.workbench_item ? item.workbench_item : (item || {});
+    if (asArray(rec.strategy_results).some(function (strategy) {
+      return strategy && (strategy.role === 'formal'
+        || normalizeString(strategy.action_semantics) === 'formal');
+    })) return true;
+    return normalizeString(rec.action_semantics) === 'formal'
+      || Boolean(rec.formal_action && (rec.formal_decision_contract || rec.contracts));
+  }
+
+  function evidenceStatusForCandidate(item, viewKey) {
+    var sourceItem = item || {};
+    var rec = sourceItem.workbench_item ? sourceItem.workbench_item : sourceItem;
+    var strategies = asArray(rec.strategy_results);
+    var sections = [];
+    if (strategies.length) {
+      strategies.forEach(function (strategy) {
+        var evidence = strategy && strategy.evidence && typeof strategy.evidence === 'object'
+          ? strategy.evidence : {};
+        if (evidence.summary && typeof evidence.summary === 'object') sections.push(evidence.summary);
+        ['daily_structure', 'sublevel_30m', 'volume_and_capital', 'price_evidence',
+          'market_and_sector', 'risk_and_next'].forEach(function (key) {
+          if (evidence[key] && typeof evidence[key] === 'object') sections.push(evidence[key]);
+        });
+      });
+    } else {
+      var evidence = getCandidateRecommendationEvidence(sourceItem, state.data, viewKey);
+      if (evidence) {
+        sections.push(evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {});
+        ['daily_structure', 'sublevel_30m', 'volume_and_capital', 'price_evidence',
+          'market_and_sector', 'risk_and_next'].forEach(function (key) {
+          if (evidence[key] && typeof evidence[key] === 'object') sections.push(evidence[key]);
+        });
+      }
+    }
+    var statuses = sections.map(function (section) {
+      return normalizeString(section && section.status).trim().toLowerCase();
+    }).filter(Boolean);
+    if (!statuses.length) return '证据未声明';
+    if (statuses.indexOf('conflict') !== -1) return '证据冲突';
+    if (statuses.indexOf('stale') !== -1 || statuses.indexOf('unavailable') !== -1) return '证据不可用';
+    if (statuses.indexOf('missing') !== -1 || statuses.indexOf('partial') !== -1) return '证据未完整';
+    return statuses.every(function (status) { return status === 'available'; })
+      ? '证据可用' : '证据未核验';
+  }
+
+  function getCandidateStatusSummary(item, viewKey) {
+    var rec = item && item.workbench_item ? item.workbench_item : (item || {});
+    var key = normalizeString(viewKey || state.currentView).trim();
+    var strategies = asArray(rec.strategy_results);
+    var formal = strategies.filter(function (strategy) {
+      return strategy && (strategy.role === 'formal'
+        || normalizeString(strategy.action_semantics) === 'formal');
+    });
+    var formalIdentity = formal.map(function (strategy) {
+      return normalizeString(strategy.strategy_id).trim();
+    }).filter(Boolean);
+    var contract = resolveViewDisplayContract(key, {});
+    var formalViewIdentity = key === 'h4_t3' ? 'H4 T+3' : '正式主推';
+    var itemSemantics = normalizeString(rec.action_semantics).trim();
+    var formalIdentityDeclared = formalIdentity.length
+      || itemSemantics === 'formal'
+      || (!itemSemantics && contract.role === 'formal');
+    var identity = formalIdentity.length
+      ? '正式：' + formalIdentity.join(' / ')
+      : (formalIdentityDeclared
+        ? formalViewIdentity
+        : (contract.role === 'baseline' ? '基础候选' : '研究观察'));
+    var pageStatus = normalizeString(rec.page_status).trim();
+    var condition;
+    if (pageStatus === 'formal_ready') condition = '正式条件完整';
+    else if (pageStatus === 'formal_incomplete') condition = '正式待确认';
+    else if (pageStatus === 'strategy_disagreement') condition = '正式策略分歧';
+    else if (pageStatus === 'evidence_blocked') condition = '条件不可核验';
+    else if (pageStatus === 'invalidated') condition = '已失效';
+    else if (pageStatus === 'waiting_trigger') condition = formal.length ? '正式待确认' : '研究待条件';
+    else condition = '条件未声明';
+    var riskFlags = asArray(rec.risk_flags).map(normalizeString).filter(Boolean);
+    return {
+      identity: identity,
+      condition: condition,
+      evidence: evidenceStatusForCandidate(item, key),
+      risk: riskFlags.length ? riskFlags.join('、') : '风险标签未登记',
+      pageStatus: pageStatus || 'unknown',
+    };
+  }
+
+  function renderCandidateStatusSummary(item, viewKey) {
+    var status = getCandidateStatusSummary(item, viewKey);
+    return '<div class="candidate-row-statuses" aria-label="身份、条件、证据与风险状态">'
+      + '<span class="tag tag-baseline">身份：' + escapeHtml(status.identity) + '</span>'
+      + '<span class="tag tag-baseline">条件：' + escapeHtml(status.condition) + '</span>'
+      + '<span class="tag tag-baseline">证据：' + escapeHtml(status.evidence) + '</span>'
+      + '<span class="tag tag-baseline">风险：' + escapeHtml(status.risk) + '</span>'
+      + '</div>';
   }
 
   function getCurrentDescription(viewKey) {
@@ -1906,17 +2348,26 @@
         if (next.focus) next.focus();
       });
     }
+    bindCandidateFilterEvents();
+  }
+
+  function refreshCandidateWorkspace() {
+    renderCandidateList();
+    renderCandidateEvidenceComparisonMount();
+  }
+
+  function bindCandidateFilterEvents() {
     if (nodes.candidateSearch) {
       nodes.candidateSearch.addEventListener('input', function () {
         state.candidateQuery = normalizeString(nodes.candidateSearch.value).trim().toLowerCase();
         state.candidateLimit = 20;
-        renderCandidateList();
+        refreshCandidateWorkspace();
       });
     }
     if (nodes.candidateMore) {
       nodes.candidateMore.addEventListener('click', function () {
         state.candidateLimit += 20;
-        renderCandidateList();
+        refreshCandidateWorkspace();
       });
     }
   }
@@ -2677,11 +3128,10 @@
       getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
       state.sectorFilterRefs
     )[0] || null;
-    state.activeItem = firstItem;
+    beginCandidateSelection(firstItem);
     renderWorkspaceTabs();
     renderViewDescription();
-    renderCandidateEvidenceComparisonMount();
-    renderCandidateList();
+    refreshCandidateWorkspace();
     renderCandidateDetail(firstItem);
     if (focusTab && nodes.tabs) {
       var activeTab = nodes.tabs.querySelector('[data-view="' + nextView + '"]');
@@ -3012,6 +3462,53 @@
     return validated;
   }
 
+  function comparisonStrategySource(strategy) {
+    var value = strategy && typeof strategy === 'object' ? strategy : {};
+    var contract = value.contract && typeof value.contract === 'object' ? value.contract : {};
+    var role = normalizeString(value.role).trim();
+    var action = normalizeString(value.formal_action).trim()
+      || (role === 'research' ? '仅观察' : '本期未声明正式动作');
+    var evidence = value.evidence && typeof value.evidence === 'object' ? value.evidence : {};
+    var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
+    var statuses = Object.keys(evidence).map(function (key) {
+      var section = evidence[key];
+      return section && typeof section === 'object'
+        ? normalizeString(section.status).trim().toLowerCase() : '';
+    }).filter(Boolean);
+    var evidenceStatus = statuses.length === 0 ? '证据未声明'
+      : statuses.indexOf('conflict') !== -1 ? '证据冲突'
+        : (statuses.indexOf('stale') !== -1 || statuses.indexOf('unavailable') !== -1)
+          ? '证据不可用'
+          : (statuses.indexOf('missing') !== -1 || statuses.indexOf('partial') !== -1)
+            ? '证据未完整'
+            : statuses.every(function (status) { return status === 'available'; })
+              ? '证据可用' : '证据未核验';
+    var priceParts = [['参考价', contract.reference_price], ['失效位', contract.invalidation_price]]
+      .map(function (entry) {
+        return isRecommendationEvidenceFiniteNumber(entry[1])
+          ? entry[0] + ' ' + recommendationEvidenceNumber(entry[1], 2) : '';
+      }).filter(Boolean);
+    return {
+      source: normalizeString(value.strategy_id).trim() || '未命名策略',
+      role: role || 'unknown',
+      action: action,
+      horizon: normalizeString(contract.intended_horizon).trim() || '周期未声明',
+      score: isRecommendationEvidenceFiniteNumber(value.score) ? Number(value.score) : null,
+      prices: priceParts.join(' · ') || '价格合同未提供',
+      evidenceStatus: evidenceStatus,
+    };
+  }
+
+  function comparisonStrategySourceText(source) {
+    var value = source || {};
+    var parts = [value.source + '：' + value.action];
+    if (value.horizon) parts.push('周期 ' + value.horizon);
+    if (value.prices && value.prices !== '价格合同未提供') parts.push(value.prices);
+    if (value.score !== null && value.score !== undefined) parts.push('分数 ' + recommendationEvidenceNumber(value.score));
+    parts.push(value.evidenceStatus || '证据未声明');
+    return parts.join(' · ');
+  }
+
   function normalizeCandidateEvidenceRow(row) {
     var source = row && typeof row === 'object' ? row : {};
     var summary = source.summary && typeof source.summary === 'object' ? source.summary : {};
@@ -3023,6 +3520,7 @@
     var daily = source.daily_structure && typeof source.daily_structure === 'object' ? source.daily_structure : {};
     var risk = source.risk_and_next && typeof source.risk_and_next === 'object' ? source.risk_and_next : {};
     var mainRise = source.main_rise_clue && typeof source.main_rise_clue === 'object' ? source.main_rise_clue : {};
+    var sourceEvidence = asArray(source.__strategy_results).map(comparisonStrategySource);
     var signalFreshness = recommendationSignalFreshness(daily);
     var dailyDataStatus = recommendationDailyDataStatus(daily);
     var componentText = ['structure', 'position', 'sentiment'].map(function (key) {
@@ -3046,7 +3544,12 @@
       code: normalizeString(source.code || summary.code).trim(),
       name: normalizeString(summary.name).trim(),
       sector: normalizeString(summary.sector).trim(),
-      action: normalizeString(summary.formal_action).trim() || '本期未声明正式动作',
+      action: normalizeString(summary.formal_action).trim()
+        || (sourceEvidence.length === 1 ? sourceEvidence[0].action : '本期未声明正式动作'),
+      actionDisplay: sourceEvidence.length > 1
+        ? sourceEvidence.map(comparisonStrategySourceText).join('；')
+        : (sourceEvidence.length === 1 ? comparisonStrategySourceText(sourceEvidence[0]) : ''),
+      sourceEvidence: sourceEvidence,
       decision: isRecommendationEvidenceFiniteNumber(decision.score) ? '决策分 ' + recommendationEvidenceNumber(decision.score) : recommendationEvidenceStatus(decision),
       decisionCode: normalizeString(decision.decision_code).trim(),
       decisionComponents: componentText,
@@ -3075,25 +3578,96 @@
       + (secondary ? '<small>' + escapeHtml(secondary) + '</small>' : '');
   }
 
+  function getCandidateComparisonEvidenceRows(viewKey, data) {
+    var selection = getCandidateSelection(viewKey);
+    return selection.items.map(function (item) {
+      var unified = item && item.workbench_item ? item.workbench_item : null;
+      var strategies = unified ? asArray(unified.strategy_results) : [];
+      var selectedStrategy = strategies.find(function (strategy) {
+        return strategy && strategy.strategy_id === unified.evidence_view;
+      }) || strategies[0] || null;
+      var selectedEvidence = selectedStrategy && selectedStrategy.evidence
+        && typeof selectedStrategy.evidence === 'object'
+        ? selectedStrategy.evidence : getCandidateRecommendationEvidence(item, data, viewKey);
+      var evidence = selectedEvidence && typeof selectedEvidence === 'object'
+        ? Object.assign({}, selectedEvidence) : {};
+      var summary = evidence.summary && typeof evidence.summary === 'object'
+        ? evidence.summary : {};
+      var itemName = normalizeString(item && item.name).trim();
+      var itemCode = normalizeString(item && item.code).trim();
+      evidence.code = normalizeString(evidence.code || itemCode).trim() || itemCode;
+      evidence.summary = Object.assign({}, summary, {
+        code: normalizeString(summary.code || itemCode).trim() || itemCode,
+        name: normalizeString(summary.name || itemName).trim() || itemName,
+        sector: normalizeString(summary.sector || (item && item.sector)).trim(),
+      });
+      if (!evidence.summary.status) evidence.summary.status = 'missing';
+      if (unified) {
+        evidence.__strategy_results = strategies;
+        evidence.__workbench_item = unified;
+        if (!evidence.summary.formal_action && strategies.length === 1
+            && selectedStrategy && selectedStrategy.role === 'research') {
+          evidence.summary.formal_action = '仅观察';
+        }
+      }
+      return evidence;
+    });
+  }
+
+  function hasWorkspaceCandidateContract() {
+    var workspace = state.workspace || {};
+    var views = workspace.views;
+    return Boolean(views && typeof views === 'object' && Object.keys(views).length);
+  }
+
+  function filterLegacyComparisonRows(rows, selection) {
+    var value = selection || {};
+    return asArray(rows).filter(function (row) {
+      var source = row && typeof row === 'object' ? row : {};
+      var summary = source.summary && typeof source.summary === 'object' ? source.summary : {};
+      var candidate = Object.assign({}, source, {
+        code: source.code || summary.code,
+        name: source.name || summary.name,
+        sector: source.sector || summary.sector,
+        sector_name: source.sector_name || summary.sector,
+        sector_code: source.sector_code || summary.sector_code,
+      });
+      if (filterCandidatesBySector(
+        [candidate], value.sectorName, value.sectorCode, value.sectorRefs
+      ).length === 0) return false;
+      if (!value.query) return true;
+      return [candidate.code, candidate.name, candidate.sector,
+        candidate.sector_name].some(function (field) {
+        return normalizeString(field).toLowerCase().indexOf(value.query) !== -1;
+      });
+    });
+  }
+
   function renderCandidateEvidenceComparison(viewKey, data) {
     var projection = getRecommendationEvidenceProjection(data);
-    var boundary = '<p class="candidate-evidence-boundary">保持正式池原顺序；排序靠前不等于决策门槛更高，正式动作仍以唯一正式合同为准。</p>';
-    if (!projection) {
+    var boundary = '<p class="candidate-evidence-boundary">保持正式池原顺序与当前匹配集合原始顺序；同股来源策略独立展示，正式动作仍以各自合同为准。身份、条件、证据与风险标签可重叠，标签数量不相加。</p>';
+    var selection = getCandidateSelection(viewKey);
+    var legacyRows = !hasWorkspaceCandidateContract() && !isDecisionView(viewKey)
+      ? filterLegacyComparisonRows(getEvidenceRowsForView(viewKey, data), selection)
+      : [];
+    if (!projection && !selection.items.length && !legacyRows.length) {
       return boundary + '<div class="candidate-evidence-empty">本期未提供证据展示</div>';
     }
-    var rows = getEvidenceRowsForView(viewKey, data).map(normalizeCandidateEvidenceRow);
+    var sourceRows = getCandidateComparisonEvidenceRows(viewKey, data);
+    if (!sourceRows.length) sourceRows = legacyRows;
+    var rows = sourceRows.map(normalizeCandidateEvidenceRow);
     if (!rows.length) {
-      return boundary + '<div class="candidate-evidence-empty">本期未选出推荐票</div>';
+      return boundary + '<div class="candidate-evidence-empty">当前集合没有匹配对象</div>';
     }
     var headers = [
-      '候选', '唯一正式动作', '决策分', '池内排序证据', '信号与新鲜度',
+      '候选', '来源策略与合同', '决策分', '池内排序证据', '信号与新鲜度',
       '价格位置', '日线结构', '30分钟确认', '量价与资金', '市场与板块',
       '风险与下一步', '数据状态', '历史验证',
     ];
     var tableRows = rows.map(function (row) {
       return '<tr>'
         + '<th scope="row">' + renderCandidateEvidenceCell(row.name || row.code, [row.code, row.sector].filter(Boolean).join(' · ')) + '</th>'
-        + '<td>' + renderCandidateEvidenceCell(row.action, '') + '</td>'
+        + '<td>' + renderCandidateEvidenceCell(row.actionDisplay || row.action, '') + '</td>'
         + '<td>' + renderCandidateEvidenceCell(row.decision, [row.decisionCode, row.decisionComponents].filter(Boolean).join(' · ')) + '</td>'
         + '<td>' + renderCandidateEvidenceCell(row.rank + ' · ' + row.rankScore, row.rankNote) + '</td>'
         + '<td>' + renderCandidateEvidenceCell(row.signalFreshness, row.signalFreshnessMeta) + '</td>'
@@ -3109,7 +3683,7 @@
     }).join('');
     var tickets = rows.map(function (row) {
       var facts = [
-        ['唯一正式动作', row.action],
+        ['来源策略与合同', row.actionDisplay || row.action],
         ['决策分', [row.decision, row.decisionComponents].filter(Boolean).join(' · ')],
         ['池内排序证据', row.rank + ' · ' + row.rankScore + ' · ' + row.rankNote],
         ['信号与新鲜度', row.signalFreshness + ' · ' + row.signalFreshnessMeta],
@@ -3399,23 +3973,11 @@
     if (!nodes.candidateList) return;
     nodes.candidateList.innerHTML = '';
 
-    var poolItems = getCurrentViewItems();
-    var allItems = filterCandidatesBySector(
-      poolItems, state.sectorFilter, state.sectorFilterCode,
-      state.sectorFilterRefs
-    );
-    var query = state.candidateQuery;
-    var items = allItems.filter(function (item) {
-      if (!query) return true;
-      return [
-        item && item.code,
-        item && item.name,
-        item && item.sector,
-      ].some(function (value) {
-        return normalizeString(value).toLowerCase().indexOf(query) !== -1;
-      });
-    });
-    var visibleItems = items.slice(0, state.candidateLimit);
+    var selection = getCandidateSelection(state.currentView);
+    var poolItems = selection.poolItems;
+    var items = selection.items;
+    var visibleItems = selection.visibleItems;
+    var query = selection.query;
     var unifiedMainEmpty = isDecisionView(state.currentView)
       ? items.length === 0
       : state.currentView === 'main' && !query && !state.sectorFilter && items.length === 0;
@@ -3430,8 +3992,15 @@
         && toCodeKey(candidate && candidate.code) === toCodeKey(state.activeItem.code);
     });
     if (visibleItems.length && !activeVisible) {
-      state.activeItem = visibleItems[0];
-      renderCandidateDetail(state.activeItem);
+      beginCandidateSelection(visibleItems[0]);
+    } else if (!visibleItems.length && !query && !state.sectorFilter) {
+      beginCandidateSelection(null);
+    }
+    if (visibleItems.length) {
+      var detailTarget = getCandidateDetailTarget();
+      if (!isCandidateDetailMounted(state.activeItem, detailTarget)) {
+        renderCandidateDetail(state.activeItem, detailTarget);
+      }
     }
     if (nodes.candidateCount) {
       nodes.candidateCount.textContent = '显示 ' + visibleItems.length + ' / ' + items.length
@@ -3441,6 +4010,10 @@
       nodes.candidateMore.hidden = visibleItems.length >= items.length;
     }
     if (!items || items.length === 0) {
+      clearCandidateDetailLifecycle(nodes.detailPanel);
+      if (nodes.drawerContent && nodes.drawerContent !== nodes.detailPanel) {
+        clearCandidateDetailLifecycle(nodes.drawerContent);
+      }
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       var rawAvailability = viewMeta.availability || {};
       nodes.candidateList.innerHTML = buildCandidateEmptyState(state.currentView, rawAvailability, {
@@ -3486,6 +4059,7 @@
         + '  <span class="candidate-row-action">' + escapeHtml(rowSummary.action) + '</span>'
         + '  <span class="candidate-row-score">' + escapeHtml(rowSummary.scoreText) + '</span>'
         + '</div>'
+        + renderCandidateStatusSummary(item, state.currentView)
         + (rowSummary.reason
           ? '<p class="candidate-row-reason">' + escapeHtml(rowSummary.reason) + '</p>'
           : '')
@@ -3496,7 +4070,7 @@
       row.addEventListener('click', function (candidate) {
         return function () {
           var returnCode = normalizeString(candidate && candidate.code);
-          state.activeItem = candidate;
+          beginCandidateSelection(candidate);
           renderCandidateDetail(candidate);
           renderCandidateList();
           if (state.isMobile) {
@@ -3516,7 +4090,7 @@
           event.preventDefault();
           var targetCandidate = visibleItems[targetIndex];
           if (!targetCandidate) return;
-          state.activeItem = targetCandidate;
+          beginCandidateSelection(targetCandidate);
           renderCandidateDetail(targetCandidate);
           var rows = nodes.candidateList.querySelectorAll('.candidate-row');
           for (var rowAt = 0; rowAt < rows.length; rowAt += 1) {
@@ -4999,7 +5573,8 @@
       + '<strong>' + escapeHtml(value.status_label) + '</strong>'
       + (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : '')
       + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
-      + '</header>' + renderCandidateBasicInfo(item, true) + buildChartPlaceholder(item)
+      + '</header>' + renderCandidateStatusSummary(item, state.currentView)
+      + renderCandidateBasicInfo(item, true) + buildChartPlaceholder(item)
       + renderCandidateFactPanel(item)
       + '<section class="decision-workbench-brief" aria-label="单股决策链">'
       + '<section><strong>为什么关注</strong><p>' + escapeHtml(value.primary_reason) + '</p></section>'
@@ -5078,12 +5653,43 @@
       + '</div>';
   }
 
+  function getCandidateDetailTarget() {
+    var drawerOpen = state.isMobile && nodes.drawer && nodes.drawer.classList
+      && nodes.drawer.classList.contains('is-open');
+    return drawerOpen && nodes.drawerContent ? nodes.drawerContent : nodes.detailPanel;
+  }
+
+  function clearCandidateDetailLifecycle(target) {
+    if (state.chartInstance && typeof state.chartInstance.dispose === 'function') {
+      state.chartInstance.dispose();
+    }
+    state.chartInstance = null;
+    state.chartMount = null;
+    state.chartAnnotationLane = null;
+    state.chartLayerSwitcher = null;
+    state.detailCandidateKey = '';
+    state.detailTarget = null;
+    state.detailRenderToken = Number(state.detailRenderToken || 0) + 1;
+    if (target && typeof target.innerHTML !== 'undefined') target.innerHTML = '';
+  }
+
+  function isCandidateDetailMounted(item, target) {
+    if (!item || !target || !state.detailCandidateKey) return false;
+    var key = candidateIdentityKey(item, state.currentView);
+    var marker = target.getAttribute ? target.getAttribute('data-candidate-key') : '';
+    return state.detailCandidateKey === key
+      && state.detailTarget === target
+      && marker === key
+      && normalizeString(target.innerHTML).trim() !== '';
+  }
+
   function renderCandidateDetail(item, target) {
     target = target || nodes.detailPanel;
     if (!target) return;
 
     if (!item) {
-      if (state.currentView === 'decision_focus') { target.innerHTML = ''; return; }
+      clearCandidateDetailLifecycle(target);
+      if (state.currentView === 'decision_focus') return;
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       target.innerHTML = state.currentView === 'main'
         ? '<div class="detail-empty"><strong>本期未选出推荐票</strong></div>'
@@ -5091,16 +5697,35 @@
       return;
     }
 
+    if (!state.activeCandidateKey
+        || state.activeCandidateKey !== candidateIdentityKey(item, state.currentView)) {
+      beginCandidateSelection(item);
+    }
+    if (isCandidateDetailMounted(item, target)) return;
+    clearCandidateDetailLifecycle(target);
+    var renderToken = Number(state.detailRenderToken || 0) + 1;
+    state.detailRenderToken = renderToken;
+    var detailKey = candidateIdentityKey(item, state.currentView);
     var raw = findRawCandidate(item.ref || {});
     target.innerHTML = buildMergedCandidateDetail(item, raw);
+    if (target.setAttribute) target.setAttribute('data-candidate-key', detailKey);
+    state.detailCandidateKey = detailKey;
+    state.detailTarget = target;
     state.chartMount = target.querySelector('#chartCanvas');
     state.chartAnnotationLane = target.querySelector('#chartAnnotationLane');
     state.chartLayerSwitcher = target.querySelector('[data-chart-layer-switcher]');
+    // The chart renderer is synchronous today; the token is kept as the
+    // lifecycle boundary for any delayed chart/data callback.
+    if (renderToken !== state.detailRenderToken
+        || !isCurrentCandidateSelection({
+          version: state.candidateSelectionVersion,
+          key: state.activeCandidateKey,
+        }, item)) return;
     renderChart(raw, item);
   }
 
   function selectPersistentPriceLabels(labels) {
-    var priorities = { invalidation: 0, current: 1, reference: 2, pressure: 3, target: 4 };
+    var priorities = { invalidation: 0, current: 1, reference: 2, watch_anchor: 3, pressure: 4, target: 5 };
     var candidates = asArray(labels).map(function (label) {
       var value = safeNumber(label && label.value, null);
       if (value === null || !Number.isFinite(value) || value <= 0) return null;
@@ -5321,7 +5946,7 @@
   }
 
   function formatPersistentPriceLabel(label) {
-    var shortLabels = { invalidation: '止', current: '现', reference: '参', pressure: '压', target: '目' };
+    var shortLabels = { invalidation: '止', current: '现', reference: '参', watch_anchor: '观', pressure: '压', target: '目' };
     var entries = asArray(label && label.labelEntries);
     if (!entries.length) entries = asArray(label && label.entries);
     if (!entries.length) {
@@ -5341,6 +5966,7 @@
     var contracts = {
       current: { lineType: 'solid', symbol: ['none', 'roundRect'] },
       reference: { lineType: 'dashed', symbol: ['none', 'circle'] },
+      watch_anchor: { lineType: 'dotted', symbol: ['none', 'circle'] },
       invalidation: { lineType: 'solid', symbol: ['none', 'arrow'] },
       pressure: { lineType: 'dotted', symbol: ['none', 'diamond'] },
       target: { lineType: 'dashed', symbol: ['none', 'triangle'] },
@@ -5398,6 +6024,99 @@
     }).filter(Boolean);
   }
 
+  function structureAnnotationSource(raw, chartEvidence) {
+    var source = raw && typeof raw === 'object' ? raw : {};
+    var annotations = source.structure_annotations && typeof source.structure_annotations === 'object'
+      ? source.structure_annotations : {};
+    var projected = chartEvidence && chartEvidence.structure && typeof chartEvidence.structure === 'object'
+      ? chartEvidence.structure : {};
+    var pivotProjection = chartEvidence && chartEvidence.pivots && typeof chartEvidence.pivots === 'object'
+      ? chartEvidence.pivots : null;
+    var pivotProjectionBlocked = !!(pivotProjection
+      && normalizeString(pivotProjection.status).trim()
+      && normalizeString(pivotProjection.status).trim() !== 'available');
+    return {
+      source: source,
+      annotations: annotations,
+      projected: projected,
+      pivotProjection: pivotProjection,
+      pivotProjectionBlocked: pivotProjectionBlocked,
+    };
+  }
+
+  function firstStructureValue(record, keys) {
+    var source = record && typeof record === 'object' ? record : {};
+    for (var i = 0; i < keys.length; i += 1) {
+      var value = source[keys[i]];
+      if (value !== undefined && value !== null && value !== '') return value;
+    }
+    return null;
+  }
+
+  function structureDateValue(record, keys, xAxis) {
+    var rawValue = firstStructureValue(record, keys);
+    var text = normalizeString(rawValue).trim();
+    if (text && asArray(xAxis).indexOf(text) !== -1) return text;
+    return '';
+  }
+
+  function selectStructureChartAreas(raw, chartEvidence, xAxis) {
+    var sources = structureAnnotationSource(raw, chartEvidence);
+    if (sources.pivotProjectionBlocked) return [];
+    var candidates = [];
+    asArray(sources.annotations.pivots).forEach(function (value) { candidates.push(value); });
+    return candidates.map(function (pivot) {
+      var item = pivot && typeof pivot === 'object' ? pivot : {};
+      var zg = safeNumber(firstStructureValue(item, ['ZG']), null);
+      var zd = safeNumber(firstStructureValue(item, ['ZD']), null);
+      var start = structureDateValue(item, ['start_date', 'startDate', 'from_date'], xAxis);
+      var end = structureDateValue(item, ['end_date', 'endDate', 'to_date'], xAxis);
+      if (!isChartPositivePrice(zg) || !isChartPositivePrice(zd) || !start || !end
+          || xAxis.indexOf(start) > xAxis.indexOf(end)) return null;
+      var area = [
+        { xAxis: start, yAxis: zg },
+        { xAxis: end, yAxis: zd },
+      ];
+      area.name = '中枢';
+      area.itemStyle = { color: 'rgba(49, 81, 244, 0.10)' };
+      area.label = { show: false };
+      return area;
+    }).filter(Boolean);
+  }
+
+  function selectStructureChartSegments(raw, chartEvidence, xAxis) {
+    var sources = structureAnnotationSource(raw, chartEvidence);
+    var candidates = [];
+    [
+      sources.annotations.segments,
+      sources.annotations.strokes,
+      sources.projected.segments,
+      sources.projected.strokes,
+      sources.source.segments,
+      sources.source.strokes,
+    ].forEach(function (values) {
+      asArray(values).forEach(function (value) { candidates.push(value); });
+    });
+    return candidates.map(function (segment) {
+      var item = segment && typeof segment === 'object' ? segment : {};
+      var start = structureDateValue(item, ['start_date', 'startDate', 'from_date'], xAxis);
+      var end = structureDateValue(item, ['end_date', 'endDate', 'to_date'], xAxis);
+      var startPrice = safeNumber(firstStructureValue(item, ['start_price', 'startPrice', 'from_price', 'from_value']), null);
+      var endPrice = safeNumber(firstStructureValue(item, ['end_price', 'endPrice', 'to_price', 'to_value']), null);
+      if (!startPrice && item.start && typeof item.start === 'object') {
+        startPrice = safeNumber(firstStructureValue(item.start, ['price', 'value', 'y']), null);
+      }
+      if (!endPrice && item.end && typeof item.end === 'object') {
+        endPrice = safeNumber(firstStructureValue(item.end, ['price', 'value', 'y']), null);
+      }
+      if (!start || !end || !isChartPositivePrice(startPrice) || !isChartPositivePrice(endPrice)) return null;
+      return [
+        { coord: [start, startPrice] },
+        { coord: [end, endPrice] },
+      ];
+    }).filter(Boolean);
+  }
+
   function getAvailableChartLayers(raw, chartEvidence) {
     var source = raw || {};
     var annotations = source.chart_annotations || {};
@@ -5406,7 +6125,7 @@
         || source.formal_decision_contract) layers.push('decision');
     if (asArray(source.buy_points).length || asArray(source.reference_buy_points).length
         || source.structure_annotations || selectStructureChartLines(annotations.markLines, source, chartEvidence).length) layers.push('structure');
-    if ([source.ema5, source.ema20, source.ma5, source.ma20].some(function (values) {
+    if ([source.ema5, source.ema20, source.ma5, source.ma10, source.ma20].some(function (values) {
       return asArray(values).filter(function (value) {
         var number = safeNumber(value, null);
         return number !== null && Number.isFinite(number);
@@ -5422,26 +6141,74 @@
     var labels = { decision: '决策位', structure: '结构', trend: '趋势' };
     var layers = getAvailableChartLayers(raw, chartEvidence);
     if (layers.indexOf(state.chartLayer) === -1) state.chartLayer = layers[0];
-    var controls = layers.map(function (layer) {
+    var overlays = state.chartOverlays && typeof state.chartOverlays === 'object'
+      ? state.chartOverlays : (state.chartOverlays = { decision: false, structure: false, trend: false });
+    var controls = '<div class="chart-layer-presets" role="group" aria-label="K线预设图层">'
+      + layers.map(function (layer) {
       return '<button type="button" data-chart-layer="' + escapeHtml(layer) + '" class="'
         + (layer === state.chartLayer ? 'is-active' : '') + '" aria-pressed="'
         + (layer === state.chartLayer ? 'true' : 'false') + '" aria-label="切换K线图层：'
         + escapeHtml(labels[layer]) + '">' + escapeHtml(labels[layer]) + '</button>';
+      }).join('') + '</div>';
+    var overlayLabels = { decision: '关键位', structure: '结构', trend: '均线' };
+    var overlayControls = ['decision', 'structure', 'trend'].filter(function (layer) {
+      return layers.indexOf(layer) !== -1;
+    }).map(function (layer) {
+      return '<label class="chart-overlay-toggle"><input type="checkbox" data-chart-overlay="'
+        + escapeHtml(layer) + '"' + (overlays[layer] ? ' checked' : '') + '>叠加'
+        + escapeHtml(overlayLabels[layer]) + '</label>';
     }).join('');
+    var overlayHtml = overlayControls
+      ? '<div class="chart-layer-overlays" role="group" aria-label="独立叠加图层">'
+        + overlayControls + '</div>' : '';
+    var windowMode = normalizeChartWindowMode(state.chartWindowMode);
+    var windowLabels = { '20': '最近20根', '60': '最近60根', all: '全部', signal: '定位信号' };
+    var windowControls = '<div class="chart-window-tools" role="group" aria-label="图表阅读工具">'
+      + Object.keys(windowLabels).map(function (mode) {
+        return '<button type="button" data-chart-window="' + mode + '" class="'
+          + (windowMode === mode ? 'is-active' : '') + '" aria-pressed="'
+          + (windowMode === mode ? 'true' : 'false') + '">' + windowLabels[mode] + '</button>';
+      }).join('')
+      + '<button type="button" data-chart-window="reset" aria-label="重置图表视图">重置</button></div>';
     var missingTrend = layers.indexOf('trend') === -1
       ? '<span class="chart-layer-status" data-chart-layer-unavailable="trend">本期未提供真实均线序列</span>'
       : '';
+    var trendDeclaration = chartMaStatusHtml(raw);
     var quantityStatus = '';
-    if (quantityProjection && quantityProjection.status === 'missing') {
-      quantityStatus = '<span class="chart-layer-status" data-chart-quantity-status="missing">成交量证据未核验，价格图保持可用</span>';
-    } else if (quantityProjection && quantityProjection.status === 'partial') {
-      quantityStatus = '<span class="chart-layer-status" data-chart-quantity-status="partial">部分成交量口径未核验，缺口已留空</span>';
+    if (quantityProjection && quantityProjection.status !== 'available') {
+      quantityStatus = chartVolumeStatusHtml(raw, quantityProjection);
     }
-    mount.innerHTML = controls + missingTrend + quantityStatus;
+    mount.innerHTML = controls + overlayHtml + windowControls + missingTrend + trendDeclaration + quantityStatus;
+    if (typeof mount.querySelectorAll !== 'function') return;
     var buttons = mount.querySelectorAll('[data-chart-layer]');
     for (var i = 0; i < buttons.length; i += 1) {
       buttons[i].addEventListener('click', function (event) {
         state.chartLayer = event.currentTarget.getAttribute('data-chart-layer');
+        renderChart(raw, workspaceItem);
+      });
+    }
+    var overlayButtons = mount.querySelectorAll('[data-chart-overlay]');
+    for (var o = 0; o < overlayButtons.length; o += 1) {
+      overlayButtons[o].addEventListener('change', function (event) {
+        var layer = event.currentTarget.getAttribute('data-chart-overlay');
+        state.chartOverlays[layer] = !!event.currentTarget.checked;
+        renderChart(raw, workspaceItem);
+      });
+    }
+    var windowButtons = mount.querySelectorAll('[data-chart-window]');
+    for (var w = 0; w < windowButtons.length; w += 1) {
+      windowButtons[w].addEventListener('click', function (event) {
+        var mode = event.currentTarget.getAttribute('data-chart-window');
+        if (mode === 'reset') {
+          state.chartLayer = 'decision';
+          state.chartOverlays = { decision: false, structure: false, trend: false };
+          state.chartWindowMode = '20';
+          state.chartZoomWindow = null;
+          state.chartZoomMode = '';
+        } else {
+          state.chartWindowMode = normalizeChartWindowMode(mode);
+          state.chartZoomWindow = null;
+        }
         renderChart(raw, workspaceItem);
       });
     }
@@ -5454,14 +6221,28 @@
       return;
     }
 
-    if (state.chartInstance) {
+    var scopeKey = raw ? getChartScopeKey(raw, workspaceItem) : '';
+    var sameIdentity = !!(scopeKey && state.chartScopeKey === scopeKey);
+    var mountMatches = chartInstanceMatchesMount(state.chartInstance, state.chartMount);
+    var sameScope = sameIdentity && mountMatches;
+    var previousZoom = sameIdentity ? readChartZoomWindow(state.chartInstance) : null;
+    if (!sameScope && state.chartInstance) {
       state.chartInstance.dispose();
       state.chartInstance = null;
+      if (!sameIdentity) {
+        state.chartZoomWindow = null;
+        state.chartZoomMode = '';
+      } else if (previousZoom) {
+        state.chartZoomWindow = previousZoom;
+      }
     }
 
     if (!raw) {
       renderChartAnnotationLane([]);
       state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
+      state.chartScopeKey = '';
+      state.chartZoomWindow = null;
+      state.chartZoomMode = '';
       return;
     }
 
@@ -5475,8 +6256,13 @@
     if (!hasChartData(raw)) {
       renderChartAnnotationLane([]);
       state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
+      state.chartScopeKey = '';
+      state.chartZoomWindow = null;
+      state.chartZoomMode = '';
       return;
     }
+
+    state.chartScopeKey = scopeKey;
 
     var xAxis = dates.slice(0, minLen);
     var kLines = [];
@@ -5512,6 +6298,7 @@
           available: 0,
           total: targetLength,
           status: 'missing',
+          metadata: chartVolumeMetadata(record),
         };
       }
       var alignedVolumes = tailAlignChartSeries(rawChartVolumes, targetLength, null);
@@ -5538,6 +6325,7 @@
         available: available,
         total: targetLength,
         status: available === 0 ? 'missing' : (available === targetLength ? 'available' : 'partial'),
+        metadata: chartVolumeMetadata(record),
       };
     }
 
@@ -5597,6 +6385,8 @@
     var priceLabelCandidates = [];
     var rawMarkLines = asArray(annotations.markLines);
     var structureLines = selectStructureChartLines(rawMarkLines, raw, chartEvidence);
+    var structureAreas = selectStructureChartAreas(raw, chartEvidence, xAxis);
+    var structureSegments = selectStructureChartSegments(raw, chartEvidence, xAxis);
     var curPrice = getCandidateCurrentPriceFromRecord(workspaceItem);
     if (curPrice === null && raw && raw !== workspaceItem) {
       curPrice = getCandidateCurrentPriceFromRecord(raw);
@@ -5623,6 +6413,13 @@
     }
     if (chartProjectionAllowsPrice(chartEvidence, 'current_price', curPrice)) {
       priceLabelCandidates.push({ kind: 'current', value: curPrice, label: '信号日收盘' });
+    }
+    var watchAnchor = workspaceItem && workspaceItem.watch_anchor && typeof workspaceItem.watch_anchor === 'object'
+      ? workspaceItem.watch_anchor : (raw.watch_anchor && typeof raw.watch_anchor === 'object' ? raw.watch_anchor : null);
+    var watchAnchorValue = watchAnchor && normalizeString(watchAnchor.status).trim() === 'verified'
+      ? safeNumber(watchAnchor.value || watchAnchor.price, null) : null;
+    if (chartProjectionAllowsPrice(chartEvidence, 'watch_anchor_price', watchAnchorValue)) {
+      priceLabelCandidates.push({ kind: 'watch_anchor', value: watchAnchorValue, label: '观察锚点' });
     }
     var formalContract = workspaceItem && workspaceItem.formal_decision_contract || raw.formal_decision_contract || {};
     var invalidationPrice = safeNumber(
@@ -5665,7 +6462,9 @@
           ? 'pressure'
           : (/参考|source/i.test(rawLineName)
             ? 'reference'
-            : (/现价|收盘|current/i.test(rawLineName) ? 'current' : '')));
+            : (/观察锚点|watch[_ -]?anchor/i.test(rawLineName)
+              ? 'watch_anchor'
+              : (/现价|收盘|current/i.test(rawLineName) ? 'current' : ''))));
       var rawValue = safeNumber(ml.yAxis, null);
       if (!rawKind || canonicalPriceKinds[rawKind]
           || rawValue === null || !Number.isFinite(rawValue) || rawValue <= 0
@@ -5701,109 +6500,161 @@
       };
     });
 
-    var activeMarkPoints = state.chartLayer === 'decision' || state.chartLayer === 'structure'
-      ? markPoints
-      : [];
-    var activeMarkLines = state.chartLayer === 'decision'
-      ? markLines
-      : (state.chartLayer === 'structure' ? structureLines : []);
+    var overlays = state.chartOverlays && typeof state.chartOverlays === 'object'
+      ? state.chartOverlays : (state.chartOverlays = { decision: false, structure: false, trend: false });
+    var decisionVisible = state.chartLayer === 'decision' || overlays.decision === true;
+    var structureVisible = state.chartLayer === 'structure' || overlays.structure === true;
+    var trendVisible = state.chartLayer === 'trend' || overlays.trend === true;
+    var activeMarkPoints = decisionVisible || structureVisible ? markPoints : [];
+    var activeMarkLines = [];
+    if (decisionVisible) activeMarkLines = activeMarkLines.concat(markLines);
+    if (structureVisible) activeMarkLines = activeMarkLines.concat(structureLines);
     var trendSeries = [];
-    if (state.chartLayer === 'trend') {
-      [[['EMA5', raw.ema5], ['MA5', raw.ma5]], [['EMA20', raw.ema20], ['MA20', raw.ma20]]].forEach(function (candidates) {
-        var entry = candidates.filter(function (candidate) {
-          return asArray(candidate[1]).filter(function (value) {
-            var number = safeNumber(value, null);
-            return number !== null && Number.isFinite(number);
-          }).length >= 2;
-        })[0];
-        if (!entry) return;
+    if (trendVisible) {
+      [
+        ['EMA5', 'ema5'],
+        ['MA5', 'ma5'],
+        ['MA10', 'ma10'],
+        ['EMA20', 'ema20'],
+        ['MA20', 'ma20'],
+      ].forEach(function (entry) {
+        var values = asArray(raw[entry[1]]);
+        if (values.filter(function (value) {
+          var number = safeNumber(value, null);
+          return number !== null && Number.isFinite(number);
+        }).length < 2) return;
         trendSeries.push({
           name: entry[0],
           type: 'line',
-          data: tailAlignChartSeries(entry[1], minLen, null),
+          data: tailAlignChartSeries(values, minLen, null),
           showSymbol: false,
           smooth: true,
+          chartMa: chartMaDeclaration(raw, entry[1]),
         });
       });
     }
 
-    state.chartInstance = window.echarts.init(state.chartMount);
-    var defaultStartIndex = Math.max(0, minLen - 20);
-    var defaultStartValue = xAxis[defaultStartIndex];
-    var defaultEndValue = xAxis[minLen - 1];
+    var volumeVisible = quantityProjection.available > 0;
+    var macdGridIndex = volumeVisible ? 2 : 1;
+    var labelTexts = persistentLabels.map(formatPersistentPriceLabel).concat(structureLines.map(function (line) {
+      return normalizeString(line.name) + ' ' + formatNumber(line.yAxis, 2);
+    }));
+    var labelChars = labelTexts.reduce(function (max, text) {
+      return Math.max(max, normalizeString(text).split('\n').reduce(function (inner, value) {
+        return Math.max(inner, normalizeString(value).length);
+      }, 0));
+    }, 0);
+    var mobileLabelWidth = Math.max(96, Math.min(180, labelChars * 8 + 24));
+    var legacyGridDefaults = { right: state.isMobile ? '96px' : '124px' };
+    var defaultChartRight = legacyGridDefaults.right;
+    var defaultChartRightPixels = Number.parseInt(defaultChartRight, 10) || 96;
+    var chartRight = state.isMobile
+      ? Math.max(defaultChartRightPixels, mobileLabelWidth) + 'px'
+      : Math.max(defaultChartRightPixels, mobileLabelWidth + 28) + 'px';
+    var axisBase = {
+      type: 'category',
+      data: xAxis,
+      boundaryGap: true,
+      axisLine: { lineStyle: { color: '#d1d5db' } },
+      axisLabel: { show: false },
+      splitLine: { show: false },
+    };
+    var grids = [
+      { left: state.isMobile ? '10%' : '6%', right: chartRight, top: '4%', height: volumeVisible ? '51%' : '58%' },
+    ];
+    var xAxes = [Object.assign({}, axisBase)];
+    var yAxes = [{
+      scale: true,
+      splitLine: { lineStyle: { color: '#f3f4f6' } },
+      axisLine: { lineStyle: { color: '#d1d5db' } },
+    }];
+    if (volumeVisible) {
+      grids.push({ left: state.isMobile ? '10%' : '6%', right: chartRight, top: '59%', height: '12%' });
+      xAxes.push(Object.assign({}, axisBase, { gridIndex: 1 }));
+      yAxes.push({
+        scale: true,
+        gridIndex: 1,
+        name: '成交量',
+        nameLocation: 'end',
+        nameGap: 4,
+        nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
+        splitLine: { lineStyle: { color: '#f3f4f6' } },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: { show: false },
+      });
+    }
+    grids.push({ left: state.isMobile ? '10%' : '6%', right: chartRight,
+      top: volumeVisible ? '75%' : '66%', height: volumeVisible ? '12%' : '24%' });
+    xAxes.push(Object.assign({}, axisBase, { gridIndex: macdGridIndex, axisLabel: { show: true } }));
+    yAxes.push({
+      scale: true,
+      gridIndex: macdGridIndex,
+      name: 'MACD',
+      nameLocation: 'end',
+      nameGap: 4,
+      nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
+      splitLine: { lineStyle: { color: '#f3f4f6' } },
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { show: false },
+    });
+
+    var requestedWindowMode = normalizeChartWindowMode(state.chartWindowMode);
+    var zoomWindow = sameIdentity && state.chartZoomMode === requestedWindowMode
+      ? (previousZoom || state.chartZoomWindow) : null;
+    if (!zoomWindow || zoomWindow.startValue === undefined || zoomWindow.endValue === undefined) {
+      zoomWindow = chartWindowValues(xAxis, requestedWindowMode, rawMarkPoints);
+    }
+    state.chartZoomWindow = Object.assign({}, zoomWindow);
+    state.chartZoomMode = requestedWindowMode;
+    state.chartInstance = state.chartInstance || window.echarts.init(state.chartMount);
+    var zoomIndexes = xAxes.map(function (_axis, index) { return index; });
+    var volumeSeries = {
+      name: '成交量',
+      type: 'bar',
+      data: volumeSlice,
+      show: volumeVisible,
+      silent: !volumeVisible,
+      itemStyle: {
+        opacity: volumeVisible ? 1 : 0,
+        color: function (params) {
+          var bar = kLines[params && params.dataIndex];
+          if (!bar || volumeSlice[params.dataIndex] === null) return '#94a3b8';
+          return bar[1] >= bar[0] ? '#EF4444' : '#10B981';
+        },
+      },
+    };
+    if (volumeVisible) {
+      volumeSeries.xAxisIndex = 1;
+      volumeSeries.yAxisIndex = 1;
+    }
+    var macdSeries = {
+      name: 'MACD',
+      type: 'bar',
+      xAxisIndex: macdGridIndex,
+      yAxisIndex: macdGridIndex,
+      data: macdSlice,
+      itemStyle: {
+        color: function (params) {
+          if (params && params.value === null) return '#94a3b8';
+          return params.value >= 0 ? '#EF4444' : '#10B981';
+        },
+      },
+    };
     state.chartInstance.setOption({
       animation: false,
       backgroundColor: '#ffffff',
-      grid: [
-        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '4%', height: '51%' },
-        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '59%', height: '12%' },
-        { left: state.isMobile ? '10%' : '6%', right: state.isMobile ? '96px' : '124px', top: '75%', height: '12%' },
-      ],
-      xAxis: [
-        {
-          type: 'category',
-          data: xAxis,
-          boundaryGap: true,
-          axisLine: { lineStyle: { color: '#d1d5db' } },
-          axisLabel: { show: false },
-          splitLine: { show: false },
-        },
-        {
-          type: 'category',
-          data: xAxis,
-          gridIndex: 1,
-          boundaryGap: true,
-          axisLine: { lineStyle: { color: '#d1d5db' } },
-          axisLabel: { show: false },
-          splitLine: { show: false },
-        },
-        {
-          type: 'category',
-          data: xAxis,
-          gridIndex: 2,
-          boundaryGap: true,
-          axisLine: { lineStyle: { color: '#d1d5db' } },
-          splitLine: { show: false },
-        },
-      ],
-      yAxis: [
-        {
-          scale: true,
-          splitLine: { lineStyle: { color: '#f3f4f6' } },
-          axisLine: { lineStyle: { color: '#d1d5db' } },
-        },
-        {
-          scale: true,
-          gridIndex: 1,
-          name: '成交量',
-          nameLocation: 'end',
-          nameGap: 4,
-          nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
-          splitLine: { lineStyle: { color: '#f3f4f6' } },
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { show: false },
-        },
-        {
-          scale: true,
-          gridIndex: 2,
-          name: 'MACD',
-          nameLocation: 'end',
-          nameGap: 4,
-          nameTextStyle: { color: '#64748b', fontSize: 10, align: 'right' },
-          splitLine: { lineStyle: { color: '#f3f4f6' } },
-          axisLine: { show: false },
-          axisTick: { show: false },
-          axisLabel: { show: false },
-        },
-      ],
+      grid: grids,
+      xAxis: xAxes,
+      yAxis: yAxes,
       tooltip: {
         trigger: 'axis',
         axisPointer: { type: 'cross' },
       },
       dataZoom: [
-        { type: 'inside', xAxisIndex: [0, 1, 2], startValue: defaultStartValue, endValue: defaultEndValue },
-        { xAxisIndex: [0, 1, 2], height: 18, startValue: defaultStartValue, endValue: defaultEndValue },
+        { type: 'inside', xAxisIndex: zoomIndexes, startValue: zoomWindow.startValue, endValue: zoomWindow.endValue },
+        { xAxisIndex: zoomIndexes, height: 18, startValue: zoomWindow.startValue, endValue: zoomWindow.endValue },
       ],
       series: [
         {
@@ -5835,7 +6686,11 @@
                   ...(line.lineStyle || {}),
                 },
               };
-            }),
+            }).concat(structureVisible ? structureSegments : []),
+          },
+          markArea: {
+            silent: true,
+            data: structureVisible ? structureAreas : [],
           },
           itemStyle: {
             color: '#EF4444',
@@ -5844,33 +6699,8 @@
             borderColor0: '#10B981',
           },
         },
-        {
-          name: '成交量',
-          type: 'bar',
-          xAxisIndex: 1,
-          yAxisIndex: 1,
-          data: volumeSlice,
-          itemStyle: {
-            color: function (params) {
-              var bar = kLines[params && params.dataIndex];
-              if (!bar || volumeSlice[params.dataIndex] === null) return '#94a3b8';
-              return bar[1] >= bar[0] ? '#EF4444' : '#10B981';
-            },
-          },
-        },
-        {
-          name: 'MACD',
-          type: 'bar',
-          xAxisIndex: 2,
-          yAxisIndex: 2,
-          data: macdSlice,
-          itemStyle: {
-            color: function (params) {
-              if (params && params.value === null) return '#94a3b8';
-              return params.value >= 0 ? '#EF4444' : '#10B981';
-            },
-          },
-        },
+        volumeSeries,
+        macdSeries,
       ].concat(trendSeries),
     }, true);
     setTimeout(function () {
@@ -6436,9 +7266,9 @@
           getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
           state.sectorFilterRefs
         );
-        state.activeItem = filtered[0] || null;
+        beginCandidateSelection(filtered[0] || null);
         renderFundingMainlineStrip();
-        renderCandidateList();
+        refreshCandidateWorkspace();
         renderCandidateDetail(state.activeItem);
       });
     }
@@ -8468,7 +9298,7 @@
   function openMobileDetailDrawer(item, returnCode) {
     if (!state.isMobile || !nodes.drawer) return;
     if (item) {
-      state.activeItem = item;
+      beginCandidateSelection(item);
     }
     if (!state.activeItem) return;
     syncMobileDrawerViewport();
@@ -8510,14 +9340,22 @@
   function closeMobileDetailDrawer() {
     if (!nodes.drawer) return;
     if (nodes.drawerContent) {
-      if (state.chartMount && nodes.drawerContent.contains(state.chartMount)) {
-        if (state.chartInstance) state.chartInstance.dispose();
-        state.chartInstance = null;
-        state.chartMount = null;
-        state.chartAnnotationLane = null;
-        state.chartLayerSwitcher = null;
+      var chartInDrawer = Boolean(
+        state.detailTarget === nodes.drawerContent
+        || (state.chartMount
+          && typeof nodes.drawerContent.contains === 'function'
+          && nodes.drawerContent.contains(state.chartMount))
+      );
+      if (chartInDrawer && state.chartInstance) {
+        var savedZoom = readChartZoomWindow(state.chartInstance);
+        if (savedZoom) state.chartZoomWindow = savedZoom;
       }
-      nodes.drawerContent.innerHTML = '';
+      if (chartInDrawer) {
+        clearCandidateDetailLifecycle(nodes.drawerContent);
+      } else {
+        // The drawer can already be hidden while the desktop detail owns the chart.
+        nodes.drawerContent.innerHTML = '';
+      }
     }
     nodes.drawer.classList.remove('is-open');
     nodes.drawer.setAttribute('aria-hidden', 'true');
@@ -8688,13 +9526,12 @@
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
-      renderCandidateEvidenceComparisonMount();
       var first = filterCandidatesBySector(
         getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
         state.sectorFilterRefs
       )[0] || null;
-      state.activeItem = first;
-      renderCandidateList();
+      beginCandidateSelection(first);
+      refreshCandidateWorkspace();
       renderCandidateDetail(first);
       renderAuxiliaryCenter();
       initComparisonSummary();
