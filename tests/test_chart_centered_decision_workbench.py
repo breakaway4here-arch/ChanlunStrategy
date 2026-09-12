@@ -328,17 +328,19 @@ assert(!JSON.stringify(summary).includes('70'), 'incident review leaked invalid 
 """,
         )
 
-    def test_candidate_row_is_limited_to_identity_action_reason_and_decision_score(self):
+    def test_candidate_row_is_limited_to_identity_market_and_reason_lines(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)
         renderer = JS[start:end]
         for token in (
             "buildCandidateRowSummary(",
-            'class="candidate-row-action"',
-            'class="candidate-row-reason"',
-            'class="candidate-row-score"',
+            "renderCandidateRowIdentity(item, state.currentView, rowSummary)",
+            "renderCandidateRowMarket(item, marketContext)",
+            "renderCandidateRowReason(item, state.currentView, rowSummary)",
         ):
             self.assertIn(token, renderer)
+        self.assertNotIn('renderCandidateStatusSummary(item, state.currentView)', renderer)
+        self.assertNotIn('class="candidate-row-score"', renderer)
         for forbidden in (
             'class="candidate-price',
             "getCandidateChangePct(item)",
@@ -605,6 +607,16 @@ assert(hiddenDesktop.innerHTML === '', 'hidden desktop switcher was targeted by 
             "grid-template-columns: 36px minmax(0, 1fr);",
             CSS,
         )
+
+    def test_mobile_chart_controls_wrap_into_touch_sized_rows_without_locking_page_scroll(self):
+        self.assertIn(".chart-layer-status", CSS)
+        self.assertIn("touch-action: pan-y", CSS)
+        mobile_start = CSS.rfind("@media (max-width: 390px)")
+        self.assertGreaterEqual(mobile_start, 0)
+        mobile = CSS[mobile_start:]
+        self.assertRegex(mobile, r"\.chart-layer-switcher[^}]*flex-wrap:\s*wrap\s*;")
+        self.assertRegex(mobile, r"\.chart-layer-switcher button[^}]*min-height:\s*44px\s*;")
+        self.assertRegex(mobile, r"\.chart-window-tools[^}]*border-top:")
 
 
 if __name__ == "__main__":

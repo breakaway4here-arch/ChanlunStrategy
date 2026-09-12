@@ -45,6 +45,7 @@ def _approved_asset_fixture():
     payloads = {
         "report-v2.js": b"window.__CHANLUN_TEST_ASSET__ = true;\n",
         "report-v2.css": b"body { color: #123456; }\n",
+        "echarts-5.4.3.min.js": b"window.echarts = { version: 'fixture' };\n",
     }
     allowlist = {}
     for asset_name, payload in payloads.items():

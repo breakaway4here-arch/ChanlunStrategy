@@ -30,6 +30,7 @@ from chanlun.chan_engine import analyze, ema  # noqa: E402
 from chanlun.kline_repository import KLineRepository  # noqa: E402
 from chanlun.market_history_store import MarketHistoryStore  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
+    CHART_LIBRARY_ASSET,
     _build_report_v2_html,
     _escape_inline_json,
     _report_asset_version,
@@ -464,7 +465,7 @@ def _validate_staged_docs(
         raise RuntimeError("comparison index changed during reconstruction")
 
     source_assets = ROOT_DIR / "chanlun" / "report_assets"
-    for relative in ("report-v2.js", "report-v2.css"):
+    for relative in ("report-v2.js", "report-v2.css", CHART_LIBRARY_ASSET):
         staged = staged_docs / "assets" / relative
         source = source_assets / relative
         if atomic._sha256_file(staged) != atomic._sha256_file(source):

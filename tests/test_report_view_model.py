@@ -912,6 +912,96 @@ class TestReportViewModel(unittest.TestCase):
         pick["volume_ratio20"] = 0.4
         self.assertLess(_build_pool_quality_features(pick)["liquidity_score"], 30.0)
 
+    def test_volume_ratio20_uses_current_bar_against_the_previous_20_verified_bars(self):
+        pick = _fusion_pick()
+        pick.update({
+            "volumes": [100.0] * 20 + [200.0],
+            "volume_units": ["hands"] * 21,
+            "volume_raw_units": ["shares"] * 21,
+            "volume_sources": ["sina"] * 21,
+            # A producer-side ratio may use another window; the display
+            # projection must calculate the declared 20-bar ratio itself.
+            "volume_ratio": 99.0,
+        })
+
+        quality = _build_pool_quality_features(pick)
+
+        self.assertEqual(quality["volume_ratio20"], 99.0)
+        self.assertEqual(quality["display_volume_ratio20"], 2.0)
+        self.assertEqual(quality["display_volume_ratio20_window_bars"], 21)
+        self.assertEqual(
+            quality["display_volume_ratio20_method"],
+            "current_div_previous20_mean",
+        )
+        self.assertEqual(quality["display_volume_ratio20_status"], "available")
+
+    def test_volume_ratio20_stays_unavailable_without_a_complete_21_bar_window(self):
+        pick = _fusion_pick()
+        pick.update({
+            "volumes": [100.0] * 20,
+            "volume_units": ["hands"] * 20,
+            "volume_raw_units": ["shares"] * 20,
+            "volume_sources": ["sina"] * 20,
+            "volume_ratio": 99.0,
+        })
+
+        quality = _build_pool_quality_features(pick)
+
+        self.assertEqual(quality["volume_ratio20"], 99.0)
+        self.assertIsNone(quality["display_volume_ratio20"])
+        self.assertEqual(quality["display_volume_ratio20_window_bars"], 21)
+        self.assertEqual(quality["display_volume_ratio20_status"], "unavailable")
+
+    def test_display_volume_ratio_does_not_change_workspace_order_or_score(self):
+        def build_pick(first_volume):
+            pick = _fusion_pick(code="600001")
+            pick.update({
+                "volumes": [first_volume] + [100.0] * 20,
+                "volume_units": ["hands"] * 21,
+                "volume_raw_units": ["shares"] * 21,
+                "volume_sources": ["sina"] * 21,
+                "volume_ratio": 1.0,
+            })
+            pick.pop("money20", None)
+            return pick
+
+        before = build_workspace(_report_data({
+            "picks_fusion": [build_pick(100.0)],
+        }))
+        after = build_workspace(_report_data({
+            "picks_fusion": [build_pick(1000.0)],
+        }))
+
+        before_row = before["views"]["main"][0]
+        after_row = after["views"]["main"][0]
+        self.assertEqual(before["view_order"], after["view_order"])
+        self.assertEqual(before["counts"], after["counts"])
+        for view_name in before["view_order"]:
+            before_signature = [
+                (row["code"], row["view_rank"], row["opportunity_score"])
+                for row in before["views"][view_name]
+            ]
+            after_signature = [
+                (row["code"], row["view_rank"], row["opportunity_score"])
+                for row in after["views"][view_name]
+            ]
+            self.assertEqual(before_signature, after_signature, view_name)
+        self.assertEqual(before_row["code"], after_row["code"])
+        self.assertEqual(before_row["view_rank"], after_row["view_rank"])
+        self.assertEqual(before_row["opportunity_score"], after_row["opportunity_score"])
+        self.assertEqual(
+            before_row["rank_trace"]["base_opportunity_score"],
+            after_row["rank_trace"]["base_opportunity_score"],
+        )
+        self.assertEqual(
+            before_row["rank_trace"]["opportunity_score"],
+            after_row["rank_trace"]["opportunity_score"],
+        )
+        self.assertNotEqual(
+            before_row["pool_quality"]["display_volume_ratio20"],
+            after_row["pool_quality"]["display_volume_ratio20"],
+        )
+
     def test_missing_or_unattested_money20_is_pending_not_low_liquidity(self):
         missing = _fusion_pick(code="001257", name="缺数量证明", score=50)
         missing["money20"] = None

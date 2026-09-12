@@ -8,6 +8,7 @@ HTML 日报生成器 — v2 策略工作台壳子 + 外部静态资源
 """
 
 import hashlib
+import base64
 import json
 import os
 import re
@@ -64,7 +65,9 @@ class NpEncoder(json.JSONEncoder):
 CHART_MAX_BARS = 50  # 图表展示默认K线根数（动态窗口会扩展）
 CHART_MIN_BARS = 50
 CHART_MAX_EXTENDED = 120
-REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js")
+REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js", "echarts-5.4.3.min.js")
+CHART_LIBRARY_ASSET = "echarts-5.4.3.min.js"
+CHART_LIBRARY_VERSION = "5.4.3"
 DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
 DEFAULT_PRECLOSE_API_BASE = (
     "https://chanlun-preclose-worker.breakaway4here.workers.dev"
@@ -120,6 +123,244 @@ def build_chart_window(pick):
         win_start = win_end - CHART_MAX_EXTENDED
 
     return win_start, win_end
+
+
+def _metadata_values(source, plural_key, scalar_key, expected_length):
+    """Return only explicitly row-aligned metadata; never broadcast a scalar."""
+    if not isinstance(source, Mapping):
+        return None
+    raw = source.get(plural_key)
+    if raw is not None:
+        if isinstance(raw, (str, bytes)):
+            values = [raw] if expected_length == 1 else None
+        elif hasattr(raw, "tolist"):
+            values = raw.tolist()
+        else:
+            try:
+                values = list(raw)
+            except TypeError:
+                values = [raw] if expected_length == 1 else None
+        if values is None or len(values) != expected_length:
+            return None
+        return list(values)
+
+    scalar = source.get(scalar_key)
+    if scalar is None or expected_length != 1:
+        return None
+    return [scalar]
+
+
+def _slice_metadata_values(source, plural_key, scalar_key, expected_length, start, end):
+    values = _metadata_values(source, plural_key, scalar_key, expected_length)
+    return values[start:end] if values is not None else []
+
+
+def _slice_metadata_group(source, fields, expected_length, start, end):
+    values = [
+        _metadata_values(source, plural_key, scalar_key, expected_length)
+        for plural_key, scalar_key in fields
+    ]
+    if any(value is None for value in values):
+        return [[] for _ in fields]
+    return [value[start:end] for value in values]
+
+
+def _display_price_basis(source):
+    source = source if isinstance(source, Mapping) else {}
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    if "price_basis" in source:
+        basis = source.get("price_basis")
+        if not isinstance(basis, Mapping):
+            return None
+        basis = dict(basis)
+        adjustment = str(basis.get("adjustment") or "").strip().lower()
+        if adjustment in {"raw", "qfq", "hfq"}:
+            return basis
+        return None
+    adjustment = str(
+        data_status.get("adjustment") or source.get("adjustment") or ""
+    ).strip().lower()
+    if adjustment in {"raw", "qfq", "hfq"}:
+        return {"adjustment": adjustment}
+    return None
+
+
+def _display_price_basis_conflict(source):
+    source = source if isinstance(source, Mapping) else {}
+    explicit = source.get("price_basis")
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    if not isinstance(explicit, Mapping):
+        return False
+    explicit_adjustment = str(explicit.get("adjustment") or "").strip().lower()
+    status_adjustment = str(data_status.get("adjustment") or "").strip().lower()
+    valid = {"raw", "qfq", "hfq"}
+    return (
+        explicit_adjustment in valid
+        and status_adjustment in valid
+        and explicit_adjustment != status_adjustment
+    )
+
+
+def _display_series_values(values):
+    """Keep bool/NaN identity until display-only numeric validation runs."""
+    if values is None:
+        return []
+    if hasattr(values, "tolist"):
+        values = values.tolist()
+    if isinstance(values, (str, bytes)):
+        return [values]
+    try:
+        return list(values)
+    except TypeError:
+        return [values]
+
+
+def _display_ma_number(value):
+    if isinstance(value, (bool, np.bool_)):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not np.isfinite(number) or number <= 0:
+        return None
+    return number
+
+
+def _sanitize_display_ma_series(values):
+    sanitized = []
+    valid_count = 0
+    for value in _display_series_values(values):
+        if value is None:
+            sanitized.append(None)
+            continue
+        number = _display_ma_number(value)
+        sanitized.append(number)
+        if number is not None:
+            valid_count += 1
+    return sanitized, valid_count
+
+
+def _sma_series(values, window):
+    values = _display_series_values(values)
+    result = [None] * len(values)
+    for index in range(int(window) - 1, len(values)):
+        sample = values[index - int(window) + 1:index + 1]
+        numbers = []
+        for value in sample:
+            if isinstance(value, (bool, np.bool_)):
+                numbers = []
+                break
+            try:
+                number = float(value)
+            except (TypeError, ValueError):
+                numbers = []
+                break
+            if not np.isfinite(number) or number <= 0:
+                numbers = []
+                break
+            numbers.append(number)
+        if len(numbers) == int(window):
+            result[index] = round(sum(numbers) / int(window), 8)
+    return result
+
+
+def _build_display_moving_average(source, dates, closes, start, end):
+    """Project trusted MA arrays or explicitly-labelled display-only SMA arrays."""
+    source = source if isinstance(source, Mapping) else {}
+    dates = _safe_list(dates)
+    closes = _display_series_values(closes)
+    n_orig = len(dates)
+    data_status = source.get("data_status")
+    data_status = data_status if isinstance(data_status, Mapping) else {}
+    basis = _display_price_basis(source)
+    basis_conflict = _display_price_basis_conflict(source)
+    daily_verified = (
+        data_status.get("daily") == "verified"
+        and data_status.get("is_final") is True
+        and data_status.get("stale") is False
+    )
+
+    output = {"ma5": [], "ma10": [], "ema5": [], "ema20": []}
+    series = {
+        key: {"status": "missing", "algorithm": "", "window": window}
+        for key, window in (("ma5", 5), ("ma10", 10), ("ema5", 5), ("ema20", 20))
+    }
+    if basis_conflict:
+        return output, {
+            "status": "unavailable",
+            "reason": "price_basis_conflict",
+            "price_basis": None,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+    if n_orig == 0 or len(closes) != n_orig:
+        return output, {
+            "status": "unavailable",
+            "reason": "daily_series_missing_or_misaligned",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    if basis is None:
+        return output, {
+            "status": "unavailable",
+            "reason": "price_basis_missing",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    if not daily_verified:
+        return output, {
+            "status": "unavailable",
+            "reason": "daily_evidence_unverified",
+            "price_basis": basis,
+            "as_of": data_status.get("latest_date"),
+            "series": series,
+        }
+
+    source_declared = set()
+    for key, window in (("ma5", 5), ("ma10", 10), ("ema5", 5), ("ema20", 20)):
+        values = _metadata_values(source, key, key, n_orig)
+        if values is None:
+            continue
+        sanitized, valid_count = _sanitize_display_ma_series(values)
+        output[key] = sanitized[start:end]
+        source_declared.add(key)
+        if valid_count:
+            series[key] = {
+                "status": "source",
+                "algorithm": "source_declared",
+                "window": window,
+            }
+
+    for key, window in (("ma5", 5), ("ma10", 10)):
+        if key in source_declared:
+            continue
+        if len(closes) < window:
+            continue
+        derived = _sma_series(closes, window)
+        if not any(value is not None for value in derived):
+            continue
+        output[key] = derived[start:end]
+        series[key] = {
+            "status": "derived",
+            "algorithm": "SMA",
+            "window": window,
+        }
+
+    available = any(item["status"] in {"source", "derived"} for item in series.values())
+    return output, {
+        "status": "available" if available else "unavailable",
+        "reason": "" if available else "daily_evidence_unverified",
+        "price_basis": basis,
+        "as_of": data_status.get("latest_date"),
+        "series": series,
+    }
 
 
 def build_chart_annotations(pick, slice_start, dates_sliced, closes_sliced):
@@ -626,13 +867,44 @@ def _serialize_picks(picks):
         dates_sliced = _slice(raw_dates)
         closes_sliced = _slice(p.get("closes", []))
         volumes_sliced = _slice(p.get("volumes", []))
-        volume_units_sliced = _slice(p.get("volume_units", []))
-        volume_raw_units_sliced = _slice(p.get("volume_raw_units", []))
-        volume_sources_sliced = _slice(p.get("volume_sources", []))
+        (
+            volume_units_sliced,
+            volume_raw_units_sliced,
+            volume_sources_sliced,
+        ) = _slice_metadata_group(
+            p,
+            (
+                ("volume_units", "volume_unit"),
+                ("volume_raw_units", "volume_raw_unit"),
+                ("volume_sources", "volume_source"),
+            ),
+            n_orig,
+            slice_start,
+            slice_end,
+        )
         amounts_sliced = _slice(p.get("amounts", []))
-        amount_available_sliced = _slice(p.get("amount_available", []))
-        amount_units_sliced = _slice(p.get("amount_units", []))
-        amount_sources_sliced = _slice(p.get("amount_sources", []))
+        (
+            amount_available_sliced,
+            amount_units_sliced,
+            amount_sources_sliced,
+        ) = _slice_metadata_group(
+            p,
+            (
+                ("amount_available", "amount_available"),
+                ("amount_units", "amount_unit"),
+                ("amount_sources", "amount_source"),
+            ),
+            n_orig,
+            slice_start,
+            slice_end,
+        )
+        moving_average_series, chart_ma = _build_display_moving_average(
+            p,
+            raw_dates,
+            p.get("closes", []),
+            slice_start,
+            slice_end,
+        )
 
         # Compute reference / current price
         bp = p.get("best_buy_point", {})
@@ -725,6 +997,11 @@ def _serialize_picks(picks):
             "amount_available": amount_available_sliced,
             "amount_units": amount_units_sliced,
             "amount_sources": amount_sources_sliced,
+            "ma5": moving_average_series["ma5"],
+            "ma10": moving_average_series["ma10"],
+            "ema5": moving_average_series["ema5"],
+            "ema20": moving_average_series["ema20"],
+            "chart_ma": chart_ma,
             "macd_hist": _serialize_macd(p, _slice, closes_sliced),
             # 图表标注
             "chart_annotations": build_chart_annotations(p, slice_start, dates_sliced, closes_sliced),
@@ -822,13 +1099,44 @@ def _serialize_startup_watchlist(watchlist):
         highs_sliced = _slice(w.get("highs", []))
         lows_sliced = _slice(w.get("lows", []))
         volumes_sliced = _slice(w.get("volumes", []))
-        volume_units_sliced = _slice(w.get("volume_units", []))
-        volume_raw_units_sliced = _slice(w.get("volume_raw_units", []))
-        volume_sources_sliced = _slice(w.get("volume_sources", []))
+        (
+            volume_units_sliced,
+            volume_raw_units_sliced,
+            volume_sources_sliced,
+        ) = _slice_metadata_group(
+            w,
+            (
+                ("volume_units", "volume_unit"),
+                ("volume_raw_units", "volume_raw_unit"),
+                ("volume_sources", "volume_source"),
+            ),
+            len(raw_dates),
+            slice_start,
+            slice_end,
+        )
         amounts_sliced = _slice(w.get("amounts", []))
-        amount_available_sliced = _slice(w.get("amount_available", []))
-        amount_units_sliced = _slice(w.get("amount_units", []))
-        amount_sources_sliced = _slice(w.get("amount_sources", []))
+        (
+            amount_available_sliced,
+            amount_units_sliced,
+            amount_sources_sliced,
+        ) = _slice_metadata_group(
+            w,
+            (
+                ("amount_available", "amount_available"),
+                ("amount_units", "amount_unit"),
+                ("amount_sources", "amount_source"),
+            ),
+            len(raw_dates),
+            slice_start,
+            slice_end,
+        )
+        moving_average_series, chart_ma = _build_display_moving_average(
+            w,
+            raw_dates,
+            closes_arr,
+            slice_start,
+            slice_end,
+        )
 
         # MACD histogram
         macd_hist_sliced = _slice(w.get("macd_hist", []))
@@ -919,6 +1227,11 @@ def _serialize_startup_watchlist(watchlist):
             "amount_available": amount_available_sliced,
             "amount_units": amount_units_sliced,
             "amount_sources": amount_sources_sliced,
+            "ma5": moving_average_series["ma5"],
+            "ma10": moving_average_series["ma10"],
+            "ema5": moving_average_series["ema5"],
+            "ema20": moving_average_series["ema20"],
+            "chart_ma": chart_ma,
             "macd_hist": macd_hist_sliced,
             "chart_annotations": chart_annotations,
         }
@@ -1717,9 +2030,25 @@ def _report_asset_version():
     for asset in REPORT_V2_ASSETS:
         digest.update(asset.encode("utf-8"))
         digest.update(b"\0")
-        with open(os.path.join(source_dir, asset), "rb") as f:
+        source_path = os.path.join(source_dir, asset)
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(
+                "required report asset is missing: {}".format(source_path)
+            )
+        with open(source_path, "rb") as f:
             digest.update(f.read())
     return digest.hexdigest()[:12]
+
+
+def _chart_library_integrity():
+    source_path = os.path.join(_report_asset_source_dir(), CHART_LIBRARY_ASSET)
+    if not os.path.isfile(source_path):
+        raise FileNotFoundError(
+            "required report asset is missing: {}".format(source_path)
+        )
+    with open(source_path, "rb") as handle:
+        digest = hashlib.sha256(handle.read()).digest()
+    return "sha256-" + base64.b64encode(digest).decode("ascii")
 
 
 def copy_report_assets(output_dir):
@@ -1730,6 +2059,10 @@ def copy_report_assets(output_dir):
     copied = 0
     for asset in REPORT_V2_ASSETS:
         source_path = os.path.join(source_dir, asset)
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(
+                "required report asset is missing: {}".format(source_path)
+            )
         target_path = os.path.join(target_dir, asset)
         changed = _copy_if_changed(source_path, target_path)
         if changed:
@@ -1911,6 +2244,88 @@ def refresh_report_asset_versions(output_dir, asset_version):
     return changed_paths
 
 
+def _chart_library_shell_tag(asset_prefix="", asset_version=None):
+    asset_query = f"?v={asset_version}" if asset_version else ""
+    config = _escape_inline_json({
+        "url": f"{asset_prefix}assets/{CHART_LIBRARY_ASSET}{asset_query}",
+        "version": CHART_LIBRARY_VERSION,
+        "integrity": _chart_library_integrity(),
+    })
+    return f"<script>window.CHANLUN_CHART_LIBRARY = {config};</script>"
+
+
+def refresh_report_chart_library_references(output_dir, asset_version=None):
+    """Upgrade existing v2 shells without touching inline report/bootstrap data."""
+    output_dir = os.path.realpath(os.path.abspath(output_dir))
+    asset_version = asset_version or _report_asset_version()
+    html_paths = [
+        os.path.join(output_dir, "index.html"),
+        os.path.join(output_dir, "compare", "index.html"),
+    ]
+    if os.path.isdir(output_dir):
+        for entry in sorted(os.listdir(output_dir)):
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", entry):
+                html_paths.append(os.path.join(output_dir, entry, "index.html"))
+
+    external = re.compile(
+        r'<script\s+(?:defer\s+)?src="https://cdn\.bootcdn\.net/ajax/libs/'
+        r'echarts/5\.4\.3/echarts\.min\.js"></script>'
+    )
+    configured = re.compile(
+        r'<script>\s*window\.CHANLUN_CHART_LIBRARY\s*=.*?</script>',
+        re.DOTALL,
+    )
+    changed_paths = []
+    for html_path in html_paths:
+        if not os.path.isfile(html_path):
+            continue
+        with open(html_path, "r", encoding="utf-8") as handle:
+            original = handle.read()
+        if "report-v2.js" not in original:
+            continue
+        report_asset = re.search(
+            r'<script[^>]+src="((?:\.\./)?assets/report-v2\.js)(?:\?v=[^"&]+)?"',
+            original,
+        )
+        if not report_asset:
+            continue
+        asset_prefix = "../" if report_asset.group(1).startswith("../") else ""
+        tag = _chart_library_shell_tag(asset_prefix, asset_version)
+        # Normalize the existing shell before inserting exactly one config tag.
+        # This keeps the helper idempotent when generation and a later release
+        # sync both touch the same already-published v2 entrypoint.
+        updated = configured.sub("", original)
+        updated = external.sub("", updated)
+        markers = list(re.finditer(
+            r'(<script[^>]+src="(?:\.\./)?assets/report-v2\.js(?:\?v=[^"&]+)?"[^>]*></script>)',
+            updated,
+        ))
+        marker = markers[-1] if markers else None
+        if marker:
+            line_start = updated.rfind("\n", 0, marker.start()) + 1
+            line_indent = updated[line_start:marker.start()]
+            if line_indent.strip():
+                # Keep an inline bootstrap/script byte sequence byte-for-byte
+                # stable when the legacy shell had no newline before report-v2.
+                updated = updated[:marker.start()] + tag + updated[marker.start():]
+            else:
+                prefix = updated[:line_start]
+                prefix_lines = prefix.splitlines(True)
+                while len(prefix_lines) > 1 and not prefix_lines[-1].strip():
+                    prefix_lines.pop()
+                prefix = "".join(prefix_lines)
+                updated = (
+                    prefix + line_indent + tag + "\n"
+                    + line_indent + updated[marker.start():]
+                )
+        if updated == original:
+            continue
+        with open(html_path, "w", encoding="utf-8") as handle:
+            handle.write(updated)
+        changed_paths.append(html_path)
+    return changed_paths
+
+
 def write_comparison_page(output_dir, top10_api_base, asset_version=None):
     """Render the standalone comparison page with the same quote API config."""
     source_path = os.path.join(_report_asset_source_dir(), "comparison.html")
@@ -1947,6 +2362,11 @@ def write_comparison_page(output_dir, top10_api_base, asset_version=None):
 def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
     """Build the lightweight v2 HTML shell."""
     asset_query = f"?v={asset_version}" if asset_version else ""
+    chart_library_json = _escape_inline_json({
+        "url": f"{asset_prefix}assets/{CHART_LIBRARY_ASSET}{asset_query}",
+        "version": CHART_LIBRARY_VERSION,
+        "integrity": _chart_library_integrity(),
+    })
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -1954,7 +2374,6 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>缠论选股日报 — {date_str}</title>
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
-<script defer src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
 </head>
 <body>
@@ -1969,6 +2388,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
   window.CHANLUN_BOOTSTRAP.isFileProtocol = (window.location.protocol === 'file:');
 }})();
 </script>
+<script>window.CHANLUN_CHART_LIBRARY = {chart_library_json};</script>
 <script src="{asset_prefix}assets/report-v2.js{asset_query}" defer></script>
 </body>
 </html>"""
@@ -2518,6 +2938,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         ))
 
     refresh_report_asset_versions(output_dir, asset_version)
+    refresh_report_chart_library_references(output_dir, asset_version)
 
     print(f"  日报已生成: {index_path}")
     print(f"  数据已写入: {data_dir}")

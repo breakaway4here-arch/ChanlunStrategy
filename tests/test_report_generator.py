@@ -106,6 +106,315 @@ class TestReportGenerator(unittest.TestCase):
         self.assertEqual(serialized["volume_sources"], ["sina"] * len(serialized["volumes"]))
         self.assertEqual(serialized["amount_available"], [True] * len(serialized["volumes"]))
 
+    def test_verified_volume_provenance_reaches_daily_and_bootstrap(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "volume_units": ["hands"] * size,
+            "volume_raw_units": ["shares"] * size,
+            "volume_sources": ["sina"] * size,
+            "amounts": [1000.0] * size,
+            "amount_available": [True] * size,
+            "amount_units": ["CNY"] * size,
+            "amount_sources": ["sina"] * size,
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "bars": size,
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+            "price_basis": {
+                "adjustment": "qfq",
+                "source": "market_history_db",
+            },
+        })
+        report = {
+            "date": "2026-05-26",
+            "picks_pure": [pick],
+            "picks_fusion": [],
+        }
+
+        daily = report_generator.build_full_daily_projection(report)
+        item = daily["picks_pure"][0]
+        self.assertEqual(item["volume_units"], ["hands"] * len(item["volumes"]))
+        self.assertEqual(item["volume_raw_units"], ["shares"] * len(item["volumes"]))
+        self.assertEqual(item["volume_sources"], ["sina"] * len(item["volumes"]))
+        self.assertEqual(item["amount_available"], [True] * len(item["volumes"]))
+        self.assertEqual(item["data_status"]["source"], "market_history_db")
+        self.assertEqual(item["data_status"]["latest_date"], "2026-05-26")
+        self.assertEqual(item["price_basis"], pick["price_basis"])
+
+        bootstrap = report_generator._build_report_bootstrap(
+            report,
+            daily,
+            "",
+            "",
+            "",
+            "",
+            historical_reports=[],
+            output_dir="",
+        )
+        self.assertEqual(
+            bootstrap["inlineReportData"]["picks_pure"][0]["volume_units"],
+            item["volume_units"],
+        )
+        self.assertEqual(
+            bootstrap["inlineReportData"]["picks_pure"][0]["chart_ma"],
+            item["chart_ma"],
+        )
+
+    def test_legacy_volume_without_metadata_remains_unverified_and_unfilled(self):
+        pick = make_pick()
+        pick["data_status"] = {
+            "daily": "verified",
+            "latest_date": "2026-05-26",
+            "source": "market_history_db",
+            "adjustment": "qfq",
+        }
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(
+            serialized["data_status"]["latest_date"],
+            "2026-05-26",
+        )
+        self.assertEqual(serialized["volume_units"], [])
+        self.assertEqual(serialized["volume_raw_units"], [])
+        self.assertEqual(serialized["volume_sources"], [])
+
+    def test_serialize_picks_drops_misaligned_metadata_instead_of_relabeling_bars(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "volume_units": ["hands"] * (size - 1),
+            "volume_raw_units": ["shares"] * size,
+            "volume_sources": ["sina"] * size,
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["volume_units"], [])
+        self.assertEqual(
+            serialized["volume_raw_units"],
+            [],
+        )
+
+    def test_serialize_picks_does_not_broadcast_scalar_volume_metadata(self):
+        pick = make_pick()
+        pick.update({
+            "volume_unit": "hands",
+            "volume_raw_unit": "shares",
+            "volume_source": "sina",
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["volume_units"], [])
+        self.assertEqual(serialized["volume_raw_units"], [])
+        self.assertEqual(serialized["volume_sources"], [])
+
+    def test_startup_watchlist_carries_verified_volume_metadata(self):
+        size = 60
+        watch = {
+            "code": "600001",
+            "name": "观察股",
+            "dates": [f"2026-05-{d:02d}" for d in range(1, size + 1)],
+            "opens": [10.0] * size,
+            "highs": [11.0] * size,
+            "lows": [9.0] * size,
+            "closes": [10.5] * size,
+            "volumes": [1000.0] * size,
+            "volume_units": ["hands"] * size,
+            "volume_raw_units": ["shares"] * size,
+            "volume_sources": ["sina"] * size,
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-30",
+                "source": "market_history_db",
+                "adjustment": "qfq",
+            },
+        }
+
+        serialized = _serialize_startup_watchlist([watch])[0]
+
+        self.assertEqual(serialized["volume_units"], ["hands"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["volume_raw_units"], ["shares"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["volume_sources"], ["sina"] * len(serialized["volumes"]))
+        self.assertEqual(serialized["data_status"]["source"], "market_history_db")
+
+    def test_verified_same_basis_closes_get_display_only_sma5_and_sma10_with_numeric_contract(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "closes": list(range(1, size + 1)),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "bars": size,
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+            "price_basis": {"adjustment": "qfq", "source": "explicit"},
+        })
+        pick["best_buy_point"]["index"] = 0
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["status"], "available")
+        self.assertEqual(serialized["chart_ma"]["price_basis"], pick["price_basis"])
+        self.assertEqual(serialized["chart_ma"]["as_of"], "2026-05-26")
+        self.assertEqual(serialized["chart_ma"]["series"]["ma5"], {
+            "status": "derived",
+            "algorithm": "SMA",
+            "window": 5,
+        })
+        self.assertEqual(serialized["chart_ma"]["series"]["ma10"], {
+            "status": "derived",
+            "algorithm": "SMA",
+            "window": 10,
+        })
+        self.assertEqual(serialized["ma5"][-1], 58.0)
+        self.assertEqual(serialized["ma10"][-1], 55.5)
+        self.assertIsNone(serialized["ma5"][0])
+        self.assertIsNone(serialized["ma10"][8])
+
+    def test_display_sma_is_not_derived_without_verified_price_basis(self):
+        pick = make_pick()
+        pick["data_status"] = {
+            "daily": "verified",
+            "latest_date": "2026-05-26",
+            "source": "market_history_db",
+            "stale": False,
+            "is_final": True,
+        }
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["status"], "unavailable")
+        self.assertEqual(serialized["chart_ma"]["reason"], "price_basis_missing")
+        self.assertEqual(serialized["ma5"], [])
+        self.assertEqual(serialized["ma10"], [])
+
+    def test_source_moving_average_series_takes_precedence_over_display_derivation(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+            "ma5": [float(index) for index in range(size)],
+            "ma10": [float(index) + 100 for index in range(size)],
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["series"]["ma5"]["status"], "source")
+        self.assertEqual(serialized["chart_ma"]["series"]["ma10"]["status"], "source")
+        self.assertEqual(serialized["ma5"][-1], float(size - 1))
+        self.assertEqual(serialized["ma10"][-1], float(size - 1) + 100)
+
+    def test_display_sma_rejects_boolean_close_values(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "closes": [True] * size,
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["status"], "unavailable")
+        self.assertTrue(all(value is None for value in serialized["ma5"]))
+        self.assertTrue(all(value is None for value in serialized["ma10"]))
+
+    def test_source_ma_preserves_null_gaps_but_all_invalid_source_ma_is_unavailable(self):
+        pick = make_pick()
+        size = len(pick["dates"])
+        pick.update({
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+            "ma5": [None] * 26 + [1.0] + [None] * (size - 27),
+            "ma10": [None] * size,
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["series"]["ma5"]["status"], "source")
+        self.assertIsNone(serialized["ma5"][0])
+        self.assertEqual(serialized["ma5"][1], 1.0)
+        self.assertEqual(serialized["chart_ma"]["series"]["ma10"]["status"], "missing")
+        self.assertEqual(serialized["chart_ma"]["status"], "available")
+
+        pick["ma5"] = [None] * size
+        serialized = _serialize_picks([pick])[0]
+        self.assertEqual(serialized["chart_ma"]["status"], "unavailable")
+        self.assertEqual(serialized["chart_ma"]["series"]["ma5"]["status"], "missing")
+
+    def test_conflicting_explicit_and_status_price_basis_blocks_display_ma(self):
+        pick = make_pick()
+        pick.update({
+            "price_basis": {"adjustment": "raw", "source": "explicit"},
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["status"], "unavailable")
+        self.assertEqual(serialized["chart_ma"]["reason"], "price_basis_conflict")
+        self.assertIsNone(serialized["chart_ma"]["price_basis"])
+        self.assertEqual(serialized["ma5"], [])
+        self.assertEqual(serialized["ma10"], [])
+
+    def test_invalid_explicit_price_basis_does_not_fallback_to_data_status(self):
+        pick = make_pick()
+        pick.update({
+            "price_basis": {"adjustment": "unknown"},
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-05-26",
+                "source": "market_history_db",
+                "stale": False,
+                "is_final": True,
+                "adjustment": "qfq",
+            },
+        })
+
+        serialized = _serialize_picks([pick])[0]
+
+        self.assertEqual(serialized["chart_ma"]["status"], "unavailable")
+        self.assertEqual(serialized["chart_ma"]["reason"], "price_basis_missing")
+        self.assertIsNone(serialized["chart_ma"]["price_basis"])
+
     def test_right_side_evidence_and_shadow_diagnostics_are_serialized_without_second_score(self):
         pick = make_pick()
         pick.update({
@@ -2837,13 +3146,15 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("return getCandidateChangePctFromRecord(raw);", self.asset_js)
         self.assertIn("getCandidateChangePct(rec)", self.asset_js)
 
-    def test_candidate_rows_keep_only_action_reason_and_formal_decision_score(self):
+    def test_candidate_rows_keep_identity_market_and_reason_lines(self):
         self.assertIn("function renderDecisionBadge", self.asset_js)
         self.assertIn("function renderCandidateDecisionBadge", self.asset_js)
         self.assertIn("function buildCandidateRowSummary", self.asset_js)
         self.assertIn("var rowSummary = buildCandidateRowSummary(item, state.currentView);", self.asset_js)
+        self.assertIn("function renderCandidateRowIdentity", self.asset_js)
+        self.assertIn("function renderCandidateRowMarket", self.asset_js)
+        self.assertIn("function renderCandidateRowReason", self.asset_js)
         self.assertIn('class="candidate-row-action"', self.asset_js)
-        self.assertIn('class="candidate-row-score"', self.asset_js)
         self.assertIn('class="candidate-row-reason"', self.asset_js)
         self.assertIn("'暂无正式决策分'", self.asset_js)
         self.assertIn("事故前原始判定·仅追溯", self.asset_js)
