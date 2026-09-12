@@ -16,7 +16,7 @@ function playwright() {
 
 function parseArgs(argv) {
   const options = {
-    root: path.resolve(__dirname, '..'),
+    root: path.resolve(__dirname, '../../../..'),
     output: path.join('/private/tmp', 'chanlun-ui-final-loading-' + Date.now()),
     echarts: process.env.ECHARTS_PATH || '',
     executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
