@@ -33,3 +33,11 @@
 ## 未覆盖项
 
 本批未部署、未启动 HTTP 服务、未接触正式数据/推送；最终三视口上线资源同步由主进程执行。15/30 分钟标题语义问题属于 layout 子任务，保留给对应 agent。
+
+## 2026-09-13 回滚与实验隔离
+
+HTTPS 根页 1440px 的真实复核发现一个未达到发布门槛的生命周期路径：库仍在 loading 时点击已选 `000636`，ECharts 就绪后 `#chartCanvas` 仍是加载态且 30 秒内没有实例。`beginCandidateSelection` 的版本递增会使旧回调失效，同股挂载判断又不会启动新的挂载。该问题已达到本批五轮实质修正上限，未继续改产品逻辑。手机首页 detached 图实例问题已在 e6 轮修正。
+
+本次回滚只移除 M5 的异步库加载/runtime Promise、发布壳配置、第三方 vendor 资源校验和自托管文件，恢复可靠的 ECharts 先加载、业务随后初始化路径；M1–M4 的工作台、图表证据、缩放、量能合同、正式/研究身份和手机生命周期清理保留。M5 实验脚本与合同测试完整移至 `tests/fixtures/ui_final_browser/archive_m5_loading/`，保留原断言及旧提交复现命令，不以 skip 或删断言掩盖失败。当前活动浏览器验收使用 `scripts/check_ui_final_browser.cjs`。
+
+另记录：原始 `file://` 页面在 Chrome 下会因 SRI 需要 CORS 而使图表降级；该问题随 M5 隔离保留为历史证据，不在本批继续优化。

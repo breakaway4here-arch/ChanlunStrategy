@@ -18,7 +18,7 @@ from chanlun.report_generator import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 class TestUiLoadingContract(unittest.TestCase):

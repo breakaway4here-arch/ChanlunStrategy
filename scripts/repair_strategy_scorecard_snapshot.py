@@ -24,7 +24,6 @@ if os.fspath(ROOT_DIR) not in sys.path:
 
 from chanlun.recommendation_ledger import load_recommendation_entries  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
-    CHART_LIBRARY_ASSET,
     _build_report_v2_html,
     _escape_inline_json,
     _report_asset_version,
@@ -812,7 +811,7 @@ def _validate_staged_artifacts(
                 "formal comparison view mismatch: {}".format(view_name)
             )
     source_assets = ROOT_DIR / "chanlun" / "report_assets"
-    for relative in ("report-v2.js", "report-v2.css", CHART_LIBRARY_ASSET):
+    for relative in ("report-v2.js", "report-v2.css"):
         if atomic._sha256_file(staged_docs / "assets" / relative) != (
             atomic._sha256_file(source_assets / relative)
         ):

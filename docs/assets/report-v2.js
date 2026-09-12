@@ -38,14 +38,6 @@
   var CHART_EMPTY_TEXT = '无法展示可验证 K 线：本期未提供真实日 K 数据；推荐原因和来源仍保留。';
   var TOP10_POLL_INTERVAL_MS = 2200;
   var TOP10_MAX_POLL_ATTEMPTS = 52;
-  var chartLibrary = {
-    status: 'idle',
-    promise: null,
-    error: null,
-    attempts: 0,
-    script: null,
-  };
-  var reportInitialized = false;
 
   var state = {
     data: null,
@@ -71,9 +63,6 @@
     chartScopeKey: '',
     chartZoomWindow: null,
     chartZoomMode: '',
-    chartLibraryPendingKey: '',
-    marketSentimentRenderToken: 0,
-    marketSentimentPending: false,
     rawPoolCandidates: null,
     drawerReturnFocus: null,
     drawerReturnCode: '',
@@ -585,123 +574,6 @@
 
   function getBootstrap() {
     return window.CHANLUN_BOOTSTRAP || {};
-  }
-
-  function getChartLibraryConfig() {
-    var value = window.CHANLUN_CHART_LIBRARY;
-    if (typeof value === 'string') return { url: value };
-    if (!value || typeof value !== 'object') return {};
-    return {
-      url: normalizeString(value.url).trim(),
-      version: normalizeString(value.version).trim(),
-      integrity: normalizeString(value.integrity).trim(),
-    };
-  }
-
-  function chartLibraryStatusText(status, error) {
-    if (status === 'loading') return '图表库加载中，文字和候选列表已可用…';
-    if (status === 'error') {
-      return '图表暂时不可用：' + normalizeString(error || '图表库加载失败');
-    }
-    if (status === 'unavailable') return '图表暂不可用：本入口未配置图表库。';
-    return '';
-  }
-
-  function renderChartLibraryState(mount, status, error, retry) {
-    if (!mount) return;
-    var text = chartLibraryStatusText(status, error);
-    var retryHtml = status === 'error' && retry
-      ? '<button type="button" class="chart-library-retry" data-chart-library-retry>重试加载图表库</button>'
-      : '';
-    mount.innerHTML = '<div class="chart-library-state chart-library-state-' + escapeHtml(status)
-      + '" role="status" data-chart-library-state="' + escapeHtml(status) + '">'
-      + '<span>' + escapeHtml(text) + '</span>' + retryHtml + '</div>';
-    var button = mount.querySelector('[data-chart-library-retry]');
-    if (button) button.addEventListener('click', retry);
-  }
-
-  function chartLibraryReady() {
-    if (window.echarts) {
-      chartLibrary.status = 'ready';
-      chartLibrary.error = null;
-      return true;
-    }
-    return false;
-  }
-
-  function ensureChartLibrary(options) {
-    var opts = options || {};
-    if (chartLibraryReady()) return Promise.resolve(window.echarts);
-    // A retry click can arrive while the first retry is still in flight.
-    // Reuse that promise so a second click cannot remove the active script.
-    if (chartLibrary.status === 'loading' && chartLibrary.promise) {
-      return chartLibrary.promise;
-    }
-    if (chartLibrary.promise && !opts.retry) return chartLibrary.promise;
-
-    var config = getChartLibraryConfig();
-    if (!config.url) {
-      chartLibrary.status = 'unavailable';
-      chartLibrary.error = '入口未声明 ECharts 资源';
-      return Promise.reject(new Error(chartLibrary.error));
-    }
-
-    if (opts.retry && chartLibrary.script && chartLibrary.script.parentNode) {
-      chartLibrary.script.parentNode.removeChild(chartLibrary.script);
-      chartLibrary.script = null;
-      chartLibrary.promise = null;
-    }
-    if (chartLibrary.promise) return chartLibrary.promise;
-
-    chartLibrary.status = 'loading';
-    chartLibrary.error = null;
-    chartLibrary.attempts += 1;
-    chartLibrary.promise = new Promise(function (resolve, reject) {
-      var script = chartLibrary.script;
-      if (!script) {
-        script = document.createElement('script');
-        script.async = true;
-        script.src = config.url;
-        script.setAttribute('data-chanlun-chart-library', 'echarts-5.4.3');
-        if (config.integrity) script.integrity = config.integrity;
-        chartLibrary.script = script;
-        (document.head || document.documentElement).appendChild(script);
-      }
-      var settled = false;
-      function finish(error) {
-        if (settled) return;
-        settled = true;
-        if (error || !chartLibraryReady()) {
-          chartLibrary.status = 'error';
-          chartLibrary.error = error && error.message
-            ? error.message : 'ECharts 全局对象未就绪';
-          reject(new Error(chartLibrary.error));
-          return;
-        }
-        resolve(window.echarts);
-      }
-      script.addEventListener('load', function () { finish(); }, { once: true });
-      script.addEventListener('error', function () {
-        finish(new Error('ECharts 资源加载失败'));
-      }, { once: true });
-      if (window.echarts) finish();
-    }).then(function (library) {
-      chartLibrary.status = 'ready';
-      chartLibrary.error = null;
-      return library;
-    }).catch(function (error) {
-      chartLibrary.promise = null;
-      throw error;
-    });
-    return chartLibrary.promise;
-  }
-
-  function getChartLibraryState() {
-    return {
-      status: chartLibraryReady() ? 'ready' : chartLibrary.status,
-      attempts: chartLibrary.attempts,
-      error: chartLibrary.error ? chartLibrary.error.message || chartLibrary.error : null,
-    };
   }
 
   function isCanonicalIsoDate(value) {
@@ -7729,76 +7601,11 @@
   }
 
   function renderChart(raw, workspaceItem) {
-    var mount = state.chartMount;
-    if (!mount) return;
-
-    var renderToken = state.detailRenderToken;
-    var detailKey = state.detailCandidateKey;
-    var selectionToken = {
-      version: state.candidateSelectionVersion,
-      key: state.activeCandidateKey,
-    };
-    var validContext = function () {
-      return state.detailRenderToken === renderToken
-        && state.chartMount === mount
-        && mount.isConnected !== false
-        && state.detailCandidateKey === detailKey
-        && isCurrentCandidateSelection(selectionToken, workspaceItem);
-    };
-    if (mount.isConnected === false) return;
-
-    // A missing data/mount dependency is a real chart-empty state and does not
-    // need to wait for the shared library.  This keeps the rest of the detail
-    // text available even when there is no serialized K-line evidence.
-    if (!raw || !hasChartData(raw)) {
-      renderChartAnnotationLane([]);
-      mount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
-      state.chartScopeKey = '';
-      state.chartZoomWindow = null;
-      state.chartZoomMode = '';
-      return;
-    }
-
+    if (!state.chartMount) return;
     if (!window.echarts) {
-      var pendingKey = [renderToken, detailKey, getChartScopeKey(raw, workspaceItem)].join('|');
-      if (state.chartLibraryPendingKey === pendingKey) return;
-      state.chartLibraryPendingKey = pendingKey;
-      var retry = function () {
-        if (!validContext()) return;
-        var retryKey = [renderToken, detailKey, 'retry'].join('|');
-        if (state.chartLibraryPendingKey === retryKey) return;
-        state.chartLibraryPendingKey = retryKey;
-        var libraryPromise = ensureChartLibrary({ retry: true });
-        renderChartLibraryState(mount, 'loading');
-        renderMarketSentimentChart();
-        libraryPromise.then(function () {
-          if (validContext()) {
-            state.chartLibraryPendingKey = '';
-            renderChart(raw, workspaceItem);
-          }
-        }).catch(function (error) {
-          if (validContext()) {
-            state.chartLibraryPendingKey = '';
-            renderChartLibraryState(mount, 'error', error.message, retry);
-          }
-        });
-      };
-      if (chartLibrary.status === 'error' || chartLibrary.status === 'unavailable') {
-        renderChartLibraryState(mount, chartLibrary.status, chartLibrary.error, retry);
-        return;
-      }
-      renderChartLibraryState(mount, 'loading');
-      ensureChartLibrary().then(function () {
-        if (validContext()) {
-          state.chartLibraryPendingKey = '';
-          renderChart(raw, workspaceItem);
-        }
-      }).catch(function (error) {
-        if (validContext()) renderChartLibraryState(mount, 'error', error.message, retry);
-      });
+      state.chartMount.innerHTML = '<div class="chart-empty">未检测到 ECharts 加载环境。</div>';
       return;
     }
-    state.chartLibraryPendingKey = '';
 
     var scopeKey = raw ? getChartScopeKey(raw, workspaceItem) : '';
     var sameIdentity = !!(scopeKey && state.chartScopeKey === scopeKey);
@@ -7816,6 +7623,15 @@
       }
     }
 
+    if (!raw) {
+      renderChartAnnotationLane([]);
+      state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
+      state.chartScopeKey = '';
+      state.chartZoomWindow = null;
+      state.chartZoomMode = '';
+      return;
+    }
+
     var dates = asArray(raw.dates);
     var opens = asArray(raw.opens);
     var highs = asArray(raw.highs);
@@ -7823,6 +7639,15 @@
     var closes = asArray(raw.closes);
     var macd = asArray(raw.macd_hist);
     var minLen = Math.min(dates.length, opens.length, highs.length, lows.length, closes.length);
+    if (!hasChartData(raw)) {
+      renderChartAnnotationLane([]);
+      state.chartMount.innerHTML = '<div class="chart-empty">' + escapeHtml(CHART_EMPTY_TEXT) + '</div>';
+      state.chartScopeKey = '';
+      state.chartZoomWindow = null;
+      state.chartZoomMode = '';
+      return;
+    }
+
     state.chartScopeKey = scopeKey;
 
     var xAxis = dates.slice(0, minLen);
@@ -8555,67 +8380,15 @@
 
   function renderMarketSentimentChart() {
     var mount = document.getElementById('marketSentimentChart');
-    if (!mount) return;
+    if (!mount || !window.echarts) return;
+    if (state.sentimentChartInstance) {
+      state.sentimentChartInstance.dispose();
+      state.sentimentChartInstance = null;
+    }
     var history = asArray((state.data || {}).market_sentiment_history).slice(-20);
     if (!history.length) {
       mount.innerHTML = '<div class="decision-empty">暂无可复算的历史情绪证据</div>';
       return;
-    }
-    if (!window.echarts && state.marketSentimentPending && chartLibrary.status === 'loading') return;
-    var renderToken = Number(state.marketSentimentRenderToken || 0) + 1;
-    state.marketSentimentRenderToken = renderToken;
-    if (!window.echarts) {
-      state.marketSentimentPending = true;
-      var retry = function () {
-        if (document.getElementById('marketSentimentChart') !== mount
-            || state.marketSentimentRenderToken !== renderToken) return;
-        if (state.marketSentimentPending && chartLibrary.status === 'loading') return;
-        state.marketSentimentPending = false;
-        var libraryPromise = ensureChartLibrary({ retry: true });
-        state.marketSentimentPending = true;
-        renderChartLibraryState(mount, 'loading');
-        state.chartLibraryPendingKey = '';
-        if (state.activeItem) {
-          renderChart(findRawCandidate(state.activeItem.ref || {}), state.activeItem);
-        }
-        libraryPromise.then(function () {
-          if (document.getElementById('marketSentimentChart') === mount
-              && state.marketSentimentRenderToken === renderToken) {
-            state.marketSentimentPending = false;
-            renderMarketSentimentChart();
-          }
-        }).catch(function (error) {
-          state.marketSentimentPending = false;
-          if (document.getElementById('marketSentimentChart') === mount
-              && state.marketSentimentRenderToken === renderToken) {
-            renderChartLibraryState(mount, 'error', error.message, retry);
-          }
-        });
-      };
-      if (chartLibrary.status === 'error' || chartLibrary.status === 'unavailable') {
-        renderChartLibraryState(mount, chartLibrary.status, chartLibrary.error, retry);
-        return;
-      }
-      renderChartLibraryState(mount, 'loading');
-      ensureChartLibrary().then(function () {
-        state.marketSentimentPending = false;
-        if (document.getElementById('marketSentimentChart') === mount
-            && state.marketSentimentRenderToken === renderToken) {
-          renderMarketSentimentChart();
-        }
-      }).catch(function (error) {
-        state.marketSentimentPending = false;
-        if (document.getElementById('marketSentimentChart') === mount
-            && state.marketSentimentRenderToken === renderToken) {
-          renderChartLibraryState(mount, 'error', error.message, retry);
-        }
-      });
-      return;
-    }
-    state.marketSentimentPending = false;
-    if (state.sentimentChartInstance) {
-      state.sentimentChartInstance.dispose();
-      state.sentimentChartInstance = null;
     }
     var dates = history.map(function (item) { return normalizeString(item.date || ''); });
     var scores = history.map(function (item) { return safeNumber(item.score, null); });
@@ -11172,8 +10945,6 @@
   }
 
   function initReportV2() {
-    if (reportInitialized) return;
-    reportInitialized = true;
     syncViewport();
     state.isMobile = isMobileViewport();
     buildAppShell();
@@ -11279,8 +11050,6 @@
   window.renderAuxiliaryCenter = renderAuxiliaryCenter;
   window.renderMarketSentimentChart = renderMarketSentimentChart;
   window.resolveGranted = resolveGranted;
-  window.ensureChartLibrary = ensureChartLibrary;
-  window.getChartLibraryState = getChartLibraryState;
 
   function comparisonNumber(value) {
     var number = safeNumber(value, null);

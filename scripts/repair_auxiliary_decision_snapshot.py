@@ -19,7 +19,6 @@ if os.fspath(ROOT_DIR) not in sys.path:
 from chanlun.auxiliary_decision import build_decision_brief  # noqa: E402
 from chanlun.h4_t3_pool import STRATEGY_VERSION  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
-    CHART_LIBRARY_ASSET,
     _build_report_v2_html,
     _escape_inline_json,
     _report_asset_version,
@@ -420,7 +419,7 @@ def _validate_staged_artifacts(
     if manifest != original_manifest:
         raise RuntimeError("report manifest changed during auxiliary repair")
     source_assets = ROOT_DIR / "chanlun" / "report_assets"
-    for relative in ("report-v2.js", "report-v2.css", CHART_LIBRARY_ASSET):
+    for relative in ("report-v2.js", "report-v2.css"):
         if atomic._sha256_file(staged_docs / "assets" / relative) != (
             atomic._sha256_file(source_assets / relative)
         ):
