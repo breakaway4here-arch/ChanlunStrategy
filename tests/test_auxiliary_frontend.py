@@ -1380,7 +1380,7 @@ assert(!lineNames.includes('现价') && !lineNames.includes('参考价'), 'decis
             "{ build: buildAuxiliaryStacks }",
             r"""
 const stacks = globalThis.__auxTest.build({ diagnostics: {} });
-['decision-directions-card', 'personal-watchlist-card', 'holding-risk-card'].forEach(function (className) {
+['decision-directions-card', 'sector-flow-card', 'limit-up-ecology-card', 'personal-watchlist-card', 'holding-risk-card'].forEach(function (className) {
   assert(stacks.today.includes(className), 'today decision stack missing ' + className);
   assert(!stacks.research.includes(className), 'today-only module leaked into research: ' + className);
 });
@@ -1388,7 +1388,10 @@ const stacks = globalThis.__auxTest.build({ diagnostics: {} });
   assert(stacks.research.includes(className), 'research validation stack missing ' + className);
   assert(!stacks.today.includes(className), 'research-only module leaked into today decision: ' + className);
 });
-assert(stacks.research.includes('sector-flow-card') && stacks.research.includes('limit-up-ecology-card'), 'market evidence details incomplete');
+const order = ['decision-directions-card', 'sector-flow-card', 'limit-up-ecology-card', 'personal-watchlist-card', 'holding-risk-card'].map(function (className) {
+  return stacks.today.indexOf(className);
+});
+assert(order.every(function (position, index) { return index === 0 || order[index - 1] < position; }), 'today decision stack order changed');
 """,
         )
 
@@ -2918,7 +2921,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         )
         self.assertLess(
             primary.index("renderPsy12ShadowSubpanel(source)"),
-            primary.index("renderSectorFlowCard(source)"),
+            primary.index("renderStrategyDisagreementAudit(source)"),
         )
 
     def test_today_workspace_precedes_research_layer_and_tabs_are_accessible(self):

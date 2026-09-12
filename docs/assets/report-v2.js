@@ -8378,12 +8378,12 @@
     return {
       today: ''
         + renderDecisionDirections(source)
+        + renderSectorFlowCard(source)
+        + renderLimitUpEcologyCard(source)
         + renderPersonalWatchlist(source)
         + renderHoldingRiskSection(source),
       research: ''
         + renderDecisionCard({ title: 'PSY12 影子验证', subtitle: '独立观察，不参与正式市场评分与推荐', className: 'psy12-research-card', bodyHtml: renderPsy12ShadowSubpanel(source) })
-        + renderSectorFlowCard(source)
-        + renderLimitUpEcologyCard(source)
         + renderStrategyDisagreementAudit(source)
         + renderStrategyScorecards(source)
         + renderShadowEvaluations(source)
