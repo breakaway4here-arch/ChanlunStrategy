@@ -4438,10 +4438,12 @@
             ? '证据未完整'
             : statuses.every(function (status) { return status === 'available'; })
               ? '证据可用' : '证据未核验';
-    var priceParts = [['参考价', contract.reference_price], ['失效位', contract.invalidation_price]]
+    var referenceCopy = isRecommendationEvidenceFiniteNumber(contract.reference_price)
+      ? referencePurposeCopy(value, contract) : '';
+    var priceParts = [['参考价', contract.reference_price, referenceCopy], ['失效位', contract.invalidation_price, '']]
       .map(function (entry) {
         return isRecommendationEvidenceFiniteNumber(entry[1])
-          ? entry[0] + ' ' + recommendationEvidenceNumber(entry[1], 2) : '';
+          ? entry[0] + ' ' + recommendationEvidenceNumber(entry[1], 2) + entry[2] : '';
       }).filter(Boolean);
     var priceBasis = contract.price_basis || value.price_basis;
     if (priceBasis && typeof priceBasis === 'object') {
@@ -4933,8 +4935,17 @@
     }).filter(Boolean);
     var unmet = asArray(rec.unmet_conditions || rec.missing_conditions || rec.blocking_reasons || rec.blocked_reasons)
       .map(normalizeString).filter(Boolean);
+    var explicitFormalIdentity = isFormalWorkbenchItem(item);
+    var explicitResearchIdentity = normalizeString(rec.action_semantics).trim() === 'watch_only'
+      || strategies.some(function (strategy) {
+        var role = normalizeString(strategy && strategy.role).trim();
+        var semantics = normalizeString(strategy && strategy.action_semantics).trim();
+        return role === 'research' || role === 'watch_only' || semantics === 'watch_only';
+      });
     if (!unmet.length && rec.is_executable === false) {
-      unmet.push('正式条件尚未完整');
+      unmet.push(explicitFormalIdentity
+        ? '正式条件尚未完整'
+        : (explicitResearchIdentity ? '仅观察；后续核验见下方' : '未记录具体阻碍'));
     }
     var prices = strategies.map(function (strategy) {
       var source = comparisonStrategySource(strategy);

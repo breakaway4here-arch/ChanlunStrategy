@@ -188,6 +188,85 @@ if (JSON.stringify(item) !== before)
   throw new Error('comparison renderer mutated the source record');
 ''')
 
+    def test_comparison_source_carries_contract_reference_purpose_to_all_views(self):
+        _assert_node_contract(self, "{ source: comparisonStrategySource, text: comparisonStrategySourceText, dimension: quickComparisonDimensionValues, render: renderCandidateEvidenceComparison, state: state }", r'''
+const t = globalThis.__auxTest;
+const strategy = { strategy_id: 'confirming', role: 'research', formal_action: '仅观察',
+  contract: { reference_price: 10, invalidation_price: 9, intended_horizon: 'T+1',
+    purpose: 'raw_reference', purpose_status: 'unverified', price_basis: 'unknown' },
+  evidence: {} };
+const item = { code: '000636', is_executable: false, strategy_results: [strategy] };
+const sourceModel = t.source(strategy);
+const text = t.text(sourceModel);
+const dimensions = t.dimension(item);
+const purposeMarker = '用途未核验，仅原始记录';
+if (!sourceModel.prices.includes('参考价 10') || !sourceModel.prices.includes(purposeMarker))
+  throw new Error('contract reference purpose was dropped from the source model');
+if (!text.includes(purposeMarker) || !dimensions['身份与来源动作'].includes(purposeMarker)
+    || !dimensions['关键价位'].includes(purposeMarker))
+  throw new Error('contract reference purpose did not reach every comparison consumer');
+t.state.data = { date: '2026-08-14', selection_input_health: {
+  schema_version: 2, status: 'verified',
+  by_view: { main: { status: 'verified', formal_actions_allowed: true } },
+  by_strategy: { daily_fusion: { status: 'verified', formal_actions_allowed: true } }
+} };
+t.state.workspace = { views: { main: [{ code: '000636', name: '研究样本', workbench_item: item }] },
+  view_meta: { main: { role: 'formal', action_semantics: 'formal', availability: { state: 'available' } } } };
+t.state.currentView = 'main';
+const fullComparison = t.render('main', t.state.data);
+if (!fullComparison.includes(purposeMarker))
+  throw new Error('full evidence comparison dropped the contract reference purpose');
+''')
+
+    def test_comparison_source_handles_contract_aliases_and_verified_purpose(self):
+        _assert_node_contract(self, "{ source: comparisonStrategySource, text: comparisonStrategySourceText }", r'''
+const t = globalThis.__auxTest;
+const aliased = t.source({ strategy_id: 'main', role: 'formal', formal_action: '可上车',
+  formal_decision_contract: { reference_price: 12, invalidation_price: 11,
+    purpose_status: 'verified', price_basis: 'qfq' }, evidence: {} });
+if (!aliased.prices.includes('参考价 12') || aliased.prices.includes('用途未核验'))
+  throw new Error('verified aliased contract lost its clean purpose');
+if (t.text(aliased).includes('用途未核验'))
+  throw new Error('verified aliased contract was downgraded in source text');
+const missing = t.source({ strategy_id: 'mystery', role: 'unknown', formal_action: '仅观察',
+  decision_contract: { reference_price: 13, price_basis: 'qfq' }, evidence: {} });
+if (!missing.prices.includes('参考价 13') || !missing.prices.includes('用途未核验'))
+  throw new Error('missing purpose on a contract alias was treated as verified');
+''')
+
+    def test_quick_comparison_labels_unfinished_conditions_by_explicit_identity(self):
+        _assert_node_contract(self, "{ dimension: quickComparisonDimensionValues, state: state }", r'''
+const t = globalThis.__auxTest;
+const formal = { code: '600001', is_executable: false, strategy_results: [{
+  strategy_id: 'main', role: 'formal', formal_action: '可上车', contract: {}, evidence: {}
+}] };
+const research = { code: '600002', is_executable: false, strategy_results: [{
+  strategy_id: 'confirming', role: 'research', formal_action: null, contract: {},
+  evidence: { risk_and_next: { next_confirmation: { status: 'available', items: ['等待回踩'] } } }
+}] };
+const watchOnly = { code: '600003', is_executable: false, strategy_results: [{
+  strategy_id: 'observation_watchlist', role: 'watch_only', action_semantics: 'watch_only',
+  formal_action: '仅观察', contract: {}, evidence: {}
+}] };
+const unknown = { code: '600004', is_executable: false, strategy_results: [{
+  strategy_id: 'mystery', formal_action: null, contract: {}, evidence: {}
+}] };
+if (t.dimension(formal)['未满足条件'] !== '正式条件尚未完整')
+  throw new Error('formal unfinished conditions lost their formal wording');
+if (t.dimension(research)['未满足条件'] === '正式条件尚未完整'
+    || !/仅观察|未记录具体阻碍/.test(t.dimension(research)['未满足条件']))
+  throw new Error('research identity was promoted to formal pending wording');
+if (t.dimension(watchOnly)['未满足条件'] === '正式条件尚未完整'
+    || !/仅观察|未记录具体阻碍/.test(t.dimension(watchOnly)['未满足条件']))
+  throw new Error('watch-only identity was promoted to formal pending wording');
+if (t.dimension(unknown)['未满足条件'] !== '未记录具体阻碍')
+  throw new Error('unknown identity was turned into a formal or satisfied claim');
+const blocked = { code: '600005', is_executable: false, blocking_reasons: ['证据不可用'],
+  strategy_results: [{ strategy_id: 'confirming', role: 'research', contract: {}, evidence: {} }] };
+if (t.dimension(blocked)['未满足条件'] !== '证据不可用')
+  throw new Error('explicit blocking reason was replaced by identity copy');
+''')
+
     def test_history_source_rows_keep_same_strategy_versions_and_contract_plans(self):
         _assert_node_contract(self, "{ source: renderDecisionHistorySource }", r'''
 const t = globalThis.__auxTest;
