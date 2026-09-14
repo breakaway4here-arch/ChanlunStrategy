@@ -639,6 +639,223 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertTrue(diag["complete"])
         self.assertEqual(diag["error"], "")
 
+    def test_sector_pagination_counts_mixed_a_and_b_codes_before_a_share_filter(self):
+        payload = {
+            "data": {
+                "total": 3,
+                "diff": [
+                    {"f12": "600001", "f14": "A股沪市"},
+                    {"f12": "000001", "f14": "A股深市"},
+                    {"f12": "200012", "f14": "B股深市"},
+                ],
+            }
+        }
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", return_value=payload):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKMIXED", return_diagnostics=True
+            )
+
+        self.assertEqual([row["code"] for row in stocks], ["000001", "600001"])
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["requested"], 3)
+        self.assertEqual(diag["raw_valid_unique"], 3)
+        self.assertEqual(diag["filtered_unique"], 2)
+        self.assertEqual(diag["unique"], 2)
+        self.assertEqual(diag["error"], "")
+
+    def test_sector_pagination_continues_after_full_b_only_page_to_a_page(self):
+        first_page = [
+            {"f12": "{:06d}".format(200000 + index), "f14": "B股{}".format(index)}
+            for index in range(100)
+        ]
+        second_page = [{"f12": "600001", "f14": "A股沪市"}]
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            return {
+                "data": {
+                    "total": 101,
+                    "diff": first_page if int(params["pn"]) == 1 else second_page,
+                }
+            }
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKBTHENASHARE", return_diagnostics=True
+            )
+
+        self.assertEqual([call["pn"] for call in calls], ["1", "2"])
+        self.assertEqual([row["code"] for row in stocks], ["600001"])
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["raw_valid_unique"], 101)
+        self.assertEqual(diag["filtered_unique"], 1)
+        self.assertEqual(diag["error"], "")
+
+    def test_sector_pagination_accepts_complete_b_only_sector_without_a_share_rows(self):
+        payload = {
+            "data": {
+                "total": 2,
+                "diff": [
+                    {"f12": "200012", "f14": "南玻B"},
+                    {"f12": "900918", "f14": "耀皮B"},
+                ],
+            }
+        }
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", return_value=payload):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKBONLY", return_diagnostics=True
+            )
+
+        self.assertEqual(stocks, [])
+        self.assertTrue(diag["complete"])
+        self.assertEqual(diag["raw_valid_unique"], 2)
+        self.assertEqual(diag["filtered_unique"], 0)
+        self.assertEqual(diag["unique"], 0)
+        self.assertEqual(diag["error"], "")
+
+    def test_sector_pagination_mixed_duplicate_page_does_not_fill_missing_codes(self):
+        first_page = [
+            {"f12": "600{:03d}".format(index), "f14": "A股{}".format(index)}
+            for index in range(99)
+        ] + [{"f12": "200012", "f14": "B股"}]
+        calls = []
+
+        def fake(params):
+            calls.append(dict(params))
+            return {"data": {"total": 200, "diff": list(first_page)}}
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKREPEATMIXED", return_diagnostics=True
+            )
+
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(len(stocks), 99)
+        self.assertEqual(diag["raw_valid_unique"], 100)
+        self.assertEqual(diag["filtered_unique"], 99)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "no_new_codes")
+
+    def test_sector_pagination_rejects_malformed_rows_as_missing_valid_codes(self):
+        first_page = _sector_rows(0, 96) + [
+            {"f12": "", "f14": "无代码"},
+            {"f12": "ABCDEF", "f14": "非数字代码"},
+            {"f12": "12345", "f14": "非六位代码"},
+            {"f12": "６００００１", "f14": "非ASCII数字代码"},
+        ]
+
+        def fake(params):
+            if int(params["pn"]) == 1:
+                return {"data": {"total": 100, "diff": first_page}}
+            return {"data": {"total": 100, "diff": []}}
+
+        with patch.object(data_fetcher, "_fetch_eastmoney_json", side_effect=fake):
+            stocks, diag = data_fetcher.fetch_sector_stocks(
+                "BKMALFORMED", return_diagnostics=True
+            )
+
+        self.assertEqual(len(stocks), 96)
+        self.assertEqual(diag["raw_valid_unique"], 96)
+        self.assertEqual(diag["filtered_unique"], 96)
+        self.assertFalse(diag["complete"])
+        self.assertEqual(diag["error"], "empty_page_before_total")
+
+    def test_collect_daily_data_does_not_mark_complete_mixed_sector_pool_incomplete(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        payload = {
+            "data": {
+                "total": 3,
+                "diff": [
+                    {"f12": "000001", "f14": "A股深市"},
+                    {"f12": "600001", "f14": "A股沪市"},
+                    {"f12": "200012", "f14": "南玻B"},
+                ],
+            }
+        }
+        stock_row = {
+            "code": "000001",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+        stock_rows = [stock_row, {**stock_row, "code": "600001", "name": "测试沪股"}]
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BKMIXED", "name": "混合板块", "flow": 1}
+        ]), patch.object(
+            data_fetcher, "_fetch_eastmoney_json", return_value=payload
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=stock_rows
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30", generated_at=closed
+            )
+
+        quality = result["data_quality"]
+        self.assertFalse(quality["stock_pool_incomplete"])
+        self.assertTrue(quality["is_official"])
+        self.assertEqual(
+            quality["sector_component_diagnostics"][0]["raw_valid_unique"], 3
+        )
+        self.assertEqual(
+            quality["sector_component_diagnostics"][0]["filtered_unique"], 2
+        )
+
+    def test_collect_daily_data_keeps_official_blocked_when_sector_page_is_missing(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        responses = [
+            {"data": {"total": 150, "diff": _sector_rows(0, 100)}},
+            {"data": {"total": 150, "diff": []}},
+        ]
+        stock_row = {
+            "code": "000000",
+            "name": "测试股",
+            "klines": _kline(["2026-06-29", "2026-06-30"], [10.0, 11.0]),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        }
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=[
+            {"code": "BKMISSING", "name": "缺页板块", "flow": 1}
+        ]), patch.object(
+            data_fetcher, "_fetch_eastmoney_json", side_effect=responses
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[stock_row]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30", generated_at=closed
+            )
+
+        quality = result["data_quality"]
+        self.assertTrue(quality["stock_pool_incomplete"])
+        self.assertFalse(quality["is_official"])
+        self.assertEqual(
+            quality["sector_component_diagnostics"][0]["error"],
+            "empty_page_before_total",
+        )
+
     def test_sector_pagination_stops_at_total_without_third_page(self):
         calls = []
 

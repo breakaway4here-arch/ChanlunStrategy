@@ -569,11 +569,16 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     返回: [{"code": "600519", "name": "贵州茅台", "change_pct": 1.5}, ...]
     """
     stocks_by_code = {}
+    # Pagination uses every well-formed six-digit security code.  The A-share
+    # exchange filter below only controls the returned stock rows.
+    raw_valid_codes = set()
     diagnostics = {
         "sector_code": sector_code,
         "page_size": SECTOR_COMPONENT_PAGE_SIZE,
         "requested": None,
         "fetched": 0,
+        "raw_valid_unique": 0,
+        "filtered_unique": 0,
         "unique": 0,
         "pages": 0,
         "complete": False,
@@ -611,12 +616,15 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
             if not isinstance(items, list):
                 items = []
             diagnostics["fetched"] += len(items)
-            unique_before = len(stocks_by_code)
+            raw_unique_before = len(raw_valid_codes)
             for it in items:
                 if not isinstance(it, dict):
                     continue
                 code = str(it.get("f12") or "").strip()
-                if not code or code in stocks_by_code:
+                if len(code) != 6 or not code.isascii() or not code.isdigit():
+                    continue
+                raw_valid_codes.add(code)
+                if code in stocks_by_code:
                     continue
                 exchange = _a_share_exchange(code)
                 if not exchange:
@@ -635,6 +643,8 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
                     "float_market_cap": circulating_market_cap,
                 }
 
+            diagnostics["raw_valid_unique"] = len(raw_valid_codes)
+            diagnostics["filtered_unique"] = len(stocks_by_code)
             diagnostics["unique"] = len(stocks_by_code)
             total = diagnostics["requested"]
             if total is None:
@@ -643,13 +653,13 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
             if total > SECTOR_COMPONENT_PAGE_SIZE * SECTOR_COMPONENT_MAX_PAGES:
                 diagnostics["error"] = "total_exceeds_limit"
                 break
-            if len(stocks_by_code) >= total:
+            if len(raw_valid_codes) >= total:
                 diagnostics["complete"] = True
                 break
             if not items:
                 diagnostics["error"] = "empty_page_before_total"
                 break
-            if len(stocks_by_code) == unique_before:
+            if len(raw_valid_codes) == raw_unique_before:
                 diagnostics["error"] = "no_new_codes"
                 break
             if len(items) < SECTOR_COMPONENT_PAGE_SIZE:
@@ -662,6 +672,8 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
             break
 
     stocks = [stocks_by_code[code] for code in sorted(stocks_by_code)]
+    diagnostics["raw_valid_unique"] = len(raw_valid_codes)
+    diagnostics["filtered_unique"] = len(stocks)
     diagnostics["unique"] = len(stocks)
     if return_diagnostics:
         return stocks, diagnostics
@@ -2641,6 +2653,8 @@ def collect_daily_data(
                         "page_size": SECTOR_COMPONENT_PAGE_SIZE,
                         "requested": None,
                         "fetched": 0,
+                        "raw_valid_unique": 0,
+                        "filtered_unique": 0,
                         "unique": 0,
                         "pages": 0,
                         "complete": False,
