@@ -557,6 +557,97 @@ def _is_registered_fail_closed_incident_correction(
     return True
 
 
+def _luojie_partial_contract_is_safe(
+    report: Mapping[str, Any], state: Mapping[str, Any]
+) -> bool:
+    """Allow only an explicitly attested, lossless LuoJie research partial."""
+    if state.get("contract_valid") is not True:
+        return False
+    pool = _as_mapping(report.get("luojie_pool"))
+    mode = str(pool.get("mode") or "").strip().lower()
+    status = str(pool.get("status") or "").strip().lower()
+    if mode != "partial" or status != "partial":
+        return False
+
+    health = pool.get("input_health")
+    selection_health = _as_mapping(report.get("selection_input_health"))
+    by_strategy = _as_mapping(selection_health.get("by_strategy"))
+    fallback_health = by_strategy.get("luojie_pool")
+    if not isinstance(health, Mapping):
+        health = fallback_health
+    health = _as_mapping(health)
+    if str(health.get("status") or "").strip().lower() != "partial":
+        return False
+    if str(health.get("required_date") or "").strip() != str(
+        report.get("date") or ""
+    ).strip():
+        return False
+    if (
+        health.get("formal_actions_allowed") is not False
+        or health.get("research_candidate_output_allowed") is not True
+    ):
+        return False
+
+    valid_collections = (list, tuple, set, frozenset)
+
+    def _unique_code_set(raw: Any) -> Optional[set[str]]:
+        if not isinstance(raw, valid_collections):
+            return None
+        values = [str(code).strip() for code in raw]
+        if any(not value for value in values):
+            return None
+        if len(values) != len(set(values)):
+            return None
+        return set(values)
+
+    if isinstance(pool.get("input_health"), Mapping) and isinstance(
+        fallback_health, Mapping
+    ):
+        for key in (
+            "status", "required_date", "requested_count", "verified_count",
+            "missing_count",
+            "formal_actions_allowed", "research_candidate_output_allowed",
+        ):
+            if key in pool["input_health"] and key in fallback_health:
+                if pool["input_health"].get(key) != fallback_health.get(key):
+                    return False
+        for key in ("verified_codes", "missing_codes"):
+            if key in pool["input_health"] and key in fallback_health:
+                left = _unique_code_set(pool["input_health"].get(key))
+                right = _unique_code_set(fallback_health.get(key))
+                if left is None or right is None or left != right:
+                    return False
+
+    raw_verified = health.get("verified_codes")
+    raw_missing = health.get("missing_codes")
+    verified_codes = _unique_code_set(raw_verified)
+    missing_codes = _unique_code_set(raw_missing)
+    if verified_codes is None or missing_codes is None:
+        return False
+    if not verified_codes or verified_codes.intersection(missing_codes):
+        return False
+
+    # The shared resolver validates numeric counts. Check that it did not
+    # silently remove any original public candidate rows.
+    rows = pool.get("candidates")
+    if not isinstance(rows, (list, tuple)):
+        return False
+    resolved_rows = state.get("candidates")
+    if not isinstance(resolved_rows, (list, tuple)):
+        return False
+    if len(resolved_rows) != len(rows):
+        return False
+    candidate_codes = []
+    for row in rows:
+        if not isinstance(row, Mapping):
+            return False
+        code = str(row.get("code") or "").strip()
+        if not code or code not in verified_codes:
+            return False
+        candidate_codes.append(code)
+    return len(candidate_codes) == len(set(candidate_codes))
+
+
 def validate_report_contract(
     report: Mapping[str, Any], require_official: bool = False
 ) -> list[str]:
@@ -619,7 +710,32 @@ def validate_report_contract(
             state = resolve_nested_strategy_pool(
                 report, pool_name, formal_h4=formal_h4
             )
-            if state["state"] in {"unavailable", "partial"}:
+            luojie_mode_status_consistent = True
+            if pool_name == "luojie_pool":
+                luojie_pool = _as_mapping(report.get(pool_name))
+                luojie_mode = str(luojie_pool.get("mode") or "").strip().lower()
+                luojie_status = str(luojie_pool.get("status") or "").strip().lower()
+                claims_partial = (
+                    luojie_mode == "partial" or luojie_status == "partial"
+                )
+                luojie_mode_status_consistent = (
+                    not claims_partial
+                    or (luojie_mode == "partial" and luojie_status == "partial")
+                )
+            partial_luojie_is_publishable = (
+                pool_name == "luojie_pool"
+                and luojie_mode_status_consistent
+                and state["state"] == "partial"
+                and _luojie_partial_contract_is_safe(report, state)
+            )
+            if (
+                not luojie_mode_status_consistent
+                or state["state"] == "unavailable"
+                or (
+                    state["state"] == "partial"
+                    and not partial_luojie_is_publishable
+                )
+            ):
                 errors.append(
                     f"{pool_name} pool contract invalid: {state['reason']}"
                 )

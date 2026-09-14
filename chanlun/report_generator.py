@@ -1421,13 +1421,19 @@ def _serialize_luojie_pool(data):
             "closes": closes,
             "chart_annotations": timeseries["chart_annotations"],
         })
-    return {
+    serialized = {
         "mode": data.get("mode", "disabled"),
         "reason": data.get("reason", ""),
         "params": data.get("params", {}),
         "diagnostics": data.get("diagnostics", {}),
         "candidates": candidates,
     }
+    # Keep the producer's research health contract on the public report plane.
+    # Missing fields stay missing so the resolver cannot infer a verified pool.
+    for field in ("status", "input_health", "strategy_version"):
+        if field in data:
+            serialized[field] = data[field]
+    return serialized
 
 
 def _serialize_h4_t3_pool(data):
