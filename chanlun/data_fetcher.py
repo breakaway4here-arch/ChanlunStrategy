@@ -370,12 +370,28 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
 # ============================================================
 def _sector_component_evidence(evidence):
     evidence = evidence if isinstance(evidence, dict) else {}
-    raw_codes = evidence.get("component_codes") or []
-    codes = {
-        str(code).strip()
-        for code in raw_codes
-        if str(code).strip()
-    }
+
+    def _code_collection(value, *, require_security_code=False):
+        if not isinstance(value, (list, tuple)):
+            return set(), False
+        normalized = []
+        for value_code in value:
+            if isinstance(value_code, (dict, list, tuple, set)):
+                return set(), False
+            code = str(value_code).strip()
+            if not code:
+                return set(), False
+            if require_security_code and (
+                len(code) != 6 or not code.isascii() or not code.isdigit()
+            ):
+                return set(), False
+            normalized.append(code)
+        codes = set(normalized)
+        return codes, len(codes) == len(normalized)
+
+    component_codes, component_codes_valid = _code_collection(
+        evidence.get("component_codes") or []
+    )
     diagnostics = evidence.get("diagnostics")
     diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
     requested = diagnostics.get("requested")
@@ -384,15 +400,52 @@ def _sector_component_evidence(evidence):
     except (TypeError, ValueError):
         requested = None
 
+    has_raw_component_codes = "raw_component_codes" in evidence
+    if has_raw_component_codes:
+        codes, raw_codes_valid = _code_collection(
+            evidence.get("raw_component_codes"),
+            require_security_code=True,
+        )
+    else:
+        codes = component_codes
+        raw_codes_valid = component_codes_valid
+
     if requested is not None and requested > 0:
         coverage = min(1.0, len(codes) / float(requested))
-    elif diagnostics.get("complete") and codes:
-        coverage = 1.0
     else:
         coverage = 0.0
 
+    counts_consistent = requested is not None and requested == len(codes)
+    for field, actual in (
+        ("unique", len(component_codes)),
+        ("filtered_unique", len(component_codes)),
+        ("raw_valid_unique", len(codes)),
+    ):
+        if diagnostics.get(field) is None:
+            continue
+        try:
+            counts_consistent = (
+                counts_consistent and int(diagnostics[field]) == actual
+            )
+        except (TypeError, ValueError):
+            counts_consistent = False
+
+    if has_raw_component_codes:
+        collections_consistent = bool(
+            raw_codes_valid
+            and component_codes_valid
+            and component_codes.issubset(codes)
+        )
+    else:
+        collections_consistent = bool(
+            component_codes_valid
+            and diagnostics.get("raw_valid_unique") in (None, len(codes))
+        )
+
     sufficient = bool(
         diagnostics.get("complete")
+        and collections_consistent
+        and counts_consistent
         and len(codes) >= 2
         and coverage >= 0.8
     )
@@ -675,6 +728,7 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
     diagnostics["raw_valid_unique"] = len(raw_valid_codes)
     diagnostics["filtered_unique"] = len(stocks)
     diagnostics["unique"] = len(stocks)
+    diagnostics["raw_component_codes"] = sorted(raw_valid_codes)
     if return_diagnostics:
         return stocks, diagnostics
     return stocks
@@ -2631,7 +2685,7 @@ def collect_daily_data(
             sector["code"], return_diagnostics=True
         )
         sector_component_diagnostics.append(component_diagnostics)
-        sector_component_evidence[str(sector.get("code") or "")] = {
+        component_evidence = {
             "component_codes": [
                 str(stock.get("code") or "")
                 for stock in stocks
@@ -2639,6 +2693,16 @@ def collect_daily_data(
             ],
             "diagnostics": dict(component_diagnostics),
         }
+        if "raw_component_codes" in component_diagnostics:
+            raw_component_codes = component_diagnostics["raw_component_codes"]
+            component_evidence["raw_component_codes"] = (
+                list(raw_component_codes)
+                if isinstance(raw_component_codes, (list, tuple))
+                else raw_component_codes
+            )
+        sector_component_evidence[str(sector.get("code") or "")] = (
+            component_evidence
+        )
         if not component_diagnostics.get("complete"):
             stock_pool_incomplete = True
         if not stocks and not component_diagnostics.get("complete"):
@@ -2698,7 +2762,26 @@ def collect_daily_data(
                 }
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
-    if not stock_map:
+    expected_sector_codes = [
+        str(sector.get("code") or "") for sector in sectors
+    ]
+    complete_empty_sector_pool = bool(
+        expected_sector_codes
+        and not stock_map
+        and len(sector_component_diagnostics) == len(expected_sector_codes)
+        and all(
+            isinstance(diagnostics, dict)
+            and diagnostics.get("complete") is True
+            and str(diagnostics.get("sector_code") or "") == sector_code
+            for sector_code, diagnostics in zip(
+                expected_sector_codes, sector_component_diagnostics
+            )
+        )
+    )
+    if complete_empty_sector_pool:
+        print("  板块成分抓取完整，A股业务池为空")
+
+    if not stock_map and not complete_empty_sector_pool:
         if KLINE_REPOSITORY_ENABLED:
             for instrument in _get_kline_repository().list_instruments():
                 code = str(instrument.get("code") or "")

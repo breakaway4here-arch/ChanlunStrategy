@@ -1618,7 +1618,7 @@ def _complete_sector_component_evidence(
                     "complete": False,
                     "error": "{}: {}".format(type(exc).__name__, exc),
                 }
-            evidence[code] = {
+            component_evidence = {
                 "component_codes": [
                     str(stock.get("code") or "")
                     for stock in (stocks or [])
@@ -1635,6 +1635,17 @@ def _complete_sector_component_evidence(
                     }
                 ),
             }
+            if (
+                isinstance(diagnostics, dict)
+                and "raw_component_codes" in diagnostics
+            ):
+                raw_component_codes = diagnostics["raw_component_codes"]
+                component_evidence["raw_component_codes"] = (
+                    list(raw_component_codes)
+                    if isinstance(raw_component_codes, (list, tuple))
+                    else raw_component_codes
+                )
+            evidence[code] = component_evidence
     return evidence
 
 

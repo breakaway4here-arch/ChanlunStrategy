@@ -662,6 +662,10 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(diag["raw_valid_unique"], 3)
         self.assertEqual(diag["filtered_unique"], 2)
         self.assertEqual(diag["unique"], 2)
+        self.assertEqual(
+            diag["raw_component_codes"],
+            ["000001", "200012", "600001"],
+        )
         self.assertEqual(diag["error"], "")
 
     def test_sector_pagination_continues_after_full_b_only_page_to_a_page(self):
@@ -813,6 +817,226 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(
             quality["sector_component_diagnostics"][0]["filtered_unique"], 2
         )
+        self.assertEqual(
+            result["sector_component_evidence"]["BKMIXED"],
+            {
+                "component_codes": ["000001", "600001"],
+                "raw_component_codes": ["000001", "200012", "600001"],
+                "diagnostics": quality["sector_component_diagnostics"][0],
+            },
+        )
+
+    def test_collect_daily_data_preserves_explicit_invalid_raw_component_codes(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        sectors = [
+            {"code": "BAD", "name": "非法证据", "flow": 300},
+            {"code": "GOOD", "name": "正常证据", "flow": 200},
+        ]
+        a_codes = ["600001", "600002"]
+
+        for label, invalid_raw in (
+            ("scalar", "600001"),
+            ("mapping", {"600001": 1}),
+            ("null", None),
+            ("integer", 2),
+        ):
+            with self.subTest(label=label):
+                def fetcher(code, *, return_diagnostics=False):
+                    rows = [
+                        {"code": item, "name": "测试{}".format(item)}
+                        for item in a_codes
+                    ]
+                    diagnostics = {
+                        "sector_code": code,
+                        "requested": 2,
+                        "raw_valid_unique": 2,
+                        "filtered_unique": 2,
+                        "unique": 2,
+                        "complete": True,
+                        "raw_component_codes": (
+                            invalid_raw if code == "BAD" else list(a_codes)
+                        ),
+                    }
+                    return (rows, diagnostics) if return_diagnostics else rows
+
+                stock_rows = [{
+                    "code": code,
+                    "name": "测试{}".format(code),
+                    "klines": _kline(
+                        ["2026-06-29", "2026-06-30"], [10.0, 11.0]
+                    ),
+                    "data_status": {
+                        "daily": "verified",
+                        "latest_date": "2026-06-30",
+                        "source": "tencent",
+                        "bars": 2,
+                        "stale": False,
+                    },
+                } for code in a_codes]
+
+                with patch.object(
+                    data_fetcher, "fetch_sector_flow", return_value=sectors
+                ), patch.object(
+                    data_fetcher, "fetch_sector_stocks", side_effect=fetcher
+                ), patch.object(
+                    data_fetcher,
+                    "batch_fetch_daily_klines",
+                    return_value=stock_rows,
+                ), patch.object(
+                    data_fetcher,
+                    "fetch_shanghai_index",
+                    return_value=_kline(
+                        ["2026-06-29", "2026-06-30"], [3.0, 3.0]
+                    ),
+                ):
+                    result = data_fetcher.collect_daily_data(
+                        required_date="2026-06-30", generated_at=closed
+                    )
+
+                evidence = result["sector_component_evidence"]
+                self.assertIn("raw_component_codes", evidence["BAD"])
+                self.assertEqual(
+                    evidence["BAD"]["raw_component_codes"], invalid_raw
+                )
+                hierarchy = data_fetcher.deduplicate_sector_hierarchy(
+                    sectors, evidence
+                )
+                self.assertEqual(
+                    [row["code"] for row in hierarchy], ["BAD", "GOOD"]
+                )
+                self.assertEqual(
+                    [row["hierarchy_dedup_status"] for row in hierarchy],
+                    ["insufficient_evidence", "partial_check_only"],
+                )
+
+    def test_collect_daily_data_keeps_legacy_pure_a_evidence_without_raw_field(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        a_codes = ["600001", "600002"]
+
+        def fetcher(code, *, return_diagnostics=False):
+            rows = [{"code": item, "name": item} for item in a_codes]
+            diagnostics = {
+                "sector_code": code,
+                "requested": 2,
+                "raw_valid_unique": 2,
+                "filtered_unique": 2,
+                "unique": 2,
+                "complete": True,
+            }
+            return (rows, diagnostics) if return_diagnostics else rows
+
+        stock_rows = [{
+            "code": code,
+            "name": code,
+            "klines": _kline(
+                ["2026-06-29", "2026-06-30"], [10.0, 11.0]
+            ),
+            "data_status": {
+                "daily": "verified",
+                "latest_date": "2026-06-30",
+                "source": "tencent",
+                "bars": 2,
+                "stale": False,
+            },
+        } for code in a_codes]
+
+        with patch.object(
+            data_fetcher,
+            "fetch_sector_flow",
+            return_value=[{"code": "LEGACY", "name": "旧纯A", "flow": 1}],
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=fetcher
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=stock_rows
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(
+                ["2026-06-29", "2026-06-30"], [3.0, 3.0]
+            ),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30", generated_at=closed
+            )
+
+        evidence = result["sector_component_evidence"]["LEGACY"]
+        self.assertNotIn("raw_component_codes", evidence)
+        hierarchy = data_fetcher.deduplicate_sector_hierarchy(
+            [{"code": "LEGACY", "name": "旧纯A", "flow": 1}],
+            {"LEGACY": evidence},
+        )
+        self.assertEqual(hierarchy[0]["hierarchy_dedup_status"], "checked_unique")
+
+    def test_sector_fetch_collect_and_hierarchy_use_matching_component_scopes(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        a_codes = ["600{:03d}".format(index) for index in range(15)]
+
+        for b_count in (0, 2, 5):
+            with self.subTest(b_count=b_count):
+                b_codes = ["200{:03d}".format(index) for index in range(b_count)]
+                payload = {
+                    "data": {
+                        "total": len(a_codes) + len(b_codes),
+                        "diff": [
+                            {"f12": code, "f14": "测试{}".format(code)}
+                            for code in a_codes + b_codes
+                        ],
+                    }
+                }
+                stock_rows = [{
+                    "code": code,
+                    "name": "测试{}".format(code),
+                    "klines": _kline(
+                        ["2026-06-29", "2026-06-30"], [10.0, 11.0]
+                    ),
+                    "data_status": {
+                        "daily": "verified",
+                        "latest_date": "2026-06-30",
+                        "source": "tencent",
+                        "bars": 2,
+                        "stale": False,
+                    },
+                } for code in a_codes]
+
+                with patch.object(
+                    data_fetcher,
+                    "fetch_sector_flow",
+                    return_value=[{
+                        "code": "BKSCOPE", "name": "口径板块", "flow": 1
+                    }],
+                ), patch.object(
+                    data_fetcher, "_fetch_eastmoney_json", return_value=payload
+                ), patch.object(
+                    data_fetcher,
+                    "batch_fetch_daily_klines",
+                    return_value=stock_rows,
+                ), patch.object(
+                    data_fetcher,
+                    "fetch_shanghai_index",
+                    return_value=_kline(
+                        ["2026-06-29", "2026-06-30"], [3.0, 3.0]
+                    ),
+                ):
+                    result = data_fetcher.collect_daily_data(
+                        required_date="2026-06-30", generated_at=closed
+                    )
+
+                evidence = result["sector_component_evidence"]["BKSCOPE"]
+                hierarchy = data_fetcher.deduplicate_sector_hierarchy(
+                    [{"code": "BKSCOPE", "name": "口径板块", "flow": 1}],
+                    {"BKSCOPE": evidence},
+                )
+                self.assertEqual(
+                    [row["code"] for row in result["stocks"]], a_codes
+                )
+                self.assertEqual(evidence["component_codes"], a_codes)
+                self.assertEqual(
+                    evidence["raw_component_codes"], sorted(a_codes + b_codes)
+                )
+                self.assertEqual(hierarchy[0]["component_coverage"], 1.0)
+                self.assertEqual(
+                    hierarchy[0]["hierarchy_dedup_status"], "checked_unique"
+                )
 
     def test_collect_daily_data_keeps_official_blocked_when_sector_page_is_missing(self):
         closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
@@ -1626,6 +1850,234 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(len(quality["sector_component_diagnostics"]), 6)
         self.assertFalse(quality["stock_pool_incomplete"])
         self.assertTrue(quality["is_official"])
+
+    def test_collect_daily_data_keeps_healthy_empty_pool_in_db_and_cache_modes(self):
+        sectors = [
+            {"code": "BK0001", "name": "空板块1", "flow": 1},
+            {"code": "BK0002", "name": "空板块2", "flow": 1},
+        ]
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+
+        for empty_kind, requested in (("all_b", 2), ("total_zero", 0)):
+            for repository_enabled in (True, False):
+                with self.subTest(
+                    empty_kind=empty_kind,
+                    repository_enabled=repository_enabled,
+                ), tempfile.TemporaryDirectory() as tmp:
+                    fallback_calls = []
+                    cache_dir = Path(tmp) / "klines" / "day"
+                    cache_dir.mkdir(parents=True)
+                    (cache_dir / "000333.json").write_text("[]", encoding="utf-8")
+
+                    def complete_empty(code, *, return_diagnostics=False):
+                        raw_codes = (
+                            ["200001", "900001"] if empty_kind == "all_b" else []
+                        )
+                        diag = {
+                            "sector_code": code,
+                            "page_size": 100,
+                            "requested": requested,
+                            "fetched": requested,
+                            "raw_component_codes": raw_codes,
+                            "raw_valid_unique": requested,
+                            "filtered_unique": 0,
+                            "unique": 0,
+                            "pages": 1,
+                            "complete": True,
+                            "error": "",
+                        }
+                        return ([], diag) if return_diagnostics else []
+
+                    def repository():
+                        fallback_calls.append("repository")
+                        return SimpleNamespace(list_instruments=lambda: [
+                            {"code": "000333", "name": "错误恢复股票"}
+                        ])
+
+                    def stock_names():
+                        fallback_calls.append("cache")
+                        return {"000333": "错误恢复股票"}
+
+                    with patch(
+                        "config.KLINE_CACHE_DIR", tmp
+                    ), patch.object(
+                        data_fetcher,
+                        "KLINE_REPOSITORY_ENABLED",
+                        repository_enabled,
+                    ), patch.object(
+                        data_fetcher, "fetch_sector_flow", return_value=sectors
+                    ), patch.object(
+                        data_fetcher,
+                        "fetch_sector_stocks",
+                        side_effect=complete_empty,
+                    ), patch.object(
+                        data_fetcher,
+                        "_get_kline_repository",
+                        side_effect=repository,
+                    ), patch.object(
+                        data_fetcher, "get_code_to_name", side_effect=stock_names
+                    ), patch.object(
+                        data_fetcher, "batch_fetch_daily_klines", return_value=[]
+                    ), patch.object(
+                        data_fetcher,
+                        "fetch_shanghai_index",
+                        return_value=_kline(
+                            ["2026-06-29", "2026-06-30"], [3.0, 3.0]
+                        ),
+                    ):
+                        result = data_fetcher.collect_daily_data(
+                            required_date="2026-06-30", generated_at=closed
+                        )
+
+                    self.assertEqual(fallback_calls, [])
+                    self.assertEqual(result["stocks"], [])
+                    quality = result["data_quality"]
+                    self.assertEqual(
+                        quality["stock_pool_source"], "sector_components"
+                    )
+                    self.assertFalse(quality["stock_pool_incomplete"])
+                    self.assertFalse(quality["fallback_used"])
+                    self.assertFalse(quality["is_official"])
+                    self.assertFalse(any(
+                        "成分抓取失败" in warning
+                        for warning in quality["warnings"]
+                    ))
+
+    def test_collect_daily_data_keeps_failure_fallbacks_for_empty_pool(self):
+        closed = datetime(2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8)))
+        cases = {
+            "all_failed": [False, False],
+            "partial_failed": [True, False],
+            "five_failed_then_skipped": [False] * 7,
+        }
+
+        for label, complete_states in cases.items():
+            with self.subTest(label=label):
+                sectors = [
+                    {"code": "BK{:04d}".format(index), "name": label, "flow": 1}
+                    for index in range(len(complete_states))
+                ]
+                calls = []
+                repository_calls = []
+
+                def empty_fetch(code, *, return_diagnostics=False):
+                    index = len(calls)
+                    calls.append(code)
+                    complete = complete_states[index]
+                    diag = {
+                        "sector_code": code,
+                        "page_size": 100,
+                        "requested": 0 if complete else 1,
+                        "fetched": 0,
+                        "raw_component_codes": [],
+                        "raw_valid_unique": 0,
+                        "filtered_unique": 0,
+                        "unique": 0,
+                        "pages": 1,
+                        "complete": complete,
+                        "error": "" if complete else "request_failed:RuntimeError",
+                    }
+                    return ([], diag) if return_diagnostics else []
+
+                def repository():
+                    repository_calls.append("list")
+                    return SimpleNamespace(list_instruments=lambda: [
+                        {"code": "000333", "name": "故障恢复股票"}
+                    ])
+
+                def batch(stocks, **kwargs):
+                    return [{
+                        **stock,
+                        "data_status": {
+                            "daily": "verified",
+                            "latest_date": "2026-06-30",
+                            "source": "market_history_db",
+                        },
+                    } for stock in stocks]
+
+                with patch.object(
+                    data_fetcher, "fetch_sector_flow", return_value=sectors
+                ), patch.object(
+                    data_fetcher, "fetch_sector_stocks", side_effect=empty_fetch
+                ), patch.object(
+                    data_fetcher, "_get_kline_repository", side_effect=repository
+                ), patch.object(
+                    data_fetcher, "batch_fetch_daily_klines", side_effect=batch
+                ), patch.object(
+                    data_fetcher,
+                    "fetch_shanghai_index",
+                    return_value=_kline(
+                        ["2026-06-29", "2026-06-30"], [3.0, 3.0]
+                    ),
+                ):
+                    result = data_fetcher.collect_daily_data(
+                        required_date="2026-06-30", generated_at=closed
+                    )
+
+                self.assertEqual(repository_calls, ["list"])
+                self.assertEqual([row["code"] for row in result["stocks"]], ["000333"])
+                quality = result["data_quality"]
+                self.assertEqual(quality["stock_pool_source"], "market_history_db")
+                self.assertTrue(quality["stock_pool_incomplete"])
+                self.assertTrue(quality["fallback_used"])
+                self.assertFalse(quality["is_official"])
+                expected_calls = 5 if label == "five_failed_then_skipped" else len(sectors)
+                self.assertEqual(len(calls), expected_calls)
+
+    def test_static_sector_source_identity_is_preserved_for_healthy_empty_components(self):
+        repository_calls = []
+
+        def complete_empty(code, *, return_diagnostics=False):
+            diag = {
+                "sector_code": code,
+                "requested": 0,
+                "fetched": 0,
+                "raw_component_codes": [],
+                "raw_valid_unique": 0,
+                "filtered_unique": 0,
+                "unique": 0,
+                "pages": 1,
+                "complete": True,
+                "error": "",
+            }
+            return ([], diag) if return_diagnostics else []
+
+        def repository():
+            repository_calls.append("list")
+            return SimpleNamespace(list_instruments=lambda: [])
+
+        with patch.object(
+            data_fetcher, "fetch_sector_flow", return_value=[]
+        ), patch.object(
+            data_fetcher, "fetch_sector_stocks", side_effect=complete_empty
+        ), patch.object(
+            data_fetcher, "_get_kline_repository", side_effect=repository
+        ), patch.object(
+            data_fetcher, "batch_fetch_daily_klines", return_value=[]
+        ), patch.object(
+            data_fetcher,
+            "fetch_shanghai_index",
+            return_value=_kline(["2026-06-29", "2026-06-30"], [3.0, 3.0]),
+        ):
+            result = data_fetcher.collect_daily_data(
+                required_date="2026-06-30",
+                generated_at=datetime(
+                    2026, 6, 30, 15, 5, tzinfo=timezone(timedelta(hours=8))
+                ),
+            )
+
+        quality = result["data_quality"]
+        self.assertEqual(repository_calls, [])
+        self.assertEqual(quality["stock_pool_source"], "sector_components")
+        self.assertEqual(quality["sector_source"], "fallback_static")
+        self.assertTrue(quality["fallback_used"])
+        self.assertTrue(any(
+            "板块资金流向接口不可用" in warning
+            for warning in quality["warnings"]
+        ))
+        self.assertFalse(any(
+            "成分抓取失败" in warning for warning in quality["warnings"]
+        ))
 
     def test_collect_daily_data_static_sector_fallback_sets_fallback_used(self):
         stock_calls = [{"code": "600000", "name": "测试股"}]

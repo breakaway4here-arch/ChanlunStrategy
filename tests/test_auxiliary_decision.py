@@ -201,7 +201,8 @@ class SectorHeatSnapshotTests(unittest.TestCase):
         evidence = {
             "BK0001": {
                 "component_codes": ["600001", "600002"],
-                "diagnostics": {"complete": True, "requested": 2},
+                "raw_component_codes": ["200001", "600001", "600002"],
+                "diagnostics": {"complete": True, "requested": 3},
             },
             "BK0002": {
                 "component_codes": ["600003"],

@@ -21,7 +21,128 @@ def _evidence(codes, *, requested=None, complete=True):
     }
 
 
+def _mixed_evidence(a_codes, raw_codes, *, requested=None, complete=True, **diagnostics):
+    a_codes = list(a_codes)
+    raw_codes = list(raw_codes)
+    if requested is None:
+        requested = len(raw_codes)
+    return {
+        "component_codes": a_codes,
+        "raw_component_codes": raw_codes,
+        "diagnostics": {
+            "requested": requested,
+            "raw_valid_unique": len(set(raw_codes)),
+            "filtered_unique": len(set(a_codes)),
+            "unique": len(set(a_codes)),
+            "complete": complete,
+            "error": "" if complete else "partial",
+            **diagnostics,
+        },
+    }
+
+
 class TestSectorHierarchyDedup(unittest.TestCase):
+
+    def test_complete_mixed_evidence_deduplicates_identical_raw_sets(self):
+        a_codes = ["600{:03d}".format(index) for index in range(15)]
+        raw_codes = a_codes + ["200{:03d}".format(index) for index in range(5)]
+        rows = [
+            {"code": "LEFT", "name": "左板块", "flow": 300},
+            {"code": "RIGHT", "name": "右板块", "flow": 200},
+        ]
+        evidence = {
+            "LEFT": _mixed_evidence(a_codes, raw_codes),
+            "RIGHT": _mixed_evidence(a_codes, raw_codes),
+        }
+
+        result = data_fetcher.deduplicate_sector_hierarchy(rows, evidence)
+
+        self.assertEqual([row["code"] for row in result], ["LEFT"])
+        self.assertEqual(result[0]["component_coverage"], 1.0)
+        self.assertEqual(
+            result[0]["hierarchy_dedup_suppressed_codes"], ["RIGHT"]
+        )
+
+    def test_complete_mixed_evidence_uses_raw_codes_for_coverage_and_overlap(self):
+        a_codes = ["600{:03d}".format(index) for index in range(15)]
+        left_raw = a_codes + ["200{:03d}".format(index) for index in range(5)]
+        right_raw = a_codes + ["900{:03d}".format(index) for index in range(5)]
+        rows = [
+            {"code": "LEFT", "name": "左板块", "flow": 300},
+            {"code": "RIGHT", "name": "右板块", "flow": 200},
+        ]
+        evidence = {
+            "LEFT": _mixed_evidence(a_codes, left_raw),
+            "RIGHT": _mixed_evidence(a_codes, right_raw),
+        }
+
+        result = data_fetcher.deduplicate_sector_hierarchy(rows, evidence)
+
+        self.assertEqual([row["code"] for row in result], ["LEFT", "RIGHT"])
+        self.assertEqual(
+            [row["component_coverage"] for row in result], [1.0, 1.0]
+        )
+        self.assertEqual(
+            [row["hierarchy_dedup_status"] for row in result],
+            ["checked_unique", "checked_unique"],
+        )
+
+    def test_unverifiable_raw_component_evidence_never_self_certifies(self):
+        valid = _mixed_evidence(
+            ["600001", "600002"],
+            ["600001", "600002"],
+        )
+        invalid_cases = {
+            "missing_raw_set_with_mixed_count": {
+                "component_codes": ["600001", "600002"],
+                "diagnostics": {
+                    "requested": 3,
+                    "raw_valid_unique": 3,
+                    "filtered_unique": 2,
+                    "unique": 2,
+                    "complete": True,
+                },
+            },
+            "duplicate_raw_code": {
+                **valid,
+                "raw_component_codes": ["600001", "600001", "600002"],
+            },
+            "scalar_raw_codes": {
+                **valid,
+                "raw_component_codes": "600001",
+            },
+            "raw_count_conflict": {
+                **valid,
+                "diagnostics": {**valid["diagnostics"], "raw_valid_unique": 3},
+            },
+            "filtered_count_conflict": {
+                **valid,
+                "diagnostics": {**valid["diagnostics"], "filtered_unique": 3},
+            },
+            "component_not_in_raw_set": {
+                **valid,
+                "component_codes": ["600001", "600003"],
+            },
+            "unknown_total": {
+                **valid,
+                "diagnostics": {**valid["diagnostics"], "requested": None},
+            },
+            "incomplete_page": {
+                **valid,
+                "diagnostics": {**valid["diagnostics"], "complete": False},
+            },
+        }
+
+        for label, evidence in invalid_cases.items():
+            with self.subTest(label=label):
+                result = data_fetcher.deduplicate_sector_hierarchy(
+                    [{"code": "ONLY", "name": label, "flow": 1}],
+                    {"ONLY": evidence},
+                )
+                self.assertEqual(
+                    result[0]["hierarchy_dedup_status"],
+                    "insufficient_evidence",
+                )
 
     def test_subset_chain_keeps_strongest_flow_representative(self):
         rows = [
@@ -54,7 +175,7 @@ class TestSectorHierarchyDedup(unittest.TestCase):
             result[1]["hierarchy_dedup_status"], "checked_unique"
         )
 
-    def test_equal_flow_prefers_better_component_coverage(self):
+    def test_complete_count_conflict_is_not_used_for_hierarchy_dedup(self):
         rows = [
             {"code": "LOW", "name": "低覆盖", "flow": 100},
             {"code": "HIGH", "name": "高覆盖", "flow": 100},
@@ -66,8 +187,14 @@ class TestSectorHierarchyDedup(unittest.TestCase):
 
         result = data_fetcher.deduplicate_sector_hierarchy(rows, evidence)
 
-        self.assertEqual([row["code"] for row in result], ["HIGH"])
-        self.assertEqual(result[0]["component_coverage"], 1.0)
+        self.assertEqual([row["code"] for row in result], ["LOW", "HIGH"])
+        self.assertEqual(result[0]["component_coverage"], 0.8)
+        self.assertEqual(
+            result[0]["hierarchy_dedup_status"], "insufficient_evidence"
+        )
+        self.assertEqual(
+            result[1]["hierarchy_dedup_status"], "partial_check_only"
+        )
 
     def test_incomplete_evidence_is_kept_and_not_claimed_as_deduped(self):
         rows = [
