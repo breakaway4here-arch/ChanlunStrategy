@@ -319,6 +319,41 @@
     return safeNumber(bp.price, null);
   }
 
+  function getCandidateReferencePriceForCalculation(rec) {
+    var record = rec || {};
+    var contract = getCandidateReferenceContract(record);
+    var contractReference = safeNumber(contract.reference_price, null);
+    var status = referencePurposeStatus(record, contract);
+    var basis = contract.price_basis || contract.priceBasis;
+    var basisText = basis && typeof basis === 'object'
+      ? (basis.adjustment || basis.basis || basis.id || '') : normalizeString(basis).trim().toLowerCase();
+    var basisBlocked = ['unknown', 'unverified', 'missing', 'conflict'].indexOf(
+      normalizeString(basisText).trim().toLowerCase()
+    ) !== -1;
+    if (contractReference !== null) {
+      if (!isReferencePurposeVerified(status) || basisBlocked) return null;
+      return contractReference;
+    }
+    // A declared contract without a reference is incomplete.  Its purpose
+    // metadata must not authorize the record-level raw reference as a proxy.
+    if (Object.keys(contract).length > 0) return null;
+    if (status !== 'verified' && status !== 'formal') return null;
+    return getCandidateReferencePriceFromRecord(record);
+  }
+
+  function getCandidateReferenceContract(rec) {
+    var record = rec && typeof rec === 'object' ? rec : {};
+    var workbench = record.workbench_item && typeof record.workbench_item === 'object'
+      ? record.workbench_item : record;
+    return (workbench.formal_decision_contract && typeof workbench.formal_decision_contract === 'object'
+      ? workbench.formal_decision_contract
+      : (workbench.contract && typeof workbench.contract === 'object'
+        ? workbench.contract
+        : (record.formal_decision_contract && typeof record.formal_decision_contract === 'object'
+          ? record.formal_decision_contract
+          : (record.contract && typeof record.contract === 'object' ? record.contract : {}))));
+  }
+
   function getCandidateReferencePrice(item) {
     var rec = item || {};
     var direct = getCandidateReferencePriceFromRecord(rec);
@@ -1543,33 +1578,9 @@
   }
 
   function mergeChartCandidate(primary, chartSource) {
-    if (!primary) {
-      return chartSource || null;
-    }
-    if (!chartSource || chartSource === primary || !hasChartData(chartSource)) {
-      return primary;
-    }
-    return {
-      ...chartSource,
-      ...primary,
-      dates: chartSource.dates,
-      opens: chartSource.opens,
-      highs: chartSource.highs,
-      lows: chartSource.lows,
-      closes: chartSource.closes,
-      volumes: chartSource.volumes,
-      volume_units: chartSource.volume_units,
-      volume_raw_units: chartSource.volume_raw_units,
-      volume_sources: chartSource.volume_sources,
-      volume_unit: chartSource.volume_unit,
-      volume_raw_unit: chartSource.volume_raw_unit,
-      volume_source: chartSource.volume_source,
-      macd_hist: chartSource.macd_hist,
-      chart_annotations: primary.chart_annotations || chartSource.chart_annotations,
-      buy_points: primary.buy_points || chartSource.buy_points,
-      reference_buy_points: primary.reference_buy_points || chartSource.reference_buy_points,
-      blocked_buy_points: primary.blocked_buy_points || chartSource.blocked_buy_points,
-    };
+    // A ref identifies one report source.  Do not splice another pool's
+    // OHLC/quantity data into it, even when the dates happen to match.
+    return primary || null;
   }
 
   function findChartCandidate(targetCode, excludeItem) {
@@ -1599,37 +1610,13 @@
       return null;
     }
     var targetCode = toCodeKey(ref.code);
-    var explicit = getWorkspaceDataFromRef(ref.pool || '');
-    var found = null;
-
-    if (explicit && explicit.length > 0) {
-      found = explicit.find(function (item) {
-        return toCodeKey(item && item.code) === targetCode;
-      }) || null;
-    }
-    if (found) {
-      return hasChartData(found) ? found : mergeChartCandidate(found, findChartCandidate(targetCode, found));
-    }
-
-    var pools = getRawPools();
-    var allPools = [
-      pools.picks_fusion,
-      pools.picks_pure,
-      pools.startup_watchlist,
-      pools.luojie_pool,
-      pools.next_day_boom,
-      pools.h4_t3_pool,
-    ];
-
-    for (var i = 0; i < allPools.length; i += 1) {
-      var candidate = allPools[i].find(function (item) {
-        return toCodeKey(item && item.code) === targetCode;
-      });
-      if (candidate) {
-        return hasChartData(candidate) ? candidate : mergeChartCandidate(candidate, findChartCandidate(targetCode, candidate));
-      }
-    }
-    return null;
+    var pool = normalizeString(ref.pool || ref.source_pool || '').trim();
+    if (!pool) return null;
+    var explicit = getWorkspaceDataFromRef(pool);
+    if (!explicit || !explicit.length) return null;
+    return explicit.find(function (item) {
+      return toCodeKey(item && item.code) === targetCode;
+    }) || null;
   }
 
   function setTextNode(el, value) {
@@ -1929,6 +1916,79 @@
     return '来源策略未单独记录';
   }
 
+  function findCurrentCandidateForCode(code, requestedView) {
+    var targetCode = toCodeKey(code);
+    if (!targetCode) return null;
+    var projection = getDecisionWorkbench();
+    if (projection) {
+      var projected = asArray(projection.items).find(function (item) {
+        return toCodeKey(item && item.code) === targetCode;
+      });
+      if (projected) {
+        return Object.assign({}, projected.candidate || {}, {
+          code: projected.code,
+          name: projected.name || (projected.candidate || {}).name,
+          evidence_view: projected.evidence_view,
+          workbench_item: projected,
+        });
+      }
+    }
+    var views = getCandidateViews().views || {};
+    var order = [requestedView, state.currentView, 'decision_all', 'main', 'h4_t3',
+      'confirming', 'observation_top5', 'growth_quality', 'highlights', 'baseline'];
+    var seen = {};
+    for (var index = 0; index < order.length; index += 1) {
+      var key = normalizeString(order[index]).trim();
+      if (!key || seen[key]) continue;
+      seen[key] = true;
+      var found = asArray(views[key]).find(function (item) {
+        return toCodeKey(item && item.code) === targetCode;
+      });
+      if (found) return found;
+    }
+    return null;
+  }
+
+  function openCurrentCandidateDetail(code, requestedView) {
+    var targetCode = toCodeKey(code);
+    var candidate = findCurrentCandidateForCode(targetCode, requestedView);
+    if (!candidate) return false;
+    var views = getCandidateViews().views || {};
+    var destination = normalizeString(requestedView).trim();
+    if (!destination || !views[destination]
+        || !asArray(views[destination]).some(function (item) {
+          return toCodeKey(item && item.code) === targetCode;
+        })) {
+      destination = state.currentView;
+    }
+    if (destination && destination !== state.currentView && views[destination]) {
+      activateWorkspaceView(destination, false);
+      candidate = findCurrentCandidateForCode(targetCode, destination) || candidate;
+    }
+    state.candidateQuery = '';
+    state.candidateLimit = Math.max(Number(state.candidateLimit) || 20, 20);
+    if (nodes.candidateSearch) nodes.candidateSearch.value = '';
+    beginCandidateSelection(candidate);
+    refreshCandidateWorkspace();
+    renderCandidateDetail(candidate);
+    if (state.isMobile) {
+      openMobileDetailDrawer(candidate, targetCode);
+    } else {
+      if (nodes.detailPanel && typeof nodes.detailPanel.scrollIntoView === 'function') {
+        nodes.detailPanel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      if (nodes.candidateList && typeof nodes.candidateList.querySelector === 'function') {
+        var row = nodes.candidateList.querySelector('[data-code="' + targetCode + '"]');
+        if (row && typeof row.focus === 'function') row.focus();
+      }
+    }
+    return true;
+  }
+
+  function openDecisionChangeCurrentChart(code, requestedView) {
+    return openCurrentCandidateDetail(code, requestedView);
+  }
+
   function decisionChangeEntryText(kind, entry, projection, changes) {
     var code = decisionChangeCode(entry) || '未提供股票代码';
     var name = decisionChangeName(entry, projection) || code;
@@ -1946,13 +2006,18 @@
     var details = [source, date ? '当前 ' + date : '', previousDate,
       phase ? '阶段 ' + phase : '', reason].filter(Boolean).join(' · ');
     var view = normalizeString(value.view || value.source_strategy || value.strategy_id).trim();
+    var currentCandidate = findCurrentCandidateForCode(code, view);
+    var currentAction = currentCandidate
+      ? '<button type="button" class="decision-change-current-button" data-change-current="'
+        + escapeHtml(code) + '" data-change-current-view="' + escapeHtml(view)
+        + '">查看当前图表</button>' : '';
     return '<li><div class="decision-change-entry"><button type="button" class="decision-change-item" data-change-drill="'
       + escapeHtml(code) + '" data-change-kind="' + escapeHtml(kind)
       + '" data-change-code="' + escapeHtml(code)
       + '" data-change-view="' + escapeHtml(view) + '"><strong>'
       + escapeHtml(name) + '</strong><span>' + escapeHtml(code) + '</span><small>'
       + escapeHtml(label + (details ? ' · ' + details : ''))
-      + '</small></button><button type="button" class="decision-change-history-button" data-change-history="'
+      + '</small></button>' + currentAction + '<button type="button" class="decision-change-history-button" data-change-history="'
       + escapeHtml(code) + '">查看已有快照</button></div></li>';
   }
 
@@ -2143,44 +2208,17 @@
         append(row, comparisonStrategyLabel(viewKey));
       });
     });
-    if (!entries.length) {
-      ['picks_fusion', 'picks_pure', 'startup_watchlist', 'observation_watchlist',
-        'next_day_boom', 'luojie_pool', 'h4_t3_pool'].forEach(function (poolKey) {
-        var value = source[poolKey];
-        var rows = value && typeof value === 'object' && !Array.isArray(value)
-          ? value.candidates : value;
-        asArray(rows).forEach(function (row) { append(row, comparisonStrategyLabel(poolKey)); });
-      });
-    }
-    var grouped = {};
-    entries.forEach(function (entry) {
-      var groupKey = entry.source + '::' + targetCode;
-      if (!grouped[groupKey]) grouped[groupKey] = [];
-      grouped[groupKey].push(entry);
+    // Keep raw pools as an attached provenance source even when projection or
+    // workspace rows exist.  Identity validation belongs to each row; a
+    // preferred version must not erase a conflicting source record.
+    ['picks_fusion', 'picks_pure', 'startup_watchlist', 'observation_watchlist',
+      'next_day_boom', 'luojie_pool', 'h4_t3_pool'].forEach(function (poolKey) {
+      var value = source[poolKey];
+      var rows = value && typeof value === 'object' && !Array.isArray(value)
+        ? value.candidates : value;
+      asArray(rows).forEach(function (row) { append(row, comparisonStrategyLabel(poolKey)); });
     });
-    var expectedVersion = normalizeString(identity.version).trim();
-    var expectedSnapshot = normalizeString(identity.snapshot).trim();
-    var expectedPhase = normalizeString(identity.phase).trim();
-    var expectedBasis = decisionHistoryBasisKey(identity.priceBasis);
-    return Object.keys(grouped).reduce(function (selected, groupKey) {
-      var candidates = grouped[groupKey];
-      if (candidates.length <= 1 || (!expectedVersion && !expectedSnapshot && !expectedPhase && !expectedBasis)) {
-        return selected.concat(candidates);
-      }
-      var ranked = candidates.map(function (entry) {
-        var row = entry.record || {};
-        var nested = row.snapshot && typeof row.snapshot === 'object' ? row.snapshot : {};
-        var score = 0;
-        if (expectedVersion && normalizeString(row.version || nested.version).trim() === expectedVersion) score += 4;
-        if (expectedSnapshot && normalizeString(row.snapshot_id || nested.snapshot_id || nested.id).trim() === expectedSnapshot) score += 4;
-        if (expectedPhase && normalizeString(row.phase).trim() === expectedPhase) score += 2;
-        if (expectedBasis && decisionHistoryBasisKey(row.price_basis) === expectedBasis) score += 2;
-        return { entry: entry, score: score };
-      });
-      var max = Math.max.apply(Math, ranked.map(function (item) { return item.score; }));
-      var matches = ranked.filter(function (item) { return item.score === max; });
-      return selected.concat(matches.map(function (item) { return item.entry; }));
-    }, []);
+    return entries;
   }
 
   function decisionHistoryIdentityText(identity) {
@@ -2211,9 +2249,17 @@
         ? evidence.risk_and_next : {};
       var contract = value.contract && typeof value.contract === 'object'
         ? value.contract : (value.formal_decision_contract || {});
-      var reference = contract.reference_price;
+      var contractReference = isRecommendationEvidenceFiniteNumber(contract.reference_price)
+        ? Number(contract.reference_price) : null;
+      var rawReference = safeNumber(value.reference_price, null);
+      if (rawReference === null) rawReference = safeNumber(row.reference_price, null);
+      var purposeStatus = referencePurposeStatus(value) || referencePurposeStatus(row);
+      var reference = contractReference;
+      if (reference === null && rawReference !== null && purposeStatus !== 'unverified'
+          && purposeStatus !== 'raw_reference') reference = rawReference;
       var invalidation = contract.invalidation_price;
-      if (!isRecommendationEvidenceFiniteNumber(reference)) reference = row.reference_price;
+      if (!isRecommendationEvidenceFiniteNumber(reference) && purposeStatus !== 'unverified'
+          && purposeStatus !== 'raw_reference') reference = row.reference_price;
       if (!isRecommendationEvidenceFiniteNumber(invalidation)) invalidation = row.invalidation_price;
       var priceBasisValue = row.price_basis || contract.price_basis;
       var priceBasis = priceBasisValue && typeof priceBasisValue === 'object'
@@ -2222,15 +2268,27 @@
         .concat(recommendationEvidenceList(risk.risk_labels));
       var roleValue = normalizeString(value.role || row.role || row.action_semantics).trim() || '身份未记录';
       var roleLabels = { formal: '正式', research: '研究', baseline: '基础候选', diagnostic: '事故复盘' };
+      var nextBlock = risk.next_confirmation && typeof risk.next_confirmation === 'object'
+        ? risk.next_confirmation : {};
+      var cancelBlock = risk.invalidation_conditions && typeof risk.invalidation_conditions === 'object'
+        ? risk.invalidation_conditions
+        : (risk.cancel_conditions && typeof risk.cancel_conditions === 'object'
+          ? risk.cancel_conditions : {});
+      var nextValues = recommendationEvidenceList(nextBlock.items);
+      var cancelValues = recommendationEvidenceList(cancelBlock.items);
       return {
         source: value.strategy_id ? comparisonStrategyLabel(value.strategy_id) : comparisonStrategyLabel(sourceId),
+        sourceId: normalizeString(value.strategy_id || sourceId).trim(),
+        sourceRef: normalizeString(value.source || (evidence.summary || {}).source || defaultSource).trim(),
         role: roleLabels[roleValue] || roleValue,
         action: source.action,
         horizon: source.horizon,
         score: source.score,
         reference: reference,
         invalidation: invalidation,
+        rawReference: rawReferenceText(row, contractReference),
         priceBasis: normalizeString(priceBasis).trim(),
+        contractId: source.contractId,
         condition: normalizeString(value.page_status || row.page_status || row.status).trim() || '条件未声明',
         structure: quickEvidenceText(daily) || normalizeString(row.primary_reason).trim() || '结构依据未声明',
         unmet: asArray(value.blocking_reasons || value.blocked_reasons || row.blocking_reasons || row.blocked_reasons)
@@ -2238,6 +2296,8 @@
         risk: riskValues.filter(function (item, index, all) {
           return item && all.indexOf(item) === index;
         }).join('、') || '风险未登记',
+        next: nextValues,
+        cancel: cancelValues,
         freshness: normalizeString((evidence.summary || {}).as_of
           || (row.data_status || {}).latest_date).trim() || '数据时效未记录',
         evidence: source.evidenceStatus,
@@ -2256,6 +2316,8 @@
         isRecommendationEvidenceFiniteNumber(row.reference) ? '参考价 ' + recommendationEvidenceNumber(row.reference, 2) : '',
         isRecommendationEvidenceFiniteNumber(row.invalidation) ? '失效位 ' + recommendationEvidenceNumber(row.invalidation, 2) : '',
         row.priceBasis ? '价基 ' + row.priceBasis : '',
+        row.contractId ? '合同 ' + row.contractId : '',
+        row.rawReference,
       ].filter(Boolean).join(' · ') || '价格合同未记录';
       if (effectiveValidation && effectiveValidation.priceComparable === false) {
         prices = '价格合同未核验，数值不可比 · ' + prices;
@@ -2265,7 +2327,13 @@
       if (effectiveValidation && effectiveValidation.identityComparable !== true) {
         condition += ' · 来源身份未核验，不作价格/升级可比';
       }
-      return '<article class="decision-history-source"><header><strong>' + escapeHtml(row.source)
+      var conditionDetails = [
+        row.next.length ? '下一核验：' + row.next.join('、') : '',
+        row.cancel.length ? '取消条件：' + row.cancel.join('、') : '',
+      ].filter(Boolean).join(' · ');
+      if (conditionDetails) condition += ' · ' + conditionDetails;
+      return '<article class="decision-history-source" data-source="' + escapeHtml(row.sourceId)
+        + '" data-source-ref="' + escapeHtml(row.sourceRef) + '"><header><strong>' + escapeHtml(row.source)
         + '</strong><span>' + escapeHtml(row.role) + '</span></header><dl>'
         + '<div><dt>动作与周期</dt><dd>' + escapeHtml(row.action + ' · ' + row.horizon) + '</dd></div>'
         + '<div><dt>结构依据</dt><dd>' + escapeHtml(row.structure) + '</dd></div>'
@@ -2307,7 +2375,7 @@
     var previousText = renderDecisionHistorySnapshot('上一有效交易快照', previousIdentity,
       previousEntries, '上一有效交易快照未找到该股票记录；这是已有历史缺口，不等于破位或失效。', value.previous && value.previous.validation);
     return '<section class="decision-history-timeline" data-history-code="' + escapeHtml(code)
-      + '"><header><h3>' + escapeHtml(code) + ' · 已有快照复盘</h3><p>仅读取当前与上一有效交易快照；不补写更早时间线，不重新运行策略。</p></header>'
+      + '"><header><h3>' + escapeHtml(code) + ' · 已有快照复盘</h3><p>仅读取当前与上一有效交易快照；跨期计算暂不可用，仅并列原记录，不输出未变化或数值变化结论。</p></header>'
       + currentText + previousText + renderDecisionHistoryValidationNote(value.previous && value.previous.validation) + '</section>';
   }
 
@@ -2385,6 +2453,16 @@
     for (var historyIndex = 0; historyIndex < historyButtons.length; historyIndex += 1) {
       historyButtons[historyIndex].addEventListener('click', function (event) {
         loadDecisionChangeHistory(event.currentTarget.getAttribute('data-change-history'), target);
+      });
+    }
+    var currentButtons = target.querySelectorAll('[data-change-current]');
+    for (var currentIndex = 0; currentIndex < currentButtons.length; currentIndex += 1) {
+      currentButtons[currentIndex].addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        openDecisionChangeCurrentChart(
+          button.getAttribute('data-change-current'),
+          button.getAttribute('data-change-current-view')
+        );
       });
     }
     var groupToggles = target.querySelectorAll('[data-change-group-toggle]');
@@ -2470,7 +2548,7 @@
     var html = '<section class="decision-changes-panel" aria-label="跨期变化复盘">'
       + '<header><div><h3>变化复盘</h3><p>' + escapeHtml(statusText) + '</p></div>'
       + '<small>' + escapeHtml(identity) + '</small></header>'
-      + '<p class="decision-changes-boundary">新增/移出只表示集合成员变化，不等于首次出现、破位或正式升级；无完整比较时不得把状态写成未变化。</p>'
+      + '<p class="decision-changes-boundary">新增/移出只表示集合成员变化，不等于首次出现、破位或正式升级；跨期计算暂不可用，无完整比较时不得把状态写成未变化。</p>'
       + '<div class="decision-change-groups">' + lists + '</div>'
       + '<div class="decision-change-history"><p>打开个股的“查看已有快照”后读取当前与上一有效交易快照。</p></div></section>';
     target.innerHTML = html;
@@ -4075,6 +4153,7 @@
       conflict: '证据冲突',
       stale: '证据已过期',
       unavailable: '证据不可用',
+      not_applicable: '本期不适用',
     };
     if (statusContext === 'historical_validation') {
       labels.collecting = '样本采集中';
@@ -4111,7 +4190,10 @@
 
   function recommendationEvidenceList(value) {
     return asArray(value).map(function (item) {
-      if (item && typeof item === 'object') return '';
+      if (item && typeof item === 'object') {
+        return normalizeString(item.text || item.label || item.condition
+          || item.reason || item.summary || item.value).trim();
+      }
       return normalizeString(item).trim();
     }).filter(Boolean);
   }
@@ -4278,6 +4360,58 @@
     return getCurrentLabel(value) || value || '未命名策略';
   }
 
+  function referencePurposeStatus(record) {
+    var value = record && typeof record === 'object' ? record : {};
+    var selectedContract = arguments.length > 1 ? arguments[1] : null;
+    var contract = selectedContract && typeof selectedContract === 'object'
+      ? selectedContract : getCandidateReferenceContract(value);
+    return normalizeString(contract.purpose_status
+      || contract.reference_price_purpose_status
+      || contract.purpose
+      || value.reference_price_purpose_status
+      || value.reference_purpose_status
+      || value.reference_price_status).trim().toLowerCase();
+  }
+
+  function rawReferencePurposeStatus(record) {
+    var value = record && typeof record === 'object' ? record : {};
+    return normalizeString(value.reference_price_purpose_status
+      || value.reference_purpose_status
+      || value.reference_price_status
+      || value.reference_price_purpose).trim().toLowerCase();
+  }
+
+  function isReferencePurposeVerified(status) {
+    var value = normalizeString(status).trim().toLowerCase();
+    return value === 'verified' || value === 'formal';
+  }
+
+  function referencePurposeLabel(record) {
+    var status = rawReferencePurposeStatus(record);
+    if (status === 'verified' || status === 'formal') return '用途已核验';
+    if (status === 'not_applicable') return '本期不适用';
+    if (status === 'conflict') return '用途冲突，待核验';
+    return '用途未核验';
+  }
+
+  function referencePurposeCopy(record, selectedContract) {
+    var status = referencePurposeStatus(record, selectedContract);
+    return status === 'verified' || status === 'formal'
+      ? '' : '（用途未核验，仅原始记录）';
+  }
+
+  function referenceNumberText(value) {
+    return isRecommendationEvidenceFiniteNumber(value)
+      ? recommendationEvidenceNumber(value, 2) : '';
+  }
+
+  function rawReferenceText(record, formalReference) {
+    var value = record && typeof record === 'object' ? record : {};
+    var raw = safeNumber(value.reference_price, null);
+    if (raw === null) return '';
+    return '原始记录参考 ' + referenceNumberText(raw) + '（' + referencePurposeLabel(value) + '）';
+  }
+
   function comparisonStrategySource(strategy) {
     var value = strategy && typeof strategy === 'object' ? strategy : {};
     var contract = value.contract && typeof value.contract === 'object' ? value.contract
@@ -4316,11 +4450,15 @@
     if (normalizeString(priceBasis).trim()) priceParts.push('价基 ' + normalizeString(priceBasis).trim());
     return {
       source: comparisonStrategyLabel(value.strategy_id),
+      sourceId: normalizeString(value.strategy_id).trim(),
       role: role || 'unknown',
       action: action,
       horizon: normalizeString(contract.intended_horizon || value.intended_horizon).trim() || '周期未声明',
       score: isRecommendationEvidenceFiniteNumber(value.score) ? Number(value.score) : null,
       prices: priceParts.join(' · ') || '价格合同未提供',
+      strategyVersion: normalizeString(value.strategy_version || value.version).trim(),
+      contractId: normalizeString(value.contract_id || value.plan_id
+        || contract.contract_id || contract.plan_id).trim(),
       evidenceStatus: evidenceStatus,
     };
   }
@@ -4334,6 +4472,8 @@
       parts.push(value.horizon);
     }
     if (value.prices && value.prices !== '价格合同未提供') parts.push(value.prices);
+    if (value.strategyVersion) parts.push('版本 ' + value.strategyVersion);
+    if (value.contractId) parts.push('合同 ' + value.contractId);
     if (value.score !== null && value.score !== undefined) parts.push('分数 ' + recommendationEvidenceNumber(value.score));
     parts.push(value.evidenceStatus || '证据未声明');
     return parts.join(' · ');
@@ -4598,6 +4738,9 @@
 
   function toggleQuickComparisonSelection(candidate) {
     var store = ensureQuickComparisonState();
+    if (typeof candidate === 'string' && store.selectedKeys.indexOf(candidate) !== -1) {
+      return removeQuickComparisonSelection(candidate);
+    }
     var item = candidate && typeof candidate === 'object'
       ? candidate : findQuickComparisonItem(candidate);
     if (!item) {
@@ -4625,6 +4768,18 @@
     return true;
   }
 
+  function removeQuickComparisonSelection(key) {
+    var store = ensureQuickComparisonState();
+    var normalizedKey = normalizeString(key).trim();
+    var currentIndex = store.selectedKeys.indexOf(normalizedKey);
+    if (currentIndex === -1) return false;
+    store.selectedKeys.splice(currentIndex, 1);
+    delete store.selectedItems[normalizedKey];
+    store.message = '';
+    renderQuickComparison();
+    return true;
+  }
+
   function quickComparisonSourceEvidence(item) {
     var rec = item && item.workbench_item ? item.workbench_item : (item || {});
     var strategies = asArray(rec.strategy_results);
@@ -4636,7 +4791,7 @@
       : (rec.decision_contract && typeof rec.decision_contract === 'object'
         ? rec.decision_contract : (rec.contract && typeof rec.contract === 'object' ? rec.contract : {}));
     var contract = Object.assign({}, declaredContract);
-    ['reference_price', 'invalidation_price', 'intended_horizon', 'price_basis'].forEach(function (field) {
+    ['invalidation_price', 'intended_horizon', 'price_basis'].forEach(function (field) {
       if (contract[field] === undefined && rec[field] !== undefined) contract[field] = rec[field];
     });
     var action = normalizeString(rec.formal_action || rec.effective_action || rec.page_action
@@ -4663,6 +4818,110 @@
     return recommendationEvidenceSectionText(section, fields || ['summary', 'state', 'signal', 'reasons']);
   }
 
+  function quickConditionTexts(strategies, key) {
+    var values = [];
+    asArray(strategies).forEach(function (strategy) {
+      var evidence = strategy && strategy.evidence && typeof strategy.evidence === 'object'
+        ? strategy.evidence : {};
+      var risk = evidence.risk_and_next && typeof evidence.risk_and_next === 'object'
+        ? evidence.risk_and_next : {};
+      var block = risk[key] && typeof risk[key] === 'object' ? risk[key] : {};
+      var items = recommendationEvidenceList(block.items);
+      if (items.length) {
+        if (normalizeString(block.status).trim() === 'conflict') {
+          items = ['条件来源冲突，待核验：' + items.join('、')];
+        }
+        values = values.concat(items);
+      } else if (normalizeString(block.status).trim() === 'not_applicable') {
+        values.push(normalizeString(block.empty_text).trim() || '本期不适用，未进行观测');
+      }
+    });
+    return values.filter(function (value, index, all) {
+      return value && all.indexOf(value) === index;
+    });
+  }
+
+  function quickConditionState(strategies, key) {
+    var blocks = asArray(strategies).map(function (strategy) {
+      var evidence = strategy && strategy.evidence && typeof strategy.evidence === 'object'
+        ? strategy.evidence : {};
+      var risk = evidence.risk_and_next && typeof evidence.risk_and_next === 'object'
+        ? evidence.risk_and_next : {};
+      return risk[key] && typeof risk[key] === 'object' ? risk[key] : null;
+    }).filter(Boolean);
+    if (!blocks.length) return 'missing';
+    if (blocks.some(function (block) {
+      return normalizeString(block.status).trim() !== 'available'
+        || !recommendationEvidenceList(block.items).length;
+    })) return 'missing';
+    return 'available';
+  }
+
+  function quickComparisonRawReference(rec, strategies) {
+    var formalReferences = asArray(strategies).map(function (strategy) {
+      var contract = strategy && strategy.contract && typeof strategy.contract === 'object'
+        ? strategy.contract : {};
+      return safeNumber(contract.reference_price, null);
+    }).filter(function (value) { return value !== null; });
+    return rawReferenceText(rec, formalReferences.length ? formalReferences[0] : null);
+  }
+
+  function quickComparisonDimensionState(item, label) {
+    var rec = item && item.workbench_item ? item.workbench_item : (item || {});
+    var strategies = quickComparisonSourceEvidence(item);
+    if (label === '下一核验') return quickConditionState(strategies, 'next_confirmation');
+    if (label === '取消或降级') {
+      var cancelStates = strategies.map(function (strategy) {
+        var evidence = strategy && strategy.evidence && typeof strategy.evidence === 'object'
+          ? strategy.evidence : {};
+        var risk = evidence.risk_and_next && typeof evidence.risk_and_next === 'object'
+          ? evidence.risk_and_next : {};
+        return risk.invalidation_conditions && typeof risk.invalidation_conditions === 'object'
+          ? 'invalidation_conditions' : 'cancel_conditions';
+      });
+      var key = cancelStates.some(function (value) { return value === 'invalidation_conditions'; })
+        ? 'invalidation_conditions' : 'cancel_conditions';
+      return quickConditionState(strategies, key);
+    }
+    if (label === '身份与来源动作') return strategies.length ? 'available' : 'missing';
+    if (label === '结构依据') {
+      return strategies.some(function (strategy) {
+        var daily = strategy && strategy.evidence && strategy.evidence.daily_structure;
+        return daily && normalizeString(daily.status).trim() === 'available'
+          && quickEvidenceText(daily);
+      }) ? 'available' : 'missing';
+    }
+    if (label === '未满足条件') {
+      return asArray(rec.unmet_conditions || rec.missing_conditions
+        || rec.blocking_reasons || rec.blocked_reasons).length || rec.is_executable === false
+        ? 'available' : 'missing';
+    }
+    if (label === '关键价位') {
+      return strategies.some(function (strategy) {
+        var contract = strategy && strategy.contract && typeof strategy.contract === 'object'
+          ? strategy.contract : {};
+        return isRecommendationEvidenceFiniteNumber(contract.reference_price)
+          || isRecommendationEvidenceFiniteNumber(contract.invalidation_price);
+      }) ? 'available' : 'missing';
+    }
+    if (label === '主要风险') {
+      if (asArray(rec.risk_flags).length) return 'available';
+      return strategies.some(function (strategy) {
+        var risk = strategy && strategy.evidence && strategy.evidence.risk_and_next;
+        return risk && normalizeString(risk.status).trim() === 'available'
+          && recommendationEvidenceList(risk.risk_labels).length;
+      }) ? 'available' : 'missing';
+    }
+    if (label === '数据时效') {
+      if (normalizeString((rec.data_status || {}).latest_date).trim()) return 'available';
+      return strategies.some(function (strategy) {
+        var summary = strategy && strategy.evidence && strategy.evidence.summary;
+        return normalizeString(summary && (summary.as_of || summary.data_latest_date)).trim();
+      }) ? 'available' : 'missing';
+    }
+    return 'missing';
+  }
+
   function quickComparisonDimensionValues(item) {
     var rec = item && item.workbench_item ? item.workbench_item : (item || {});
     var strategies = quickComparisonSourceEvidence(item);
@@ -4682,6 +4941,8 @@
       return source.source + '：' + source.prices;
     }).filter(Boolean);
     if (!prices.length) prices.push('关键价位合同未声明');
+    var rawReference = quickComparisonRawReference(rec, strategies);
+    if (rawReference) prices.push(rawReference);
     var risks = asArray(rec.risk_flags).map(normalizeString).filter(Boolean);
     strategies.forEach(function (strategy) {
       var risk = strategy && strategy.evidence && strategy.evidence.risk_and_next;
@@ -4706,6 +4967,10 @@
       '未满足条件': unmet.join('、') || '未满足条件未声明',
       '关键价位': prices.join('；'),
       '主要风险': risks.join('、') || '主要风险未登记',
+      '下一核验': quickConditionTexts(strategies, 'next_confirmation').join('；') || '下一核验未声明',
+      '取消或降级': (quickConditionTexts(strategies, 'invalidation_conditions').concat(
+        quickConditionTexts(strategies, 'cancel_conditions')
+      ).filter(function (value, index, all) { return value && all.indexOf(value) === index; })).join('；') || '取消条件未声明',
       '数据时效': freshness.filter(function (value, index, values) {
         return value && values.indexOf(value) === index;
       }).join('；') || '数据时效未声明',
@@ -4717,10 +4982,15 @@
       return quickComparisonDimensionValues(record.item)[label];
     });
     var normalized = values.map(function (value) { return normalizeString(value).trim(); });
-    var same = normalized.length > 1 && normalized.every(function (value) { return value === normalized[0]; });
+    var states = records.map(function (record) {
+      return quickComparisonDimensionState(record.item, label);
+    });
+    var status = states.length && states.every(function (value) { return value === 'available'; })
+      ? 'available' : 'missing';
     var value = values[index] || '--';
-    return '<div class="quick-comparison-dimension ' + (same ? 'is-same' : 'is-different')
-      + '" data-quick-dimension="' + escapeHtml(label) + '"><dt>' + escapeHtml(label)
+    return '<div class="quick-comparison-dimension'
+      + '" data-quick-dimension="' + escapeHtml(label) + '" data-quick-status="'
+      + status + '"><dt>' + escapeHtml(label)
       + '</dt><dd>' + escapeHtml(value) + '</dd></div>';
   }
 
@@ -4735,7 +5005,20 @@
     var removals = target.querySelectorAll('[data-quick-remove]');
     for (var removeIndex = 0; removeIndex < removals.length; removeIndex += 1) {
       removals[removeIndex].addEventListener('click', function (event) {
-        toggleQuickComparisonSelection(event.currentTarget.getAttribute('data-quick-remove'));
+        var button = event.currentTarget;
+        var storedKey = button.getAttribute('data-quick-key');
+        if (storedKey) removeQuickComparisonSelection(storedKey);
+        else toggleQuickComparisonSelection(button.getAttribute('data-quick-remove'));
+      });
+    }
+    var detailButtons = target.querySelectorAll('[data-quick-detail]');
+    for (var detailIndex = 0; detailIndex < detailButtons.length; detailIndex += 1) {
+      detailButtons[detailIndex].addEventListener('click', function (event) {
+        var button = event.currentTarget;
+        openCurrentCandidateDetail(
+          button.getAttribute('data-quick-detail'),
+          button.getAttribute('data-quick-view')
+        );
       });
     }
   }
@@ -4753,15 +5036,21 @@
         + escapeHtml(code) + '"' + (checked ? ' checked' : '') + '><span>'
         + escapeHtml((item && item.name) || code) + ' ' + escapeHtml(code) + '</span></label>';
     }).join('');
-    var dimensions = ['身份与来源动作', '结构依据', '未满足条件', '关键价位', '主要风险', '数据时效'];
+    var dimensions = ['身份与来源动作', '结构依据', '未满足条件', '下一核验', '取消或降级', '关键价位', '主要风险', '数据时效'];
     var columns = records.map(function (record, index) {
       var item = record.item || {};
       var code = toCodeKey(item.code);
       var status = record.inCurrent ? '' : '<small class="quick-comparison-outside">不在当前集合，可移除</small>';
+      var currentCandidate = findCurrentCandidateForCode(code, state.currentView);
+      var detailButton = currentCandidate
+        ? '<button type="button" class="quick-comparison-detail" data-quick-detail="'
+          + escapeHtml(code) + '" data-quick-view="' + escapeHtml(state.currentView)
+          + '">查看当前图表</button>' : '';
       return '<article class="quick-comparison-column" data-quick-code="' + escapeHtml(code) + '">'
         + '<header><strong>' + escapeHtml(item.name || code) + '</strong><span>' + escapeHtml(code)
-        + '</span><button type="button" data-quick-remove="' + escapeHtml(code) + '">移除</button>'
-        + status + '</header><dl>' + dimensions.map(function (label) {
+        + '</span><button type="button" data-quick-remove="' + escapeHtml(code)
+        + '" data-quick-key="' + escapeHtml(record.key) + '">移除</button>'
+        + detailButton + status + '</header><dl>' + dimensions.map(function (label) {
           return quickComparisonDimensionHtml(label, records, index);
         }).join('') + '</dl></article>';
     }).join('');
@@ -5010,8 +5299,11 @@
     // Keep each reference with its original role; a research anchor is not a stop.
     var reference = hasVerifiedBasicFacts(rec) ? stockFactNumber(rec.reference_price) : null;
     if (reference !== null && reference > 0) {
-      rows.push(['结构参考', formatNumber(reference, 2) + '（非失效位）']);
-      var distance = stockFactNumber(rec.distance_from_reference_pct);
+      var rawPurposeStatus = rawReferencePurposeStatus(rec);
+      var referenceUsable = rawPurposeStatus === 'verified' || rawPurposeStatus === 'formal';
+      rows.push(['结构参考', formatNumber(reference, 2) + (referenceUsable
+        ? '（非失效位）' : '（用途未核验，仅原始记录）')]);
+      var distance = referenceUsable ? stockFactNumber(rec.distance_from_reference_pct) : null;
       if (distance !== null) rows.push(['距结构参考', formatPct(distance, true)]);
     }
     var value = rec.workbench_item || {};
@@ -5261,15 +5553,16 @@
   function buildDecisionHeader(item, raw) {
     var rec = item || {};
     var source = raw || {};
-    var contract = rec.formal_decision_contract || source.formal_decision_contract || {};
+    var contract = getCandidateReferenceContract(rec);
     var action = normalizeString(contract.action || resolvePageAction(rec, state.currentView) || '观察');
     var currentPrice = safeNumber(contract.current_price, getCandidateCurrentPrice(rec));
     var referencePrice = safeNumber(contract.reference_price, getCandidateReferencePrice(rec));
+    var referenceCopy = referencePrice === null ? '' : referencePurposeCopy(rec, contract);
     var changePct = safeNumber(contract.change_pct, getCandidateChangePct(rec));
     var facts = [];
     if (currentPrice !== null) facts.push('<span><small>现价</small><strong>' + escapeHtml(formatNumber(currentPrice, 2)) + '</strong></span>');
     if (changePct !== null) facts.push('<span><small>当日</small><strong>' + escapeHtml(formatPct(changePct, true)) + '</strong></span>');
-    if (referencePrice !== null) facts.push('<span><small>参考价</small><strong>' + escapeHtml(formatNumber(referencePrice, 2)) + '</strong></span>');
+    if (referencePrice !== null) facts.push('<span><small>参考价' + escapeHtml(referenceCopy) + '</small><strong>' + escapeHtml(formatNumber(referencePrice, 2)) + '</strong></span>');
     if (normalizeString(contract.intended_horizon)) {
       facts.push('<span><small>周期</small><strong>' + escapeHtml(normalizeString(contract.intended_horizon)) + '</strong></span>');
     }
@@ -5503,20 +5796,33 @@
 
   function buildPriceSection(item, raw) {
     var currentPrice = getCandidateCurrentPrice(item);
-    var refPrice = getCandidateReferencePrice(item);
+    var selectedContract = getCandidateReferenceContract(item);
+    var contractReference = safeNumber(selectedContract.reference_price, null);
+    var refPrice = contractReference === null
+      ? getCandidateReferencePrice(item) : contractReference;
+    var calculationReference = getCandidateReferencePriceForCalculation(item);
     var refPriceLabel = isIncidentReviewItem(item)
       ? '事故前结构参考价（仅追溯）'
       : '结构参考价';
+    if (!isIncidentReviewItem(item) && refPrice !== null && calculationReference === null) {
+      refPriceLabel += '（用途未核验，仅原始记录）';
+    }
 
-    var dist = safeNumber(item.distance_from_reference_pct, null);
-    if (dist === null && refPrice !== null && currentPrice !== null && refPrice !== 0) {
-      dist = ((currentPrice - refPrice) / refPrice) * 100;
+    var dist = calculationReference !== null
+      ? safeNumber(item.distance_from_reference_pct, null) : null;
+    if (dist === null && calculationReference !== null && currentPrice !== null
+        && calculationReference !== 0) {
+      dist = ((currentPrice - calculationReference) / calculationReference) * 100;
     }
 
     var stopLoss = safeNumber(item.stop_loss, null);
     if (stopLoss === null && raw) {
       stopLoss = safeNumber(raw.stop_loss, null);
     }
+
+    var rawReferenceNote = safeNumber(item && item.reference_price, null) !== null
+      && contractReference !== null
+      ? rawReferenceText(item, contractReference) : '';
 
     return ''
       + '<div class="detail-section">'
@@ -5527,6 +5833,7 @@
       + '    <div class="price-cell"><div class="price-label">距参考价</div><div class="price-value">' + escapeHtml(dist === null ? '--' : formatPct(dist, true)) + '</div></div>'
       + '    <div class="price-cell"><div class="price-label">止损</div><div class="price-value">' + escapeHtml(stopLoss === null ? '--' : formatNumber(stopLoss, 2)) + '</div></div>'
       + '  </div>'
+      + (rawReferenceNote ? '<p class="detail-price-note">' + escapeHtml(rawReferenceNote) + '</p>' : '')
       + '</div>';
   }
 
@@ -6296,7 +6603,13 @@
   function conditionItems(section, key, label) {
     var block = section && section[key] && typeof section[key] === 'object' ? section[key] : {};
     var items = recommendationEvidenceList(block.items);
+    if (normalizeString(block.status).trim() === 'conflict' && items.length) {
+      items = ['条件来源冲突，待核验：' + items.join('、')];
+    }
     var empty = normalizeString(block.empty_text).trim();
+    if (!items.length && normalizeString(block.status).trim() === 'not_applicable') {
+      empty = empty || '本期不适用，未进行观测';
+    }
     return evidenceListSection(label, items, empty || '当前策略未声明该条件');
   }
 
@@ -6796,8 +7109,32 @@
     var blockers = asArray(rec.blocking_reasons || rec.blocked_reasons);
     var next = asArray(rec.next_confirmation);
     var invalidation = asArray(rec.invalidation);
-    if (!next.length) next = recommendationEvidenceList(risk.next_confirmation && risk.next_confirmation.items);
-    if (!invalidation.length) invalidation = recommendationEvidenceList(risk.invalidation_conditions && risk.invalidation_conditions.items);
+    function conditionItems(block, fallback) {
+      var value = block && typeof block === 'object' ? block : {};
+      var items = recommendationEvidenceList(value.items);
+      var status = normalizeString(value.status).trim();
+      if (status === 'conflict' && items.length) {
+        return ['条件来源冲突，待核验：' + items.join('、')];
+      }
+      if (!items.length && status === 'not_applicable') {
+        return [normalizeString(value.empty_text).trim() || '本期不适用，未进行观测'];
+      }
+      if (!items.length && normalizeString(value.empty_text).trim() && status !== 'missing') {
+        return [normalizeString(value.empty_text).trim()];
+      }
+      return items.length ? items : (fallback ? [fallback] : []);
+    }
+    function chooseConditionBlock(primary, fallback) {
+      var first = primary && typeof primary === 'object' ? primary : {};
+      if (normalizeString(first.status).trim() || recommendationEvidenceList(first.items).length) return first;
+      return fallback && typeof fallback === 'object' ? fallback : {};
+    }
+    if (!next.length) next = conditionItems(risk.next_confirmation, '');
+    if (!invalidation.length) {
+      invalidation = conditionItems(chooseConditionBlock(
+        risk.invalidation_conditions, risk.cancel_conditions
+      ), '');
+    }
     function actionList(items, empty, target) {
       return items.length ? '<ul>' + items.slice(0, 3).map(function (row) {
         return '<li><button type="button" class="decision-brief-jump" data-evidence-target="' + escapeHtml(target) + '">' + escapeHtml(row) + '</button></li>';
@@ -6854,12 +7191,21 @@
     }
     var strategies = asArray(value.strategy_results).map(function (strategy, index) {
       var contract = strategy.contract || {};
+      var referenceStatus = referencePurposeStatus(strategy, contract);
+      var hasReference = isRecommendationEvidenceFiniteNumber(contract.reference_price);
+      var reference = hasReference ? recommendationEvidenceNumber(contract.reference_price, 2) : '待补充';
+      var referencePurpose = hasReference
+        ? (referenceStatus === 'verified' || referenceStatus === 'formal'
+          ? '（用途已核验）' : '（用途未核验，仅原始记录）') : '';
+      var referenceLine = strategy.role === 'formal'
+        ? '参考价 ' + reference + referencePurpose
+          + ' · 失效位 ' + (contract.invalidation_price || '待补充')
+          + ' · 周期 ' + (contract.intended_horizon || '未声明')
+        : (hasReference ? '原始记录参考价 ' + reference + referencePurpose : '');
       return '<section><strong>' + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
         + ' · ' + escapeHtml(strategy.formal_action || '研究观察') + '</strong>'
         + '<p>' + escapeHtml(strategy.primary_reason || '') + '</p>'
-        + (strategy.role === 'formal' ? '<p>参考价 ' + escapeHtml(contract.reference_price || '待补充')
-          + ' · 失效位 ' + escapeHtml(contract.invalidation_price || '待补充')
-          + ' · 周期 ' + escapeHtml(contract.intended_horizon || '未声明') + '</p>' : '')
+        + (referenceLine ? '<p>' + escapeHtml(referenceLine) + '</p>' : '')
         + renderStrategyEvidence(strategy, index) + '</section>';
     }).join('');
     var evidence = getCandidateRecommendationEvidence(item, state.data) || {};
@@ -6877,12 +7223,26 @@
       + strategies + renderRecommendationEvidenceAudit(evidence, getBootstrap().pageDate) + '</details></div>';
   }
 
+  function renderNoEvidenceReference(item, raw) {
+    var reference = getCandidateReferencePrice(item);
+    if (reference === null && raw) reference = getCandidateReferencePrice(raw);
+    if (reference === null) return '';
+    var label = isIncidentReviewItem(item)
+      ? '事故前结构参考价（仅追溯）'
+      : '原始记录参考价（用途未核验）';
+    return '<p class="detail-raw-reference" data-reference-purpose="unverified">'
+      + '<strong>' + escapeHtml(label) + '</strong>：'
+      + escapeHtml(formatNumber(reference, 2))
+      + '；不进入正式参考线、止损或收益计算。</p>';
+  }
+
   function buildMergedCandidateDetail(item, raw) {
     if (item && item.workbench_item) return buildUnifiedCandidateDetail(item);
     var evidence = getCandidateRecommendationEvidence(item, state.data);
     if (!evidence) {
       return '<div class="detail-empty-wrap merged-candidate-detail">'
         + '<div class="detail-empty"><strong>本期未提供证据展示</strong></div>'
+        + renderNoEvidenceReference(item, raw)
         + buildChartPlaceholder(item)
         + '</div>';
     }
@@ -7780,14 +8140,30 @@
     if (curPrice === null) {
       curPrice = safeNumber(priceEvidence && priceEvidence.current_price, null);
     }
-    var refPrice = getCandidateReferencePriceFromRecord(workspaceItem);
+    var referencePurposeBlocked = [workspaceItem, raw].some(function (record) {
+      var contract = getCandidateReferenceContract(record);
+      var contractReference = safeNumber(contract.reference_price, null);
+      var rawStatus = rawReferencePurposeStatus(record);
+      var contractBlocked = contractReference !== null
+        && !isReferencePurposeVerified(referencePurposeStatus(record, contract));
+      var rawValue = safeNumber(record && record.reference_price, null);
+      var rawBlocked = contractReference === null && rawValue !== null
+        && !isReferencePurposeVerified(rawStatus);
+      return contractBlocked || rawBlocked;
+    });
+    var refPrice = getCandidateReferencePriceForCalculation(workspaceItem);
     if (refPrice === null && raw && raw !== workspaceItem) {
-      refPrice = getCandidateReferencePriceFromRecord(raw);
+      refPrice = getCandidateReferencePriceForCalculation(raw);
     }
-    if (refPrice === null && raw && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
-      refPrice = safeNumber(raw.reference_buy_points[0].reference_price, null);
+    if (refPrice === null && !referencePurposeBlocked && raw
+        && raw.reference_buy_points && raw.reference_buy_points.length > 0) {
+      var referencePoint = raw.reference_buy_points[0] || {};
+      var pointStatus = normalizeString(referencePoint.status || referencePoint.purpose_status).trim().toLowerCase();
+      if (pointStatus === 'verified' || pointStatus === 'formal') {
+        refPrice = safeNumber(referencePoint.reference_price, null);
+      }
     }
-    if (refPrice === null) {
+    if (refPrice === null && !referencePurposeBlocked) {
       refPrice = safeNumber(priceEvidence && priceEvidence.reference_price, null);
     }
     if (chartProjectionAllowsPrice(chartEvidence, 'reference_price', refPrice)) {
@@ -7851,6 +8227,7 @@
             : (/观察锚点|watch[_ -]?anchor/i.test(rawLineName)
               ? 'watch_anchor'
               : (/现价|收盘|current/i.test(rawLineName) ? 'current' : ''))));
+      if (rawKind === 'reference' && referencePurposeBlocked) continue;
       var rawValue = safeNumber(ml.yAxis, null);
       if (!rawKind || canonicalPriceKinds[rawKind]
           || rawValue === null || !Number.isFinite(rawValue) || rawValue <= 0

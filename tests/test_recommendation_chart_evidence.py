@@ -750,7 +750,7 @@ assert(volume.data.every(function (value) { return value === null; }),
 """,
         )
 
-    def test_borrowed_chart_uses_actual_chart_source_volume_metadata(self):
+    def test_chart_does_not_borrow_another_source_volume_metadata(self):
         _assert_node_contract(
             self,
             "({ merge: mergeChartCandidate, chart: renderChart, state: state })",
@@ -762,13 +762,10 @@ const chartOwner={dates:['D1','D2'],opens:[10,11],highs:[11,12],lows:[9,10],clos
 const primary={code:'600001',volumes:[999,999],volume_units:['hands','hands'],
  volume_raw_units:['hands','hands'],volume_sources:['wrong-primary','wrong-primary']};
 const merged=globalThis.__auxTest.merge(primary,chartOwner);
-assert(merged.volumes===chartOwner.volumes&&merged.volume_units===chartOwner.volume_units
- && merged.volume_raw_units===chartOwner.volume_raw_units&&merged.volume_sources===chartOwner.volume_sources,
- 'borrowed chart did not keep quantity metadata ownership');
-globalThis.__auxTest.chart(merged, {});
-const volume=chartOption.series.filter(function (series) { return series.name === '成交量'; })[0];
-assert(volume.data[0]===100&&volume.data[1]===null,
- 'metadata-source mismatch made borrowed volume comparable');
+assert(merged===primary && merged.volumes===primary.volumes
+ && merged.volume_units===primary.volume_units&&merged.volume_raw_units===primary.volume_raw_units
+ && merged.volume_sources===primary.volume_sources,
+ 'chart borrowed quantity metadata from another report source');
 """,
         )
 

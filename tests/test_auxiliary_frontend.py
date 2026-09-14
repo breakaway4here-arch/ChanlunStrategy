@@ -1050,7 +1050,7 @@ const raw = {
 globalThis.__auxTest.chart(raw, {
   code: '600001', current_price: 11.7,
   formal_decision_contract: {
-    action: '观察', reference_price: 11.2,
+    action: '观察', reference_price: 11.2, purpose_status: 'verified',
     invalidation_price: 10.4, pressure_price: 12.0
   }
 });
@@ -1142,7 +1142,7 @@ globalThis.__auxTest.chart({
 }, {
   code: '600001',
   formal_decision_contract: {
-    action: '观察', reference_price: 10.0,
+    action: '观察', reference_price: 10.0, purpose_status: 'verified',
     invalidation_price: 8.0, pressure_price: 12.0
   }
 });
@@ -2077,7 +2077,7 @@ globalThis.__auxTest.chart({
   }
 }, chartItem);
 const chartJson = JSON.stringify(chartOption);
-assert(chartJson.includes('事故前参考·仅追溯'), 'incident chart reference was not relabeled');
+assert(!chartJson.includes('事故前参考·仅追溯'), 'unverified incident reference remained an active chart line');
 assert(!chartJson.includes('参考 4.0375'), 'raw reference annotation still looked valid');
 assert(!chartJson.includes('参考 15.20'), 'computed reference still looked valid');
 """,
