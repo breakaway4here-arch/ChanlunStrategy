@@ -141,7 +141,11 @@ const payload={workspace:{views:{main:[
   {code:'600001',name:'目标版本',version:'v2',action:'目标动作'}
 ]}}};
 const rows=t.entries(payload,'600001',null,{version:'v2'});
-if(rows.length!==1 || rows[0].record.action!=='目标动作')throw Error('duplicate source/code did not select matching identity');
+if(rows.length!==2 || !rows.some((row)=>row.record.action==='旧动作')
+  || !rows.some((row)=>row.record.action==='目标动作')
+  || !rows.some((row)=>row.record.action==='旧动作' && row.validation
+    && row.validation.versionStatus==='conflict'))
+  throw Error('duplicate source/code silently discarded a conflicting version');
 ''')
 
     def test_u11_single_row_identity_conflict_and_missing_declaration_are_visible(self):
