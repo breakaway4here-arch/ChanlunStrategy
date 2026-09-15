@@ -2150,18 +2150,21 @@ body {
 }
 
 .chart-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+  gap: 6px;
   margin-bottom: 6px;
 }
 
 .chart-layer-switcher {
-  display: inline-flex;
+  display: flex;
   flex-wrap: wrap;
   align-items: center;
-  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   gap: 3px;
   padding: 3px;
   border: 1px solid var(--border-soft);
@@ -2200,6 +2203,8 @@ body {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
+  max-width: 100%;
+  min-width: 0;
   gap: 3px;
 }
 
@@ -3278,6 +3283,7 @@ body {
 }
 
 .chart-help {
+  min-width: 0;
   padding: 9px 11px;
   border-bottom: 1px solid var(--border-soft);
   color: var(--text-sub);
@@ -6802,6 +6808,8 @@ body {
 .unified-candidate-detail .chart-layer-switcher button { min-height: 32px; font-size: 12px; }
 .unified-candidate-detail .candidate-research-details > section { padding: 12px; border-top: 1px solid var(--border-soft); }
 .unified-candidate-detail .candidate-research-details p { font-size: 13px; }
+.candidate-source-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 5px 10px; }
+.candidate-source-score { color: var(--text-sub); font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
 .candidate-row-score:empty, .view-description:empty, .candidate-list-tools[hidden] { display: none; }
 .candidate-row[data-status="watch_only"] .candidate-row-action { background: var(--neutral-soft); color: var(--text-sub); }
 .candidate-row[data-status="evidence_blocked"] .candidate-row-action,
@@ -6831,6 +6839,17 @@ body {
   flex-wrap: wrap;
   gap: 5px;
   min-width: 0;
+}
+.candidate-row-source-scores {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  min-width: 0;
+}
+.candidate-row-source-scores .candidate-row-score {
+  padding: 2px 6px;
+  font-size: 11px;
 }
 .candidate-row-identity-label {
   max-width: 180px;

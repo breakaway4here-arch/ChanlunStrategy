@@ -171,7 +171,7 @@ t.locate('simulation-tracking',mappingRoot);
 if(!simulation.parentNode.open) throw Error('simulation tracking entry did not open its evidence ancestor');
 ''')
 
-    def test_u16_candidate_fact_rows_keep_dl_semantics_and_one_step_evidence_jump(self):
+    def test_u16_candidate_fact_rows_keep_dl_semantics_and_market_cap_plain(self):
         _assert_node_contract(self, "{ facts:renderCandidateFactPanel,state:state }", r'''
 const t=globalThis.__auxTest;
 t.state.data={date:'2026-09-12'};
@@ -183,7 +183,33 @@ const html=t.facts({
 });
 if(/<dl>\s*<div[^>]*role="button"/.test(html)) throw Error('fact row still makes a dl child an interactive div');
 if(html.indexOf('<div class="candidate-fact-row"><dt>')<0) throw Error('fact rows lost valid dl item structure');
-if(html.indexOf('<button type="button" class="candidate-fact-jump" data-evidence-target="price">')<0) throw Error('fact row lost one-step evidence jump');
+if(!/<dt>总市值<\/dt><dd>100\.00亿<\/dd>/.test(html)) throw Error('market cap was lost or kept a false price-evidence jump');
+''')
+
+    def test_u16_source_locator_never_falls_back_to_another_module_or_the_button(self):
+        _assert_node_contract(self, "{ locate:locateDetailEvidence,state:state }", r'''
+window.setTimeout=function(){};
+const mount={};
+function destination(name){return {name:name,tagName:'SECTION',parentNode:{tagName:'DETAILS',open:false,parentNode:null},classList:{add(){},remove(){}},scrollIntoView(){}};}
+const mainPrice=destination('main-price');
+const otherPrice=destination('other-price');
+const button=destination('button');
+const selectors=[];
+const root={contains(node){return node===mount;},querySelector(selector){
+ selectors.push(selector);
+ if(selector==='[aria-labelledby="evidence-module-strategy-main-0-02"]')return mainPrice;
+ if(selector==='[data-evidence-module="02"]')return otherPrice;
+ if(selector==='[data-evidence-target="evidence-module-strategy-missing-9-02"]')return button;
+ return null;
+}};
+const t=globalThis.__auxTest;t.state.detailTarget=root;t.state.chartMount=mount;t.state.chartInstance=null;
+const found=t.locate('evidence-module-strategy-main-0-02',root);
+if(found!==mainPrice || !mainPrice.parentNode.open)throw Error('source locator did not open the exact source module');
+if(selectors.includes('[data-evidence-module="02"]'))throw Error('source locator queried the first module from another source');
+selectors.length=0;
+const missing=t.locate('evidence-module-strategy-missing-9-02',root);
+if(missing!==null)throw Error('missing source target fell back to the button itself');
+if(selectors.some(function(selector){return selector.indexOf('data-evidence-target')>=0;}))throw Error('locator queried an action button as its destination');
 ''')
 
     def test_u16_status_summary_uses_a_named_group_role(self):

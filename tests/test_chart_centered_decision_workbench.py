@@ -328,6 +328,236 @@ assert(!JSON.stringify(summary).includes('70'), 'incident review leaked invalid 
 """,
         )
 
+    def test_formal_source_scores_are_visible_without_merging_or_research_leak(self):
+        _assert_node_contract(
+            self,
+            "({ summary: buildCandidateRowSummary, identity: renderCandidateRowIdentity, detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+t.state.data = { date: '2026-09-14' };
+const item = { code: '600001', name: '多来源样本', workbench_item: {
+  code: '600001', name: '多来源样本', status_label: '正式策略分歧',
+  formal_action: null, score: null, primary_reason: '来源动作不同',
+  is_executable: false, blocking_reasons: ['正式策略意见不一致'],
+  contracts: {}, strategy_results: [
+    { strategy_id: 'main', role: 'formal', action_semantics: 'formal',
+      formal_action: '推荐', score: 88, contract: {}, evidence: {} },
+    { strategy_id: 'h4_t3', role: 'formal', action_semantics: 'formal',
+      formal_action: '观察', score: 60, contract: {}, evidence: {} },
+    { strategy_id: 'acceleration', role: 'research', action_semantics: 'formal',
+      formal_action: null, score: 91, contract: {}, evidence: {} }
+  ]
+} };
+const identity = t.identity(item, 'decision_all', t.summary(item, 'decision_all'));
+assert(identity.includes('正式主推') && identity.includes('决策分 88'),
+  'main formal source score is missing from the identity line');
+assert(identity.includes('H4 T+3') && identity.includes('决策分 60'),
+  'H4 formal source score is missing from the identity line');
+assert(!identity.includes('91'), 'research score leaked into the identity line');
+assert((identity.match(/data-source-score/g) || []).length === 2,
+  'different formal source scores were merged or duplicated');
+const detail = t.detail(item);
+assert(detail.includes('data-source-score="main">决策分 88'),
+  'main score is not readable beside its detail source title');
+assert(detail.includes('data-source-score="h4_t3">决策分 60'),
+  'H4 score is not readable beside its detail source title');
+assert(!detail.includes('data-source-score="acceleration"') && !detail.includes('决策分 91'),
+  'research score leaked into the source detail');
+
+const zero = { code: '600002', name: '零分样本', action_semantics: 'formal',
+  decision_engine_v1: { total_score: 0 } };
+const zeroIdentity = t.identity(zero, 'main', t.summary(zero, 'main'));
+assert(zeroIdentity.includes('决策分 0'), 'a real formal zero score disappeared');
+const missing = { code: '600003', name: '缺分样本', action_semantics: 'formal',
+  decision_engine_v1: { opportunity_score: 99 } };
+const missingIdentity = t.identity(missing, 'main', t.summary(missing, 'main'));
+assert(!missingIdentity.includes('决策分 0') && !missingIdentity.includes('99'),
+  'missing formal score was filled from zero or a ranking score');
+const research = { code: '600004', name: '研究样本', action_semantics: 'watch_only',
+  decision_engine_v1: { total_score: 91 } };
+const researchIdentity = t.identity(research, 'acceleration', t.summary(research, 'acceleration'));
+assert(!researchIdentity.includes('决策分') && !researchIdentity.includes('91'),
+  'legacy research score was connected to the visible identity line');
+const incident = { code: '600005', name: '事故复盘', incident_review_only: true,
+  action_semantics: 'formal', decision_engine_v1: { total_score: 77 } };
+const incidentIdentity = t.identity(incident, 'main', t.summary(incident, 'main'));
+assert(!incidentIdentity.includes('决策分') && !incidentIdentity.includes('77'),
+  'incident review restored a visible formal score');
+const unifiedIncident = { code: '600006', name: '统一事故复盘', workbench_item: {
+  code: '600006', name: '统一事故复盘', status_label: '仅追溯', formal_action: null,
+  score: null, primary_reason: '原始记录', contracts: {}, strategy_results: [
+    { strategy_id: 'main', role: 'formal', action_semantics: 'formal', score: 76,
+      candidate: { incident_review_only: true }, contract: {}, evidence: {} }
+  ]
+} };
+const unifiedIncidentIdentity = t.identity(unifiedIncident, 'decision_all', t.summary(unifiedIncident, 'decision_all'));
+assert(!unifiedIncidentIdentity.includes('决策分') && !t.detail(unifiedIncident).includes('决策分 76'),
+  'strategy-level incident review restored a visible formal score');
+const anonymousFormal = { code: '600007', name: '来源缺失', workbench_item: {
+  code: '600007', name: '来源缺失', status_label: '待核验', formal_action: null,
+  score: null, primary_reason: '来源未声明', contracts: {}, strategy_results: [
+    { role: 'formal', action_semantics: 'formal', score: 75, contract: {}, evidence: {} }
+  ]
+} };
+assert(!t.identity(anonymousFormal, 'decision_all', t.summary(anonymousFormal, 'decision_all')).includes('决策分 75'),
+  'a score without a named formal source became visible');
+""",
+        )
+
+    def test_visible_formal_scores_accept_only_numeric_scalars(self):
+        _assert_node_contract(
+            self,
+            "({ summary: buildCandidateRowSummary, identity: renderCandidateRowIdentity, detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+t.state.data = { date: '2026-09-14' };
+function unified(score) {
+  return { code: '600001', name: '正式分类型样本', workbench_item: {
+    code: '600001', name: '正式分类型样本', status_label: '正式待确认',
+    formal_action: '观察', primary_reason: '核对原始决策分', is_executable: false,
+    contracts: {}, strategy_results: [
+      { strategy_id: 'main', role: 'formal', action_semantics: 'formal',
+        formal_action: '观察', score: score, contract: {}, evidence: {} }
+    ]
+  } };
+}
+for (const value of ['   ', [], ['88'], true, false, Infinity, -1, 101]) {
+  const item = unified(value);
+  const identity = t.identity(item, 'decision_all', t.summary(item, 'decision_all'));
+  const detail = t.detail(item);
+  assert(!identity.includes('data-source-score') && !detail.includes('data-source-score'),
+    'invalid formal score became visible: ' + JSON.stringify(value));
+}
+const unifiedNumericString = unified('88');
+assert(t.identity(unifiedNumericString, 'decision_all', t.summary(unifiedNumericString, 'decision_all')).includes('决策分 88'),
+  'valid unified numeric string score disappeared');
+assert(t.detail(unifiedNumericString).includes('决策分 88'),
+  'valid unified numeric string score disappeared from detail');
+
+for (const value of ['   ', [], ['88'], true, false, Infinity, -1, 101]) {
+  const item = { code: '600002', name: 'Legacy 正式分类型样本', action_semantics: 'formal',
+    decision_engine_v1: { total_score: value } };
+  const identity = t.identity(item, 'main', t.summary(item, 'main'));
+  assert(!identity.includes('决策分'),
+    'invalid legacy formal score became visible: ' + JSON.stringify(value));
+}
+const legacyNumericString = { code: '600003', name: 'Legacy 数字字符串', action_semantics: 'formal',
+  decision_engine_v1: { total_score: '88' } };
+assert(t.identity(legacyNumericString, 'main', t.summary(legacyNumericString, 'main')).includes('决策分 88'),
+  'valid legacy numeric string score disappeared');
+""",
+        )
+
+    def test_legacy_formal_score_respects_explicit_record_identity(self):
+        _assert_node_contract(
+            self,
+            "({ summary: buildCandidateRowSummary, identity: renderCandidateRowIdentity, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+t.state.data = { date: '2026-09-14' };
+function identity(patch) {
+  const item = Object.assign({ code: '600001', name: 'Legacy 身份样本',
+    decision_engine_v1: { total_score: 91 } }, patch);
+  return t.identity(item, 'main', t.summary(item, 'main'));
+}
+for (const patch of [
+  { action_semantics: 'watch_only' },
+  { action_semantics: 'upstream_only' },
+  { role: 'research' },
+  { role: 'baseline' },
+  { role: 'research', action_semantics: 'formal' },
+  { role: 'formal', action_semantics: 'watch_only' }
+]) {
+  assert(!identity(patch).includes('决策分 91'),
+    'formal view overrode explicit non-formal identity: ' + JSON.stringify(patch));
+}
+assert(identity({ action_semantics: 'formal' }).includes('决策分 91'),
+  'explicit legacy formal identity lost its score');
+assert(identity({}).includes('决策分 91'),
+  'legacy formal-view compatibility lost its score');
+""",
+        )
+
+    def test_unified_detail_header_exposes_source_scores_before_collapsed_evidence(self):
+        _assert_node_contract(
+            self,
+            "({ detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+t.state.data = { date: '2026-09-14' };
+const item = { code: '600001', name: '首屏来源分样本', workbench_item: {
+  code: '600001', name: '首屏来源分样本', status_label: '正式策略分歧',
+  formal_action: null, primary_reason: '来源动作不同', is_executable: false,
+  blocking_reasons: ['正式策略意见不一致'], contracts: {}, strategy_results: [
+    { strategy_id: 'main', role: 'formal', action_semantics: 'formal', score: 88,
+      formal_action: '推荐', contract: {}, evidence: {} },
+    { strategy_id: 'h4_t3', role: 'formal', action_semantics: 'formal', score: 60,
+      formal_action: '观察', contract: {}, evidence: {} },
+    { strategy_id: 'acceleration', role: 'research', action_semantics: 'watch_only', score: 91,
+      formal_action: null, contract: {}, evidence: {} }
+  ]
+} };
+const html = t.detail(item);
+const headerStart = html.indexOf('<header class="unified-stock-head">');
+const headerEnd = html.indexOf('</header>', headerStart);
+const header = html.slice(headerStart, headerEnd);
+assert(header.includes('正式主推 决策分 88'),
+  'main source score is not visible in the first-layer detail header');
+assert(header.includes('H4 T+3 决策分 60'),
+  'H4 source score is not visible in the first-layer detail header');
+assert(!header.includes('91') && !header.includes('acceleration'),
+  'research score leaked into the first-layer detail header');
+assert(header.includes('正式策略分歧') && header.includes('正式策略意见不一致'),
+  'first-layer score displaced status or blocker context');
+""",
+        )
+
+    def test_top_level_incident_suppresses_header_and_source_title_scores(self):
+        _assert_node_contract(
+            self,
+            "({ detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+t.state.data = { date: '2026-09-14' };
+const item = { code: '600008', name: '顶层事故复盘', incident_review_only: true,
+  workbench_item: { code: '600008', name: '顶层事故复盘', status_label: '仅追溯',
+    formal_action: null, primary_reason: '原始记录', is_executable: false,
+    contracts: {}, strategy_results: [
+      { strategy_id: 'main', role: 'formal', action_semantics: 'formal', score: 88,
+        formal_action: '推荐', candidate: { incident_review_only: false }, contract: {}, evidence: {} }
+    ]
+  }
+};
+const html = t.detail(item);
+const header = (html.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+const sourceTitle = (html.match(/<header class="candidate-source-title">([\s\S]*?)<\/header>/) || [])[1] || '';
+assert(!header.includes('data-source-score') && !header.includes('决策分 88'),
+  'top-level incident leaked a formal score into the first-layer header');
+assert(!sourceTitle.includes('data-source-score') && !sourceTitle.includes('决策分 88'),
+  'top-level incident leaked a formal score into the source title');
+""",
+        )
+
+    def test_decision_navigation_descriptions_remain_readable_for_empty_views(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderViewDescription, state: state, nodes: nodes })",
+            r"""
+const t = globalThis.__auxTest;
+t.nodes.description = { innerHTML: '' };
+t.state.data = { date: '2026-09-14' };
+t.state.workspace = { views: {}, view_meta: {} };
+t.state.currentView = 'decision_formal';
+t.render();
+assert(t.nodes.description.innerHTML.includes('本期正式策略的全部结果，包含待确认、不可执行及风险状态；请查看具体动作。'),
+  'formal-results explanation disappeared when the pool is empty');
+t.state.currentView = 'decision_focus';
+t.render();
+assert(t.nodes.description.innerHTML.includes('按本期状态及原顺序选取至多 5 项供优先复核，可能包含研究观察；不是独立推荐排名。'),
+  'focus explanation disappeared when the pool is empty');
+""",
+        )
+
     def test_candidate_row_is_limited_to_identity_market_and_reason_lines(self):
         start = JS.index("function renderCandidateList")
         end = JS.index("function buildDecisionHeader", start)

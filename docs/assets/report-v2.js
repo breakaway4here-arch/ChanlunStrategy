@@ -4097,7 +4097,13 @@
   function renderViewDescription() {
     if (!nodes.description) return;
     if (isDecisionView(state.currentView)) {
-      nodes.description.innerHTML = '';
+      var decisionCopy = {
+        decision_formal: '本期正式策略的全部结果，包含待确认、不可执行及风险状态；请查看具体动作。',
+        decision_focus: '按本期状态及原顺序选取至多 5 项供优先复核，可能包含研究观察；不是独立推荐排名。',
+      }[state.currentView] || '';
+      nodes.description.innerHTML = decisionCopy
+        ? '<div class="view-description-copy">' + escapeHtml(decisionCopy) + '</div>'
+        : '';
       return;
     }
     var viewDef = getCandidateViews();
@@ -5171,6 +5177,68 @@
     };
   }
 
+  function formalDecisionScoreValue(value) {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    if (typeof value === 'string' && !value.trim()) return null;
+    var score = Number(value);
+    return Number.isFinite(score) && score >= 0 && score <= 100 ? score : null;
+  }
+
+  function isFormalStrategyResult(strategy) {
+    var value = strategy && typeof strategy === 'object' ? strategy : {};
+    var role = normalizeString(value.role).trim();
+    return role ? role === 'formal'
+      : normalizeString(value.action_semantics).trim() === 'formal';
+  }
+
+  function candidateFormalScoreEntries(item, viewKey) {
+    var rec = item && typeof item === 'object' ? item : {};
+    if (isIncidentReviewItem(rec)) return [];
+    var unified = rec.workbench_item && typeof rec.workbench_item === 'object'
+      ? rec.workbench_item : null;
+    if (unified) {
+      return asArray(unified.strategy_results).map(function (strategy) {
+        if (!isFormalStrategyResult(strategy)
+            || isIncidentReviewItem(strategy && strategy.candidate)) return null;
+        var sourceId = normalizeString(strategy.strategy_id).trim();
+        if (!sourceId) return null;
+        var score = formalDecisionScoreValue(strategy && strategy.score);
+        if (score === null) return null;
+        return {
+          sourceId: sourceId,
+          label: getCurrentLabel(sourceId) || sourceId || '正式来源',
+          score: score,
+        };
+      }).filter(Boolean);
+    }
+    var key = normalizeString(viewKey || state.currentView).trim();
+    if (resolveViewDisplayContract(key, {}).action_semantics !== 'formal') return [];
+    var explicitSemantics = normalizeString(rec.action_semantics).trim();
+    var explicitRole = normalizeString(rec.role).trim();
+    if ((explicitSemantics && explicitSemantics !== 'formal')
+        || (explicitRole && explicitRole !== 'formal')) return [];
+    var legacyDecision = resolveDecisionEngine(rec, null);
+    var legacyScore = formalDecisionScoreValue(
+      legacyDecision && legacyDecision.total_score
+    );
+    return legacyScore === null ? [] : [{
+      sourceId: key,
+      label: getCurrentLabel(key) || '正式来源',
+      score: legacyScore,
+    }];
+  }
+
+  function renderCandidateFormalScores(item, viewKey) {
+    var scores = candidateFormalScoreEntries(item, viewKey);
+    if (!scores.length) return '';
+    return '<span class="candidate-row-source-scores" aria-label="正式来源原决策分">'
+      + scores.map(function (entry) {
+        return '<span class="candidate-row-score" data-source-score="'
+          + escapeHtml(entry.sourceId) + '">' + escapeHtml(entry.label)
+          + ' 决策分 ' + escapeHtml(formatNumber(entry.score, 0)) + '</span>';
+      }).join('') + '</span>';
+  }
+
   function stockFactNumber(value) {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
   }
@@ -5246,15 +5314,118 @@
       + '</div>';
   }
 
+  function sameCandidateSourceRef(left, right) {
+    var leftRef = left && typeof left === 'object' ? left : {};
+    var rightRef = right && typeof right === 'object' ? right : {};
+    var leftPool = normalizeString(leftRef.pool || leftRef.source_pool).trim();
+    var rightPool = normalizeString(rightRef.pool || rightRef.source_pool).trim();
+    var leftCode = toCodeKey(leftRef.code);
+    var rightCode = toCodeKey(rightRef.code);
+    return Boolean(leftPool && rightPool && leftCode && rightCode
+      && leftPool === rightPool && leftCode === rightCode);
+  }
+
+  function candidateFactEvidenceTarget(item, facts, evidenceKey, moduleNumber) {
+    var rec = item && typeof item === 'object' ? item : {};
+    var ref = rec.ref && typeof rec.ref === 'object' ? rec.ref : {};
+    var raw = facts && facts.raw && typeof facts.raw === 'object' ? facts.raw : null;
+    if (!raw || !sameCandidateSourceRef(ref, {
+      pool: ref.pool || ref.source_pool,
+      code: raw.code,
+    })) return '';
+    var unified = rec.workbench_item && typeof rec.workbench_item === 'object'
+      ? rec.workbench_item : null;
+    if (unified) {
+      var strategies = asArray(unified.strategy_results);
+      var sourceRefs = asArray(unified.source_refs).filter(function (sourceRef) {
+        return sourceRef && typeof sourceRef === 'object';
+      });
+      var sourceView = normalizeString(rec.evidence_view).trim();
+      var matches = [];
+      function findStrategyMatches(view) {
+        var found = [];
+        strategies.forEach(function (strategy, index) {
+          if (normalizeString(strategy && strategy.strategy_id).trim() === view) {
+            found.push({ strategy: strategy, index: index });
+          }
+        });
+        return found;
+      }
+      if (sourceView) {
+        matches = findStrategyMatches(sourceView);
+        if (matches.length !== 1) return '';
+        var selectedCandidate = matches[0].strategy.candidate;
+        var selectedCandidateRef = selectedCandidate && typeof selectedCandidate === 'object'
+          && selectedCandidate.ref && typeof selectedCandidate.ref === 'object'
+          ? selectedCandidate.ref : null;
+        var selectedSourceRefs = sourceRefs.filter(function (sourceRef) {
+          return normalizeString(sourceRef.view).trim() === sourceView;
+        });
+        if (selectedSourceRefs.some(function (sourceRef) {
+          return !sameCandidateSourceRef(ref, sourceRef.ref);
+        })) return '';
+        if (selectedCandidateRef) {
+          if (!sameCandidateSourceRef(ref, selectedCandidateRef)) return '';
+        } else if (selectedSourceRefs.length !== 1
+            || !sameCandidateSourceRef(ref, selectedSourceRefs[0].ref)) {
+          return '';
+        }
+        var hasSourceConflict = sourceRefs.some(function (sourceRef) {
+          if (!sameCandidateSourceRef(ref, sourceRef.ref)) return false;
+          var mapped = findStrategyMatches(normalizeString(sourceRef.view).trim());
+          if (mapped.length !== 1) return true;
+          var mappedCandidate = mapped[0].strategy.candidate;
+          var mappedRef = mappedCandidate && typeof mappedCandidate === 'object'
+            && mappedCandidate.ref && typeof mappedCandidate.ref === 'object'
+            ? mappedCandidate.ref : null;
+          return Boolean(mappedRef && !sameCandidateSourceRef(sourceRef.ref, mappedRef));
+        });
+        if (hasSourceConflict) return '';
+      } else {
+        var matchingSourceRefs = sourceRefs.filter(function (sourceRef) {
+          return sameCandidateSourceRef(ref, sourceRef.ref);
+        });
+        if (matchingSourceRefs.length !== 1) return '';
+        sourceView = normalizeString(matchingSourceRefs[0].view).trim();
+        matches = findStrategyMatches(sourceView);
+        if (!sourceView || matches.length !== 1) return '';
+        var fallbackCandidate = matches[0].strategy.candidate;
+        var fallbackRef = fallbackCandidate && typeof fallbackCandidate === 'object'
+          && fallbackCandidate.ref && typeof fallbackCandidate.ref === 'object'
+          ? fallbackCandidate.ref : null;
+        if (fallbackRef && !sameCandidateSourceRef(ref, fallbackRef)) return '';
+      }
+      var evidence = matches[0].strategy.evidence;
+      if (!evidence || typeof evidence !== 'object'
+          || !evidence[evidenceKey] || typeof evidence[evidenceKey] !== 'object'
+          || normalizeString(evidence[evidenceKey].status).trim().toLowerCase() === 'missing') return '';
+      return 'evidence-module-' + strategyEvidencePrefix(matches[0].strategy, matches[0].index)
+        + '-' + moduleNumber;
+    }
+    var evidenceView = normalizeString(rec.evidence_view || state.currentView).trim();
+    var viewContract = resolveViewDisplayContract(evidenceView, {});
+    var sourcePool = normalizeString(viewContract.source_pool).trim();
+    var refPool = normalizeString(ref.pool || ref.source_pool).trim();
+    var legacyEvidence = sourcePool && sourcePool === refPool
+      ? getCandidateRecommendationEvidence(rec, state.data, evidenceView) : null;
+    if (!legacyEvidence || typeof legacyEvidence[evidenceKey] !== 'object'
+        || normalizeString(legacyEvidence[evidenceKey].status).trim().toLowerCase() === 'missing') return '';
+    return moduleNumber === '05' ? 'volume' : 'price';
+  }
+
   function renderCandidateFactPanel(item) {
     var rec = item || {};
     var facts = candidateBasicFacts(rec);
     var quality = hasVerifiedBasicFacts(rec) ? (rec.pool_quality || {}) : {};
     var raw = facts.verified ? facts.raw : {};
     var rows = [];
-    function add(label, value, suffix, divisor) {
+    var priceTarget = candidateFactEvidenceTarget(rec, facts, 'price_evidence', '02');
+    var volumeTarget = candidateFactEvidenceTarget(rec, facts, 'volume_and_capital', '05');
+    function add(label, value, suffix, divisor, target) {
       var number = stockFactNumber(value);
-      if (number !== null && number >= 0) rows.push([label, formatNumber(number / (divisor || 1), 2) + (suffix || '')]);
+      if (number !== null && number >= 0) {
+        rows.push([label, formatNumber(number / (divisor || 1), 2) + (suffix || ''), target || '']);
+      }
     }
     function canonicalVolumeWindow(record, length) {
       var units = asArray(record && record.volume_units);
@@ -5284,7 +5455,7 @@
         && canonicalVolumeWindow(volumeRecord || {}, 21)
         && volumes.every(function (v) { return v !== null && v >= 0; })) {
       var mean = volumes.slice(0, 20).reduce(function (sum, v) { return sum + v; }, 0) / 20;
-      if (mean > 0) add('较20日均量', volumes[20] / mean, '倍');
+      if (mean > 0) add('较20日均量', volumes[20] / mean, '倍', 1, volumeTarget);
     }
     var money20 = quality.money20 === undefined ? raw.money20 : quality.money20;
     var money20Number = stockFactNumber(money20);
@@ -5298,11 +5469,11 @@
     );
     if (money20Number !== null && money20Number > 0) {
       if (liquidityWindow === 20 && liquiditySource === 'amounts') {
-        add('20日均成交额', money20Number, '亿', 100000000);
+        add('20日均成交额', money20Number, '亿', 100000000, volumeTarget);
       } else if (liquidityWindow === 20 && liquiditySource === 'volume_price_proxy') {
-        add('估算20日均成交额', money20Number, '亿', 100000000);
+        add('估算20日均成交额', money20Number, '亿', 100000000, volumeTarget);
       } else {
-        rows.push(['20日均成交额', '成交额来源未核验']);
+        rows.push(['20日均成交额', '成交额来源未核验', volumeTarget]);
       }
     }
     add('总市值', quality.market_cap, '亿');
@@ -5313,23 +5484,28 @@
       var rawPurposeStatus = rawReferencePurposeStatus(rec);
       var referenceUsable = rawPurposeStatus === 'verified' || rawPurposeStatus === 'formal';
       rows.push(['结构参考', formatNumber(reference, 2) + (referenceUsable
-        ? '（非失效位）' : '（用途未核验，仅原始记录）')]);
+        ? '（非失效位）' : '（用途未核验，仅原始记录）'), priceTarget]);
       var distance = referenceUsable ? stockFactNumber(rec.distance_from_reference_pct) : null;
-      if (distance !== null) rows.push(['距结构参考', formatPct(distance, true)]);
+      if (distance !== null) rows.push(['距结构参考', formatPct(distance, true), priceTarget]);
     }
     var value = rec.workbench_item || {};
     var contract = value.contracts || rec.formal_decision_contract || {};
     if (value.formal_action || rec.action_semantics === 'formal') {
       [['正式参考价', 'reference_price'], ['失效位', 'invalidation_price']].forEach(function (field) {
         var price = stockFactNumber(contract[field[1]]);
-        rows.push([field[0], price !== null && price > 0 ? formatNumber(price, 2) : '未提供']);
+        rows.push([field[0], price !== null && price > 0 ? formatNumber(price, 2) : '未提供',
+          price !== null && price > 0 ? priceTarget : '']);
       });
     }
     return '<section class="candidate-fact-panel" aria-label="量能与参考位">'
       + (rows.length ? '<dl>' + rows.map(function (row) {
+        var content = escapeHtml(row[1]);
+        if (row[2]) {
+          content = '<button type="button" class="candidate-fact-jump" data-evidence-target="'
+            + escapeHtml(row[2]) + '">' + content + '</button>';
+        }
         return '<div class="candidate-fact-row"><dt>'
-          + escapeHtml(row[0]) + '</dt><dd><button type="button" class="candidate-fact-jump" data-evidence-target="price">'
-          + escapeHtml(row[1]) + '</button></dd></div>';
+          + escapeHtml(row[0]) + '</dt><dd>' + content + '</dd></div>';
       }).join('') + '</dl>' : '<p class="candidate-quote-note">量能与参考位数据未提供</p>')
       + '<p class="candidate-quote-note">仅展示本期已有数据；未提供的成交额、换手率或市值不作推算。</p></section>';
   }
@@ -5344,7 +5520,8 @@
       + '</strong><span class="candidate-code">' + escapeHtml(normalizeString(item && item.code)) + '</span></div>'
       + '<div class="candidate-row-identity-status"><span class="candidate-row-action">'
       + escapeHtml(action) + '</span><span class="candidate-row-identity-label">'
-      + escapeHtml(identity) + '</span></div></div>';
+      + escapeHtml(identity) + '</span>' + renderCandidateFormalScores(item, viewKey)
+      + '</div></div>';
   }
 
   function buildCandidateMarketContext(items) {
@@ -7086,10 +7263,15 @@
     return '短周期确认证据（频率未提供）';
   }
 
+  function strategyEvidencePrefix(strategy, index) {
+    return 'strategy-' + normalizeString(strategy && strategy.strategy_id)
+      .replace(/[^a-zA-Z0-9_-]/g, '') + '-' + (index || 0);
+  }
+
   function renderStrategyEvidence(strategy, index) {
     var evidence = strategy.evidence || {};
     var reportDate = getBootstrap().pageDate;
-    var prefix = 'strategy-' + normalizeString(strategy.strategy_id).replace(/[^a-zA-Z0-9_-]/g, '') + '-' + (index || 0);
+    var prefix = strategyEvidencePrefix(strategy, index);
     var body = renderRecommendationEvidenceModule('01', '决策与数据审计', evidence.summary || {},
       renderRecommendationConclusion(evidence, !!(strategy.candidate || {}).incident_review_only, 'audit', strategy.action_semantics), reportDate, undefined, false, prefix);
     var modules = [
@@ -7213,8 +7395,17 @@
           + ' · 失效位 ' + (contract.invalidation_price || '待补充')
           + ' · 周期 ' + (contract.intended_horizon || '未声明')
         : (hasReference ? '原始记录参考价 ' + reference + referencePurpose : '');
-      return '<section><strong>' + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
+      var sourceScore = isFormalStrategyResult(strategy)
+        && !isIncidentReviewItem(item)
+        && !isIncidentReviewItem(strategy && strategy.candidate)
+        && normalizeString(strategy && strategy.strategy_id).trim()
+        ? formalDecisionScoreValue(strategy.score) : null;
+      return '<section><header class="candidate-source-title"><strong>'
+        + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
         + ' · ' + escapeHtml(strategy.formal_action || '研究观察') + '</strong>'
+        + (sourceScore === null ? '' : '<span class="candidate-source-score" data-source-score="'
+          + escapeHtml(normalizeString(strategy.strategy_id).trim()) + '">决策分 '
+          + escapeHtml(formatNumber(sourceScore, 0)) + '</span>') + '</header>'
         + '<p>' + escapeHtml(strategy.primary_reason || '') + '</p>'
         + (referenceLine ? '<p>' + escapeHtml(referenceLine) + '</p>' : '')
         + renderStrategyEvidence(strategy, index) + '</section>';
@@ -7223,6 +7414,7 @@
     return '<div class="merged-candidate-detail unified-candidate-detail"><header class="unified-stock-head">'
       + '<h2>' + escapeHtml(value.name) + ' <small>' + escapeHtml(value.code) + '</small></h2>'
       + '<strong>' + escapeHtml(value.status_label) + '</strong>'
+      + renderCandidateFormalScores(item, state.currentView)
       + (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : '')
       + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
       + '</header>' + renderCandidateStatusSummary(item, state.currentView)
@@ -7419,6 +7611,8 @@
       'sublevel-summary': '04',
       'price': '02',
       'price-evidence': '02',
+      'volume': '05',
+      'volume-capital': '05',
       'risk-next': '07',
       'risk-invalidation': '07',
       'formal-action': '01A',
@@ -7426,16 +7620,21 @@
       'historical-validation': '08',
     }[targetName];
     var destination = null;
+    var sourceModuleTarget = /^evidence-module-strategy-[a-zA-Z0-9_-]+-\d+-(?:02|05)$/.test(targetName);
     if (targetName === 'simulation-tracking' && root && root.querySelector) {
       destination = root.querySelector('.recommendation-simulation-tracking');
       if (!destination) destination = root.querySelector('[data-evidence-module="08"]');
+    } else if (sourceModuleTarget && root && root.querySelector) {
+      destination = root.querySelector('[aria-labelledby="' + targetName + '"]');
     } else if (moduleNumber && root && root.querySelector) {
       destination = root.querySelector('[data-evidence-module="' + moduleNumber + '"]');
       if (!destination && moduleNumber === '01A') {
         destination = root.querySelector('[data-evidence-module="01"]');
       }
     }
-    if (!destination && root && root.querySelector) destination = root.querySelector('[data-evidence-target="' + targetName + '"]');
+    if (!destination && root && root.querySelector && !sourceModuleTarget) {
+      destination = root.querySelector('[data-evidence-node="' + targetName + '"]');
+    }
     if (destination) {
       openEvidenceAncestorDetails(destination);
       destination.classList.add('is-evidence-target');
