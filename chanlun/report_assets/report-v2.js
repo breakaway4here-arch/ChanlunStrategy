@@ -2645,6 +2645,244 @@
     }).join('') + '</dl>';
   }
 
+  function luojieContractCodes(values) {
+    if (!Array.isArray(values)) return null;
+    var codes = values.map(function (value) {
+      return toCodeKey(value && typeof value === 'object' ? value.code : value);
+    });
+    if (codes.some(function (code) { return !/^\d{6}$/.test(code); })) return null;
+    var unique = {};
+    if (codes.some(function (code) {
+      if (unique[code]) return true;
+      unique[code] = true;
+      return false;
+    })) return null;
+    return codes;
+  }
+
+  function sameLuojieCodeSet(left, right) {
+    var leftCodes = luojieContractCodes(left);
+    var rightCodes = luojieContractCodes(right);
+    return Boolean(leftCodes && rightCodes && leftCodes.length === rightCodes.length
+      && leftCodes.slice().sort().join(',') === rightCodes.slice().sort().join(','));
+  }
+
+  function validLuojiePartialHealth(health, reportDate) {
+    var value = health && typeof health === 'object' ? health : {};
+    function count(name, codesName) {
+      var number = value[name];
+      var codes = luojieContractCodes(value[codesName]);
+      return typeof number === 'number' && Number.isFinite(number)
+        && number >= 0 && Math.floor(number) === number
+        && codes && number === codes.length;
+    }
+    var requested = value.requested_count;
+    var verifiedCodes = luojieContractCodes(value.verified_codes);
+    var missingCodes = luojieContractCodes(value.missing_codes);
+    var budgetExcludedCodes = luojieContractCodes(value.budget_excluded_codes);
+    return normalizeString(value.status).trim() === 'partial'
+      && normalizeString(value.required_date).trim() === reportDate
+      && normalizeString(value.blocking_reason).trim() === 'strategy_input_stale_or_unverified'
+      && value.formal_actions_allowed === false
+      && value.research_output_trusted === false
+      && value.research_candidate_output_allowed === true
+      && typeof requested === 'number' && Number.isFinite(requested)
+      && requested >= 0 && Math.floor(requested) === requested
+      && count('verified_count', 'verified_codes')
+      && count('missing_count', 'missing_codes')
+      && count('budget_excluded_count', 'budget_excluded_codes')
+      && requested === value.verified_count + value.missing_count
+      && value.invalid_count === 0
+      && Array.isArray(value.invalid_codes)
+      && value.invalid_codes.length === 0
+      && verifiedCodes && missingCodes && budgetExcludedCodes
+      && verifiedCodes.every(function (code) {
+        return missingCodes.indexOf(code) === -1 && budgetExcludedCodes.indexOf(code) === -1;
+      })
+      && missingCodes.every(function (code) {
+        return budgetExcludedCodes.indexOf(code) === -1;
+      });
+  }
+
+  function sameLuojiePartialHealth(left, right) {
+    var scalarFields = [
+      'status', 'required_date', 'requested_count', 'verified_count',
+      'missing_count', 'budget_excluded_count', 'invalid_count',
+      'formal_actions_allowed', 'research_candidate_output_allowed',
+      'research_output_trusted', 'blocking_reason',
+    ];
+    return scalarFields.every(function (field) { return left[field] === right[field]; })
+      && sameLuojieCodeSet(left.verified_codes, right.verified_codes)
+      && sameLuojieCodeSet(left.missing_codes, right.missing_codes)
+      && sameLuojieCodeSet(left.budget_excluded_codes, right.budget_excluded_codes)
+      && sameLuojieCodeSet(left.invalid_codes, right.invalid_codes);
+  }
+
+  function isLegacyLuojieCommonUpstreamClosure(data, reportDate, finalUpstream) {
+    var selection = data.selection_input_health || {};
+    var byView = selection.by_view && selection.by_view.luojie;
+    var workspace = data.workspace || {};
+    var meta = workspace.view_meta && workspace.view_meta.luojie;
+    var upstream = meta && meta.upstream_contract;
+    function isExpected(value) {
+      var invalidCodes = luojieContractCodes(value && value.invalid_codes);
+      return Boolean(value && typeof value === 'object' && invalidCodes
+        && normalizeString(value.status).trim() === 'unavailable'
+        && normalizeString(value.required_date).trim() === reportDate
+        && normalizeString(value.blocking_reason).trim() === 'strategy_upstream_contract_mismatch'
+        && value.output_hidden === true
+        && value.invalid_count === invalidCodes.length
+        && sameLuojieCodeSet(value.invalid_codes, finalUpstream.excluded_codes));
+    }
+    var availabilityReason = normalizeString(
+      meta && meta.availability && meta.availability.reason
+    ).trim();
+    return asArray(workspace.views && workspace.views.luojie).length === 0
+      && isExpected(byView) && isExpected(upstream)
+      && meta.availability && normalizeString(meta.availability.state).trim() === 'unavailable'
+      && availabilityReason.indexOf('picks_pure') !== -1
+      && availabilityReason.indexOf('共同上游') !== -1;
+  }
+
+  function getLuojieIndependentSourceProjection(data) {
+    var report = data && typeof data === 'object' ? data : {};
+    var reportDate = normalizeString(report.date).trim();
+    var workbench = getDecisionWorkbench(report);
+    var pool = report.luojie_pool && typeof report.luojie_pool === 'object'
+      ? report.luojie_pool : null;
+    var selection = report.selection_input_health || {};
+    var strategyHealth = selection.by_strategy && selection.by_strategy.luojie_pool;
+    var poolHealth = pool && pool.input_health;
+    var diagnostics = pool && pool.diagnostics && typeof pool.diagnostics === 'object'
+      ? pool.diagnostics : {};
+    var finalUpstream = diagnostics.final_common_upstream;
+    if (!reportDate || !workbench || workbench.report_date !== reportDate
+        || Number(selection.schema_version) !== 2 || !pool
+        || normalizeString(selection.required_date).trim() !== reportDate
+        || normalizeString(pool.mode).trim() !== 'partial'
+        || normalizeString(pool.status).trim() !== 'partial'
+        || !normalizeString(pool.strategy_version).trim()
+        || !validLuojiePartialHealth(strategyHealth, reportDate)
+        || !validLuojiePartialHealth(poolHealth, reportDate)
+        || !sameLuojiePartialHealth(strategyHealth, poolHealth)
+        || diagnostics.partial_candidate_output_allowed !== true
+        || diagnostics.requested_count !== strategyHealth.requested_count
+        || diagnostics.verified_count !== strategyHealth.verified_count
+        || !sameLuojieCodeSet(diagnostics.missing_codes, strategyHealth.missing_codes)
+        || diagnostics.budget_excluded_count !== strategyHealth.budget_excluded_count
+        || !sameLuojieCodeSet(
+          diagnostics.budget_excluded_codes, strategyHealth.budget_excluded_codes
+        )
+        || !finalUpstream || finalUpstream.enforced !== false
+        || normalizeString(finalUpstream.reason).trim() !== 'research_independent_candidate_set'
+        || normalizeString(finalUpstream.upstream_pool).trim() !== 'picks_pure'
+        || !isLegacyLuojieCommonUpstreamClosure(report, reportDate, finalUpstream)) {
+      return null;
+    }
+
+    var rawCandidates = asArray(pool.candidates);
+    var rawCodes = luojieContractCodes(rawCandidates);
+    var verifiedCodes = luojieContractCodes(strategyHealth.verified_codes);
+    var missingCodes = luojieContractCodes(strategyHealth.missing_codes);
+    var budgetExcludedCodes = luojieContractCodes(strategyHealth.budget_excluded_codes);
+    var evidenceRows = getEvidenceRowsForView('luojie', report);
+    var evidenceCodes = luojieContractCodes(evidenceRows);
+    var finalExcludedCodes = luojieContractCodes(finalUpstream.excluded_codes);
+    if (!rawCodes || !rawCodes.length || !verifiedCodes || !missingCodes || !budgetExcludedCodes
+        || !evidenceCodes || !finalExcludedCodes
+        || finalUpstream.candidate_count !== rawCodes.length
+        || finalUpstream.input_count !== rawCodes.length
+        || finalUpstream.excluded_count !== finalExcludedCodes.length
+        || diagnostics.candidates !== rawCodes.length
+        || !sameLuojieCodeSet(evidenceRows, rawCandidates)
+        || rawCodes.some(function (code) {
+          return verifiedCodes.indexOf(code) === -1
+            || missingCodes.indexOf(code) !== -1
+            || budgetExcludedCodes.indexOf(code) !== -1;
+        })) return null;
+
+    var invalid = false;
+    var sourceRows = [];
+    asArray(workbench.items).forEach(function (item) {
+      var strategies = asArray(item && item.strategy_results).filter(function (strategy) {
+        return normalizeString(strategy && strategy.strategy_id).trim() === 'luojie';
+      });
+      if (!strategies.length) return;
+      if (strategies.length !== 1) {
+        invalid = true;
+        return;
+      }
+      var strategy = strategies[0];
+      var candidate = strategy.candidate && typeof strategy.candidate === 'object'
+        ? strategy.candidate : null;
+      var ref = candidate && candidate.ref && typeof candidate.ref === 'object'
+        ? candidate.ref : {};
+      var code = toCodeKey(candidate && candidate.code);
+      var evidence = strategy.evidence && typeof strategy.evidence === 'object'
+        ? strategy.evidence : {};
+      var evidenceSummary = evidence.summary && typeof evidence.summary === 'object'
+        ? evidence.summary : {};
+      var sourceRefs = asArray(item && item.source_refs).filter(function (sourceRef) {
+        return normalizeString(sourceRef && sourceRef.view).trim() === 'luojie';
+      });
+      var viewRank = strategy.view_rank;
+      if (!candidate || toCodeKey(item && item.code) !== code
+          || normalizeString(strategy.role).trim() !== 'research'
+          || normalizeString(strategy.action_semantics).trim() !== 'watch_only'
+          || normalizeString(strategy.page_status).trim() !== 'watch_only'
+          || normalizeString(strategy.formal_action).trim()
+          || (strategy.score !== null && typeof strategy.score !== 'undefined')
+          || normalizeString(candidate.action_semantics).trim() !== 'watch_only'
+          || candidate.is_formal_recommendation !== false
+          || asArray(candidate.sources).length !== 1
+          || normalizeString(candidate.sources[0]).trim() !== 'luojie'
+          || (candidate.evidence_view
+            && normalizeString(candidate.evidence_view).trim() !== 'luojie')
+          || candidate.workbench_item
+          || normalizeString(ref.pool || ref.source_pool).trim() !== 'luojie_pool'
+          || toCodeKey(ref.code) !== code
+          || sourceRefs.length !== 1
+          || !sameCandidateSourceRef(ref, sourceRefs[0].ref)
+          || normalizeString(evidence.view).trim() !== 'luojie'
+          || toCodeKey(evidence.code || evidenceSummary.code) !== code
+          || normalizeString(evidenceSummary.pool_identity).trim() !== 'luojie_pool'
+          || typeof viewRank !== 'number' || !Number.isFinite(viewRank)
+          || viewRank < 1 || Math.floor(viewRank) !== viewRank
+          || candidate.view_rank !== viewRank) {
+        invalid = true;
+        return;
+      }
+      sourceRows.push({ rank: viewRank, candidate: candidate, evidence: evidence });
+    });
+    sourceRows.sort(function (left, right) { return left.rank - right.rank; });
+    var evidenceByCode = {};
+    evidenceRows.forEach(function (evidence) {
+      evidenceByCode[toCodeKey(evidence && evidence.code)] = evidence;
+    });
+    if (invalid || sourceRows.length !== rawCodes.length
+        || sourceRows.some(function (row, index) {
+          var detailEvidence = evidenceByCode[toCodeKey(row.candidate && row.candidate.code)];
+          return (index > 0 && row.rank === sourceRows[index - 1].rank)
+            || !detailEvidence
+            || JSON.stringify(detailEvidence) !== JSON.stringify(row.evidence);
+        })
+        || !sameLuojieCodeSet(sourceRows.map(function (row) {
+          return row.candidate;
+        }), rawCandidates)) return null;
+
+    var reason = normalizeString(pool.reason).trim() || '15分钟研究输入部分核验';
+    return {
+      rows: sourceRows.map(function (row) { return row.candidate; }),
+      availability: {
+        state: 'partial',
+        reason: reason + '；专用视图显示 ' + sourceRows.length + ' 只；核验 '
+          + strategyHealth.verified_count + ' / 请求 ' + strategyHealth.requested_count
+          + '；缺失 ' + strategyHealth.missing_count
+          + '；预算外 ' + strategyHealth.budget_excluded_count + '。',
+      },
+    };
+  }
+
   function getCandidateViews() {
     var workspace = state.workspace || {};
     var rawViews = workspace.views || {};
@@ -2652,12 +2890,18 @@
     Object.keys(rawViews).forEach(function (viewKey) {
       views[viewKey] = asArray(rawViews[viewKey]).slice();
     });
+    var luojieSourceProjection = getLuojieIndependentSourceProjection(state.data || {});
+    if (luojieSourceProjection) {
+      views.luojie = luojieSourceProjection.rows.slice();
+    }
     var rawMeta = workspace.view_meta || {};
     var meta = {};
     Object.keys(Object.assign({}, DEFAULT_VIEW_CONTRACTS, rawMeta)).forEach(function (viewKey) {
       var resolved = resolveViewDisplayContract(viewKey, rawMeta[viewKey] || {});
       var blockingReason = getStrategyViewBlockingReason(state.data, viewKey);
-      if (blockingReason) {
+      if (viewKey === 'luojie' && luojieSourceProjection) {
+        resolved.availability = luojieSourceProjection.availability;
+      } else if (blockingReason) {
         views[viewKey] = [];
         resolved.availability = {
           state: 'unavailable',
@@ -2815,6 +3059,44 @@
       || Boolean(rec.formal_action && (rec.formal_decision_contract || rec.contracts));
   }
 
+  function getWorkbenchCurrentDecision(item) {
+    var outer = item && typeof item === 'object' ? item : {};
+    var rec = outer.workbench_item && typeof outer.workbench_item === 'object'
+      ? outer.workbench_item : outer;
+    var pageStatus = normalizeString(rec.page_status).trim();
+    var formal = isFormalWorkbenchItem(rec);
+    var incident = isIncidentReviewItem(outer) || isIncidentReviewItem(rec);
+    var executable = formal && !incident
+      && pageStatus === 'formal_ready' && rec.is_executable === true;
+    var statusLabels = {
+      formal_ready: '正式条件完整',
+      formal_incomplete: '正式待确认',
+      strategy_disagreement: '正式策略分歧',
+      evidence_blocked: '暂无法判断',
+      invalidated: '已失效',
+      waiting_trigger: formal ? '正式待确认' : '研究待条件',
+      watch_only: '研究观察',
+    };
+    var statusLabel = incident
+      ? '仅追溯'
+      : (normalizeString(rec.status_label).trim() || statusLabels[pageStatus]
+        || (formal ? '状态未声明' : '研究观察'));
+    if (!incident && formal && !executable && pageStatus === 'formal_ready') {
+      statusLabel = '可执行性未核验';
+    }
+    var currentDominates = incident || (formal && !executable);
+    return {
+      formal: formal,
+      incident: incident,
+      executable: executable,
+      currentDominates: currentDominates,
+      statusLabel: statusLabel,
+      prompt: currentDominates
+        ? '当前提示：' + statusLabel + '；当前不可执行'
+        : normalizeString(rec.primary_reason).trim(),
+    };
+  }
+
   function evidenceStatusForCandidate(item, viewKey) {
     var sourceItem = item || {};
     var rec = sourceItem.workbench_item ? sourceItem.workbench_item : sourceItem;
@@ -2853,6 +3135,7 @@
 
   function getCandidateStatusSummary(item, viewKey) {
     var rec = item && item.workbench_item ? item.workbench_item : (item || {});
+    var currentDecision = getWorkbenchCurrentDecision(item);
     var key = normalizeString(viewKey || state.currentView).trim();
     var strategies = asArray(rec.strategy_results);
     var formal = strategies.filter(function (strategy) {
@@ -2876,7 +3159,10 @@
         : (contract.role === 'baseline' ? '基础候选' : '研究观察'));
     var pageStatus = normalizeString(rec.page_status).trim();
     var condition;
-    if (pageStatus === 'formal_ready') condition = '正式条件完整';
+    if (currentDecision.incident
+        || (pageStatus === 'formal_ready' && !currentDecision.executable)) {
+      condition = currentDecision.statusLabel;
+    } else if (pageStatus === 'formal_ready') condition = '正式条件完整';
     else if (pageStatus === 'formal_incomplete') condition = '正式待确认';
     else if (pageStatus === 'strategy_disagreement') condition = '正式策略分歧';
     else if (pageStatus === 'evidence_blocked') condition = '条件不可核验';
@@ -4499,6 +4785,16 @@
     var risk = source.risk_and_next && typeof source.risk_and_next === 'object' ? source.risk_and_next : {};
     var mainRise = source.main_rise_clue && typeof source.main_rise_clue === 'object' ? source.main_rise_clue : {};
     var sourceEvidence = asArray(source.__strategy_results).map(comparisonStrategySource);
+    var currentDecision = source.__workbench_item
+      ? getWorkbenchCurrentDecision(source.__workbench_item) : null;
+    var sourceActionDisplay = sourceEvidence.map(function (strategy) {
+      var text = comparisonStrategySourceText(strategy);
+      if (!currentDecision || !currentDecision.currentDominates) return text;
+      return (strategy.role === 'formal' ? '原策略结论：' : '研究结论：') + text;
+    }).join('；');
+    if (currentDecision && currentDecision.currentDominates) {
+      sourceActionDisplay = [currentDecision.prompt, sourceActionDisplay].filter(Boolean).join('；');
+    }
     var signalFreshness = recommendationSignalFreshness(daily);
     var dailyDataStatus = recommendationDailyDataStatus(daily);
     var componentText = ['structure', 'position', 'sentiment'].map(function (key) {
@@ -4522,11 +4818,11 @@
       code: normalizeString(source.code || summary.code).trim(),
       name: normalizeString(summary.name).trim(),
       sector: normalizeString(summary.sector).trim(),
-      action: normalizeString(summary.formal_action).trim()
-        || (sourceEvidence.length === 1 ? sourceEvidence[0].action : '本期未声明正式动作'),
-      actionDisplay: sourceEvidence.length > 1
-        ? sourceEvidence.map(comparisonStrategySourceText).join('；')
-        : (sourceEvidence.length === 1 ? comparisonStrategySourceText(sourceEvidence[0]) : ''),
+      action: currentDecision && currentDecision.currentDominates
+        ? currentDecision.statusLabel
+        : (normalizeString(summary.formal_action).trim()
+          || (sourceEvidence.length === 1 ? sourceEvidence[0].action : '本期未声明正式动作')),
+      actionDisplay: sourceActionDisplay,
       sourceEvidence: sourceEvidence,
       decision: isRecommendationEvidenceFiniteNumber(decision.score) ? '决策分 ' + recommendationEvidenceNumber(decision.score) : recommendationEvidenceStatus(decision),
       decisionCode: normalizeString(decision.decision_code).trim(),
@@ -4933,11 +5229,30 @@
   function quickComparisonDimensionValues(item) {
     var rec = item && item.workbench_item ? item.workbench_item : (item || {});
     var strategies = quickComparisonSourceEvidence(item);
+    var currentDecision = item && item.workbench_item
+      ? getWorkbenchCurrentDecision(item) : null;
     var sourceFacts = strategies.map(function (strategy) {
-      return comparisonStrategySourceText(comparisonStrategySource(strategy));
+      var source = comparisonStrategySource(strategy);
+      var text = comparisonStrategySourceText(source);
+      if (!currentDecision || !currentDecision.currentDominates) return text;
+      return (source.role === 'formal' ? '原策略结论：' : '研究结论：') + text;
     }).filter(Boolean);
+    if (currentDecision && currentDecision.currentDominates) {
+      sourceFacts.unshift(currentDecision.prompt);
+    }
     var structure = strategies.map(function (strategy) {
-      return quickEvidenceText((strategy || {}).evidence && (strategy || {}).evidence.daily_structure);
+      var evidenceText = quickEvidenceText(
+        (strategy || {}).evidence && (strategy || {}).evidence.daily_structure
+      );
+      var strategyReason = normalizeString(strategy && strategy.primary_reason).trim();
+      var text = currentDecision && currentDecision.currentDominates
+        ? [strategyReason, evidenceText].filter(function (value, index, values) {
+          return value && values.indexOf(value) === index;
+        }).join(' · ')
+        : (evidenceText || strategyReason);
+      return text && currentDecision && currentDecision.currentDominates
+        ? (isFormalStrategyResult(strategy) ? '原策略依据：' : '研究依据：') + text
+        : text;
     }).filter(Boolean);
     var unmet = asArray(rec.unmet_conditions || rec.missing_conditions || rec.blocking_reasons || rec.blocked_reasons)
       .map(normalizeString).filter(Boolean);
@@ -4980,7 +5295,11 @@
     });
     return {
       '身份与来源动作': sourceFacts.join('；') || '来源策略未声明',
-      '结构依据': structure.join('；') || normalizeString(rec.primary_reason).trim() || '结构依据未声明',
+      '结构依据': structure.join('；')
+        || (normalizeString(rec.primary_reason).trim()
+          ? ((currentDecision && currentDecision.currentDominates ? '原策略依据：' : '')
+            + normalizeString(rec.primary_reason).trim())
+          : '结构依据未声明'),
       '未满足条件': unmet.join('、') || '未满足条件未声明',
       '关键价位': prices.join('；'),
       '主要风险': risks.join('、') || '主要风险未登记',
@@ -5137,8 +5456,10 @@
     var rec = item && typeof item === 'object' ? item : {};
     if (rec.workbench_item) {
       var unified = rec.workbench_item;
-      return { action: unified.status_label,
-        reason: normalizeString(unified.primary_reason)
+      var currentDecision = getWorkbenchCurrentDecision(rec);
+      return { action: currentDecision.statusLabel,
+        reason: (currentDecision.currentDominates
+          ? currentDecision.prompt : normalizeString(unified.primary_reason))
           + (asArray(unified.risk_flags)[0] ? ' · ' + unified.risk_flags[0] : ''),
         scoreText: unified.formal_action && isRecommendationEvidenceFiniteNumber(unified.score)
           ? '决策分 ' + formatNumber(unified.score, 0) : '' };
@@ -7293,13 +7614,14 @@
       + renderRecommendationEvidenceAudit(evidence, reportDate) + '</details>';
   }
 
-  function buildUnifiedShortJudgment(value, evidence, part) {
-    var rec = value || {};
+  function buildUnifiedShortJudgment(item, evidence, part) {
+    var rec = item && item.workbench_item ? item.workbench_item : (item || {});
     var source = evidence && typeof evidence === 'object' ? evidence : {};
     var daily = source.daily_structure && typeof source.daily_structure === 'object' ? source.daily_structure : {};
     var sublevel = source.sublevel_30m && typeof source.sublevel_30m === 'object' ? source.sublevel_30m : {};
     var risk = source.risk_and_next && typeof source.risk_and_next === 'object' ? source.risk_and_next : {};
     var blockers = asArray(rec.blocking_reasons || rec.blocked_reasons);
+    var currentDecision = getWorkbenchCurrentDecision(item);
     var next = asArray(rec.next_confirmation);
     var invalidation = asArray(rec.invalidation);
     function conditionItems(block, fallback) {
@@ -7336,9 +7658,14 @@
     var signalDate = normalizeString(rec.signal_date || daily.signal_date || (source.summary || {}).signal_date || '未提供');
     var confirmDate = normalizeString(rec.confirm_date || sublevel.confirm_date || '未提供');
     var dataCutoff = normalizeString(rec.data_latest_date || (source.summary || {}).data_latest_date || sublevel.latest_date || '未提供');
+    var currentReason = currentDecision.currentDominates
+      ? currentDecision.prompt
+      : normalizeString(rec.primary_reason || (daily.summary || source.primary_reason) || '本期未提供核心关注理由');
     var coreHtml = '<section class="decision-workbench-brief unified-short-judgment decision-brief-core" aria-label="图前核心判断">'
-      + '<section><span class="decision-workbench-brief-label">为什么关注</span><button type="button" class="decision-brief-jump" data-evidence-target="daily-chart">'
-      + escapeHtml(normalizeString(rec.primary_reason || (daily.summary || source.primary_reason) || '本期未提供核心关注理由')) + '</button>'
+      + '<section><span class="decision-workbench-brief-label">'
+      + escapeHtml(currentDecision.currentDominates ? '当前提示' : '为什么关注')
+      + '</span><button type="button" class="decision-brief-jump" data-evidence-target="daily-chart">'
+      + escapeHtml(currentReason) + '</button>'
       + (blockers.length ? '<aside class="decision-brief-alert" aria-label="重要异常">主要阻碍：'
         + escapeHtml(blockers.slice(0, 2).join('；')) + '</aside>' : '')
       + '</section></section>';
@@ -7360,6 +7687,7 @@
 
   function buildUnifiedCandidateDetail(item) {
     var value = item.workbench_item;
+    var currentDecision = getWorkbenchCurrentDecision(item);
     function list(values, fallback) {
       return asArray(values).length ? '<ul>' + values.slice(0, 3).map(function (v) {
         return '<li>' + escapeHtml(v) + '</li>';
@@ -7396,30 +7724,37 @@
           + ' · 周期 ' + (contract.intended_horizon || '未声明')
         : (hasReference ? '原始记录参考价 ' + reference + referencePurpose : '');
       var sourceScore = isFormalStrategyResult(strategy)
-        && !isIncidentReviewItem(item)
+        && !currentDecision.incident
         && !isIncidentReviewItem(strategy && strategy.candidate)
         && normalizeString(strategy && strategy.strategy_id).trim()
         ? formalDecisionScoreValue(strategy.score) : null;
+      var sourceAction = strategy.formal_action || '研究观察';
+      var sourceActionPrefix = currentDecision.currentDominates
+        ? (isFormalStrategyResult(strategy) ? '原策略结论：' : '研究结论：') : '';
+      var sourceReasonPrefix = currentDecision.currentDominates && strategy.primary_reason
+        ? (isFormalStrategyResult(strategy) ? '原策略依据：' : '研究依据：') : '';
       return '<section><header class="candidate-source-title"><strong>'
         + escapeHtml(getCurrentLabel(strategy.strategy_id) || strategy.strategy_id)
-        + ' · ' + escapeHtml(strategy.formal_action || '研究观察') + '</strong>'
+        + ' · ' + escapeHtml(sourceActionPrefix + sourceAction) + '</strong>'
         + (sourceScore === null ? '' : '<span class="candidate-source-score" data-source-score="'
           + escapeHtml(normalizeString(strategy.strategy_id).trim()) + '">决策分 '
           + escapeHtml(formatNumber(sourceScore, 0)) + '</span>') + '</header>'
-        + '<p>' + escapeHtml(strategy.primary_reason || '') + '</p>'
+        + '<p>' + escapeHtml(sourceReasonPrefix + (strategy.primary_reason || '')) + '</p>'
         + (referenceLine ? '<p>' + escapeHtml(referenceLine) + '</p>' : '')
         + renderStrategyEvidence(strategy, index) + '</section>';
     }).join('');
     var evidence = getCandidateRecommendationEvidence(item, state.data) || {};
     return '<div class="merged-candidate-detail unified-candidate-detail"><header class="unified-stock-head">'
       + '<h2>' + escapeHtml(value.name) + ' <small>' + escapeHtml(value.code) + '</small></h2>'
-      + '<strong>' + escapeHtml(value.status_label) + '</strong>'
+      + '<strong>' + escapeHtml(currentDecision.statusLabel) + '</strong>'
       + renderCandidateFormalScores(item, state.currentView)
-      + (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : '')
+      + (currentDecision.currentDominates
+        ? '<span>' + escapeHtml(currentDecision.prompt.replace('；', ' · ')) + '</span>'
+        : (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : ''))
       + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
       + '</header>' + renderCandidateStatusSummary(item, state.currentView)
-      + renderCandidateBasicInfo(item, true) + buildUnifiedShortJudgment(value, evidence, 'core')
-      + buildChartPlaceholder(item) + buildUnifiedShortJudgment(value, evidence, 'after')
+      + renderCandidateBasicInfo(item, true) + buildUnifiedShortJudgment(item, evidence, 'core')
+      + buildChartPlaceholder(item) + buildUnifiedShortJudgment(item, evidence, 'after')
       + renderCandidateFactPanel(item)
       + renderHistoricalValidationLink(value, evidence)
       + '<details class="candidate-research-details"><summary>来源策略与完整证据</summary>'

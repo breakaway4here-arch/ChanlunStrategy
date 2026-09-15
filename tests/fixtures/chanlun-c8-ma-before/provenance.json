@@ -1,0 +1,37 @@
+{
+  "report_date": "2026-09-14",
+  "fixture": {
+    "file": "page.html.gz",
+    "compression": "gzip",
+    "size": 203466,
+    "sha256": "5838aaf8fd3e6e81b1704c919d850b4699860d586dcf60296d64164728229c7b"
+  },
+  "home": {
+    "captured_from": "/private/tmp/chanlun-c8-consumer-fixes-20260915/baseline/home.html",
+    "size": 3570765,
+    "sha256": "b8d85318d898213a2947fcba9dd18d281a714762af10224c83b19e0c8da8b40f"
+  },
+  "archive": {
+    "captured_from": "/private/tmp/chanlun-c8-consumer-fixes-20260915/baseline/2026-09-14.html",
+    "size": 3570771,
+    "sha256": "61b336a6e6419a4d40b990eaa9d636cc503b1dec0f335643cfb73c9cf29577ce",
+    "derive_from": "home",
+    "replacements": [
+      {
+        "old": "href=\"assets/report-v2.css",
+        "new": "href=\"../assets/report-v2.css",
+        "count": 1
+      },
+      {
+        "old": "src=\"assets/report-v2.js",
+        "new": "src=\"../assets/report-v2.js",
+        "count": 1
+      }
+    ]
+  },
+  "daily": {
+    "committed_path": "docs/data/2026-09-14.json",
+    "size": 1750490,
+    "sha256": "e93d3b430c9c3745c21717e02c5ec770454e5b92cf512710b78c9f81c64918bf"
+  }
+}

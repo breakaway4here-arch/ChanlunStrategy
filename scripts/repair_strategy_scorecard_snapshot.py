@@ -23,6 +23,7 @@ if os.fspath(ROOT_DIR) not in sys.path:
     sys.path.insert(0, os.fspath(ROOT_DIR))
 
 from chanlun.recommendation_ledger import load_recommendation_entries  # noqa: E402
+from chanlun.pool_contract import resolve_nested_strategy_pool  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
     _build_report_v2_html,
     _escape_inline_json,
@@ -39,6 +40,9 @@ from chanlun.strategy_review import (  # noqa: E402
     load_review_market_context_from_store,
 )
 from scripts import enable_shadow_evaluation_snapshot as atomic  # noqa: E402
+from scripts.validate_today_report import (  # noqa: E402
+    _luojie_partial_contract_is_safe,
+)
 
 
 RESEARCH_POOLS_WITH_LEGACY_ZERO = ("next_day_boom", "luojie_pool")
@@ -144,8 +148,365 @@ def _registered_input_incidents(report_date):
     ]
 
 
+def _unique_code_list(raw):
+    if not isinstance(raw, (list, tuple, set, frozenset)):
+        return None
+    codes = [str(code or "").strip() for code in raw]
+    if any(not code for code in codes) or len(codes) != len(set(codes)):
+        return None
+    return codes
+
+
+def _whole_number(value):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    if number < 0 or not number.is_integer():
+        return None
+    return int(number)
+
+
+def _luojie_health_contract_is_safe(report, *, allow_budget_exclusions):
+    """Validate the producer's per-code research health declaration."""
+    pool = report.get("luojie_pool")
+    pool = pool if isinstance(pool, dict) else {}
+    selection = report.get("selection_input_health")
+    selection = selection if isinstance(selection, dict) else {}
+    by_strategy = selection.get("by_strategy")
+    by_strategy = by_strategy if isinstance(by_strategy, dict) else {}
+    embedded = pool.get("input_health")
+    fallback = by_strategy.get("luojie_pool")
+    health = embedded if isinstance(embedded, dict) else fallback
+    if not isinstance(health, dict):
+        return False
+
+    if isinstance(embedded, dict) and isinstance(fallback, dict):
+        for key in (
+            "status", "required_date", "requested_count", "verified_count",
+            "missing_count", "invalid_count", "budget_excluded_count",
+            "formal_actions_allowed", "research_candidate_output_allowed",
+        ):
+            if embedded.get(key) != fallback.get(key):
+                return False
+        for key in (
+            "verified_codes", "missing_codes", "invalid_codes",
+            "budget_excluded_codes",
+        ):
+            left = _unique_code_list(embedded.get(key))
+            right = _unique_code_list(fallback.get(key))
+            if left is None or right is None or set(left) != set(right):
+                return False
+
+    requested_count = _whole_number(health.get("requested_count"))
+    verified_count = _whole_number(health.get("verified_count"))
+    missing_count = _whole_number(health.get("missing_count"))
+    invalid_count = _whole_number(health.get("invalid_count"))
+    budget_excluded_count = _whole_number(
+        health.get("budget_excluded_count")
+    )
+    verified_codes = _unique_code_list(health.get("verified_codes"))
+    missing_codes = _unique_code_list(health.get("missing_codes"))
+    invalid_codes = _unique_code_list(health.get("invalid_codes"))
+    budget_excluded_codes = _unique_code_list(
+        health.get("budget_excluded_codes")
+    )
+    if any(value is None for value in (
+        requested_count,
+        verified_count,
+        missing_count,
+        invalid_count,
+        budget_excluded_count,
+        verified_codes,
+        missing_codes,
+        invalid_codes,
+        budget_excluded_codes,
+    )):
+        return False
+    verified_set = set(verified_codes)
+    missing_set = set(missing_codes)
+    invalid_set = set(invalid_codes)
+    budget_excluded_set = set(budget_excluded_codes)
+    return bool(
+        str(health.get("required_date") or "").strip()
+        == str(report.get("date") or "").strip()
+        and verified_count == len(verified_codes)
+        and missing_count == len(missing_codes)
+        and invalid_count == len(invalid_codes)
+        and budget_excluded_count == len(budget_excluded_codes)
+        and requested_count == verified_count + missing_count
+        and invalid_count == missing_count
+        and invalid_set == missing_set
+        and not verified_set.intersection(missing_set)
+        and not budget_excluded_set.intersection(
+            verified_set | missing_set
+        )
+        and (allow_budget_exclusions or budget_excluded_count == 0)
+    )
+
+
+def _luojie_research_identity_is_safe(rows):
+    """Reject rows that explicitly claim a non-LuoJie/formal identity."""
+    watch_actions = {
+        "", "盯盘", "仅观察", "观察", "研究观察", "等待确认", "暂无法判断",
+    }
+    for row in rows:
+        if not isinstance(row, dict):
+            return False
+        if "role" in row and row.get("role") != "research":
+            return False
+        if "view" in row and row.get("view") != "observation":
+            return False
+        if (
+            "action_semantics" in row
+            and row.get("action_semantics") != "watch_only"
+        ):
+            return False
+        if row.get("is_formal_recommendation") is True:
+            return False
+        if "sources" in row and row.get("sources") != ["luojie"]:
+            return False
+        for field in ("action", "page_action", "effective_action"):
+            if field in row and str(row.get(field) or "").strip() not in watch_actions:
+                return False
+        formal = row.get("formal_decision_contract")
+        if isinstance(formal, dict) and formal:
+            return False
+    return True
+
+
+def _fully_verified_luojie_contract_is_safe(report, state):
+    pool = report.get("luojie_pool")
+    if not isinstance(pool, dict) or not (
+        str(pool.get("mode") or "").strip().lower() == "enabled"
+        and str(pool.get("status") or "").strip().lower()
+        in {"ok", "verified"}
+        and state.get("state") in {"ran", "verified_empty"}
+        and state.get("contract_valid") is True
+    ):
+        return False
+    selection = report.get("selection_input_health")
+    selection = selection if isinstance(selection, dict) else {}
+    by_strategy = selection.get("by_strategy")
+    by_strategy = by_strategy if isinstance(by_strategy, dict) else {}
+    embedded = pool.get("input_health")
+    fallback = by_strategy.get("luojie_pool")
+    health = embedded if isinstance(embedded, dict) else fallback
+    if not isinstance(health, dict) or not (
+        str(health.get("status") or "").strip().lower() == "verified"
+        and str(health.get("required_date") or "").strip()
+        == str(report.get("date") or "").strip()
+        and health.get("formal_actions_allowed") is False
+        and health.get("research_candidate_output_allowed") is True
+    ):
+        return False
+    if isinstance(embedded, dict) and isinstance(fallback, dict):
+        for key in (
+            "status", "required_date", "requested_count", "verified_count",
+            "missing_count", "formal_actions_allowed",
+            "research_candidate_output_allowed",
+        ):
+            if embedded.get(key) != fallback.get(key):
+                return False
+        for key in ("verified_codes", "missing_codes"):
+            left = _unique_code_list(embedded.get(key))
+            right = _unique_code_list(fallback.get(key))
+            if left is None or right is None or set(left) != set(right):
+                return False
+    verified_codes = _unique_code_list(health.get("verified_codes"))
+    missing_codes = _unique_code_list(health.get("missing_codes"))
+    requested_count = _whole_number(health.get("requested_count"))
+    verified_count = _whole_number(health.get("verified_count"))
+    missing_count = _whole_number(health.get("missing_count"))
+    if None in {
+        requested_count, verified_count, missing_count,
+    } or verified_codes is None or missing_codes is None:
+        return False
+    if not (
+        verified_count == len(verified_codes)
+        and missing_count == 0
+        and missing_codes == []
+        and requested_count == verified_count
+    ):
+        return False
+    candidate_codes = {
+        str(row.get("code") or "").strip()
+        for row in state.get("candidates") or []
+        if isinstance(row, dict)
+    }
+    return candidate_codes.issubset(set(verified_codes))
+
+
+def _independent_luojie_research_contract(report):
+    """Return a verified independent-research contract or ``None``."""
+    report = report if isinstance(report, dict) else {}
+    state = resolve_nested_strategy_pool(report, "luojie_pool")
+    partial = state.get("state") == "partial"
+    contract_safe = _luojie_health_contract_is_safe(
+        report,
+        allow_budget_exclusions=partial,
+    ) and (
+        partial and _luojie_partial_contract_is_safe(report, state)
+        or _fully_verified_luojie_contract_is_safe(report, state)
+    )
+    if not contract_safe:
+        return None
+    pool = report.get("luojie_pool")
+    diagnostics = pool.get("diagnostics") if isinstance(pool, dict) else {}
+    diagnostics = diagnostics if isinstance(diagnostics, dict) else {}
+    upstream = diagnostics.get("final_common_upstream")
+    if not isinstance(upstream, dict) or not (
+        upstream.get("upstream_pool") == "picks_pure"
+        and upstream.get("enforced") is False
+        and upstream.get("reason") == "research_independent_candidate_set"
+    ):
+        return None
+
+    rows = list(state.get("candidates") or [])
+    if not _luojie_research_identity_is_safe(rows):
+        return None
+    candidate_codes = [
+        str(row.get("code") or "").strip()
+        for row in rows
+        if isinstance(row, dict)
+    ]
+    if (
+        len(candidate_codes) != len(rows)
+        or any(not code for code in candidate_codes)
+        or len(candidate_codes) != len(set(candidate_codes))
+    ):
+        return None
+    pure_codes = {
+        str(row.get("code") or "").strip()
+        for row in report.get("picks_pure") or []
+        if isinstance(row, dict) and str(row.get("code") or "").strip()
+    }
+    excluded_codes = sorted(set(candidate_codes) - pure_codes)
+    declared_excluded = upstream.get("excluded_codes")
+    if not isinstance(declared_excluded, list) or (
+        declared_excluded != excluded_codes
+        or len(declared_excluded) != len(set(declared_excluded))
+    ):
+        return None
+
+    expected_counts = {
+        "upstream_count": len(pure_codes),
+        "input_count": len(candidate_codes),
+        "candidate_count": len(candidate_codes),
+        "kept_count": len(set(candidate_codes) & pure_codes),
+        "excluded_count": len(excluded_codes),
+    }
+    for key, expected in expected_counts.items():
+        value = upstream.get(key)
+        if isinstance(value, bool) or value != expected:
+            return None
+    return {
+        "state": state,
+        "candidate_codes": candidate_codes,
+        "excluded_codes": excluded_codes,
+    }
+
+
+def _has_legacy_luojie_upstream_marker(
+    report,
+    report_date,
+    independent_contract,
+):
+    """Prove that an empty LuoJie view was closed by this repair script."""
+    if not independent_contract:
+        return False
+    invalid_codes = independent_contract["excluded_codes"]
+    expected_marker = {
+        "status": "unavailable",
+        "required_date": report_date,
+        "blocking_reason": "strategy_upstream_contract_mismatch",
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+        "output_hidden": True,
+    }
+    health = report.get("selection_input_health")
+    by_view = health.get("by_view") if isinstance(health, dict) else {}
+    if not isinstance(by_view, dict) or by_view.get("luojie") != expected_marker:
+        return False
+
+    workspace = report.get("workspace")
+    if not isinstance(workspace, dict):
+        return False
+    views = workspace.get("views")
+    counts = workspace.get("counts")
+    view_meta = workspace.get("view_meta")
+    diagnostics = workspace.get("diagnostics")
+    if not (
+        isinstance(views, dict)
+        and views.get("luojie") == []
+        and isinstance(counts, dict)
+        and counts.get("luojie") == 0
+        and isinstance(view_meta, dict)
+        and isinstance(diagnostics, dict)
+    ):
+        return False
+    meta = view_meta.get("luojie")
+    if not isinstance(meta, dict) or not (
+        meta.get("role") == "research"
+        and meta.get("source_pool") == "luojie_pool"
+        and meta.get("action_semantics") == "watch_only"
+        and meta.get("upstream_contract") == expected_marker
+        and meta.get("availability") == {
+            "state": "unavailable",
+            "reason": (
+                "历史输出含 {} 只不在 picks_pure 共同上游全集；"
+                "该视图已封闭，保留原始池追溯但不重排。"
+            ).format(len(invalid_codes)),
+        }
+    ):
+        return False
+    incidents = diagnostics.get("upstream_contract_incidents")
+    expected_incident = {
+        "view": "luojie",
+        "blocking_reason": "strategy_upstream_contract_mismatch",
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+    }
+    if not isinstance(incidents, list):
+        return False
+    luojie_incidents = [
+        row for row in incidents
+        if isinstance(row, dict) and row.get("view") == "luojie"
+    ]
+    return luojie_incidents == [expected_incident]
+
+
+def _remove_legacy_luojie_upstream_marker(report):
+    health = report.get("selection_input_health")
+    by_view = health.get("by_view") if isinstance(health, dict) else None
+    if isinstance(by_view, dict):
+        by_view.pop("luojie", None)
+
+
+def _assert_restored_luojie_workspace(workspace, independent_contract):
+    views = workspace.get("views") if isinstance(workspace, dict) else {}
+    rows = views.get("luojie") if isinstance(views, dict) else None
+    if not isinstance(rows, list):
+        raise RuntimeError("independent luojie workspace restoration failed")
+    expected_codes = independent_contract["candidate_codes"]
+    if [str(row.get("code") or "") for row in rows] != expected_codes:
+        raise RuntimeError("independent luojie workspace restoration failed")
+    for rank, row in enumerate(rows, 1):
+        code = expected_codes[rank - 1]
+        if not (
+            row.get("view_rank") == rank
+            and row.get("sources") == ["luojie"]
+            and row.get("action_semantics") == "watch_only"
+            and row.get("ref") == {"pool": "luojie_pool", "code": code}
+        ):
+            raise RuntimeError("independent luojie workspace restoration failed")
+
+
 def _workspace_upstream_contract_violations(report):
     report = report if isinstance(report, dict) else {}
+    independent_luojie = _independent_luojie_research_contract(report)
     pure_codes = {
         str(row.get("code") or "")
         for row in report.get("picks_pure") or []
@@ -156,6 +517,8 @@ def _workspace_upstream_contract_violations(report):
     views = views if isinstance(views, dict) else {}
     violations = {}
     for view_name in COMMON_UPSTREAM_STRATEGY_VIEWS:
+        if view_name == "luojie" and independent_luojie is not None:
+            continue
         rows = views.get(view_name)
         rows = rows if isinstance(rows, list) else []
 
@@ -570,10 +933,18 @@ def rebuild_strategy_scorecard_report(
     _validate_scorecard_contract(scorecards, review_diagnostics)
     baseline = protected_report_digest(report)
     incident_correction = bool(_registered_input_incidents(report_date))
+    independent_luojie = _independent_luojie_research_contract(report)
+    restore_luojie = _has_legacy_luojie_upstream_marker(
+        report,
+        report_date,
+        independent_luojie,
+    )
     original_contract_views = set(
         _workspace_upstream_contract_violations(report)
     )
     rebuilt = _deepcopy_json(report)
+    if restore_luojie:
+        _remove_legacy_luojie_upstream_marker(rebuilt)
     _apply_registered_input_health(rebuilt, report_date)
     removed = _remove_unproven_zero_changes(rebuilt)
     rebuilt["strategy_scorecards"] = _deepcopy_json(scorecards)
@@ -589,10 +960,16 @@ def rebuild_strategy_scorecard_report(
         )
     if "workspace" in rebuilt:
         rebuilt["workspace"] = build_workspace(rebuilt)
+        if restore_luojie:
+            _assert_restored_luojie_workspace(
+                rebuilt["workspace"], independent_luojie
+            )
     rebuilt_contract_views = set(
         _workspace_upstream_contract_violations(rebuilt)
     )
     ignored_contract_views = original_contract_views | rebuilt_contract_views
+    if restore_luojie:
+        ignored_contract_views.add("luojie")
     baseline_workspace = workspace_selection_projection(
         report,
         ignore_formal=incident_correction,
@@ -622,6 +999,7 @@ def rebuild_strategy_scorecard_report(
         "upstream_contract_blocked_views": sorted(
             rebuilt_contract_views
         ),
+        "restored_independent_views": ["luojie"] if restore_luojie else [],
     }
 
 

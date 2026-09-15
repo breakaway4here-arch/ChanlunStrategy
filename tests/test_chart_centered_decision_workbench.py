@@ -848,6 +848,243 @@ assert(hiddenDesktop.innerHTML === '', 'hidden desktop switcher was targeted by 
         self.assertRegex(mobile, r"\.chart-layer-switcher button[^}]*min-height:\s*44px\s*;")
         self.assertRegex(mobile, r"\.chart-window-tools[^}]*border-top:")
 
+    def test_actual_sep14_non_executable_result_uses_current_copy_and_traces_original_strategy(self):
+        _assert_node_contract(
+            self,
+            "({ rows: decisionRows, summary: buildCandidateRowSummary, rowReason: renderCandidateRowReason, detail: buildUnifiedCandidateDetail, quick: quickComparisonDimensionValues, normalizeEvidence: normalizeCandidateEvidenceRow, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+const archivedHtml = require('zlib').gunzipSync(fs.readFileSync(
+  'tests/fixtures/chanlun-c8-ma-before/page.html.gz'
+)).toString('utf8');
+const bootstrapMarker = 'window.CHANLUN_BOOTSTRAP = ';
+const start = archivedHtml.indexOf(bootstrapMarker) + bootstrapMarker.length;
+const end = archivedHtml.indexOf(';\n  window.CHANLUN_BOOTSTRAP.dataBasePrefix', start);
+const bootstrap = JSON.parse(archivedHtml.slice(start, end));
+const frozen = JSON.stringify(bootstrap);
+window.CHANLUN_BOOTSTRAP = bootstrap;
+t.state.data = bootstrap.inlineReportData;
+t.state.workspace = bootstrap.inlineReportData.workspace;
+t.state.currentView = 'decision_formal';
+const row = t.rows(bootstrap.decisionWorkbench, 'decision_formal')
+  .find(function (item) { return item.code === '603344'; });
+assert(row, 'actual Sep14 星德胜 row is missing');
+const value = row.workbench_item;
+assert(value.page_status === 'evidence_blocked' && value.status_label === '暂无法判断'
+  && value.is_executable === false && value.formal_action === '可上车'
+  && value.score === 62, 'actual Sep14 F2 fields changed unexpectedly');
+
+const summary = t.summary(row, 'decision_formal');
+const rowHtml = t.rowReason(row, 'decision_formal', summary);
+assert(summary.action === '暂无法判断' && summary.reason.includes('当前提示：暂无法判断'),
+  'list summary is not led by the current workbench state');
+assert(!summary.reason.includes('偏执行优先') && !rowHtml.includes('偏执行优先'),
+  'non-executable list still presents the original execution reason as current');
+assert(rowHtml.includes('缺少有效参考价') && rowHtml.includes('缺少有效失效位'),
+  'list lost the concrete current blockers');
+
+const detail = t.detail(row);
+const header = (detail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+const core = (detail.match(/<section class="decision-workbench-brief unified-short-judgment decision-brief-core"[\s\S]*?<\/section><\/section>/) || [])[0] || '';
+const sources = detail.slice(detail.indexOf('来源策略与完整证据'));
+assert(header.includes('当前提示：暂无法判断') && header.includes('当前不可执行'),
+  'detail first layer does not state current non-executable status');
+assert(!header.includes('正式动作：可上车') && !core.includes('偏执行优先'),
+  'detail first layer still promotes the original strategy conclusion');
+assert(core.includes('当前提示') && core.includes('暂无法判断')
+  && core.includes('结构摘要：证据冲突'), 'chart-front judgment lost current state or blockers');
+assert(sources.includes('原策略结论：可上车')
+  && sources.includes('原策略依据：主推命中，确认与结构条件已满足，偏执行优先。'),
+  'source provenance did not retain and relabel the original strategy facts');
+
+const quick = t.quick(row);
+assert(quick['身份与来源动作'].includes('当前提示：暂无法判断')
+  && quick['身份与来源动作'].includes('原策略结论：'),
+  'quick comparison did not separate current status from source conclusions');
+assert(quick['结构依据'].includes('原策略依据：') && quick['结构依据'].includes('偏执行优先'),
+  'quick comparison lost the original strategy reason provenance');
+const selected = value.strategy_results.find(function (strategy) {
+  return strategy.strategy_id === value.evidence_view;
+}) || value.strategy_results[0];
+const comparison = t.normalizeEvidence(Object.assign({}, selected.evidence, {
+  __strategy_results: value.strategy_results,
+  __workbench_item: value
+}));
+assert(comparison.actionDisplay.includes('当前提示：暂无法判断')
+  && comparison.actionDisplay.includes('原策略结论：'),
+  'evidence comparison did not separate current status from source conclusions');
+assert(frozen === JSON.stringify(bootstrap), 'F2 render consumers mutated the actual report input');
+""",
+        )
+
+    def test_unified_current_copy_preserves_ready_and_fails_closed_for_non_ready_states(self):
+        _assert_node_contract(
+            self,
+            "({ summary: buildCandidateRowSummary, detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-14' };
+t.state.data = { date: '2026-09-14' };
+t.state.currentView = 'decision_formal';
+function item(patch) {
+  const value = Object.assign({
+    code: '600001', name: '状态样本', page_status: 'formal_ready',
+    status_label: '正式条件完整', formal_action: '可上车', score: 62,
+    is_executable: true, primary_reason: '条件已满足，偏执行优先',
+    blocking_reasons: [], contracts: {}, strategy_results: [{
+      strategy_id: 'main', role: 'formal', action_semantics: 'formal',
+      formal_action: '可上车', score: 62, primary_reason: '条件已满足，偏执行优先',
+      contract: {}, evidence: {}
+    }]
+  }, patch || {});
+  return { code: value.code, name: value.name, workbench_item: value };
+}
+const ready = item();
+const readySummary = t.summary(ready, 'decision_formal');
+const readyDetail = t.detail(ready);
+const readyHeader = (readyDetail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+const readyCore = (readyDetail.match(/<section class="decision-workbench-brief unified-short-judgment decision-brief-core"[\s\S]*?<\/section><\/section>/) || [])[0] || '';
+assert(readySummary.reason === '条件已满足，偏执行优先',
+  'formal_ready list path was downgraded');
+assert(readyHeader.includes('正式动作：可上车') && readyCore.includes('条件已满足，偏执行优先'),
+  'formal_ready first layer lost its current executable conclusion');
+
+for (const sample of [
+  { page_status: 'formal_incomplete', status_label: '正式待确认', is_executable: false,
+    blocking_reasons: ['缺少有效参考价', '缺少有效失效位'] },
+  { page_status: 'evidence_blocked', status_label: '暂无法判断', is_executable: false,
+    blocking_reasons: ['日线结构：证据冲突'] },
+  { page_status: 'strategy_disagreement', status_label: '正式策略分歧', is_executable: false,
+    blocking_reasons: ['正式策略意见不一致'] },
+  { page_status: 'unknown', status_label: '', is_executable: false,
+    blocking_reasons: [] },
+  { page_status: 'formal_ready', status_label: '正式条件完整', is_executable: false,
+    blocking_reasons: [] }
+]) {
+  const blocked = item(sample);
+  const summary = t.summary(blocked, 'decision_formal');
+  const detail = t.detail(blocked);
+  const header = (detail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+  assert(summary.reason.includes('当前提示：') && !summary.reason.includes('条件已满足'),
+    'non-ready summary exposed an executable reason: ' + sample.page_status);
+  assert(header.includes('当前不可执行') && !header.includes('正式动作：可上车'),
+    'non-ready detail exposed an executable action: ' + sample.page_status);
+  assert(!summary.reason.includes('无风险') && !summary.reason.includes('条件齐全'),
+    'unknown or conflicting state was filled as safe: ' + sample.page_status);
+}
+""",
+        )
+
+    def test_formal_ready_without_verified_executability_updates_every_current_status_label(self):
+        _assert_node_contract(
+            self,
+            "({ current: getWorkbenchCurrentDecision, status: renderCandidateStatusSummary, detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-14' };
+t.state.data = { date: '2026-09-14' };
+t.state.currentView = 'decision_formal';
+function item() {
+  const value = {
+    code: '600001', name: '状态样本', page_status: 'formal_ready',
+    status_label: '正式条件完整', formal_action: '可上车', score: 62,
+    is_executable: true, primary_reason: '条件已满足，偏执行优先',
+    blocking_reasons: [], contracts: {}, strategy_results: [{
+      strategy_id: 'main', role: 'formal', action_semantics: 'formal',
+      formal_action: '可上车', score: 62, primary_reason: '条件已满足，偏执行优先',
+      contract: {}, evidence: {}
+    }]
+  };
+  return { code: value.code, name: value.name, workbench_item: value };
+}
+const ready = item();
+const readyDetail = t.detail(ready);
+const readyHeader = (readyDetail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+assert(readyHeader.includes('<strong>正式条件完整</strong>')
+  && t.status(ready, 'decision_formal').includes('条件：正式条件完整'),
+  'verified formal_ready current labels were downgraded');
+
+for (const mode of ['false', 'missing']) {
+  const blocked = item();
+  if (mode === 'false') blocked.workbench_item.is_executable = false;
+  else delete blocked.workbench_item.is_executable;
+  const current = t.current(blocked);
+  const detail = t.detail(blocked);
+  const header = (detail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+  const sources = detail.slice(detail.indexOf('来源策略与完整证据'));
+  assert(current.statusLabel === '可执行性未核验',
+    mode + ' executable contract did not fail closed');
+  assert(header.includes('<strong>可执行性未核验</strong>')
+    && !header.includes('<strong>正式条件完整</strong>'),
+    mode + ' executable contract left a stale header status');
+  assert(t.status(blocked, 'decision_formal').includes('条件：可执行性未核验')
+    && !t.status(blocked, 'decision_formal').includes('条件：正式条件完整'),
+    mode + ' executable contract left a stale condition summary');
+  assert(header.includes('决策分 62') && sources.includes('原策略结论：可上车')
+    && sources.includes('原策略依据：条件已满足，偏执行优先'),
+    mode + ' executable contract lost score or labeled strategy history');
+}
+""",
+        )
+
+    def test_outer_incident_guard_reaches_unified_core_judgment(self):
+        _assert_node_contract(
+            self,
+            "({ current: getWorkbenchCurrentDecision, status: renderCandidateStatusSummary, detail: buildUnifiedCandidateDetail, state: state })",
+            r"""
+const t = globalThis.__auxTest;
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-14' };
+t.state.data = { date: '2026-09-14' };
+t.state.currentView = 'decision_formal';
+const value = {
+  code: '600001', name: '事故复盘样本', page_status: 'formal_ready',
+  status_label: '正式条件完整', formal_action: '可上车', score: 62,
+  is_executable: true, primary_reason: '条件已满足，偏执行优先',
+  blocking_reasons: [], contracts: {}, strategy_results: [{
+    strategy_id: 'main', role: 'formal', action_semantics: 'formal',
+    formal_action: '可上车', score: 62, primary_reason: '条件已满足，偏执行优先',
+    contract: {}, evidence: {}
+  }]
+};
+const normal = { code: value.code, name: value.name, workbench_item: value };
+const normalSources = t.detail(normal).slice(
+  t.detail(normal).indexOf('来源策略与完整证据')
+);
+assert(normalSources.includes('data-source-score="main"')
+  && normalSources.includes('决策分 62'),
+  'normal formal source score disappeared');
+const incident = {
+  code: value.code, name: value.name, incident_review_only: true, workbench_item: value
+};
+const current = t.current(incident);
+const detail = t.detail(incident);
+const header = (detail.match(/<header class="unified-stock-head">([\s\S]*?)<\/header>/) || [])[1] || '';
+const core = (detail.match(/<section class="decision-workbench-brief unified-short-judgment decision-brief-core"[\s\S]*?<\/section><\/section>/) || [])[0] || '';
+const sources = detail.slice(detail.indexOf('来源策略与完整证据'));
+assert(current.incident && current.statusLabel === '仅追溯',
+  'formal_ready overwrote the incident current status');
+assert(header.includes('<strong>仅追溯</strong>') && header.includes('当前不可执行')
+  && t.status(incident, 'decision_formal').includes('条件：仅追溯'),
+  'incident current status did not reach every first-layer label');
+assert(core.includes('当前提示') && core.includes('仅追溯')
+  && core.includes('当前不可执行') && !core.includes('偏执行优先'),
+  'outer incident guard was lost by the chart-front judgment consumer');
+assert(!sources.includes('data-source-score="main"')
+  && sources.includes('原策略依据：条件已满足，偏执行优先'),
+  'incident detail exposed an active score or lost labeled strategy history');
+const innerValue = Object.assign({}, value, { incident_review_only: true });
+const innerIncident = {
+  code: value.code, name: value.name, workbench_item: innerValue
+};
+const innerDetail = t.detail(innerIncident);
+const innerSources = innerDetail.slice(innerDetail.indexOf('来源策略与完整证据'));
+assert(t.current(innerIncident).incident
+  && !innerSources.includes('data-source-score="main"')
+  && innerSources.includes('原策略依据：条件已满足，偏执行优先'),
+  'inner incident detail exposed an active score or lost labeled strategy history');
+""",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

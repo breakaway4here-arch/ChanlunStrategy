@@ -5,6 +5,7 @@ value is presentation data only and must never be written to the formal JSON,
 selection stores, ledgers, or pre-close snapshots.
 """
 
+import copy
 import math
 import re
 from collections.abc import Mapping
@@ -1841,20 +1842,24 @@ def _project_daily_structure(
             audit_reasons[field] = diagnostic
     buy_point_price = _positive_price(price_evidence.get("buy_point_price"))
 
-    ma_sources = []
-    for source in sources:
-        nested = _as_mapping(_field(source, "ma"))
-        if nested:
-            ma_sources.append(nested)
-        dma = _as_mapping(_field(source, "gf_dma_health"))
-        nested_dma = _as_mapping(dma.get("ma"))
-        if nested_dma:
-            ma_sources.append(nested_dma)
-        ma_sources.append(source)
-    ma_values = {
-        key: consistent_positive(key, ma_sources, (key,))
-        for key in ("ma5", "ma10", "ma20", "ma50", "ma100", "ma200")
-    }
+    ma_values = {}
+    for key in ("ma5", "ma10", "ma20", "ma50", "ma100", "ma200"):
+        ma_sources = []
+        for source in sources:
+            nested = _as_mapping(_field(source, "ma"))
+            if nested:
+                ma_sources.append(nested)
+            dma = _as_mapping(_field(source, "gf_dma_health"))
+            nested_dma = _as_mapping(dma.get("ma"))
+            if nested_dma:
+                ma_sources.append(nested_dma)
+            declared = _field(source, key, _MISSING)
+            if not (
+                key in {"ma5", "ma10"}
+                and isinstance(declared, (list, tuple))
+            ):
+                ma_sources.append(source)
+        ma_values[key] = consistent_positive(key, ma_sources, (key,))
     missing_ma_labels = [
         key.upper()
         for key in ("ma5", "ma10", "ma20", "ma50")
@@ -5082,4 +5087,252 @@ def build_recommendation_evidence_projection(
         "report_date": report_date,
         "views": _build_views(formal_report, daily_data, report_date),
         "market_sentiment": market_sentiment,
+    }
+
+
+def correct_published_display_ma_evidence(
+    formal_report,
+    daily_data,
+    workspace,
+    existing_evidence,
+):
+    """Correct only the published MA5/MA10 display-sequence false conflict.
+
+    This is deliberately narrower than rebuilding the evidence projection.
+    Published pages may contain independently verified minute evidence that
+    cannot be reconstructed from the daily JSON.  Every source identity is
+    therefore replayed, while only the known MA audit, its direct summary,
+    and its main-rise consumer are changed.
+    """
+    formal_report = formal_report if isinstance(formal_report, dict) else {}
+    daily_data = daily_data if isinstance(daily_data, dict) else {}
+    workspace = workspace if isinstance(workspace, dict) else {}
+    evidence = (
+        existing_evidence if isinstance(existing_evidence, dict) else {}
+    )
+    report_date = _strict_date_value(daily_data.get("date"))
+    if not report_date or _strict_date_value(formal_report.get("date")) != report_date:
+        raise ValueError("published MA correction report date mismatch")
+    if not (
+        evidence.get("schema_version") == 1
+        and evidence.get("report_date") == report_date
+        and isinstance(evidence.get("views"), dict)
+        and isinstance(evidence.get("market_sentiment"), dict)
+    ):
+        raise ValueError("published MA correction evidence envelope mismatch")
+    workspace_views = workspace.get("views")
+    if not isinstance(workspace_views, dict):
+        raise ValueError("published MA correction workspace is missing")
+    declared_order = workspace.get("view_order")
+    if not isinstance(declared_order, list) or declared_order != list(
+        evidence["views"]
+    ):
+        raise ValueError("published MA correction view order mismatch")
+
+    corrected = copy.deepcopy(evidence)
+    corrected_sources = []
+    seen_identities = set()
+    for view_name, old_rows in evidence["views"].items():
+        workspace_rows = workspace_views.get(view_name)
+        if not isinstance(old_rows, list) or not isinstance(workspace_rows, list):
+            raise ValueError("published MA correction view rows are invalid")
+        if len(old_rows) != len(workspace_rows):
+            raise ValueError("published MA correction source count mismatch")
+        for index, (old, row) in enumerate(zip(old_rows, workspace_rows)):
+            if not isinstance(old, dict) or not isinstance(row, dict):
+                raise ValueError("published MA correction source row is invalid")
+            code = _as_text(row.get("code"))
+            ref = _as_mapping(row.get("ref"))
+            pool_name = _as_text(ref.get("pool"))
+            ref_code = _as_text(ref.get("code"))
+            view_rank = _positive_integer(row.get("view_rank"))
+            identity = (view_name, pool_name, code, view_rank)
+            if not (
+                code
+                and pool_name
+                and ref_code == code
+                and view_rank == index + 1
+                and identity not in seen_identities
+                and old.get("view") == view_name
+                and _as_text(old.get("code")) == code
+            ):
+                raise ValueError("published MA correction source identity mismatch")
+            seen_identities.add(identity)
+            source_identity = _as_mapping(old.get("source_identity"))
+            summary = _as_mapping(old.get("summary"))
+            if not (
+                source_identity.get("status") == "available"
+                and not source_identity.get("reason")
+                and summary.get("pool_identity") == pool_name
+                and summary.get("view_identity") == view_name
+                and summary.get("view_rank") == view_rank
+            ):
+                raise ValueError("published MA correction evidence identity mismatch")
+
+            raw, serialized_pool, serialized_diagnostic = (
+                _find_serialized_candidate(daily_data, row)
+            )
+            original_raw, formal_diagnostic = _find_original_candidate(
+                formal_report, row
+            )
+            if (
+                serialized_diagnostic
+                or formal_diagnostic
+                or serialized_pool != pool_name
+                or not isinstance(raw, Mapping)
+                or not isinstance(original_raw, Mapping)
+            ):
+                raise ValueError("published MA correction source lookup failed")
+
+            old_daily = old.get("daily_structure")
+            if not isinstance(old_daily, dict):
+                raise ValueError("published MA correction daily evidence is missing")
+            audit_reasons = old_daily.get("audit_reasons")
+            if not isinstance(audit_reasons, dict):
+                raise ValueError("published MA correction audit contract is invalid")
+            if not audit_reasons:
+                continue
+            if audit_reasons != {"ma5": "invalid", "ma10": "invalid"}:
+                raise ValueError("published MA correction found extra conflict")
+            if not (
+                old_daily.get("status") == "conflict"
+                and old_daily.get("reason")
+                == "daily_evidence_conflict_or_invalid"
+                and old_daily.get("ma5") is None
+                and old_daily.get("ma10") is None
+            ):
+                raise ValueError("published MA correction old state mismatch")
+            price_evidence = old.get("price_evidence")
+            if not isinstance(price_evidence, dict) or not isinstance(
+                old_daily.get("missing_evidence"), list
+            ):
+                raise ValueError(
+                    "published MA correction direct evidence is missing"
+                )
+            sources = (row, raw, original_raw)
+            for field in ("ma5", "ma10"):
+                if not any(
+                    isinstance(_field(source, field, _MISSING), (list, tuple))
+                    for source in sources
+                ):
+                    raise ValueError(
+                        "published MA correction lacks display sequence"
+                    )
+
+            fixed_daily = _project_daily_structure(
+                row,
+                raw,
+                original_raw,
+                price_evidence,
+                report_date,
+            )
+            if not (
+                fixed_daily.get("status") == "available"
+                and fixed_daily.get("audit_reasons") == {}
+                and fixed_daily.get("ma5") is None
+                and fixed_daily.get("ma10") is None
+            ):
+                raise ValueError("published MA correction remains ambiguous")
+            if old_daily.get("as_of") != report_date:
+                raise ValueError("published MA correction daily fact drifted")
+            for field in (
+                "buy_point_price",
+                "data_source",
+                "freshness_status",
+                "health",
+                "is_final",
+                "latest_date",
+                "ma20",
+                "ma50",
+                "ma100",
+                "ma200",
+                "ma_bullish",
+                "signal",
+                "signal_age_days",
+                "signal_date",
+                "signal_freshness_status",
+                "signal_reason",
+                "source",
+                "stage",
+                "stale",
+                "startup_grade",
+                "startup_label",
+                "startup_warning",
+                "summary",
+                "trend",
+            ):
+                expected = fixed_daily.get(field, _MISSING)
+                if expected is not _MISSING and expected is not None and (
+                    old_daily.get(field, _MISSING) != expected
+                ):
+                    raise ValueError(
+                        "published MA correction daily fact drifted"
+                    )
+
+            updated_daily = copy.deepcopy(old_daily)
+            updated_daily["status"] = fixed_daily["status"]
+            updated_daily["audit_reasons"] = {}
+            updated_daily["missing_evidence"] = [
+                value
+                for value in old_daily.get("missing_evidence") or []
+                if value not in {"ma5 证据invalid", "ma10 证据invalid"}
+            ]
+            updated_daily.pop("reason", None)
+            updated_summary = _build_summary(
+                row,
+                raw,
+                original_raw,
+                pool_name,
+                view_name,
+                report_date,
+                updated_daily,
+            )
+            if {
+                key: value for key, value in summary.items() if key != "status"
+            } != {
+                key: value
+                for key, value in updated_summary.items()
+                if key != "status"
+            } or updated_summary.get("status") != "available":
+                raise ValueError("published MA correction summary drifted")
+            sublevel_30m = old.get("sublevel_30m")
+            if not isinstance(sublevel_30m, dict):
+                raise ValueError("published MA correction minute evidence is missing")
+            main_rise = _build_main_rise_clue(
+                row,
+                raw,
+                original_raw,
+                pool_name,
+                view_name,
+                report_date,
+                sublevel_30m,
+                updated_daily,
+            )
+            main_rise, truncated = _bound_display_strings(main_rise)
+            payload_contract = _as_mapping(old.get("payload_contract"))
+            if truncated or not (
+                payload_contract.get("status") == "available"
+                and payload_contract.get("truncated_text_count") == 0
+            ):
+                raise ValueError("published MA correction payload would truncate")
+
+            target = corrected["views"][view_name][index]
+            target["daily_structure"] = updated_daily
+            target["summary"] = updated_summary
+            target["main_rise_clue"] = main_rise
+            corrected_sources.append({
+                "view": view_name,
+                "pool": pool_name,
+                "code": code,
+                "view_rank": view_rank,
+            })
+
+    if not corrected_sources:
+        raise ValueError("published MA correction found no target source")
+    return corrected, {
+        "corrected_sources": corrected_sources,
+        "corrected_source_count": len(corrected_sources),
+        "corrected_entity_count": len({
+            item["code"] for item in corrected_sources
+        }),
     }

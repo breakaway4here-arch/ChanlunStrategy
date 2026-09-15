@@ -483,6 +483,83 @@ class TestRecommendationEvidenceModule(unittest.TestCase):
         self.assertIsNone(daily["ma50"])
         self.assertEqual(daily["macd"], "DIF/DEA 双线0轴上")
 
+    def test_top_level_ma5_ma10_display_sequences_are_not_scalar_declarations(self):
+        row = _workspace_row()
+        raw = _raw_candidate()
+        raw.update({
+            "trend_type": "盘整",
+            "ma5": [],
+            "ma10": (9.8, 10.1),
+        })
+
+        daily = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]["daily_structure"]
+
+        self.assertIsNone(daily["ma5"])
+        self.assertIsNone(daily["ma10"])
+        self.assertNotEqual(daily["status"], "conflict")
+        self.assertNotIn("ma5", daily["audit_reasons"])
+        self.assertNotIn("ma10", daily["audit_reasons"])
+
+    def test_nested_ma_arrays_and_top_level_invalid_scalars_still_fail_closed(self):
+        cases = (
+            ({"ma": {"ma5": []}}, "ma5"),
+            ({"gf_dma_health": {"ma": {"ma10": [9.8, 10.1]}}}, "ma10"),
+            ({"ma5": "10.0"}, "ma5"),
+        )
+        for declarations, field in cases:
+            with self.subTest(declarations=declarations):
+                row = _workspace_row()
+                raw = _raw_candidate()
+                raw.update(declarations)
+
+                daily = build_recommendation_evidence_projection(
+                    {},
+                    _workspace_daily([row], [raw]),
+                )["views"]["main"][0]["daily_structure"]
+
+                self.assertEqual(daily["status"], "conflict")
+                self.assertEqual(daily["audit_reasons"].get(field), "invalid")
+
+    def test_top_level_ma_sequence_keeps_nested_scalar_and_real_conflict(self):
+        row = _workspace_row()
+        raw = _raw_candidate()
+        raw.update({
+            "ma5": [9.8, 10.1],
+            "ma": {"ma5": 10.2},
+        })
+
+        daily = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]["daily_structure"]
+
+        self.assertEqual(daily["ma5"], 10.2)
+        self.assertNotIn("ma5", daily["audit_reasons"])
+
+        raw["gf_dma_health"] = {"ma": {"ma5": 10.3}}
+        conflicted = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]["daily_structure"]
+        self.assertIsNone(conflicted["ma5"])
+        self.assertEqual(conflicted["audit_reasons"].get("ma5"), "conflict")
+
+    def test_other_ma_top_level_sequences_keep_existing_scalar_contract(self):
+        row = _workspace_row()
+        raw = _raw_candidate()
+        raw["ma20"] = [9.8, 10.1]
+
+        daily = build_recommendation_evidence_projection(
+            {},
+            _workspace_daily([row], [raw]),
+        )["views"]["main"][0]["daily_structure"]
+
+        self.assertIsNone(daily["ma20"])
+        self.assertEqual(daily["audit_reasons"].get("ma20"), "invalid")
+
     def test_daily_summary_cannot_claim_ma5_ma10_hold_when_values_are_missing(self):
         row = _workspace_row()
         raw = _raw_candidate()
