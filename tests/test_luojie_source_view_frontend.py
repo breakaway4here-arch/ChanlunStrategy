@@ -124,6 +124,53 @@ assert(frozen === JSON.stringify(bootstrap), 'source-view recovery mutated the a
 """
         )
 
+    def test_actual_sep14_goldwind_research_detail_hides_stored_decision_score_64(self):
+        self._assert_contract(
+            r"""
+const t = globalThis.__auxTest;
+const bootstrap = archivedBootstrap();
+const frozen = JSON.stringify(bootstrap);
+window.CHANLUN_BOOTSTRAP = bootstrap;
+t.state.data = bootstrap.inlineReportData;
+t.setup(t.state.data);
+t.state.currentView = 'luojie';
+t.state.rawPoolCandidates = null;
+const views = t.views();
+const row = views.views.luojie.find(function (candidate) {
+  return candidate.code === '002202';
+});
+assert(views.views.luojie.length === 30 && row && row.name === '金风科技',
+  'actual Sep14 Goldwind research row is missing');
+const evidence = t.evidence(row, t.state.data, 'luojie');
+assert(evidence && evidence.decision_score.score === 64
+  && evidence.decision_score.components.structure.score === -5
+  && evidence.decision_score.components.position.score === 35
+  && evidence.decision_score.components.sentiment.score === 34,
+  'actual stored 64-point source evidence changed unexpectedly');
+const detail = t.detail(row, row);
+const auditStart = detail.indexOf('data-evidence-module="01A"');
+const auditEnd = detail.indexOf('data-evidence-module="02"', auditStart);
+const audit = detail.slice(auditStart, auditEnd);
+assert(auditStart >= 0 && auditEnd > auditStart, 'expanded 01A audit module is missing');
+assert(audit.includes('研究排序与数据审计')
+  && audit.includes('本页不启用正式决策分'),
+  'research audit does not explain its non-formal score contract');
+assert(!audit.includes('<span>决策分</span><strong>64')
+  && !audit.includes('class="recommendation-component-grid"')
+  && !audit.includes('<span>结构</span><strong>-5')
+  && !audit.includes('<span>位置</span><strong>35')
+  && !audit.includes('<span>情绪</span><strong>34'),
+  'stored research score or components are presented as an active formal decision score');
+assert(audit.includes('池内 #1') && audit.includes('排序分 32'),
+  'research view order or opportunity ranking evidence disappeared');
+['data-evidence-module="02"', 'data-evidence-module="03"',
+  'data-evidence-module="04"', 'id="chartCanvas"'].forEach(function (marker) {
+  assert(detail.includes(marker), 'research source evidence disappeared: ' + marker);
+});
+assert(frozen === JSON.stringify(bootstrap), 'score display guard mutated the actual report input');
+"""
+        )
+
     def test_partial_recovery_rejects_wrong_date_ref_identity_and_health(self):
         self._assert_contract(
             r"""

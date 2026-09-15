@@ -6715,13 +6715,14 @@
 
   function renderRecommendationConclusion(evidence, incidentReview) {
     var displayMode = normalizeString(arguments[2]).trim();
-    var actionSemantics = normalizeString(arguments[3] || 'formal').trim();
+    var actionSemantics = normalizeString(arguments[3]).trim();
+    var formalScoreDisplay = actionSemantics === 'formal' && !incidentReview;
     var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
     var decision = evidence.decision_score && typeof evidence.decision_score === 'object' ? evidence.decision_score : {};
     var components = decision.components && typeof decision.components === 'object' ? decision.components : {};
     var rank = evidence.rank_evidence && typeof evidence.rank_evidence === 'object' ? evidence.rank_evidence : {};
     var componentLabels = { structure: '结构', position: '位置', sentiment: '情绪' };
-    var componentHtml = ['structure', 'position', 'sentiment'].map(function (key) {
+    var componentHtml = formalScoreDisplay ? ['structure', 'position', 'sentiment'].map(function (key) {
       var component = components[key] && typeof components[key] === 'object' ? components[key] : {};
       var score = component.score;
       var reasons = recommendationEvidenceList(component.reasons);
@@ -6733,7 +6734,7 @@
       return '<div><span>' + escapeHtml(componentLabels[key]) + '</span><strong>'
         + escapeHtml(isRecommendationEvidenceFiniteNumber(score) ? recommendationEvidenceNumber(score) : '--') + '</strong>'
         + pillsHtml + '</div>';
-    }).join('');
+    }).join('') : '';
     var decisionScore = decision.score;
     var rankScore = rank.opportunity_score;
     var viewRank = rank.view_rank;
@@ -6784,25 +6785,32 @@
       ['终局状态', evidenceBooleanText(summary.data_is_final, '已终局', '非终局', '终局状态未提供')],
       ['陈旧状态', evidenceBooleanText(summary.data_stale, '已陈旧', '未陈旧', '陈旧状态未提供')],
     ]);
-    var primaryReasonPills = ['structure', 'position', 'sentiment'].reduce(function (result, key) {
+    var primaryReasonPills = formalScoreDisplay ? ['structure', 'position', 'sentiment'].reduce(function (result, key) {
       var component = components[key] && typeof components[key] === 'object' ? components[key] : {};
       recommendationEvidenceList(component.reasons).forEach(function (reason) {
         if (result.indexOf(reason) === -1 && result.length < 3) result.push(reason);
       });
       return result;
-    }, []);
+    }, []) : [];
     var primaryReasonHtml = primaryReasonPills.length
       ? '<div class="reason-pills recommendation-primary-reasons">'
         + primaryReasonPills.map(function (reason) {
           return '<span class="reason-pill">' + escapeHtml(reason.trim()) + '</span>';
         }).join('') + '</div>'
       : '';
+    var inactiveScoreText = incidentReview
+      ? '事故复盘评分不生效' : '本页不启用正式决策分';
     var scoreAuditHtml = '<div class="decision-score-audit">'
       + '<div class="recommendation-score-split">'
-      + '<section><span>决策分</span><strong>'
-      + escapeHtml(!incidentReview && isRecommendationEvidenceFiniteNumber(decisionScore) ? recommendationEvidenceNumber(decisionScore) : '本期未提供')
-      + '</strong><small>' + escapeHtml(incidentReview ? '事故复盘评分不生效' : (normalizeString(decision.decision_code).trim() || '未提供决策代码')) + '</small>'
-      + '<div class="recommendation-component-grid">' + componentHtml + '</div></section>'
+      + '<section><span>' + escapeHtml(formalScoreDisplay ? '决策分' : '评分状态') + '</span><strong>'
+      + escapeHtml(formalScoreDisplay && isRecommendationEvidenceFiniteNumber(decisionScore)
+        ? recommendationEvidenceNumber(decisionScore)
+        : (formalScoreDisplay ? '本期未提供' : inactiveScoreText))
+      + '</strong><small>' + escapeHtml(formalScoreDisplay
+        ? (normalizeString(decision.decision_code).trim() || '未提供决策代码')
+        : '仅保留来源事实、排序证据与原始审计记录') + '</small>'
+      + (formalScoreDisplay
+        ? '<div class="recommendation-component-grid">' + componentHtml + '</div>' : '') + '</section>'
       + '<section><span>排序证据</span><strong>'
       + escapeHtml(isRecommendationEvidenceFiniteNumber(viewRank) ? '池内 #' + recommendationEvidenceNumber(viewRank) : '池内名次 --')
       + '</strong><small>'
@@ -6810,7 +6818,11 @@
       + '</small><p>' + escapeHtml(normalizeString(rank.note).trim() || '仅用于当前池内排序') + '</p></section>'
       + '</div>' + primaryFacts + '</div>';
     var metaHtml = '<details class="evidence-meta-details">'
-      + '<summary class="evidence-meta-summary">决策分构成与数据审计</summary>'
+      + '<summary class="evidence-meta-summary">'
+      + escapeHtml(formalScoreDisplay
+        ? '决策分构成与数据审计'
+        : (incidentReview ? '历史记录与数据审计' : '研究排序与数据审计'))
+      + '</summary>'
       + scoreAuditHtml + metaFacts
       + '</details>';
     var headerHtml = renderRecommendationEvidenceHeader(
@@ -6824,9 +6836,11 @@
       + (normalizeString(summary.formal_action_reason).trim()
         ? '<p class="recommendation-conclusion-reason">' + escapeHtml(summary.formal_action_reason) + '</p>' : '')
       + primaryReasonHtml
-      + '<div class="decision-score-inline"><span>决策分</span><strong>'
-      + escapeHtml(!incidentReview && isRecommendationEvidenceFiniteNumber(decisionScore)
-        ? recommendationEvidenceNumber(decisionScore) : '本期未提供')
+      + '<div class="decision-score-inline"><span>'
+      + escapeHtml(formalScoreDisplay ? '决策分' : '评分状态') + '</span><strong>'
+      + escapeHtml(formalScoreDisplay && isRecommendationEvidenceFiniteNumber(decisionScore)
+        ? recommendationEvidenceNumber(decisionScore)
+        : (formalScoreDisplay ? '本期未提供' : inactiveScoreText))
       + '</strong></div>'
       + (displayMode === 'audit' ? '' : riskHtml)
       + metaHtml;
@@ -7790,6 +7804,10 @@
     var actionSemantics = resolveViewDisplayContract(
       state.currentView, {}
     ).action_semantics;
+    var decisionAuditTitle = incidentReview
+      ? '历史记录与数据审计'
+      : (normalizeString(actionSemantics).trim() === 'formal'
+        ? '决策分与数据审计' : '研究排序与数据审计');
     var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
     var price = evidence.price_evidence && typeof evidence.price_evidence === 'object' ? evidence.price_evidence : {};
     var daily = evidence.daily_structure && typeof evidence.daily_structure === 'object' ? evidence.daily_structure : {};
@@ -7821,7 +7839,7 @@
       + '<summary><span>完整证据与审计</span><small>价格、结构、30分钟、量价、市场、风险与历史验证</small></summary>'
       + '<div class="candidate-research-details-body">'
       + renderRecommendationEvidenceModule(
-        '01A', '决策分与数据审计', summary,
+        '01A', decisionAuditTitle, summary,
         renderRecommendationConclusion(
           evidence, incidentReview, 'audit', actionSemantics
         ), reportDate,

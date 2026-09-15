@@ -676,6 +676,47 @@ assert(!html.includes('<details class="evidence-meta-details" open'),
 """,
         )
 
+    def test_decision_score_readouts_require_formal_non_incident_semantics(self):
+        _assert_node_contract(
+            self,
+            "{ render: renderRecommendationConclusion }",
+            r"""
+function evidence(score) {
+  return {
+    summary: {
+      code: '600001', name: '控制样本', formal_action: '观察',
+      formal_action_reason: '等待确认', data_health: 'verified',
+      data_is_final: true, data_stale: false
+    },
+    decision_score: {
+      score: score, decision_code: 'observe',
+      components: {
+        structure: { score: score, reasons: ['结构原因'] },
+        position: { score: 0, reasons: ['位置原因'] },
+        sentiment: { score: 0, reasons: ['情绪原因'] }
+      }
+    },
+    rank_evidence: { view_rank: 2, opportunity_score: 88 }
+  };
+}
+const formal = globalThis.__auxTest.render(evidence(64), false, 'audit', 'formal');
+assert(formal.includes('<span>决策分</span><strong>64')
+  && formal.includes('class="recommendation-component-grid"')
+  && formal.includes('<span>结构</span><strong>64'),
+  'validated formal decision score or its components disappeared');
+const formalZero = globalThis.__auxTest.render(evidence(0), false, 'audit', 'formal');
+assert(formalZero.includes('<span>决策分</span><strong>0')
+  && formalZero.includes('<span>结构</span><strong>0'),
+  'a true formal zero score or zero component was treated as missing');
+const incident = globalThis.__auxTest.render(evidence(64), true, 'audit', 'formal');
+assert(incident.includes('事故复盘评分不生效')
+  && !incident.includes('<span>决策分</span><strong>64')
+  && !incident.includes('class="recommendation-component-grid"')
+  && !incident.includes('<span>结构</span><strong>64'),
+  'incident review exposed an active score or score components');
+""",
+        )
+
     def test_390_stacks_market_chart_brief_and_disables_sticky_overlay(self):
         mobile_start = CSS.rfind("@media (max-width: 390px)")
         self.assertGreaterEqual(mobile_start, 0)
