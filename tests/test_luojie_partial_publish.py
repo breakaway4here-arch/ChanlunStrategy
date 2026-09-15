@@ -85,6 +85,15 @@ def _health():
     }
 
 
+def _unavailable_health():
+    return {
+        "status": "unavailable",
+        "required_date": "2026-09-14",
+        "formal_actions_allowed": False,
+        "research_candidate_output_allowed": False,
+    }
+
+
 def _producer_pool():
     return {
         "status": "partial",
@@ -138,6 +147,95 @@ def _contract_pool():
 
 
 class TestLuojiePartialPublish(unittest.TestCase):
+
+    def test_unavailable_empty_nonactionable_luojie_does_not_block_official_report(self):
+        report = _official_report()
+        report["selection_input_health"]["by_strategy"]["luojie_pool"] = (
+            _unavailable_health()
+        )
+        report["luojie_pool"] = {
+            "mode": "enabled",
+            "status": "unavailable",
+            "reason": "15分钟研究输入不可用",
+            "input_health": _unavailable_health(),
+            "candidates": [],
+        }
+        report["workspace"] = build_workspace(report)
+
+        self.assertEqual(report["workspace"]["views"]["luojie"], [])
+        self.assertEqual(validate_report_contract(report, require_official=True), [])
+
+    def test_unavailable_luojie_rejects_candidates_malformed_or_actionable_state(self):
+        cases = ("candidate", "malformed_candidates", "research_allowed", "workspace_row")
+        for case in cases:
+            with self.subTest(case=case):
+                report = _official_report()
+                health = _unavailable_health()
+                report["selection_input_health"]["by_strategy"]["luojie_pool"] = (
+                    copy.deepcopy(health)
+                )
+                report["luojie_pool"] = {
+                    "mode": "enabled",
+                    "status": "unavailable",
+                    "reason": "15分钟研究输入不可用",
+                    "input_health": health,
+                    "candidates": [],
+                }
+                report["workspace"] = build_workspace(report)
+                if case == "candidate":
+                    report["luojie_pool"]["candidates"] = [{
+                        "code": "600001",
+                        "data_status": {"daily": "verified"},
+                    }]
+                elif case == "malformed_candidates":
+                    report["luojie_pool"]["candidates"] = {}
+                elif case == "research_allowed":
+                    report["luojie_pool"]["input_health"][
+                        "research_candidate_output_allowed"
+                    ] = True
+                else:
+                    report["workspace"]["views"]["luojie"] = [{
+                        "code": "600001",
+                        "change_pct": 1.0,
+                        "current_price": 10.0,
+                        "data_status": {"daily": "verified"},
+                        "ref": {"pool": "luojie_pool", "code": "600001"},
+                    }]
+
+                errors = validate_report_contract(report, require_official=True)
+
+                self.assertTrue(
+                    any("luojie_pool pool contract invalid" in error for error in errors),
+                    errors,
+                )
+
+    def test_unavailable_luojie_does_not_relax_formal_or_h4_guards(self):
+        for case in ("formal", "h4"):
+            with self.subTest(case=case):
+                report = _official_report()
+                report["selection_input_health"]["by_strategy"]["luojie_pool"] = (
+                    _unavailable_health()
+                )
+                report["luojie_pool"] = {
+                    "mode": "enabled",
+                    "status": "unavailable",
+                    "input_health": _unavailable_health(),
+                    "candidates": [],
+                }
+                report["workspace"] = build_workspace(report)
+                if case == "formal":
+                    report["selection_input_health"]["formal"] = {
+                        "status": "unavailable",
+                        "formal_actions_allowed": False,
+                    }
+                    expected = "formal strategy input"
+                else:
+                    report["h4_t3_pool"]["status"] = "unavailable"
+                    expected = "h4_t3_pool pool contract invalid"
+
+                errors = validate_report_contract(report, require_official=True)
+
+                self.assertTrue(any(expected in error for error in errors), errors)
 
     def test_producer_serializer_resolver_validator_roundtrip_keeps_research_candidates(self):
         report = _official_report()

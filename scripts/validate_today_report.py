@@ -648,6 +648,60 @@ def _luojie_partial_contract_is_safe(
     return len(candidate_codes) == len(set(candidate_codes))
 
 
+def _luojie_unavailable_contract_is_safe(
+    report: Mapping[str, Any], state: Mapping[str, Any]
+) -> bool:
+    """Allow an unavailable optional LuoJie module only when it exposes nothing."""
+    if state.get("state") != "unavailable":
+        return False
+    pool = report.get("luojie_pool")
+    if not isinstance(pool, Mapping):
+        return False
+    if (
+        str(pool.get("mode") or "").strip().lower() != "enabled"
+        or str(pool.get("status") or "").strip().lower() != "unavailable"
+    ):
+        return False
+    rows = pool.get("candidates")
+    if not isinstance(rows, (list, tuple)) or rows:
+        return False
+
+    workspace = report.get("workspace")
+    views = workspace.get("views") if isinstance(workspace, Mapping) else None
+    luojie_view = views.get("luojie") if isinstance(views, Mapping) else None
+    if not isinstance(luojie_view, (list, tuple)) or luojie_view:
+        return False
+
+    health_contracts = []
+    if "input_health" in pool:
+        if not isinstance(pool.get("input_health"), Mapping):
+            return False
+        health_contracts.append(pool["input_health"])
+    selection_health = report.get("selection_input_health")
+    by_strategy = (
+        selection_health.get("by_strategy")
+        if isinstance(selection_health, Mapping)
+        else None
+    )
+    fallback_health = (
+        by_strategy.get("luojie_pool")
+        if isinstance(by_strategy, Mapping)
+        else None
+    )
+    if fallback_health is not None:
+        if not isinstance(fallback_health, Mapping):
+            return False
+        health_contracts.append(fallback_health)
+    if not health_contracts:
+        return False
+    return all(
+        str(health.get("status") or "").strip().lower() == "unavailable"
+        and health.get("formal_actions_allowed") is False
+        and health.get("research_candidate_output_allowed") is False
+        for health in health_contracts
+    )
+
+
 def validate_report_contract(
     report: Mapping[str, Any], require_official: bool = False
 ) -> list[str]:
@@ -728,9 +782,17 @@ def validate_report_contract(
                 and state["state"] == "partial"
                 and _luojie_partial_contract_is_safe(report, state)
             )
+            unavailable_luojie_is_safe_degradation = (
+                pool_name == "luojie_pool"
+                and luojie_mode_status_consistent
+                and _luojie_unavailable_contract_is_safe(report, state)
+            )
             if (
                 not luojie_mode_status_consistent
-                or state["state"] == "unavailable"
+                or (
+                    state["state"] == "unavailable"
+                    and not unavailable_luojie_is_safe_degradation
+                )
                 or (
                     state["state"] == "partial"
                     and not partial_luojie_is_publishable
