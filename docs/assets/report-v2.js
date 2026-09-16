@@ -6445,10 +6445,12 @@
       }
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       var rawAvailability = viewMeta.availability || {};
+      var filteredEmpty = Boolean(query || state.sectorFilter);
+      var traceSuppressed = filteredEmpty || Boolean(selection.statusFilter);
       nodes.candidateList.innerHTML = buildCandidateEmptyState(state.currentView, rawAvailability, {
-        filtered: Boolean(query || state.sectorFilter),
+        filtered: filteredEmpty,
         filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
-      });
+      }) + (traceSuppressed ? '' : renderLegacyRawConditionTrace(state.currentView));
       var openAll = nodes.candidateList.querySelector('[data-workbench-open-all]');
       if (openAll) openAll.addEventListener('click', function () { activateWorkspaceView('decision_all', true); });
       var openResearch = nodes.candidateList.querySelector('[data-open-research-observation]');
@@ -6462,7 +6464,7 @@
       nodes.detailPanel.innerHTML = unifiedMainEmpty
         ? ''
         : buildCandidateEmptyState(state.currentView, rawAvailability, {
-          filtered: Boolean(query || state.sectorFilter),
+          filtered: filteredEmpty,
           filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
         });
       return;
@@ -8278,6 +8280,107 @@
       + '；不进入正式参考线、止损或收益计算。</p>';
   }
 
+  function noEvidenceHistoricalConditionTexts(value) {
+    var seen = Object.create(null);
+    return asArray(value).map(function (condition) {
+      return typeof condition === 'string' ? condition.trim() : '';
+    }).filter(function (condition) {
+      if (!condition || seen[condition]) return false;
+      seen[condition] = true;
+      return true;
+    });
+  }
+
+  function resolveNoEvidenceRawConditionRecord(item, raw) {
+    var ref = item && item.ref && typeof item.ref === 'object' ? item.ref : {};
+    var pool = normalizeString(ref.pool || ref.source_pool).trim();
+    var code = toCodeKey(ref.code);
+    var itemCode = toCodeKey(item && item.code);
+    if (!pool || !code || !itemCode || code !== itemCode || !raw) {
+      return { record: null, ambiguous: false };
+    }
+    var matches = asArray(getWorkspaceDataFromRef(pool)).filter(function (candidate) {
+      return toCodeKey(candidate && candidate.code) === code;
+    });
+    if (matches.length > 1) return { record: null, ambiguous: true };
+    return {
+      record: matches.length === 1 && matches[0] === raw ? raw : null,
+      ambiguous: false,
+    };
+  }
+
+  function renderNoEvidenceHistoricalConditions(item, raw) {
+    var value = item && typeof item === 'object' ? item : {};
+    var rawResolution = resolveNoEvidenceRawConditionRecord(value, raw);
+    var rawRecord = rawResolution.record || {};
+    var definitions = [
+      ['next_day_conditions', 'next_day', '次日条件'],
+      ['upgrade_conditions', 'upgrade', '升级条件'],
+      ['cancel_conditions', 'cancel', '取消条件'],
+    ];
+    var groups = definitions.map(function (definition) {
+      var itemConditions = noEvidenceHistoricalConditionTexts(value[definition[0]]);
+      var rawConditions = itemConditions.length
+        ? [] : noEvidenceHistoricalConditionTexts(rawRecord[definition[0]]);
+      var conditions = itemConditions.length ? itemConditions : rawConditions;
+      if (!conditions.length) return '';
+      return '<section class="detail-raw-condition-group" data-condition-kind="'
+        + escapeHtml(definition[1]) + '" data-condition-source="'
+        + (itemConditions.length ? 'item' : 'raw') + '">'
+        + '<h4>' + escapeHtml(definition[2]) + '</h4><ul>'
+        + conditions.map(function (condition) {
+          return '<li>' + escapeHtml(condition) + '</li>';
+        }).join('') + '</ul></section>';
+    }).filter(Boolean);
+    if (!groups.length && !rawResolution.ambiguous) return '';
+    var ambiguity = rawResolution.ambiguous
+      ? '<p class="detail-raw-condition-note">同一来源有多条同代码记录，未自动补充其他记录的条件。</p>'
+      : '';
+    return '<section class="detail-raw-conditions" data-condition-status="historical-unconfirmed">'
+      + '<h3>历史原始条件（未重新确认）</h3>'
+      + '<p>以下仅转录本条历史原始记录，不对当前满足状态、有效性或可执行性作推断。</p>'
+      + ambiguity + groups.join('') + '</section>';
+  }
+
+  function renderLegacyRawConditionTrace(viewKey) {
+    var key = normalizeString(viewKey).trim();
+    var report = state.data || {};
+    var selection = report.selection_input_health;
+    if ((selection !== null && typeof selection !== 'undefined')
+        || !getStrategyViewBlockingReason(report, key)) return '';
+    var workspace = state.workspace || {};
+    var rows = asArray((workspace.views || {})[key]);
+    var records = rows.map(function (item, index) {
+      var ref = item && item.ref && typeof item.ref === 'object' ? item.ref : {};
+      var refPool = normalizeString(ref.pool || ref.source_pool).trim();
+      var refCode = toCodeKey(ref.code);
+      var raw = asArray(getWorkspaceDataFromRef(refPool)).find(function (candidate) {
+        return toCodeKey(candidate && candidate.code) === refCode;
+      }) || null;
+      var conditions = renderNoEvidenceHistoricalConditions(item, raw);
+      if (conditions.indexOf('detail-raw-condition-group') === -1) return '';
+      var sourcePool = normalizeString(ref.pool || ref.source_pool).trim();
+      var knownSourcePool = Object.prototype.hasOwnProperty.call(getRawPools(), sourcePool);
+      var sourceLabel = knownSourcePool ? getViewSourcePoolLabel(sourcePool) : '';
+      var publicSource = knownSourcePool && sourceLabel && sourceLabel !== sourcePool
+        ? '来源 ' + sourceLabel : '来源未登记';
+      var name = normalizeString(item && (item.name || item.code)).trim() || '未命名';
+      var code = toCodeKey(item && item.code);
+      return '<article class="legacy-raw-condition-record" data-raw-condition-index="'
+        + escapeHtml(index + 1) + '" data-raw-condition-code="' + escapeHtml(code) + '">'
+        + '<header><h4>' + escapeHtml(name) + (code ? ' <small>' + escapeHtml(code) + '</small>' : '')
+        + '</h4><span>' + escapeHtml(publicSource)
+        + ' · 原顺序 #' + escapeHtml(index + 1) + '</span></header>'
+        + conditions + '</article>';
+    }).filter(Boolean);
+    if (!records.length) return '';
+    return '<details class="legacy-raw-condition-trace">'
+      + '<summary>原始条件追溯（' + escapeHtml(records.length) + '条）</summary>'
+      + '<p class="legacy-raw-condition-boundary">这些是历史原始记录，未重新确认；'
+      + '不生成当前动作，不进入当前候选或比较，也不判断条件现在是否成立。</p>'
+      + '<div class="legacy-raw-condition-records">' + records.join('') + '</div></details>';
+  }
+
   function buildMergedCandidateDetail(item, raw) {
     if (item && item.workbench_item) return buildUnifiedCandidateDetail(item);
     var evidence = getCandidateRecommendationEvidence(item, state.data);
@@ -8291,6 +8394,7 @@
         + renderPoolHitSummary(item, 'detail') + '</div>'
         + '<div class="detail-empty"><strong>本期未提供证据展示</strong></div>'
         + renderNoEvidenceReference(item, raw)
+        + renderNoEvidenceHistoricalConditions(item, raw)
         + buildChartPlaceholder(item)
         + '</div>';
     }

@@ -535,6 +535,254 @@ if (!/事故前|仅追溯|用途未核验/.test(html))
 if (!html.includes('id="chartCanvas"')) throw new Error('no-evidence incident detail lost the OHLC chart mount');
 ''')
 
+    def test_actual_aug14_blocked_view_gets_one_collapsed_read_only_condition_trace(self):
+        _assert_node_contract(self, "{ setup: normalizeWorkspace, views: getCandidateViews, list: renderCandidateList, state: state, nodes: nodes }", r'''
+const t = globalThis.__auxTest;
+function node() {
+  return { innerHTML: '', textContent: '', hidden: false, children: [],
+    classList: { add() {}, remove() {}, toggle() {}, contains() { return false; } },
+    querySelector() { return null; }, querySelectorAll() { return []; },
+    appendChild(child) { this.children.push(child); return child; },
+    addEventListener() {}, setAttribute() {}, getAttribute() { return ''; } };
+}
+const data = JSON.parse(fs.readFileSync('docs/data/2026-08-14.json', 'utf8'));
+const frozen = JSON.stringify(data);
+t.state.data = data;
+t.setup(data);
+t.state.currentView = 'confirming';
+t.state.rawPoolCandidates = null;
+t.state.candidateQuery = '';
+t.state.sectorFilter = '';
+t.nodes.candidateList = node();
+t.nodes.candidateCount = node();
+t.nodes.candidateMore = node();
+t.nodes.candidateTools = node();
+t.nodes.candidateSearch = node();
+t.nodes.detailPanel = node();
+t.nodes.drawerContent = t.nodes.detailPanel;
+t.nodes.workspaceBody = node();
+t.list();
+if (t.views().views.confirming.length !== 0)
+  throw new Error('legacy health guard was bypassed and restored current candidates');
+const html = t.nodes.candidateList.innerHTML;
+if (!html.includes('原始条件追溯') || !html.includes('<details')
+    || !html.includes('网宿科技') || !html.includes('300017')
+    || !html.includes('回踩不破突破位') || !html.includes('跌破启动参考位'))
+  throw new Error('actual blocked confirming view lacks its collapsed raw-condition trace');
+if (!html.includes('未重新确认') || !html.includes('不生成当前动作'))
+  throw new Error('raw-condition trace lacks its read-only historical boundary');
+if (html.includes('class="candidate-row"') || html.includes('正式动作：'))
+  throw new Error('raw-condition trace reintroduced a current candidate or action');
+if (t.nodes.detailPanel.innerHTML.includes('原始条件追溯'))
+  throw new Error('raw-condition trace was duplicated into the detail empty state');
+if (t.nodes.candidateCount.textContent !== '显示 0 / 0')
+  throw new Error('raw-condition trace changed the guarded candidate count');
+
+t.state.candidateQuery = '300017';
+t.nodes.candidateSearch.value = '300017';
+t.list();
+if (!t.nodes.candidateList.innerHTML.includes('300017 · 0只')
+    || t.nodes.candidateList.innerHTML.includes('原始条件追溯'))
+  throw new Error('raw-condition trace replaced the existing filtered empty state');
+if (t.state.candidateQuery !== '300017')
+  throw new Error('rendering the filtered empty state cleared the existing query');
+if (frozen !== JSON.stringify(data))
+  throw new Error('actual Aug14 input was mutated by the trace');
+''')
+
+    def test_raw_condition_trace_preserves_duplicate_workspace_rows_but_never_uses_schema2(self):
+        _assert_node_contract(self, "{ trace: renderLegacyRawConditionTrace, state: state }", r'''
+const t = globalThis.__auxTest;
+const first = { code: '600206', name: '重复记录一',
+  ref: { pool: 'observation_watchlist', code: '600206' },
+  next_day_conditions: ['first item next'] };
+const second = { code: '600206', name: '重复记录二',
+  ref: { pool: 'observation_watchlist', code: '600206' },
+  next_day_conditions: ['second item next'] };
+const rawFirst = { code: '600206', next_day_conditions: ['wrong raw first'] };
+const rawSecond = { code: '600206', next_day_conditions: ['wrong raw second'] };
+t.state.data = { date: '2026-08-14', observation_watchlist: [rawFirst, rawSecond] };
+t.state.workspace = { views: { observation_top5: [first, second] } };
+t.state.rawPoolCandidates = null;
+let html = t.trace('observation_top5');
+if (!(html.indexOf('first item next') < html.indexOf('second item next'))
+    || html.includes('wrong raw first') || html.includes('wrong raw second'))
+  throw new Error('duplicate workspace records were deduplicated, reordered, or merged with raw rows');
+
+t.state.data.selection_input_health = { schema_version: 2, by_view: {
+  observation_top5: { status: 'unavailable', output_hidden: true }
+} };
+html = t.trace('observation_top5');
+if (html !== '') throw new Error('schema2 unavailable/output-hidden contract was bypassed');
+
+t.state.data.selection_input_health = { schema_version: 99, by_view: {
+  observation_top5: { status: 'unavailable', output_hidden: true }
+} };
+html = t.trace('observation_top5');
+if (html !== '') throw new Error('explicit unknown health-contract version was treated as legacy absence');
+
+t.state.data = { date: '2026-08-14', selection_input_health: null };
+t.state.workspace = { views: { confirming: [{ code: '600208', name: '坏来源名样本',
+  ref: { pool: 'constructor', code: '600208' }, next_day_conditions: ['item retained safely']
+}] } };
+t.state.rawPoolCandidates = null;
+html = t.trace('confirming');
+if (!html.includes('item retained safely'))
+  throw new Error('an invalid source key hid safe item-owned conditions');
+if (html.includes('constructor') || html.includes('function Object') || html.includes('[native code]'))
+  throw new Error('an internal or invalid source-pool key was exposed to the user');
+''')
+
+    def test_no_evidence_unique_ref_shows_real_historical_conditions_without_reconfirming(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const report = JSON.parse(fs.readFileSync('docs/data/2026-08-14.json', 'utf8'));
+const item = report.workspace.views.confirming.find((row) => row.code === '300017');
+const raw = report.startup_watchlist.find((row) => row.code === '300017');
+t.state.data = report;
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, raw);
+if (!html.includes('历史原始条件') || !html.includes('未重新确认'))
+  throw new Error('historical condition boundary was not disclosed');
+if (!/data-condition-kind="next_day"[\s\S]*回踩不破突破位/.test(html))
+  throw new Error('real next-day condition was not shown in its own group');
+if (!/data-condition-kind="upgrade"[\s\S]*30min二买(?:\/|&#47;)三买/.test(html))
+  throw new Error('real upgrade condition was not shown in its own group');
+if (!/data-condition-kind="cancel"[\s\S]*跌破启动参考位/.test(html))
+  throw new Error('real cancel condition was not shown in its own group');
+if (html.includes('已满足') || html.includes('条件满足'))
+  throw new Error('historical conditions were inferred as currently satisfied');
+''')
+
+    def test_no_evidence_next_day_conditions_remain_independent_from_upgrade_conditions(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const item = { code: '600201', name: '独立字段样本', ref: { pool: 'startup_watchlist', code: '600201' },
+  next_day_conditions: ['仅次日条件'], upgrade_conditions: ['仅升级条件'],
+  cancel_conditions: ['仅取消条件'] };
+t.state.data = { date: '2026-08-14', startup_watchlist: [] };
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, null);
+if (!/data-condition-kind="next_day"[\s\S]*仅次日条件/.test(html))
+  throw new Error('next_day_conditions did not keep an independent group');
+if (!/data-condition-kind="upgrade"[\s\S]*仅升级条件/.test(html))
+  throw new Error('upgrade_conditions did not keep an independent group');
+if (!/data-condition-kind="cancel"[\s\S]*仅取消条件/.test(html))
+  throw new Error('cancel_conditions did not keep an independent group');
+''')
+
+    def test_no_evidence_conditions_prefer_item_fields_over_unique_raw_fields(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const raw = { code: '600202', next_day_conditions: ['raw次日'],
+  upgrade_conditions: ['raw升级'], cancel_conditions: ['raw取消'] };
+const item = { code: '600202', name: 'item优先样本',
+  ref: { pool: 'startup_watchlist', code: '600202' },
+  next_day_conditions: ['item次日'], upgrade_conditions: ['item升级'],
+  cancel_conditions: ['item取消'] };
+t.state.data = { date: '2026-08-14', startup_watchlist: [raw] };
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, raw);
+['item次日', 'item升级', 'item取消'].forEach((text) => {
+  if (!html.includes(text)) throw new Error('item condition was not preferred: ' + text);
+});
+['raw次日', 'raw升级', 'raw取消'].forEach((text) => {
+  if (html.includes(text)) throw new Error('raw condition was merged over an existing item field: ' + text);
+});
+''')
+
+    def test_no_evidence_conditions_keep_empty_and_malformed_values_local_and_escape_html(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const raw = { code: '600203', next_day_conditions: ['<script>危险</script>', null, { text: '对象条件' }, 7],
+  upgrade_conditions: { text: '错误顶层类型' }, cancel_conditions: '错误顶层类型' };
+const item = { code: '600203', name: '异常类型样本', reference_price: 10.2,
+  ref: { pool: 'startup_watchlist', code: '600203' },
+  next_day_conditions: [], upgrade_conditions: null };
+t.state.data = { date: '2026-08-14', startup_watchlist: [raw] };
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, raw);
+if (!html.includes('&lt;script&gt;危险&lt;&#47;script&gt;') || html.includes('<script>危险</script>'))
+  throw new Error('historical condition HTML was not escaped');
+if (html.includes('对象条件') || html.includes('>7<') || html.includes('错误顶层类型'))
+  throw new Error('malformed historical condition values became visible claims');
+if (html.includes('data-condition-kind="upgrade"') || html.includes('data-condition-kind="cancel"'))
+  throw new Error('missing or malformed groups were fabricated');
+if (!html.includes('10.20') || !html.includes('id="chartCanvas"'))
+  throw new Error('local condition degradation removed the existing reference or chart');
+''')
+
+    def test_no_evidence_raw_conditions_stay_with_the_referenced_pool(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const startup = { code: '600204', next_day_conditions: ['启动池条件'] };
+const observation = { code: '600204', next_day_conditions: ['观察池条件'] };
+const item = { code: '600204', name: '来源隔离样本',
+  ref: { pool: 'startup_watchlist', code: '600204' } };
+t.state.data = { date: '2026-08-14', startup_watchlist: [startup], observation_watchlist: [observation] };
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, startup);
+if (!html.includes('启动池条件')) throw new Error('referenced-pool condition was not shown');
+if (html.includes('观察池条件')) throw new Error('same-code condition leaked from another pool');
+
+const badRefItem = { code: '600999', name: '坏ref样本',
+  ref: { pool: 'startup_watchlist', code: '600204' } };
+const badRefHtml = t.detail(badRefItem, startup);
+if (badRefHtml.includes('启动池条件'))
+  throw new Error('a ref for another code supplied historical conditions');
+''')
+
+    def test_no_evidence_raw_conditions_do_not_guess_among_same_pool_duplicates(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const first = { code: '600205', next_day_conditions: ['首条raw条件'] };
+const second = { code: '600205', next_day_conditions: ['次条raw条件'] };
+const item = { code: '600205', name: '同池重复样本',
+  ref: { pool: 'observation_watchlist', code: '600205' },
+  next_day_conditions: ['item自带条件'] };
+t.state.data = { date: '2026-08-14', observation_watchlist: [first, second] };
+t.state.rawPoolCandidates = null;
+const html = t.detail(item, first);
+if (!html.includes('item自带条件')) throw new Error('item-owned condition was lost on an ambiguous ref');
+if (html.includes('首条raw条件') || html.includes('次条raw条件'))
+  throw new Error('same-pool duplicate was guessed by code order');
+if (!html.includes('同一来源有多条同代码记录') || !html.includes('未自动补充')
+    || html.includes('ref'))
+  throw new Error('ambiguous raw-condition degradation was not explained');
+''')
+
+    def test_no_evidence_condition_deduplication_handles_prototype_named_text(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const item = { code: '600207', name: '原型名条件样本',
+  next_day_conditions: ['__proto__', '__proto__', 'constructor', 'constructor'] };
+t.state.data = { date: '2026-08-14' };
+const html = t.detail(item, null);
+if (!html.includes('__proto__') || !html.includes('constructor'))
+  throw new Error('prototype-named condition text was dropped by deduplication');
+if ((html.match(/__proto__/g) || []).length !== 1
+    || (html.match(/constructor/g) || []).length !== 1)
+  throw new Error('prototype-named condition text was not deduplicated');
+''')
+
+    def test_no_evidence_condition_rendering_does_not_mutate_item_raw_or_report(self):
+        _assert_node_contract(self, "{ detail: buildMergedCandidateDetail, state: state }", r'''
+const t = globalThis.__auxTest;
+const raw = { code: '600206', next_day_conditions: ['次日'],
+  upgrade_conditions: ['升级'], cancel_conditions: ['取消'] };
+const item = { code: '600206', name: '只读样本', ref: { pool: 'startup_watchlist', code: '600206' } };
+const report = { date: '2026-08-14', startup_watchlist: [raw] };
+const beforeItem = JSON.stringify(item);
+const beforeRaw = JSON.stringify(raw);
+const beforeReport = JSON.stringify(report);
+t.state.data = report;
+t.state.rawPoolCandidates = null;
+t.detail(item, raw);
+if (JSON.stringify(item) !== beforeItem) throw new Error('condition rendering mutated the item');
+if (JSON.stringify(raw) !== beforeRaw) throw new Error('condition rendering mutated the raw record');
+if (JSON.stringify(report) !== beforeReport) throw new Error('condition rendering mutated the report input');
+''')
+
 
 if __name__ == '__main__':
     unittest.main()
