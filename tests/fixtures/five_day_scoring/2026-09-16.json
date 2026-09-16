@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-16",
+  "market": {},
+  "sector_flow": [],
+  "data_quality": {},
+  "market_sentiment": {},
+  "picks_pure": [
+    {
+      "code": "OOS",
+      "name": "样本外",
+      "trend_type": "无中枢",
+      "confirmed_by": "30min确认",
+      "confirmations": ["30min两阳夹一阴确认"],
+      "sector_rank": 19,
+      "sector_flow": 123456789,
+      "position_data_status": "verified",
+      "position_evidence_date": "2026-09-16",
+      "position_absolute_percentile": 45.0,
+      "position_absolute_window": 120,
+      "decision_engine_v1": {
+        "version": "decision-v2",
+        "code": "OOS",
+        "name": "样本外",
+        "decision": "观察",
+        "decision_code": "observe",
+        "total_score": 45,
+        "structure": {"score": 10, "reasons": ["未形成中枢/尚无趋势结构", "回踩确认"]},
+        "position": {"score": 15, "reasons": ["120日收盘分位中位"]},
+        "sentiment": {"score": 20, "reasons": ["板块热点"]},
+        "risk_reasons": []
+      }
+    }
+  ]
+}

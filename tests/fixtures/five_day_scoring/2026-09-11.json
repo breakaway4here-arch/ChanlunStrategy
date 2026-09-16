@@ -1,0 +1,50 @@
+{
+  "date": "2026-09-11",
+  "market": {},
+  "sector_flow": [],
+  "data_quality": {},
+  "market_sentiment": {},
+  "picks_pure": [
+    {
+      "code": "STRUCT",
+      "name": "结构二买",
+      "trend_type": "无中枢",
+      "sector_rank": 8,
+      "sector_flow": 100000000,
+      "position_data_status": "verified",
+      "position_evidence_date": "2026-09-11",
+      "position_absolute_percentile": 45.0,
+      "position_absolute_window": 120,
+      "best_buy_point": {
+        "confirmed_by": "30min确认",
+        "confirmations": ["30min 二买"],
+        "confirmation_evidence": {
+          "schema_version": 1,
+          "sufficient_bars": true,
+          "buy_point": "二买",
+          "ema_bullish_alignment": false,
+          "close_above_ema5": true,
+          "ema5_rising_bars": 2,
+          "recent_peak_drawdown_pct": 1.0,
+          "macd_hist_direction": "improving",
+          "ema5_reclaim": true,
+          "stop_fall": true,
+          "fresh_yang_pattern": null,
+          "recovery_bundle_match": true
+        }
+      },
+      "decision_engine_v1": {
+        "version": "decision-v2",
+        "code": "STRUCT",
+        "name": "结构二买",
+        "decision": "观察",
+        "decision_code": "observe",
+        "total_score": 45,
+        "structure": {"score": 10, "reasons": ["未形成中枢/尚无趋势结构", "回踩确认"]},
+        "position": {"score": 15, "reasons": ["120日收盘分位中位"]},
+        "sentiment": {"score": 20, "reasons": ["板块热点"]},
+        "risk_reasons": []
+      }
+    }
+  ]
+}

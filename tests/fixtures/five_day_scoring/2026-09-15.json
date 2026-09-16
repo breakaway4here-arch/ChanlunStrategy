@@ -1,0 +1,34 @@
+{
+  "date": "2026-09-15",
+  "market": {},
+  "sector_flow": [],
+  "data_quality": {},
+  "market_sentiment": {},
+  "observation_watchlist": [
+    {
+      "code": "WAIT",
+      "name": "等待回踩",
+      "trend_type": "无中枢",
+      "watch_reason": "涨停当日不追，等待次日回踩确认",
+      "upgrade_conditions": ["回踩不破突破位", "30min二买/三买"],
+      "next_day_conditions": ["回踩不破突破位", "30min二买/三买"],
+      "confirmations": [],
+      "position_data_status": "verified",
+      "position_evidence_date": "2026-09-15",
+      "position_absolute_percentile": 45.0,
+      "position_absolute_window": 120,
+      "decision_engine_v1": {
+        "version": "decision-v2",
+        "code": "WAIT",
+        "name": "等待回踩",
+        "decision": "不推荐",
+        "decision_code": "reject",
+        "total_score": 10,
+        "structure": {"score": -5, "reasons": ["未形成中枢/尚无趋势结构"]},
+        "position": {"score": 15, "reasons": ["120日收盘分位中位"]},
+        "sentiment": {"score": 0, "reasons": ["情绪信息不足"]},
+        "risk_reasons": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "date": "2026-09-09",
+  "market": {},
+  "sector_flow": [],
+  "data_quality": {},
+  "market_sentiment": {},
+  "picks_pure": [
+    {
+      "code": "OLD",
+      "name": "旧引擎",
+      "decision_engine_v1": {
+        "version": 1,
+        "code": "OLD",
+        "name": "旧引擎",
+        "decision": "观察",
+        "decision_code": "observe",
+        "total_score": 50,
+        "structure": {"score": 20, "reasons": ["旧结构"]},
+        "position": {"score": 15, "reasons": ["旧位置"]},
+        "sentiment": {"score": 15, "reasons": ["旧情绪"]},
+        "risk_reasons": []
+      }
+    }
+  ],
+  "picks_fusion": [
+    {
+      "code": "OLD",
+      "name": "旧引擎",
+      "decision_engine_v1": {
+        "version": 1,
+        "code": "OLD",
+        "name": "旧引擎",
+        "decision": "观察",
+        "decision_code": "observe",
+        "total_score": 50,
+        "structure": {"score": 20, "reasons": ["旧结构"]},
+        "position": {"score": 15, "reasons": ["旧位置"]},
+        "sentiment": {"score": 15, "reasons": ["旧情绪"]},
+        "risk_reasons": []
+      }
+    }
+  ]
+}
