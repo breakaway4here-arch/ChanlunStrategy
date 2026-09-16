@@ -1670,6 +1670,261 @@
     return id ? 'ID:' + id : '';
   }
 
+  function poolHitSourceDescriptor(identifier) {
+    var raw = identifier && typeof identifier === 'object'
+      ? identifier.strategy_id || identifier.view || identifier.pool
+        || identifier.source || identifier.id
+      : identifier;
+    raw = normalizeString(raw).trim();
+    if (!raw) return null;
+    var key = raw.toLowerCase();
+    if (key.indexOf('decision_') === 0) return { type: 'ignored', raw: raw };
+    var pools = {
+      main: 'main',
+      picks_fusion: 'main',
+      h4_t3: 'h4',
+      h4_t3_pool: 'h4',
+      acceleration: 'acceleration',
+      next_day_boom: 'acceleration',
+      luojie: 'luojie',
+      luojie_pool: 'luojie',
+      confirming: 'confirming',
+      startup_watchlist: 'confirming',
+      baseline: 'baseline',
+      picks_pure: 'baseline',
+    };
+    var collections = {
+      highlights: { key: 'highlights', label: '看点榜' },
+      observation_top5: { key: 'observation-top5', label: '观察Top5' },
+      observation_watchlist: { key: 'observation-top5', label: '观察Top5' },
+      growth_quality: { key: 'growth-quality', label: '高弹性观察' },
+    };
+    if (Object.prototype.hasOwnProperty.call(pools, key)) {
+      return { type: 'pool', key: pools[key], raw: raw };
+    }
+    if (Object.prototype.hasOwnProperty.call(collections, key)) {
+      return { type: 'collection', key: collections[key].key,
+        label: collections[key].label, raw: raw };
+    }
+    return { type: 'unknown', raw: raw };
+  }
+
+  function poolHitIdentity(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    var identity = primaryDisplaySecurityIdentity(value);
+    if (identity) return identity;
+    var summary = value.summary && typeof value.summary === 'object'
+      ? value.summary : {};
+    return primaryDisplaySecurityIdentity({
+      instrument_id: summary.instrument_id,
+      security_id: summary.security_id,
+      code: value.code || summary.code,
+      exchange: value.exchange || summary.exchange,
+      market: value.market || summary.market,
+    });
+  }
+
+  function poolHitCurrentSnapshotRecord(item) {
+    var outer = item && typeof item === 'object' ? item : {};
+    var direct = outer.workbench_item && typeof outer.workbench_item === 'object'
+      ? outer.workbench_item
+      : (outer.__workbench_item && typeof outer.__workbench_item === 'object'
+        ? outer.__workbench_item : outer);
+    var projection = getDecisionWorkbench();
+    if (!projection) return direct;
+    var values = direct === outer ? [outer] : [outer, direct];
+    var mismatch = values.some(function (value) {
+      var reportDate = normalizeString(value.report_date || value.date).trim();
+      var phase = normalizeString(value.phase).trim();
+      var snapshotId = normalizeString(value.snapshot_id).trim();
+      return (reportDate && reportDate !== normalizeString(projection.report_date).trim())
+        || (phase && phase !== normalizeString(projection.phase).trim())
+        || (snapshotId && projection.snapshot_id
+          && snapshotId !== normalizeString(projection.snapshot_id).trim());
+    });
+    if (mismatch) return direct;
+    var identity = poolHitIdentity(direct) || poolHitIdentity(outer);
+    if (!identity) return direct;
+    return asArray(projection.items).find(function (candidate) {
+      return poolHitIdentity(candidate) === identity;
+    }) || direct;
+  }
+
+  function getPoolHitSummary(item) {
+    try {
+      var record = poolHitCurrentSnapshotRecord(item);
+      var pools = [];
+      var collections = [];
+      var unknown = [];
+      var poolSeen = Object.create(null);
+      var collectionSeen = Object.create(null);
+      var unknownSeen = Object.create(null);
+      function appendIdentifier(identifier) {
+        var descriptor = poolHitSourceDescriptor(identifier);
+        if (!descriptor || descriptor.type === 'ignored') return;
+        if (descriptor.type === 'pool') {
+          if (Object.prototype.hasOwnProperty.call(poolSeen, descriptor.key)) return;
+          poolSeen[descriptor.key] = true;
+          pools.push({ key: descriptor.key, label: descriptor.key });
+          return;
+        }
+        if (descriptor.type === 'collection') {
+          if (Object.prototype.hasOwnProperty.call(collectionSeen, descriptor.key)) return;
+          collectionSeen[descriptor.key] = true;
+          collections.push({ key: descriptor.key, label: descriptor.label });
+          return;
+        }
+        if (!Object.prototype.hasOwnProperty.call(unknownSeen, descriptor.raw)) {
+          unknownSeen[descriptor.raw] = true;
+          unknown.push(descriptor.raw);
+        }
+      }
+      function appendRef(ref) {
+        var value = ref && typeof ref === 'object' ? ref : {};
+        appendIdentifier(value.pool || value.source_pool || value.view);
+      }
+      var strategies = asArray(record && record.strategy_results);
+      strategies.forEach(function (strategy) {
+        var value = strategy && typeof strategy === 'object' ? strategy : {};
+        appendIdentifier(value.strategy_id || value.view || value.source);
+        appendRef(value.ref);
+        appendRef(value.candidate_ref);
+        appendRef(value.candidate && value.candidate.ref);
+      });
+      asArray(record && record.source_refs).forEach(function (sourceRef) {
+        if (!sourceRef || typeof sourceRef !== 'object') {
+          appendIdentifier(sourceRef);
+          return;
+        }
+        appendIdentifier(sourceRef.view || sourceRef.strategy_id || sourceRef.source);
+        appendRef(sourceRef.ref);
+      });
+      asArray(record && record.sources).forEach(function (source) {
+        appendIdentifier(source);
+        if (source && typeof source === 'object') appendRef(source.ref);
+      });
+      appendRef(record && record.ref);
+      appendRef(record && record.candidate && record.candidate.ref);
+
+      var formalMain = strategies.some(function (strategy) {
+        var value = strategy && typeof strategy === 'object' ? strategy : {};
+        var identifiers = [
+          value.strategy_id,
+          value.ref && value.ref.pool,
+          value.candidate_ref && value.candidate_ref.pool,
+          value.candidate && value.candidate.ref && value.candidate.ref.pool,
+        ];
+        return identifiers.some(function (identifier) {
+          var descriptor = poolHitSourceDescriptor(identifier);
+          return descriptor && descriptor.type === 'pool' && descriptor.key === 'main';
+        }) && isFormalStrategyResult(value);
+      });
+      if (!formalMain) {
+        var directRefs = [
+          record && record.ref && record.ref.pool,
+          record && record.candidate && record.candidate.ref
+            && record.candidate.ref.pool,
+        ];
+        var directMain = directRefs.some(function (identifier) {
+          var descriptor = poolHitSourceDescriptor(identifier);
+          return descriptor && descriptor.type === 'pool' && descriptor.key === 'main';
+        });
+        var role = normalizeString(record && record.role).trim();
+        var semantics = normalizeString(record && record.action_semantics).trim();
+        var explicitlyResearch = role === 'research' || role === 'baseline'
+          || semantics === 'watch_only' || semantics === 'upstream_only'
+          || (record && record.is_formal_recommendation === false);
+        formalMain = directMain && !explicitlyResearch
+          && isFormalWorkbenchItem(record);
+      }
+      var labels = {
+        main: formalMain ? '主推策略' : '融合候选',
+        h4: 'H4',
+        acceleration: '加速池',
+        luojie: '罗姐池',
+        confirming: '等确认',
+        baseline: '基础候选·上游',
+      };
+      pools.forEach(function (pool) { pool.label = labels[pool.key] || pool.key; });
+      var count = pools.length;
+      var badgeText;
+      var badgeTone;
+      if (unknown.length && count) {
+        badgeText = '已知命中' + count + '池 · 有来源待识别';
+        badgeTone = 'partial';
+      } else if (unknown.length) {
+        badgeText = '有来源待识别';
+        badgeTone = 'unknown';
+      } else if (!count) {
+        badgeText = '来源待补';
+        badgeTone = 'missing';
+      } else {
+        badgeText = '命中' + count + '池';
+        badgeTone = count >= 3 ? 'many' : (count === 2 ? 'two' : 'one');
+      }
+      return {
+        count: count,
+        badgeText: badgeText,
+        badgeTone: badgeTone,
+        status: badgeTone === 'partial' ? 'partial'
+          : (badgeTone === 'unknown' ? 'unknown'
+            : (badgeTone === 'missing' ? 'missing' : 'available')),
+        reasonCode: '',
+        pools: pools,
+        collections: collections,
+        unknown: unknown,
+      };
+    } catch (error) {
+      return {
+        count: 0,
+        badgeText: '来源待补',
+        badgeTone: 'missing',
+        status: 'degraded',
+        reasonCode: 'source_summary_unavailable',
+        pools: [],
+        collections: [],
+        unknown: [],
+      };
+    }
+  }
+
+  function renderPoolHitSummaryValue(summary, placement) {
+    var value = summary && typeof summary === 'object' ? summary : {
+      badgeText: '来源待补', badgeTone: 'missing',
+      status: 'missing', reasonCode: '',
+      pools: [], collections: [], unknown: [],
+    };
+    var context = ['list', 'detail', 'comparison'].indexOf(placement) !== -1
+      ? placement : 'list';
+    var tags = asArray(value.pools).map(function (pool) {
+      return '<span class="pool-hit-tag is-' + escapeHtml(pool.key) + '">'
+        + escapeHtml(pool.label) + '</span>';
+    }).concat(asArray(value.collections).map(function (entry) {
+      return '<span class="pool-hit-tag is-collection">收录：'
+        + escapeHtml(entry.label) + '</span>';
+    })).concat(asArray(value.unknown).map(function (raw) {
+      return '<span class="pool-hit-tag is-unknown">未识别：'
+        + escapeHtml(raw) + '</span>';
+    })).join('');
+    var status = ['available', 'partial', 'unknown', 'missing', 'degraded']
+      .indexOf(normalizeString(value.status).trim()) !== -1
+      ? normalizeString(value.status).trim() : 'missing';
+    var reasonCode = status === 'degraded'
+      && value.reasonCode === 'source_summary_unavailable'
+      ? 'source_summary_unavailable' : '';
+    return '<div class="pool-hit-summary is-' + context + '" aria-label="来源池摘要"'
+      + ' data-source-summary-status="' + escapeHtml(status) + '"'
+      + (reasonCode ? ' data-source-summary-reason="' + reasonCode + '"' : '') + '>'
+      + '<span class="pool-hit-badge is-' + escapeHtml(value.badgeTone || 'missing')
+      + '">' + escapeHtml(value.badgeText || '来源待补') + '</span>'
+      + (tags ? '<span class="pool-hit-tags">' + tags + '</span>' : '')
+      + '</div>';
+  }
+
+  function renderPoolHitSummary(item, placement) {
+    return renderPoolHitSummaryValue(getPoolHitSummary(item), placement);
+  }
+
   function primaryDisplayMainRows(viewContext) {
     var views = viewContext && typeof viewContext === 'object'
       ? viewContext : ((state.workspace || {}).views || {});
@@ -5018,6 +5273,7 @@
       code: normalizeString(source.code || summary.code).trim(),
       name: normalizeString(summary.name).trim(),
       sector: normalizeString(summary.sector).trim(),
+      poolHitSummary: getPoolHitSummary(source.__workbench_item || source),
       action: currentDecision && currentDecision.currentDominates
         ? currentDecision.statusLabel
         : (normalizeString(summary.formal_action).trim()
@@ -5140,7 +5396,9 @@
     ];
     var tableRows = rows.map(function (row) {
       return '<tr>'
-        + '<th scope="row">' + renderCandidateEvidenceCell(row.name || row.code, [row.code, row.sector].filter(Boolean).join(' · ')) + '</th>'
+        + '<th scope="row"><div class="pool-hit-title">'
+        + renderCandidateEvidenceCell(row.name || row.code, [row.code, row.sector].filter(Boolean).join(' · '))
+        + renderPoolHitSummaryValue(row.poolHitSummary, 'comparison') + '</div></th>'
         + '<td>' + renderCandidateEvidenceCell(row.actionDisplay || row.action, '') + '</td>'
         + '<td>' + renderCandidateEvidenceCell(row.decision, [row.decisionCode, row.decisionComponents].filter(Boolean).join(' · ')) + '</td>'
         + '<td>' + renderCandidateEvidenceCell(row.rank + ' · ' + row.rankScore, row.rankNote) + '</td>'
@@ -5172,7 +5430,8 @@
       ];
       return '<article class="candidate-evidence-ticket">'
         + '<header><strong>' + escapeHtml(row.name || row.code) + '</strong><small>'
-        + escapeHtml([row.code, row.sector].filter(Boolean).join(' · ')) + '</small></header>'
+        + escapeHtml([row.code, row.sector].filter(Boolean).join(' · ')) + '</small>'
+        + renderPoolHitSummaryValue(row.poolHitSummary, 'comparison') + '</header>'
         + '<dl>' + facts.map(function (fact) {
           return '<div><dt>' + escapeHtml(fact[0]) + '</dt><dd>' + escapeHtml(fact[1] || '--') + '</dd></div>';
         }).join('') + '</dl></article>';
@@ -5586,7 +5845,8 @@
         + '<header><strong>' + escapeHtml(item.name || code) + '</strong><span>' + escapeHtml(code)
         + '</span><button type="button" data-quick-remove="' + escapeHtml(code)
         + '" data-quick-key="' + escapeHtml(record.key) + '">移除</button>'
-        + detailButton + status + '</header><dl>' + dimensions.map(function (label) {
+        + detailButton + status + renderPoolHitSummary(item, 'comparison')
+        + '</header><dl>' + dimensions.map(function (label) {
           return quickComparisonDimensionHtml(label, records, index);
         }).join('') + '</dl></article>';
     }).join('');
@@ -6041,7 +6301,7 @@
       + '<div class="candidate-row-identity-status"><span class="candidate-row-action">'
       + escapeHtml(action) + '</span><span class="candidate-row-identity-label">'
       + escapeHtml(identity) + '</span>' + renderCandidateFormalScores(item, viewKey)
-      + '</div></div>';
+      + '</div></div>' + renderPoolHitSummary(item, 'list');
   }
 
   function buildCandidateMarketContext(items) {
@@ -6208,6 +6468,11 @@
       return;
     }
 
+    var poolHitNote = document.createElement('p');
+    poolHitNote.className = 'pool-hit-note';
+    poolHitNote.textContent = '按来源池计数，含上游基础池；榜单重复收录不叠加';
+    nodes.candidateList.appendChild(poolHitNote);
+
     var marketContext = buildCandidateMarketContext(visibleItems);
     if (marketContext) {
       var contextNode = document.createElement('p');
@@ -6313,6 +6578,7 @@
       + '<div class="decision-header-action"><span class="formal-action ' + escapeHtml(getActionPillClass(action)) + '">'
       + escapeHtml('正式动作：' + action) + '</span></div>'
       + (facts.length ? '<div class="decision-header-facts">' + facts.join('') + '</div>' : '')
+      + renderPoolHitSummary(item, 'detail')
       + '</div>';
   }
 
@@ -6909,7 +7175,7 @@
     return age === 0 ? '当日' : recommendationEvidenceNumber(age) + ' 个交易日';
   }
 
-  function renderRecommendationEvidenceHeader(evidence, incidentReview, actionSemantics) {
+  function renderRecommendationEvidenceHeader(evidence, incidentReview, actionSemantics, sourceItem) {
     var summary = evidence && typeof evidence.summary === 'object' ? evidence.summary : {};
     var code = normalizeString(evidence && (evidence.code || summary.code)).trim();
     var name = normalizeString(summary.name).trim() || code || '未命名';
@@ -6931,12 +7197,14 @@
       + '<div class="decision-header-action"><span class="formal-action '
       + escapeHtml(incidentReview ? 'is-neutral' : getActionPillClass(action)) + '">'
       + escapeHtml(incidentReview ? action : actionPrefix + action) + '</span></div>'
+      + renderPoolHitSummary(sourceItem || evidence, 'detail')
       + '</div>';
   }
 
   function renderRecommendationConclusion(evidence, incidentReview) {
     var displayMode = normalizeString(arguments[2]).trim();
     var actionSemantics = normalizeString(arguments[3]).trim();
+    var sourceItem = arguments[4];
     var formalScoreDisplay = actionSemantics === 'formal' && !incidentReview;
     var summary = evidence.summary && typeof evidence.summary === 'object' ? evidence.summary : {};
     var decision = evidence.decision_score && typeof evidence.decision_score === 'object' ? evidence.decision_score : {};
@@ -7047,7 +7315,7 @@
       + scoreAuditHtml + metaFacts
       + '</details>';
     var headerHtml = renderRecommendationEvidenceHeader(
-      evidence, incidentReview, actionSemantics
+      evidence, incidentReview, actionSemantics, sourceItem
     );
     var riskHtml = riskFacts
       ? '<aside class="recommendation-evidence-risk-facts" aria-label="数据风险提示">' + riskFacts + '</aside>'
@@ -7986,6 +8254,7 @@
       + (currentDecision.currentDominates
         ? '<span>' + escapeHtml(currentDecision.prompt.replace('；', ' · ')) + '</span>'
         : (value.formal_action ? '<span>正式动作：' + escapeHtml(value.formal_action) + '</span>' : ''))
+      + renderPoolHitSummary(item, 'detail')
       + (blockers.length ? '<p class="unified-blocker">' + escapeHtml(blockers.slice(0, 3).join('、')) + '</p>' : '')
       + '</header>' + renderCandidateStatusSummary(item, state.currentView)
       + renderCandidateBasicInfo(item, true) + buildUnifiedShortJudgment(item, evidence, 'core')
@@ -8014,6 +8283,12 @@
     var evidence = getCandidateRecommendationEvidence(item, state.data);
     if (!evidence) {
       return '<div class="detail-empty-wrap merged-candidate-detail">'
+        + '<div class="detail-header recommendation-evidence-header pool-hit-fallback-header">'
+        + '<div><h2 class="detail-title">'
+        + escapeHtml(normalizeString(item && (item.name || item.code)) || '未命名')
+        + '</h2><p class="detail-subtitle">'
+        + escapeHtml(normalizeString(item && item.code)) + '</p></div>'
+        + renderPoolHitSummary(item, 'detail') + '</div>'
         + '<div class="detail-empty"><strong>本期未提供证据展示</strong></div>'
         + renderNoEvidenceReference(item, raw)
         + buildChartPlaceholder(item)
@@ -8042,7 +8317,7 @@
       + renderRecommendationEvidenceModule(
         '01', '推荐结论', summary,
         renderRecommendationConclusion(
-          evidence, incidentReview, 'primary', actionSemantics
+          evidence, incidentReview, 'primary', actionSemantics, item
         ), reportDate,
         null, true,
       )
@@ -8062,7 +8337,7 @@
       + renderRecommendationEvidenceModule(
         '01A', decisionAuditTitle, summary,
         renderRecommendationConclusion(
-          evidence, incidentReview, 'audit', actionSemantics
+          evidence, incidentReview, 'audit', actionSemantics, item
         ), reportDate,
         null, true,
       )

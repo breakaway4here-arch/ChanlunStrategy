@@ -505,8 +505,10 @@ assert(header.includes('正式主推 决策分 88'),
   'main source score is not visible in the first-layer detail header');
 assert(header.includes('H4 T+3 决策分 60'),
   'H4 source score is not visible in the first-layer detail header');
-assert(!header.includes('91') && !header.includes('acceleration'),
+assert(!header.includes('91'),
   'research score leaked into the first-layer detail header');
+assert(header.includes('加速池'),
+  'research source badge disappeared while its score stayed isolated');
 assert(header.includes('正式策略分歧') && header.includes('正式策略意见不一致'),
   'first-layer score displaced status or blocker context');
 """,

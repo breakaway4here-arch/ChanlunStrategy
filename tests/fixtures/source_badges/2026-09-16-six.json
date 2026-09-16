@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "source_release_head": "af644db7429d54c3c83fe0dfddb386345e373fb8",
+    "source_page": "docs/2026-09-16/index.html",
+    "source_page_sha256": "575e515c04a0445152ccf3d0919ea7dde673191cadfe44e369e8449f2cb85528",
+    "source_extract_sha256": "04daa1b0ec028aa383f76aa435182402efc4e7daa42ee19dd4287cbec3dfa6b9",
+    "cropping": "Keeps six public security identities and only their current-snapshot source relationships needed for source-badge rendering. Prices, charts, access configuration, private fields, contracts, risks, and unrelated strategy evidence are omitted."
+  },
+  "snapshot": {
+    "schema_version": "decision-workbench-v1",
+    "report_date": "2026-09-16",
+    "phase": "formal",
+    "snapshot_id": "formal:2026-09-16:0cb9ad89d6ab3d2c",
+    "unified_identity_count": 80
+  },
+  "rows": [
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SZ300095",
+      "instrument_id": "SZ300095",
+      "code": "300095",
+      "name": "华伍股份",
+      "page_status": "formal_incomplete",
+      "score": 61,
+      "is_executable": false,
+      "sources": ["main", "highlights", "baseline"],
+      "source_refs": [
+        {"view": "main", "ref": {"pool": "picks_fusion", "code": "300095"}},
+        {"view": "highlights", "ref": {"pool": "picks_fusion", "code": "300095"}},
+        {"view": "baseline", "ref": {"pool": "picks_pure", "code": "300095"}}
+      ],
+      "candidate": {"code": "300095", "name": "华伍股份", "ref": {"pool": "picks_fusion", "code": "300095"}, "action_semantics": "formal"},
+      "strategy_results": [
+        {"strategy_id": "main", "role": "formal", "action_semantics": "formal", "formal_action": "可上车", "score": 61, "candidate": {"code": "300095", "ref": {"pool": "picks_fusion", "code": "300095"}}},
+        {"strategy_id": "highlights", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "300095", "ref": {"pool": "picks_fusion", "code": "300095"}}},
+        {"strategy_id": "baseline", "role": "research", "action_semantics": "upstream_only", "candidate": {"code": "300095", "ref": {"pool": "picks_pure", "code": "300095"}}}
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SH688150",
+      "instrument_id": "SH688150",
+      "code": "688150",
+      "name": "莱特光电",
+      "page_status": "formal_incomplete",
+      "score": 71,
+      "is_executable": false,
+      "sources": ["main", "highlights", "baseline"],
+      "source_refs": [
+        {"view": "main", "ref": {"pool": "picks_fusion", "code": "688150"}},
+        {"view": "highlights", "ref": {"pool": "picks_fusion", "code": "688150"}},
+        {"view": "baseline", "ref": {"pool": "picks_pure", "code": "688150"}}
+      ],
+      "candidate": {"code": "688150", "name": "莱特光电", "ref": {"pool": "picks_fusion", "code": "688150"}, "action_semantics": "formal"},
+      "strategy_results": [
+        {"strategy_id": "main", "role": "formal", "action_semantics": "formal", "formal_action": "可上车", "score": 71, "candidate": {"code": "688150", "ref": {"pool": "picks_fusion", "code": "688150"}}},
+        {"strategy_id": "highlights", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "688150", "ref": {"pool": "picks_fusion", "code": "688150"}}},
+        {"strategy_id": "baseline", "role": "research", "action_semantics": "upstream_only", "candidate": {"code": "688150", "ref": {"pool": "picks_pure", "code": "688150"}}}
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SH688008",
+      "instrument_id": "SH688008",
+      "code": "688008",
+      "name": "澜起科技",
+      "page_status": "waiting_trigger",
+      "is_executable": false,
+      "sources": ["luojie", "highlights"],
+      "source_refs": [
+        {"view": "luojie", "ref": {"pool": "luojie_pool", "code": "688008"}},
+        {"view": "highlights", "ref": {"pool": "luojie_pool", "code": "688008"}}
+      ],
+      "candidate": {"code": "688008", "name": "澜起科技", "ref": {"pool": "luojie_pool", "code": "688008"}, "action_semantics": "watch_only"},
+      "strategy_results": [
+        {"strategy_id": "luojie", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "688008", "ref": {"pool": "luojie_pool", "code": "688008"}}},
+        {"strategy_id": "highlights", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "688008", "ref": {"pool": "luojie_pool", "code": "688008"}}}
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SZ300656",
+      "instrument_id": "SZ300656",
+      "code": "300656",
+      "name": "民德电子",
+      "page_status": "waiting_trigger",
+      "is_executable": false,
+      "sources": ["confirming", "observation_top5"],
+      "source_refs": [
+        {"view": "confirming", "ref": {"pool": "startup_watchlist", "code": "300656"}},
+        {"view": "observation_top5", "ref": {"pool": "observation_watchlist", "code": "300656"}}
+      ],
+      "candidate": {"code": "300656", "name": "民德电子", "ref": {"pool": "startup_watchlist", "code": "300656"}, "action_semantics": "watch_only"},
+      "strategy_results": [
+        {"strategy_id": "confirming", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "300656", "ref": {"pool": "startup_watchlist", "code": "300656"}}},
+        {"strategy_id": "observation_top5", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "300656", "ref": {"pool": "observation_watchlist", "code": "300656"}}}
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SH605358",
+      "instrument_id": "SH605358",
+      "code": "605358",
+      "name": "XD立昂微",
+      "page_status": "waiting_trigger",
+      "is_executable": false,
+      "sources": ["confirming", "luojie"],
+      "source_refs": [
+        {"view": "confirming", "ref": {"pool": "startup_watchlist", "code": "605358"}},
+        {"view": "luojie", "ref": {"pool": "luojie_pool", "code": "605358"}}
+      ],
+      "candidate": {"code": "605358", "name": "XD立昂微", "ref": {"pool": "startup_watchlist", "code": "605358"}, "action_semantics": "watch_only"},
+      "strategy_results": [
+        {"strategy_id": "confirming", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "605358", "ref": {"pool": "startup_watchlist", "code": "605358"}}},
+        {"strategy_id": "luojie", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "605358", "ref": {"pool": "luojie_pool", "code": "605358"}}}
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SZ300456",
+      "instrument_id": "SZ300456",
+      "code": "300456",
+      "name": "赛微电子",
+      "page_status": "waiting_trigger",
+      "is_executable": false,
+      "sources": ["luojie", "baseline"],
+      "source_refs": [
+        {"view": "luojie", "ref": {"pool": "luojie_pool", "code": "300456"}},
+        {"view": "baseline", "ref": {"pool": "picks_pure", "code": "300456"}}
+      ],
+      "candidate": {"code": "300456", "name": "赛微电子", "ref": {"pool": "luojie_pool", "code": "300456"}, "action_semantics": "watch_only"},
+      "strategy_results": [
+        {"strategy_id": "luojie", "role": "research", "action_semantics": "watch_only", "candidate": {"code": "300456", "ref": {"pool": "luojie_pool", "code": "300456"}}},
+        {"strategy_id": "baseline", "role": "research", "action_semantics": "upstream_only", "candidate": {"code": "300456", "ref": {"pool": "picks_pure", "code": "300456"}}}
+      ]
+    }
+  ]
+}
