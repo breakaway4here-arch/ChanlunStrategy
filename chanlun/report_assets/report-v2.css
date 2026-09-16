@@ -155,7 +155,7 @@ button {
 .review-registry-boundary,
 .review-registry-empty { color: var(--text-muted); font-size: 12px; }
 .review-registry-meta { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 10px; }
-.review-registry-counts { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
+.review-registry-counts { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 6px; margin-top: 10px; }
 .review-registry-counts span, .review-registry-counts strong { padding: 7px 8px; background: var(--neutral-soft); }
 .review-registry-counts span { color: var(--text-muted); font-size: 11px; }
 .review-registry-counts strong { color: var(--text-main); font-size: 15px; text-align: right; }
