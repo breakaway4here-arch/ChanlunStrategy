@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -26,6 +27,17 @@ TZ_CN = timezone(timedelta(hours=8))
 COMPARISON_VIEWS = {
     "main", "h4_t3", "highlights", "observation_top5", "acceleration",
     "luojie", "confirming", "growth_quality", "baseline",
+}
+REVIEW_HORIZONS = {"T+1", "T+3", "T+5"}
+REVIEW_IDENTITY_STATUSES = {"verified", "conflict", "unresolved"}
+REVIEW_SOURCE_ROLES = {"formal", "research", "baseline", "unknown"}
+REVIEW_PERFORMANCE_STATUSES = {
+    "formal_eligible", "formal_input_blocked", "incident_excluded", "review_only",
+}
+REVIEW_HORIZON_STATUSES = {
+    "maturity_unknown", "pending", "missing", "invalid_price",
+    "price_basis_unverified", "identity_conflict",
+    "calculated_legacy_internal",
 }
 
 
@@ -51,6 +63,30 @@ def _as_str_list(value: Any) -> list[str]:
         if text:
             out.append(text)
     return out
+
+
+def _is_count(value: Any) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+
+
+def _is_date_text(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").strftime("%Y-%m-%d") == value
+    except ValueError:
+        return False
+
+
+def _is_optional_number(value: Any) -> bool:
+    if value is None:
+        return True
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except OverflowError:
+        return False
 
 
 def validate_manifest_contract(manifest: Mapping[str, Any]) -> list[str]:
@@ -126,6 +162,232 @@ def validate_manifest_contract(manifest: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+def validate_review_registry_contract(index: Mapping[str, Any]) -> list[str]:
+    """Validate schema-1 review data when an index opts into the field."""
+    if "review_registry" not in index:
+        return []
+    errors: list[str] = []
+    registry = index.get("review_registry")
+    if not isinstance(registry, Mapping):
+        return ["review registry must be a mapping"]
+    if registry.get("schema_version") != 1:
+        errors.append("review registry schema_version must be 1")
+    if registry.get("review_only") is not True:
+        errors.append("review registry review_only must be true")
+    status = registry.get("status")
+    if not isinstance(status, str) or status not in (
+        "available", "unavailable",
+    ):
+        errors.append("review registry status invalid")
+
+    index_dates = set(_as_str_list(index.get("dates")))
+    window_start = registry.get("window_start")
+    window_end = registry.get("window_end")
+    window_valid = bool(
+        _is_date_text(window_start)
+        and _is_date_text(window_end)
+        and window_start <= window_end
+        and window_start in index_dates
+        and window_end in index_dates
+    )
+    if not window_valid:
+        errors.append("review registry window invalid")
+    if registry.get("calendar_status") not in (
+        "supported_2026_exchange_calendar",
+        "local_trade_calendar",
+        "unavailable",
+    ):
+        errors.append("review registry calendar_status invalid")
+    price_cutoff = registry.get("price_data_cutoff")
+    if price_cutoff is not None and not _is_date_text(price_cutoff):
+        errors.append("review registry price_data_cutoff invalid")
+    if not isinstance(registry.get("horizon_summary"), Mapping):
+        errors.append("review registry horizon_summary must be a mapping")
+
+    entries = registry.get("entries")
+    if status == "unavailable":
+        if (
+            registry.get("registered_count") is not None
+            or registry.get("instrument_count") is not None
+        ):
+            errors.append("review registry unavailable counts must be null")
+        if entries != []:
+            errors.append("review registry unavailable entries must be empty")
+        if registry.get("unavailable_reason") != "review_task_failed":
+            errors.append("review registry unavailable reason invalid")
+        error_type = registry.get("error_type")
+        if not isinstance(error_type, str) or not error_type.strip():
+            errors.append("review registry unavailable error_type invalid")
+        return errors
+    if status != "available":
+        return errors
+    if not isinstance(entries, list):
+        return errors + ["review registry entries must be an array"]
+
+    registered_count = registry.get("registered_count")
+    if not _is_count(registered_count) or registered_count != len(entries):
+        errors.append("review registry registered_count mismatch")
+    verified_instruments = set()
+    for entry in entries:
+        if not isinstance(entry, Mapping):
+            errors.append("review registry entry must be a mapping")
+            continue
+        entry_date = entry.get("report_date")
+        if not (
+            _is_date_text(entry_date)
+            and entry_date in index_dates
+            and window_valid
+            and window_start <= entry_date <= window_end
+        ):
+            errors.append(
+                "review registry entry report_date outside index/window"
+            )
+        code = entry.get("code")
+        if not isinstance(code, str) or len(code) != 6 or not code.isdigit():
+            errors.append("review registry entry code invalid")
+        identity_status = entry.get("identity_status")
+        instrument_id = entry.get("instrument_id")
+        if (
+            not isinstance(identity_status, str)
+            or identity_status not in REVIEW_IDENTITY_STATUSES
+        ):
+            errors.append("review registry entry identity_status invalid")
+        elif identity_status == "verified":
+            if not (
+                isinstance(instrument_id, str)
+                and instrument_id[:2] in {"SH", "SZ", "BJ"}
+                and instrument_id[2:] == code
+            ):
+                errors.append("review registry verified identity invalid")
+            else:
+                verified_instruments.add(instrument_id)
+        elif instrument_id is not None:
+            errors.append("review registry unresolved identity must be null")
+
+        sources = entry.get("sources")
+        if not isinstance(sources, list) or not sources:
+            errors.append(
+                "review registry entry sources must be non-empty array"
+            )
+        else:
+            for source in sources:
+                if not isinstance(source, Mapping):
+                    errors.append("review registry source must be a mapping")
+                    continue
+                source_view = source.get("view")
+                if (
+                    not isinstance(source_view, str)
+                    or source_view not in COMPARISON_VIEWS
+                ):
+                    errors.append("review registry source view invalid")
+                source_role = source.get("role")
+                if (
+                    not isinstance(source_role, str)
+                    or source_role not in REVIEW_SOURCE_ROLES
+                ):
+                    errors.append("review registry source role invalid")
+                performance_status = source.get(
+                    "formal_performance_status"
+                )
+                if (
+                    not isinstance(performance_status, str)
+                    or performance_status not in REVIEW_PERFORMANCE_STATUSES
+                ):
+                    errors.append(
+                        "review registry source performance status invalid"
+                    )
+                rank = source.get("rank")
+                if rank is not None and not (
+                    isinstance(rank, int)
+                    and not isinstance(rank, bool)
+                    and rank > 0
+                ):
+                    errors.append("review registry source rank invalid")
+                if not _is_optional_number(source.get("score")):
+                    errors.append("review registry source score invalid")
+                for key in (
+                    "action", "strategy_version", "decision_version",
+                    "policy_version",
+                ):
+                    value = source.get(key)
+                    if value is not None and not isinstance(value, str):
+                        errors.append(
+                            "review registry source {} invalid".format(key)
+                        )
+
+        horizons = entry.get("horizons")
+        if not isinstance(horizons, Mapping) or not REVIEW_HORIZONS.issubset(
+            horizons
+        ):
+            errors.append("review registry entry horizons incomplete")
+            continue
+        for horizon_key in sorted(REVIEW_HORIZONS):
+            horizon = horizons.get(horizon_key)
+            if not isinstance(horizon, Mapping):
+                errors.append("review registry horizon must be a mapping")
+                continue
+            horizon_status = horizon.get("status")
+            if (
+                not isinstance(horizon_status, str)
+                or horizon_status not in REVIEW_HORIZON_STATUSES
+            ):
+                errors.append("review registry horizon status invalid")
+                continue
+            matured = horizon.get("matured")
+            if not isinstance(matured, bool):
+                errors.append("review registry horizon matured invalid")
+            target_date = horizon.get("target_trading_date")
+            if target_date is not None and not _is_date_text(target_date):
+                errors.append("review registry horizon target date invalid")
+            for key in ("base_price", "endpoint_price", "return_pct"):
+                if not _is_optional_number(horizon.get(key)):
+                    errors.append(
+                        "review registry horizon {} invalid".format(key)
+                    )
+            if horizon.get("price_source") not in (
+                None, "local_market_history",
+            ):
+                errors.append("review registry horizon price_source invalid")
+            basis = horizon.get("price_basis_status")
+            if basis is not None and not isinstance(basis, str):
+                errors.append(
+                    "review registry horizon price_basis_status invalid"
+                )
+            return_pct = horizon.get("return_pct")
+            if horizon_status == "maturity_unknown":
+                if target_date is not None or matured is not False:
+                    errors.append(
+                        "review registry maturity_unknown horizon contradictory"
+                    )
+            elif horizon_status == "pending":
+                if target_date is None or matured is not False:
+                    errors.append(
+                        "review registry pending horizon contradictory"
+                    )
+            else:
+                if target_date is None or matured is not True:
+                    errors.append(
+                        "review registry matured horizon contradictory"
+                    )
+            if horizon_status == "calculated_legacy_internal":
+                if return_pct is None:
+                    errors.append(
+                        "review registry calculated horizon return missing"
+                    )
+            elif return_pct is not None:
+                errors.append(
+                    "review registry uncalculated horizon return must be null"
+                )
+
+    instrument_count = registry.get("instrument_count")
+    if (
+        not _is_count(instrument_count)
+        or instrument_count != len(verified_instruments)
+    ):
+        errors.append("review registry instrument_count mismatch")
+    return errors
+
+
 def validate_comparison_contract(
     index: Mapping[str, Any], report_date: str = ""
 ) -> list[str]:
@@ -190,6 +452,7 @@ def validate_comparison_contract(
                     errors.append(
                         f"comparison row missing indexed price: {date_value}/{view}/{code or '--'}"
                     )
+    errors.extend(validate_review_registry_contract(index))
     return errors
 
 
@@ -219,6 +482,26 @@ def validate_comparison_formal_alignment(
         if daily_codes != comparison_codes:
             errors.append(
                 "comparison formal view mismatch: {}".format(view_name)
+            )
+    return errors
+
+
+def validate_comparison_artifact(
+    report: Mapping[str, Any],
+    comparison: Any,
+    report_date: str,
+) -> list[str]:
+    """Strictly validate whether an optional comparison file is publishable."""
+    errors = validate_comparison_contract(
+        comparison, report_date=report_date
+    )
+    if isinstance(comparison, Mapping):
+        dates = _as_str_list(comparison.get("dates"))
+        if report_date in dates:
+            errors.extend(
+                validate_comparison_formal_alignment(
+                    report, comparison, report_date
+                )
             )
     return errors
 
@@ -967,6 +1250,7 @@ def main(argv=None):
         description="Validate one generated official report"
     )
     parser.add_argument("--needs-sublevel-retry", action="store_true")
+    parser.add_argument("--comparison-artifact-only", action="store_true")
     parser.add_argument(
         "--docs-dir", default=str(ROOT / "docs")
     )
@@ -981,6 +1265,31 @@ def main(argv=None):
         return 1
 
     report = json.loads(path.read_text(encoding="utf-8"))
+    if args.comparison_artifact_only:
+        comparison_path = docs_dir / "data" / "comparison-index.json"
+        if not comparison_path.exists():
+            print("missing comparison index: docs/data/comparison-index.json", file=sys.stderr)
+            return 1
+        try:
+            comparison = json.loads(
+                comparison_path.read_text(encoding="utf-8")
+            )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            print(
+                "comparison index unreadable: {}".format(type(exc).__name__),
+                file=sys.stderr,
+            )
+            return 1
+        comparison_errors = validate_comparison_artifact(
+            report, comparison, report_date
+        )
+        if comparison_errors:
+            print("comparison artifact mismatch:", file=sys.stderr)
+            for error in comparison_errors:
+                print("  {}".format(error), file=sys.stderr)
+            return 1
+        print("comparison artifact validated for {}".format(report_date))
+        return 0
     if retry_check:
         if needs_sublevel_retry(report):
             print(f"sublevel retry needed for {report_date}")
@@ -1000,26 +1309,64 @@ def main(argv=None):
 
     comparison_path = docs_dir / "data" / "comparison-index.json"
     comparison_page = docs_dir / "compare" / "index.html"
+    comparison_warnings = []
     if not comparison_path.exists():
-        contract_errors.append("missing comparison index: docs/data/comparison-index.json")
-    else:
-        comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
-        contract_errors.extend(
-            validate_comparison_contract(comparison, report_date=report_date)
+        comparison_warnings.append(
+            "missing comparison index: docs/data/comparison-index.json"
         )
-        contract_errors.extend(
-            validate_comparison_formal_alignment(
-                report, comparison, report_date
+    else:
+        try:
+            comparison = json.loads(
+                comparison_path.read_text(encoding="utf-8")
             )
-        )
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            comparison_warnings.append(
+                "comparison index unreadable: {}".format(type(exc).__name__)
+            )
+        else:
+            comparison_warnings.extend(
+                validate_comparison_contract(comparison)
+            )
+            comparison_map = comparison \
+                if isinstance(comparison, Mapping) else {}
+            comparison_dates = _as_str_list(comparison_map.get("dates"))
+            if report_date in comparison_dates:
+                comparison_warnings.extend(
+                    validate_comparison_formal_alignment(
+                        report, comparison, report_date
+                    )
+                )
+            else:
+                cutoff = str(comparison_map.get("latest_date") or "").strip()
+                comparison_warnings.append(
+                    "comparison coverage ends at {} (report {})".format(
+                        cutoff or "unknown", report_date
+                    )
+                )
     if not comparison_page.exists():
-        contract_errors.append("missing comparison page: docs/compare/index.html")
+        comparison_warnings.append(
+            "missing comparison page: docs/compare/index.html"
+        )
     else:
-        comparison_html = comparison_page.read_text(encoding="utf-8")
-        if "__CHANLUN_TOP10_API_BASE__" in comparison_html:
-            contract_errors.append("comparison page quote API was not configured")
-        if 'id="comparisonApp"' not in comparison_html:
-            contract_errors.append("comparison page mount is missing")
+        try:
+            comparison_html = comparison_page.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as exc:
+            comparison_warnings.append(
+                "comparison page unreadable: {}".format(type(exc).__name__)
+            )
+        else:
+            if "__CHANLUN_TOP10_API_BASE__" in comparison_html:
+                comparison_warnings.append(
+                    "comparison page quote API was not configured"
+                )
+            if 'id="comparisonApp"' not in comparison_html:
+                comparison_warnings.append("comparison page mount is missing")
+
+    for warning in comparison_warnings:
+        print(
+            "comparison review degraded: {}".format(warning),
+            file=sys.stderr,
+        )
 
     if contract_errors:
         print("report contract mismatch:", file=sys.stderr)

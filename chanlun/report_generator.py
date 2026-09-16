@@ -20,7 +20,10 @@ from datetime import datetime, timedelta
 import numpy as np
 
 from chanlun.chan_engine import calc_macd
-from chanlun.report_comparison import write_comparison_index
+from chanlun.report_comparison import (
+    comparison_review_snapshot,
+    write_comparison_index,
+)
 from chanlun.report_view_model import build_workspace
 from chanlun.right_side_startup import build_right_side_startup_evidence
 from chanlun.personal_watchlist import resolve_decision_watchlist_url
@@ -2806,7 +2809,15 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
     )
     if comparison_db_path is None:
         comparison_db_path = MARKET_HISTORY_DB_PATH if is_default_output else ""
-    write_comparison_index(data_dir, comparison_db_path)
+    with comparison_review_snapshot(bootstrap.get("decisionWorkbench")):
+        try:
+            write_comparison_index(data_dir, comparison_db_path)
+        except Exception as exc:
+            print(
+                "  复盘索引暂不可用，主报告继续生成: {}".format(
+                    type(exc).__name__
+                )
+            )
     copy_report_assets(output_dir)
     asset_version = _report_asset_version()
     write_comparison_page(

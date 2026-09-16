@@ -272,13 +272,22 @@ commit_today_report_if_changed() {
     fi
     git add \
         "docs/index.html" \
-        docs/data.json \
-        "docs/data/comparison-index.json" \
+        "docs/data.json" \
         "docs/data/index.json" \
         "docs/data/${TODAY}.json" \
         "docs/${TODAY}/index.html" \
         "docs/assets/report-v2.css" \
         "docs/assets/report-v2.js"
+    if [ -f "docs/data/comparison-index.json" ]; then
+        if /usr/bin/python3 scripts/validate_today_report.py \
+            --comparison-artifact-only "$TODAY"; then
+            git add "docs/data/comparison-index.json"
+        else
+            echo "复盘索引未通过独立校验，本次不暂存；保留上一已发布版本"
+        fi
+    else
+        echo "复盘索引本期未生成，仅提交已校验的正式日报产物"
+    fi
     if ! git diff --cached --quiet; then
         git commit -m "chore: 自动更新 ${TODAY} 日报数据"
     else

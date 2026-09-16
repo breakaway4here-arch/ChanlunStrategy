@@ -115,6 +115,21 @@ class TestDailyRunScript(unittest.TestCase):
             wrapper.index("if ! record_formal_publish_targets; then"),
         )
 
+    def test_optional_comparison_index_is_staged_only_when_present(self):
+        self.assertIn(
+            'if [ -f "docs/data/comparison-index.json" ]; then',
+            self.script,
+        )
+        self.assertIn(
+            'git add "docs/data/comparison-index.json"',
+            self.script,
+        )
+        validator = self.script.index("--comparison-artifact-only")
+        optional_add = self.script.index(
+            'git add "docs/data/comparison-index.json"'
+        )
+        self.assertLess(validator, optional_add)
+
 
 if __name__ == "__main__":
     unittest.main()
