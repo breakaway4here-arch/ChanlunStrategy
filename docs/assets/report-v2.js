@@ -79,6 +79,15 @@
       message: '',
       max: 3,
     },
+    hotspot: {
+      model: null,
+      mode: 'map',
+      query: '',
+      theme: '',
+      onlySystem: false,
+      visibleLimit: 30,
+      returnFocus: null,
+    },
     top10: {
       jobId: '',
       status: '',
@@ -146,6 +155,9 @@
     precloseBody: null,
     precloseReconciliation: null,
     directionQuick: null,
+    marketHotspot: null,
+    hotspotDialog: null,
+    hotspotDialogContent: null,
     candidateSearch: null,
     candidateCount: null,
     candidateMore: null,
@@ -1925,6 +1937,1021 @@
     return renderPoolHitSummaryValue(getPoolHitSummary(item), placement);
   }
 
+  function hotspotCode(value) {
+    var raw = normalizeString(value).trim().toUpperCase();
+    var match = raw.match(/(?:^|[^0-9])(\d{6})(?:[^0-9]|$)/);
+    return match ? match[1] : (/^\d{6}$/.test(raw) ? raw : '');
+  }
+
+  function hotspotExchange(code) {
+    if (/^6/.test(code)) return 'SH';
+    if (/^(0|3)/.test(code)) return 'SZ';
+    if (/^(4|8|92)/.test(code)) return 'BJ';
+    return '';
+  }
+
+  function hotspotNormalizeExchange(value) {
+    var raw = normalizeString(value).trim().toUpperCase();
+    if (!raw) return '';
+    if (/^(SH|SSE|XSHG|上海)/.test(raw)) return 'SH';
+    if (/^(SZ|SZSE|XSHE|深圳)/.test(raw)) return 'SZ';
+    if (/^(BJ|BSE|XBSE|北京)/.test(raw)) return 'BJ';
+    return '';
+  }
+
+  function hotspotSecurityIdentity(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    var candidate = value.candidate && typeof value.candidate === 'object'
+      ? value.candidate : {};
+    var identities = [];
+    var invalidMetadata = false;
+    function appendIdentity(identity) {
+      if (identity && identities.indexOf(identity) === -1) identities.push(identity);
+    }
+    [value.instrument_id, value.security_id,
+      candidate.instrument_id, candidate.security_id].forEach(function (rawValue) {
+      var declared = normalizeString(rawValue).trim();
+      if (!declared) return;
+      var normalized = declared.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (!/^(SH|SZ|BJ)\d{6}$/.test(normalized)) {
+        invalidMetadata = true;
+        return;
+      }
+      appendIdentity(normalized);
+    });
+    function appendCodeIdentity(record) {
+      var rawCode = record && record.code;
+      var code = hotspotCode(rawCode);
+      if (!normalizeString(rawCode).trim()) return;
+      if (!code) {
+        invalidMetadata = true;
+        return;
+      }
+      var declaredExchangeRaw = record.exchange || record.market;
+      var declaredExchange = hotspotNormalizeExchange(declaredExchangeRaw);
+      if (normalizeString(declaredExchangeRaw).trim() && !declaredExchange) {
+        invalidMetadata = true;
+        return;
+      }
+      var derivedExchange = hotspotExchange(code);
+      if (declaredExchange && derivedExchange && declaredExchange !== derivedExchange) {
+        appendIdentity(declaredExchange + code);
+        appendIdentity(derivedExchange + code);
+        return;
+      }
+      appendIdentity((declaredExchange || derivedExchange) + code);
+    }
+    appendCodeIdentity(value);
+    appendCodeIdentity(candidate);
+    var code = hotspotCode(value.code || candidate.code);
+    var conflict = invalidMetadata || identities.length > 1;
+    if (conflict) {
+      return {
+        identity: '',
+        code: code,
+        conflict: true,
+        quarantineIdentity: identities[0] || '',
+        quarantineIdentities: identities,
+      };
+    }
+    return {
+      identity: identities[0] || '',
+      code: code || (identities[0] ? identities[0].slice(-6) : ''),
+      conflict: false,
+      quarantineIdentity: '',
+      quarantineIdentities: [],
+    };
+  }
+
+  function hotspotFiniteNumber(value) {
+    var number = safeNumber(value, null);
+    return number !== null && Number.isFinite(number) ? number : null;
+  }
+
+  function hotspotIsoDate(value) {
+    var match = normalizeString(value).trim().match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : '';
+  }
+
+  function hotspotQuoteDateContract(record, reportDate, snapshotDate, snapshotAsOf) {
+    var value = record && typeof record === 'object' ? record : {};
+    var declarations = [
+      { field: 'quote_date', value: value.quote_date },
+      { field: 'date', value: value.date },
+      { field: 'report_date', value: value.report_date },
+      { field: 'as_of', value: value.as_of },
+    ].filter(function (entry) {
+      return entry.value !== null && entry.value !== undefined
+        && normalizeString(entry.value).trim() !== '';
+    });
+    var dates = [];
+    var invalid = false;
+    declarations.forEach(function (entry) {
+      var date = hotspotIsoDate(entry.value);
+      if (!date) {
+        invalid = true;
+        return;
+      }
+      if (dates.indexOf(date) === -1) dates.push(date);
+    });
+    if (invalid || dates.length > 1
+        || (dates.length && dates[0] !== snapshotDate)
+        || (dates.length && reportDate && dates[0] !== reportDate)) {
+      return {
+        status: 'date_conflict',
+        date: declarations.length ? normalizeString(declarations[0].value).trim() : '',
+      };
+    }
+    var rowAsOf = normalizeString(value.as_of).trim();
+    var rowDate = normalizeString(
+      value.quote_date || value.date || value.report_date
+    ).trim();
+    return {
+      status: 'available',
+      date: rowAsOf || rowDate || snapshotAsOf || snapshotDate,
+    };
+  }
+
+  function hotspotQuoteTone(value) {
+    if (value === null) return 'missing';
+    if (value > 0) return 'up';
+    if (value < 0) return 'down';
+    return 'flat';
+  }
+
+  function emptyHotspotPoolSummary() {
+    return {
+      count: 0,
+      badgeText: '来源待补',
+      badgeTone: 'missing',
+      status: 'missing',
+      reasonCode: '',
+      pools: [],
+      collections: [],
+      unknown: [],
+    };
+  }
+
+  function marketHotspotPoolSummaryBadge(summary) {
+    var value = summary && typeof summary === 'object' ? summary : emptyHotspotPoolSummary();
+    var count = asArray(value.pools).length;
+    var unknown = asArray(value.unknown);
+    var badgeText;
+    var badgeTone;
+    if (unknown.length && count) {
+      badgeText = '已知命中' + count + '池 · 有来源待识别';
+      badgeTone = 'partial';
+    } else if (unknown.length) {
+      badgeText = '有来源待识别';
+      badgeTone = 'unknown';
+    } else if (!count) {
+      badgeText = '来源待补';
+      badgeTone = 'missing';
+    } else {
+      badgeText = '命中' + count + '池';
+      badgeTone = count >= 3 ? 'many' : (count === 2 ? 'two' : 'one');
+    }
+    return Object.assign({}, value, {
+      count: count,
+      badgeText: badgeText,
+      badgeTone: badgeTone,
+      status: badgeTone === 'partial' ? 'partial'
+        : (badgeTone === 'unknown' ? 'unknown'
+          : (badgeTone === 'missing' ? 'missing' : 'available')),
+    });
+  }
+
+  function marketHotspotBlockedSources(health) {
+    var aliases = {
+      daily_fusion: 'main',
+      daily_pure: 'baseline',
+    };
+    var poolKeys = Object.create(null);
+    var rawKeys = Object.create(null);
+    asArray((health || {}).blocked_strategies).forEach(function (identifier) {
+      var raw = normalizeString(identifier).trim();
+      if (!raw) return;
+      rawKeys[raw.toLowerCase()] = true;
+      var descriptor = poolHitSourceDescriptor(raw);
+      var key = descriptor && descriptor.type === 'pool'
+        ? descriptor.key : aliases[raw.toLowerCase()];
+      if (key) poolKeys[key] = true;
+    });
+    return { poolKeys: poolKeys, rawKeys: rawKeys };
+  }
+
+  function marketHotspotRecordSourceContract(item, blockedSources) {
+    var summary = getPoolHitSummary(item);
+    var blocked = blockedSources || { poolKeys: {}, rawKeys: {} };
+    var originalPools = asArray(summary.pools);
+    var pools = originalPools.filter(function (pool) {
+      return !blocked.poolKeys[pool && pool.key];
+    });
+    var blockedKnownCount = originalPools.length - pools.length;
+    var blockedUnknownCount = asArray(summary.unknown).filter(function (raw) {
+      return blocked.rawKeys[normalizeString(raw).trim().toLowerCase()];
+    }).length;
+    return {
+      allKnownSourcesBlocked: Boolean(
+        (originalPools.length && !pools.length)
+        || (!originalPools.length && blockedUnknownCount)
+      ),
+      summary: marketHotspotPoolSummaryBadge(Object.assign({}, summary, {
+        pools: pools,
+        unknown: asArray(summary.unknown).filter(function (raw) {
+          return !blocked.rawKeys[normalizeString(raw).trim().toLowerCase()];
+        }),
+        blockedSourceCount: blockedKnownCount + blockedUnknownCount,
+      })),
+    };
+  }
+
+  function hotspotWorkbenchRecordMismatch(item, projection) {
+    var value = item && typeof item === 'object' ? item : {};
+    var candidate = value.candidate && typeof value.candidate === 'object'
+      ? value.candidate : {};
+    return [value, candidate].some(function (record) {
+      var date = normalizeString(record.report_date || record.date).trim();
+      var phase = normalizeString(record.phase).trim();
+      var snapshotId = normalizeString(record.snapshot_id).trim();
+      return (date && date !== normalizeString(projection.report_date).trim())
+        || (phase && phase !== normalizeString(projection.phase).trim())
+        || (snapshotId && snapshotId !== normalizeString(projection.snapshot_id).trim());
+    });
+  }
+
+  function marketHotspotScopeContract(report, snapshot) {
+    var source = report && typeof report === 'object' ? report : {};
+    var limitSnapshot = snapshot && typeof snapshot === 'object' ? snapshot : {};
+    var phases = [source.phase, limitSnapshot.phase].map(function (value) {
+      return normalizeString(value).trim().toLowerCase();
+    }).filter(function (value, index, values) {
+      return value && values.indexOf(value) === index;
+    });
+    var snapshotIds = [source.snapshot_id, limitSnapshot.snapshot_id].map(function (value) {
+      return normalizeString(value).trim();
+    }).filter(function (value, index, values) {
+      return value && values.indexOf(value) === index;
+    });
+    return {
+      phase: phases.length === 1 ? phases[0] : '',
+      snapshotId: snapshotIds.length === 1 ? snapshotIds[0] : '',
+      conflict: phases.length > 1 || snapshotIds.length > 1,
+    };
+  }
+
+  function marketHotspotRowScopeMismatch(item, projection) {
+    if (!projection || !item || typeof item !== 'object') return false;
+    var phase = normalizeString(item.phase).trim().toLowerCase();
+    var snapshotId = normalizeString(item.snapshot_id).trim();
+    var reportDate = normalizeString(item.report_date).trim();
+    return (phase && phase !== normalizeString(projection.phase).trim().toLowerCase())
+      || (snapshotId && snapshotId !== normalizeString(projection.snapshot_id).trim())
+      || (reportDate && reportDate !== normalizeString(projection.report_date).trim());
+  }
+
+  function marketHotspotDeclaredTotalContract(projection) {
+    var summary = projection && projection.summary;
+    if (!summary || typeof summary !== 'object'
+        || !Object.prototype.hasOwnProperty.call(summary, 'total_items')) {
+      return { declared: false, valid: true };
+    }
+    var value = summary.total_items;
+    var validNumber = typeof value === 'number' && Number.isFinite(value)
+      && value >= 0 && Math.floor(value) === value;
+    return {
+      declared: true,
+      valid: validNumber && value === asArray(projection.items).length,
+    };
+  }
+
+  function getMarketHotspotWorkbenchContract(reportDate, marketScope) {
+    var bootstrap = getBootstrap();
+    var projection = bootstrap.decisionWorkbench;
+    var requestedScope = marketScope && typeof marketScope === 'object'
+      ? marketScope : { phase: '', snapshotId: '', conflict: false };
+    var health = projection && projection.health && typeof projection.health === 'object'
+      ? projection.health : {};
+    var scopeValid = Boolean(
+      projection && projection.schema_version === 'decision-workbench-v1'
+      && normalizeString(projection.report_date).trim() === reportDate
+      && projection.phase === 'formal'
+      && normalizeString(projection.snapshot_id).trim()
+      && normalizeString(projection.payload_hash).trim()
+      && Array.isArray(projection.items)
+      && ['verified', 'partial'].indexOf(normalizeString(health.status).trim()) !== -1
+      && requestedScope.conflict !== true
+      && (!requestedScope.phase
+        || requestedScope.phase === normalizeString(projection.phase).trim().toLowerCase())
+      && (!requestedScope.snapshotId
+        || requestedScope.snapshotId === normalizeString(projection.snapshot_id).trim())
+    );
+    var complete = Boolean(scopeValid
+      && normalizeString(health.status).trim() === 'verified'
+      && !asArray(health.blocking_reasons).length
+      && !asArray(health.fact_blocking_reasons).length
+      && !asArray(health.blocked_strategies).length);
+    var records = Object.create(null);
+    var summaries = Object.create(null);
+    var quarantined = Object.create(null);
+    if (!scopeValid) {
+      return { scopeValid: false, complete: false, projection: null,
+        records: records, summaries: summaries, quarantined: quarantined };
+    }
+    var blockedSources = marketHotspotBlockedSources(health);
+    var declaredTotal = marketHotspotDeclaredTotalContract(projection);
+    var negativeProofInvalid = !declaredTotal.valid;
+    asArray(projection.items).forEach(function (item) {
+      var identity = hotspotSecurityIdentity(item);
+      if (identity.conflict) {
+        negativeProofInvalid = true;
+        asArray(identity.quarantineIdentities).forEach(function (value) {
+          if (value) quarantined[value] = true;
+        });
+        return;
+      }
+      if (!identity.identity) {
+        negativeProofInvalid = true;
+        return;
+      }
+      if (hotspotWorkbenchRecordMismatch(item, projection)) {
+        negativeProofInvalid = true;
+        quarantined[identity.identity] = true;
+        delete records[identity.identity];
+        return;
+      }
+      if (records[identity.identity]) {
+        negativeProofInvalid = true;
+        quarantined[identity.identity] = true;
+        delete records[identity.identity];
+        return;
+      }
+      var sourceContract = marketHotspotRecordSourceContract(item, blockedSources);
+      if (sourceContract.allKnownSourcesBlocked) {
+        quarantined[identity.identity] = true;
+        delete records[identity.identity];
+        delete summaries[identity.identity];
+        return;
+      }
+      if (!quarantined[identity.identity]) {
+        records[identity.identity] = item;
+        summaries[identity.identity] = sourceContract.summary;
+      }
+    });
+    complete = complete && !negativeProofInvalid;
+    return {
+      scopeValid: true,
+      complete: complete,
+      projection: projection,
+      records: records,
+      summaries: summaries,
+      quarantined: quarantined,
+      negativeCoverageComplete: complete,
+    };
+  }
+
+  function safeMarketHotspotSectorOverview(data) {
+    try {
+      return buildFundingMainlineModel(data || {});
+    } catch (error) {
+      return {
+        title: '板块摘要',
+        status: { label: '状态待确认', tone: 'neutral', detail: '板块摘要暂不可用。' },
+        items: [],
+      };
+    }
+  }
+
+  function marketHotspotEvidence(data, code) {
+    var source = data || {};
+    var decisionBrief = source.decision_brief && typeof source.decision_brief === 'object'
+      ? source.decision_brief : {};
+    var registry = Object.create(null);
+    asArray(decisionBrief.evidence_registry).forEach(function (entry) {
+      var ref = normalizeString(entry && entry.evidence_ref).trim();
+      if (ref) registry[ref] = entry;
+    });
+    var events = [];
+    var modelSummaries = [];
+    var eventSeen = Object.create(null);
+    var summarySeen = Object.create(null);
+    function appendEvent(entry) {
+      if (!entry || typeof entry !== 'object') return;
+      var title = normalizeString(entry.title || entry.display_title).trim();
+      if (!title) return;
+      var url = normalizeString(entry.url || entry.source_url || entry.link).trim();
+      var key = title + '|' + url;
+      if (eventSeen[key]) return;
+      eventSeen[key] = true;
+      events.push({
+        title: title,
+        date: normalizeString(entry.date || entry.publish_date || entry.ctime).trim(),
+        source: normalizeString(entry.source || entry.publisher).trim(),
+        url: url,
+      });
+    }
+    asArray(source.events).forEach(function (event) {
+      var linked = asArray(event && event.stock_list).some(function (stock) {
+        return hotspotCode(stock && typeof stock === 'object'
+          ? stock.code || stock.instrument_id : stock) === code;
+      });
+      if (linked) appendEvent(event);
+    });
+    asArray(decisionBrief.theses).forEach(function (thesis) {
+      var linked = asArray(thesis && thesis.stock_links).some(function (link) {
+        return hotspotCode(link && (link.code || link.instrument_id)) === code;
+      });
+      if (!linked) return;
+      asArray(thesis.evidence_refs).forEach(function (ref) {
+        var evidence = registry[normalizeString(ref).trim()];
+        if (evidence && normalizeString(evidence.kind).trim() === 'event') appendEvent(evidence);
+      });
+      var summary = normalizeString(thesis.llm_summary || thesis.rule_summary).trim();
+      if (summary && !summarySeen[summary]) {
+        summarySeen[summary] = true;
+        modelSummaries.push({
+          text: summary,
+          kind: thesis.llm_summary ? 'model' : 'rule',
+        });
+      }
+    });
+    return { events: events, modelSummaries: modelSummaries };
+  }
+
+  function buildMarketHotspotModel(data) {
+    var source = data || {};
+    var sectorOverview = safeMarketHotspotSectorOverview(source);
+    var reportDate = normalizeString(source.date || source.report_date || getBootstrap().pageDate).trim();
+    var base = {
+      status: 'missing',
+      reasonCode: '',
+      reportDate: reportDate,
+      snapshotDate: '',
+      asOf: '',
+      source: '',
+      snapshotStatus: 'missing',
+      items: [],
+      groups: [],
+      totalSecurityCount: 0,
+      totalAppearanceCount: 0,
+      quoteCount: 0,
+      systemHitCount: 0,
+      systemOutCount: 0,
+      systemUnknownCount: 0,
+      systemListComplete: false,
+      countsKnown: false,
+      sectorOverview: sectorOverview,
+    };
+    try {
+      var snapshot = source.limit_up_snapshot && typeof source.limit_up_snapshot === 'object'
+        ? source.limit_up_snapshot : {};
+      var snapshotStatus = normalizeString(snapshot.status || 'missing').trim();
+      var declaredSnapshotDate = normalizeString(snapshot.date || snapshot.report_date).trim();
+      var snapshotAsOf = normalizeString(snapshot.as_of || snapshot.generated_at).trim();
+      var asOfMatch = snapshotAsOf.match(/^(\d{4}-\d{2}-\d{2})/);
+      var asOfDate = asOfMatch ? asOfMatch[1] : '';
+      var snapshotDate = declaredSnapshotDate || asOfDate;
+      base.snapshotDate = snapshotDate;
+      base.asOf = snapshotAsOf;
+      base.source = normalizeString(snapshot.source).trim();
+      base.snapshotStatus = snapshotStatus;
+      if ((declaredSnapshotDate && asOfDate && declaredSnapshotDate !== asOfDate)
+          || (snapshotDate && reportDate && snapshotDate !== reportDate)) {
+        base.status = 'date_mismatch';
+        base.reasonCode = 'hotspot_date_mismatch';
+        return base;
+      }
+      if (!snapshotDate) {
+        base.status = 'date_unknown';
+        base.reasonCode = 'hotspot_date_unknown';
+        return base;
+      }
+      if (snapshotStatus === 'verified_empty') {
+        base.status = 'empty';
+        base.countsKnown = true;
+        return base;
+      }
+      if (['verified_complete', 'partial'].indexOf(snapshotStatus) === -1) {
+        base.status = snapshotStatus === 'error' ? 'error' : 'missing';
+        base.reasonCode = snapshotStatus === 'error'
+          ? 'hotspot_snapshot_error' : 'hotspot_snapshot_missing';
+        return base;
+      }
+
+      if (!Array.isArray(snapshot.items)) {
+        base.status = 'unavailable';
+        base.reasonCode = 'hotspot_items_invalid';
+        return base;
+      }
+      var rawSnapshotItems = snapshot.items;
+      var usableSnapshotItems = rawSnapshotItems.filter(function (record) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return false;
+        return Boolean(normalizeString(
+          record.name || record.code || record.instrument_id || record.security_id
+        ).trim());
+      });
+      if (!usableSnapshotItems.length) {
+        base.status = 'unavailable';
+        base.reasonCode = 'hotspot_items_unavailable';
+        return base;
+      }
+      var rawTotal = hotspotFiniteNumber(snapshot.raw_total);
+      var itemsPartial = usableSnapshotItems.length !== rawSnapshotItems.length
+        || (rawTotal !== null && rawTotal !== rawSnapshotItems.length);
+
+      var marketScope = marketHotspotScopeContract(source, snapshot);
+      var workbench = getMarketHotspotWorkbenchContract(reportDate, marketScope);
+      base.systemListComplete = workbench.complete;
+      var items = [];
+      var determinedByIdentity = Object.create(null);
+      var rawOrder = 0;
+      usableSnapshotItems.forEach(function (record) {
+        var raw = record && typeof record === 'object' ? record : {};
+        var identity = hotspotSecurityIdentity(raw);
+        if (identity.identity && determinedByIdentity[identity.identity]) return;
+        var quoteDate = hotspotQuoteDateContract(
+          raw, reportDate, snapshotDate, snapshotAsOf
+        );
+        var quoteStatus = identity.conflict ? 'identity_conflict' : quoteDate.status;
+        var quoteAvailable = quoteStatus === 'available';
+        var changePct = quoteAvailable ? hotspotFiniteNumber(raw.change_pct) : null;
+        var price = quoteAvailable ? hotspotFiniteNumber(raw.price) : null;
+        if (price !== null && price <= 0) price = null;
+        var lianban = quoteAvailable ? hotspotFiniteNumber(raw.lianban) : null;
+        if (lianban !== null && lianban < 1) lianban = null;
+        var item = {
+          key: identity.identity || 'name:' + rawOrder + ':' + normalizeString(raw.name).trim(),
+          identity: identity.identity,
+          code: identity.code,
+          name: normalizeString(raw.name).trim() || identity.code || '名称待补',
+          sector: normalizeString(raw.sector || raw.industry).trim() || '题材待补',
+          isDeterminedSecurity: Boolean(identity.identity) && !identity.conflict,
+          identityConflict: identity.conflict,
+          associationScopeConflict: marketHotspotRowScopeMismatch(
+            raw, workbench.projection
+          ),
+          price: price,
+          changePct: changePct,
+          quoteTone: hotspotQuoteTone(changePct),
+          quoteStatus: quoteStatus,
+          quoteDate: quoteDate.date,
+          lianban: lianban === null ? null : Math.floor(lianban),
+          firstTime: quoteAvailable ? normalizeString(raw.first_time).trim() : '',
+          fund: quoteAvailable ? hotspotFiniteNumber(raw.fund) : null,
+          zhaban: quoteAvailable ? hotspotFiniteNumber(raw.zhaban) : null,
+          reportDate: reportDate,
+          asOf: base.asOf,
+          quoteSource: base.source,
+          themes: [],
+          membership: 'unknown',
+          membershipReason: '',
+          workbenchItem: null,
+          poolSummary: emptyHotspotPoolSummary(),
+          events: [],
+          modelSummaries: [],
+          raw: raw,
+          sourceOrder: rawOrder,
+        };
+        rawOrder += 1;
+        if (identity.identity) determinedByIdentity[identity.identity] = item;
+        items.push(item);
+      });
+
+      var byCode = Object.create(null);
+      items.forEach(function (item) {
+        if (item.code && !byCode[item.code]) byCode[item.code] = item;
+      });
+      var groups = [];
+      var groupByName = Object.create(null);
+      var groupItemSeen = Object.create(null);
+      function ensureGroup(name) {
+        var normalized = normalizeString(name).trim() || '题材待补';
+        if (!groupByName[normalized]) {
+          groupByName[normalized] = {
+            key: 'theme-' + groups.length,
+            name: normalized,
+            colorIndex: groups.length % 8,
+            items: [],
+          };
+          groups.push(groupByName[normalized]);
+        }
+        return groupByName[normalized];
+      }
+      asArray(snapshot.theme_groups).forEach(function (group) {
+        var target = ensureGroup(group && group.name);
+        var seen = groupItemSeen[target.key] || Object.create(null);
+        groupItemSeen[target.key] = seen;
+        asArray(group && group.codes).forEach(function (value) {
+          var item = byCode[hotspotCode(value)];
+          if (!item || seen[item.key]) return;
+          seen[item.key] = true;
+          target.items.push(item);
+          if (item.themes.indexOf(target.name) === -1) item.themes.push(target.name);
+        });
+      });
+      items.forEach(function (item) {
+        if (item.themes.length) return;
+        var fallback = ensureGroup(item.sector || '题材待补');
+        if (!fallback.items.some(function (entry) { return entry.key === item.key; })) {
+          fallback.items.push(item);
+        }
+        item.themes.push(fallback.name);
+      });
+
+      items.forEach(function (item) {
+        if (item.isDeterminedSecurity && workbench.scopeValid) {
+          if (item.associationScopeConflict) {
+            item.membershipReason = '该热点记录的报告阶段或快照与系统清单冲突';
+          } else if (workbench.quarantined[item.identity]) {
+            item.membership = 'unknown';
+            item.membershipReason = '证券身份、日期、阶段或快照冲突';
+          } else if (workbench.records[item.identity]) {
+            item.membership = 'in';
+            item.workbenchItem = workbench.records[item.identity];
+            item.poolSummary = workbench.summaries[item.identity]
+              || getPoolHitSummary(item.workbenchItem);
+          } else if (workbench.complete) {
+            item.membership = 'out';
+            item.membershipReason = '完整同日报告系统清单未收录';
+          } else {
+            item.membershipReason = '当前系统清单覆盖不完整，不能证明未入选';
+          }
+        } else if (item.identityConflict) {
+          item.membershipReason = '证券身份冲突';
+        } else if (!workbench.scopeValid) {
+          item.membershipReason = '系统清单日期、阶段、快照或完整性待核验';
+        } else {
+          item.membershipReason = '证券身份待关联';
+        }
+        if (item.code && item.isDeterminedSecurity) {
+          var evidence = marketHotspotEvidence(source, item.code);
+          item.events = evidence.events;
+          item.modelSummaries = evidence.modelSummaries;
+        }
+      });
+
+      base.items = items;
+      base.groups = groups.filter(function (group) { return group.items.length; });
+      base.totalSecurityCount = items.filter(function (item) {
+        return item.isDeterminedSecurity;
+      }).length;
+      base.totalAppearanceCount = base.groups.reduce(function (total, group) {
+        return total + group.items.filter(function (item) {
+          return item.isDeterminedSecurity;
+        }).length;
+      }, 0);
+      base.quoteCount = items.filter(function (item) { return item.changePct !== null; }).length;
+      base.systemHitCount = items.filter(function (item) { return item.membership === 'in'; }).length;
+      base.systemOutCount = items.filter(function (item) { return item.membership === 'out'; }).length;
+      base.systemUnknownCount = items.filter(function (item) {
+        return item.membership === 'unknown';
+      }).length;
+      base.countsKnown = true;
+      base.status = snapshotStatus === 'partial' || itemsPartial ? 'partial'
+        : (items.length ? 'available' : 'empty');
+      return base;
+    } catch (error) {
+      base.status = 'degraded';
+      base.reasonCode = 'hotspot_model_unavailable';
+      return base;
+    }
+  }
+
+  function filterMarketHotspotItems(model, filters) {
+    var value = model && typeof model === 'object' ? model : { items: [], groups: [] };
+    var options = filters && typeof filters === 'object' ? filters : {};
+    var query = normalizeString(options.query).trim().toLowerCase();
+    var theme = normalizeString(options.theme).trim();
+    var onlySystem = options.onlySystem === true;
+    var items = asArray(value.items).filter(function (item) {
+      if (onlySystem && item.membership !== 'in') return false;
+      if (theme && asArray(item.themes).indexOf(theme) === -1) return false;
+      if (!query) return true;
+      return [item.name, item.code, item.sector].concat(asArray(item.themes))
+        .some(function (part) {
+          return normalizeString(part).toLowerCase().indexOf(query) !== -1;
+        });
+    });
+    var allowed = Object.create(null);
+    items.forEach(function (item) { allowed[item.key] = true; });
+    var groups = asArray(value.groups).map(function (group) {
+      return Object.assign({}, group, {
+        items: asArray(group.items).filter(function (item) { return allowed[item.key]; }),
+      });
+    }).filter(function (group) { return group.items.length; });
+    return { items: items, groups: groups };
+  }
+
+  function safeMarketHotspotUrl(value) {
+    var url = normalizeString(value).trim();
+    return /^https?:\/\//i.test(url) ? url : '';
+  }
+
+  function marketHotspotMembershipHtml(item) {
+    if (item.membership === 'in') {
+      var summary = renderPoolHitSummaryValue(item.poolSummary, 'list');
+      return summary.replace(/^<div/, '<span').replace(/<\/div>$/, '</span>');
+    }
+    if (item.membership === 'out') {
+      return '<span class="hotspot-membership is-out">本期系统清单未入选</span>';
+    }
+    return '<span class="hotspot-membership is-unknown">关联未知</span>';
+  }
+
+  function marketHotspotQuoteHtml(item, compact) {
+    var pct = item.changePct === null ? '报价暂缺' : formatPct(item.changePct, true);
+    var board = item.lianban === null ? ''
+      : (item.lianban > 1 ? item.lianban + '连板' : '首板');
+    return '<span class="hotspot-quote is-' + escapeHtml(item.quoteTone) + '"><strong>'
+      + escapeHtml(pct) + '</strong>'
+      + (!compact && item.price !== null ? '<small>价 ' + escapeHtml(formatNumber(item.price, 2)) + '</small>' : '')
+      + (board ? '<small>' + escapeHtml(board) + '</small>' : '')
+      + '</span>';
+  }
+
+  function marketHotspotIdentityLabel(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    if (value.identityConflict) {
+      return value.code ? '原记录 ' + value.code + ' · 身份冲突' : '证券身份冲突';
+    }
+    return value.code || '身份待关联';
+  }
+
+  function renderMarketHotspotCard(item) {
+    return '<button type="button" class="hotspot-stock-card is-' + escapeHtml(item.quoteTone)
+      + '" data-hotspot-open="' + escapeHtml(item.key) + '" data-hotspot-code="'
+      + escapeHtml(item.isDeterminedSecurity ? item.code : '') + '"><span class="hotspot-stock-title"><strong>'
+      + escapeHtml(item.name) + '</strong><small>' + escapeHtml(marketHotspotIdentityLabel(item))
+      + '</small></span>' + marketHotspotQuoteHtml(item, true)
+      + marketHotspotMembershipHtml(item) + '</button>';
+  }
+
+  function renderMarketHotspotListRow(item) {
+    var eventText = item.events.length
+      ? item.events[0].title + '（关联事件，非已证实涨停原因）' : '原因未补';
+    return '<button type="button" class="hotspot-list-row" data-hotspot-open="'
+      + escapeHtml(item.key) + '" data-hotspot-code="'
+      + escapeHtml(item.isDeterminedSecurity ? item.code : '') + '">'
+      + '<span><strong>' + escapeHtml(item.name) + '</strong><small>'
+      + escapeHtml(marketHotspotIdentityLabel(item)) + '</small></span><span>'
+      + escapeHtml(asArray(item.themes).join(' / ') || item.sector) + '</span>'
+      + marketHotspotQuoteHtml(item, false) + '<span class="hotspot-list-event">'
+      + escapeHtml(eventText) + '</span><span>' + marketHotspotMembershipHtml(item)
+      + '</span></button>';
+  }
+
+  function renderMarketHotspotSectorFallback(model) {
+    var overview = model && model.sectorOverview || {};
+    var items = asArray(overview.items);
+    if (!items.length) return '';
+    return '<div class="hotspot-sector-fallback"><strong>'
+      + escapeHtml(overview.title || '板块摘要') + '</strong><div>'
+      + items.map(function (item) {
+        return '<span>' + escapeHtml(item.name || '板块待补') + '</span>';
+      }).join('') + '</div></div>';
+  }
+
+  function renderMarketHotspotSection(model, uiState) {
+    var value = model && typeof model === 'object' ? model : buildMarketHotspotModel({});
+    var options = uiState && typeof uiState === 'object' ? uiState : {};
+    var mode = options.mode === 'list' ? 'list' : 'map';
+    var visibleLimit = Math.max(1, Number(options.visibleLimit) || 30);
+    var filtered = filterMarketHotspotItems(value, options);
+    var visibleItems = filtered.items.slice(0, visibleLimit);
+    var visible = Object.create(null);
+    visibleItems.forEach(function (item) { visible[item.key] = true; });
+    var visibleGroups = filtered.groups.map(function (group) {
+      return Object.assign({}, group, {
+        items: group.items.filter(function (item) { return visible[item.key]; }),
+      });
+    }).filter(function (group) { return group.items.length; });
+    var themeButtons = asArray(value.groups).map(function (group) {
+      var active = normalizeString(options.theme) === group.name;
+      return '<button type="button" data-hotspot-theme="' + escapeHtml(group.name)
+        + '" aria-pressed="' + (active ? 'true' : 'false') + '" class="'
+        + (active ? 'is-active' : '') + '">' + escapeHtml(group.name) + '</button>';
+    }).join('');
+    var statusCopy = value.status === 'partial'
+      ? '当前为部分有效样本，未取得部分不解释为没有热点。'
+      : (value.status === 'date_mismatch'
+        ? '热点快照日期与报告日不一致，个股行情已隔离。'
+        : (value.status === 'date_unknown'
+          ? '热点快照日期未核验，个股行情已隔离。'
+        : (value.status === 'degraded'
+          ? '热点个股暂不可用，其他日报内容不受影响。'
+          : (value.status === 'unavailable'
+            ? '热点样本暂不可用，不能据此判断今日为空。'
+          : (value.status === 'empty'
+            ? '本期热点个股确认空池，保留已有板块摘要。'
+            : (value.status === 'available'
+              ? '热点是市场背景，不是新的推荐池。' : '热点个股数据尚未生成。'))))));
+    var content = '';
+    if (visibleItems.length && mode === 'map') {
+      content = '<div class="hotspot-group-grid">' + visibleGroups.map(function (group) {
+        return '<article class="hotspot-group is-theme-' + escapeHtml(group.colorIndex)
+          + '"><header><span></span><strong>' + escapeHtml(group.name)
+          + '</strong><small>' + escapeHtml(String(group.items.length)) + '只</small></header>'
+          + '<div class="hotspot-stock-grid">' + group.items.map(renderMarketHotspotCard).join('')
+          + '</div></article>';
+      }).join('') + '</div>';
+    } else if (visibleItems.length) {
+      content = '<div class="hotspot-list"><header><span>股票</span><span>方向</span><span>行情</span><span>事件/说明</span><span>系统关系</span></header>'
+        + visibleItems.map(renderMarketHotspotListRow).join('') + '</div>';
+    } else {
+      content = '<div class="hotspot-empty"><strong>当前筛选没有可显示个股</strong><span>'
+        + escapeHtml(statusCopy) + '</span></div>' + renderMarketHotspotSectorFallback(value);
+    }
+    var showing = Math.min(visibleLimit, filtered.items.length);
+    var countsKnown = value.countsKnown === true;
+    var sampleCountText = countsKnown ? String(value.totalSecurityCount) : '暂不可用';
+    var groupCountText = countsKnown ? String(value.groups.length) : '暂不可用';
+    var quoteCountText = countsKnown ? String(value.quoteCount) : '暂不可用';
+    var hitCountText = countsKnown ? String(value.systemHitCount) : '暂不可用';
+    var displayCountHtml = countsKnown
+      ? '显示 ' + escapeHtml(String(showing)) + ' / '
+        + escapeHtml(String(filtered.items.length))
+      : '显示 暂不可用';
+    var totalCountText = countsKnown
+      ? '共 ' + String(value.totalSecurityCount) + ' 只确定证券；跨题材可重复出现，总数按证券去重'
+      : '样本数量暂不可用；现有板块事实仍可独立阅读';
+    return '<section class="market-hotspot-section" id="marketHotspotSection" aria-labelledby="marketHotspotTitle">'
+      + '<header class="hotspot-heading"><div><span class="hotspot-eyebrow">市场背景</span><h2 id="marketHotspotTitle">今日热点地图</h2><p>'
+      + escapeHtml(statusCopy) + '</p></div><div class="hotspot-snapshot"><strong>'
+      + escapeHtml(value.reportDate || '日期待补') + '</strong><small>'
+      + escapeHtml(value.asOf ? '快照 ' + value.asOf : '快照时间待补') + '</small><small>'
+      + escapeHtml(value.source ? '来源 ' + value.source : '来源待补') + '</small></div></header>'
+      + '<div class="hotspot-metrics"><span><strong>' + escapeHtml(sampleCountText)
+      + '</strong><small>已取得样本</small></span><span><strong>'
+      + escapeHtml(groupCountText) + '</strong><small>已取得题材/行业</small></span><span><strong>'
+      + escapeHtml(quoteCountText) + '</strong><small>有行情</small></span><span><strong>'
+      + escapeHtml(hitCountText) + '</strong><small>命中系统</small></span></div>'
+      + '<div class="hotspot-tools"><div class="hotspot-mode" role="group" aria-label="热点阅读模式">'
+      + '<button type="button" data-hotspot-mode="map" aria-pressed="' + (mode === 'map') + '">主题地图</button>'
+      + '<button type="button" data-hotspot-mode="list" aria-pressed="' + (mode === 'list') + '">详细清单</button></div>'
+      + '<div class="hotspot-themes"><button type="button" data-hotspot-theme="" aria-pressed="'
+      + (!options.theme) + '" class="' + (!options.theme ? 'is-active' : '') + '">全部题材</button>'
+      + themeButtons + '</div><label class="hotspot-search"><span>搜索</span><input id="marketHotspotSearch" type="search" value="'
+      + escapeHtml(options.query || '') + '" placeholder="搜索名称或代码"></label>'
+      + '<label class="hotspot-only-system"><input id="marketHotspotOnlySystem" type="checkbox"'
+      + (options.onlySystem ? ' checked' : '') + '>只看系统命中</label>'
+      + '<button type="button" class="hotspot-clear" data-hotspot-clear>清空</button></div>'
+      + '<div class="hotspot-result-meta" aria-live="polite"><span>'
+      + displayCountHtml + '</span><small>' + escapeHtml(totalCountText) + '</small></div>'
+      + content
+      + (filtered.items.length > showing
+        ? '<button type="button" class="hotspot-more" data-hotspot-more>加载更多</button>' : '')
+      + '<p class="hotspot-boundary">按来源池计数，含上游基础池；榜单重复收录不叠加。行情取自本热点快照，不用候选报价替换。</p>'
+      + '</section>';
+  }
+
+  function renderMarketHotspotReadOnlyDetail(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    var membership = value.membership === 'out' ? '本期系统清单未入选'
+      : (value.membership === 'in' ? '本期系统清单已命中' : '系统清单关联未知');
+    var eventHtml = asArray(value.events).map(function (event) {
+      var url = safeMarketHotspotUrl(event && event.url);
+      return '<li><strong>' + escapeHtml(event && event.title || '事件标题待补') + '</strong>'
+        + (event && event.date ? '<small>' + escapeHtml(event.date) + '</small>' : '')
+        + (url ? '<a href="' + escapeHtml(url) + '" target="_blank" rel="noopener noreferrer">查看来源</a>' : '')
+        + '</li>';
+    }).join('');
+    var summaryHtml = asArray(value.modelSummaries).map(function (summary) {
+      return '<li>' + escapeHtml(summary && summary.text) + '</li>';
+    }).join('');
+    var quoteEvidence = value.quoteStatus === 'date_conflict'
+      ? '行情日期冲突，报价已隔离'
+      : (value.quoteStatus === 'identity_conflict'
+        ? '证券身份冲突，报价已隔离'
+        : (value.quoteDate ? '行情时点 ' + value.quoteDate : '行情时点待核验'));
+    return '<article class="hotspot-readonly-detail"><header><div><h2 id="hotspotReadonlyTitle">'
+      + escapeHtml(value.name || '热点详情') + '</h2><p>'
+      + escapeHtml(marketHotspotIdentityLabel(value))
+      + ' · ' + escapeHtml(asArray(value.themes).join(' / ') || value.sector || '题材待补')
+      + '</p></div><button type="button" data-hotspot-close aria-label="关闭热点详情">关闭</button></header>'
+      + '<div class="hotspot-readonly-body"><section><h3>已记录盘面</h3><p><strong class="is-'
+      + escapeHtml(value.quoteTone || 'missing') + '">'
+      + escapeHtml(value.changePct === null ? '报价暂缺' : formatPct(value.changePct, true))
+      + (value.price === null ? '' : ' · ¥ ' + escapeHtml(formatNumber(value.price, 2)))
+      + '</strong></p><p>报告日 ' + escapeHtml(value.reportDate || '待补') + ' · '
+      + escapeHtml(quoteEvidence) + ' · ' + escapeHtml(value.quoteSource || '来源待补')
+      + '</p></section><section><h3>系统关系</h3><p>' + escapeHtml(membership)
+      + '</p><p>未入池热点保持只读，不加入主推、全部或观察。</p></section>'
+      + '<section><h3>关联事件，不代表已证实涨停原因</h3>'
+      + (eventHtml ? '<ul>' + eventHtml + '</ul>' : '<p>原因未补</p>') + '</section>'
+      + (summaryHtml ? '<section><h3>模型归纳</h3><ul>' + summaryHtml + '</ul></section>' : '')
+      + '<p class="hotspot-chart-missing">没有可靠 K 线；本详情不跨来源借图。</p></div></article>';
+  }
+
+  function showMarketHotspotReadOnlyDetail(item) {
+    if (!nodes.hotspotDialog || !nodes.hotspotDialogContent) return false;
+    nodes.hotspotDialogContent.innerHTML = renderMarketHotspotReadOnlyDetail(item);
+    var close = nodes.hotspotDialogContent.querySelector('[data-hotspot-close]');
+    if (close) close.addEventListener('click', function () {
+      if (typeof nodes.hotspotDialog.close === 'function') nodes.hotspotDialog.close();
+      else nodes.hotspotDialog.removeAttribute('open');
+    });
+    if (typeof nodes.hotspotDialog.showModal === 'function') nodes.hotspotDialog.showModal();
+    else nodes.hotspotDialog.setAttribute('open', '');
+    return true;
+  }
+
+  function openMarketHotspotDetail(item, handlers) {
+    var value = item && typeof item === 'object' ? item : {};
+    var callbacks = handlers && typeof handlers === 'object' ? handlers : {};
+    if (value.membership === 'in' && value.workbenchItem) {
+      var openCandidate = callbacks.openCandidate || openCurrentCandidateDetail;
+      if (openCandidate(value.code, value.workbenchItem.evidence_view || state.currentView)) {
+        return 'candidate';
+      }
+    }
+    var openReadonly = callbacks.openReadonly || showMarketHotspotReadOnlyDetail;
+    openReadonly(value);
+    return 'readonly';
+  }
+
+  function marketHotspotState() {
+    if (!state.hotspot || typeof state.hotspot !== 'object') {
+      state.hotspot = { model: null, mode: 'map', query: '', theme: '',
+        onlySystem: false, visibleLimit: 30, returnFocus: null };
+    }
+    return state.hotspot;
+  }
+
+  function bindMarketHotspotControls() {
+    if (!nodes.marketHotspot) return;
+    var store = marketHotspotState();
+    Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-mode]'), function (button) {
+      button.addEventListener('click', function () {
+        store.mode = button.getAttribute('data-hotspot-mode') === 'list' ? 'list' : 'map';
+        renderMarketHotspot();
+      });
+    });
+    Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-theme]'), function (button) {
+      button.addEventListener('click', function () {
+        store.theme = button.getAttribute('data-hotspot-theme') || '';
+        store.visibleLimit = 30;
+        renderMarketHotspot();
+      });
+    });
+    var search = nodes.marketHotspot.querySelector('#marketHotspotSearch');
+    if (search) search.addEventListener('input', function () {
+      store.query = search.value || '';
+      store.visibleLimit = 30;
+      renderMarketHotspot();
+      var next = nodes.marketHotspot.querySelector('#marketHotspotSearch');
+      if (next && next.focus) {
+        next.focus();
+        if (typeof next.setSelectionRange === 'function') {
+          next.setSelectionRange(next.value.length, next.value.length);
+        }
+      }
+    });
+    var onlySystem = nodes.marketHotspot.querySelector('#marketHotspotOnlySystem');
+    if (onlySystem) onlySystem.addEventListener('change', function () {
+      store.onlySystem = onlySystem.checked === true;
+      store.visibleLimit = 30;
+      renderMarketHotspot();
+    });
+    var clear = nodes.marketHotspot.querySelector('[data-hotspot-clear]');
+    if (clear) clear.addEventListener('click', function () {
+      store.query = '';
+      store.theme = '';
+      store.onlySystem = false;
+      store.visibleLimit = 30;
+      renderMarketHotspot();
+    });
+    var more = nodes.marketHotspot.querySelector('[data-hotspot-more]');
+    if (more) more.addEventListener('click', function () {
+      store.visibleLimit += 30;
+      renderMarketHotspot();
+    });
+    Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-open]'), function (button) {
+      button.addEventListener('click', function () {
+        var key = button.getAttribute('data-hotspot-open');
+        var item = asArray(store.model && store.model.items).find(function (entry) {
+          return entry.key === key;
+        });
+        if (!item) return;
+        store.returnFocus = button;
+        openMarketHotspotDetail(item);
+      });
+    });
+  }
+
+  function renderMarketHotspot() {
+    if (!nodes.marketHotspot) return;
+    var store = marketHotspotState();
+    try {
+      store.model = buildMarketHotspotModel(state.data || {});
+      nodes.marketHotspot.outerHTML = renderMarketHotspotSection(store.model, store);
+      nodes.marketHotspot = document.getElementById('marketHotspotSection');
+      bindMarketHotspotControls();
+    } catch (error) {
+      nodes.marketHotspot.innerHTML = '<div class="hotspot-empty"><strong>热点个股暂不可用</strong>'
+        + '<span>其他日报内容继续可用。</span></div>';
+    }
+  }
+
   function primaryDisplayMainRows(viewContext) {
     var views = viewContext && typeof viewContext === 'object'
       ? viewContext : ((state.workspace || {}).views || {});
@@ -2141,6 +3168,7 @@
     return '<nav class="decision-overview-links" aria-label="本页快捷入口">'
       + '<a href="#marketDecisionBar">大盘依据</a>'
       + '<a href="#candidateWorkspace">候选工作台</a>'
+      + '<a href="#marketHotspotSection">热点地图</a>'
       + '<a href="#personalWatchlistSection">我的关注</a>'
       + '<a href="#reportChanges">本期变化</a>'
       + '</nav>';
@@ -3794,6 +4822,7 @@
       + '      <div id="personalWatchlistStack"></div>'
       + '    </section>'
       + '    <section class="direction-quick supplemental-fact-anchor" id="directionQuickSummary" aria-label="今日方向摘要"></section>'
+      + '    <section class="market-hotspot-section" id="marketHotspotSection" aria-label="今日热点地图"><div class="hotspot-empty"><span>正在整理热点样本…</span></div></section>'
       + '    <section class="supporting-decisions-stack" id="supportingDecisionsStack" aria-label="今日补充事实"></section>'
       + '    <section class="report-changes-placeholder" id="reportChanges" aria-label="本期变化及复盘入口"><div id="decisionChanges"></div></section>'
       + '  </section>'
@@ -3817,6 +4846,9 @@
       + '      <div id="mobileDrawerContent"></div>'
       + '    </div>'
       + '  </div>'
+      + '  <dialog class="hotspot-readonly-dialog" id="hotspotReadonlyDialog" aria-labelledby="hotspotReadonlyTitle">'
+      + '    <div id="hotspotReadonlyDialogContent"></div>'
+      + '  </dialog>'
       + '  <div class="text-empty hidden" id="globalError"></div>'
       + '</main>';
 
@@ -3855,6 +4887,9 @@
     nodes.precloseBody = app.querySelector('#precloseBody');
     nodes.precloseReconciliation = app.querySelector('#precloseReconciliation');
     nodes.directionQuick = app.querySelector('#directionQuickSummary');
+    nodes.marketHotspot = app.querySelector('#marketHotspotSection');
+    nodes.hotspotDialog = app.querySelector('#hotspotReadonlyDialog');
+    nodes.hotspotDialogContent = app.querySelector('#hotspotReadonlyDialogContent');
     nodes.historicalReconstruction = app.querySelector('#historicalReconstruction');
     nodes.candidateSearch = app.querySelector('#candidateSearch');
     nodes.candidateTools = app.querySelector('.candidate-list-tools');
@@ -12520,6 +13555,7 @@
       renderReviewToolPanels();
       renderFundingMainlineStrip();
       renderDirectionQuickSummary(state.data);
+      renderMarketHotspot();
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
@@ -12590,6 +13626,8 @@
   window.findRawCandidate = findRawCandidate;
   window.renderChart = renderChart;
   window.renderAuxiliaryCenter = renderAuxiliaryCenter;
+  window.renderMarketHotspot = renderMarketHotspot;
+  window.openMarketHotspotDetail = openMarketHotspotDetail;
   window.renderMarketSentimentChart = renderMarketSentimentChart;
   window.resolveGranted = resolveGranted;
 
