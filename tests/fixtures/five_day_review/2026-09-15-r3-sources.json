@@ -1,0 +1,219 @@
+{
+  "meta": {
+    "source_commit": "0fc3de99b3a7bf2ff035c1e1db55474f97bf5efb",
+    "source_page": "docs/2026-09-15/index.html",
+    "source_page_sha256": "689088cc68b84a13211e2d5e9915fe549fbccc208f29da8ca52167d93ccb283f",
+    "source_snapshot_sha256": "2e6f3d8146e5ba92eba536cb0dc0f4cd286d2da001fee1dc804fb549514c7ca1",
+    "extraction": "Static whitelist extraction from window.CHANLUN_BOOTSTRAP.decisionWorkbench; page scripts were not executed.",
+    "selection": "Only the 2026-09-15 highlights source rows for 688150 and 600184 plus their baseline source records are retained.",
+    "cropping": "Retains public identity, original view order/rank, current status/reason, source-local risk labels, and source refs needed by R3. Omits market series, prices, account/access configuration, private fields, unrelated candidates, and unused evidence sections."
+  },
+  "snapshot": {
+    "pageDate": "2026-09-15",
+    "decisionWorkbench": {
+      "schema_version": "decision-workbench-v1",
+      "report_date": "2026-09-15",
+      "phase": "formal",
+      "items": [
+        {
+          "id": "2026-09-15:formal:formal:2026-09-15:6e0737641d7b6e1e:SH688150",
+          "code": "688150",
+          "name": "莱特光电",
+          "evidence_view": "highlights",
+          "page_status": "watch_only",
+          "is_executable": false,
+          "status_label": "研究观察",
+          "primary_reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；突破20日平台；涨幅4.9%",
+          "risk_flags": [],
+          "blocking_reasons": [],
+          "strategy_results": [
+            {
+              "strategy_id": "highlights",
+              "role": "research",
+              "action_semantics": "watch_only",
+              "page_status": "watch_only",
+              "formal_action": null,
+              "score": null,
+              "view_rank": 1,
+              "primary_reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；突破20日平台；涨幅4.9%",
+              "candidate": {
+                "code": "688150",
+                "name": "莱特光电",
+                "primary_reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；突破20日平台；涨幅4.9%",
+                "page_action_reason": "处于60日低位区间；放量2.1倍；站上MA5/MA10；突破20日平台；涨幅4.9%",
+                "risk_flags": [],
+                "ref": {
+                  "pool": "picks_fusion",
+                  "code": "688150"
+                }
+              },
+              "evidence": {
+                "summary": {
+                  "status": "available",
+                  "source": "workspace.views.highlights",
+                  "as_of": "2026-09-15",
+                  "code": "688150",
+                  "name": "莱特光电",
+                  "sector": "电子化学品Ⅲ",
+                  "pool_identity": "picks_fusion",
+                  "view_identity": "highlights",
+                  "view_rank": 1
+                },
+                "risk_and_next": {
+                  "status": "missing",
+                  "source": "workspace risk flags + declared candidate conditions",
+                  "as_of": "2026-09-15",
+                  "risk_labels": []
+                }
+              }
+            },
+            {
+              "strategy_id": "baseline",
+              "role": "research",
+              "action_semantics": "upstream_only",
+              "page_status": "watch_only",
+              "formal_action": null,
+              "score": null,
+              "view_rank": 7,
+              "primary_reason": "原始缠论结构候选；等待各独立策略继续筛选。",
+              "candidate": {
+                "code": "688150",
+                "name": "莱特光电",
+                "primary_reason": "",
+                "page_action_reason": "原始缠论结构候选；等待各独立策略继续筛选。",
+                "risk_flags": [],
+                "ref": {
+                  "pool": "picks_pure",
+                  "code": "688150"
+                }
+              },
+              "evidence": {
+                "summary": {
+                  "status": "available",
+                  "source": "workspace.views.baseline",
+                  "as_of": "2026-09-15",
+                  "code": "688150",
+                  "name": "莱特光电",
+                  "sector": "电子化学品Ⅲ",
+                  "pool_identity": "picks_pure",
+                  "view_identity": "baseline",
+                  "view_rank": 7
+                },
+                "risk_and_next": {
+                  "status": "missing",
+                  "source": "workspace risk flags + declared candidate conditions",
+                  "as_of": "2026-09-15",
+                  "risk_labels": []
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "2026-09-15:formal:formal:2026-09-15:6e0737641d7b6e1e:SH600184",
+          "code": "600184",
+          "name": "光电股份",
+          "evidence_view": "highlights",
+          "page_status": "watch_only",
+          "is_executable": false,
+          "status_label": "研究观察",
+          "primary_reason": "处于60日低位区间；放量2.2倍；站上MA5/MA10；突破20日平台；涨幅7.5%",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "blocking_reasons": [],
+          "strategy_results": [
+            {
+              "strategy_id": "highlights",
+              "role": "research",
+              "action_semantics": "watch_only",
+              "page_status": "watch_only",
+              "formal_action": null,
+              "score": null,
+              "view_rank": 2,
+              "primary_reason": "处于60日低位区间；放量2.2倍；站上MA5/MA10；突破20日平台；涨幅7.5%",
+              "candidate": {
+                "code": "600184",
+                "name": "光电股份",
+                "primary_reason": "处于60日低位区间；放量2.2倍；站上MA5/MA10；突破20日平台；涨幅7.5%",
+                "page_action_reason": "处于60日低位区间；放量2.2倍；站上MA5/MA10；突破20日平台；涨幅7.5%",
+                "risk_flags": [
+                  "涨幅过热"
+                ],
+                "ref": {
+                  "pool": "picks_fusion",
+                  "code": "600184"
+                }
+              },
+              "evidence": {
+                "summary": {
+                  "status": "available",
+                  "source": "workspace.views.highlights",
+                  "as_of": "2026-09-15",
+                  "code": "600184",
+                  "name": "光电股份",
+                  "sector": "地面兵装Ⅱ",
+                  "pool_identity": "picks_fusion",
+                  "view_identity": "highlights",
+                  "view_rank": 2
+                },
+                "risk_and_next": {
+                  "status": "available",
+                  "source": "workspace risk flags + declared candidate conditions",
+                  "as_of": "2026-09-15",
+                  "risk_labels": [
+                    "涨幅过热"
+                  ]
+                }
+              }
+            },
+            {
+              "strategy_id": "baseline",
+              "role": "research",
+              "action_semantics": "upstream_only",
+              "page_status": "watch_only",
+              "formal_action": null,
+              "score": null,
+              "view_rank": 14,
+              "primary_reason": "原始缠论结构候选；等待各独立策略继续筛选。",
+              "candidate": {
+                "code": "600184",
+                "name": "光电股份",
+                "primary_reason": "",
+                "page_action_reason": "原始缠论结构候选；等待各独立策略继续筛选。",
+                "risk_flags": [
+                  "涨幅过热"
+                ],
+                "ref": {
+                  "pool": "picks_pure",
+                  "code": "600184"
+                }
+              },
+              "evidence": {
+                "summary": {
+                  "status": "available",
+                  "source": "workspace.views.baseline",
+                  "as_of": "2026-09-15",
+                  "code": "600184",
+                  "name": "光电股份",
+                  "sector": "地面兵装Ⅱ",
+                  "pool_identity": "picks_pure",
+                  "view_identity": "baseline",
+                  "view_rank": 14
+                },
+                "risk_and_next": {
+                  "status": "available",
+                  "source": "workspace risk flags + declared candidate conditions",
+                  "as_of": "2026-09-15",
+                  "risk_labels": [
+                    "涨幅过热"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

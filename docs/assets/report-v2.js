@@ -14,7 +14,7 @@
     baseline: '基础候选',
   };
   var DEFAULT_VIEW_DESCRIPTIONS = {
-    highlights: '看点 Top10：跨池混合优先观察榜。用于快速扫今天最值得看的标的，不等于全部可立即买入；请结合身份标签、共振标签和操作状态判断。',
+    highlights: '看点 Top10：跨池混合优先观察榜，保留原名次。研究阅读顺序，不代表次日收益排名；请结合身份标签、共振标签和操作状态判断。',
     main: '正式主推：融合候选中通过正式推荐门槛的结果，可执行优先。',
     h4_t3: 'H4 T+3 生产池：展示全部过门候选，按现有统一分排序，可空选、不回填。',
     observation_top5: '观察 Top5：近失样本观察榜，不计入主推荐；显示失败门、升级条件和取消条件。',
@@ -5458,9 +5458,8 @@
       var unified = rec.workbench_item;
       var currentDecision = getWorkbenchCurrentDecision(rec);
       return { action: currentDecision.statusLabel,
-        reason: (currentDecision.currentDominates
-          ? currentDecision.prompt : normalizeString(unified.primary_reason))
-          + (asArray(unified.risk_flags)[0] ? ' · ' + unified.risk_flags[0] : ''),
+        reason: currentDecision.currentDominates
+          ? currentDecision.prompt : normalizeString(unified.primary_reason),
         scoreText: unified.formal_action && isRecommendationEvidenceFiniteNumber(unified.score)
           ? '决策分 ' + formatNumber(unified.score, 0) : '' };
     }
@@ -5891,11 +5890,34 @@
       + '</div>';
   }
 
+  function candidateSourceRiskLabels(item, viewKey) {
+    var rec = item && typeof item === 'object' ? item : {};
+    var evidence = getCandidateRecommendationEvidence(rec, state.data, viewKey);
+    var risk = evidence && evidence.risk_and_next
+      && typeof evidence.risk_and_next === 'object' ? evidence.risk_and_next : {};
+    var risks = recommendationEvidenceList(risk.risk_labels);
+    if (!risks.length && rec.workbench_item) {
+      var workbench = rec.workbench_item;
+      var sourceView = normalizeString(rec.evidence_view || workbench.evidence_view).trim();
+      var selected = asArray(workbench.strategy_results).filter(function (strategy) {
+        return normalizeString(strategy && strategy.strategy_id).trim() === sourceView;
+      });
+      if (selected.length === 1) {
+        risks = asArray((selected[0].candidate || {}).risk_flags)
+          .map(normalizeString).filter(Boolean);
+      }
+    } else if (!risks.length) {
+      risks = asArray(rec.risk_flags).map(normalizeString).filter(Boolean);
+    }
+    return risks.filter(function (value, index, values) {
+      return value && values.indexOf(value) === index;
+    });
+  }
+
   function renderCandidateRowReason(item, viewKey, rowSummary) {
     var rec = item || {};
-    var source = rec.workbench_item || rec;
     var blockers = asArray((rec.workbench_item || rec).blocking_reasons || (rec.workbench_item || rec).blocked_reasons);
-    var riskFlags = asArray(source.risk_flags).map(normalizeString).filter(Boolean);
+    var riskFlags = candidateSourceRiskLabels(rec, viewKey);
     var status = getCandidateStatusSummary(rec, viewKey);
     var parts = [];
     var reason = normalizeString(rowSummary && rowSummary.reason).trim();
@@ -5904,10 +5926,8 @@
       blocker = normalizeString(blocker).trim();
       if (blocker && parts.join('；').indexOf(blocker) === -1) parts.push(blocker);
     });
-    if (riskFlags.length) {
-      var riskText = '风险：' + riskFlags.join('、');
-      if (parts.join('；').indexOf(riskText) === -1) parts.push(riskText);
-    }
+    var riskText = '风险：' + (riskFlags.length ? riskFlags.join('、') : '未登记');
+    if (parts.join('；').indexOf(riskText) === -1) parts.push(riskText);
     if (status.evidence && status.evidence !== '证据可用') {
       var evidenceText = '证据：' + status.evidence;
       if (parts.join('；').indexOf(evidenceText) === -1) parts.push(evidenceText);
