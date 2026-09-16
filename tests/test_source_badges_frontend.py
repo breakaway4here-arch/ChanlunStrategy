@@ -359,6 +359,41 @@ assert(notes.length === 1
             self.assertIn(token, CSS)
         self.assertNotIn(".pool-hit-summary button", CSS)
 
+    def test_detail_header_cascade_keeps_name_action_and_sources_readable_on_mobile(self):
+        generic_flex = CSS.rfind(".detail-header {\n  display: flex;")
+        decision_fix = CSS.find(
+            ".detail-header.decision-header {\n  display: grid;",
+            generic_flex,
+        )
+        evidence_fix = CSS.find(
+            ".detail-header.recommendation-evidence-header {\n  display: grid;",
+            generic_flex,
+        )
+        self.assertGreater(generic_flex, 0)
+        self.assertGreater(decision_fix, generic_flex)
+        self.assertGreater(evidence_fix, generic_flex)
+
+        late_rules = CSS[min(decision_fix, evidence_fix):]
+        self.assertIn("display: grid", late_rules)
+        self.assertIn("grid-column: 1 / -1", late_rules)
+        self.assertIn("overflow-wrap: anywhere", late_rules)
+
+        mobile = late_rules.rfind("@media (max-width: 680px)")
+        self.assertGreater(mobile, 0)
+        mobile_rules = late_rules[mobile:]
+        self.assertIn(".detail-header.decision-header", mobile_rules)
+        self.assertIn(".detail-header.recommendation-evidence-header", mobile_rules)
+        self.assertIn("grid-template-columns: minmax(0, 1fr)", mobile_rules)
+
+        self.assertIn(
+            ".unified-stock-head { display: flex; flex-wrap: wrap;",
+            CSS,
+        )
+        self.assertIn(
+            ".pool-hit-summary.is-detail { flex-basis: 100%;",
+            CSS,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

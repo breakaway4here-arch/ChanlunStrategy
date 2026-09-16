@@ -7267,3 +7267,57 @@ body {
   .pool-hit-badge { font-size: 13px; }
   .pool-hit-tag { font-size: 12px; }
 }
+
+.detail-header.decision-header {
+  display: grid;
+  grid-template-columns: minmax(150px, auto) auto minmax(0, 1fr);
+  align-items: center;
+}
+
+.detail-header.recommendation-evidence-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.detail-header.decision-header > div:first-child,
+.detail-header.recommendation-evidence-header > div:first-child,
+.detail-header.decision-header .decision-header-action,
+.detail-header.recommendation-evidence-header .decision-header-action {
+  min-width: 0;
+}
+
+.detail-header.decision-header .detail-title,
+.detail-header.recommendation-evidence-header .detail-title,
+.detail-header.decision-header .formal-action,
+.detail-header.recommendation-evidence-header .formal-action {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.detail-header.decision-header > .pool-hit-summary,
+.detail-header.recommendation-evidence-header > .pool-hit-summary {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 680px) {
+  .detail-header.decision-header,
+  .detail-header.recommendation-evidence-header {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .detail-header.decision-header .decision-header-action,
+  .detail-header.recommendation-evidence-header .decision-header-action,
+  .detail-header.decision-header .decision-header-facts {
+    width: 100%;
+    justify-self: start;
+    justify-content: flex-start;
+  }
+
+  .detail-header.decision-header > .pool-hit-summary,
+  .detail-header.recommendation-evidence-header > .pool-hit-summary {
+    grid-column: 1;
+    width: 100%;
+  }
+}
