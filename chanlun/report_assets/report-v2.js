@@ -12155,6 +12155,339 @@
     return comparisonScale(value, minimum, maximum);
   }
 
+  function getReviewRegistry(index) {
+    var registry = index && index.review_registry;
+    return registry && Number(registry.schema_version) === 1
+      && Array.isArray(registry.entries) ? registry : null;
+  }
+
+  function reviewRegistryNumber(value) {
+    var number = Number(value);
+    return value === null || value === undefined || value === ''
+      || !Number.isFinite(number) ? null : number;
+  }
+
+  function reviewRegistryMetricNumber(value) {
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+  }
+
+  function reviewRegistryHorizonMetric(horizon) {
+    var value = horizon && typeof horizon === 'object' ? horizon : {};
+    var status = normalizeString(value.status).trim();
+    var basis = normalizeString(value.price_basis_status).trim();
+    var verifiedStatuses = ['calculated', 'calculated_verified'];
+    var verifiedBases = [
+      'canonical_raw_verified',
+      'canonical_qfq_verified',
+      'canonical_hfq_verified',
+    ];
+    var legacyInternalBases = [
+      'legacy_same_index_raw_metadata_incomplete',
+      'legacy_same_index_qfq_metadata_incomplete',
+      'legacy_same_index_hfq_metadata_incomplete',
+    ];
+    var result = reviewRegistryMetricNumber(value.return_pct);
+    var base = reviewRegistryMetricNumber(value.base_price);
+    var endpoint = reviewRegistryMetricNumber(value.endpoint_price);
+    if (value.matured !== true || base === null || base <= 0
+        || endpoint === null || endpoint <= 0 || result === null) return null;
+    if (verifiedStatuses.indexOf(status) !== -1
+        && verifiedBases.indexOf(basis) !== -1) {
+      return { kind: 'verified', value: result };
+    }
+    if (status === 'calculated_legacy_internal'
+        && legacyInternalBases.indexOf(basis) !== -1) {
+      return { kind: 'internal', value: result };
+    }
+    return null;
+  }
+
+  function reviewRegistryHorizonKind(horizon) {
+    var value = horizon && typeof horizon === 'object' ? horizon : {};
+    var status = normalizeString(value.status).trim();
+    var metric = reviewRegistryHorizonMetric(value);
+    if (metric) return metric.kind === 'internal' ? 'internal' : 'calculable';
+    if (status === 'missing') return 'missing';
+    if (status === 'pending') return 'pending';
+    return 'unknown';
+  }
+
+  function reviewRegistryHorizonStatus(horizon) {
+    var value = horizon && typeof horizon === 'object' ? horizon : {};
+    var status = normalizeString(value.status).trim();
+    var metric = reviewRegistryHorizonMetric(value);
+    if (metric && metric.kind === 'internal') return '价格变化（内部口径）';
+    if (metric) return '可计算';
+    if (status === 'missing') return '缺价';
+    if (status === 'pending') return '待到期';
+    if (status === 'maturity_unknown') return '交易日历未知';
+    if (status === 'identity_conflict') return '证券身份冲突，不计收益';
+    if (status === 'invalid_price') return '价格异常，不计收益';
+    if (status === 'price_basis_unverified') return '价基未核验，不计收益';
+    if ([
+      'calculated', 'calculated_verified', 'calculated_internal',
+      'calculated_legacy_internal',
+    ].indexOf(status) !== -1) {
+      return '价基元数据未完整，仅保留原值';
+    }
+    return status
+      ? '状态原值 ' + status + '（未识别，不计收益）'
+      : '状态未登记，不计收益';
+  }
+
+  function reviewRegistrySourceStatus(value) {
+    var status = normalizeString(value).trim();
+    var labels = {
+      formal_eligible: '正式样本可追溯',
+      review_only: '仅复盘',
+      incident_excluded: '事故排除',
+      formal_input_blocked: '正式输入阻断',
+    };
+    return labels[status] || (status ? '状态原值 ' + status : '状态未登记');
+  }
+
+  function reviewRegistryExecutionStatus(value) {
+    var status = normalizeString(value).trim();
+    var labels = {
+      waiting: '等待条件',
+      ready: '条件完整',
+      executable: '可执行',
+      blocked: '不可执行',
+      unavailable: '不可用',
+    };
+    if (!status) return '该快照执行状态未登记';
+    return labels[status]
+      ? '该快照执行状态 ' + labels[status] + '（原值 ' + status + '）'
+      : '该快照执行状态原值 ' + status + '（未识别）';
+  }
+
+  function reviewRegistryPageStatus(value) {
+    var status = normalizeString(value).trim();
+    var labels = {
+      formal_ready: '正式条件完整',
+      formal_incomplete: '正式待确认',
+      strategy_disagreement: '正式策略分歧',
+      evidence_blocked: '暂无法判断',
+      invalidated: '已失效',
+      waiting_trigger: '等待触发',
+      watch_only: '研究观察',
+    };
+    if (!status) return '页面状态未登记';
+    return labels[status]
+      ? '页面状态 ' + labels[status] + '（原值 ' + status + '）'
+      : '页面状态原值 ' + status + '（未识别）';
+  }
+
+  function reviewRegistryCoverageText(entry) {
+    var value = entry && typeof entry === 'object' ? entry : {};
+    var coverage = normalizeString(value.coverage_status).trim();
+    var snapshotKind = normalizeString(value.snapshot_kind).trim();
+    if (coverage === 'confirmed_display_snapshot') return '';
+    if (coverage === 'unconfirmed_legacy_workspace'
+        || snapshotKind === 'legacy_workspace_fallback') {
+      return '旧视图口径，覆盖未确认';
+    }
+    if (coverage === 'unconfirmed_report_identity'
+        || snapshotKind === 'postprocessed_html_bootstrap'
+        || snapshotKind === 'mixed_same_day_snapshots') {
+      return '另版展示快照，报告身份待核验';
+    }
+    if (coverage) return '覆盖状态原值 ' + coverage + '（未识别）';
+    return snapshotKind
+      ? '覆盖状态未登记（快照类型原值 ' + snapshotKind + '）'
+      : '覆盖状态未登记';
+  }
+
+  function reviewRegistryCounts(entries) {
+    var counts = {
+      registered: asArray(entries).length,
+      matured: 0,
+      calculable: 0,
+      internal: 0,
+      missing: 0,
+      pending: 0,
+      unknown: 0,
+    };
+    asArray(entries).forEach(function (entry) {
+      var horizons = entry && typeof entry.horizons === 'object' ? entry.horizons : {};
+      ['T+1', 'T+3', 'T+5'].forEach(function (key) {
+        var horizon = horizons[key] && typeof horizons[key] === 'object'
+          ? horizons[key] : {};
+        if (horizon.matured === true) counts.matured += 1;
+        var kind = reviewRegistryHorizonKind(horizon);
+        if (kind === 'internal') {
+          counts.internal += 1;
+          counts.calculable += 1;
+        } else {
+          counts[kind] += 1;
+        }
+      });
+    });
+    return counts;
+  }
+
+  function renderReviewRegistrySource(source) {
+    var value = source && typeof source === 'object' ? source : {};
+    var roleKey = normalizeString(value.role).trim();
+    var role = { formal: '正式', research: '研究', baseline: '基础' }[roleKey]
+      || roleKey || '角色未登记';
+    var view = normalizeString(value.view).trim();
+    var rank = reviewRegistryNumber(value.rank);
+    var score = reviewRegistryNumber(value.score);
+    var versions = [];
+    if (normalizeString(value.strategy_version).trim()) {
+      versions.push('策略版本 ' + normalizeString(value.strategy_version).trim());
+    }
+    if (normalizeString(value.decision_version).trim()) {
+      versions.push('决策版本 ' + normalizeString(value.decision_version).trim());
+    }
+    if (normalizeString(value.policy_version).trim()) {
+      versions.push('政策版本 ' + normalizeString(value.policy_version).trim());
+    }
+    if (!versions.length) versions.push('版本未登记');
+    return '<li class="review-registry-source"><strong>'
+      + escapeHtml(view ? comparisonViewLabel(view) : '来源未登记')
+      + ' · ' + escapeHtml(role) + ' · 原名次 ' + escapeHtml(rank === null ? '--' : '#' + rank)
+      + '</strong><span>原动作 ' + escapeHtml(normalizeString(value.action).trim() || '未登记')
+      + ' · 原分 ' + escapeHtml(score === null ? '--' : formatNumber(score, 0))
+      + ' · ' + escapeHtml(versions.join(' · '))
+      + ' · ' + escapeHtml(reviewRegistrySourceStatus(value.formal_performance_status))
+      + '</span>'
+      + (roleKey === 'research' ? '<small class="review-registry-rank-note">'
+        + '研究阅读顺序，不代表次日收益排名</small>' : '')
+      + '</li>';
+  }
+
+  function renderReviewRegistryHorizon(key, horizon) {
+    var value = horizon && typeof horizon === 'object' ? horizon : {};
+    var metric = reviewRegistryHorizonMetric(value);
+    var base = reviewRegistryNumber(value.base_price);
+    var endpoint = reviewRegistryNumber(value.endpoint_price);
+    var target = normalizeString(value.target_trading_date).trim();
+    return '<article class="review-registry-horizon is-'
+      + escapeHtml(reviewRegistryHorizonKind(value)) + '">'
+      + '<header><strong>' + escapeHtml(key) + '</strong><span>'
+      + escapeHtml(reviewRegistryHorizonStatus(value)) + '</span></header>'
+      + '<p>' + escapeHtml(target ? '目标日 ' + target : '目标日未确定') + '</p>'
+      + '<p>源值 ' + escapeHtml(base === null ? '--' : formatNumber(base, 2))
+      + ' → ' + escapeHtml(endpoint === null ? '--' : formatNumber(endpoint, 2)) + '</p>'
+      + (!metric ? '' : '<strong class="'
+        + (metric.kind === 'internal'
+          ? 'review-registry-internal-change' : 'review-registry-return') + '">'
+        + escapeHtml(formatPct(metric.value, true)) + '</strong>')
+      + (metric && metric.kind === 'internal'
+        ? '<p class="review-registry-basis-note">价基元数据未完整；不等于策略/成交收益</p>' : '')
+      + '</article>';
+  }
+
+  function renderReviewRegistryEntry(entry) {
+    var value = entry && typeof entry === 'object' ? entry : {};
+    var occurrence = reviewRegistryNumber(value.occurrence_in_window);
+    var occurrenceText = occurrence === null
+      ? '窗口出现次数未登记'
+      : '窗口第' + formatNumber(occurrence, 0) + '次（非首次信号）';
+    var firstSeen = normalizeString(value.first_seen_in_window).trim();
+    var risks = asArray(value.risk_flags).map(normalizeString).filter(Boolean);
+    var reportDate = normalizeString(value.report_date).trim();
+    var coverageText = reviewRegistryCoverageText(value);
+    var horizons = value.horizons && typeof value.horizons === 'object'
+      ? value.horizons : {};
+    return '<details class="review-registry-entry" data-review-code="'
+      + escapeHtml(normalizeString(value.code).trim()) + '"><summary><span><strong>'
+      + escapeHtml(normalizeString(value.name).trim() || normalizeString(value.code).trim() || '未命名')
+      + '</strong><small>' + escapeHtml(normalizeString(value.code).trim())
+      + '</small></span><span>' + escapeHtml(occurrenceText) + '</span></summary>'
+      + '<div class="review-registry-entry-body">'
+      + '<p class="review-registry-state">'
+      + escapeHtml(reportDate ? '源报告日 ' + reportDate : '源报告日未登记')
+      + ' · ' + escapeHtml(reviewRegistryExecutionStatus(value.current_execution_status))
+      + ' · ' + escapeHtml(reviewRegistryPageStatus(value.current_page_status))
+      + (firstSeen ? ' · 窗口内首次登记 ' + escapeHtml(firstSeen) : '') + '</p>'
+      + (coverageText ? '<p class="review-registry-coverage">'
+        + escapeHtml(coverageText) + '</p>' : '')
+      + '<p class="review-registry-risk">'
+      + escapeHtml(risks.length ? '已有风险：' + risks.join('、') : '风险未登记') + '</p>'
+      + '<ul class="review-registry-sources">'
+      + (asArray(value.sources).length
+        ? asArray(value.sources).map(renderReviewRegistrySource).join('')
+        : '<li class="review-registry-source"><strong>来源未登记</strong></li>')
+      + '</ul><div class="review-registry-horizons">'
+      + ['T+1', 'T+3', 'T+5'].map(function (key) {
+        return renderReviewRegistryHorizon(key, horizons[key]);
+      }).join('') + '</div></div></details>';
+  }
+
+  function renderReviewRegistry(index, sourceDate) {
+    var registry = getReviewRegistry(index);
+    var latestDate = normalizeString(index && index.latest_date).trim();
+    if (!registry) {
+      return '<section class="comparison-review-registry is-unavailable"><header><div>'
+        + '<p class="comparison-eyebrow">只读登记</p><h2>展示对象复盘</h2></div>'
+        + (latestDate ? '<small>当前索引覆盖截至 ' + escapeHtml(latestDate) + '</small>' : '')
+        + '</header><p>展示对象登记暂未提供；原正式/研究比较仍可使用。</p></section>';
+    }
+    var windowStart = normalizeString(registry.window_start).trim();
+    var windowEnd = normalizeString(registry.window_end).trim();
+    var priceCutoff = normalizeString(registry.price_data_cutoff).trim();
+    var registryStatus = normalizeString(registry.status).trim();
+    if (registryStatus === 'unavailable') {
+      var unavailableReasonCode = normalizeString(registry.unavailable_reason).trim();
+      var unavailableReason = unavailableReasonCode === 'review_task_failed'
+        ? '复盘任务失败（原值 review_task_failed）'
+        : (unavailableReasonCode
+          ? '暂不可用原因原值 ' + unavailableReasonCode + '（未识别）'
+          : normalizeString(registry.reason || registry.status_reason).trim());
+      return '<section class="comparison-review-registry is-unavailable"><header><div>'
+        + '<p class="comparison-eyebrow">只读登记</p><h2>展示对象复盘暂不可用</h2>'
+        + '<p>复盘模块状态原值 unavailable，不记为 0 个对象。</p></div>'
+        + '<small>登记覆盖截至 ' + escapeHtml(windowEnd || '未提供') + '</small></header>'
+        + '<div class="review-registry-meta"><span>登记窗口 '
+        + escapeHtml(windowStart || '未提供') + ' — ' + escapeHtml(windowEnd || '未提供')
+        + '</span><span>价格数据截止 ' + escapeHtml(priceCutoff || '未提供')
+        + '</span><span>当前索引覆盖截至 ' + escapeHtml(latestDate || '未提供') + '</span></div>'
+        + '<p>' + escapeHtml(unavailableReason || '暂未提供原因')
+        + '；原正式/研究比较仍可使用。</p></section>';
+    }
+    var entries = asArray(registry.entries).filter(function (entry) {
+      return normalizeString(entry && entry.report_date).trim() === normalizeString(sourceDate).trim();
+    });
+    var counts = reviewRegistryCounts(entries);
+    var confirmedCoverageCount = entries.filter(function (entry) {
+      return normalizeString(entry && entry.coverage_status).trim()
+        === 'confirmed_display_snapshot';
+    }).length;
+    var countItems = [
+      ['登记对象', counts.registered],
+      ['已到期端点', counts.matured],
+      ['可计算端点（含内部诊断）', counts.calculable],
+      ['内部诊断端点', counts.internal],
+      ['缺价端点', counts.missing],
+      ['待到期端点', counts.pending],
+      ['未知/不兼容', counts.unknown],
+    ];
+    var empty = entries.length ? '' : '<p class="review-registry-empty">该源报告日没有登记对象；登记覆盖截至 '
+      + escapeHtml(windowEnd || '未提供') + '。</p>';
+    return '<section class="comparison-review-registry"><header><div>'
+      + '<p class="comparison-eyebrow">只读登记</p><h2>展示对象复盘</h2>'
+      + '<p>原分仅作来源追溯，不代表当前可执行分或胜率。</p></div>'
+      + '<small>登记覆盖截至 ' + escapeHtml(windowEnd || '未提供') + '</small></header>'
+      + '<div class="review-registry-meta"><span>登记窗口 '
+      + escapeHtml(windowStart || '未提供') + ' — ' + escapeHtml(windowEnd || '未提供')
+      + '</span><span>价格数据截止 ' + escapeHtml(priceCutoff || '未提供')
+      + '</span><span>当前索引覆盖截至 ' + escapeHtml(latestDate || '未提供') + '</span></div>'
+      + '<div class="review-registry-counts">' + countItems.map(function (item) {
+        return '<span>' + escapeHtml(item[0]) + '</span><strong>' + escapeHtml(String(item[1])) + '</strong>';
+      }).join('') + '</div>'
+      + '<p class="review-registry-boundary">正式与研究来源逐条追溯，不跨角色/版本合并收益；缺价、待到期和未知状态保留在登记中。</p>'
+      + '<p class="review-registry-boundary">覆盖已确认 ' + escapeHtml(String(confirmedCoverageCount))
+      + ' · 覆盖待核验 ' + escapeHtml(String(entries.length - confirmedCoverageCount)) + '</p>'
+      + empty
+      + (entries.length ? '<details class="review-registry-list"><summary>完整登记（'
+        + escapeHtml(String(entries.length)) + '）</summary><div>'
+        + entries.map(renderReviewRegistryEntry).join('') + '</div></details>' : '')
+      + '</section>';
+  }
+
   function renderComparisonPage(index, root) {
     var dates = asArray(index && index.dates).slice(-26);
     var latestDate = normalizeString(index && index.latest_date) || dates[dates.length - 1] || '';
@@ -12166,7 +12499,7 @@
       + '<label>源报告日<select id="comparisonSource">' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '"' + (date === sourceDate ? ' selected' : '') + '>' + escapeHtml(comparisonDateLabel(index, date)) + '</option>'; }).join('') + '</select></label>'
       + '<label>对比日<select id="comparisonTarget"><option value="current">当前</option>' + dates.map(function (date) { return '<option value="' + escapeHtml(date) + '">' + escapeHtml(comparisonDateLabel(index, date)) + '</option>'; }).join('') + '</select></label>'
       + '<button id="comparisonRefresh" type="button">刷新对比价</button><span id="comparisonQuoteStatus" class="comparison-status">尚未刷新当前行情</span>'
-      + '</section><div id="comparisonContent"></div>';
+      + '</section><div id="comparisonReviewRegistry"></div><div id="comparisonContent"></div>';
 
     var quoteData = null;
     var quoteSourceDate = '';
@@ -12186,6 +12519,7 @@
       var target = root.querySelector('#comparisonTarget').value;
       var sourceDate = source;
       var targetDate = target;
+      root.querySelector('#comparisonReviewRegistry').innerHTML = renderReviewRegistry(index, sourceDate);
       if (targetDate !== 'current' && sourceDate > targetDate) {
         root.querySelector('#comparisonContent').innerHTML = '<div class="comparison-empty">对比日不能早于源报告日。</div>';
         return;
@@ -12199,6 +12533,8 @@
     function handleConditionChange() {
       clearComparisonQuotes();
       syncComparisonControls();
+      var sourceDate = root.querySelector('#comparisonSource').value;
+      root.querySelector('#comparisonReviewRegistry').innerHTML = renderReviewRegistry(index, sourceDate);
       root.querySelector('#comparisonContent').innerHTML = '<div class="comparison-empty">请选择条件后点击“' + (root.querySelector('#comparisonTarget').value === 'current' ? '刷新对比价' : '开始比对') + '”。</div>';
     }
     root.querySelector('#comparisonSource').addEventListener('change', handleConditionChange);

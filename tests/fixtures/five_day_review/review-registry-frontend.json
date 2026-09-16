@@ -1,0 +1,402 @@
+{
+  "meta": {
+    "source_index_artifact": "backend-r0-r2/five-day-comparison-index-final.json (task evidence only)",
+    "source_index_sha256": "626996d2240de1ce5a5959f211f9aee9cdb375c64055d73b893fae1cea1216df",
+    "source_report_commit": "0fc3de99b3a7bf2ff035c1e1db55474f97bf5efb",
+    "source_page": "docs/2026-09-14/index.html",
+    "source_page_sha256": "784061368f30d9aaeba704cd7ede7bd3fdac6261b6116c8ddd398674bfcb7e11",
+    "cropping": "The index keeps two public 2026-09-14 registry entries needed by the frontend: multi-source/multi-version 星德胜 and missing-price 华之杰. A separate whitelist keeps only code/name/base/endpoint plus the shared horizon contract for all nine real 2026-09-14 new-pair negatives. Reports, market series, access configuration, private fields, unrelated entries, and global return aggregates are omitted.",
+    "synthetic_boundary": "Two separately flagged synthetic entries cover numeric zero, pending maturity, calendar unknown, an unknown future status, mixed roles/versions, and incident exclusion. They are not presented as historical report rows."
+  },
+  "index": {
+    "version": 1,
+    "latest_date": "2026-09-15",
+    "dates": [
+      "2026-09-14",
+      "2026-09-15"
+    ],
+    "reports": {
+      "2026-09-14": {
+        "quality": {
+          "is_official": true
+        },
+        "views": {}
+      },
+      "2026-09-15": {
+        "quality": {
+          "is_official": true
+        },
+        "views": {}
+      }
+    },
+    "review_registry": {
+      "schema_version": 1,
+      "review_only": true,
+      "window_start": "2026-09-09",
+      "window_end": "2026-09-15",
+      "registered_count": 132,
+      "instrument_count": 118,
+      "calendar_status": "supported_2026_exchange_calendar",
+      "price_data_cutoff": "2026-09-16",
+      "entries": [
+        {
+          "report_date": "2026-09-14",
+          "snapshot_id": "formal:2026-09-14:83a5e64fbd698cfc",
+          "snapshot_kind": "published_html_bootstrap",
+          "coverage_status": "confirmed_display_snapshot",
+          "instrument_id": "SH603344",
+          "identity_status": "verified",
+          "code": "603344",
+          "name": "星德胜",
+          "sources": [
+            {
+              "view": "main",
+              "role": "formal",
+              "rank": 1,
+              "action": "可上车",
+              "score": 62.0,
+              "strategy_version": "daily-fusion-close-v2",
+              "decision_version": "decision-v2",
+              "policy_version": "decision-v2",
+              "formal_performance_status": "formal_eligible"
+            },
+            {
+              "view": "highlights",
+              "role": "research",
+              "rank": 1,
+              "action": "可上车",
+              "score": 62.0,
+              "strategy_version": null,
+              "decision_version": "decision-v2",
+              "policy_version": null,
+              "formal_performance_status": "review_only"
+            },
+            {
+              "view": "baseline",
+              "role": "research",
+              "rank": 1,
+              "action": "仅观察",
+              "score": 54.0,
+              "strategy_version": "daily-pure-close-v2",
+              "decision_version": "decision-v2",
+              "policy_version": "decision-v2",
+              "formal_performance_status": "review_only"
+            }
+          ],
+          "current_execution_status": "waiting",
+          "current_page_status": "formal_incomplete",
+          "risk_flags": [],
+          "signal_date": null,
+          "first_seen_in_window": "2026-09-14",
+          "occurrence_in_window": 1,
+          "occurrence_count_in_window": 1,
+          "horizons": {
+            "T+1": {
+              "target_trading_date": "2026-09-15",
+              "status": "calculated_legacy_internal",
+              "matured": true,
+              "base_price": 25.286404245908898,
+              "endpoint_price": 22.75976116762495,
+              "price_source": "local_market_history",
+              "price_basis_status": "legacy_same_index_qfq_metadata_incomplete",
+              "return_pct": -9.992101
+            },
+            "T+3": {
+              "target_trading_date": "2026-09-17",
+              "status": "pending",
+              "matured": false,
+              "base_price": 25.286404245908898,
+              "endpoint_price": null,
+              "price_source": "local_market_history",
+              "price_basis_status": null,
+              "return_pct": null
+            },
+            "T+5": {
+              "target_trading_date": "2026-09-21",
+              "status": "pending",
+              "matured": false,
+              "base_price": 25.286404245908898,
+              "endpoint_price": null,
+              "price_source": "local_market_history",
+              "price_basis_status": null,
+              "return_pct": null
+            }
+          }
+        },
+        {
+          "report_date": "2026-09-14",
+          "snapshot_id": "formal:2026-09-14:83a5e64fbd698cfc",
+          "snapshot_kind": "published_html_bootstrap",
+          "coverage_status": "confirmed_display_snapshot",
+          "instrument_id": "SH603400",
+          "identity_status": "verified",
+          "code": "603400",
+          "name": "华之杰",
+          "sources": [
+            {
+              "view": "confirming",
+              "role": "research",
+              "rank": 3,
+              "action": "仅观察",
+              "score": 53.0,
+              "strategy_version": "observation-gate-close-v1",
+              "decision_version": "decision-v2",
+              "policy_version": "decision-v2",
+              "formal_performance_status": "review_only"
+            },
+            {
+              "view": "highlights",
+              "role": "research",
+              "rank": 6,
+              "action": "仅观察",
+              "score": 53.0,
+              "strategy_version": null,
+              "decision_version": "decision-v2",
+              "policy_version": null,
+              "formal_performance_status": "review_only"
+            }
+          ],
+          "current_execution_status": "waiting",
+          "current_page_status": "watch_only",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "signal_date": null,
+          "first_seen_in_window": "2026-09-14",
+          "occurrence_in_window": 1,
+          "occurrence_count_in_window": 1,
+          "horizons": {
+            "T+1": {
+              "target_trading_date": "2026-09-15",
+              "status": "missing",
+              "matured": true,
+              "base_price": 54.67,
+              "endpoint_price": null,
+              "price_source": "local_market_history",
+              "price_basis_status": null,
+              "return_pct": null
+            },
+            "T+3": {
+              "target_trading_date": "2026-09-17",
+              "status": "pending",
+              "matured": false,
+              "base_price": 54.67,
+              "endpoint_price": null,
+              "price_source": "local_market_history",
+              "price_basis_status": null,
+              "return_pct": null
+            },
+            "T+5": {
+              "target_trading_date": "2026-09-21",
+              "status": "pending",
+              "matured": false,
+              "base_price": 54.67,
+              "endpoint_price": null,
+              "price_source": "local_market_history",
+              "price_basis_status": null,
+              "return_pct": null
+            }
+          }
+        }
+      ]
+    }
+  },
+  "synthetic_boundary_entry": {
+    "fixture_kind": "synthetic_boundary",
+    "report_date": "2026-09-14",
+    "snapshot_id": "synthetic-boundary-only",
+    "snapshot_kind": "synthetic_boundary",
+    "coverage_status": "synthetic_boundary",
+    "instrument_id": "SZ000001",
+    "identity_status": "verified",
+    "code": "000001",
+    "name": "边界反例",
+    "sources": [
+      {
+        "view": "main",
+        "role": "formal",
+        "rank": 9,
+        "action": "原动作",
+        "score": 0,
+        "strategy_version": "formal-v1",
+        "formal_performance_status": "incident_excluded"
+      },
+      {
+        "view": "highlights",
+        "role": "research",
+        "rank": 2,
+        "action": "仅观察",
+        "score": 0,
+        "strategy_version": "research-v2",
+        "formal_performance_status": "review_only"
+      }
+    ],
+    "current_execution_status": "future_execution_state",
+    "current_page_status": "watch_only",
+    "risk_flags": [],
+    "signal_date": null,
+    "first_seen_in_window": "2026-09-09",
+    "occurrence_in_window": 2,
+    "occurrence_count_in_window": 2,
+    "horizons": {
+      "T+1": {
+        "target_trading_date": "2026-09-15",
+        "status": "calculated_verified",
+        "matured": true,
+        "base_price": 10,
+        "endpoint_price": 10,
+        "price_source": "fixture",
+        "price_basis_status": "canonical_qfq_verified",
+        "return_pct": 0
+      },
+      "T+3": {
+        "target_trading_date": "2026-09-17",
+        "status": "pending",
+        "matured": false,
+        "base_price": 10,
+        "endpoint_price": null,
+        "price_source": "fixture",
+        "price_basis_status": null,
+        "return_pct": null
+      },
+      "T+5": {
+        "target_trading_date": "2026-09-21",
+        "status": "future_status_v2",
+        "matured": false,
+        "base_price": 10,
+        "endpoint_price": 12,
+        "price_source": "fixture",
+        "price_basis_status": "canonical_qfq_verified",
+        "return_pct": 20
+      }
+    }
+  },
+  "synthetic_calendar_unknown_entry": {
+    "fixture_kind": "synthetic_boundary",
+    "report_date": "2026-09-14",
+    "snapshot_id": "synthetic-calendar-only",
+    "snapshot_kind": "synthetic_boundary",
+    "coverage_status": "synthetic_boundary",
+    "instrument_id": "SZ000002",
+    "identity_status": "verified",
+    "code": "000002",
+    "name": "日历未知反例",
+    "sources": [
+      {
+        "view": "highlights",
+        "role": "research",
+        "rank": 3,
+        "action": "仅观察",
+        "score": null,
+        "strategy_version": "research-calendar-v1",
+        "decision_version": null,
+        "policy_version": null,
+        "formal_performance_status": "review_only"
+      }
+    ],
+    "current_execution_status": "waiting",
+    "current_page_status": "watch_only",
+    "risk_flags": [],
+    "signal_date": null,
+    "first_seen_in_window": "2026-09-14",
+    "occurrence_in_window": 1,
+    "occurrence_count_in_window": 1,
+    "horizons": {
+      "T+1": {
+        "target_trading_date": null,
+        "status": "maturity_unknown",
+        "matured": false,
+        "base_price": 8,
+        "endpoint_price": null,
+        "price_source": "fixture",
+        "price_basis_status": null,
+        "return_pct": null
+      },
+      "T+3": {
+        "target_trading_date": null,
+        "status": "maturity_unknown",
+        "matured": false,
+        "base_price": 8,
+        "endpoint_price": null,
+        "price_source": "fixture",
+        "price_basis_status": null,
+        "return_pct": null
+      },
+      "T+5": {
+        "target_trading_date": null,
+        "status": "maturity_unknown",
+        "matured": false,
+        "base_price": 8,
+        "endpoint_price": null,
+        "price_source": "fixture",
+        "price_basis_status": null,
+        "return_pct": null
+      }
+    }
+  },
+  "real_unverified_new_pair_contract": {
+    "report_date": "2026-09-14",
+    "target_trading_date": "2026-09-15",
+    "status": "price_basis_unverified",
+    "matured": true,
+    "price_source": "local_market_history",
+    "price_basis_status": "new_pair_same_adjustment_not_independently_proven",
+    "return_pct": null
+  },
+  "real_unverified_new_pairs": [
+    {
+      "code": "300283",
+      "name": "温州宏丰",
+      "base_price": 12.388710280373829,
+      "endpoint_price": 12.388710280373829
+    },
+    {
+      "code": "002230",
+      "name": "科大讯飞",
+      "base_price": 40.04423076923077,
+      "endpoint_price": 39.4375
+    },
+    {
+      "code": "688651",
+      "name": "盛邦安全",
+      "base_price": 23.34118338229123,
+      "endpoint_price": 22.406009232060427
+    },
+    {
+      "code": "300369",
+      "name": "绿盟科技",
+      "base_price": 8.055963855421686,
+      "endpoint_price": 7.664807228915662
+    },
+    {
+      "code": "300454",
+      "name": "深信服",
+      "base_price": 136.34832314895644,
+      "endpoint_price": 137.08967780334896
+    },
+    {
+      "code": "688225",
+      "name": "亚信安全",
+      "base_price": 12.478411149825785,
+      "endpoint_price": 12.16850174216028
+    },
+    {
+      "code": "000839",
+      "name": "国安股份",
+      "base_price": 2.822770700636942,
+      "endpoint_price": 2.6412420382165602
+    },
+    {
+      "code": "600641",
+      "name": "先导基电",
+      "base_price": 31.9,
+      "endpoint_price": 31.32
+    },
+    {
+      "code": "603991",
+      "name": "领先股份",
+      "base_price": 177.72,
+      "endpoint_price": 178.3
+    }
+  ]
+}
