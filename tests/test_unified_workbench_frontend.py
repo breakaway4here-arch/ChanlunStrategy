@@ -24,13 +24,16 @@ if(ids.length!==new Set(ids).size)throw Error('strategy heading IDs collide');
 for(const label of [...html.matchAll(/aria-labelledby="([^"]+)"/g)].map(x=>x[1]))if(!ids.includes(label))throw Error('heading reference missing');
 ''')
 
-    def test_empty_focus_has_action_without_repeating_screen_summary(self):
-        _assert_node_contract(self, "{ empty:buildCandidateEmptyState }", r'''
+    def test_empty_primary_stays_empty_without_falling_back_to_research(self):
+        _assert_node_contract(self, "{ empty:buildCandidateEmptyState,state:state }", r'''
 window.CHANLUN_BOOTSTRAP={pageDate:'2026-09-08',decisionWorkbench:{schema_version:'decision-workbench-v1',report_date:'2026-09-08',phase:'formal',items:[{code:'600001'}],summary:{reason:'已在顶部说明筛选过程'}}};
-const html=globalThis.__auxTest.empty('decision_focus',{},{});
+globalThis.__auxTest.state.data={date:'2026-09-08'};
+globalThis.__auxTest.state.workspace={views:{main:[]},view_meta:{}};
+const html=globalThis.__auxTest.empty('decision_formal',{},{});
 if(html.includes('已在顶部说明筛选过程'))throw Error('empty state repeats overview');
-if(!html.includes('data-workbench-open-all') || !html.includes('查看全部 1 只'))throw Error('no route to remaining candidates');
-const filtered=globalThis.__auxTest.empty('decision_focus',{}, {filtered:true,filterLabel:'测试'});
+if(!html.includes('本期暂无主推') || html.includes('data-workbench-open-all') || html.includes('查看全部'))
+  throw Error('empty primary fell back to research');
+const filtered=globalThis.__auxTest.empty('decision_formal',{}, {filtered:true,filterLabel:'测试'});
 if(!filtered.includes('已保留筛选条件'))throw Error('filter empty state was lost');
 ''')
 
@@ -55,8 +58,10 @@ const ev={code:'600001',summary:{status:'available'},daily_structure:{status:'av
 const item={id:'one',code:'600001',name:'样本',page_status:'watch_only',status_label:'研究观察',formal_action:null,score:null,primary_reason:'等待回踩',next_confirmation:[],invalidation:[],blocked_reasons:[],sources:['confirming'],evidence_view:'confirming',candidate:{code:'600001',name:'样本',ref:{pool:'startup_watchlist',code:'600001'}},strategy_results:[{strategy_id:'confirming',role:'research',formal_action:null,contract:{},evidence:ev}]};
 window.CHANLUN_BOOTSTRAP={pageDate:data.date,decisionWorkbench:{schema_version:'decision-workbench-v1',report_date:data.date,phase:'formal',summary:{title:'暂无正式推荐',reason:'确认条件不足'},items:[item],featured_ids:[]}};
 const views=globalThis.__auxTest.setup(data);
-if(views.views.decision_all.length!==1 || views.views.decision_focus.length!==0)throw Error('projection not consumed');
-if(globalThis.__auxTest.groups().primary.some(x=>x.key==='confirming'||x.key==='observation_top5'))throw Error('duplicate pool navigation');
+if(views.views.decision_all.length!==1 || views.views.decision_formal.length!==0)
+  throw Error('projection not consumed by all/primary views');
+if(globalThis.__auxTest.groups().primary.some(x=>['confirming','observation_top5','decision_focus','decision_wait'].includes(x.key)))
+  throw Error('duplicate primary navigation');
 const row=views.views.decision_all[0];
 const summary=globalThis.__auxTest.row(row,'decision_all');
 if(summary.action.indexOf('观察')<0 || summary.scoreText.indexOf('决策分')>=0)throw Error('research formal label leaked');

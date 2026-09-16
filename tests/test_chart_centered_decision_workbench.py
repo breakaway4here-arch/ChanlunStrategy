@@ -538,7 +538,7 @@ assert(!sourceTitle.includes('data-source-score') && !sourceTitle.includes('决�
 """,
         )
 
-    def test_decision_navigation_descriptions_remain_readable_for_empty_views(self):
+    def test_single_primary_description_and_status_filter_remain_readable_when_empty(self):
         _assert_node_contract(
             self,
             "({ render: renderViewDescription, state: state, nodes: nodes })",
@@ -549,12 +549,15 @@ t.state.data = { date: '2026-09-14' };
 t.state.workspace = { views: {}, view_meta: {} };
 t.state.currentView = 'decision_formal';
 t.render();
-assert(t.nodes.description.innerHTML.includes('本期正式策略的全部结果，包含待确认、不可执行及风险状态；请查看具体动作。'),
-  'formal-results explanation disappeared when the pool is empty');
-t.state.currentView = 'decision_focus';
+assert(t.nodes.description.innerHTML.includes('主推合并原正式推荐、正式结果与优先关注的有效阅读集合')
+  && t.nodes.description.innerHTML.includes('不升级为正式或可执行')
+  && t.nodes.description.innerHTML.includes('全部状态')
+  && t.nodes.description.innerHTML.includes('正式待确认'),
+  'single-primary explanation or built-in status filter disappeared when empty');
+t.state.currentView = 'decision_all';
 t.render();
-assert(t.nodes.description.innerHTML.includes('按本期状态及原顺序选取至多 5 项供优先复核，可能包含研究观察；不是独立推荐排名。'),
-  'focus explanation disappeared when the pool is empty');
+assert(t.nodes.description.innerHTML.includes('统一清单保留本期全部规范对象及原相对顺序'),
+  'complete-list explanation disappeared when empty');
 """,
         )
 

@@ -1,0 +1,193 @@
+{
+  "meta": {
+    "source_release_head": "af644db7429d54c3c83fe0dfddb386345e373fb8",
+    "source_page": "docs/2026-09-16/index.html",
+    "source_page_sha256": "575e515c04a0445152ccf3d0919ea7dde673191cadfe44e369e8449f2cb85528",
+    "source_js_sha256": "95a83847ddd718164121a7aa667b23434ae0a9c16a33241c707a9675930b0764",
+    "cropping": "Keeps the ordered 80 public security identities, the two real formal workbench records, the two existing main rows, and featured IDs required for N1/N2/D1. Other strategy evidence, prices, charts, access configuration, and private fields are omitted. Non-formal item semantics are synthetic in the test and are not presented as report facts."
+  },
+  "snapshot": {
+    "schema_version": "decision-workbench-v1",
+    "report_date": "2026-09-16",
+    "phase": "formal",
+    "snapshot_id": "formal:2026-09-16:0cb9ad89d6ab3d2c"
+  },
+  "featured_ids": [
+    "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SZ300095",
+    "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SH688150"
+  ],
+  "main_rows": [
+    {
+      "code": "300095",
+      "name": "华伍股份",
+      "ref": {"pool": "picks_fusion", "code": "300095"},
+      "action_semantics": "formal"
+    },
+    {
+      "code": "688150",
+      "name": "莱特光电",
+      "ref": {"pool": "picks_fusion", "code": "688150"},
+      "action_semantics": "formal"
+    }
+  ],
+  "formal_items": [
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SZ300095",
+      "instrument_id": "SZ300095",
+      "code": "300095",
+      "name": "华伍股份",
+      "page_status": "formal_incomplete",
+      "status_label": "正式推荐·条件待补充",
+      "formal_action": "可上车",
+      "score": 61,
+      "is_executable": false,
+      "evidence_view": "main",
+      "blocked_reasons": ["missing_reference_price", "missing_invalidation_price"],
+      "blocking_reasons": ["缺少有效参考价", "缺少有效失效位"],
+      "next_confirmation": [],
+      "invalidation": [],
+      "candidate": {
+        "code": "300095",
+        "name": "华伍股份",
+        "ref": {"pool": "picks_fusion", "code": "300095"},
+        "action_semantics": "formal"
+      },
+      "strategy_results": [
+        {
+          "strategy_id": "main",
+          "role": "formal",
+          "action_semantics": "formal",
+          "formal_action": "可上车",
+          "page_status": "formal_incomplete",
+          "score": 61,
+          "candidate": {
+            "code": "300095",
+            "name": "华伍股份",
+            "ref": {"pool": "picks_fusion", "code": "300095"},
+            "action_semantics": "formal"
+          }
+        }
+      ]
+    },
+    {
+      "id": "2026-09-16:formal:formal:2026-09-16:0cb9ad89d6ab3d2c:SH688150",
+      "instrument_id": "SH688150",
+      "code": "688150",
+      "name": "莱特光电",
+      "page_status": "formal_incomplete",
+      "status_label": "正式推荐·条件待补充",
+      "formal_action": "可上车",
+      "score": 71,
+      "is_executable": false,
+      "evidence_view": "main",
+      "blocked_reasons": ["missing_reference_price", "missing_invalidation_price"],
+      "blocking_reasons": ["缺少有效参考价", "缺少有效失效位"],
+      "next_confirmation": [],
+      "invalidation": [],
+      "candidate": {
+        "code": "688150",
+        "name": "莱特光电",
+        "ref": {"pool": "picks_fusion", "code": "688150"},
+        "action_semantics": "formal"
+      },
+      "strategy_results": [
+        {
+          "strategy_id": "main",
+          "role": "formal",
+          "action_semantics": "formal",
+          "formal_action": "可上车",
+          "page_status": "formal_incomplete",
+          "score": 71,
+          "candidate": {
+            "code": "688150",
+            "name": "莱特光电",
+            "ref": {"pool": "picks_fusion", "code": "688150"},
+            "action_semantics": "formal"
+          }
+        }
+      ]
+    }
+  ],
+  "ordered_identities": [
+    ["SZ300095", "300095", "华伍股份"],
+    ["SH688150", "688150", "莱特光电"],
+    ["SH688008", "688008", "澜起科技"],
+    ["SZ002796", "002796", "世嘉科技"],
+    ["SZ300656", "300656", "民德电子"],
+    ["SH688110", "688110", "东芯股份"],
+    ["SZ300992", "300992", "泰福泵业"],
+    ["SZ301319", "301319", "唯特偶"],
+    ["SH600961", "600961", "株冶集团"],
+    ["SZ300672", "300672", "国科微"],
+    ["SZ301486", "301486", "致尚科技"],
+    ["SH605111", "605111", "新洁能"],
+    ["SH688478", "688478", "晶升股份"],
+    ["SZ300223", "300223", "北京君正"],
+    ["SH688652", "688652", "京仪装备"],
+    ["SZ000670", "000670", "盈方微"],
+    ["SZ002119", "002119", "康强电子"],
+    ["SH688256", "688256", "寒武纪"],
+    ["SZ002137", "002137", "实益达"],
+    ["SH600498", "600498", "烽火通信"],
+    ["SH688261", "688261", "东微半导"],
+    ["SZ002584", "002584", "西陇科学"],
+    ["SZ001339", "001339", "智微智能"],
+    ["SZ003026", "003026", "中晶科技"],
+    ["SZ300661", "300661", "圣邦股份"],
+    ["SH605358", "605358", "XD立昂微"],
+    ["SH688209", "688209", "英集芯"],
+    ["SZ002428", "002428", "云南锗业"],
+    ["SH603324", "603324", "盛剑科技"],
+    ["SH688432", "688432", "有研硅"],
+    ["SZ002161", "002161", "远 望 谷"],
+    ["SH688380", "688380", "中微半导"],
+    ["SZ002077", "002077", "大港股份"],
+    ["SZ002824", "002824", "和胜股份"],
+    ["SH688396", "688396", "华润微"],
+    ["SZ002846", "002846", "英联股份"],
+    ["SZ300456", "300456", "赛微电子"],
+    ["SH600545", "600545", "卓郎智能"],
+    ["SH688048", "688048", "长光华芯"],
+    ["SZ300373", "300373", "扬杰科技"],
+    ["SH603155", "603155", "DR新亚强"],
+    ["SH688498", "688498", "源杰科技"],
+    ["SZ300655", "300655", "晶瑞电材"],
+    ["SH603248", "603248", "锡华科技"],
+    ["SH688536", "688536", "思瑞浦"],
+    ["SZ301678", "301678", "新恒汇"],
+    ["SH600460", "600460", "士兰微"],
+    ["SH603956", "603956", "威派格"],
+    ["SH688809", "688809", "强一股份"],
+    ["SH600584", "600584", "长电科技"],
+    ["SH603322", "603322", "超讯科技"],
+    ["SZ000753", "000753", "漳州发展"],
+    ["SH603078", "603078", "江化微"],
+    ["SZ002489", "002489", "浙江永强"],
+    ["SH688019", "688019", "安集科技"],
+    ["SZ002787", "002787", "华源控股"],
+    ["SZ002902", "002902", "铭普光磁"],
+    ["SH688135", "688135", "利扬芯片"],
+    ["SZ002156", "002156", "通富微电"],
+    ["SZ002806", "002806", "华锋股份"],
+    ["SZ002903", "002903", "宇环数控"],
+    ["SZ300054", "300054", "鼎龙股份"],
+    ["SZ301297", "301297", "富乐德"],
+    ["SH603290", "603290", "斯达半导"],
+    ["SH603607", "603607", "京华激光"],
+    ["SZ002560", "002560", "通达股份"],
+    ["SH603162", "603162", "海通发展"],
+    ["SH688082", "688082", "盛美上海"],
+    ["SZ000720", "000720", "新能泰山"],
+    ["SH688550", "688550", "瑞联新材"],
+    ["SZ002976", "002976", "瑞玛精密"],
+    ["SH688107", "688107", "安路科技"],
+    ["SZ002281", "002281", "光迅科技"],
+    ["SH600707", "600707", "彩虹股份"],
+    ["SZ002645", "002645", "华宏科技"],
+    ["SZ300450", "300450", "先导智能"],
+    ["SZ000657", "000657", "中钨高新"],
+    ["SZ002378", "002378", "章源钨业"],
+    ["SZ002842", "002842", "翔鹭钨业"],
+    ["SZ300443", "300443", "金雷股份"]
+  ]
+}

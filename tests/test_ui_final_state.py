@@ -195,7 +195,9 @@ const wrappedStatus=globalThis.__auxTest.status(all[0],'decision_all');
 if(wrappedStatus.identity.indexOf('正式')<0 || wrappedStatus.condition!=='正式待确认')
   throw Error('workbench wrapper lost formal identity or condition');
 const nav=globalThis.__auxTest.navigation();
-if(nav.find(function(x){return x.key==='decision_wait';}).label!=='正式待确认')throw Error('formal pending label is ambiguous');
+if(nav.map(function(x){return x.key+':'+x.label;}).join(',')
+  !=='decision_formal:主推,decision_all:全部,decision_blocked:待核验 / 风险')
+  throw Error('formal pending was not folded into the single primary entry');
 const status=globalThis.__auxTest.status({code:'600002',page_status:'watch_only',primary_reason:'等待回踩',strategy_results:[{strategy_id:'confirming',role:'research',evidence:{summary:{status:'missing'}}}]},'confirming');
 if(status.condition!=='条件未声明' || status.evidence!=='证据未完整' || status.risk!=='风险标签未登记')
   throw Error('unstructured waiting text was promoted to satisfied condition');

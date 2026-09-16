@@ -68,6 +68,7 @@
     drawerReturnCode: '',
     drawerBackgroundState: [],
     candidateQuery: '',
+    decisionStatusFilter: '',
     sectorFilter: '',
     sectorFilterCode: '',
     sectorFilterRefs: [],
@@ -1638,15 +1639,134 @@
     return normalizeString(key).indexOf('decision_') === 0;
   }
 
-  function decisionRows(projection, key) {
-    return projection.items.filter(function (item) {
-      if (key === 'decision_focus') return asArray(projection.featured_ids).indexOf(item.id) !== -1;
-      if (key === 'decision_formal') return isFormalWorkbenchItem(item);
-      if (key === 'decision_wait') return isFormalWorkbenchItem(item)
-        && item.page_status === 'formal_incomplete';
-      if (key === 'decision_blocked') return ['evidence_blocked', 'strategy_disagreement', 'invalidated'].indexOf(item.page_status) !== -1 || asArray(item.risk_flags).length > 0;
-      return true;
-    }).map(function (item, index) {
+  function primaryDisplaySecurityIdentity(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    var candidate = value.candidate && typeof value.candidate === 'object'
+      ? value.candidate : {};
+    var direct = normalizeString(
+      value.instrument_id || value.security_id
+        || candidate.instrument_id || candidate.security_id
+    ).trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
+    if (/^(SH|SZ|BJ)\d{6}$/.test(direct)) return direct;
+    var rawCode = normalizeString(value.code || candidate.code).trim().toUpperCase();
+    var prefixed = rawCode.replace(/[^A-Z0-9]/g, '');
+    if (/^(SH|SZ|BJ)\d{6}$/.test(prefixed)) return prefixed;
+    var codeMatch = rawCode.match(/(\d{6})$/);
+    var code = codeMatch ? codeMatch[1] : '';
+    var exchange = normalizeString(
+      value.exchange || value.market || candidate.exchange || candidate.market
+    ).trim().toUpperCase();
+    if (exchange.indexOf('SH') === 0) exchange = 'SH';
+    else if (exchange.indexOf('SZ') === 0) exchange = 'SZ';
+    else if (exchange.indexOf('BJ') === 0) exchange = 'BJ';
+    else exchange = '';
+    if (!exchange && code) {
+      if (/^6/.test(code)) exchange = 'SH';
+      else if (/^(0|3)/.test(code)) exchange = 'SZ';
+      else if (/^(4|8|92)/.test(code)) exchange = 'BJ';
+    }
+    if (code) return (exchange || 'CODE') + code;
+    var id = normalizeString(value.id).trim();
+    return id ? 'ID:' + id : '';
+  }
+
+  function primaryDisplayMainRows(viewContext) {
+    var views = viewContext && typeof viewContext === 'object'
+      ? viewContext : ((state.workspace || {}).views || {});
+    var rows = asArray(views.main);
+    if (!viewContext && getStrategyViewBlockingReason(state.data || {}, 'main')) return [];
+    return rows;
+  }
+
+  function selectPrimaryDisplayItems(projection, mainRows) {
+    var value = projection && typeof projection === 'object' ? projection : {};
+    var canonical = asArray(value.items);
+    var featured = {};
+    asArray(value.featured_ids).forEach(function (id) {
+      id = normalizeString(id).trim();
+      if (id) featured[id] = true;
+    });
+    var main = asArray(mainRows);
+    var mainIdentities = {};
+    main.forEach(function (item) {
+      var identity = primaryDisplaySecurityIdentity(item);
+      if (identity) mainIdentities[identity] = true;
+    });
+    var selected = [];
+    var seen = {};
+    function append(item) {
+      var identity = primaryDisplaySecurityIdentity(item);
+      if (!identity || seen[identity]) return;
+      seen[identity] = true;
+      selected.push(item);
+    }
+    canonical.forEach(function (item) {
+      var identity = primaryDisplaySecurityIdentity(item);
+      if (isFormalWorkbenchItem(item)
+          || featured[normalizeString(item && item.id).trim()]
+          || (identity && mainIdentities[identity])) append(item);
+    });
+    main.forEach(append);
+    return selected;
+  }
+
+  function resolvePrimaryNavigationState(viewKey, projectionAvailable) {
+    var key = normalizeString(viewKey).trim();
+    var enabled = projectionAvailable === undefined
+      ? Boolean(getDecisionWorkbench()) : Boolean(projectionAvailable);
+    if (!enabled) return { viewKey: key, statusFilter: '' };
+    if (key === 'decision_wait') {
+      return { viewKey: 'decision_formal', statusFilter: 'formal_incomplete' };
+    }
+    if (key === 'decision_focus' || key === 'main' || key === 'decision_formal') {
+      return { viewKey: 'decision_formal', statusFilter: '' };
+    }
+    return { viewKey: key, statusFilter: '' };
+  }
+
+  function primaryDisplayStatus(item) {
+    var value = item && item.workbench_item ? item.workbench_item : (item || {});
+    return normalizeString(value.page_status).trim();
+  }
+
+  function primaryDisplayMatchesStatus(item, statusFilter) {
+    var value = item && item.workbench_item ? item.workbench_item : (item || {});
+    var status = normalizeString(statusFilter).trim();
+    if (!status) return true;
+    if (status === 'formal_incomplete') {
+      return primaryDisplayStatus(value) === status && isFormalWorkbenchItem(value);
+    }
+    return primaryDisplayStatus(value) === status;
+  }
+
+  function decisionRows(projection, key, viewContext) {
+    var value = projection && typeof projection === 'object' ? projection : {};
+    var canonical = asArray(value.items);
+    var resolved = resolvePrimaryNavigationState(key, true);
+    var rows;
+    if (resolved.viewKey === 'decision_formal') {
+      rows = selectPrimaryDisplayItems(value, primaryDisplayMainRows(viewContext));
+      if (resolved.statusFilter) {
+        rows = rows.filter(function (item) {
+          return primaryDisplayMatchesStatus(item, resolved.statusFilter);
+        });
+      }
+    } else {
+      rows = canonical.filter(function (item) {
+        if (resolved.viewKey === 'decision_blocked') {
+          return ['evidence_blocked', 'strategy_disagreement', 'invalidated'].indexOf(item.page_status) !== -1
+            || asArray(item.risk_flags).length > 0;
+        }
+        return true;
+      });
+    }
+    return rows.map(function (item, index) {
+      if (canonical.indexOf(item) === -1) {
+        return Object.assign({}, item, {
+          view_rank: index + 1,
+          evidence_view: item.evidence_view || 'main',
+        });
+      }
       return Object.assign({}, item.candidate || {}, {
         code: item.code, name: item.name, view_rank: index + 1,
         evidence_view: item.evidence_view, workbench_item: item,
@@ -1655,17 +1775,20 @@
   }
 
   function decisionNavigation() {
-    return [{ key: 'decision_focus', label: '优先关注' }, { key: 'decision_all', label: '全部' },
-      { key: 'decision_formal', label: '正式结果' }, { key: 'decision_wait', label: '正式待确认' },
+    return [{ key: 'decision_formal', label: '主推' }, { key: 'decision_all', label: '全部' },
       { key: 'decision_blocked', label: '待核验 / 风险' }];
   }
 
   function decisionOverviewCounts() {
     var projection = getDecisionWorkbench();
+    var primary = null;
     var formal = 0;
     var research = 0;
     var seen = {};
     if (projection) {
+      primary = selectPrimaryDisplayItems(
+        projection, primaryDisplayMainRows()
+      ).length;
       formal = asArray(projection.items).filter(isFormalWorkbenchItem).length;
       asArray(projection.items).forEach(function (item) {
         var rec = item || {};
@@ -1689,7 +1812,7 @@
         return rawViews && Array.isArray(rawViews[key]);
       });
       if (!formalKeys.length && !researchKeys.length) {
-        return { formal: null, research: null, capability: 'unavailable' };
+        return { primary: null, formal: null, research: null, capability: 'unavailable' };
       }
       var formalSeen = {};
       formalKeys.forEach(function (key) {
@@ -1717,9 +1840,9 @@
           });
         });
       }
-      return { formal: formal, research: research, capability: 'available' };
+      return { primary: formal, formal: formal, research: research, capability: 'available' };
     }
-    return { formal: formal, research: research, capability: 'available' };
+    return { primary: primary, formal: formal, research: research, capability: 'available' };
   }
 
   function decisionOverviewCountText(value) {
@@ -1777,7 +1900,7 @@
       var legacyCounts = decisionOverviewCounts();
       mount.innerHTML = '<div class="decision-overview-main"><h2>本期选股结论</h2>'
         + '<p>本期未生成统一清单，按原始策略视图展示；证据能力以本期记录为准。</p>'
-        + '<div class="decision-overview-counts"><span><small>正式结果</small><strong>' + escapeHtml(decisionOverviewCountText(legacyCounts.formal)) + '</strong></span>'
+        + '<div class="decision-overview-counts"><span><small>主推</small><strong>' + escapeHtml(decisionOverviewCountText(legacyCounts.primary)) + '</strong></span>'
         + '<span><small>研究观察</small><strong>' + escapeHtml(decisionOverviewCountText(legacyCounts.research)) + '</strong></span>'
         + '<span class="decision-overview-gap"><small>关键缺口</small><strong>'
         + escapeHtml(legacyCounts.capability === 'available' ? '统一清单未提供；旧版视图可部分汇总' : '旧版汇总能力未提供')
@@ -1797,7 +1920,7 @@
     var gapText = gaps.length ? gaps.join(' · ') : '关键数据缺口：未记录';
     mount.innerHTML = '<div class="decision-overview-main"><h2>' + escapeHtml(summary.title) + '</h2><p>'
       + escapeHtml(summary.reason) + '</p>' + buildFormalOutcomeExplanation(summary, state.data || {})
-      + '<div class="decision-overview-counts"><span><small>正式结果</small><strong>' + escapeHtml(decisionOverviewCountText(counts.formal)) + '</strong></span>'
+      + '<div class="decision-overview-counts"><span><small>主推</small><strong>' + escapeHtml(decisionOverviewCountText(counts.primary)) + '</strong></span>'
       + '<span><small>研究观察</small><strong>' + escapeHtml(decisionOverviewCountText(counts.research)) + '</strong></span>'
       + '<span class="decision-overview-gap"><small>关键缺口</small><strong>' + escapeHtml(gapText) + '</strong></span></div>'
       + '<p class="decision-overview-coverage">' + escapeHtml(coverageText) + '</p>'
@@ -2916,7 +3039,7 @@
     });
     var projection = getDecisionWorkbench();
     if (projection) decisionNavigation().forEach(function (entry) {
-      views[entry.key] = decisionRows(projection, entry.key);
+      views[entry.key] = decisionRows(projection, entry.key, views);
       meta[entry.key] = { label: entry.label, role: 'presentation', action_semantics: 'mixed',
         availability: { state: views[entry.key].length ? 'available' : 'verified_empty' } };
     });
@@ -3018,10 +3141,19 @@
     var key = normalizeString(viewKey || state.currentView).trim();
     var viewInfo = getCandidateViews();
     var poolItems = asArray(viewInfo.views[key]);
+    var statusFilter = key === 'decision_formal'
+      ? normalizeString(opts.statusFilter === undefined
+        ? state.decisionStatusFilter : opts.statusFilter).trim()
+      : '';
+    var statusItems = statusFilter
+      ? poolItems.filter(function (item) {
+        return primaryDisplayMatchesStatus(item, statusFilter);
+      })
+      : poolItems;
     var sectorName = opts.sectorName === undefined ? state.sectorFilter : opts.sectorName;
     var sectorCode = opts.sectorCode === undefined ? state.sectorFilterCode : opts.sectorCode;
     var sectorRefs = opts.sectorRefs === undefined ? state.sectorFilterRefs : opts.sectorRefs;
-    var sectorItems = filterCandidatesBySector(poolItems, sectorName, sectorCode, sectorRefs);
+    var sectorItems = filterCandidatesBySector(statusItems, sectorName, sectorCode, sectorRefs);
     var query = opts.query === undefined ? state.candidateQuery : opts.query;
     query = normalizeString(query).trim().toLowerCase();
     var items = sectorItems.filter(function (item) {
@@ -3039,6 +3171,8 @@
     return {
       viewKey: key,
       poolItems: poolItems,
+      statusItems: statusItems,
+      statusFilter: statusFilter,
       sectorItems: sectorItems,
       items: items,
       visibleItems: visibleItems,
@@ -3239,15 +3373,27 @@
 
   function buildCandidateEmptyState(viewKey, availability, context) {
     var ctx = context || {};
+    if (viewKey === 'decision_formal' && !ctx.filtered) {
+      var primaryRows = decisionRows(
+        getDecisionWorkbench() || {},
+        'decision_formal',
+        ((state.workspace || {}).views || {})
+      );
+      if (state.decisionStatusFilter === 'formal_incomplete' && primaryRows.length) {
+        return '<div class="candidate-empty decision-empty"><strong>主推中暂无正式待确认</strong>'
+          + '<span>当前筛选没有匹配对象；主推完整集合与原状态均已保留。</span></div>';
+      }
+      return '<div class="candidate-empty decision-empty"><strong>本期暂无主推</strong>'
+        + '<span>原正式推荐、正式结果与优先关注的有效阅读集合均为空；不从研究池自动补票。</span></div>';
+    }
     if (isDecisionView(viewKey) && !ctx.filtered) {
       var projection = getDecisionWorkbench() || {};
       var total = asArray(projection.items).length;
-      return '<div class="candidate-empty decision-empty"><strong>' + escapeHtml(viewKey === 'decision_focus'
-        ? '暂无条件明确的优先候选' : '此状态下暂无候选') + '</strong><span>'
+      return '<div class="candidate-empty decision-empty"><strong>此状态下暂无候选</strong><span>'
         + (total ? '其余标的保留在完整清单，可查看观察理由和待核验条件。' : '本期没有可展示的标的，等待下一次报告更新。')
         + '</span>' + (total && viewKey !== 'decision_all'
           ? '<button type="button" class="candidate-empty-action" data-workbench-open-all>'
-            + (viewKey === 'decision_focus' ? '进入全部研究观察（查看全部 ' + total + ' 只）' : '查看全部 ' + total + ' 只')
+            + '查看全部 ' + total + ' 只'
             + '</button>' : '') + '</div>';
     }
     if (ctx.filtered) {
@@ -3511,6 +3657,14 @@
     renderCandidateList();
     renderCandidateEvidenceComparisonMount();
     renderQuickComparison();
+  }
+
+  function renderCurrentCandidateSelection() {
+    var firstItem = getCandidateSelection(state.currentView).visibleItems[0] || null;
+    beginCandidateSelection(firstItem);
+    refreshCandidateWorkspace();
+    renderCandidateDetail(state.activeItem);
+    return firstItem;
   }
 
   function bindCandidateFilterEvents() {
@@ -4281,23 +4435,61 @@
   }
 
   function activateWorkspaceView(nextView, focusTab) {
-    if (!nextView || nextView === state.currentView) return;
-    state.currentView = nextView;
+    var resolved = resolvePrimaryNavigationState(nextView);
+    var resolvedView = resolved.viewKey;
+    var filterChanged = normalizeString(state.decisionStatusFilter)
+      !== normalizeString(resolved.statusFilter);
+    if (!resolvedView || (resolvedView === state.currentView && !filterChanged)) return;
+    state.currentView = resolvedView;
+    state.decisionStatusFilter = resolved.statusFilter;
     state.candidateQuery = '';
     state.candidateLimit = 20;
     if (nodes.candidateSearch) nodes.candidateSearch.value = '';
-    var firstItem = filterCandidatesBySector(
-      getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
-      state.sectorFilterRefs
-    )[0] || null;
-    beginCandidateSelection(firstItem);
     renderWorkspaceTabs();
     renderViewDescription();
-    refreshCandidateWorkspace();
-    renderCandidateDetail(firstItem);
+    renderCurrentCandidateSelection();
     if (focusTab && nodes.tabs) {
-      var activeTab = nodes.tabs.querySelector('[data-view="' + nextView + '"]');
+      var activeTab = nodes.tabs.querySelector('[data-view="' + resolvedView + '"]');
       if (activeTab && activeTab.focus) activeTab.focus();
+    }
+  }
+
+  function renderPrimaryStatusFilters() {
+    var items = asArray((getCandidateViews().views || {}).decision_formal);
+    var formal = items.filter(function (item) {
+      return isFormalWorkbenchItem(item && item.workbench_item ? item.workbench_item : item);
+    }).length;
+    var research = items.length - formal;
+    var pending = items.filter(function (item) {
+      return primaryDisplayMatchesStatus(item, 'formal_incomplete');
+    }).length;
+    var current = normalizeString(state.decisionStatusFilter).trim();
+    return '<small class="decision-primary-composition">主推构成：正式 '
+      + escapeHtml(String(formal)) + ' · 研究 ' + escapeHtml(String(research))
+      + '；研究对象不升级正式</small>'
+      + '<div class="decision-status-filters" role="group" aria-label="主推状态筛选">'
+      + '<button type="button" data-decision-status-filter="" aria-pressed="'
+      + (current ? 'false' : 'true') + '" class="' + (current ? '' : 'is-active')
+      + '">全部状态 <span>' + escapeHtml(String(items.length)) + '</span></button>'
+      + '<button type="button" data-decision-status-filter="formal_incomplete" aria-pressed="'
+      + (current === 'formal_incomplete' ? 'true' : 'false') + '" class="'
+      + (current === 'formal_incomplete' ? 'is-active' : '')
+      + '">正式待确认 <span>' + escapeHtml(String(pending)) + '</span></button></div>';
+  }
+
+  function bindPrimaryStatusFilters() {
+    if (!nodes.description || typeof nodes.description.querySelectorAll !== 'function') return;
+    var buttons = nodes.description.querySelectorAll('[data-decision-status-filter]');
+    for (var index = 0; index < buttons.length; index += 1) {
+      buttons[index].addEventListener('click', function (event) {
+        var filter = normalizeString(
+          event.currentTarget.getAttribute('data-decision-status-filter')
+        ).trim();
+        activateWorkspaceView(
+          filter === 'formal_incomplete' ? 'decision_wait' : 'decision_formal',
+          false
+        );
+      });
     }
   }
 
@@ -4383,9 +4575,17 @@
   function renderViewDescription() {
     if (!nodes.description) return;
     if (isDecisionView(state.currentView)) {
+      if (state.currentView === 'decision_formal') {
+        nodes.description.innerHTML = '<div class="view-description-copy">'
+          + '主推合并原正式推荐、正式结果与优先关注的有效阅读集合；保留原顺序、角色、分数和执行条件。'
+          + '原优先关注中的研究对象仍是研究待条件，不升级为正式或可执行。'
+          + '</div>' + renderPrimaryStatusFilters();
+        bindPrimaryStatusFilters();
+        return;
+      }
       var decisionCopy = {
-        decision_formal: '本期正式策略的全部结果，包含待确认、不可执行及风险状态；请查看具体动作。',
-        decision_focus: '按本期状态及原顺序选取至多 5 项供优先复核，可能包含研究观察；不是独立推荐排名。',
+        decision_all: '统一清单保留本期全部规范对象及原相对顺序。',
+        decision_blocked: '集中查看待核验、策略分歧、失效或已有风险的对象。',
       }[state.currentView] || '';
       nodes.description.innerHTML = decisionCopy
         ? '<div class="view-description-copy">' + escapeHtml(decisionCopy) + '</div>'
@@ -5972,7 +6172,8 @@
     }
     if (nodes.candidateCount) {
       nodes.candidateCount.textContent = '显示 ' + visibleItems.length + ' / ' + items.length
-        + (query || state.sectorFilter ? '（原池 ' + poolItems.length + '）' : '');
+        + (query || state.sectorFilter || selection.statusFilter
+          ? '（原池 ' + poolItems.length + '）' : '');
     }
     if (nodes.candidateMore) {
       nodes.candidateMore.hidden = visibleItems.length >= items.length;
@@ -7923,7 +8124,6 @@
 
     if (!item) {
       clearCandidateDetailLifecycle(target);
-      if (state.currentView === 'decision_focus') return;
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       target.innerHTML = state.currentView === 'main'
         ? '<div class="detail-empty"><strong>本期未选出推荐票</strong></div>'
@@ -11889,18 +12089,27 @@
   function normalizeWorkspace(data) {
     var ws = data && data.workspace ? data.workspace : null;
     if (!ws) {
+      var projectionWithoutWorkspace = getDecisionWorkbench(data);
       state.workspace = {
-        default_view: 'main',
+        default_view: projectionWithoutWorkspace ? 'decision_formal' : 'main',
         view_order: DEFAULT_VIEW_ORDER,
         view_meta: {},
         views: {},
       };
+      state.decisionStatusFilter = '';
+      state.currentView = state.workspace.default_view;
       return;
     }
 
     state.workspace = Object.assign({}, ws);
-    if (getDecisionWorkbench(data)) state.workspace.default_view = 'decision_focus';
-    state.currentView = ws.default_view || state.currentView;
+    var projection = getDecisionWorkbench(data);
+    var resolved = resolvePrimaryNavigationState(
+      ws.default_view || state.currentView,
+      Boolean(projection)
+    );
+    if (projection) state.workspace.default_view = resolved.viewKey;
+    state.decisionStatusFilter = resolved.statusFilter;
+    state.currentView = resolved.viewKey || state.currentView;
     if (!state.currentView) state.currentView = 'main';
   }
 
@@ -11935,13 +12144,7 @@
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
       renderViewDescription();
-      var first = filterCandidatesBySector(
-        getCurrentViewItems(), state.sectorFilter, state.sectorFilterCode,
-        state.sectorFilterRefs
-      )[0] || null;
-      beginCandidateSelection(first);
-      refreshCandidateWorkspace();
-      renderCandidateDetail(first);
+      var first = renderCurrentCandidateSelection();
       renderAuxiliaryCenter();
       initComparisonSummary();
       renderTop10Control();

@@ -1460,6 +1460,40 @@ body {
   color: var(--text-muted);
 }
 
+.decision-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.decision-primary-composition {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.decision-status-filters button {
+  min-height: 32px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-sub);
+  background: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.decision-status-filters button.is-active {
+  border-color: var(--primary);
+  color: #fff;
+  background: var(--primary);
+}
+
+.decision-status-filters span { font-weight: 800; }
+
 .today-workspace {
   padding: 0;
   border: 0;
