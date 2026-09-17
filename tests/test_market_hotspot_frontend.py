@@ -5,6 +5,8 @@ import pathlib
 import subprocess
 import unittest
 
+from tests.css_test_helpers import media_rule_blocks
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CSS = (ROOT / "chanlun/report_assets/report-v2.css").read_text(encoding="utf-8")
@@ -475,7 +477,7 @@ assert(initialHtml.includes('搜索名称或代码') && initialHtml.includes('�
             "({ build: buildMarketHotspotModel, render: renderMarketHotspotSection })",
             r"""
 const report = JSON.parse(fs.readFileSync('docs/data/2026-09-16.json', 'utf8'));
-const bootstrapLine = fs.readFileSync('docs/index.html', 'utf8').split('\n').find(function (line) {
+const bootstrapLine = fs.readFileSync('docs/2026-09-16/index.html', 'utf8').split('\n').find(function (line) {
   return line.includes('window.CHANLUN_BOOTSTRAP = ');
 });
 const bootstrap = JSON.parse(bootstrapLine.split('window.CHANLUN_BOOTSTRAP = ')[1].replace(/;\s*$/, ''));
@@ -1102,7 +1104,7 @@ assert(html.includes('确认空池') && html.includes('<strong>0</strong><small>
             "({ build: buildMarketHotspotModel, filter: filterMarketHotspotItems })",
             r"""
 const report = JSON.parse(fs.readFileSync('docs/data/2026-09-16.json', 'utf8'));
-const bootstrapLine = fs.readFileSync('docs/index.html', 'utf8').split('\n').find(function (line) {
+const bootstrapLine = fs.readFileSync('docs/2026-09-16/index.html', 'utf8').split('\n').find(function (line) {
   return line.includes('window.CHANLUN_BOOTSTRAP = ');
 });
 const bootstrap = JSON.parse(bootstrapLine.split('window.CHANLUN_BOOTSTRAP = ')[1].replace(/;\s*$/, ''));
@@ -1159,7 +1161,7 @@ assert(JSON.stringify(bootstrap.decisionWorkbench) === frozenWorkbench,
         )
         for token in required:
             self.assertIn(token, CSS)
-        mobile = CSS[CSS.rfind("@media (max-width: 760px)") :]
+        mobile = "\n".join(media_rule_blocks(CSS, "@media (max-width: 760px)"))
         self.assertIn(".hotspot-group-grid", mobile)
         self.assertIn("grid-template-columns: 1fr", mobile)
         self.assertIn(".hotspot-stock-grid", mobile)

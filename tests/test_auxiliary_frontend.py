@@ -4,6 +4,8 @@ import pathlib
 import subprocess
 import unittest
 
+from tests.css_test_helpers import media_rule_blocks
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 JS = (ROOT / "chanlun/report_assets/report-v2.js").read_text(encoding="utf-8")
@@ -1360,14 +1362,14 @@ assert(!lineNames.includes('现价') && !lineNames.includes('参考价'), 'decis
         desktop_end = CSS.index("}", desktop_start)
         desktop_rule = CSS[desktop_start:desktop_end]
         self.assertIn("height: 380px", desktop_rule)
-        mobile_start = CSS.rindex("@media (max-width: 760px)")
-        mobile_rules = CSS[mobile_start:]
+        mobile_rules = "\n".join(media_rule_blocks(CSS, "@media (max-width: 760px)"))
         self.assertRegex(
             mobile_rules,
             r"\.chart-canvas\s*\{[^}]*\bheight:\s*360px",
         )
-        self.assertIn(".candidate-row-identity { display: grid;", mobile_rules)
-        self.assertIn(".candidate-row-market { grid-template-columns: minmax(0, 1fr) auto auto;", mobile_rules)
+        narrow_mobile_rules = "\n".join(media_rule_blocks(CSS, "@media (max-width: 680px)"))
+        self.assertIn(".candidate-row-identity { display: grid;", narrow_mobile_rules)
+        self.assertIn(".candidate-row-market { grid-template-columns: minmax(0, 1fr) auto auto;", narrow_mobile_rules)
 
     def test_today_and_research_stacks_have_distinct_semantic_ownership(self):
         _assert_node_contract(
@@ -2842,7 +2844,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
     def test_mobile_evidence_chain_becomes_vertical(self):
         self.assertIn(".evidence-chain", CSS)
         self.assertIn(".evidence-step", CSS)
-        mobile = CSS[CSS.rindex("@media (max-width: 760px)"):]
+        mobile = "\n".join(media_rule_blocks(CSS, "@media (max-width: 760px)"))
         self.assertIn(".evidence-chain", mobile)
         self.assertIn("grid-template-columns: 1fr", mobile)
         self.assertIn(".decision-direction > summary", mobile)
@@ -2873,7 +2875,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
         )
 
     def test_strategy_attribution_drilldown_stacks_on_mobile(self):
-        mobile = CSS[CSS.rindex("@media (max-width: 760px)"):]
+        mobile = "\n".join(media_rule_blocks(CSS, "@media (max-width: 760px)"))
         self.assertIn(".strategy-attribution-meta", mobile)
         self.assertIn(".strategy-sample-row", mobile)
         self.assertIn("grid-template-columns: 1fr", mobile)
@@ -2984,7 +2986,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
             self.assertIn(token, JS)
 
     def test_strategy_horizons_stack_on_mobile(self):
-        mobile = CSS[CSS.rindex("@media (max-width: 760px)"):]
+        mobile = "\n".join(media_rule_blocks(CSS, "@media (max-width: 760px)"))
         self.assertIn(".strategy-returns", mobile)
         self.assertIn("grid-template-columns: 1fr", mobile)
 

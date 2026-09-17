@@ -39,7 +39,9 @@ class NextdayResearchHookTests(unittest.TestCase):
         child = subprocess.CompletedProcess([], 0, stdout="done", stderr="")
         with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
             HOOK.subprocess, "run", return_value=child
-        ) as run_child, contextlib.redirect_stderr(io.StringIO()):
+        ) as run_child, mock.patch.object(
+            HOOK, "publish_sidecars", return_value={"status": "published", "dates": ["2026-09-17"], "unavailable_dates": [], "reason": ""}
+        ) as publish, contextlib.redirect_stderr(io.StringIO()):
             status = self._call_main(output_dir=self.output_dir)
 
         self.assertEqual(0, status)
@@ -52,22 +54,79 @@ class NextdayResearchHookTests(unittest.TestCase):
         self.assertEqual(60, run_child.call_args.kwargs["timeout"])
         self.assertTrue(run_child.call_args.kwargs["capture_output"])
         self.assertEqual(str(self.root), run_child.call_args.kwargs["cwd"])
+        publish.assert_called_once_with(self.root, self.output_dir.resolve(), timeout_seconds=30)
         status = json.loads((self.output_dir / "last_hook_status.json").read_text(encoding="utf-8"))
-        self.assertEqual("completed", status["status"])
+        self.assertEqual("published", status["status"])
         self.assertEqual("2026-09-17", status["as_of"])
+
+    def test_publish_failure_is_recorded_without_failing_the_hook(self):
+        child = subprocess.CompletedProcess([], 0, stdout="done", stderr="")
+        with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
+            HOOK.subprocess, "run", return_value=child
+        ), mock.patch.object(
+            HOOK, "publish_sidecars", return_value={"status": "committed_pending", "dates": ["2026-09-17"], "unavailable_dates": [], "reason": "push_pending"}
+        ), contextlib.redirect_stderr(io.StringIO()):
+            status = self._call_main(output_dir=self.output_dir)
+
+        self.assertEqual(0, status)
+        persisted = json.loads((self.output_dir / "last_hook_status.json").read_text(encoding="utf-8"))
+        self.assertEqual("committed_pending", persisted["status"])
+        self.assertEqual("push_pending", persisted["error_summary"])
+
+    def test_conflict_or_partial_refresh_publishes_only_with_valid_frozen_date(self):
+        for research_status in ("conflict", "partial_refresh"):
+            with self.subTest(research_status=research_status):
+                child = subprocess.CompletedProcess(
+                    [], 2, stdout=json.dumps({"status": research_status}), stderr=""
+                )
+                with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
+                    HOOK.subprocess, "run", return_value=child
+                ), mock.patch.object(
+                    HOOK,
+                    "project_runs",
+                    return_value=({"2026-09-17": {"report_date": "2026-09-17", "source_run_id": "20260917-run", "frozen_at": "2026-09-17T08:51:33Z"}}, []),
+                ) as project, mock.patch.object(
+                    HOOK,
+                    "publish_sidecars",
+                    return_value={"status": "published", "dates": ["2026-09-17"], "unavailable_dates": [], "reason": ""},
+                ) as publish, contextlib.redirect_stderr(io.StringIO()):
+                    status = self._call_main(output_dir=self.output_dir)
+
+                self.assertEqual(0, status)
+                project.assert_called_once_with(self.output_dir.resolve(), ["2026-09-17"])
+                publish.assert_called_once_with(self.root, self.output_dir.resolve(), timeout_seconds=30)
+                persisted = json.loads((self.output_dir / "last_hook_status.json").read_text(encoding="utf-8"))
+                self.assertEqual("published", persisted["status"])
+                self.assertIn("research_status={}".format(research_status), persisted["error_summary"])
+                self.assertEqual(2, persisted["exit_code"])
+
+    def test_conflict_without_valid_frozen_date_skips_publisher(self):
+        child = subprocess.CompletedProcess([], 2, stdout='{"status":"conflict"}', stderr="")
+        with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
+            HOOK.subprocess, "run", return_value=child
+        ), mock.patch.object(HOOK, "project_runs", return_value=({}, [{"report_date": "2026-09-17", "status": "source_unavailable"}])), mock.patch.object(
+            HOOK, "publish_sidecars"
+        ) as publish, contextlib.redirect_stderr(io.StringIO()):
+            status = self._call_main(output_dir=self.output_dir)
+
+        self.assertEqual(0, status)
+        publish.assert_not_called()
+        persisted = json.loads((self.output_dir / "last_hook_status.json").read_text(encoding="utf-8"))
+        self.assertEqual("failed", persisted["status"])
 
     def test_cli_failure_is_logged_and_does_not_fail_the_hook(self):
         child = subprocess.CompletedProcess([], 7, stdout="", stderr="research failed")
         output = io.StringIO()
         with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
             HOOK.subprocess, "run", return_value=child
-        ), contextlib.redirect_stderr(output):
+        ), mock.patch.object(HOOK, "publish_sidecars") as publish, contextlib.redirect_stderr(output):
             status = self._call_main(output_dir=self.output_dir)
 
         self.assertEqual(0, status)
         self.assertIn("status=failed", output.getvalue())
         self.assertIn("exit_code=7", output.getvalue())
         self.assertIn("research failed", output.getvalue())
+        publish.assert_not_called()
         selections = self.output_dir / "2026-09-17.json"
         selections.write_text("frozen selections", encoding="utf-8")
         child = subprocess.CompletedProcess([], 5, stdout="", stderr="later failure")
@@ -105,7 +164,7 @@ class NextdayResearchHookTests(unittest.TestCase):
         output = io.StringIO()
         with mock.patch.object(HOOK, "PROJECT_ROOT", self.root), mock.patch.object(
             HOOK.subprocess, "run", return_value=child
-        ), contextlib.redirect_stderr(output):
+        ), mock.patch.object(HOOK, "publish_sidecars", return_value={"status": "published", "dates": [], "unavailable_dates": [], "reason": ""}), contextlib.redirect_stderr(output):
             status = self._call_main(output_dir=output_path)
 
         self.assertEqual(0, status)

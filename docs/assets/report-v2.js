@@ -107,6 +107,13 @@
       loading: false,
       expiryTimer: null,
     },
+    nextdayResearch: {
+      requestToken: 0,
+      reportDate: '',
+      controller: null,
+      timeoutTimer: null,
+      hashListenerBound: false,
+    },
     watchlistManager: {
       loaded: false,
       loading: false,
@@ -130,6 +137,8 @@
     primaryTabs: null,
     todayDecisionView: null,
     researchValidationView: null,
+    nextdayResearchSection: null,
+    nextdayResearch: null,
     marketEvidence: null,
     marketDecisionBar: null,
     marketDecisionSummary: null,
@@ -5034,6 +5043,10 @@
       + '    <section class="report-changes-placeholder" id="reportChanges" aria-label="本期变化及复盘入口"><div id="decisionChanges"></div></section>'
       + '  </section>'
       + '  <section class="primary-view research-validation-view hidden" id="researchValidationView" role="tabpanel" aria-labelledby="primary-mode-tab-research">'
+      + '    <section class="l1-nextday-research" id="nextday-research" aria-labelledby="nextdayResearchTitle" tabindex="-1">'
+      + '      <header class="l1-nextday-header"><div><h2 id="nextdayResearchTitle">L1 次日强势研究候选</h2><p>按当日报告生成的研究名单与次日价格路径记录。</p></div><span class="l1-nextday-research-badge">研究观察 · 不构成正式推荐</span></header>'
+      + '      <div class="l1-nextday-content" id="nextdayResearchContent" role="status" aria-live="polite" aria-atomic="true">等待日报数据…</div>'
+      + '    </section>'
       + '    <section class="aux-center decision-center">'
       + '      <details id="auxCenter" open>'
       + '        <summary>'
@@ -5067,6 +5080,8 @@
     nodes.primaryTabs = app.querySelector('.primary-mode-tabs');
     nodes.todayDecisionView = app.querySelector('#todayDecisionView');
     nodes.researchValidationView = app.querySelector('#researchValidationView');
+    nodes.nextdayResearchSection = app.querySelector('#nextday-research');
+    nodes.nextdayResearch = app.querySelector('#nextdayResearchContent');
     nodes.marketEvidence = app.querySelector('#marketEvidence');
     nodes.mobileDecisionSummary = app.querySelector('#mobileDecisionSummary');
     nodes.marketDecisionBar = app.querySelector('#marketDecisionBar');
@@ -5103,6 +5118,16 @@
     nodes.candidateCount = app.querySelector('#candidateCount');
     nodes.candidateMore = app.querySelector('#candidateMore');
     nodes.globalError = app.querySelector('#globalError');
+    if (nodes.nextdayResearch) {
+      nodes.nextdayResearch.addEventListener('click', function (event) {
+        var target = event.target && event.target.closest
+          ? event.target.closest('[data-nextday-research-retry]')
+          : null;
+        if (!target) return;
+        event.preventDefault();
+        loadNextdayResearch();
+      });
+    }
     if (nodes.primaryTabs) {
       nodes.primaryTabs.addEventListener('click', function (event) {
         var button = event.target && event.target.closest
@@ -13459,6 +13484,522 @@
     setTimeout(renderMarketSentimentChart, 0);
   }
 
+  var NEXTDAY_RESEARCH_METRICS = [
+    { key: 'cc1', label: '信号日收盘→次日收盘', shortLabel: 'CC1' },
+    { key: 'gap1', label: '信号日收盘→次日开盘', shortLabel: 'GAP1' },
+    { key: 'oc1', label: '次日开盘→次日收盘', shortLabel: 'OC1' },
+    { key: 'oc2', label: '次日开盘→T+2收盘', shortLabel: 'OC2' },
+    { key: 'oc3', label: '次日开盘→T+3收盘', shortLabel: 'OC3' },
+  ];
+
+  var NEXTDAY_PATH_STATUS_LABELS = {
+    observed: '已观测',
+    pending: '待目标日',
+    calendar_unavailable: '交易日历不可用',
+    basis_unverified: '价基未核验',
+    data_unavailable: '行情不可用',
+    signal_bar_unavailable: '信号日行情不可用',
+    missing: '数据缺失',
+    nonfinal: '行情未最终确认',
+    invalid_status: '行情状态无效',
+    invalid_ohlc: '价格数据无效',
+    duplicate_inconsistent: '重复行情冲突',
+    unavailable: '暂不可用',
+    unknown: '状态未识别',
+  };
+
+  var NEXTDAY_BASIS_STATUS_LABELS = {
+    pending: '待目标日',
+    not_matured: '尚未到期',
+    calendar_unavailable: '交易日历不可用',
+    raw_comparable: '原始价可比',
+    within_bar_invariant: '同一根 K 线内计算',
+    price_basis_unverified: '价基未核验',
+    data_unavailable: '行情不可用',
+    signal_bar_unavailable: '信号日行情不可用',
+    unknown: '价基状态未识别',
+  };
+
+  function isNextdayRecord(value) {
+    return !!value && typeof value === 'object' && !Array.isArray(value);
+  }
+
+  function nextdayStrictCount(value) {
+    return typeof value === 'number' && isFinite(value) && value >= 0 && Math.floor(value) === value
+      ? value : null;
+  }
+
+  function nextdayStrictPercent(value) {
+    return typeof value === 'number' && isFinite(value) ? value : null;
+  }
+
+  function validateNextdayResearchPayload(payload, reportDate) {
+    var expectedDate = normalizeString(reportDate).trim();
+    if (!isCanonicalIsoDate(expectedDate) || !isNextdayRecord(payload)) return null;
+    if (payload.schema_version !== 'nextday-research-public-v1'
+        || normalizeString(payload.report_date).trim() !== expectedDate
+        || ['available', 'partial'].indexOf(normalizeString(payload.status).trim()) === -1
+        || !isNextdayRecord(payload.summary)
+        || !isNextdayRecord(payload.l1)
+        || !isNextdayRecord(payload.b0)
+        || !isNextdayRecord(payload.outcomes)) return null;
+    var selectionGroups = [payload.l1, payload.b0];
+    if (!selectionGroups.every(function (group) {
+      return ['evaluated', 'not_evaluated'].indexOf(normalizeString(group.status).trim()) !== -1
+        && Array.isArray(group.selected);
+    })) return null;
+    var outcomeGroups = [payload.outcomes.l1, payload.outcomes.b0];
+    if (!outcomeGroups.every(function (group) {
+      return isNextdayRecord(group)
+        && ['evaluated', 'not_evaluated'].indexOf(normalizeString(group.status).trim()) !== -1
+        && Array.isArray(group.outcome_rows);
+    })) return null;
+    return payload;
+  }
+
+  function nextdayResearchNoticeHtml(message, retryable) {
+    return '<div class="l1-nextday-notice" role="status"><span>' + escapeHtml(message)
+      + '</span>' + (retryable
+        ? '<button type="button" data-nextday-research-retry>重新读取</button>' : '') + '</div>';
+  }
+
+  function getNextdayResearchUrl(reportDate) {
+    var date = normalizeString(reportDate).trim();
+    if (!isCanonicalIsoDate(date)) return '';
+    var prefix = normalizeString(getBootstrap().dataBasePrefix).trim();
+    if (prefix && prefix !== './' && !/^(\.\.\/){1,2}$/.test(prefix)) return '';
+    return prefix + 'research/nextday/' + date + '.json';
+  }
+
+  function getVisibleNextdayResearchDate() {
+    var bootstrapDate = normalizeString(getBootstrap().pageDate).trim();
+    var data = state.data || {};
+    var dataDate = normalizeString(data.date || data.report_date).trim();
+    if (!isCanonicalIsoDate(bootstrapDate) || !isCanonicalIsoDate(dataDate)
+        || bootstrapDate !== dataDate) return '';
+    return bootstrapDate;
+  }
+
+  function getNextdayResearchSourceLabel(sourcePool) {
+    return getViewSourcePoolLabel(sourcePool);
+  }
+
+  function nextdayResearchTextList(value) {
+    if (!Array.isArray(value)) return [];
+    return value.map(function (item) { return normalizeString(item).trim(); }).filter(Boolean);
+  }
+
+  function nextdayResearchListText(value, fallback) {
+    var values = nextdayResearchTextList(value);
+    return values.length ? values.join('、') : (fallback || '未登记');
+  }
+
+  function nextdayResearchMetricStatus(metric) {
+    var value = isNextdayRecord(metric) ? metric : {};
+    var status = normalizeString(value.status).trim();
+    var basis = normalizeString(value.price_basis_status).trim();
+    var percent = nextdayStrictPercent(value.value_pct);
+    if (status === 'observed') {
+      if (percent === null) return { text: '结果数值未提供', observed: false, value: null };
+      if (basis === 'raw_comparable' || basis === 'within_bar_invariant') {
+        return { text: formatPct(percent, true), observed: true, value: percent };
+      }
+      if (basis === 'price_basis_unverified') {
+        return { text: '价基未核验', observed: false, value: null };
+      }
+      return { text: NEXTDAY_BASIS_STATUS_LABELS[basis] || '价基状态未识别', observed: false, value: null };
+    }
+    if (status === 'basis_unverified' || basis === 'price_basis_unverified') {
+      return { text: '价基未核验', observed: false, value: null };
+    }
+    return {
+      text: NEXTDAY_PATH_STATUS_LABELS[status] || '结果未提供',
+      observed: false,
+      value: null,
+    };
+  }
+
+  function nextdayOutcomeRowsByIdentity(outcomeGroup) {
+    var map = Object.create(null);
+    asArray(outcomeGroup && outcomeGroup.outcome_rows).forEach(function (row) {
+      var identity = normalizeString(row && row.stock_identity).trim();
+      if (!identity) return;
+      if (Object.prototype.hasOwnProperty.call(map, identity)) {
+        map[identity] = null;
+      } else {
+        map[identity] = row;
+      }
+    });
+    return map;
+  }
+
+  function renderNextdayCandidateOutcome(row) {
+    if (!isNextdayRecord(row) || !isNextdayRecord(row.path_metrics)) {
+      return '<div class="l1-nextday-outcome-empty">路径结果未登记</div>';
+    }
+    return (row.entry_one_price === true
+      ? '<p class="l1-nextday-entry-warning">一字日，成交不确定</p>' : '')
+      + '<div class="l1-nextday-row-metrics" aria-label="次日价格路径状态">'
+      + NEXTDAY_RESEARCH_METRICS.map(function (entry) {
+        var result = nextdayResearchMetricStatus(row.path_metrics[entry.key]);
+        return '<span class="l1-nextday-row-metric' + (result.observed ? ' is-observed' : '') + '"><small>'
+          + escapeHtml(entry.label) + ' <em>(' + entry.shortLabel + ')</em></small><strong>'
+          + escapeHtml(result.text) + '</strong></span>';
+      }).join('') + '</div>';
+  }
+
+  function nextdayOutcomeStatusCounts(outcomeGroup, metricKey) {
+    var counts = Object.create(null);
+    asArray(outcomeGroup && outcomeGroup.outcome_rows).forEach(function (row) {
+      var metric = (row && row.path_metrics && row.path_metrics[metricKey]) || {};
+      var stateName = normalizeString(metric.status).trim() || 'unknown';
+      if (stateName === 'observed' && !nextdayResearchMetricStatus(metric).observed) {
+        stateName = normalizeString(metric.price_basis_status).trim() === 'price_basis_unverified'
+          ? 'basis_unverified' : 'unknown';
+      }
+      counts[stateName] = (counts[stateName] || 0) + 1;
+    });
+    return counts;
+  }
+
+  function nextdayOutcomeGroupMetricText(outcomeGroup, key) {
+    var group = isNextdayRecord(outcomeGroup) ? outcomeGroup : {};
+    if (normalizeString(group.status).trim() !== 'evaluated') return '结果未评估';
+    var metric = isNextdayRecord(group.metrics && group.metrics[key]) ? group.metrics[key] : {};
+    var observed = nextdayStrictCount(metric.observed);
+    var mean = nextdayStrictPercent(metric.mean_pct);
+    var rows = asArray(group.outcome_rows);
+    var observedRows = rows.filter(function (row) {
+      return nextdayResearchMetricStatus((row && row.path_metrics || {})[key]).observed;
+    }).length;
+    if (observed !== null && observed > 0 && observed === observedRows && mean !== null) {
+      var text = '均值 ' + formatPct(mean, true) + ' · 已观测 ' + observed;
+      var median = nextdayStrictPercent(metric.median_pct);
+      if (median !== null) text += ' · 中位数 ' + formatPct(median, true);
+      var selected = nextdayStrictCount(group.metrics.selected);
+      if (selected !== null && selected > observed) text += ' / ' + selected + '只';
+      var gainField = key === 'oc1' ? 'gain_ge_3' : (key === 'cc1' ? 'gain_ge_5' : '');
+      var gain = gainField ? nextdayStrictCount(metric[gainField]) : null;
+      var loss = nextdayStrictCount(metric.loss_le_minus5);
+      if (gain !== null) text += ' · ' + (key === 'oc1' ? '≥3% ' : '≥5% ') + gain + '/' + observed;
+      if (loss !== null) text += ' · ≤−5% ' + loss + '/' + observed;
+      return text;
+    }
+    if (observed !== null && observed > 0) return '统计与逐项结果不一致，暂不汇总';
+    var counts = nextdayOutcomeStatusCounts(group, key);
+    var labels = [
+      ['pending', '待目标日'],
+      ['basis_unverified', '价基未核验'],
+      ['missing', '数据缺失'],
+      ['data_unavailable', '行情不可用'],
+      ['calendar_unavailable', '交易日历不可用'],
+      ['nonfinal', '行情未最终确认'],
+      ['invalid_status', '行情状态无效'],
+      ['invalid_ohlc', '价格数据无效'],
+      ['signal_bar_unavailable', '信号日行情不可用'],
+      ['duplicate_inconsistent', '重复行情冲突'],
+    ];
+    var summaries = labels.filter(function (entry) { return counts[entry[0]]; }).map(function (entry) {
+      return entry[1] + ' ' + counts[entry[0]];
+    });
+    return summaries.length ? summaries.join(' · ') : '暂无可验证结果';
+  }
+
+  function renderNextdayOutcomeSummary(outcomeGroup, reportDate) {
+    var group = isNextdayRecord(outcomeGroup) ? outcomeGroup : {};
+    var asOf = normalizeString(group.as_of_date).trim() || normalizeString(reportDate).trim();
+    var metrics = NEXTDAY_RESEARCH_METRICS.map(function (entry) {
+      return '<div class="l1-nextday-group-metric"><span>' + escapeHtml(entry.label)
+        + ' <em>(' + entry.shortLabel + ')</em></span><strong>'
+        + escapeHtml(nextdayOutcomeGroupMetricText(group, entry.key)) + '</strong></div>';
+    }).join('');
+    var reason = normalizeString(group.reason).trim();
+    return '<section class="l1-nextday-outcome-summary" aria-label="分组价格路径统计">'
+      + '<header><strong>价格路径跟踪</strong><span>截至 ' + escapeHtml(isCanonicalIsoDate(asOf) ? asOf : '日期未提供') + '</span></header>'
+      + (normalizeString(group.status).trim() === 'not_evaluated'
+        ? '<p class="l1-nextday-outcome-reason">结果未评估' + (reason ? '：' + escapeHtml(reason) : '') + '</p>'
+        : '<div class="l1-nextday-group-metrics">' + metrics + '</div>')
+      + '<p class="l1-nextday-outcome-boundary">行情路径观察，不代表可成交结果或实盘收益；费用、滑点、排队与成交均未模拟。</p>'
+      + '</section>';
+  }
+
+  function nextdayResearchIdentity(item) {
+    return normalizeString(item && item.stock_identity).trim();
+  }
+
+  function nextdayResearchOverlap(l1, b0) {
+    if (normalizeString(l1 && l1.status).trim() !== 'evaluated'
+        || normalizeString(b0 && b0.status).trim() !== 'evaluated') return null;
+    var l1Map = Object.create(null);
+    asArray(l1.selected).forEach(function (item) {
+      var identity = nextdayResearchIdentity(item);
+      if (identity) l1Map[identity] = item;
+    });
+    return asArray(b0.selected).map(function (item) {
+      var identity = nextdayResearchIdentity(item);
+      return identity && l1Map[identity]
+        ? { identity: identity, name: normalizeString(item.name || l1Map[identity].name).trim() }
+        : null;
+    }).filter(Boolean);
+  }
+
+  function nextdayResearchCandidateHtml(item, index, groupKind, overlapMap, outcomeMap) {
+    var value = isNextdayRecord(item) ? item : {};
+    var identity = nextdayResearchIdentity(value);
+    var name = normalizeString(value.name).trim() || '名称未提供';
+    var exchange = normalizeString(value.exchange).trim();
+    var code = normalizeString(value.code).trim();
+    var displayCode = identity || (exchange && code ? exchange + code : code || '代码未提供');
+    var rank = nextdayStrictCount(value.rank);
+    var sourcePools = nextdayResearchTextList(value.source_pools).map(getNextdayResearchSourceLabel);
+    var riskFlags = nextdayResearchTextList(value.risk_flags);
+    var avoidChase = value.avoid_chase === true ? '避免追高'
+      : (value.avoid_chase === false ? '未标记避免追高' : '追高限制未登记');
+    var overlap = identity && overlapMap && overlapMap[identity];
+    var industry = normalizeString(value.industry).trim();
+    var limitSector = normalizeString(value.limit_sector).trim();
+    var industryCount = nextdayStrictCount(value.industry_count);
+    var boardCount = nextdayStrictCount(value.board_n);
+    var sealTime = normalizeString(value.first_limit_time).trim();
+    var topic = limitSector
+      ? '涨停题材 ' + limitSector + (industryCount === null ? ' · 家数未记录' : ' · ' + industryCount + '家')
+      : '涨停题材未登记';
+    var industryText = industry ? '行业 ' + industry : '行业未登记';
+    var poolText = sourcePools.length ? sourcePools.join(' · ') : '来源池未登记';
+    var rowOutcome = outcomeMap && identity ? outcomeMap[identity] : null;
+    var nextDayConditions = nextdayResearchTextList(value.next_day_conditions);
+    if (!nextDayConditions.length) nextDayConditions = nextdayResearchTextList(value.next_confirmation);
+    var cancelConditions = nextdayResearchTextList(value.cancel_conditions);
+    nextdayResearchTextList(value.invalidation).forEach(function (condition) {
+      if (cancelConditions.indexOf(condition) === -1) cancelConditions.push(condition);
+    });
+    var candidateClass = groupKind === 'l1' ? 'is-l1' : 'is-b0';
+    return '<li class="l1-nextday-candidate ' + candidateClass + '"><article>'
+      + '<header class="l1-nextday-candidate-head"><span class="l1-nextday-rank">'
+      + escapeHtml(rank === null ? '顺序 ' + (index + 1) : '#' + rank) + '</span>'
+      + '<span class="l1-nextday-name">' + escapeHtml(name) + '</span>'
+      + '<span class="l1-nextday-code">' + escapeHtml(displayCode) + '</span>'
+      + (overlap ? '<span class="l1-nextday-overlap">与 ' + (groupKind === 'l1' ? 'B0' : 'L1') + ' 重叠</span>' : '')
+      + '</header>'
+      + '<div class="l1-nextday-source-pools">' + sourcePools.map(function (pool) {
+        return '<span>' + escapeHtml(pool) + '</span>';
+      }).join('') + '</div>'
+      + '<p class="l1-nextday-sector">' + escapeHtml(industryText) + ' · ' + escapeHtml(topic)
+      + ' · ' + escapeHtml(boardCount === null ? '连板数未记录' : boardCount + '板')
+      + ' · ' + escapeHtml(sealTime ? '首封 ' + sealTime : '首封时间未记录') + '</p>'
+      + '<p class="l1-nextday-risk"><strong>' + escapeHtml(avoidChase) + '</strong> · '
+      + escapeHtml(riskFlags.length ? riskFlags.join('、') : '风险标签未列出，不代表无风险') + '</p>'
+      + '<p class="l1-nextday-watch-reason"><strong>观察依据</strong> '
+      + escapeHtml(normalizeString(value.watch_reason || value.startup_reason).trim() || '未登记') + '</p>'
+      + '<div class="l1-nextday-condition-list">'
+      + '<p><strong>次日条件</strong> ' + escapeHtml(nextDayConditions.length ? nextDayConditions.join('；') : '未登记') + '</p>'
+      + '<p><strong>升级条件</strong> ' + escapeHtml(nextdayResearchListText(value.upgrade_conditions)) + '</p>'
+      + '<p><strong>取消条件</strong> ' + escapeHtml(cancelConditions.length ? cancelConditions.join('；') : '未登记') + '</p>'
+      + '</div>' + renderNextdayCandidateOutcome(rowOutcome) + '</article></li>';
+  }
+
+  function renderNextdaySelectionGroup(title, kind, group, opposite, outcomes, asOfDate, overlapRows) {
+    var selection = isNextdayRecord(group) ? group : {};
+    var groupStatus = normalizeString(selection.status).trim();
+    var selected = Array.isArray(selection.selected) ? selection.selected : [];
+    var countText = groupStatus === 'evaluated' ? selected.length + '只' : '未评估';
+    var identityMap = Object.create(null);
+    asArray(overlapRows).forEach(function (row) { identityMap[row.identity] = true; });
+    var outcomeGroup = outcomes && outcomes[kind] && typeof outcomes[kind] === 'object'
+      ? outcomes[kind] : {};
+    var outcomeMap = nextdayOutcomeRowsByIdentity(outcomeGroup);
+    var subtitle = kind === 'l1'
+      ? '排序：行业涨停家数降序 → 连板数降序 → 首封时间升序 → 证券身份；保持源顺序，最多五只，不补位。'
+      : '日报原看点顺序对照；仅展示原有数量。';
+    var body = '';
+    if (groupStatus === 'not_evaluated') {
+      body = '<div class="l1-nextday-group-empty is-not-evaluated"><strong>'
+        + (kind === 'l1' ? 'L1 未评估' : 'B0 未评估') + '</strong><span>'
+        + escapeHtml(normalizeString(selection.reason).trim() || '输入证据不足，未判断为空选。') + '</span></div>';
+    } else if (!selected.length) {
+      body = '<div class="l1-nextday-group-empty is-evaluated-empty"><strong>'
+        + (kind === 'l1' ? 'L1 已评估，未选出候选' : 'B0 已评估，当前没有原看点条目')
+        + '</strong></div>';
+    } else {
+      body = '<ol class="l1-nextday-candidate-list">' + selected.map(function (item, index) {
+        return renderNextdayResearchCandidateForGroup(item, index, kind, identityMap, outcomeMap);
+      }).join('') + '</ol>';
+    }
+    return '<section class="l1-nextday-group ' + (kind === 'l1' ? 'is-l1' : 'is-b0') + '">'
+      + '<header class="l1-nextday-group-head"><div><h3>' + escapeHtml(title) + '</h3><p>'
+      + escapeHtml(subtitle) + '</p></div><span class="l1-nextday-group-count">' + escapeHtml(countText) + '</span></header>'
+      + body + renderNextdayOutcomeSummary(outcomeGroup, asOfDate) + '</section>';
+  }
+
+  function renderNextdayResearchCandidateForGroup(item, index, kind, overlapMap, outcomeMap) {
+    return nextdayResearchCandidateHtml(item, index, kind, overlapMap, outcomeMap);
+  }
+
+  function renderNextdayResearchProjection(payload, reportDate) {
+    var projection = validateNextdayResearchPayload(payload, reportDate);
+    if (!projection) return nextdayResearchNoticeHtml('本期研究结果不可用', true);
+    var overlapRows = nextdayResearchOverlap(projection.l1, projection.b0);
+    var overlapText = overlapRows === null
+      ? 'L1 / B0 重叠关系未评估'
+      : (overlapRows.length
+        ? 'L1 / B0 重叠：' + overlapRows.map(function (row) { return row.name + '（' + row.identity + '）'; }).join('、')
+        : 'L1 / B0 无重复标的');
+    var summary = projection.summary || {};
+    var statusText = projection.status === 'partial' ? '研究结果部分可用' : '研究结果已生成';
+    var snapshotLabel = projection.l1.status === 'evaluated' ? '完整涨停快照' : '涨停快照样本';
+    var topReason = normalizeString(projection.reason).trim();
+    var asOfDate = normalizeString(projection.outcomes && projection.outcomes.as_of_date).trim();
+    var l1Count = projection.l1.status === 'evaluated' ? projection.l1.selected.length : null;
+    var b0Count = projection.b0.status === 'evaluated' ? projection.b0.selected.length : null;
+    var l1OverlapMap = Object.create(null);
+    var b0OverlapMap = Object.create(null);
+    asArray(overlapRows).forEach(function (row) {
+      l1OverlapMap[row.identity] = true;
+      b0OverlapMap[row.identity] = true;
+    });
+    var l1OutcomeMap = nextdayOutcomeRowsByIdentity(projection.outcomes.l1);
+    var b0OutcomeMap = nextdayOutcomeRowsByIdentity(projection.outcomes.b0);
+    var metaParts = [];
+    var algorithm = normalizeString(projection.algorithm_version).trim();
+    var runId = normalizeString(projection.source_run_id).trim();
+    var frozenAt = normalizeString(projection.frozen_at).trim();
+    if (algorithm) metaParts.push('算法 ' + algorithm);
+    if (runId) metaParts.push('运行 ' + runId);
+    if (frozenAt) metaParts.push('冻结 ' + frozenAt);
+    return '<div class="l1-nextday-projection" data-report-date="' + escapeHtml(reportDate) + '">'
+      + '<div class="l1-nextday-status-line"><strong>' + escapeHtml(statusText) + '</strong>'
+      + '<span>报告日 ' + escapeHtml(reportDate) + '</span></div>'
+      + '<p class="l1-nextday-coverage">系统候选 ' + escapeHtml(nextdayStrictCount(summary.candidate_count) === null ? '—' : String(summary.candidate_count))
+      + ' · ' + escapeHtml(snapshotLabel) + ' ' + escapeHtml(nextdayStrictCount(summary.snapshot_unique_count) === null ? '—' : String(summary.snapshot_unique_count))
+      + ' · 交集 ' + escapeHtml(nextdayStrictCount(summary.candidate_snapshot_intersection) === null ? '—' : String(summary.candidate_snapshot_intersection))
+      + '</p><p class="l1-nextday-overlap-summary">' + escapeHtml(overlapText) + '</p>'
+      + (topReason ? '<p class="l1-nextday-top-reason">' + escapeHtml(topReason) + '</p>' : '')
+      + (metaParts.length ? '<p class="l1-nextday-meta">' + escapeHtml(metaParts.join(' · ')) + '</p>' : '')
+      + '<div class="l1-nextday-groups">'
+      + renderNextdaySelectionGroup('L1 次日强势候选', 'l1', projection.l1, projection.b0,
+        projection.outcomes, asOfDate, overlapRows)
+      + renderNextdaySelectionGroup('B0 原看点对照', 'b0', projection.b0, projection.l1,
+        projection.outcomes, asOfDate, overlapRows)
+      + '</div><p class="l1-nextday-boundary">研究观察，不构成正式推荐；价格路径记录不进入正式候选、排序或操作建议。</p></div>';
+  }
+
+  function cancelNextdayResearchRequest() {
+    var request = state.nextdayResearch || {};
+    if (request.timeoutTimer) clearTimeout(request.timeoutTimer);
+    if (request.controller && typeof request.controller.abort === 'function') {
+      try { request.controller.abort(); } catch (err) {}
+    }
+    request.timeoutTimer = null;
+    request.controller = null;
+  }
+
+  function isCurrentNextdayResearchRequest(requestToken, reportDate, mount) {
+    return !!mount
+      && requestToken === state.nextdayResearch.requestToken
+      && state.nextdayResearch.reportDate === reportDate
+      && getVisibleNextdayResearchDate() === reportDate;
+  }
+
+  function loadNextdayResearch() {
+    var mount = nodes.nextdayResearch;
+    if (!mount) return Promise.resolve(false);
+    cancelNextdayResearchRequest();
+    state.nextdayResearch.requestToken += 1;
+    var requestToken = state.nextdayResearch.requestToken;
+    state.nextdayResearch.reportDate = '';
+    var reportDate = getVisibleNextdayResearchDate();
+    if (!reportDate) {
+      mount.innerHTML = nextdayResearchNoticeHtml('报告日期无法匹配，未加载研究结果。', false);
+      return Promise.resolve(false);
+    }
+    if (!state.granted) {
+      mount.innerHTML = nextdayResearchNoticeHtml('日报访问尚未授权，未读取研究结果。', false);
+      return Promise.resolve(false);
+    }
+    var url = getNextdayResearchUrl(reportDate);
+    if (!url) {
+      mount.innerHTML = nextdayResearchNoticeHtml('研究结果路径配置不可用。', false);
+      return Promise.resolve(false);
+    }
+    state.nextdayResearch.reportDate = reportDate;
+    mount.innerHTML = '<div class="l1-nextday-notice is-loading" role="status">正在读取 ' + escapeHtml(reportDate) + ' 研究结果…</div>';
+    var controller = null;
+    var Controller = window.AbortController
+      || (typeof AbortController !== 'undefined' ? AbortController : null);
+    if (Controller) {
+      try { controller = new Controller(); } catch (err) { controller = null; }
+    }
+    state.nextdayResearch.controller = controller;
+    var fetchOptions = { method: 'GET', credentials: 'same-origin' };
+    if (controller) fetchOptions.signal = controller.signal;
+    var timeoutPromise = new Promise(function (resolve, reject) {
+      state.nextdayResearch.timeoutTimer = setTimeout(function () {
+        if (controller && typeof controller.abort === 'function') {
+          try { controller.abort(); } catch (err) {}
+        }
+        var error = new Error('nextday research request timed out');
+        error.code = 'timeout';
+        reject(error);
+      }, 8000);
+    });
+    var fetchPromise;
+    try {
+      fetchPromise = window.fetch(url, fetchOptions);
+    } catch (error) {
+      fetchPromise = Promise.reject(error);
+    }
+    return Promise.race([Promise.resolve(fetchPromise), timeoutPromise]).then(function (response) {
+      if (!response || !response.ok) {
+        var fetchError = new Error('nextday research sidecar unavailable');
+        fetchError.status = response && response.status;
+        throw fetchError;
+      }
+      if (typeof response.json !== 'function') throw new Error('invalid JSON response');
+      return response.json();
+    }).then(function (payload) {
+      if (!isCurrentNextdayResearchRequest(requestToken, reportDate, mount)) return false;
+      var projection = validateNextdayResearchPayload(payload, reportDate);
+      if (!projection) {
+        mount.innerHTML = nextdayResearchNoticeHtml('本期研究结果不可用', true);
+        return false;
+      }
+      mount.innerHTML = renderNextdayResearchProjection(projection, reportDate);
+      return true;
+    }).catch(function (error) {
+      if (!isCurrentNextdayResearchRequest(requestToken, reportDate, mount)) return false;
+      if (error && error.status === 404) {
+        mount.innerHTML = nextdayResearchNoticeHtml('本日研究结果尚未发布', true);
+      } else {
+        mount.innerHTML = nextdayResearchNoticeHtml('本期研究结果暂不可用，可重新读取。', true);
+      }
+      return false;
+    }).finally(function () {
+      if (requestToken !== state.nextdayResearch.requestToken) return;
+      if (state.nextdayResearch.timeoutTimer) clearTimeout(state.nextdayResearch.timeoutTimer);
+      state.nextdayResearch.timeoutTimer = null;
+      state.nextdayResearch.controller = null;
+    });
+  }
+
+  function openNextdayResearchFromHash() {
+    if (!window.location || normalizeString(window.location.hash) !== '#nextday-research') return false;
+    state.primaryMode = 'research';
+    renderPrimaryMode();
+    var focusSection = function () {
+      if (!nodes.nextdayResearchSection) return;
+      if (nodes.nextdayResearchSection.scrollIntoView) {
+        nodes.nextdayResearchSection.scrollIntoView({ block: 'start' });
+      }
+      if (nodes.nextdayResearchSection.focus) {
+        try { nodes.nextdayResearchSection.focus({ preventScroll: true }); }
+        catch (err) { nodes.nextdayResearchSection.focus(); }
+      }
+    };
+    if (window.requestAnimationFrame) window.requestAnimationFrame(focusSection);
+    else setTimeout(focusSection, 0);
+    return true;
+  }
+
   function setDrawerBackgroundInert(inert) {
     if (!nodes.shell || !nodes.drawer) return;
     if (inert) {
@@ -13740,6 +14281,11 @@
     buildAppShell();
     refreshReviewToolsMounts();
     renderPrimaryMode();
+    openNextdayResearchFromHash();
+    if (window.addEventListener && !state.nextdayResearch.hashListenerBound) {
+      window.addEventListener('hashchange', openNextdayResearchFromHash);
+      state.nextdayResearch.hashListenerBound = true;
+    }
     loadPrecloseAdvisory();
     state.rawPoolCandidates = null;
     resetTop10State();
@@ -13768,6 +14314,7 @@
       renderViewDescription();
       var first = renderCurrentCandidateSelection();
       renderAuxiliaryCenter();
+      loadNextdayResearch();
       initComparisonSummary();
       renderTop10Control();
       if (state.isMobile && first) {

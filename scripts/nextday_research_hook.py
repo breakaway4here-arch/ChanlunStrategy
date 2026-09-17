@@ -14,8 +14,22 @@ from typing import Optional, Sequence
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TIMEOUT_SECONDS = 60
+PUBLISH_TIMEOUT_SECONDS = 30
 MAX_DETAIL_CHARS = 2000
 STATUS_FILENAME = "last_hook_status.json"
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+try:
+    from scripts.publish_nextday_research import publish_sidecars
+except Exception:
+    # Research and the daily report remain successful if the optional public
+    # sidecar publisher cannot be imported in this runtime checkout.
+    publish_sidecars = None
+try:
+    from chanlun.nextday_public import project_runs
+except Exception:
+    project_runs = None
 
 
 def resolve_output_dir(output_dir: Optional[str]) -> Path:
@@ -148,6 +162,73 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _publisher_result(output_dir: Path) -> dict:
+    if publish_sidecars is None:
+        return {"status": "unavailable", "reason": "publisher_unavailable"}
+    try:
+        result = publish_sidecars(
+            PROJECT_ROOT,
+            output_dir,
+            timeout_seconds=PUBLISH_TIMEOUT_SECONDS,
+        )
+    except Exception:
+        return {"status": "unavailable", "reason": "publisher_error"}
+    if not isinstance(result, dict) or not isinstance(result.get("status"), str):
+        return {"status": "unavailable", "reason": "publisher_unavailable"}
+    return result
+
+
+def _frozen_record_is_valid(output_dir: Path, report_date: Optional[str]) -> bool:
+    if project_runs is None or not report_date:
+        return False
+    try:
+        projections, errors = project_runs(output_dir, [report_date])
+    except Exception:
+        return False
+    record = projections.get(report_date)
+    return (
+        not errors
+        and isinstance(record, dict)
+        and record.get("report_date") == report_date
+        and isinstance(record.get("source_run_id"), str)
+        and bool(record.get("source_run_id"))
+        and isinstance(record.get("frozen_at"), str)
+        and bool(record.get("frozen_at"))
+    )
+
+
+def _record_publisher_result(
+    output_dir: Path,
+    *,
+    as_of: Optional[str],
+    report_path: Optional[Path],
+    db_path: Optional[Path],
+    publish_result: dict,
+    research_status: Optional[str] = None,
+    research_exit_code: int = 0,
+) -> None:
+    publish_status = publish_result.get("status")
+    if not isinstance(publish_status, str) or not publish_status:
+        publish_status = "unavailable"
+    reason = publish_result.get("reason", "")
+    if not isinstance(reason, str) or len(reason) > 120:
+        reason = "publisher_unavailable"
+    if research_status:
+        reason = "research_status={};{}".format(research_status, reason)
+    _record_status(
+        output_dir,
+        status=publish_status,
+        as_of=as_of,
+        report_path=report_path,
+        db_path=db_path,
+        exit_code=research_exit_code if research_exit_code else (
+            0 if publish_status in ("published", "published_partial", "no_changes", "partial_no_changes") else 1
+        ),
+        timeout_seconds=PUBLISH_TIMEOUT_SECONDS,
+        error_summary=reason,
+    )
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = _build_parser()
     try:
@@ -217,6 +298,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 0
 
     if result.returncode != 0:
+        try:
+            payload = json.loads(_text(result.stdout))
+        except (TypeError, ValueError):
+            payload = None
+        research_status = payload.get("status") if isinstance(payload, dict) else None
+        if (
+            result.returncode == 2
+            and research_status in ("conflict", "partial_refresh")
+            and _frozen_record_is_valid(output_dir, args.as_of)
+        ):
+            _record_publisher_result(
+                output_dir,
+                as_of=args.as_of,
+                report_path=report_path,
+                db_path=db_path,
+                publish_result=_publisher_result(output_dir),
+                research_status=research_status,
+                research_exit_code=result.returncode,
+            )
+            return 0
         detail = "\n".join(
             part for part in (_text(result.stdout), _text(result.stderr)) if part
         )
@@ -231,13 +332,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 0
 
-    _record_status(
+    _record_publisher_result(
         output_dir,
-        status="completed",
         as_of=args.as_of,
         report_path=report_path,
         db_path=db_path,
-        exit_code=0,
+        publish_result=_publisher_result(output_dir),
     )
     return 0
 
