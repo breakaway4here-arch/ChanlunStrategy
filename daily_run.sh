@@ -295,7 +295,33 @@ commit_today_report_if_changed() {
     fi
 }
 
+run_optional_nextday_research_hook() {
+    local market_db_path
+    local hook_status
+    local -a hook_args
+
+    market_db_path="${CHANLUN_MARKET_HISTORY_DB_PATH:-${SCRIPT_DIR}/.cache/chanlun/market_history.sqlite}"
+    hook_args=(
+        --report "${SCRIPT_DIR}/${TODAY_DATA_PATH}"
+        --db "$market_db_path"
+        --as-of "$TODAY"
+    )
+    if [ -n "${CHANLUN_NEXTDAY_RESEARCH_DIR:-}" ]; then
+        hook_args+=(--output-dir "$CHANLUN_NEXTDAY_RESEARCH_DIR")
+    fi
+
+    if /usr/bin/python3 "${SCRIPT_DIR}/scripts/nextday_research_hook.py" "${hook_args[@]}"; then
+        return 0
+    else
+        hook_status=$?
+        echo "可选次日研究钩子进程异常（exit=${hook_status}），不影响已发布日报"
+        return 0
+    fi
+}
+
 publish_ready_report() {
+    local push_status
+
     if ! fetch_with_proxy_fallback; then
         echo "提交前远端回读失败，保留已校验产物，等待下一次补推"
         return 1
@@ -307,7 +333,16 @@ publish_ready_report() {
     if ! commit_today_report_if_changed; then
         return 1
     fi
-    push_pending_commits
+    if push_pending_commits; then
+        :
+    else
+        push_status=$?
+        return "$push_status"
+    fi
+    if ! run_optional_nextday_research_hook; then
+        echo "可选次日研究调用失败，不影响已发布日报"
+    fi
+    return 0
 }
 
 main "$@"

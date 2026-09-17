@@ -1,0 +1,31 @@
+{
+  "date": "2026-09-17",
+  "basis": "Frozen published report features + local_readonly_export outcome bars. No rescreen, external quotes or production writes.",
+  "is_exploratory": true,
+  "cannot_claim_untouched_test": "These historical dates were already inspected in prior turns. Chronological subperiods are stability checks, not a pristine holdout.",
+  "target_primary": "next-day close / signal-day close - 1 >= 5%",
+  "secondary": "next-day close / next-day open - 1 >= 3%; report separately, NOT same-day realized trading profit",
+  "risk": "next-day close / next-day open - 1 <= -5%; next-day open to T+2/T+3 close",
+  "capacity": "at most 5 ranked names each signal date; preserve empty slots and missing outcome rows, do not refill",
+  "ranking": "known signal-day change_pct descending, instrument_id stable tie break, except B0 original highlights rank",
+  "conditions": {
+    "B0": "original highlights first 5",
+    "B1": "all published candidates signal-day change_pct descending first 5",
+    "B2": "within original highlights, signal-day change_pct descending first 5",
+    "C1_solid_volume": "change_pct>=4 AND close_position_in_day>=0.75 AND original volume_ratio in [1.5,4]",
+    "C2_not_extended": "C1 AND documented distance to MA20<=15",
+    "C3_sector": "change_pct>=4 AND close_position_in_day>=0.75 AND same sector >=2 distinct documented same-day limit-up names",
+    "C4_breakout": "C1 AND signal close>=prior 20-bar high",
+    "C5_trend_health": "change_pct>=4 AND frozen alignment in {bullish,repairing} AND fomo in {low,medium}"
+  },
+  "open_filter_sensitivity": "freeze B2 and C1 lists the night before; next opening gap in [-2,3] only; no refill; availability at opening needs causal execution validation",
+  "subperiods": {
+    "earlier_legacy": "2026-08-12..2026-08-26",
+    "recent_all": "2026-08-27..2026-09-15",
+    "recent10": "2026-09-02..2026-09-15",
+    "recent_first5": "2026-09-02..2026-09-08",
+    "recent_last5": "2026-09-09..2026-09-15"
+  },
+  "no_threshold_tuning": "All new parameter numbers fixed here; no scan for an optimal threshold. Report ALL tested variants.",
+  "implementation_correction": "B0/B1/B2 tie break uses instrument_id exactly as v2; earlier preliminary code-sorted figures are NOT final results. New C methods also use instrument_id for consistency."
+}

@@ -1,0 +1,48 @@
+{
+  "limit_vs_nonlimit_recent10_hit5_difference_95pct_by_date_bootstrap": [
+    0.14845883665966383,
+    0.20250825359521013,
+    0.28549988557270845
+  ],
+  "L1_vs_B0_recent_complete_date_cc1": {
+    "paired_complete_days": 9,
+    "mean_diff_pp": 1.7573880004224596,
+    "higher_days": 7,
+    "bootstrap95": [
+      0.2706680787579069,
+      3.3148937253840423
+    ],
+    "daily_diff": {
+      "2026-09-02": 2.858275711175711,
+      "2026-09-03": 0.7346766296651115,
+      "2026-09-04": 5.2423801108884245,
+      "2026-09-07": 1.6090492324940442,
+      "2026-09-08": -2.0809144886907682,
+      "2026-09-09": 1.0305896476733585,
+      "2026-09-10": -0.3832877989632282,
+      "2026-09-11": 5.566205885924237,
+      "2026-09-15": 1.2395170736352454
+    }
+  },
+  "L1_vs_B0_recent_complete_date_oc1": {
+    "paired_complete_days": 9,
+    "mean_diff_pp": -0.11513857170163187,
+    "higher_days": 4,
+    "bootstrap95": [
+      -2.103620629416696,
+      1.932195298526865
+    ],
+    "daily_diff": {
+      "2026-09-02": 2.84663111167131,
+      "2026-09-03": -0.5201771607671728,
+      "2026-09-04": 1.4211982876727847,
+      "2026-09-07": -0.517702915292888,
+      "2026-09-08": -2.301631446511765,
+      "2026-09-09": 0.6081457883644578,
+      "2026-09-10": -5.4359451373331025,
+      "2026-09-11": 5.675573946827754,
+      "2026-09-15": -2.812339619946065
+    }
+  },
+  "warning": "Exploratory, not adjusted for trying multiple rules. Very few dates; resampling dates does not establish independence across adjacent dates or eliminate repeated-security effects. Not a production confidence guarantee."
+}

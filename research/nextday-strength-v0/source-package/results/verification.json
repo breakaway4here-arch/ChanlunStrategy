@@ -1,0 +1,16 @@
+{
+  "raw_endpoint_recomputation": {
+    "local_bars_read": 142210,
+    "endpoint_checks": 19582,
+    "mismatches": 0
+  },
+  "ten_methods_selections_reproduced": true,
+  "recent10_means_reproduced": true,
+  "future_outcome_columns_do_not_affect_L1": true,
+  "input_not_mutated": true,
+  "dates_dedup_and_max5": true,
+  "duplicate_identity_rejected": true,
+  "empty_missing_not_forced_to_five": true,
+  "production_integrated": false,
+  "scope": "Research-script checks, not product CI or full strategy execution"
+}

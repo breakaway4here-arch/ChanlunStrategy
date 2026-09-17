@@ -1,0 +1,7 @@
+{
+  "round": "2 (exploratory, not pre-registered before inspecting the limit-up association)",
+  "L0_limit_early": "same-day verified limit-up candidates, first_time ascending then instrument_id; max5/day",
+  "L1_limit_sector": "same-day verified limit-up candidates, own snapshot sector distinct limit-up count descending, board_n descending, first_time ascending, instrument_id; max5/day",
+  "scope": "fixed published candidate universe only, not changing original pools",
+  "unchanged": "same max5/day, all missing outcomes retained, no target-based replacement, NO new price/volume thresholds"
+}

@@ -1,0 +1,38 @@
+{
+  "as_of_data": "2026-09-16 close",
+  "signal_dates": [
+    "2026-08-12",
+    "2026-09-15"
+  ],
+  "signal_days": 25,
+  "registered_signal_rows": 2504,
+  "different_instruments": 1613,
+  "recent10_signal_dates": [
+    "2026-09-02",
+    "2026-09-03",
+    "2026-09-04",
+    "2026-09-07",
+    "2026-09-08",
+    "2026-09-09",
+    "2026-09-10",
+    "2026-09-11",
+    "2026-09-14",
+    "2026-09-15"
+  ],
+  "source_sha256": {
+    "local_readonly_export.zip": "b667caf175a3b15c608f8191eb35e70fad17ba653460eccf829e4608e457eff3",
+    "ChanlunStrategy_H4空选诊断与26日回测研究包_v1.zip": "5c95b7e2c8ef06950db96587a4dbc4c370b69af880de94595df833ab9395174f",
+    "ChanlunStrategy_本地导出复核与后续小步任务_v2.zip": "860c3c5ebd71e471b8655220b5c5ce1f607f6cee4f67c02f6b0ea8c6b6a32f38",
+    "chanlun_pages_20260917_af97ab2.zip": "2276840e566b5fe23315a2f3a35755e30b0202625c9073049dc5df978d719fe0"
+  },
+  "independent_arithmetic_recheck": {
+    "local_bars_read": 142210,
+    "endpoint_checks": 19582,
+    "mismatches": 0
+  },
+  "historical_warning": "Older report snapshots include reconstructed / legacy archive views; not point-in-time proof of first publication, no untouched out-of-sample claims.",
+  "feature_provenance": "Candle values from the same source row referenced by frozen entries, only if last archived bar equals report_date. No future bars used as selectors. Original feature names and volume ratios preserved, no unit inference.",
+  "performance_warning": "Price paths, not actual realized returns. No commission/slippage/queue or intraday execution assumptions. 1 missing next-day price in recent10; never substituted another security.",
+  "iteration_warning": "Five new hypothesis filters in round1, two limit-up shortlist orderings after the limit-up partition in round2. All displayed; not cherry-picking or claiming pre-registration of the entire discovery.",
+  "current_repo_changed": false
+}
