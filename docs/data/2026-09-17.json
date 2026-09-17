@@ -3207,7 +3207,7 @@
   "sector_heat": {
     "schema_version": 1,
     "date": "2026-09-17",
-    "as_of": "2026-09-17T15:05:07+08:00",
+    "as_of": "2026-09-17T15:20:10+08:00",
     "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
     "status": "verified_partial",
     "items": [
@@ -3242,7 +3242,7 @@
         "limit_up_count": 1,
         "net_flow": 714604896.0,
         "net_flow_text": "7.15亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -3297,7 +3297,7 @@
         "limit_up_count": 0,
         "net_flow": 2308679424.0,
         "net_flow_text": "23.09亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -3636,7 +3636,7 @@
         "limit_up_count": 10,
         "net_flow": 3707594576.0,
         "net_flow_text": "37.08亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -4159,7 +4159,7 @@
         "limit_up_count": 3,
         "net_flow": 1575733760.0,
         "net_flow_text": "15.76亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -4197,7 +4197,7 @@
         "limit_up_count": 0,
         "net_flow": 455123616.0,
         "net_flow_text": "4.55亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -4288,7 +4288,7 @@
         "limit_up_count": 1,
         "net_flow": 1046276352.0,
         "net_flow_text": "10.46亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -4561,7 +4561,7 @@
         "limit_up_count": 0,
         "net_flow": 1314773504.0,
         "net_flow_text": "13.15亿",
-        "as_of": "2026-09-17T15:05:07+08:00",
+        "as_of": "2026-09-17T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       }
@@ -4625,7 +4625,7 @@
       "sector": "出版",
       "lianban": 2,
       "first_time": "09:25",
-      "fund": 10313275,
+      "fund": 9302650,
       "zhaban": 0
     },
     {
@@ -4658,7 +4658,7 @@
       "sector": "元件",
       "lianban": 5,
       "first_time": "09:31",
-      "fund": 2359984,
+      "fund": 2486760,
       "zhaban": 23
     },
     {
@@ -4691,7 +4691,7 @@
       "sector": "消费电子",
       "lianban": 1,
       "first_time": "09:39",
-      "fund": 5420434,
+      "fund": 7992266,
       "zhaban": 1
     },
     {
@@ -4724,7 +4724,7 @@
       "sector": "玻璃玻纤",
       "lianban": 1,
       "first_time": "09:44",
-      "fund": 2155600,
+      "fund": 2278680,
       "zhaban": 0
     },
     {
@@ -4735,7 +4735,7 @@
       "sector": "医疗服务",
       "lianban": 1,
       "first_time": "09:47",
-      "fund": 5745080,
+      "fund": 6424044,
       "zhaban": 0
     },
     {
@@ -4790,7 +4790,7 @@
       "sector": "纺织制造",
       "lianban": 1,
       "first_time": "10:06",
-      "fund": 7410830,
+      "fund": 5397364,
       "zhaban": 2
     },
     {
@@ -4812,7 +4812,7 @@
       "sector": "汽车服务",
       "lianban": 1,
       "first_time": "10:15",
-      "fund": 4052160,
+      "fund": 3987438,
       "zhaban": 2
     },
     {
@@ -4823,7 +4823,7 @@
       "sector": "农产品加",
       "lianban": 1,
       "first_time": "10:17",
-      "fund": 27733902,
+      "fund": 28240380,
       "zhaban": 0
     },
     {
@@ -4834,7 +4834,7 @@
       "sector": "汽车零部",
       "lianban": 1,
       "first_time": "10:25",
-      "fund": 1610580,
+      "fund": 1591632,
       "zhaban": 1
     },
     {
@@ -4845,7 +4845,7 @@
       "sector": "种植业",
       "lianban": 1,
       "first_time": "10:26",
-      "fund": 2223000,
+      "fund": 2758275,
       "zhaban": 2
     },
     {
@@ -4867,7 +4867,7 @@
       "sector": "旅游及景",
       "lianban": 1,
       "first_time": "10:30",
-      "fund": 3178954,
+      "fund": 3152968,
       "zhaban": 0
     },
     {
@@ -4889,7 +4889,7 @@
       "sector": "自动化设",
       "lianban": 1,
       "first_time": "10:39",
-      "fund": 1540025,
+      "fund": 1573650,
       "zhaban": 0
     },
     {
@@ -4900,7 +4900,7 @@
       "sector": "服装家纺",
       "lianban": 1,
       "first_time": "10:43",
-      "fund": 2051634,
+      "fund": 2273310,
       "zhaban": 1
     },
     {
@@ -4922,7 +4922,7 @@
       "sector": "汽车零部",
       "lianban": 1,
       "first_time": "10:58",
-      "fund": 589984,
+      "fund": 759318,
       "zhaban": 1
     },
     {
@@ -4933,7 +4933,7 @@
       "sector": "汽车零部",
       "lianban": 1,
       "first_time": "11:08",
-      "fund": 5534930,
+      "fund": 5617108,
       "zhaban": 1
     },
     {
@@ -4966,7 +4966,7 @@
       "sector": "种植业",
       "lianban": 2,
       "first_time": "13:02",
-      "fund": 2530552,
+      "fund": 2783920,
       "zhaban": 6
     },
     {
@@ -4977,7 +4977,7 @@
       "sector": "航运港口",
       "lianban": 1,
       "first_time": "13:04",
-      "fund": 24148620,
+      "fund": 23348910,
       "zhaban": 1
     },
     {
@@ -4988,7 +4988,7 @@
       "sector": "化学原料",
       "lianban": 1,
       "first_time": "13:04",
-      "fund": 1356102,
+      "fund": 1394712,
       "zhaban": 4
     },
     {
@@ -5010,7 +5010,7 @@
       "sector": "半导体",
       "lianban": 1,
       "first_time": "13:13",
-      "fund": 6314880,
+      "fund": 6760160,
       "zhaban": 0
     },
     {
@@ -5032,7 +5032,7 @@
       "sector": "汽车零部",
       "lianban": 1,
       "first_time": "13:17",
-      "fund": 3668002,
+      "fund": 3532886,
       "zhaban": 0
     },
     {
@@ -5043,7 +5043,7 @@
       "sector": "电力",
       "lianban": 1,
       "first_time": "13:32",
-      "fund": 2742560,
+      "fund": 2576640,
       "zhaban": 0
     },
     {
@@ -5054,7 +5054,7 @@
       "sector": "焦炭Ⅱ",
       "lianban": 1,
       "first_time": "13:44",
-      "fund": 4594536,
+      "fund": 2192604,
       "zhaban": 0
     },
     {
@@ -5065,7 +5065,7 @@
       "sector": "造纸",
       "lianban": 1,
       "first_time": "13:54",
-      "fund": 2219382,
+      "fund": 2165375,
       "zhaban": 2
     },
     {
@@ -5076,7 +5076,7 @@
       "sector": "风电设备",
       "lianban": 1,
       "first_time": "14:00",
-      "fund": 839762,
+      "fund": 805322,
       "zhaban": 4
     },
     {
@@ -5087,7 +5087,7 @@
       "sector": "风电设备",
       "lianban": 3,
       "first_time": "14:02",
-      "fund": 5156072,
+      "fund": 5450960,
       "zhaban": 0
     },
     {
@@ -5098,7 +5098,7 @@
       "sector": "汽车零部",
       "lianban": 1,
       "first_time": "14:17",
-      "fund": 1434800,
+      "fund": 831300,
       "zhaban": 0
     },
     {
@@ -5109,14 +5109,14 @@
       "sector": "出版",
       "lianban": 1,
       "first_time": "14:46",
-      "fund": 705000,
+      "fund": 984000,
       "zhaban": 1
     }
   ],
   "limit_up_snapshot": {
     "date": "2026-09-17",
-    "as_of": "2026-09-17T15:07:15+08:00",
-    "generated_at": "2026-09-17T15:08:26+08:00",
+    "as_of": "2026-09-17T15:20:50+08:00",
+    "generated_at": "2026-09-17T15:22:03+08:00",
     "source": "eastmoney_limit_pools",
     "status": "verified_complete",
     "raw_total": 47,
@@ -5155,7 +5155,7 @@
         "sector": "出版",
         "lianban": 2,
         "first_time": "09:25",
-        "fund": 10313275,
+        "fund": 9302650,
         "zhaban": 0
       },
       {
@@ -5188,7 +5188,7 @@
         "sector": "元件",
         "lianban": 5,
         "first_time": "09:31",
-        "fund": 2359984,
+        "fund": 2486760,
         "zhaban": 23
       },
       {
@@ -5221,7 +5221,7 @@
         "sector": "消费电子",
         "lianban": 1,
         "first_time": "09:39",
-        "fund": 5420434,
+        "fund": 7992266,
         "zhaban": 1
       },
       {
@@ -5254,7 +5254,7 @@
         "sector": "玻璃玻纤",
         "lianban": 1,
         "first_time": "09:44",
-        "fund": 2155600,
+        "fund": 2278680,
         "zhaban": 0
       },
       {
@@ -5265,7 +5265,7 @@
         "sector": "医疗服务",
         "lianban": 1,
         "first_time": "09:47",
-        "fund": 5745080,
+        "fund": 6424044,
         "zhaban": 0
       },
       {
@@ -5320,7 +5320,7 @@
         "sector": "纺织制造",
         "lianban": 1,
         "first_time": "10:06",
-        "fund": 7410830,
+        "fund": 5397364,
         "zhaban": 2
       },
       {
@@ -5342,7 +5342,7 @@
         "sector": "汽车服务",
         "lianban": 1,
         "first_time": "10:15",
-        "fund": 4052160,
+        "fund": 3987438,
         "zhaban": 2
       },
       {
@@ -5353,7 +5353,7 @@
         "sector": "农产品加",
         "lianban": 1,
         "first_time": "10:17",
-        "fund": 27733902,
+        "fund": 28240380,
         "zhaban": 0
       },
       {
@@ -5364,7 +5364,7 @@
         "sector": "汽车零部",
         "lianban": 1,
         "first_time": "10:25",
-        "fund": 1610580,
+        "fund": 1591632,
         "zhaban": 1
       },
       {
@@ -5375,7 +5375,7 @@
         "sector": "种植业",
         "lianban": 1,
         "first_time": "10:26",
-        "fund": 2223000,
+        "fund": 2758275,
         "zhaban": 2
       },
       {
@@ -5397,7 +5397,7 @@
         "sector": "旅游及景",
         "lianban": 1,
         "first_time": "10:30",
-        "fund": 3178954,
+        "fund": 3152968,
         "zhaban": 0
       },
       {
@@ -5419,7 +5419,7 @@
         "sector": "自动化设",
         "lianban": 1,
         "first_time": "10:39",
-        "fund": 1540025,
+        "fund": 1573650,
         "zhaban": 0
       },
       {
@@ -5430,7 +5430,7 @@
         "sector": "服装家纺",
         "lianban": 1,
         "first_time": "10:43",
-        "fund": 2051634,
+        "fund": 2273310,
         "zhaban": 1
       },
       {
@@ -5452,7 +5452,7 @@
         "sector": "汽车零部",
         "lianban": 1,
         "first_time": "10:58",
-        "fund": 589984,
+        "fund": 759318,
         "zhaban": 1
       },
       {
@@ -5463,7 +5463,7 @@
         "sector": "汽车零部",
         "lianban": 1,
         "first_time": "11:08",
-        "fund": 5534930,
+        "fund": 5617108,
         "zhaban": 1
       },
       {
@@ -5496,7 +5496,7 @@
         "sector": "种植业",
         "lianban": 2,
         "first_time": "13:02",
-        "fund": 2530552,
+        "fund": 2783920,
         "zhaban": 6
       },
       {
@@ -5507,7 +5507,7 @@
         "sector": "航运港口",
         "lianban": 1,
         "first_time": "13:04",
-        "fund": 24148620,
+        "fund": 23348910,
         "zhaban": 1
       },
       {
@@ -5518,7 +5518,7 @@
         "sector": "化学原料",
         "lianban": 1,
         "first_time": "13:04",
-        "fund": 1356102,
+        "fund": 1394712,
         "zhaban": 4
       },
       {
@@ -5540,7 +5540,7 @@
         "sector": "半导体",
         "lianban": 1,
         "first_time": "13:13",
-        "fund": 6314880,
+        "fund": 6760160,
         "zhaban": 0
       },
       {
@@ -5562,7 +5562,7 @@
         "sector": "汽车零部",
         "lianban": 1,
         "first_time": "13:17",
-        "fund": 3668002,
+        "fund": 3532886,
         "zhaban": 0
       },
       {
@@ -5573,7 +5573,7 @@
         "sector": "电力",
         "lianban": 1,
         "first_time": "13:32",
-        "fund": 2742560,
+        "fund": 2576640,
         "zhaban": 0
       },
       {
@@ -5584,7 +5584,7 @@
         "sector": "焦炭Ⅱ",
         "lianban": 1,
         "first_time": "13:44",
-        "fund": 4594536,
+        "fund": 2192604,
         "zhaban": 0
       },
       {
@@ -5595,7 +5595,7 @@
         "sector": "造纸",
         "lianban": 1,
         "first_time": "13:54",
-        "fund": 2219382,
+        "fund": 2165375,
         "zhaban": 2
       },
       {
@@ -5606,7 +5606,7 @@
         "sector": "风电设备",
         "lianban": 1,
         "first_time": "14:00",
-        "fund": 839762,
+        "fund": 805322,
         "zhaban": 4
       },
       {
@@ -5617,7 +5617,7 @@
         "sector": "风电设备",
         "lianban": 3,
         "first_time": "14:02",
-        "fund": 5156072,
+        "fund": 5450960,
         "zhaban": 0
       },
       {
@@ -5628,7 +5628,7 @@
         "sector": "汽车零部",
         "lianban": 1,
         "first_time": "14:17",
-        "fund": 1434800,
+        "fund": 831300,
         "zhaban": 0
       },
       {
@@ -5639,7 +5639,7 @@
         "sector": "出版",
         "lianban": 1,
         "first_time": "14:46",
-        "fund": 705000,
+        "fund": 984000,
         "zhaban": 1
       }
     ],
@@ -5953,8 +5953,8 @@
     "config_revision": "watchlist-20260820-01",
     "analysis_revision": "watchlist-20260820-01:2026-09-17:715fbb0862e9",
     "date": "2026-09-17",
-    "as_of": "2026-09-17T15:05:07+08:00",
-    "generated_at": "2026-09-17T15:05:07+08:00",
+    "as_of": "2026-09-17T15:20:10+08:00",
+    "generated_at": "2026-09-17T15:20:10+08:00",
     "status": "ok",
     "fresh_count": 5,
     "stale_count": 0,
@@ -6139,7 +6139,7 @@
     "model": "gpt-5.6-luna",
     "prompt_version": "decision-brief-v4",
     "schema_version": "1",
-    "generated_at": "2026-09-17T15:05:07+08:00",
+    "generated_at": "2026-09-17T15:20:10+08:00",
     "evidence_registry": [
       {
         "evidence_ref": "event:2026-09-17:6a82a1da9e43",
@@ -6653,16 +6653,14 @@
         "theme": "半导体",
         "direction": "negative",
         "stage": "risk",
-        "confidence": "high",
-        "rule_score": 68.0,
+        "confidence": "medium",
+        "rule_score": 52.0,
         "evidence_refs": [
-          "event:2026-09-17:b7b9b7bdf70d",
+          "event:2026-09-17:96c3e2a6687e",
           "limit-theme:2026-09-17:dcc56252e4af",
           "watch-fact:2026-09-17:300139",
           "watch-fact:2026-09-17:688525",
-          "limit-up:2026-09-17:003026",
-          "event:2026-09-17:a738bd9b794a",
-          "event:2026-09-17:96c3e2a6687e"
+          "limit-up:2026-09-17:003026"
         ],
         "sector_links": [
           {
@@ -6697,42 +6695,6 @@
         ],
         "risk_reasons": [
           {
-            "reason_code": "negative_sector_impact",
-            "title": "半导体负向影响",
-            "detail": "美联储偏鹰叠加中概股波动，A股科技成长承压分化",
-            "severity": "high",
-            "source_type": "event_impact",
-            "verification_status": "model_extracted",
-            "evidence_refs": [
-              "event:2026-09-17:b7b9b7bdf70d"
-            ],
-            "affected_codes": []
-          },
-          {
-            "reason_code": "negative_sector_impact",
-            "title": "半导体负向影响",
-            "detail": "美联储加息释放紧缩信号，A股成长估值与贵金属承压",
-            "severity": "high",
-            "source_type": "event_impact",
-            "verification_status": "model_extracted",
-            "evidence_refs": [
-              "event:2026-09-17:a738bd9b794a"
-            ],
-            "affected_codes": []
-          },
-          {
-            "reason_code": "negative_sector_impact",
-            "title": "半导体负向影响",
-            "detail": "美联储继续紧缩引发美股震荡，A股风险偏好短线承压",
-            "severity": "medium",
-            "source_type": "event_impact",
-            "verification_status": "model_extracted",
-            "evidence_refs": [
-              "event:2026-09-17:96c3e2a6687e"
-            ],
-            "affected_codes": []
-          },
-          {
             "reason_code": "hard_risk_event",
             "title": "硬风险事件",
             "detail": "美联储宣布加息、暗示今年还将继续紧缩之际，标普500指数收跌33.92点，跌幅0.45%，报7551.81点，美联储宣布加息之际维持微幅上涨状态，美联储主席沃什新闻发布会开始后出现一波V形反转行情，北京时间02:42-03:27持续下跌。\n\n道琼斯工业平均指数收跌631.21点，跌幅1.21%，报51461.90点。\n\n纳斯达克综合指数（纳指）收跌3.146点，跌幅0.01%，报25978.425点。\n\n纳斯达克100指数收涨7.223点，涨幅0.03%，报28945.061点。\n\n纳斯达克科技市值加权指数收涨0.07%，报2934.2356点。\n\n费城半导体指数收涨70.56点，涨幅0.63%，报11246.107点。\n\n费城证交所KBW银行指数收跌2.87%，创2月以来最大跌幅，报178.58点，美联储宣布加息之前维持微幅下跌状态、之后持续扩大跌幅。\n\n道琼斯KBW地区银行指数收跌1.52%，报140.36点。\n\n罗素2000指数收跌0.40%，报2858.811点。\n\n纳斯达克生物科技指数收涨0.23%，报6903.74点。\n\n标普中盘股400指数收跌0.60%，纳斯达克美国中等市值指数跌0.74%。\n\n恐慌指数VIX收涨2.97%，报17.71，美联储主席沃什新闻发布会结束后曾刷新日高至18.94。",
@@ -6745,8 +6707,8 @@
             "affected_codes": []
           }
         ],
-        "rule_summary": "半导体存在风险：美联储偏鹰叠加中概股波动，A股科技成长承压分化。",
-        "llm_summary": "美联储偏鹰与中概股波动压制科技成长风险偏好，半导体虽有涨停题材支撑，但重点池个股走弱，板块与重点股尚未形成有效共振，当前以风险观察为主。",
+        "rule_summary": "半导体存在风险：美联储宣布加息、暗示今年还将继续紧缩之际，标普500指数收跌33.92点，跌幅0.45%，报7551.81点，美联储宣布加息之际维持微幅上涨状态，美联储主席沃什新闻发布会开始后出现一波V形反转行情，北京时间02:42-03:27持续下跌。\n\n道琼斯工业平均指数收跌631.21点，跌幅1.21%，报51461.90点。\n\n纳斯达克综合指数（纳指）收跌3.146点，跌幅0.01%，报25978.425点。\n\n纳斯达克100指数收涨7.223点，涨幅0.03%，报28945.061点。\n\n纳斯达克科技市值加权指数收涨0.07%，报2934.2356点。\n\n费城半导体指数收涨70.56点，涨幅0.63%，报11246.107点。\n\n费城证交所KBW银行指数收跌2.87%，创2月以来最大跌幅，报178.58点，美联储宣布加息之前维持微幅下跌状态、之后持续扩大跌幅。\n\n道琼斯KBW地区银行指数收跌1.52%，报140.36点。\n\n罗素2000指数收跌0.40%，报2858.811点。\n\n纳斯达克生物科技指数收涨0.23%，报6903.74点。\n\n标普中盘股400指数收跌0.60%，纳斯达克美国中等市值指数跌0.74%。\n\n恐慌指数VIX收涨2.97%，报17.71，美联储主席沃什新闻发布会结束后曾刷新日高至18.94。",
+        "llm_summary": "外部紧缩事件压制风险偏好，半导体虽有涨停主题支撑，但重点观察股仍处于等待确认状态，板块与个股尚未形成有效共振。",
         "next_trigger": [
           "半导体风险继续扩散或相关结构进一步走弱"
         ],
@@ -6760,7 +6722,7 @@
           "半导体风险证据减弱且结构止跌"
         ],
         "llm_stage": "risk",
-        "llm_confidence": "high",
+        "llm_confidence": "medium",
         "llm_stock_mentions": [
           {
             "code": "300139",
@@ -6814,7 +6776,7 @@
           }
         ],
         "rule_summary": "创新药存在风险：美联储宣布加息、暗示今年还将继续紧缩之际，标普500指数收跌33.92点，跌幅0.45%，报7551.81点，美联储宣布加息之际维持微幅上涨状态，美联储主席沃什新闻发布会开始后出现一波V形反转行情，北京时间02:42-03:27持续下跌。\n\n道琼斯工业平均指数收跌631.21点，跌幅1.21%，报51461.90点。\n\n纳斯达克综合指数（纳指）收跌3.146点，跌幅0.01%，报25978.425点。\n\n纳斯达克100指数收涨7.223点，涨幅0.03%，报28945.061点。\n\n纳斯达克科技市值加权指数收涨0.07%，报2934.2356点。\n\n费城半导体指数收涨70.56点，涨幅0.63%，报11246.107点。\n\n费城证交所KBW银行指数收跌2.87%，创2月以来最大跌幅，报178.58点，美联储宣布加息之前维持微幅下跌状态、之后持续扩大跌幅。\n\n道琼斯KBW地区银行指数收跌1.52%，报140.36点。\n\n罗素2000指数收跌0.40%，报2858.811点。\n\n纳斯达克生物科技指数收涨0.23%，报6903.74点。\n\n标普中盘股400指数收跌0.60%，纳斯达克美国中等市值指数跌0.74%。\n\n恐慌指数VIX收涨2.97%，报17.71，美联储主席沃什新闻发布会结束后曾刷新日高至18.94。",
-        "llm_summary": "紧缩预期压制成长资产估值，医药生物虽有资金流入，但现有证据仍支持创新药处于风险阶段，板块修复持续性尚未得到确认。",
+        "llm_summary": "医药生物资金表现相对积极，但外部紧缩事件带来风险偏好压制，创新药方向仍需观察资金强度能否抵消事件冲击。",
         "next_trigger": [
           "创新药风险继续扩散或相关结构进一步走弱"
         ],
@@ -6846,6 +6808,18 @@
         "watchlist_impacts": [],
         "risk_reasons": [
           {
+            "reason_code": "negative_sector_impact",
+            "title": "大金融负向影响",
+            "detail": "美联储加息冲击美股风险偏好，A股短线承压但半导体相对坚挺",
+            "severity": "medium",
+            "source_type": "event_impact",
+            "verification_status": "model_extracted",
+            "evidence_refs": [
+              "event:2026-09-17:96c3e2a6687e"
+            ],
+            "affected_codes": []
+          },
+          {
             "reason_code": "hard_risk_event",
             "title": "硬风险事件",
             "detail": "美联储宣布加息、暗示今年还将继续紧缩之际，标普500指数收跌33.92点，跌幅0.45%，报7551.81点，美联储宣布加息之际维持微幅上涨状态，美联储主席沃什新闻发布会开始后出现一波V形反转行情，北京时间02:42-03:27持续下跌。\n\n道琼斯工业平均指数收跌631.21点，跌幅1.21%，报51461.90点。\n\n纳斯达克综合指数（纳指）收跌3.146点，跌幅0.01%，报25978.425点。\n\n纳斯达克100指数收涨7.223点，涨幅0.03%，报28945.061点。\n\n纳斯达克科技市值加权指数收涨0.07%，报2934.2356点。\n\n费城半导体指数收涨70.56点，涨幅0.63%，报11246.107点。\n\n费城证交所KBW银行指数收跌2.87%，创2月以来最大跌幅，报178.58点，美联储宣布加息之前维持微幅下跌状态、之后持续扩大跌幅。\n\n道琼斯KBW地区银行指数收跌1.52%，报140.36点。\n\n罗素2000指数收跌0.40%，报2858.811点。\n\n纳斯达克生物科技指数收涨0.23%，报6903.74点。\n\n标普中盘股400指数收跌0.60%，纳斯达克美国中等市值指数跌0.74%。\n\n恐慌指数VIX收涨2.97%，报17.71，美联储主席沃什新闻发布会结束后曾刷新日高至18.94。",
@@ -6858,8 +6832,8 @@
             "affected_codes": []
           }
         ],
-        "rule_summary": "大金融存在风险：美联储宣布加息、暗示今年还将继续紧缩之际，标普500指数收跌33.92点，跌幅0.45%，报7551.81点，美联储宣布加息之际维持微幅上涨状态，美联储主席沃什新闻发布会开始后出现一波V形反转行情，北京时间02:42-03:27持续下跌。\n\n道琼斯工业平均指数收跌631.21点，跌幅1.21%，报51461.90点。\n\n纳斯达克综合指数（纳指）收跌3.146点，跌幅0.01%，报25978.425点。\n\n纳斯达克100指数收涨7.223点，涨幅0.03%，报28945.061点。\n\n纳斯达克科技市值加权指数收涨0.07%，报2934.2356点。\n\n费城半导体指数收涨70.56点，涨幅0.63%，报11246.107点。\n\n费城证交所KBW银行指数收跌2.87%，创2月以来最大跌幅，报178.58点，美联储宣布加息之前维持微幅下跌状态、之后持续扩大跌幅。\n\n道琼斯KBW地区银行指数收跌1.52%，报140.36点。\n\n罗素2000指数收跌0.40%，报2858.811点。\n\n纳斯达克生物科技指数收涨0.23%，报6903.74点。\n\n标普中盘股400指数收跌0.60%，纳斯达克美国中等市值指数跌0.74%。\n\n恐慌指数VIX收涨2.97%，报17.71，美联储主席沃什新闻发布会结束后曾刷新日高至18.94。",
-        "llm_summary": "美联储继续紧缩与海外市场波动共同压制风险偏好，大金融缺少板块资金和重点池共振证据，现有方向维持风险观察。",
+        "rule_summary": "大金融存在风险：美联储加息冲击美股风险偏好，A股短线承压但半导体相对坚挺。",
+        "llm_summary": "美联储加息冲击海外风险偏好，大金融受到负向传导，A股短线承压；相较之下，半导体表现更具韧性。",
         "next_trigger": [
           "大金融风险继续扩散或相关结构进一步走弱"
         ],
@@ -6919,7 +6893,7 @@
         "event_ref": "event:2026-09-17:a738bd9b794a",
         "rule_score": 62.0,
         "rule_result": "confirmed_catalyst",
-        "llm_result": "negative",
+        "llm_result": "mixed",
         "arbitration_result": "catalyst",
         "arbitration_reason": "rule_and_llm_consistent",
         "model": "gpt-5.6-luna",
@@ -6955,7 +6929,7 @@
         "event_ref": "event:2026-09-17:96c3e2a6687e",
         "rule_score": 52.0,
         "rule_result": "risk",
-        "llm_result": "negative",
+        "llm_result": "mixed",
         "arbitration_result": "risk",
         "arbitration_reason": "deterministic_risk_category",
         "model": "gpt-5.6-luna",
@@ -7002,7 +6976,7 @@
         "record_type": "direction",
         "event_ref": "",
         "thesis_id": "thesis:2026-09-17:d987a297f847",
-        "rule_score": 68.0,
+        "rule_score": 52.0,
         "rule_result": "negative",
         "llm_result": "negative",
         "arbitration_result": "negative",
@@ -8681,21 +8655,21 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "新三板创新层扩容提速，利好专精特新与制造业资本化",
+        "headline": "新三板创新层扩容提速，优质制造企业获资本市场关注",
         "analysis": [
-          "创新层扩容提升优质企业融资和挂牌预期",
-          "专精特新企业集中进入，强化制造业成长逻辑",
-          "多层次资本市场联动利好券商与创投业务"
+          "创新层扩容将提升专精特新企业融资与规范化发展能力",
+          "制造业企业占比高，契合新型工业化和新质生产力方向",
+          "多元资本路径完善，有助于优质企业获得长期资金支持"
         ],
         "positive_sectors": [
           "专用设备",
-          "电气设备",
-          "证券"
+          "新材料",
+          "电子通信"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "新三板创新层扩容提速，利好专精特新与制造业资本化",
+        "summary": "新三板创新层扩容提速，优质制造企业获资本市场关注",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -8784,21 +8758,21 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "美联储偏鹰叠加中概股波动，A股科技成长承压分化",
+        "headline": "中概股分化叠加美联储紧缩，压制A股成长板块情绪",
         "analysis": [
-          "美联储紧缩预期推升美元并压制全球风险偏好",
-          "中概股普遍走弱可能拖累相关A股情绪",
-          "新能源与互联网板块短线或面临估值扰动"
+          "中概股整体走弱，可能短线压制港股及A股科技股风险偏好",
+          "美联储释放继续紧缩信号，全球成长资产估值承受压力",
+          "部分中概股逆势上涨，显示市场内部仍存在结构性机会"
         ],
         "positive_sectors": [],
         "negative_sectors": [
           "光伏",
-          "半导体",
+          "互联网",
           "新能源汽车"
         ],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "美联储偏鹰叠加中概股波动，A股科技成长承压分化",
+        "summary": "中概股分化叠加美联储紧缩，压制A股成长板块情绪",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -8834,21 +8808,23 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "美联储加息释放紧缩信号，A股成长估值与贵金属承压",
+        "headline": "美联储紧缩信号强化，A股成长与金融资产承压分化",
         "analysis": [
-          "美国利率上行推升美元，全球资金风险偏好下降",
-          "成长股估值对利率敏感，短期承受折现率压力",
-          "黄金价格跳水或压制A股贵金属板块表现"
+          "美联储加息并暗示继续紧缩，全球流动性预期明显收紧",
+          "美元走强可能压制北向资金及高估值成长板块表现",
+          "AI板块相对抗跌，国内自主创新主题仍具结构性支撑"
         ],
-        "positive_sectors": [],
+        "positive_sectors": [
+          "人工智能",
+          "半导体"
+        ],
         "negative_sectors": [
-          "半导体",
-          "贵金属",
-          "证券"
+          "银行",
+          "贵金属"
         ],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "美联储加息释放紧缩信号，A股成长估值与贵金属承压",
+        "summary": "美联储紧缩信号强化，A股成长与金融资产承压分化",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -8883,21 +8859,21 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "苹果布局企业级AI服务器，利好A股算力与芯片产业链",
+        "headline": "苹果布局企业级AI服务器，利好A股算力与半导体链条",
         "analysis": [
-          "苹果切入企业服务器有望扩大AI推理需求",
-          "自研芯片集群将带动先进封装和高速互联关注",
-          "英伟达网络设备参与强化算力基础设施预期"
+          "苹果进军企业级服务器，体现AI推理需求持续扩张趋势",
+          "自研芯片与高速互联方案将带动服务器产业链技术升级",
+          "国内算力设备和半导体厂商可能获得产业映射与订单预期"
         ],
         "positive_sectors": [
           "半导体",
-          "计算机设备",
-          "通信"
+          "服务器",
+          "人工智能"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "苹果布局企业级AI服务器，利好A股算力与芯片产业链",
+        "summary": "苹果布局企业级AI服务器，利好A股算力与半导体链条",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -8980,21 +8956,22 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "美联储继续紧缩引发美股震荡，A股风险偏好短线承压",
+        "headline": "美联储加息冲击美股风险偏好，A股短线承压但半导体相对坚挺",
         "analysis": [
-          "美股震荡反映紧缩预期升温，外部风险偏好有所降温",
-          "美元走强可能带来新兴市场资金流动压力",
-          "A股高估值成长和券商板块或率先出现波动"
+          "美股银行和道指下跌，反映紧缩预期对风险资产形成压制",
+          "费城半导体指数上涨，显示科技成长板块内部表现分化",
+          "A股短线或受外盘情绪扰动，但自主可控方向相对具韧性"
         ],
-        "positive_sectors": [],
+        "positive_sectors": [
+          "半导体"
+        ],
         "negative_sectors": [
-          "半导体",
-          "证券",
-          "贵金属"
+          "银行",
+          "券商"
         ],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "美联储继续紧缩引发美股震荡，A股风险偏好短线承压",
+        "summary": "美联储加息冲击美股风险偏好，A股短线承压但半导体相对坚挺",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -9032,21 +9009,21 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "国家电网强化重点企业供电保障，利好高端制造与医药",
+        "headline": "国家电网强化重点企业供电保障，利好芯片医药及电网设备投资",
         "analysis": [
-          "重点企业供电稳定性提升，有助于降低生产中断风险",
-          "芯片制造和精密加工对电力连续性要求较高",
-          "政策落地将改善新质生产力企业运营预期"
+          "重点产业供电保障升级，有助于降低高端制造企业运营风险",
+          "芯片和生物医药用电稳定性提升，支持产能扩张与项目落地",
+          "电网改造及客户接入优化将带动输变电设备投资需求"
         ],
         "positive_sectors": [
           "半导体",
-          "专用设备",
-          "生物医药"
+          "生物医药",
+          "电力设备"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "国家电网强化重点企业供电保障，利好高端制造与医药",
+        "summary": "国家电网强化重点企业供电保障，利好芯片医药及电网设备投资",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -9124,21 +9101,20 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "公募基金加快建仓叠加调研升温，半导体关注度明显提升",
+        "headline": "次新基金加速建仓叠加调研升温，机构资金偏向半导体领域",
         "analysis": [
-          "新基金快速建仓显示权益资金配置意愿回升",
-          "机构调研高频化有助于挖掘细分行业成长机会",
-          "半导体热度领先，可能获得增量资金关注"
+          "次新基金快速建仓，显示公募资金正在积极寻找配置机会",
+          "机构调研次数处于高位，反映市场对结构性机会关注升温",
+          "半导体和电子设备制造获重点调研，可能形成资金偏好强化"
         ],
         "positive_sectors": [
           "半导体",
-          "电子",
-          "计算机设备"
+          "电子设备制造"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "公募基金加快建仓叠加调研升温，半导体关注度明显提升",
+        "summary": "次新基金加速建仓叠加调研升温，机构资金偏向半导体领域",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -9151,18 +9127,18 @@
     }
   ],
   "forecast": {
-    "core_judgment": "上证3875.60处于无中枢盘整判断，短线偏弱震荡，资金呈结构性进攻",
-    "volume_note": "量较5日均量缩6.5%，突破暂缺量能确认",
+    "core_judgment": "指数缩量回落，缠论中枢未明，处于弱势震荡观察期",
+    "volume_note": "较5日均量低6.5%，突破暂缺量能确认",
     "short_term": [
-      "若放量站回3875.60并扩大至+1%，可视为短线修复信号，关注汽车、面板承接",
-      "若跌破3875.60且成交同步放大，弱势延续，暂不追涨，观察前低支撑",
-      "若指数横盘而汽车、面板、医药生物持续放量上攻，属于结构性行情，回踩可试仓"
+      "若上证放量站上3900点，关注向上构建中枢，汽车、面板能否延续强势",
+      "若跌破3850点且放量，警惕向下离开中枢，先看3800点支撑",
+      "若指数横盘而半导体、医药持续获资金流入，属于结构性轮动，可关注板块回踩后的二买机会"
     ],
-    "mid_term": "若资金继续集中汽车、面板、医药生物且指数放量收复3875.60，可能形成向上离开中枢的早期路径；若受美联储紧缩压制成长板块并跌破当前平台，则转为中期弱势震荡，等待日线中枢确认。",
+    "mid_term": "上证3875.60附近尚无明确中枢和背驰，后续重点观察3850—3900点突破方向；放量站稳3900点并获资金配合，或向3950点上行；跌破3850点则可能回探3800点。",
     "risks": [
-      "美联储继续紧缩压制半导体、证券等成长估值，科技方向冲高回落风险上升",
-      "板块资金虽7/7正流入，但指数全线下跌，资金可能是局部抱团，追高易遭分化",
-      "当前量能缩减且日线中枢未识别，任何上攻缺乏量价确认，假突破风险较高"
+      "美联储加息及持续紧缩压制成长股估值，半导体利好若无法转化为放量上涨，易形成冲高回落",
+      "指数全线下跌且量能低于5日均量，若资金流入集中于少数板块，板块广度可能快速收缩",
+      "汽车、面板等强势板块若跌破当日启动位并出现资金反流，可能触发短线获利盘集中兑现"
     ]
   },
   "sell_signals": [],
@@ -9172,7 +9148,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:985922d35a232e51",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "000504",
       "name": "南华生物",
       "reference_close": 9.1,
@@ -9251,7 +9227,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:1b76a9f160091566",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "002285",
       "name": "世联行",
       "reference_close": 2.63,
@@ -9329,7 +9305,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:c470888b3bf71137",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "002339",
       "name": "积成电子",
       "reference_close": 8.320191780821919,
@@ -9407,7 +9383,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:faab70da9e9c4572",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "002640",
       "name": "跨境通",
       "reference_close": 3.83633431085044,
@@ -9485,7 +9461,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f1c2f1894a9f48ce",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "003026",
       "name": "中晶科技",
       "reference_close": 37.0,
@@ -9563,7 +9539,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:c7449caa0a058194",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "300223",
       "name": "北京君正",
       "reference_close": 135.06,
@@ -9641,7 +9617,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7cbf3572336ba66e",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "300283",
       "name": "温州宏丰",
       "reference_close": 12.586641744548285,
@@ -9718,7 +9694,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:225228d44d0c8b79",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "300454",
       "name": "深信服",
       "reference_close": 139.6082525196413,
@@ -9796,7 +9772,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5534d73dd8bd80fa",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "300672",
       "name": "国科微",
       "reference_close": 174.35,
@@ -9874,7 +9850,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b454b612b3912711",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "300685",
       "name": "艾德生物",
       "reference_close": 17.31,
@@ -10004,7 +9980,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:229c18064ac92eea",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "301075",
       "name": "多瑞医药",
       "reference_close": 64.31,
@@ -10254,7 +10230,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3862f880062bcc1a",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "301297",
       "name": "富乐德",
       "reference_close": 46.96,
@@ -10332,7 +10308,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:9304ca6dee773142",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600026",
       "name": "中远海能",
       "reference_close": 23.198785615158034,
@@ -10411,7 +10387,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:e1aaf01a4ea63756",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600356",
       "name": "恒丰纸业",
       "reference_close": 10.214495192307691,
@@ -10489,7 +10465,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:0ce712998627dabb",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600360",
       "name": "华微电子",
       "reference_close": 10.59,
@@ -10566,7 +10542,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:359aee56a91d2c74",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600609",
       "name": "金杯汽车",
       "reference_close": 3.6125454545454554,
@@ -10645,7 +10621,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:46340fcde734fd9c",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600630",
       "name": "龙头股份",
       "reference_close": 7.55072022111664,
@@ -10723,7 +10699,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6a7c9b38279d23b2",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "600822",
       "name": "上海物贸",
       "reference_close": 9.39138349514563,
@@ -10802,7 +10778,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b1b7c7ef33d0fcb0",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "601218",
       "name": "吉鑫科技",
       "reference_close": 5.802800875273523,
@@ -10880,7 +10856,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:384dd2104ee4677e",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "601872",
       "name": "招商轮船",
       "reference_close": 21.85,
@@ -10959,7 +10935,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4a0432427b14c60d",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "601975",
       "name": "招商南油",
       "reference_close": 4.686327077747989,
@@ -11038,7 +11014,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3a09d5b162de587b",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "603162",
       "name": "海通发展",
       "reference_close": 13.594063848144954,
@@ -11117,7 +11093,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:dff85e720d6f4069",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "603248",
       "name": "锡华科技",
       "reference_close": 22.58717597471022,
@@ -11195,7 +11171,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8d8316e8997d2119",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "603322",
       "name": "超讯科技",
       "reference_close": 31.864970717423134,
@@ -11272,7 +11248,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:17506a183fa73a72",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "603421",
       "name": "鼎信通讯",
       "reference_close": 6.375709828393137,
@@ -11349,7 +11325,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:1c131d582a87bc4a",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "603960",
       "name": "克来机电",
       "reference_close": 16.874151758173966,
@@ -11428,7 +11404,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:33284606ed46b578",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688037",
       "name": "芯源微",
       "reference_close": 346.044525946659,
@@ -11506,7 +11482,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6343644ccd55a9a7",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688048",
       "name": "长光华芯",
       "reference_close": 328.09,
@@ -11583,7 +11559,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5e1617a2af293e11",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688110",
       "name": "东芯股份",
       "reference_close": 115.53,
@@ -11660,7 +11636,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:56ce45af19ab24c3",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688135",
       "name": "利扬芯片",
       "reference_close": 40.52,
@@ -11738,7 +11714,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f3d5f5c93a59508f",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688209",
       "name": "英集芯",
       "reference_close": 37.78,
@@ -11816,7 +11792,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5fa7fa7848a76b05",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688432",
       "name": "有研硅",
       "reference_close": 55.0,
@@ -11894,7 +11870,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4ac1eff886f45a62",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688498",
       "name": "源杰科技",
       "reference_close": 1784.66,
@@ -11972,7 +11948,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:e8debd44223fd144",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688521",
       "name": "芯原股份",
       "reference_close": 196.1,
@@ -12050,7 +12026,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a7ce852ac80c72d8",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688535",
       "name": "华海诚科",
       "reference_close": 105.7,
@@ -12127,7 +12103,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:374085e864074f7e",
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
       "code": "688536",
       "name": "思瑞浦",
       "reference_close": 330.65,
@@ -14657,15 +14633,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -14859,16 +14835,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     {
@@ -14900,15 +14876,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -15102,16 +15078,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     {
@@ -15134,15 +15110,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -15336,16 +15312,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     {
@@ -15368,15 +15344,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -15570,16 +15546,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     {
@@ -15603,15 +15579,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -15805,16 +15781,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     {
@@ -15848,15 +15824,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -16050,16 +16026,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     }
   ],
@@ -16148,8 +16124,8 @@
     },
     "data_quality": {
       "report_date": "2026-09-17",
-      "generated_at": "2026-09-17T15:05:07+08:00",
-      "as_of": "2026-09-17T15:05:07+08:00",
+      "generated_at": "2026-09-17T15:20:10+08:00",
+      "as_of": "2026-09-17T15:20:10+08:00",
       "bar_state": "closed",
       "is_trading_day": true,
       "is_official": true,
@@ -16194,18 +16170,8 @@
         "603400",
         "688496"
       ],
-      "daily_remote_refresh_count": 9,
-      "daily_remote_refresh_codes": [
-        "920055",
-        "920058",
-        "920247",
-        "920351",
-        "920571",
-        "920690",
-        "920896",
-        "920906",
-        "920978"
-      ],
+      "daily_remote_refresh_count": 0,
+      "daily_remote_refresh_codes": [],
       "daily_remote_refresh_failed_codes": [
         "001237",
         "001365",
@@ -16239,7 +16205,7 @@
         "920268",
         "920269"
       ],
-      "daily_refresh_mode": "db_first",
+      "daily_refresh_mode": "missing_only",
       "missing_30min_count": 0,
       "stock_pool_incomplete": false,
       "sector_component_diagnostics": [
@@ -18705,19 +18671,19 @@
         "remote_error": "",
         "name_resolution_missing_codes": []
       },
-      "daily_run_mode": "db_first",
+      "daily_run_mode": "missing_only",
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -18911,16 +18877,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       },
       "runtime_policy": {
         "market_history_cutover_mode": "sqlite",
@@ -18940,13 +18906,13 @@
           "instrument_count": 5781,
           "total_instrument_count": 5994,
           "ignored_non_a_instruments": 213,
-          "db_complete": 5772,
-          "missing_before": 9,
+          "db_complete": 5781,
+          "missing_before": 0,
           "missing_after": 0,
-          "remote_calls": 1,
-          "remote_rows": 5916,
-          "remote_matched": 9,
-          "hydrated": 9,
+          "remote_calls": 0,
+          "remote_rows": 0,
+          "remote_matched": 0,
+          "hydrated": 0,
           "industry_complete": true
         },
         "eligibility": {
@@ -19020,9 +18986,9 @@
       },
       "market_cap_evidence": {
         "requested": 927,
-        "db_hits": 921,
-        "remote_requested": 6,
-        "remote_hits": 6,
+        "db_hits": 927,
+        "remote_requested": 0,
+        "remote_hits": 0,
         "hydrated": 927,
         "max_workers": 20
       },
@@ -19053,15 +19019,15 @@
         "market_close_snapshot": {
           "status": "partial",
           "report_date": "2026-09-17",
-          "requested": 5916,
-          "unique": 5916,
-          "valid_a_rows": 5916,
-          "valid_bar_count": 5438,
-          "quoted_rows": 5553,
-          "written": 5438,
-          "skipped_unquoted": 363,
-          "skipped_missing_factor": 115,
-          "history_eligible_rows": 5772,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5781,
+          "valid_bar_count": 5447,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
           "identity_pending_rows": 93,
           "identity_pending_codes": [
             "920008",
@@ -19255,16 +19221,16 @@
           ],
           "identity_invalid_rows": 120,
           "registered_non_a_rows_ignored": 120,
-          "coverage": 0.927195,
-          "coverage_numerator": 5438,
-          "coverage_denominator": 5865,
-          "eligible_coverage_numerator": 5438,
-          "eligible_coverage_denominator": 5772,
+          "coverage": 0.927307,
+          "coverage_numerator": 5447,
+          "coverage_denominator": 5874,
+          "eligible_coverage_numerator": 0,
+          "eligible_coverage_denominator": 0,
           "minimum_coverage": 0.9,
           "meets_minimum_coverage": true,
-          "remote_calls": 1,
-          "eligible_coverage": 0.942134,
-          "reason": "identity_migration_pending"
+          "remote_calls": 0,
+          "reason": "identity_migration_pending",
+          "source": "db"
         }
       },
       "by_strategy": {
@@ -20017,15 +19983,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-17",
-            "requested": 5916,
-            "unique": 5916,
-            "valid_a_rows": 5916,
-            "valid_bar_count": 5438,
-            "quoted_rows": 5553,
-            "written": 5438,
-            "skipped_unquoted": 363,
-            "skipped_missing_factor": 115,
-            "history_eligible_rows": 5772,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
+            "valid_bar_count": 5447,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -20219,16 +20185,16 @@
             ],
             "identity_invalid_rows": 120,
             "registered_non_a_rows_ignored": 120,
-            "coverage": 0.927195,
-            "coverage_numerator": 5438,
-            "coverage_denominator": 5865,
-            "eligible_coverage_numerator": 5438,
-            "eligible_coverage_denominator": 5772,
+            "coverage": 0.927307,
+            "coverage_numerator": 5447,
+            "coverage_denominator": 5874,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942134,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         "h4_t3": {
@@ -20980,15 +20946,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-17",
-            "requested": 5916,
-            "unique": 5916,
-            "valid_a_rows": 5916,
-            "valid_bar_count": 5438,
-            "quoted_rows": 5553,
-            "written": 5438,
-            "skipped_unquoted": 363,
-            "skipped_missing_factor": 115,
-            "history_eligible_rows": 5772,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
+            "valid_bar_count": 5447,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -21182,16 +21148,16 @@
             ],
             "identity_invalid_rows": 120,
             "registered_non_a_rows_ignored": 120,
-            "coverage": 0.927195,
-            "coverage_numerator": 5438,
-            "coverage_denominator": 5865,
-            "eligible_coverage_numerator": 5438,
-            "eligible_coverage_denominator": 5772,
+            "coverage": 0.927307,
+            "coverage_numerator": 5447,
+            "coverage_denominator": 5874,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942134,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         "luojie_pool": {
@@ -21923,15 +21889,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -22125,16 +22091,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     "common_upstream": {
@@ -24270,7 +24236,7 @@
       "startup_watchlist": 12
     },
     "candidate_funnel": {
-      "run_id": "20260917-79a76ca1ea69",
+      "run_id": "20260917-aa5eaa7b7a0d",
       "report_date": "2026-09-17",
       "as_of": "2026-09-17",
       "candidate_count": 5914,
@@ -24918,7 +24884,7 @@
       "status": "ok",
       "code": "000300",
       "bars": 101,
-      "rows_written": 1,
+      "rows_written": 0,
       "latest_date": "2026-09-17"
     },
     "strategy_review": {
@@ -24935,8 +24901,8 @@
   },
   "data_quality": {
     "report_date": "2026-09-17",
-    "generated_at": "2026-09-17T15:05:07+08:00",
-    "as_of": "2026-09-17T15:05:07+08:00",
+    "generated_at": "2026-09-17T15:20:10+08:00",
+    "as_of": "2026-09-17T15:20:10+08:00",
     "bar_state": "closed",
     "is_trading_day": true,
     "is_official": true,
@@ -24981,18 +24947,8 @@
       "603400",
       "688496"
     ],
-    "daily_remote_refresh_count": 9,
-    "daily_remote_refresh_codes": [
-      "920055",
-      "920058",
-      "920247",
-      "920351",
-      "920571",
-      "920690",
-      "920896",
-      "920906",
-      "920978"
-    ],
+    "daily_remote_refresh_count": 0,
+    "daily_remote_refresh_codes": [],
     "daily_remote_refresh_failed_codes": [
       "001237",
       "001365",
@@ -25026,7 +24982,7 @@
       "920268",
       "920269"
     ],
-    "daily_refresh_mode": "db_first",
+    "daily_refresh_mode": "missing_only",
     "missing_30min_count": 0,
     "stock_pool_incomplete": false,
     "sector_component_diagnostics": [
@@ -27492,19 +27448,19 @@
       "remote_error": "",
       "name_resolution_missing_codes": []
     },
-    "daily_run_mode": "db_first",
+    "daily_run_mode": "missing_only",
     "market_close_snapshot": {
       "status": "partial",
       "report_date": "2026-09-17",
-      "requested": 5916,
-      "unique": 5916,
-      "valid_a_rows": 5916,
-      "valid_bar_count": 5438,
-      "quoted_rows": 5553,
-      "written": 5438,
-      "skipped_unquoted": 363,
-      "skipped_missing_factor": 115,
-      "history_eligible_rows": 5772,
+      "requested": 0,
+      "unique": 0,
+      "valid_a_rows": 5781,
+      "valid_bar_count": 5447,
+      "quoted_rows": 0,
+      "written": 0,
+      "skipped_unquoted": 0,
+      "skipped_missing_factor": 0,
+      "history_eligible_rows": 0,
       "identity_pending_rows": 93,
       "identity_pending_codes": [
         "920008",
@@ -27698,16 +27654,16 @@
       ],
       "identity_invalid_rows": 120,
       "registered_non_a_rows_ignored": 120,
-      "coverage": 0.927195,
-      "coverage_numerator": 5438,
-      "coverage_denominator": 5865,
-      "eligible_coverage_numerator": 5438,
-      "eligible_coverage_denominator": 5772,
+      "coverage": 0.927307,
+      "coverage_numerator": 5447,
+      "coverage_denominator": 5874,
+      "eligible_coverage_numerator": 0,
+      "eligible_coverage_denominator": 0,
       "minimum_coverage": 0.9,
       "meets_minimum_coverage": true,
-      "remote_calls": 1,
-      "eligible_coverage": 0.942134,
-      "reason": "identity_migration_pending"
+      "remote_calls": 0,
+      "reason": "identity_migration_pending",
+      "source": "db"
     },
     "runtime_policy": {
       "market_history_cutover_mode": "sqlite",
@@ -27727,13 +27683,13 @@
         "instrument_count": 5781,
         "total_instrument_count": 5994,
         "ignored_non_a_instruments": 213,
-        "db_complete": 5772,
-        "missing_before": 9,
+        "db_complete": 5781,
+        "missing_before": 0,
         "missing_after": 0,
-        "remote_calls": 1,
-        "remote_rows": 5916,
-        "remote_matched": 9,
-        "hydrated": 9,
+        "remote_calls": 0,
+        "remote_rows": 0,
+        "remote_matched": 0,
+        "hydrated": 0,
         "industry_complete": true
       },
       "eligibility": {
@@ -27807,9 +27763,9 @@
     },
     "market_cap_evidence": {
       "requested": 927,
-      "db_hits": 921,
-      "remote_requested": 6,
-      "remote_hits": 6,
+      "db_hits": 927,
+      "remote_requested": 0,
+      "remote_hits": 0,
       "hydrated": 927,
       "max_workers": 20
     },
@@ -27840,15 +27796,15 @@
       "market_close_snapshot": {
         "status": "partial",
         "report_date": "2026-09-17",
-        "requested": 5916,
-        "unique": 5916,
-        "valid_a_rows": 5916,
-        "valid_bar_count": 5438,
-        "quoted_rows": 5553,
-        "written": 5438,
-        "skipped_unquoted": 363,
-        "skipped_missing_factor": 115,
-        "history_eligible_rows": 5772,
+        "requested": 0,
+        "unique": 0,
+        "valid_a_rows": 5781,
+        "valid_bar_count": 5447,
+        "quoted_rows": 0,
+        "written": 0,
+        "skipped_unquoted": 0,
+        "skipped_missing_factor": 0,
+        "history_eligible_rows": 0,
         "identity_pending_rows": 93,
         "identity_pending_codes": [
           "920008",
@@ -28042,16 +27998,16 @@
         ],
         "identity_invalid_rows": 120,
         "registered_non_a_rows_ignored": 120,
-        "coverage": 0.927195,
-        "coverage_numerator": 5438,
-        "coverage_denominator": 5865,
-        "eligible_coverage_numerator": 5438,
-        "eligible_coverage_denominator": 5772,
+        "coverage": 0.927307,
+        "coverage_numerator": 5447,
+        "coverage_denominator": 5874,
+        "eligible_coverage_numerator": 0,
+        "eligible_coverage_denominator": 0,
         "minimum_coverage": 0.9,
         "meets_minimum_coverage": true,
-        "remote_calls": 1,
-        "eligible_coverage": 0.942134,
-        "reason": "identity_migration_pending"
+        "remote_calls": 0,
+        "reason": "identity_migration_pending",
+        "source": "db"
       }
     },
     "by_strategy": {
@@ -28804,15 +28760,15 @@
         "market_close_snapshot": {
           "status": "partial",
           "report_date": "2026-09-17",
-          "requested": 5916,
-          "unique": 5916,
-          "valid_a_rows": 5916,
-          "valid_bar_count": 5438,
-          "quoted_rows": 5553,
-          "written": 5438,
-          "skipped_unquoted": 363,
-          "skipped_missing_factor": 115,
-          "history_eligible_rows": 5772,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5781,
+          "valid_bar_count": 5447,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
           "identity_pending_rows": 93,
           "identity_pending_codes": [
             "920008",
@@ -29006,16 +28962,16 @@
           ],
           "identity_invalid_rows": 120,
           "registered_non_a_rows_ignored": 120,
-          "coverage": 0.927195,
-          "coverage_numerator": 5438,
-          "coverage_denominator": 5865,
-          "eligible_coverage_numerator": 5438,
-          "eligible_coverage_denominator": 5772,
+          "coverage": 0.927307,
+          "coverage_numerator": 5447,
+          "coverage_denominator": 5874,
+          "eligible_coverage_numerator": 0,
+          "eligible_coverage_denominator": 0,
           "minimum_coverage": 0.9,
           "meets_minimum_coverage": true,
-          "remote_calls": 1,
-          "eligible_coverage": 0.942134,
-          "reason": "identity_migration_pending"
+          "remote_calls": 0,
+          "reason": "identity_migration_pending",
+          "source": "db"
         }
       },
       "h4_t3": {
@@ -29767,15 +29723,15 @@
         "market_close_snapshot": {
           "status": "partial",
           "report_date": "2026-09-17",
-          "requested": 5916,
-          "unique": 5916,
-          "valid_a_rows": 5916,
-          "valid_bar_count": 5438,
-          "quoted_rows": 5553,
-          "written": 5438,
-          "skipped_unquoted": 363,
-          "skipped_missing_factor": 115,
-          "history_eligible_rows": 5772,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5781,
+          "valid_bar_count": 5447,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
           "identity_pending_rows": 93,
           "identity_pending_codes": [
             "920008",
@@ -29969,16 +29925,16 @@
           ],
           "identity_invalid_rows": 120,
           "registered_non_a_rows_ignored": 120,
-          "coverage": 0.927195,
-          "coverage_numerator": 5438,
-          "coverage_denominator": 5865,
-          "eligible_coverage_numerator": 5438,
-          "eligible_coverage_denominator": 5772,
+          "coverage": 0.927307,
+          "coverage_numerator": 5447,
+          "coverage_denominator": 5874,
+          "eligible_coverage_numerator": 0,
+          "eligible_coverage_denominator": 0,
           "minimum_coverage": 0.9,
           "meets_minimum_coverage": true,
-          "remote_calls": 1,
-          "eligible_coverage": 0.942134,
-          "reason": "identity_migration_pending"
+          "remote_calls": 0,
+          "reason": "identity_migration_pending",
+          "source": "db"
         }
       },
       "luojie_pool": {
@@ -30710,15 +30666,15 @@
     "market_close_snapshot": {
       "status": "partial",
       "report_date": "2026-09-17",
-      "requested": 5916,
-      "unique": 5916,
-      "valid_a_rows": 5916,
-      "valid_bar_count": 5438,
-      "quoted_rows": 5553,
-      "written": 5438,
-      "skipped_unquoted": 363,
-      "skipped_missing_factor": 115,
-      "history_eligible_rows": 5772,
+      "requested": 0,
+      "unique": 0,
+      "valid_a_rows": 5781,
+      "valid_bar_count": 5447,
+      "quoted_rows": 0,
+      "written": 0,
+      "skipped_unquoted": 0,
+      "skipped_missing_factor": 0,
+      "history_eligible_rows": 0,
       "identity_pending_rows": 93,
       "identity_pending_codes": [
         "920008",
@@ -30912,16 +30868,16 @@
       ],
       "identity_invalid_rows": 120,
       "registered_non_a_rows_ignored": 120,
-      "coverage": 0.927195,
-      "coverage_numerator": 5438,
-      "coverage_denominator": 5865,
-      "eligible_coverage_numerator": 5438,
-      "eligible_coverage_denominator": 5772,
+      "coverage": 0.927307,
+      "coverage_numerator": 5447,
+      "coverage_denominator": 5874,
+      "eligible_coverage_numerator": 0,
+      "eligible_coverage_denominator": 0,
       "minimum_coverage": 0.9,
       "meets_minimum_coverage": true,
-      "remote_calls": 1,
-      "eligible_coverage": 0.942134,
-      "reason": "identity_migration_pending"
+      "remote_calls": 0,
+      "reason": "identity_migration_pending",
+      "source": "db"
     },
     "by_view": {
       "highlights": {
@@ -62102,8 +62058,8 @@
     },
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "16485c798d25d63efd8ea45863702c1a3b75817abf878a59873db41407d0e8b3",
-      "after_sha256": "16485c798d25d63efd8ea45863702c1a3b75817abf878a59873db41407d0e8b3"
+      "before_sha256": "1173cc1ec9b8619b7a45daa83fe48dc4528129ebaadca153130b8c7d8308d2d2",
+      "after_sha256": "1173cc1ec9b8619b7a45daa83fe48dc4528129ebaadca153130b8c7d8308d2d2"
     },
     "production_reference": {
       "pool": "picks_fusion",
