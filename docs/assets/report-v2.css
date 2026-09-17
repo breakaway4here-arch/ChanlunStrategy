@@ -2159,10 +2159,14 @@ body {
 .hotspot-clear,
 .hotspot-more { min-height: 34px; padding: 6px 10px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-sub); font: inherit; font-size: 12px; cursor: pointer; }
 .hotspot-mode button[aria-pressed="true"] { color: #FFFFFF; background: var(--primary); }
-.hotspot-themes { display: flex; flex: 1 1 360px; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.hotspot-sort,
+.hotspot-theme-more { display: inline-flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+.hotspot-sort select,
+.hotspot-theme-more select { min-width: 0; min-height: 34px; padding: 5px 26px 5px 8px; border: 1px solid var(--border-soft); border-radius: 8px; background: #FFFFFF; color: var(--text-main); font: inherit; font-size: 12px; }
+.hotspot-themes { display: flex; flex: 1 1 440px; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; }
 .hotspot-themes button { min-height: 30px; padding: 4px 9px; border-color: var(--border-soft); background: #FFFFFF; }
 .hotspot-themes button.is-active { border-color: rgba(49, 81, 244, .30); color: var(--primary); background: var(--primary-soft); }
-.hotspot-search { display: flex; align-items: center; gap: 6px; min-width: min(220px, 100%); color: var(--text-muted); font-size: 11px; }
+.hotspot-search { display: flex; flex: 1 1 220px; align-items: center; gap: 6px; min-width: min(220px, 100%); color: var(--text-muted); font-size: 11px; white-space: nowrap; }
 .hotspot-search input { min-width: 0; width: 100%; min-height: 36px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 8px; background: #FFFFFF; color: var(--text-main); font: inherit; }
 .hotspot-only-system { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; color: var(--text-sub); font-size: 12px; white-space: nowrap; }
 .hotspot-only-system input { width: 16px; height: 16px; accent-color: var(--primary); }
@@ -2176,6 +2180,11 @@ body {
 .hotspot-group > header > span { width: 4px; height: 22px; border-radius: 3px; background: var(--hotspot-theme-color, #2563EB); }
 .hotspot-group > header strong { min-width: 0; color: var(--text-main); font-size: 14px; overflow-wrap: anywhere; }
 .hotspot-group > header small { padding: 3px 7px; border-radius: 999px; color: var(--hotspot-theme-color, #2563EB); background: var(--hotspot-theme-soft, #EFF6FF); font-size: 10px; font-weight: 700; }
+.hotspot-group-heading { display: grid; gap: 3px; min-width: 0; }
+.hotspot-group > header .hotspot-group-stats,
+.hotspot-group > header .hotspot-group-current { width: fit-content; max-width: 100%; padding: 0; color: var(--text-muted); background: transparent; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; }
+.hotspot-group > header .hotspot-group-current { color: var(--hotspot-theme-color, #2563EB); }
+.hotspot-group > header .hotspot-group-count { white-space: nowrap; }
 .hotspot-group.is-theme-0 { --hotspot-theme-color: #2563EB; --hotspot-theme-soft: #EFF6FF; }
 .hotspot-group.is-theme-1 { --hotspot-theme-color: #7C3AED; --hotspot-theme-soft: #F5F3FF; }
 .hotspot-group.is-theme-2 { --hotspot-theme-color: #0891B2; --hotspot-theme-soft: #ECFEFF; }
@@ -2225,6 +2234,7 @@ body {
 .hotspot-list-row .pool-hit-badge { font-size: 11px; }
 .hotspot-list-row .pool-hit-tag { font-size: 10px; white-space: normal; }
 .hotspot-more { display: block; width: min(280px, 100%); margin: 12px auto 0; border-color: rgba(49, 81, 244, .24); color: var(--primary); background: var(--primary-soft); font-weight: 700; }
+.hotspot-group-more { width: calc(100% - 20px); margin: 0 10px 10px; }
 .hotspot-boundary { margin: 10px 2px 0; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
 .hotspot-empty { display: grid; gap: 4px; padding: 24px; border: 1px dashed var(--border); border-radius: var(--radius-md); color: var(--text-muted); text-align: center; }
 .hotspot-empty strong { color: var(--text-main); }
@@ -2265,11 +2275,17 @@ body {
   .hotspot-tools { display: grid; grid-template-columns: 1fr; }
   .hotspot-mode { width: 100%; }
   .hotspot-mode button { flex: 1 1 0; }
+  .hotspot-sort { width: 100%; }
+  .hotspot-sort select { flex: 1 1 auto; }
   .hotspot-themes { flex-basis: auto; }
+  .hotspot-theme-more { flex: 1 1 100%; }
+  .hotspot-theme-more select { flex: 1 1 auto; }
   .hotspot-search { width: 100%; }
   .hotspot-only-system { min-height: 42px; }
   .hotspot-result-meta { display: grid; gap: 3px; }
   .hotspot-group-grid { grid-template-columns: 1fr; }
+  .hotspot-group > header { grid-template-columns: 4px minmax(0, 1fr); }
+  .hotspot-group > header .hotspot-group-count { display: none; }
   .hotspot-stock-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .hotspot-stock-card { min-height: 145px; padding: 8px; }
   .hotspot-stock-card .pool-hit-summary { align-content: start; }

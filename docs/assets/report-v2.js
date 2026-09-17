@@ -82,10 +82,13 @@
     hotspot: {
       model: null,
       mode: 'map',
+      sortMode: 'count',
       query: '',
       theme: '',
       onlySystem: false,
       visibleLimit: 30,
+      showAllGroups: false,
+      expandedGroups: {},
       returnFocus: null,
     },
     top10: {
@@ -2378,6 +2381,102 @@
     return { events: events, modelSummaries: modelSummaries };
   }
 
+  function marketHotspotFirstTimeOrder(value) {
+    var raw = normalizeString(value).trim();
+    var match = raw.match(/^(\d{2}):(\d{2})(?::(\d{2}))?$/)
+      || raw.match(/^(\d{2})(\d{2})(\d{2})?$/);
+    if (!match) return null;
+    var hour = Number(match[1]);
+    var minute = Number(match[2]);
+    var second = Number(match[3] || 0);
+    if (hour > 23 || minute > 59 || second > 59) return null;
+    return hour * 3600 + minute * 60 + second;
+  }
+
+  function compareMarketHotspotNullableDesc(left, right) {
+    var leftKnown = typeof left === 'number' && Number.isFinite(left);
+    var rightKnown = typeof right === 'number' && Number.isFinite(right);
+    if (leftKnown && rightKnown && left !== right) return right - left;
+    if (leftKnown !== rightKnown) return leftKnown ? -1 : 1;
+    return 0;
+  }
+
+  function compareMarketHotspotItems(left, right) {
+    var heightOrder = compareMarketHotspotNullableDesc(left.lianban, right.lianban);
+    if (heightOrder) return heightOrder;
+    var leftTime = marketHotspotFirstTimeOrder(left.firstTime);
+    var rightTime = marketHotspotFirstTimeOrder(right.firstTime);
+    var leftTimeKnown = leftTime !== null;
+    var rightTimeKnown = rightTime !== null;
+    if (leftTimeKnown && rightTimeKnown && leftTime !== rightTime) return leftTime - rightTime;
+    if (leftTimeKnown !== rightTimeKnown) return leftTimeKnown ? -1 : 1;
+    var leftCode = normalizeString(left.code || left.key).trim();
+    var rightCode = normalizeString(right.code || right.key).trim();
+    if (leftCode !== rightCode) return leftCode < rightCode ? -1 : 1;
+    return Number(left.sourceOrder || 0) - Number(right.sourceOrder || 0);
+  }
+
+  function marketHotspotGroupWithStats(group) {
+    var value = group && typeof group === 'object' ? group : {};
+    var items = asArray(value.items).slice().sort(compareMarketHotspotItems);
+    var valid = items.filter(function (item) {
+      return item.isDeterminedSecurity && item.quoteStatus === 'available';
+    });
+    var heights = valid.map(function (item) { return item.lianban; }).filter(function (height) {
+      return typeof height === 'number' && Number.isFinite(height);
+    });
+    return Object.assign({}, value, {
+      items: items,
+      totalCount: valid.length ? valid.length : null,
+      totalItemCount: items.length,
+      maxLianban: heights.length ? Math.max.apply(Math, heights) : null,
+      systemHitCount: valid.filter(function (item) {
+        return item.membership === 'in';
+      }).length,
+      systemUnknownCount: valid.filter(function (item) {
+        return item.membership === 'unknown';
+      }).length,
+    });
+  }
+
+  function marketHotspotSystemCountText(hitCount, unknownCount) {
+    var hits = Number(hitCount) || 0;
+    var unknown = Number(unknownCount) || 0;
+    if (!unknown) return '系统命中' + hits + '只';
+    if (hits) return '已知命中' + hits + '只 · 待关联' + unknown + '只';
+    return '系统命中待核验 · 待关联' + unknown + '只';
+  }
+
+  function marketHotspotSortMode(value) {
+    return ['count', 'height', 'system'].indexOf(normalizeString(value).trim()) !== -1
+      ? normalizeString(value).trim() : 'count';
+  }
+
+  function compareMarketHotspotGroups(left, right, mode) {
+    var selected = marketHotspotSortMode(mode);
+    var order = 0;
+    if (selected === 'height') {
+      order = compareMarketHotspotNullableDesc(left.maxLianban, right.maxLianban)
+        || compareMarketHotspotNullableDesc(left.totalCount, right.totalCount);
+    } else if (selected === 'system') {
+      order = compareMarketHotspotNullableDesc(left.systemHitCount, right.systemHitCount)
+        || compareMarketHotspotNullableDesc(left.totalCount, right.totalCount)
+        || compareMarketHotspotNullableDesc(left.maxLianban, right.maxLianban);
+    } else {
+      order = compareMarketHotspotNullableDesc(left.totalCount, right.totalCount)
+        || compareMarketHotspotNullableDesc(left.maxLianban, right.maxLianban);
+    }
+    return order || Number(left.sourceOrder || 0) - Number(right.sourceOrder || 0);
+  }
+
+  function sortMarketHotspotGroups(groups, mode) {
+    return asArray(groups).slice().sort(function (left, right) {
+      return compareMarketHotspotGroups(left, right, mode);
+    }).map(function (group, index) {
+      return Object.assign({}, group, { rank: index + 1 });
+    });
+  }
+
   function buildMarketHotspotModel(data) {
     var source = data || {};
     var sectorOverview = safeMarketHotspotSectorOverview(source);
@@ -2531,6 +2630,7 @@
             key: 'theme-' + groups.length,
             name: normalized,
             colorIndex: groups.length % 8,
+            sourceOrder: groups.length,
             items: [],
           };
           groups.push(groupByName[normalized]);
@@ -2591,7 +2691,9 @@
       });
 
       base.items = items;
-      base.groups = groups.filter(function (group) { return group.items.length; });
+      base.groups = sortMarketHotspotGroups(groups.filter(function (group) {
+        return group.items.length;
+      }).map(marketHotspotGroupWithStats), 'count');
       base.totalSecurityCount = items.filter(function (item) {
         return item.isDeterminedSecurity;
       }).length;
@@ -2623,23 +2725,33 @@
     var query = normalizeString(options.query).trim().toLowerCase();
     var theme = normalizeString(options.theme).trim();
     var onlySystem = options.onlySystem === true;
-    var items = asArray(value.items).filter(function (item) {
+    function itemMatches(item) {
       if (onlySystem && item.membership !== 'in') return false;
-      if (theme && asArray(item.themes).indexOf(theme) === -1) return false;
       if (!query) return true;
       return [item.name, item.code, item.sector].concat(asArray(item.themes))
         .some(function (part) {
           return normalizeString(part).toLowerCase().indexOf(query) !== -1;
         });
-    });
-    var allowed = Object.create(null);
-    items.forEach(function (item) { allowed[item.key] = true; });
-    var groups = asArray(value.groups).map(function (group) {
+    }
+    var groups = sortMarketHotspotGroups(value.groups, options.sortMode).filter(function (group) {
+      return !theme || group.name === theme;
+    }).map(function (group) {
+      var matched = asArray(group.items).filter(itemMatches);
       return Object.assign({}, group, {
-        items: asArray(group.items).filter(function (item) { return allowed[item.key]; }),
+        items: matched,
+        matchedCount: matched.length,
       });
     }).filter(function (group) { return group.items.length; });
-    return { items: items, groups: groups };
+    var seen = Object.create(null);
+    var items = [];
+    groups.forEach(function (group) {
+      group.items.forEach(function (item) {
+        if (seen[item.key]) return;
+        seen[item.key] = true;
+        items.push(item);
+      });
+    });
+    return { items: items, groups: groups, matchedSecurityCount: items.length };
   }
 
   function safeMarketHotspotUrl(value) {
@@ -2715,21 +2827,28 @@
     var value = model && typeof model === 'object' ? model : buildMarketHotspotModel({});
     var options = uiState && typeof uiState === 'object' ? uiState : {};
     var mode = options.mode === 'list' ? 'list' : 'map';
+    var sortMode = marketHotspotSortMode(options.sortMode);
     var visibleLimit = Math.max(1, Number(options.visibleLimit) || 30);
-    var filtered = filterMarketHotspotItems(value, options);
-    var visibleItems = filtered.items.slice(0, visibleLimit);
-    var visible = Object.create(null);
-    visibleItems.forEach(function (item) { visible[item.key] = true; });
-    var visibleGroups = filtered.groups.map(function (group) {
-      return Object.assign({}, group, {
-        items: group.items.filter(function (item) { return visible[item.key]; }),
-      });
-    }).filter(function (group) { return group.items.length; });
-    var themeButtons = asArray(value.groups).map(function (group) {
+    var filtered = filterMarketHotspotItems(value, Object.assign({}, options, {
+      sortMode: sortMode,
+    }));
+    var orderedGroups = sortMarketHotspotGroups(value.groups, sortMode);
+    var quickGroups = orderedGroups.slice(0, 6);
+    var quickNames = Object.create(null);
+    quickGroups.forEach(function (group) { quickNames[group.name] = true; });
+    var themeButtons = quickGroups.map(function (group) {
       var active = normalizeString(options.theme) === group.name;
       return '<button type="button" data-hotspot-theme="' + escapeHtml(group.name)
         + '" aria-pressed="' + (active ? 'true' : 'false') + '" class="'
         + (active ? 'is-active' : '') + '">' + escapeHtml(group.name) + '</button>';
+    }).join('');
+    var remainingGroups = orderedGroups.filter(function (group) {
+      return !quickNames[group.name];
+    });
+    var themeSelectOptions = remainingGroups.map(function (group) {
+      return '<option value="' + escapeHtml(group.name) + '"'
+        + (normalizeString(options.theme) === group.name ? ' selected' : '') + '>'
+        + escapeHtml(group.name) + '</option>';
     }).join('');
     var statusCopy = value.status === 'partial'
       ? '当前为部分有效样本，未取得部分不解释为没有热点。'
@@ -2746,33 +2865,85 @@
             : (value.status === 'available'
               ? '热点是市场背景，不是新的推荐池。' : '热点个股数据尚未生成。'))))));
     var content = '';
-    if (visibleItems.length && mode === 'map') {
-      content = '<div class="hotspot-group-grid">' + visibleGroups.map(function (group) {
+    var showing = 0;
+    if (filtered.items.length && mode === 'map') {
+      var mapGroups = options.showAllGroups === true
+        ? filtered.groups : filtered.groups.slice(0, 6);
+      var mapSeen = Object.create(null);
+      content = '<div class="hotspot-group-grid">' + mapGroups.map(function (group) {
+        var expandedGroups = options.expandedGroups && typeof options.expandedGroups === 'object'
+          ? options.expandedGroups : {};
+        var expanded = expandedGroups[group.key] === true;
+        var groupItems = expanded ? group.items : group.items.slice(0, 6);
+        groupItems.forEach(function (item) { mapSeen[item.key] = true; });
+        var totalText = group.totalCount === null
+          ? '涨停家数待核验'
+          : (value.status === 'partial'
+            ? '已取得涨停' + group.totalCount + '家' : '涨停' + group.totalCount + '家');
+        var heightText = group.maxLianban === null
+          ? '连板高度待核验' : '最高' + group.maxLianban + '连板';
+        var currentText = groupItems.length !== group.totalItemCount
+          ? '<small class="hotspot-group-current">当前显示'
+            + escapeHtml(String(groupItems.length)) + '/' + escapeHtml(String(group.totalItemCount))
+            + '只</small>' : '';
+        var rank = Number(group.rank || 0);
+        var rankText = '#' + (rank > 0 && rank < 10 ? '0' : '') + (rank || '—');
+        var systemText = group.totalCount === null
+          ? '系统关联待核验'
+          : marketHotspotSystemCountText(group.systemHitCount, group.systemUnknownCount);
         return '<article class="hotspot-group is-theme-' + escapeHtml(group.colorIndex)
-          + '"><header><span></span><strong>' + escapeHtml(group.name)
-          + '</strong><small>' + escapeHtml(String(group.items.length)) + '只</small></header>'
-          + '<div class="hotspot-stock-grid">' + group.items.map(renderMarketHotspotCard).join('')
-          + '</div></article>';
+          + '"><header><span></span><div class="hotspot-group-heading"><strong>'
+          + escapeHtml(rankText + ' ' + group.name) + '</strong><small class="hotspot-group-stats">'
+          + escapeHtml(totalText + ' · ' + heightText + ' · ' + systemText)
+          + '</small>' + currentText + '</div><small class="hotspot-group-count">'
+          + escapeHtml(totalText) + '</small></header>'
+          + '<div class="hotspot-stock-grid">' + groupItems.map(renderMarketHotspotCard).join('')
+          + '</div>'
+          + (!expanded && group.items.length > groupItems.length
+            ? '<button type="button" class="hotspot-more hotspot-group-more" data-hotspot-group-more="'
+              + escapeHtml(group.key) + '">查看本组全部' + escapeHtml(String(group.items.length)) + '只</button>'
+            : '') + '</article>';
       }).join('') + '</div>';
-    } else if (visibleItems.length) {
+      showing = Object.keys(mapSeen).length;
+      if (filtered.groups.length > mapGroups.length) {
+        content += '<button type="button" class="hotspot-more" data-hotspot-more-groups>更多行业（余下'
+          + escapeHtml(String(filtered.groups.length - mapGroups.length)) + '组）</button>';
+      }
+    } else if (filtered.items.length) {
+      var visibleItems = filtered.items.slice(0, visibleLimit);
+      showing = visibleItems.length;
       content = '<div class="hotspot-list"><header><span>股票</span><span>方向</span><span>行情</span><span>事件/说明</span><span>系统关系</span></header>'
         + visibleItems.map(renderMarketHotspotListRow).join('') + '</div>';
     } else {
       content = '<div class="hotspot-empty"><strong>当前筛选没有可显示个股</strong><span>'
         + escapeHtml(statusCopy) + '</span></div>' + renderMarketHotspotSectorFallback(value);
     }
-    var showing = Math.min(visibleLimit, filtered.items.length);
     var countsKnown = value.countsKnown === true;
     var sampleCountText = countsKnown ? String(value.totalSecurityCount) : '暂不可用';
     var groupCountText = countsKnown ? String(value.groups.length) : '暂不可用';
     var quoteCountText = countsKnown ? String(value.quoteCount) : '暂不可用';
-    var hitCountText = countsKnown ? String(value.systemHitCount) : '暂不可用';
+    var systemUnknownCount = countsKnown ? Number(value.systemUnknownCount) || 0 : 0;
+    var hitCountText = countsKnown
+      ? (systemUnknownCount && !value.systemHitCount ? '待核验' : String(value.systemHitCount))
+      : '暂不可用';
+    var hitCountLabel = !countsKnown
+      ? '系统命中只数（证券去重）'
+      : (systemUnknownCount
+        ? (value.systemHitCount
+          ? '已知系统命中 · 另有' + systemUnknownCount + '只待关联'
+          : '系统命中待核验 · ' + systemUnknownCount + '只待关联')
+        : '系统命中只数（证券去重）');
     var displayCountHtml = countsKnown
-      ? '显示 ' + escapeHtml(String(showing)) + ' / '
-        + escapeHtml(String(filtered.items.length))
-      : '显示 暂不可用';
+      ? '匹配 ' + escapeHtml(String(filtered.items.length)) + '只 · 当前显示 '
+        + escapeHtml(String(showing)) + '只'
+      : '匹配/显示 暂不可用';
     var totalCountText = countsKnown
-      ? '共 ' + String(value.totalSecurityCount) + ' 只确定证券；跨题材可重复出现，总数按证券去重'
+      ? '行业总数 ' + String(value.groups.length) + '组 · 全量证券 '
+        + String(value.totalSecurityCount) + '只 · '
+        + marketHotspotSystemCountText(value.systemHitCount, systemUnknownCount)
+        + (systemUnknownCount
+          ? '；系统命中排序按已知命中只数，不累加每股池数'
+          : '，按不同证券计，不累加每股池数')
       : '样本数量暂不可用；现有板块事实仍可独立阅读';
     return '<section class="market-hotspot-section" id="marketHotspotSection" aria-labelledby="marketHotspotTitle">'
       + '<header class="hotspot-heading"><div><span class="hotspot-eyebrow">市场背景</span><h2 id="marketHotspotTitle">今日热点地图</h2><p>'
@@ -2784,13 +2955,20 @@
       + '</strong><small>已取得样本</small></span><span><strong>'
       + escapeHtml(groupCountText) + '</strong><small>已取得题材/行业</small></span><span><strong>'
       + escapeHtml(quoteCountText) + '</strong><small>有行情</small></span><span><strong>'
-      + escapeHtml(hitCountText) + '</strong><small>命中系统</small></span></div>'
+      + escapeHtml(hitCountText) + '</strong><small>' + escapeHtml(hitCountLabel) + '</small></span></div>'
       + '<div class="hotspot-tools"><div class="hotspot-mode" role="group" aria-label="热点阅读模式">'
       + '<button type="button" data-hotspot-mode="map" aria-pressed="' + (mode === 'map') + '">主题地图</button>'
       + '<button type="button" data-hotspot-mode="list" aria-pressed="' + (mode === 'list') + '">详细清单</button></div>'
+      + '<label class="hotspot-sort"><span>板块排序</span><select data-hotspot-sort>'
+      + '<option value="count"' + (sortMode === 'count' ? ' selected' : '') + '>涨停家数</option>'
+      + '<option value="height"' + (sortMode === 'height' ? ' selected' : '') + '>连板高度</option>'
+      + '<option value="system"' + (sortMode === 'system' ? ' selected' : '') + '>系统命中</option>'
+      + '</select></label>'
       + '<div class="hotspot-themes"><button type="button" data-hotspot-theme="" aria-pressed="'
       + (!options.theme) + '" class="' + (!options.theme ? 'is-active' : '') + '">全部题材</button>'
-      + themeButtons + '</div><label class="hotspot-search"><span>搜索</span><input id="marketHotspotSearch" type="search" value="'
+      + themeButtons + '<label class="hotspot-theme-more"><span>更多行业</span><select data-hotspot-theme-select'
+      + (remainingGroups.length ? '' : ' disabled') + '><option value="">更多行业选择</option>'
+      + themeSelectOptions + '</select></label></div><label class="hotspot-search"><span>搜索</span><input id="marketHotspotSearch" type="search" value="'
       + escapeHtml(options.query || '') + '" placeholder="搜索名称或代码"></label>'
       + '<label class="hotspot-only-system"><input id="marketHotspotOnlySystem" type="checkbox"'
       + (options.onlySystem ? ' checked' : '') + '>只看系统命中</label>'
@@ -2798,7 +2976,7 @@
       + '<div class="hotspot-result-meta" aria-live="polite"><span>'
       + displayCountHtml + '</span><small>' + escapeHtml(totalCountText) + '</small></div>'
       + content
-      + (filtered.items.length > showing
+      + (mode === 'list' && filtered.items.length > showing
         ? '<button type="button" class="hotspot-more" data-hotspot-more>加载更多</button>' : '')
       + '<p class="hotspot-boundary">按来源池计数，含上游基础池；榜单重复收录不叠加。行情取自本热点快照，不用候选报价替换。</p>'
       + '</section>';
@@ -2871,10 +3049,24 @@
 
   function marketHotspotState() {
     if (!state.hotspot || typeof state.hotspot !== 'object') {
-      state.hotspot = { model: null, mode: 'map', query: '', theme: '',
-        onlySystem: false, visibleLimit: 30, returnFocus: null };
+      state.hotspot = { model: null, mode: 'map', sortMode: 'count', query: '', theme: '',
+        onlySystem: false, visibleLimit: 30, showAllGroups: false,
+        expandedGroups: {}, returnFocus: null };
     }
+    state.hotspot.sortMode = marketHotspotSortMode(state.hotspot.sortMode);
+    if (!state.hotspot.expandedGroups || typeof state.hotspot.expandedGroups !== 'object') {
+      state.hotspot.expandedGroups = {};
+    }
+    if (typeof state.hotspot.showAllGroups !== 'boolean') state.hotspot.showAllGroups = false;
     return state.hotspot;
+  }
+
+  function clearMarketHotspotFilters(store) {
+    var value = store && typeof store === 'object' ? store : {};
+    value.query = '';
+    value.theme = '';
+    value.onlySystem = false;
+    return value;
   }
 
   function bindMarketHotspotControls() {
@@ -2886,17 +3078,25 @@
         renderMarketHotspot();
       });
     });
+    var sort = nodes.marketHotspot.querySelector('[data-hotspot-sort]');
+    if (sort) sort.addEventListener('change', function () {
+      store.sortMode = marketHotspotSortMode(sort.value);
+      renderMarketHotspot();
+    });
     Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-theme]'), function (button) {
       button.addEventListener('click', function () {
         store.theme = button.getAttribute('data-hotspot-theme') || '';
-        store.visibleLimit = 30;
         renderMarketHotspot();
       });
+    });
+    var themeSelect = nodes.marketHotspot.querySelector('[data-hotspot-theme-select]');
+    if (themeSelect) themeSelect.addEventListener('change', function () {
+      store.theme = themeSelect.value || '';
+      renderMarketHotspot();
     });
     var search = nodes.marketHotspot.querySelector('#marketHotspotSearch');
     if (search) search.addEventListener('input', function () {
       store.query = search.value || '';
-      store.visibleLimit = 30;
       renderMarketHotspot();
       var next = nodes.marketHotspot.querySelector('#marketHotspotSearch');
       if (next && next.focus) {
@@ -2909,16 +3109,23 @@
     var onlySystem = nodes.marketHotspot.querySelector('#marketHotspotOnlySystem');
     if (onlySystem) onlySystem.addEventListener('change', function () {
       store.onlySystem = onlySystem.checked === true;
-      store.visibleLimit = 30;
       renderMarketHotspot();
     });
     var clear = nodes.marketHotspot.querySelector('[data-hotspot-clear]');
     if (clear) clear.addEventListener('click', function () {
-      store.query = '';
-      store.theme = '';
-      store.onlySystem = false;
-      store.visibleLimit = 30;
+      clearMarketHotspotFilters(store);
       renderMarketHotspot();
+    });
+    var moreGroups = nodes.marketHotspot.querySelector('[data-hotspot-more-groups]');
+    if (moreGroups) moreGroups.addEventListener('click', function () {
+      store.showAllGroups = true;
+      renderMarketHotspot();
+    });
+    Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-group-more]'), function (button) {
+      button.addEventListener('click', function () {
+        store.expandedGroups[button.getAttribute('data-hotspot-group-more')] = true;
+        renderMarketHotspot();
+      });
     });
     var more = nodes.marketHotspot.querySelector('[data-hotspot-more]');
     if (more) more.addEventListener('click', function () {
