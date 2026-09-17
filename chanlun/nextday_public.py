@@ -28,6 +28,7 @@ _BASIS_STATUSES = {
     "not_matured",
     "calendar_unavailable",
     "raw_comparable",
+    "qfq_comparable",
     "within_bar_invariant",
     "price_basis_unverified",
     "data_unavailable",
@@ -244,11 +245,40 @@ def _selection_group(
             raise PublicProjectionError("selection identity is unavailable")
         identities.add(public["stock_identity"])
         selected.append(public)
-    return {"status": "evaluated", "reason": "", "selected": selected}
+    result = {"status": "evaluated", "reason": "", "selected": selected}
+    group_freezes = selection.get("group_freezes")
+    group_record = group_freezes.get(group_name) if isinstance(group_freezes, Mapping) else None
+    freeze = _public_group_freeze(group_record)
+    if freeze is not None:
+        result.update(freeze)
+    return result
 
 
 def _group_reason(group_name: str) -> str:
     return "{} 结果尚未刷新".format("L1" if group_name == "l1" else "B0")
+
+
+def _public_group_freeze(
+    record: Any, allowed_record_statuses: Tuple[str, ...] = ("evaluated",)
+) -> Optional[Dict[str, Any]]:
+    if not isinstance(record, Mapping) or record.get("status") not in allowed_record_statuses:
+        return None
+    source_status = record.get("registration_status")
+    frozen_at = record.get("frozen_at")
+    if (
+        not isinstance(frozen_at, str)
+        or len(frozen_at) > 40
+        or re.fullmatch(r"[0-9T:+.Z-]+", frozen_at) is None
+    ):
+        frozen_at = None
+    result = {}
+    if source_status == "prospective":
+        result["registration_status"] = "prospective"
+    elif source_status in ("retrospective", "historical"):
+        result["registration_status"] = "historical"
+    if frozen_at is not None:
+        result["frozen_at"] = frozen_at
+    return result or None
 
 
 def _group_metric(
@@ -452,12 +482,18 @@ def _outcomes_group(
         _public_outcome_row(rows_by_identity[item["stock_identity"]], item, source, report_date)
         for item in candidates
     ]
-    return {
+    result = {
         "status": "evaluated",
         "reason": "",
         "metrics": _public_metrics(raw_metrics, len(candidates)),
         "outcome_rows": public_rows,
     }
+    freeze = _public_group_freeze(
+        source, ("research_only", "evaluated", "evaluated_empty")
+    )
+    if freeze is not None:
+        result.update(freeze)
+    return result
 
 
 def project_run(selection: Mapping[str, Any], outcomes: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
@@ -510,6 +546,8 @@ def project_run(selection: Mapping[str, Any], outcomes: Optional[Mapping[str, An
     if not isinstance(frozen_at, str) or len(frozen_at) > 40 or re.fullmatch(r"[0-9T:+.Z-]+", frozen_at) is None:
         frozen_at = None
     registration_status = selection.get("registration_status")
+    if registration_status == "retrospective":
+        registration_status = "historical"
     if registration_status not in _REGISTRATION_STATUSES:
         registration_status = "unknown"
     source_run_id = _string(selection.get("source_run_id"), maximum=80)

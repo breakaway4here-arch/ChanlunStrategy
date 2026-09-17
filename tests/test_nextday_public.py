@@ -173,6 +173,84 @@ def outcomes_for(selection, *, as_of_date=REPORT_DATE, l1_rows=None, b0_rows=Non
 
 
 class PublicProjectionTests(unittest.TestCase):
+    def test_legacy_research_only_group_without_freeze_fields_stays_unannotated(self):
+        selection = selection_for()
+        outcomes = outcomes_for(selection)
+        self.assertEqual(outcomes["l1"]["status"], "research_only")
+        self.assertNotIn("registration_status", outcomes["l1"])
+        self.assertNotIn("frozen_at", outcomes["l1"])
+
+        projected = project_run(selection, outcomes)
+
+        self.assertNotIn("registration_status", projected["l1"])
+        self.assertNotIn("frozen_at", projected["l1"])
+        self.assertNotIn("registration_status", projected["outcomes"]["l1"])
+        self.assertNotIn("frozen_at", projected["outcomes"]["l1"])
+
+    def test_projects_group_registration_time_without_private_freeze_metadata(self):
+        selection = selection_for()
+        selection["registration_status"] = "retrospective"
+        selection["group_freezes"] = {
+            "l1": {
+                "status": "evaluated",
+                "registration_status": "prospective",
+                "frozen_at": "2026-09-17T08:30:00Z",
+                "source_hash": "private-l1-hash",
+                "source_path": "/private/l1/selection.json",
+            },
+            "b0": {
+                "status": "evaluated",
+                "registration_status": "retrospective",
+                "frozen_at": "2026-09-18T09:15:00Z",
+                "source_hash": "private-b0-hash",
+                "source_path": "/private/b0/selection.json",
+            },
+        }
+        outcomes = outcomes_for(selection)
+        outcomes["l1"].update({
+            "registration_status": "prospective",
+            "frozen_at": "2026-09-17T08:30:00Z",
+        })
+        outcomes["b0"].update({
+            "registration_status": "retrospective",
+            "frozen_at": "2026-09-18T09:15:00Z",
+        })
+
+        projected = project_run(selection, outcomes)
+
+        self.assertEqual(projected["registration_status"], "historical")
+        self.assertEqual(projected["l1"]["registration_status"], "prospective")
+        self.assertEqual(projected["l1"]["frozen_at"], "2026-09-17T08:30:00Z")
+        self.assertEqual(projected["b0"]["registration_status"], "historical")
+        self.assertEqual(projected["b0"]["frozen_at"], "2026-09-18T09:15:00Z")
+        self.assertEqual(projected["outcomes"]["b0"]["registration_status"], "historical")
+        self.assertEqual(projected["outcomes"]["b0"]["frozen_at"], "2026-09-18T09:15:00Z")
+        serialized = json.dumps(projected, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("private-l1-hash", serialized)
+        self.assertNotIn("private-b0-hash", serialized)
+        self.assertNotIn("source_path", serialized)
+        self.assertNotIn("/private/", serialized)
+
+    def test_qfq_comparability_status_is_public_without_local_proof_metadata(self):
+        selection = selection_for()
+        l1_row = outcome_row(selection["l1"]["selected"][0], outcome_status="available")
+        l1_row.update({
+            "cc1": 2.5,
+            "outcome_status": "available",
+        })
+        l1_row["basis_status_by_metric"]["cc1"] = "qfq_comparable"
+        outcomes = outcomes_for(selection, l1_rows=[l1_row])
+
+        projected = project_run(selection, outcomes)
+        row = projected["outcomes"]["l1"]["outcome_rows"][0]
+        self.assertEqual(row["path_metrics"]["cc1"]["status"], "observed")
+        self.assertEqual(
+            row["path_metrics"]["cc1"]["price_basis_status"], "qfq_comparable"
+        )
+        serialized = json.dumps(projected, ensure_ascii=False, sort_keys=True)
+        self.assertNotIn("basis_proof", serialized)
+        self.assertNotIn("factor_vs_raw", serialized)
+
     def test_projects_whitelisted_public_fields_and_path_metrics(self):
         selection = selection_for()
         outcomes = outcomes_for(selection)
@@ -187,6 +265,7 @@ class PublicProjectionTests(unittest.TestCase):
             "candidate_snapshot_intersection": 13,
         })
         self.assertEqual(projected["status"], "available")
+        self.assertNotIn("registration_status", projected["l1"])
 
         l1 = projected["l1"]["selected"][0]
         self.assertEqual(l1["stock_identity"], "SH600609")

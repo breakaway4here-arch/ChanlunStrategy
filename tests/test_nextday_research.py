@@ -65,6 +65,30 @@ def _report(candidates=None, snapshot=None):
     }
 
 
+def _archived_workbench(candidates):
+    items = []
+    for rank, candidate in enumerate(candidates, 1):
+        items.append(
+            {
+                "code": candidate.get("code"),
+                "name": candidate.get("name"),
+                "candidate": candidate,
+                "strategy_results": [
+                    {"strategy_id": "highlights", "view_rank": rank}
+                ],
+            }
+        )
+    return {
+        "identity_matches": True,
+        "workbench": {"report_date": REPORT_DATE, "items": items},
+    }
+
+
+def _with_report_identity(prepared, identity="a" * 64):
+    prepared["report_identity"] = identity
+    return prepared
+
+
 def _create_outcome_database(path, rows):
     connection = sqlite3.connect(str(path))
     connection.executescript(
@@ -408,8 +432,10 @@ class NextdayResearchTests(unittest.TestCase):
     def test_input_insufficient_attempt_can_upgrade_once_to_valid_freeze(self):
         partial = _snapshot([_limit_row("600609", "金杯汽车")])
         partial["status"] = "partial"
-        invalid = adapt_report(_report([_candidate()], partial))
-        valid = adapt_report(_report([_candidate()], _snapshot([_limit_row("600609", "金杯汽车")])))
+        invalid = _with_report_identity(adapt_report(_report([_candidate()], partial)))
+        valid = _with_report_identity(
+            adapt_report(_report([_candidate()], _snapshot([_limit_row("600609", "金杯汽车")]))),
+        )
         with tempfile.TemporaryDirectory() as tmp:
             runs = Path(tmp)
             first = freeze_selection(runs, invalid, source_hash="partial-source")
@@ -419,6 +445,380 @@ class NextdayResearchTests(unittest.TestCase):
             self.assertEqual(upgraded["action"], "upgraded")
             self.assertEqual(saved["freeze_status"], "valid")
             self.assertEqual(saved["source_hash"], "valid-source")
+
+    def test_l1_fill_preserves_evaluated_b0_a_and_records_conflict_for_b0_b(self):
+        partial = _snapshot([_limit_row("600609", "金杯汽车")])
+        partial["status"] = "partial"
+        first = _with_report_identity(
+            adapt_report(
+                _report([_candidate()], partial),
+                archived_workbench=_archived_workbench([_candidate("600609", "B0_A")]),
+            )
+        )
+        valid = _with_report_identity(
+            adapt_report(
+                _report([_candidate()], _snapshot([_limit_row("600609", "金杯汽车")])),
+                archived_workbench=_archived_workbench([_candidate("603960", "B0_B")]),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(runs, first, "partial", frozen_at="2026-09-17T08:00:00Z")
+            path = runs / REPORT_DATE / "selection.json"
+            original = json.loads(path.read_text(encoding="utf-8"))
+            original_b0 = original["b0"]
+            original_b0_freeze = original["group_freezes"]["b0"]
+
+            result = freeze_selection(
+                runs, valid, "completed", frozen_at="2026-09-18T08:00:00Z"
+            )
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+            self.assertEqual(result["action"], "upgraded_with_conflict")
+            self.assertEqual(saved["l1"]["status"], "evaluated")
+            self.assertEqual(saved["b0"], original_b0)
+            self.assertEqual(saved["group_freezes"]["b0"], original_b0_freeze)
+            self.assertEqual(saved["group_freezes"]["b0"]["status"], "evaluated")
+            self.assertEqual(saved["group_freezes"]["b0"]["registration_status"], "prospective")
+            self.assertEqual(saved["group_freezes"]["l1"]["registration_status"], "retrospective")
+            self.assertEqual(saved["registration_status"], "retrospective")
+            self.assertIn("conflict_path", result)
+            self.assertTrue(Path(result["conflict_path"]).is_file())
+
+    def test_b0_same_report_first_fill_preserves_frozen_l1_and_marks_late_registration(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        first = _with_report_identity(adapt_report(report))
+        completed = _with_report_identity(
+            adapt_report(
+                report,
+                archived_workbench=_archived_workbench([_candidate("603960", "克来机电")]),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(runs, first, "report-and-missing-archive", frozen_at="2026-09-17T08:00:00Z")
+            path = runs / REPORT_DATE / "selection.json"
+            original = json.loads(path.read_text(encoding="utf-8"))
+            original_l1 = original["l1"]
+            original_l1_freeze = original["group_freezes"]["l1"]
+
+            result = freeze_selection(
+                runs,
+                completed,
+                "report-and-archive-assets-v2",
+                frozen_at="2026-09-18T08:00:00Z",
+            )
+            saved = json.loads(path.read_text(encoding="utf-8"))
+
+            self.assertEqual(result["action"], "upgraded")
+            self.assertEqual(saved["l1"], original_l1)
+            self.assertEqual(saved["group_freezes"]["l1"], original_l1_freeze)
+            self.assertEqual(saved["b0"]["status"], "evaluated")
+            self.assertEqual(saved["group_freezes"]["b0"]["frozen_at"], "2026-09-18T08:00:00Z")
+            self.assertEqual(saved["group_freezes"]["b0"]["registration_status"], "retrospective")
+            self.assertEqual(saved["registration_status"], "retrospective")
+
+    def test_process_keeps_legacy_conflict_status_when_safe_group_fills(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        archived = _archived_workbench([_candidate("600609", "金杯汽车")])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_path = root / "report.json"
+            report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            runs = root / "runs"
+
+            def fake_evaluator(snapshot, db_path, as_of_date):
+                return {
+                    "status": "pending",
+                    "report_date": snapshot["report_date"],
+                    "as_of_date": as_of_date,
+                    "outcome_rows": [],
+                    "metrics": {"selected": len(snapshot["selected"])},
+                }
+
+            with mock.patch(
+                "chanlun.nextday_research._read_archived_workbench",
+                side_effect=[
+                    (None, None, "matching_archived_workbench_missing"),
+                    (archived, "same-report-workbench", None),
+                ],
+            ):
+                process_report(
+                    report_path,
+                    runs,
+                    root / "unused.db",
+                    as_of_date=REPORT_DATE,
+                    outcome_evaluator=fake_evaluator,
+                    frozen_at="2026-09-17T08:00:00Z",
+                )
+                before = json.loads(
+                    (runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8")
+                )
+                second = process_report(
+                    report_path,
+                    runs,
+                    root / "unused.db",
+                    as_of_date=REPORT_DATE,
+                    outcome_evaluator=fake_evaluator,
+                    frozen_at="2026-09-18T08:00:00Z",
+                )
+
+            saved = json.loads((runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8"))
+            self.assertEqual(second["status"], "conflict")
+            self.assertEqual(second["freeze_action"], "upgraded_with_conflict")
+            self.assertTrue(Path(second["conflict_path"]).is_file())
+            self.assertEqual(saved["l1"], before["l1"])
+            self.assertEqual(saved["group_freezes"]["l1"], before["group_freezes"]["l1"])
+            self.assertEqual(saved["b0"]["status"], "evaluated")
+            self.assertEqual(saved["group_freezes"]["b0"]["registration_status"], "retrospective")
+
+    def test_both_insufficient_groups_can_first_freeze_from_same_report_bytes(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        report["data_quality"] = {
+            "report_date": REPORT_DATE,
+            "bar_state": "closed",
+            "is_official": True,
+        }
+        archived = _archived_workbench([_candidate("600609", "金杯汽车")])
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            report_path = root / "report.json"
+            report_path.write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+            original_report_bytes = report_path.read_bytes()
+            runs = root / "runs"
+
+            def fake_evaluator(snapshot, db_path, as_of_date):
+                return {
+                    "status": "pending",
+                    "report_date": snapshot["report_date"],
+                    "as_of_date": as_of_date,
+                    "outcome_rows": [],
+                    "metrics": {"selected": len(snapshot["selected"])},
+                }
+
+            with mock.patch(
+                "chanlun.nextday_research._read_archived_workbench",
+                side_effect=[
+                    (None, None, "matching_archived_workbench_missing"),
+                    (archived, "asset-query-v2", None),
+                ],
+            ):
+                first = process_report(
+                    report_path,
+                    runs,
+                    root / "unused.db",
+                    as_of_date="2026-09-16",
+                    outcome_evaluator=fake_evaluator,
+                    frozen_at="2026-09-17T08:00:00Z",
+                )
+                first_saved = json.loads(
+                    (runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8")
+                )
+                second = process_report(
+                    report_path,
+                    runs,
+                    root / "unused.db",
+                    as_of_date=REPORT_DATE,
+                    outcome_evaluator=fake_evaluator,
+                    frozen_at="2026-09-18T08:00:00Z",
+                )
+
+            saved = json.loads((runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8"))
+            summary = json.loads((runs / "summary.json").read_text(encoding="utf-8"))
+            self.assertEqual(report_path.read_bytes(), original_report_bytes)
+            self.assertEqual(first["status"], "not_evaluated")
+            self.assertEqual(first_saved["l1"]["status"], "not_evaluated")
+            self.assertEqual(first_saved["b0"]["status"], "not_evaluated")
+            self.assertEqual(second["freeze_action"], "upgraded")
+            self.assertEqual(second["status"], "processed")
+            self.assertEqual(saved["l1"]["status"], "evaluated")
+            self.assertEqual(saved["b0"]["status"], "evaluated")
+            self.assertEqual(saved["group_freezes"]["l1"]["report_identity"], saved["report_identity"])
+            self.assertEqual(saved["group_freezes"]["b0"]["report_identity"], saved["report_identity"])
+            self.assertEqual(second["l1_registration_status"], "retrospective")
+            self.assertEqual(second["b0_registration_status"], "retrospective")
+            self.assertEqual(second["registration_status"], "retrospective")
+            self.assertEqual(summary["dates"][0]["l1_registration_status"], "retrospective")
+            self.assertEqual(summary["dates"][0]["b0_registration_status"], "retrospective")
+
+    def test_initial_no_valid_group_can_recover_from_strong_new_report_identity(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        initial = adapt_report(report)
+        initial["freeze_status"] = "input_insufficient"
+        initial["l1"] = {"status": "not_evaluated", "reason": "initial_input_missing", "selected": []}
+        initial["b0"] = {"status": "not_evaluated", "reason": "archive_missing", "selected": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(runs, initial, "legacy-failed-attempt", frozen_at="2026-09-17T08:00:00Z")
+            completed = _with_report_identity(
+                adapt_report(
+                    report,
+                    archived_workbench=_archived_workbench([_candidate("600609", "金杯汽车")]),
+                ),
+                "c" * 64,
+            )
+            result = freeze_selection(
+                runs, completed, "strong-current-report", frozen_at="2026-09-18T08:00:00Z"
+            )
+            saved = json.loads(
+                (runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8")
+            )
+
+            self.assertEqual(result["action"], "upgraded")
+            self.assertEqual(saved["report_identity"], "c" * 64)
+            self.assertEqual(saved["l1"]["status"], "evaluated")
+            self.assertEqual(saved["b0"]["status"], "evaluated")
+            for group in ("l1", "b0"):
+                self.assertEqual(saved["group_freezes"][group]["first_attempted_at"], "2026-09-17T08:00:00Z")
+                self.assertEqual(saved["group_freezes"][group]["frozen_at"], "2026-09-18T08:00:00Z")
+                self.assertIsNone(saved["group_freezes"][group]["supersedes"]["report_identity"])
+            self.assertEqual(saved["first_attempted_at"], "2026-09-17T08:00:00Z")
+            self.assertEqual(saved["registration_status"], "retrospective")
+
+    def test_registration_uses_shanghai_trading_date_not_utc_date(self):
+        prepared = _with_report_identity(
+            adapt_report(
+                _report(
+                    [_candidate("600609", "金杯汽车")],
+                    _snapshot([_limit_row("600609", "金杯汽车")]),
+                ),
+                archived_workbench=_archived_workbench([_candidate("600609", "金杯汽车")]),
+            )
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(
+                runs, prepared, "source-before-china-midnight", frozen_at="2026-09-17T15:59:00Z"
+            )
+            before = json.loads((runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8"))
+            self.assertEqual(before["registration_status"], "prospective")
+            self.assertEqual(before["group_freezes"]["l1"]["registration_status"], "prospective")
+
+            next_runs = Path(tmp) / "next"
+            freeze_selection(
+                next_runs, prepared, "source-after-china-midnight", frozen_at="2026-09-17T16:30:00Z"
+            )
+            after = json.loads(
+                (next_runs / REPORT_DATE / "selection.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(after["registration_status"], "retrospective")
+            self.assertEqual(after["group_freezes"]["b0"]["registration_status"], "retrospective")
+
+    def test_revised_or_unknown_report_identity_cannot_fill_a_missing_group(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        for incoming_identity in ("b" * 64, None):
+            with self.subTest(incoming_identity=incoming_identity):
+                first = _with_report_identity(adapt_report(report), "a" * 64)
+                completed = _with_report_identity(
+                    adapt_report(
+                        report,
+                        archived_workbench=_archived_workbench([_candidate("600609", "金杯汽车")]),
+                    ),
+                    incoming_identity or "a" * 64,
+                )
+                if incoming_identity is None:
+                    completed.pop("report_identity", None)
+                with tempfile.TemporaryDirectory() as tmp:
+                    runs = Path(tmp)
+                    freeze_selection(runs, first, "first-source", frozen_at="2026-09-17T08:00:00Z")
+                    path = runs / REPORT_DATE / "selection.json"
+                    before = path.read_bytes()
+                    result = freeze_selection(
+                        runs, completed, "revised-or-unknown", frozen_at="2026-09-18T08:00:00Z"
+                    )
+                    self.assertEqual(result["action"], "conflict")
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_changed_algorithm_or_group_method_cannot_mix_freeze_versions(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        for changed_contract in ("algorithm", "l1_method", "b0_method"):
+            with self.subTest(changed_contract=changed_contract):
+                first = _with_report_identity(adapt_report(report), "d" * 64)
+                completed = _with_report_identity(
+                    adapt_report(
+                        report,
+                        archived_workbench=_archived_workbench([_candidate("603960", "克来机电")]),
+                    ),
+                    "d" * 64,
+                )
+                if changed_contract == "algorithm":
+                    completed["algorithm_version"] = "nextday-research-v-next"
+                else:
+                    group_name = "l1" if changed_contract == "l1_method" else "b0"
+                    completed[group_name]["method"] = "changed-method"
+                with tempfile.TemporaryDirectory() as tmp:
+                    runs = Path(tmp)
+                    freeze_selection(runs, first, "initial", frozen_at="2026-09-17T08:00:00Z")
+                    path = runs / REPORT_DATE / "selection.json"
+                    before = path.read_bytes()
+                    result = freeze_selection(
+                        runs, completed, "same-raw-report-new-contract", frozen_at="2026-09-18T08:00:00Z"
+                    )
+                    self.assertEqual(result["action"], "conflict")
+                    self.assertEqual(path.read_bytes(), before)
+
+    def test_conflicting_report_identity_and_report_sha_are_not_proof(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        first = adapt_report(report)
+        first["report_identity"] = "e" * 64
+        first["source_hashes"] = {"report_sha256": "e" * 64}
+        completed = adapt_report(
+            report,
+            archived_workbench=_archived_workbench([_candidate("603960", "克来机电")]),
+        )
+        completed["report_identity"] = "f" * 64
+        completed["source_hashes"] = {"report_sha256": "e" * 64}
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(runs, first, "original", frozen_at="2026-09-17T08:00:00Z")
+            path = runs / REPORT_DATE / "selection.json"
+            before = path.read_bytes()
+            result = freeze_selection(
+                runs, completed, "inconsistent-identities", frozen_at="2026-09-18T08:00:00Z"
+            )
+            self.assertEqual(result["action"], "conflict")
+            self.assertEqual(path.read_bytes(), before)
+
+    def test_same_report_and_group_inputs_ignore_archive_html_asset_query_change(self):
+        report = _report(
+            [_candidate("600609", "金杯汽车")],
+            _snapshot([_limit_row("600609", "金杯汽车")]),
+        )
+        archived = _archived_workbench([_candidate("600609", "金杯汽车")])
+        first = _with_report_identity(adapt_report(report, archived_workbench=archived))
+        rerun = _with_report_identity(adapt_report(report, archived_workbench=archived))
+        with tempfile.TemporaryDirectory() as tmp:
+            runs = Path(tmp)
+            freeze_selection(runs, first, "html-query-v1", frozen_at="2026-09-17T08:00:00Z")
+            path = runs / REPORT_DATE / "selection.json"
+            original = path.read_bytes()
+            result = freeze_selection(
+                runs, rerun, "html-query-v2", frozen_at="2026-09-17T08:01:00Z"
+            )
+            self.assertEqual(result["action"], "unchanged")
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(len(list((runs / REPORT_DATE / "conflicts").glob("*.json"))), 0)
 
     def test_outcomes_are_read_only_to_selection_and_markdown_shows_pending(self):
         report = _report([_candidate()], _snapshot([_limit_row("600609", "金杯汽车")]))

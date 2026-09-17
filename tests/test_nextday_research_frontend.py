@@ -174,12 +174,32 @@ assert(html.includes('回踩不破突破位') && html.includes('放量长阴破�
 assert(html.includes('与 L1 重叠') || html.includes('L1 / B0 重叠'), 'L1/B0 overlap is missing');
 assert(html.includes('研究观察') && html.includes('不构成正式推荐'), 'research-only boundary is missing');
 assert(html.includes('SH600609') && html.includes('SH603960'), 'instrument IDs are missing');
+assert(!html.includes('回溯登记'), 'legacy group without freeze metadata changed its rendering');
 const hostile = samplePayload();
 hostile.l1.selected[0].name = '<img src=x onerror=alert(1)>';
 hostile.l1.selected[0].watch_reason = '<script>alert(2)</script>';
 const safe = __nextdayTest.render(hostile, '2026-09-17');
 assert(!safe.includes('<img') && !safe.includes('<script>'), 'sidecar text was not escaped');
 assert(safe.includes('&lt;img') && safe.includes('&lt;script&gt;'), 'escaped source text is missing');
+""",
+        )
+
+    def test_historical_group_freeze_is_visible_only_for_that_group(self):
+        _run_node_contract(
+            self,
+            "({ render: renderNextdayResearchProjection })",
+            r"""
+const payload = samplePayload();
+payload.l1.registration_status = 'prospective';
+payload.l1.frozen_at = '2026-09-17T08:30:00Z';
+payload.b0.registration_status = 'historical';
+payload.b0.frozen_at = '2026-09-18T09:15:00Z';
+const html = __nextdayTest.render(payload, '2026-09-17');
+assert(html.includes('回溯登记 · 冻结 2026-09-18T09:15:00Z'), 'historical group freeze was hidden');
+const l1Start = html.indexOf('L1 次日强势候选');
+const b0Start = html.indexOf('B0 原看点对照');
+assert(!html.slice(l1Start, b0Start).includes('回溯登记'), 'prospective L1 was mislabeled retrospective');
+assert(!html.includes('source_hash') && !html.includes('selection.json'), 'private freeze metadata leaked');
 """,
         )
 
@@ -214,6 +234,7 @@ assert(emptyHtml.includes('L1 已评估，未选出候选'), 'evaluated empty wa
 const payload = samplePayload();
 const row = payload.outcomes.l1.outcome_rows[0];
 row.path_metrics.cc1 = { status: 'observed', price_basis_status: 'raw_comparable', value_pct: 0 };
+row.path_metrics.gap1 = { status: 'observed', price_basis_status: 'qfq_comparable', value_pct: 1.25 };
 row.path_metrics.oc1 = { status: 'observed', price_basis_status: 'within_bar_invariant', value_pct: 3 };
 row.entry_one_price = true;
 payload.outcomes.l1.metrics.cc1 = {
@@ -222,6 +243,7 @@ payload.outcomes.l1.metrics.cc1 = {
 payload.outcomes.l1.metrics.oc1 = {
   observed: 1, mean_pct: 3, median_pct: 3, gain_ge_3: 1, loss_le_minus5: 0
 };
+payload.outcomes.l1.metrics.gap1 = { observed: 1, mean_pct: 1.25 };
 payload.outcomes.l1.outcome_rows[1].path_metrics.cc1 = {
   status: 'basis_unverified', price_basis_status: 'price_basis_unverified', value_pct: null
 };
@@ -231,6 +253,7 @@ payload.outcomes.l1.outcome_rows[1].path_metrics.gap1 = {
 const html = __nextdayTest.render(payload, '2026-09-17');
 assert(html.includes('截至 2026-09-17'), 'outcome as-of date is missing');
 assert(html.includes('0.00%'), 'an observed real zero was hidden');
+assert(html.includes('1.25%') && !html.includes('价基状态未识别'), 'verified qfq value was rejected');
 assert(html.includes('价基未核验') && html.includes('数据缺失'), 'unverified and missing statuses were collapsed');
 assert(html.includes('信号日收盘→次日收盘') && html.includes('信号日收盘→次日开盘')
   && html.includes('次日开盘→次日收盘') && html.includes('次日开盘→T+2收盘') && html.includes('次日开盘→T+3收盘'),

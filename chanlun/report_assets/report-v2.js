@@ -13513,6 +13513,7 @@
     not_matured: '尚未到期',
     calendar_unavailable: '交易日历不可用',
     raw_comparable: '原始价可比',
+    qfq_comparable: '复权价可比',
     within_bar_invariant: '同一根 K 线内计算',
     price_basis_unverified: '价基未核验',
     data_unavailable: '行情不可用',
@@ -13601,7 +13602,7 @@
     var percent = nextdayStrictPercent(value.value_pct);
     if (status === 'observed') {
       if (percent === null) return { text: '结果数值未提供', observed: false, value: null };
-      if (basis === 'raw_comparable' || basis === 'within_bar_invariant') {
+      if (basis === 'raw_comparable' || basis === 'qfq_comparable' || basis === 'within_bar_invariant') {
         return { text: formatPct(percent, true), observed: true, value: percent };
       }
       if (basis === 'price_basis_unverified') {
@@ -13811,6 +13812,11 @@
     var subtitle = kind === 'l1'
       ? '排序：行业涨停家数降序 → 连板数降序 → 首封时间升序 → 证券身份；保持源顺序，最多五只，不补位。'
       : '日报原看点顺序对照；仅展示原有数量。';
+    var registrationStatus = normalizeString(selection.registration_status).trim();
+    if (registrationStatus === 'historical' || registrationStatus === 'retrospective') {
+      var groupFrozenAt = normalizeString(selection.frozen_at).trim();
+      subtitle += ' · 回溯登记 · 冻结 ' + (groupFrozenAt || '时间未记录');
+    }
     var body = '';
     if (groupStatus === 'not_evaluated') {
       body = '<div class="l1-nextday-group-empty is-not-evaluated"><strong>'

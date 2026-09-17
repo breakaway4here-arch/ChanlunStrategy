@@ -16,9 +16,10 @@ import re
 import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .identity import InstrumentIdentity, normalize_identity
 from .nextday_candidates import METHODS, number, select_day
@@ -652,6 +653,38 @@ def adapt_report(
     intersection_count = sum(
         1 for row in rows if row["identity_details"]["asset_type"] + "|" + row["identity_details"]["exchange"] + "|" + row["identity_details"]["code"] in snapshot_by_identity
     )
+    group_input_hashes = {
+        "l1": _sha256(
+            _compact_json(
+                {
+                    "candidate_rows": rows,
+                    "snapshot": report.get("limit_up_snapshot"),
+                    "snapshot_status": snapshot_status,
+                    "selection": {
+                        "status": "evaluated" if l1_ok else "not_evaluated",
+                        "selected": l1_selected,
+                    },
+                }
+            ).encode("utf-8")
+        ),
+        "b0": _sha256(
+            _compact_json(
+                {
+                    "archive_status": archive_status,
+                    "archive_reason": archive_reason,
+                    "archive_candidates": archive_rows,
+                    "selection": {
+                        "status": (
+                            "evaluated"
+                            if archive_status == "evaluated" and not archive_errors and not b0_merge_errors
+                            else "not_evaluated"
+                        ),
+                        "selected": b0_selected,
+                    },
+                }
+            ).encode("utf-8")
+        ),
+    }
     return {
         "schema_version": 1,
         "status": "research_only",
@@ -685,6 +718,7 @@ def adapt_report(
             "reason": b0_reason,
             "selected": b0_selected,
         },
+        "_group_input_hashes": group_input_hashes,
     }
 
 
@@ -732,9 +766,14 @@ def _now_iso() -> str:
 
 
 def _registration_status(report_date: str, frozen_at: str) -> str:
-    frozen_date = _date_text(frozen_at[:10]) if isinstance(frozen_at, str) else None
-    if frozen_date is None:
+    parsed = _timestamp_value(frozen_at)
+    if parsed is None:
         return "retrospective"
+    try:
+        report_timezone = ZoneInfo("Asia/Shanghai")
+    except ZoneInfoNotFoundError:
+        report_timezone = timezone(timedelta(hours=8))
+    frozen_date = parsed.astimezone(report_timezone).date().isoformat()
     return "prospective" if frozen_date <= report_date else "retrospective"
 
 
@@ -743,13 +782,268 @@ def _conflict_path(date_dir: Path, source_hash: str) -> Path:
     return date_dir / "conflicts" / (token + ".json")
 
 
+def _is_sha256(value: Any) -> bool:
+    return isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{64}", value) is not None
+
+
+def _selection_report_identity(selection: Mapping[str, Any]) -> Optional[str]:
+    explicit = selection.get("report_identity")
+    source_hashes = selection.get("source_hashes")
+    source_identity = source_hashes.get("report_sha256") if isinstance(source_hashes, Mapping) else None
+    if "report_identity" in selection and not _is_sha256(explicit):
+        return None
+    if _is_sha256(explicit) and _is_sha256(source_identity):
+        if explicit.lower() != source_identity.lower():
+            return None
+    identity = explicit if _is_sha256(explicit) else source_identity
+    return identity.lower() if _is_sha256(identity) else None
+
+
+def _selection_freeze_contract(selection: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
+    contract = {
+        "algorithm_version": selection.get("algorithm_version"),
+        "methods": {},
+    }
+    for group_name in ("l1", "b0"):
+        group = selection.get(group_name)
+        contract["methods"][group_name] = group.get("method") if isinstance(group, Mapping) else None
+    stored = selection.get("freeze_contract")
+    if "freeze_contract" in selection and not isinstance(stored, Mapping):
+        return None
+    if isinstance(stored, Mapping) and _compact_json(stored) != _compact_json(contract):
+        return None
+    group_freezes = selection.get("group_freezes")
+    if isinstance(group_freezes, Mapping):
+        for group_name in ("l1", "b0"):
+            record = group_freezes.get(group_name)
+            if not isinstance(record, Mapping):
+                continue
+            if (
+                record.get("algorithm_version") is not None
+                and record.get("algorithm_version") != contract["algorithm_version"]
+            ):
+                return None
+            if (
+                record.get("method") is not None
+                and record.get("method") != contract["methods"][group_name]
+            ):
+                return None
+    return contract
+
+
+def _valid_freeze_contract(contract: Any) -> bool:
+    if not isinstance(contract, Mapping):
+        return False
+    if not isinstance(contract.get("algorithm_version"), str) or not contract.get("algorithm_version"):
+        return False
+    methods = contract.get("methods")
+    return isinstance(methods, Mapping) and all(
+        isinstance(methods.get(group_name), str) and methods.get(group_name)
+        for group_name in ("l1", "b0")
+    )
+
+
+def _group_source_hash(
+    group_name: str, selection: Mapping[str, Any], report_identity: Optional[str]
+) -> str:
+    input_hashes = selection.get("_group_input_hashes")
+    input_hash = input_hashes.get(group_name) if isinstance(input_hashes, Mapping) else None
+    return _sha256(
+        _compact_json(
+            {
+                "group": group_name,
+                "report_identity": report_identity,
+                "freeze_contract": _selection_freeze_contract(selection),
+                "input_hash": input_hash,
+                "selection": selection.get(group_name),
+            }
+        ).encode("utf-8")
+    )
+
+
+def _is_group_evaluated(selection: Mapping[str, Any], group_name: str) -> bool:
+    group = selection.get(group_name)
+    return isinstance(group, Mapping) and group.get("status") == "evaluated"
+
+
+def _new_group_freezes(
+    selection: Mapping[str, Any], frozen_at: str, report_identity: Optional[str]
+) -> Dict[str, Dict[str, Any]]:
+    records = {}
+    report_date = _date_text(selection.get("report_date")) or ""
+    for group_name in ("l1", "b0"):
+        evaluated = _is_group_evaluated(selection, group_name)
+        source_hash = _group_source_hash(group_name, selection, report_identity)
+        group = selection.get(group_name)
+        method = group.get("method") if isinstance(group, Mapping) else None
+        records[group_name] = {
+            "status": "evaluated" if evaluated else "not_evaluated",
+            "source_hash": source_hash,
+            "report_identity": report_identity,
+            "algorithm_version": selection.get("algorithm_version"),
+            "method": method,
+            "first_source_hash": source_hash,
+            "first_attempted_at": frozen_at,
+            "attempted_at": frozen_at,
+            "frozen_at": frozen_at if evaluated else None,
+            "registration_status": (
+                _registration_status(report_date, frozen_at) if evaluated else "not_evaluated"
+            ),
+        }
+    return records
+
+
+def _legacy_group_freezes(selection: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    report_date = _date_text(selection.get("report_date")) or ""
+    report_identity = _selection_report_identity(selection)
+    source_hashes = selection.get("source_hashes")
+    source_hashes = source_hashes if isinstance(source_hashes, Mapping) else {}
+    attempted_at = selection.get("freeze_attempted_at") or selection.get("frozen_at")
+    records = {}
+    for group_name in ("l1", "b0"):
+        evaluated = _is_group_evaluated(selection, group_name)
+        frozen_at = selection.get("frozen_at") if evaluated else None
+        group = selection.get(group_name)
+        source_parts = {
+            "report_sha256": source_hashes.get("report_sha256"),
+            "archive_sha256": source_hashes.get("archive_sha256") if group_name == "b0" else None,
+            "selection": selection.get(group_name),
+        }
+        registration_status = selection.get("registration_status")
+        if evaluated and registration_status not in ("prospective", "retrospective"):
+            registration_status = _registration_status(report_date, frozen_at or attempted_at or "")
+        records[group_name] = {
+            "status": "evaluated" if evaluated else "not_evaluated",
+            "source_hash": _sha256(_compact_json(source_parts).encode("utf-8")),
+            "report_identity": report_identity,
+            "algorithm_version": selection.get("algorithm_version"),
+            "method": group.get("method") if isinstance(group, Mapping) else None,
+            "first_source_hash": _sha256(_compact_json(source_parts).encode("utf-8")),
+            "first_attempted_at": attempted_at,
+            "attempted_at": attempted_at,
+            "frozen_at": frozen_at,
+            "registration_status": registration_status if evaluated else "not_evaluated",
+            "legacy": True,
+        }
+    return records
+
+
+def _existing_group_freezes(selection: Mapping[str, Any]) -> Dict[str, Dict[str, Any]]:
+    raw = selection.get("group_freezes")
+    legacy = _legacy_group_freezes(selection)
+    if not isinstance(raw, Mapping):
+        return legacy
+    records = {}
+    for group_name in ("l1", "b0"):
+        item = raw.get(group_name)
+        if not isinstance(item, Mapping) or item.get("status") not in ("evaluated", "not_evaluated"):
+            records[group_name] = legacy[group_name]
+            continue
+        record = dict(item)
+        # If the old payload says evaluated, treat it as frozen even when metadata
+        # is incomplete. Missing metadata must never make an evaluated group mutable.
+        if _is_group_evaluated(selection, group_name) and record.get("status") != "evaluated":
+            records[group_name] = legacy[group_name]
+            continue
+        if not _is_sha256(record.get("source_hash")) or "frozen_at" not in record:
+            record["legacy"] = True
+        record.setdefault("report_identity", _selection_report_identity(selection))
+        record.setdefault("algorithm_version", selection.get("algorithm_version"))
+        group = selection.get(group_name)
+        record.setdefault("method", group.get("method") if isinstance(group, Mapping) else None)
+        record.setdefault("first_source_hash", record.get("source_hash"))
+        record.setdefault("first_attempted_at", record.get("attempted_at"))
+        record.setdefault("registration_status", "not_evaluated")
+        records[group_name] = record
+    return records
+
+
+def _timestamp_value(value: Any) -> Optional[datetime]:
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _first_fill_is_chronological(previous_attempt: Any, frozen_at: Any) -> bool:
+    previous = _timestamp_value(previous_attempt)
+    current = _timestamp_value(frozen_at)
+    return previous is not None and current is not None and current >= previous
+
+
+def _aggregate_registration_status(
+    group_freezes: Mapping[str, Mapping[str, Any]], report_date: str, fallback_time: str
+) -> str:
+    statuses = [
+        record.get("registration_status")
+        for record in group_freezes.values()
+        if isinstance(record, Mapping) and record.get("status") == "evaluated"
+    ]
+    if not statuses:
+        return _registration_status(report_date, fallback_time)
+    return "prospective" if all(status == "prospective" for status in statuses) else "retrospective"
+
+
+def _latest_group_freeze_time(
+    group_freezes: Mapping[str, Mapping[str, Any]], fallback: str
+) -> str:
+    candidates = [
+        record.get("frozen_at")
+        for record in group_freezes.values()
+        if isinstance(record, Mapping)
+        and record.get("status") == "evaluated"
+        and _timestamp_value(record.get("frozen_at")) is not None
+    ]
+    if not candidates:
+        return fallback
+    return max(candidates, key=lambda value: _timestamp_value(value))
+
+
+def _write_freeze_conflict(
+    date_dir: Path,
+    existing: Mapping[str, Any],
+    incoming: Mapping[str, Any],
+    group_conflicts: Sequence[Mapping[str, Any]],
+    reason: str,
+) -> Path:
+    report_date = str(incoming.get("report_date"))
+    conflict_key = {
+        "incoming_source_hash": incoming.get("source_hash"),
+        "incoming_report_identity": _selection_report_identity(incoming),
+        "groups": list(group_conflicts),
+        "reason": reason,
+    }
+    conflict_hash = _sha256(_compact_json(conflict_key).encode("utf-8"))
+    conflict_path = _conflict_path(date_dir, conflict_hash)
+    conflict = {
+        "report_date": report_date,
+        "recorded_at": _now_iso(),
+        "frozen_source_hash": existing.get("source_hash"),
+        "incoming_source_hash": incoming.get("source_hash"),
+        "frozen_report_identity": _selection_report_identity(existing),
+        "incoming_report_identity": _selection_report_identity(incoming),
+        "frozen_status": existing.get("freeze_status"),
+        "incoming_status": incoming.get("freeze_status"),
+        "groups": list(group_conflicts),
+        "reason": reason,
+    }
+    if not conflict_path.exists():
+        _write_json(conflict_path, conflict)
+    return conflict_path
+
+
 def freeze_selection(
     output_dir: Path,
     prepared: Mapping[str, Any],
     source_hash: str,
     frozen_at: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Freeze one report date; only an incomplete first attempt can be upgraded."""
+    """Freeze each research group independently for one proven report version."""
     report_date = _date_text(prepared.get("report_date"))
     if report_date is None:
         raise ResearchInputError("prepared selection has no valid report date")
@@ -763,34 +1057,185 @@ def freeze_selection(
     incoming["registration_status"] = _registration_status(report_date, frozen_at)
     incoming.setdefault("source_hashes", {})
     incoming["freeze_attempted_at"] = frozen_at
+    incoming["first_attempted_at"] = frozen_at
+    report_identity = _selection_report_identity(incoming)
+    incoming["report_identity"] = report_identity
+    incoming_contract = _selection_freeze_contract(incoming)
+    incoming["freeze_contract"] = incoming_contract
+    incoming["group_freezes"] = _new_group_freezes(incoming, frozen_at, report_identity)
+    incoming.pop("_group_input_hashes", None)
     with _date_lock(date_dir):
         if not selection_path.exists():
+            incoming["frozen_at"] = _latest_group_freeze_time(incoming["group_freezes"], frozen_at)
+            incoming["registration_status"] = _aggregate_registration_status(
+                incoming["group_freezes"], report_date, frozen_at
+            )
             _write_json(selection_path, incoming)
             return {"action": "created", "selection_path": str(selection_path)}
         try:
             existing = json.loads(selection_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise ResearchInputError("existing frozen selection cannot be read: {}".format(exc))
-        if existing.get("freeze_status") == "input_insufficient" and incoming.get("freeze_status") == "valid":
-            incoming["supersedes_source_hash"] = existing.get("source_hash")
-            incoming["first_attempted_at"] = existing.get("freeze_attempted_at") or existing.get("frozen_at")
-            _write_json(selection_path, incoming)
-            return {"action": "upgraded", "selection_path": str(selection_path)}
-        if existing.get("source_hash") == source_hash:
-            return {"action": "unchanged", "selection_path": str(selection_path)}
-        conflict = {
-            "report_date": report_date,
-            "recorded_at": _now_iso(),
-            "frozen_source_hash": existing.get("source_hash"),
-            "incoming_source_hash": str(source_hash),
-            "frozen_status": existing.get("freeze_status"),
-            "incoming_status": incoming.get("freeze_status"),
-            "reason": "frozen_selection_is_immutable",
-        }
-        conflict_path = _conflict_path(date_dir, str(source_hash))
-        if not conflict_path.exists():
-            _write_json(conflict_path, conflict)
-        return {"action": "conflict", "selection_path": str(selection_path), "conflict_path": str(conflict_path)}
+        existing_report_identity = _selection_report_identity(existing)
+        existing_contract = _selection_freeze_contract(existing)
+        same_contract = (
+            _valid_freeze_contract(existing_contract)
+            and _valid_freeze_contract(incoming_contract)
+            and _compact_json(existing_contract) == _compact_json(incoming_contract)
+        )
+        same_report = (
+            existing_report_identity is not None
+            and report_identity is not None
+            and existing_report_identity == report_identity
+        )
+        same_source = existing.get("source_hash") == str(source_hash)
+        old_group_freezes = _existing_group_freezes(existing)
+        has_frozen_group = any(
+            old_group_freezes[name].get("status") == "evaluated"
+            for name in ("l1", "b0")
+        )
+        merged = copy.deepcopy(incoming)
+        merged_groups: Dict[str, Dict[str, Any]] = {}
+        group_conflicts: List[Dict[str, Any]] = []
+        updated_groups = []
+
+        for group_name in ("l1", "b0"):
+            old_group = existing.get(group_name) if isinstance(existing.get(group_name), Mapping) else {}
+            new_group = incoming.get(group_name) if isinstance(incoming.get(group_name), Mapping) else {}
+            old_freeze = copy.deepcopy(old_group_freezes[group_name])
+            new_freeze = copy.deepcopy(incoming["group_freezes"][group_name])
+            old_evaluated = old_freeze.get("status") == "evaluated"
+            new_evaluated = new_freeze.get("status") == "evaluated"
+            legacy = old_freeze.get("legacy") is True
+            same_group = False
+            if same_contract and (same_report or same_source):
+                if legacy:
+                    same_group = _compact_json(old_group) == _compact_json(new_group)
+                else:
+                    same_group = old_freeze.get("source_hash") == new_freeze.get("source_hash")
+
+            if old_evaluated:
+                merged[group_name] = copy.deepcopy(old_group)
+                merged_groups[group_name] = old_freeze
+                if not same_group:
+                    group_conflicts.append(
+                        {
+                            "group": group_name,
+                            "reason": "evaluated_group_is_immutable",
+                            "frozen_status": old_freeze.get("status"),
+                            "incoming_status": new_freeze.get("status"),
+                            "frozen_source_hash": old_freeze.get("source_hash"),
+                            "incoming_source_hash": new_freeze.get("source_hash"),
+                        }
+                    )
+                continue
+
+            first_fill_has_identity = (
+                same_report and same_contract
+                if has_frozen_group
+                else report_identity is not None and _valid_freeze_contract(incoming_contract)
+            )
+            if new_evaluated and first_fill_has_identity and _first_fill_is_chronological(
+                old_freeze.get("attempted_at") or old_freeze.get("first_attempted_at"), frozen_at
+            ):
+                new_freeze["first_attempted_at"] = (
+                    old_freeze.get("first_attempted_at")
+                    or old_freeze.get("attempted_at")
+                    or frozen_at
+                )
+                new_freeze["first_source_hash"] = (
+                    old_freeze.get("first_source_hash") or old_freeze.get("source_hash")
+                )
+                new_freeze["attempted_at"] = frozen_at
+                new_freeze["frozen_at"] = frozen_at
+                new_freeze["registration_status"] = _registration_status(report_date, frozen_at)
+                new_freeze["supersedes"] = {
+                    "source_hash": old_freeze.get("source_hash"),
+                    "report_identity": old_freeze.get("report_identity"),
+                    "attempted_at": old_freeze.get("attempted_at")
+                    or old_freeze.get("first_attempted_at"),
+                }
+                new_freeze["supersedes_report_identity"] = (
+                    old_freeze.get("report_identity")
+                    if old_freeze.get("report_identity") != report_identity
+                    else None
+                )
+                new_freeze["legacy"] = False
+                merged[group_name] = copy.deepcopy(new_group)
+                merged_groups[group_name] = new_freeze
+                updated_groups.append(group_name)
+                continue
+
+            merged[group_name] = copy.deepcopy(old_group)
+            merged_groups[group_name] = old_freeze
+            if not same_group and (has_frozen_group or new_evaluated):
+                reason = (
+                    "selection_contract_changed"
+                    if not same_contract
+                    else "report_identity_unproven_or_changed"
+                    if not same_report
+                    else "group_first_fill_not_chronological"
+                    if new_evaluated
+                    else "group_inputs_changed_while_unavailable"
+                )
+                group_conflicts.append(
+                    {
+                        "group": group_name,
+                        "reason": reason,
+                        "frozen_status": old_freeze.get("status"),
+                        "incoming_status": new_freeze.get("status"),
+                        "frozen_source_hash": old_freeze.get("source_hash"),
+                        "incoming_source_hash": new_freeze.get("source_hash"),
+                    }
+                )
+
+        conflict_path = None
+        if group_conflicts:
+            reason = (
+                "frozen_group_contract_or_input_changed"
+                if has_frozen_group
+                else "first_valid_identity_unavailable"
+            )
+            conflict_path = _write_freeze_conflict(
+                date_dir, existing, incoming, group_conflicts, reason
+            )
+
+        if not updated_groups:
+            if not group_conflicts:
+                return {"action": "unchanged", "selection_path": str(selection_path)}
+            return {
+                "action": "conflict",
+                "selection_path": str(selection_path),
+                "conflict_path": str(conflict_path),
+            }
+
+        merged["group_freezes"] = merged_groups
+        merged["report_identity"] = report_identity or existing_report_identity
+        merged["source_hash"] = str(source_hash)
+        merged["source_hashes"] = incoming.get("source_hashes") or existing.get("source_hashes") or {}
+        merged["freeze_status"] = (
+            "valid" if _is_group_evaluated(merged, "l1") else "input_insufficient"
+        )
+        merged["first_attempted_at"] = (
+            existing.get("first_attempted_at")
+            or existing.get("freeze_attempted_at")
+            or existing.get("frozen_at")
+            or frozen_at
+        )
+        merged["freeze_attempted_at"] = frozen_at
+        merged["frozen_at"] = _latest_group_freeze_time(merged_groups, frozen_at)
+        merged["registration_status"] = _aggregate_registration_status(
+            merged_groups, report_date, frozen_at
+        )
+        merged["supersedes_source_hash"] = existing.get("source_hash")
+        if existing_report_identity != report_identity:
+            merged["supersedes_report_identity"] = existing_report_identity
+        _write_json(selection_path, merged)
+        result = {"action": "upgraded", "selection_path": str(selection_path)}
+        if conflict_path is not None:
+            result["action"] = "upgraded_with_conflict"
+            result["conflict_path"] = str(conflict_path)
+        return result
 
 
 def _read_archived_workbench(report_path: Path, report: Mapping[str, Any], report_date: str) -> Tuple[Any, Optional[str], Optional[str]]:
@@ -860,6 +1305,28 @@ def evaluate_frozen_selection(snapshot: Mapping[str, Any], db_path: Path, as_of_
     return _load_evaluator()(snapshot, db_path, as_of_date)
 
 
+def _group_freeze_info(selection: Mapping[str, Any], group_name: str) -> Dict[str, Any]:
+    group_freezes = selection.get("group_freezes")
+    record = group_freezes.get(group_name) if isinstance(group_freezes, Mapping) else None
+    group = selection.get(group_name)
+    if isinstance(record, Mapping) and record.get("status") == "evaluated":
+        registration_status = record.get("registration_status")
+        if registration_status not in ("prospective", "retrospective"):
+            registration_status = "retrospective"
+        return {
+            "registration_status": registration_status,
+            "frozen_at": record.get("frozen_at") if isinstance(record.get("frozen_at"), str) else None,
+        }
+    if isinstance(group, Mapping) and group.get("status") == "evaluated":
+        frozen_at = selection.get("frozen_at")
+        registration_status = selection.get("registration_status")
+        if registration_status not in ("prospective", "retrospective"):
+            report_date = _date_text(selection.get("report_date")) or ""
+            registration_status = _registration_status(report_date, frozen_at or "")
+        return {"registration_status": registration_status, "frozen_at": frozen_at}
+    return {"registration_status": "not_evaluated", "frozen_at": None}
+
+
 def _run_group(
     report_date: str,
     group_name: str,
@@ -869,9 +1336,12 @@ def _run_group(
     evaluator: Any,
 ) -> Dict[str, Any]:
     group = selection.get(group_name) or {}
+    freeze_info = _group_freeze_info(selection, group_name)
     if group.get("status") != "evaluated":
         return {
             "status": "not_evaluated",
+            "registration_status": freeze_info["registration_status"],
+            "frozen_at": freeze_info["frozen_at"],
             "reason": group.get("reason") or "selection_not_evaluated",
             "selected": [],
             "outcome_rows": [],
@@ -883,6 +1353,8 @@ def _run_group(
             "status": "evaluated_empty",
             "report_date": report_date,
             "as_of_date": as_of_date,
+            "registration_status": freeze_info["registration_status"],
+            "frozen_at": freeze_info["frozen_at"],
             "selected": [],
             "outcome_rows": [],
             "metrics": {"selected": 0, "observed_cc1": 0, "observed_oc1": 0},
@@ -895,6 +1367,8 @@ def _run_group(
         "status": result.get("status") or "evaluated",
         "report_date": result.get("report_date") or report_date,
         "as_of_date": result.get("as_of_date") or as_of_date,
+        "registration_status": freeze_info["registration_status"],
+        "frozen_at": freeze_info["frozen_at"],
         "selected": selected,
         "outcome_rows": result.get("outcome_rows") or [],
         "metrics": result.get("metrics") or {},
@@ -1150,12 +1624,20 @@ def _refresh_all(
             continue
         try:
             result = _refresh_date(date_dir, db_path, as_of_date, evaluator)
+            selection = result.get("selection") or {}
+            outcomes = result.get("outcomes") or {}
+            l1_freeze_info = _group_freeze_info(selection, "l1")
+            b0_freeze_info = _group_freeze_info(selection, "b0")
             refreshed.append({
                 "report_date": result["report_date"],
                 "status": result["status"],
-                "l1_status": (result.get("outcomes") or {}).get("l1", {}).get("status"),
-                "b0_status": (result.get("outcomes") or {}).get("b0", {}).get("status"),
-                "registration_status": result.get("selection", {}).get("registration_status"),
+                "l1_status": outcomes.get("l1", {}).get("status") or (selection.get("l1") or {}).get("status"),
+                "b0_status": outcomes.get("b0", {}).get("status") or (selection.get("b0") or {}).get("status"),
+                "registration_status": selection.get("registration_status"),
+                "l1_registration_status": outcomes.get("l1", {}).get("registration_status") or l1_freeze_info["registration_status"],
+                "b0_registration_status": outcomes.get("b0", {}).get("registration_status") or b0_freeze_info["registration_status"],
+                "l1_frozen_at": outcomes.get("l1", {}).get("frozen_at") or l1_freeze_info["frozen_at"],
+                "b0_frozen_at": outcomes.get("b0", {}).get("frozen_at") or b0_freeze_info["frozen_at"],
             })
         except Exception as exc:
             errors.append({"report_date": date_dir.name, "error": "{}: {}".format(type(exc).__name__, str(exc))})
@@ -1220,6 +1702,7 @@ def process_report(
     }
     source_hash = _sha256(_compact_json(source_hashes).encode("utf-8"))
     prepared["source_hashes"] = source_hashes
+    prepared["report_identity"] = source_hashes["report_sha256"]
     if archive_error:
         prepared["archive_read_status"] = archive_error
     freeze = freeze_selection(output_dir, prepared, source_hash, frozen_at=frozen_at)
@@ -1233,24 +1716,34 @@ def process_report(
         )
     except (OSError, ValueError):
         pass
-    if freeze["action"] == "conflict":
+    if freeze["action"] in ("conflict", "upgraded_with_conflict"):
         status = "conflict"
     elif refresh_errors:
         status = "partial_refresh"
-    elif prepared.get("freeze_status") == "input_insufficient":
+    elif not any(_is_group_evaluated(frozen_current, name) for name in ("l1", "b0")):
         status = "not_evaluated"
     else:
         status = "processed"
-    return {
+    l1_freeze_info = _group_freeze_info(frozen_current, "l1")
+    b0_freeze_info = _group_freeze_info(frozen_current, "b0")
+    result = {
         "status": status,
         "report_date": report_date,
         "as_of_date": as_of_date,
         "freeze_action": freeze["action"],
-        "l1_status": (current or {}).get("l1_status") or prepared["l1"]["status"],
-        "b0_status": (current or {}).get("b0_status") or prepared["b0"]["status"],
+        "l1_status": (current or {}).get("l1_status") or (frozen_current.get("l1") or {}).get("status"),
+        "b0_status": (current or {}).get("b0_status") or (frozen_current.get("b0") or {}).get("status"),
+        "registration_status": frozen_current.get("registration_status"),
+        "l1_registration_status": l1_freeze_info["registration_status"],
+        "b0_registration_status": b0_freeze_info["registration_status"],
+        "l1_frozen_at": l1_freeze_info["frozen_at"],
+        "b0_frozen_at": b0_freeze_info["frozen_at"],
         "selected_l1": len((frozen_current.get("l1") or {}).get("selected") or []),
         "selected_b0": len((frozen_current.get("b0") or {}).get("selected") or []),
         "refreshed_dates": [item["report_date"] for item in refreshed],
         "refresh_errors": refresh_errors,
         "selection_path": freeze["selection_path"],
     }
+    if freeze.get("conflict_path"):
+        result["conflict_path"] = freeze["conflict_path"]
+    return result

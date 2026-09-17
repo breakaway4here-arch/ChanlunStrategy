@@ -8,12 +8,13 @@ trading dates for each of at most five selected identities.
 from __future__ import annotations
 
 import copy
+import json
 import math
 import re
 import sqlite3
 import statistics
 from collections import Counter, defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from numbers import Real
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -27,6 +28,8 @@ MAX_SELECTIONS = 5
 _IDENTITY_RE = re.compile(r"^(SH|SZ|BJ)([0-9]{6})$")
 _IDENTITY_KEY_RE = re.compile(r"^stock\|(SH|SZ|BJ)\|([0-9]{6})$")
 _OHLC_COLUMNS = ("open", "high", "low", "close")
+_OFFICIAL_CLOSE_SOURCE = "official_close_snapshot:eastmoney"
+_PRECLOSE_MAX_BYTES = 64 * 1024 * 1024
 _BAR_COLUMNS = (
     "instrument_id",
     "ts",
@@ -286,6 +289,204 @@ def _validate_bar(rows: Sequence[Mapping[str, Any]]) -> Tuple[str, Optional[dict
 
 def _basis_is_raw(*bars: Optional[Mapping[str, Any]]) -> bool:
     return all(bar is not None and bar.get("adjustment") == "raw" for bar in bars)
+
+
+def _read_preclose_input(
+    evidence_root: Path,
+    trade_date: str,
+    cache: Dict[str, Optional[Mapping[str, Any]]],
+) -> Optional[Mapping[str, Any]]:
+    if trade_date in cache:
+        return cache[trade_date]
+    path = evidence_root / "preclose" / trade_date / "input.json"
+    try:
+        if not path.is_file() or path.stat().st_size > _PRECLOSE_MAX_BYTES:
+            cache[trade_date] = None
+            return None
+        with path.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        cache[trade_date] = None
+        return None
+    cache[trade_date] = payload if isinstance(payload, Mapping) else None
+    return cache[trade_date]
+
+
+def _qfq_bridge_proof(
+    evidence_root: Path,
+    preclose_cache: Dict[str, Optional[Mapping[str, Any]]],
+    exchange: str,
+    code: str,
+    trade_date: str,
+    previous_date: str,
+    previous_bar: Optional[Mapping[str, Any]],
+    final_bar: Mapping[str, Any],
+) -> dict:
+    """Verify one final qfq bar against its retained same-day quote bridge.
+
+    The preclose input is evidence only. The final ``bars_day`` row remains the
+    evaluated bar; only its same-day open must match the provisional qfq open,
+    because the official-close writer applies one factor to the full raw OHLC
+    while later high, low, and close values may legitimately move after 14:45.
+    """
+
+    def rejected(reason: str) -> dict:
+        return {"status": "unverified", "reason": reason}
+
+    if final_bar.get("adjustment") != "qfq":
+        return rejected("adjustment_chain_mismatch")
+    if final_bar.get("source_batch") != _OFFICIAL_CLOSE_SOURCE:
+        return rejected("final_bar_source_mismatch")
+    if previous_bar is None:
+        return rejected("previous_final_bar_missing")
+    if previous_bar.get("adjustment") != "qfq":
+        return rejected("adjustment_chain_mismatch")
+
+    payload = _read_preclose_input(evidence_root, trade_date, preclose_cache)
+    if payload is None:
+        return rejected("preclose_input_missing")
+    if (
+        payload.get("schema_version") != "preclose-input-v1"
+        or payload.get("mode") != "preclose_advisory"
+        or payload.get("trade_date") != trade_date
+        or payload.get("bar_state") != "intraday"
+        or payload.get("is_final") is not False
+    ):
+        return rejected("preclose_header_mismatch")
+    as_of = payload.get("as_of")
+    if not isinstance(as_of, str):
+        return rejected("preclose_header_mismatch")
+    try:
+        parsed_as_of = datetime.fromisoformat(as_of.replace("Z", "+00:00"))
+    except ValueError:
+        return rejected("preclose_header_mismatch")
+    if (
+        parsed_as_of.date().isoformat() != trade_date
+        or parsed_as_of.utcoffset() is None
+    ):
+        return rejected("preclose_header_mismatch")
+
+    diagnostics = payload.get("runtime_diagnostics")
+    quote_snapshot = diagnostics.get("quote_snapshot") if isinstance(diagnostics, Mapping) else None
+    if not isinstance(quote_snapshot, Mapping) or quote_snapshot.get("complete") is not True:
+        return rejected("quote_snapshot_incomplete")
+    counters = [quote_snapshot.get(key) for key in ("requested", "unique", "fetched")]
+    if any(isinstance(value, bool) or not isinstance(value, int) or value < 1 for value in counters):
+        return rejected("quote_snapshot_incomplete")
+    if len(set(counters)) != 1:
+        return rejected("quote_snapshot_incomplete")
+
+    daily_rows = payload.get("daily")
+    if not isinstance(daily_rows, list) or any(not isinstance(item, Mapping) for item in daily_rows):
+        return rejected("daily_identity_mismatch")
+    same_code_rows = [item for item in daily_rows if item.get("code") == code]
+    if (
+        len(same_code_rows) != 1
+        or same_code_rows[0].get("asset_type") != "stock"
+        or same_code_rows[0].get("exchange") != exchange
+        or same_code_rows[0].get("as_of") != as_of
+    ):
+        return rejected("daily_identity_mismatch")
+    daily = same_code_rows[0]
+    if daily.get("is_final") is not False or daily.get("bar_state") != "intraday":
+        return rejected("daily_evidence_unverified")
+
+    data_status = daily.get("data_status")
+    if (
+        not isinstance(data_status, Mapping)
+        or data_status.get("adjustment") != "qfq"
+        or data_status.get("daily") != "verified"
+        or data_status.get("is_final") is not True
+        or data_status.get("latest_date") != previous_date
+        or data_status.get("source") != "market_history_db"
+        or data_status.get("stale") is not False
+    ):
+        return rejected("daily_evidence_unverified")
+
+    basis = daily.get("price_basis")
+    if not isinstance(basis, Mapping) or basis.get("adjustment") != "qfq":
+        return rejected("price_basis_invalid")
+    factor = basis.get("factor_vs_raw")
+    adjusted_previous = basis.get("adjusted_previous_close")
+    raw_previous = basis.get("raw_previous_close")
+    adjusted_current = basis.get("adjusted_current_price")
+    raw_current = basis.get("raw_current_price")
+    if not _positive_price(factor) or not all(
+        _positive_price(value)
+        for value in (adjusted_previous, raw_previous, adjusted_current, raw_current)
+    ):
+        return rejected("price_basis_invalid")
+
+    market = payload.get("market")
+    stock_bars = market.get("stock_bars") if isinstance(market, Mapping) else None
+    if not isinstance(stock_bars, list) or any(not isinstance(item, Mapping) for item in stock_bars):
+        return rejected("raw_quote_mismatch")
+    raw_quote_rows = [item for item in stock_bars if item.get("code") == code]
+    if len(raw_quote_rows) != 1:
+        return rejected("raw_quote_mismatch")
+    raw_quote = raw_quote_rows[0]
+    if (
+        not _positive_price(raw_quote.get("prev_close"))
+        or not _positive_price(raw_quote.get("close"))
+        or not _close_enough(float(raw_quote["prev_close"]), float(raw_previous))
+        or not _close_enough(float(raw_quote["close"]), float(raw_current))
+        or not _close_enough(float(raw_previous) * float(factor), float(adjusted_previous))
+        or not _close_enough(float(raw_current) * float(factor), float(adjusted_current))
+        or not _close_enough(float(adjusted_previous), float(previous_bar.get("close")))
+    ):
+        return rejected("prior_close_anchor_mismatch")
+
+    klines = daily.get("klines")
+    if (
+        not isinstance(klines, Mapping)
+        or klines.get("adjustment") != "qfq"
+        or klines.get("source") != "formal_history+eastmoney_intraday"
+    ):
+        return rejected("intraday_kline_invalid")
+    dates = klines.get("dates")
+    arrays = {
+        key: klines.get(key)
+        for key in ("opens", "highs", "lows", "closes", "finals")
+    }
+    if (
+        not isinstance(dates, list)
+        or len(dates) < 2
+        or any(not isinstance(values, list) or len(values) != len(dates) for values in arrays.values())
+        or dates[-2] != previous_date
+        or dates[-1] != trade_date
+        or arrays["finals"][-2] is not True
+        or arrays["finals"][-1] is not False
+    ):
+        return rejected("intraday_kline_invalid")
+    prior_close = arrays["closes"][-2]
+    provisional_ohlc = [arrays[key][-1] for key in ("opens", "highs", "lows", "closes")]
+    if (
+        not _positive_price(prior_close)
+        or not _close_enough(float(prior_close), float(previous_bar.get("close")))
+        or not all(_positive_price(value) for value in provisional_ohlc)
+        or not _close_enough(float(arrays["closes"][-1]), float(adjusted_current))
+    ):
+        return rejected("intraday_kline_invalid")
+    provisional_open, provisional_high, provisional_low, provisional_close = map(float, provisional_ohlc)
+    if (
+        provisional_high < provisional_low
+        or provisional_low > provisional_open
+        or provisional_open > provisional_high
+        or provisional_low > provisional_close
+        or provisional_close > provisional_high
+    ):
+        return rejected("intraday_kline_invalid")
+    if not _close_enough(provisional_open, float(final_bar.get("open"))):
+        return rejected("open_anchor_mismatch")
+
+    return {
+        "status": "verified",
+        "method": "preclose-qfq-factor-open-anchor-v1",
+        "trade_date": trade_date,
+        "previous_date": previous_date,
+        "factor_vs_raw": float(factor),
+        "preclose_as_of": as_of,
+    }
 
 
 def _percent_change(start: Optional[float], end: Optional[float]) -> Optional[float]:
@@ -572,6 +773,8 @@ def _evaluate_cohort(
     connection: sqlite3.Connection,
     target_dates: Mapping[str, Optional[str]],
     registered: Mapping[Tuple[str, str], Sequence[int]],
+    evidence_root: Path,
+    preclose_cache: Dict[str, Optional[Mapping[str, Any]]],
 ) -> Tuple[List[dict], dict]:
     identities = []
     extracted = []
@@ -686,6 +889,32 @@ def _evaluate_cohort(
         t1 = bars.get("t1")
         t2 = bars.get("t2")
         t3 = bars.get("t3")
+        qfq_bridges = {}
+        exchange, code = row["identity"][:2], row["identity"][2:]
+        previous_labels = {
+            "t1": (report_date.isoformat(), signal),
+            "t2": (target_dates.get("t1"), t1),
+            "t3": (target_dates.get("t2"), t2),
+        }
+        for label, current_bar in (("t1", t1), ("t2", t2), ("t3", t3)):
+            if current_bar is None or current_bar.get("adjustment") != "qfq":
+                continue
+            previous_date, previous_bar = previous_labels[label]
+            if not isinstance(previous_date, str):
+                proof = {"status": "unverified", "reason": "previous_final_bar_missing"}
+            else:
+                proof = _qfq_bridge_proof(
+                    evidence_root,
+                    preclose_cache,
+                    exchange,
+                    code,
+                    current_bar["ts"],
+                    previous_date,
+                    previous_bar,
+                    current_bar,
+                )
+            qfq_bridges[label] = proof
+            row["bar_provenance"].setdefault(label, {})["basis_proof"] = proof
         if t1:
             row["open1"] = t1["open"]
             row["close1"] = t1["close"]
@@ -702,6 +931,15 @@ def _evaluate_cohort(
                 row["gap1"] = _percent_change(signal["close"], t1["open"])
                 row["basis_status_by_metric"]["cc1"] = "raw_comparable"
                 row["basis_status_by_metric"]["gap1"] = "raw_comparable"
+            elif (
+                signal.get("adjustment") == "qfq"
+                and t1.get("adjustment") == "qfq"
+                and qfq_bridges.get("t1", {}).get("status") == "verified"
+            ):
+                row["cc1"] = _percent_change(signal["close"], t1["close"])
+                row["gap1"] = _percent_change(signal["close"], t1["open"])
+                row["basis_status_by_metric"]["cc1"] = "qfq_comparable"
+                row["basis_status_by_metric"]["gap1"] = "qfq_comparable"
             else:
                 row["basis_status_by_metric"]["cc1"] = "price_basis_unverified"
                 row["basis_status_by_metric"]["gap1"] = "price_basis_unverified"
@@ -711,18 +949,31 @@ def _evaluate_cohort(
                 basis_status = "signal_bar_unavailable"
             row["basis_status_by_metric"]["cc1"] = basis_status
             row["basis_status_by_metric"]["gap1"] = basis_status
-        for label, target_bar in (("oc2", t2), ("oc3", t3)):
-            date_key = "t2" if label == "oc2" else "t3"
-            if row["maturity_status"][date_key] != "matured":
+        for label, target_label in (("oc2", "t2"), ("oc3", "t3")):
+            if row["maturity_status"][target_label] != "matured":
                 continue
-            if t1 and target_bar:
-                if _basis_is_raw(t1, target_bar):
+            target_bar = bars.get(target_label)
+            if not t1 or not target_bar:
+                row["basis_status_by_metric"][label] = "data_unavailable"
+            elif _basis_is_raw(t1, target_bar):
+                # Retain the existing raw-endpoint path contract. Intermediate
+                # raw bars are not needed to compare these unchanged raw prices.
+                row[label] = _percent_change(t1["open"], target_bar["close"])
+                row["basis_status_by_metric"][label] = "raw_comparable"
+            elif t1.get("adjustment") == "qfq" and target_bar.get("adjustment") == "qfq":
+                bridge_labels = ("t2",) if label == "oc2" else ("t2", "t3")
+                if label == "oc3" and not t2:
+                    row["basis_status_by_metric"][label] = "data_unavailable"
+                elif all(
+                    qfq_bridges.get(bridge_label, {}).get("status") == "verified"
+                    for bridge_label in bridge_labels
+                ):
                     row[label] = _percent_change(t1["open"], target_bar["close"])
-                    row["basis_status_by_metric"][label] = "raw_comparable"
+                    row["basis_status_by_metric"][label] = "qfq_comparable"
                 else:
                     row["basis_status_by_metric"][label] = "price_basis_unverified"
             else:
-                row["basis_status_by_metric"][label] = "data_unavailable"
+                row["basis_status_by_metric"][label] = "price_basis_unverified"
 
         crossdate_basis = [
             row["basis_status_by_metric"][key]
@@ -730,6 +981,8 @@ def _evaluate_cohort(
         ]
         if "price_basis_unverified" in crossdate_basis:
             row["basis_status"] = "price_basis_unverified"
+        elif "qfq_comparable" in crossdate_basis:
+            row["basis_status"] = "qfq_comparable"
         elif "raw_comparable" in crossdate_basis:
             row["basis_status"] = "raw_comparable"
         elif row["maturity_status"]["t1"] == "pending":
@@ -815,6 +1068,7 @@ def evaluate_frozen_selection(
     try:
         connection.execute("PRAGMA query_only = ON")
         connection.execute("BEGIN")
+        preclose_cache = {}
         _required_columns(
             connection,
             "instruments",
@@ -870,6 +1124,8 @@ def evaluate_frozen_selection(
             connection,
             target_dates,
             registered,
+            Path(database_path).parent,
+            preclose_cache,
         )
         result = {
             "status": "research_only",
@@ -890,6 +1146,8 @@ def evaluate_frozen_selection(
                 connection,
                 target_dates,
                 registered,
+                Path(database_path).parent,
+                preclose_cache,
             )
             result["baseline_outcome_rows"] = baseline_rows
             result["baseline_metrics"] = baseline_metrics
