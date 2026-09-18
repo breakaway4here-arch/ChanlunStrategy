@@ -1,0 +1,65 @@
+# 问财 Skills 本地调用约定
+
+适用于 ChanlunStrategy 内的 Agent 与命令行调用；文件内容按 Markdown 格式阅读。
+
+## 密钥与环境
+
+- `IWENCAI_BASE_URL` 和 `IWENCAI_API_KEY` 优先从当前进程环境读取。
+- 未导出 `IWENCAI_API_KEY` 时，脚本才加载 `${IWENCAI_PROFILE:-$HOME/.zshrc}` 作为本地回退。
+- 凭证配置文件权限必须保持为 `600`，且不得提交到仓库。
+- 密钥不得写入仓库文件、日报 JSON、日志、命令行参数或截图。
+- 调用时不传 `--api-key`，统一从环境变量读取。
+
+可移植路径覆盖：
+
+- `IWENCAI_PROFILE`：本地凭证 profile；默认 `$HOME/.zshrc`。
+- `IWENCAI_SKILLS_ROOT`：Skills 根目录；默认 `${CODEX_HOME:-$HOME/.codex}/skills`。
+- `IWENCAI_PYTHON_BIN`：Python 解释器；默认 `/usr/bin/python3`。
+
+## 统一调用入口
+
+从仓库根目录调用：
+
+```bash
+./scripts/run_iwencai_skill.sh <skill-name> [skill arguments...]
+```
+
+公告搜索示例：
+
+```bash
+./scripts/run_iwencai_skill.sh announcement-search "贵州茅台最新公告" --size 10
+```
+
+结构化行情查询示例：
+
+```bash
+./scripts/run_iwencai_skill.sh hithink-market-query --query "贵州茅台最新价" --limit 10
+```
+
+脚本默认使用 `/usr/bin/python3`，可通过 `IWENCAI_PYTHON_BIN` 覆盖。只有当前进程未导出 `IWENCAI_API_KEY` 时才加载本地 profile，避免无关交互配置进入自动化进程。
+
+## 已允许的 Skills
+
+| Skill | 用途 | 参数形式 |
+| --- | --- | --- |
+| `news-search` | 财经新闻 | `"query" --size 10` |
+| `announcement-search` | 公司公告 | `"query" --size 10` |
+| `report-search` | 研报搜索 | `"query" --size 10` |
+| `hithink-event-query` | 业绩预告、质押、解禁、调研、监管函 | `--query "query" --limit 10` |
+| `hithink-market-query` | 股票、ETF 与实时行情 | `--query "query" --limit 10` |
+| `hithink-zhishu-query` | 指数行情 | `--query "query" --limit 10` |
+| `hithink-industry-query` | 行业行情与估值 | `--query "query" --limit 10` |
+| `hithink-sector-selector` | 板块筛选 | `--query "query" --limit 10` |
+| `hithink-finance-query` | 财务指标 | `--query "query" --limit 10` |
+| `hithink-business-query` | 主营、客户、供应商与重大合同 | `--query "query" --limit 10` |
+
+未启用：`hithink-insresearch-query`（机构研究与评级）、`hithink-management-query`（公司股东股本）。
+
+## 后续 Agent 调用规则
+
+1. 用户的问题命中上述能力时，直接使用对应 skill，不再索取 API Key。
+2. 优先通过本文件记录的统一入口调用，避免密钥出现在命令历史和工具输出中。
+3. 返回结果必须注明数据来源为“同花顺问财”，并保留查询日期和原始数据日期。
+4. 行业数据必须校验一级、二级或三级行业口径；不得混层汇总。
+5. 问财数据当前作为研究证据或交叉核验，不直接覆盖正式选股池、PSY12 正式数据源或市场情绪正式权重。
+6. 本入口不得进入 14:47 预跑、正式日报生成或其他正式选股关键路径；供应商失败只能影响本次研究查询。
