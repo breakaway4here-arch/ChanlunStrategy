@@ -171164,8 +171164,1064 @@
         "key_signal": "未出现明显背驰信号",
         "conclusion": "无中枢"
       },
-      "picks_pure": [],
-      "picks_fusion": [],
+      "picks_pure": [
+        {
+          "code": "301075",
+          "name": "多瑞医药",
+          "signal_tier": "candidate",
+          "source_channel": "low_position",
+          "tier": "candidate",
+          "category": "A",
+          "quality_tier": "",
+          "view": "main",
+          "reference_type": "",
+          "price_basis": null,
+          "watch_anchor": null,
+          "change_pct": 5.32,
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 119,
+            "price": 68.53,
+            "date": "",
+            "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min两阳夹一阴确认"
+            ],
+            "confirmation_evidence": {
+              "schema_version": 1,
+              "sufficient_bars": true,
+              "ema_bullish_alignment": true,
+              "close_above_ema5": true,
+              "ema5_rising_bars": 8,
+              "recent_peak_drawdown_pct": 1.735016,
+              "macd_hist_direction": "weakening",
+              "ema5_reclaim": false,
+              "stop_fall": false,
+              "buy_point": null,
+              "fresh_yang_pattern": "two_yang_one_yin",
+              "recovery_bundle_match": false
+            },
+            "daily_startup_grade": "strong",
+            "daily_startup_label": "强启动",
+            "daily_startup_warning": "",
+            "sublevel_confirm_grade": "A",
+            "sublevel_confirm_label": "A级确认",
+            "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-09-21",
+            "startup_index": 119,
+            "startup_date": "2026-09-21",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-09-21 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "break_20d_high",
+              "实体阳线≥3%"
+            ],
+            "change_pct": 5.32,
+            "volume_ratio": 1.68
+          },
+          "gf_dma_health": {
+            "code": "301075",
+            "name": "多瑞医药",
+            "label": "趋势健康",
+            "score": 76.0,
+            "trend_stage": "repairing",
+            "ma": {
+              "ma20": 59.628,
+              "ma50": 56.068,
+              "ma100": 64.1004,
+              "ma200": null
+            },
+            "distance_pct": {
+              "vs_ma20": 14.93,
+              "vs_ma50": 22.23,
+              "vs_ma100": 6.91,
+              "vs_ma200": null
+            },
+            "alignment": "repairing",
+            "extension_level": "warm",
+            "pullback_health": "healthy",
+            "fomo_risk": "low",
+            "risk_flags": [
+              "价格偏离20日线中等，回撤容忍度下降"
+            ],
+            "positive_flags": [
+              "放量上攻，量比1.22",
+              "价格位于MA20之上，具修复属性",
+              "回调后仍在MA20/MA50上方"
+            ],
+            "summary": "均线由弱转强，修复中，价格偏离20日线中等，回撤容忍度下降，回撤healthy。",
+            "data_quality": "insufficient_200"
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "无中枢",
+          "score": 35.2,
+          "market_cap": 54.824,
+          "circulating_market_cap": 38.788,
+          "float_market_cap": 38.788,
+          "money20": null,
+          "liquidity_source": "missing",
+          "liquidity_window_bars": 0,
+          "industry": "",
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "301075",
+            "name": "多瑞医药",
+            "decision": "不推荐",
+            "decision_code": "reject",
+            "total_score": 29,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "未形成中枢/尚无趋势结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": -10,
+              "reasons": [
+                "120日收盘分位偏高"
+              ]
+            },
+            "sentiment": {
+              "score": 29,
+              "reasons": [
+                "板块热点",
+                "放量启动",
+                "震荡市",
+                "趋势健康度偏弱",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": []
+          },
+          "position_distance_pct": 0.0,
+          "position_reference_price": 68.53,
+          "position_reference_type": "low_position_channel:日线强势启动",
+          "position_data_status": "verified",
+          "position_evidence_date": "2026-09-21",
+          "position_absolute_percentile": 67.0833,
+          "position_absolute_window": 120,
+          "sector": "医药生物",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 119,
+              "price": 68.53,
+              "date": "",
+              "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 45,
+              "price": 68.17,
+              "date": "2026-06-08",
+              "reason": "swing笔底背驰(力度比=42.41%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null,
+          "opportunity_score": 36,
+          "watch_score": 36,
+          "view_rank": 1,
+          "rank_trace": {
+            "base_source": "baseline",
+            "source_count": 1,
+            "signal_score": 2.82,
+            "entry_score": 16.0,
+            "momentum_score": 7.98,
+            "market_score": 6.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 0.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "30min确认",
+                "ma_bullish": false,
+                "confirmations": [
+                  "30min两阳夹一阴确认"
+                ],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": 0.0
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": null,
+                "volume_ratio20": null,
+                "display_volume_ratio20": null,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "unavailable",
+                "volume_evidence_status": "missing",
+                "liquidity_label": "待数量核验",
+                "liquidity_score": 0.0,
+                "code_style_score": 100.0,
+                "growth_board_score": 80.0,
+                "growth_board_label": "创业板弹性",
+                "market_cap_score": 100.0,
+                "market_cap_label": "强弹性流通市值",
+                "market_cap_source": "circulating_market_cap",
+                "ret20": null,
+                "ret20_score": 0.0,
+                "industry_key": "医药生物",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 0.0,
+                    "evaluated": false,
+                    "status": "missing",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 80.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 100.0,
+                    "source": "circulating_market_cap"
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 0.0
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 28.0,
+                "pool_quality_tags": [
+                  "创业板弹性",
+                  "强弹性流通市值"
+                ],
+                "market_cap": 54.824,
+                "circulating_market_cap": 38.788,
+                "float_market_cap": 38.788,
+                "liquidity_source": "missing",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "missing",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 2.8,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 28.0,
+            "pool_quality_tags": [
+              "创业板弹性",
+              "强弹性流通市值"
+            ],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 80.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0035,
+            "base_opportunity_score": 33,
+            "risk_flags": [],
+            "opportunity_score": 36,
+            "distance_from_reference_pct": 0.0,
+            "change_pct": 5.32,
+            "source:baseline": 1,
+            "selected_reason": "基准池单源入榜"
+          }
+        },
+        {
+          "code": "003021",
+          "name": "兆威机电",
+          "signal_tier": "candidate",
+          "source_channel": "low_position",
+          "tier": "candidate",
+          "category": "A",
+          "quality_tier": "",
+          "view": "main",
+          "reference_type": "",
+          "price_basis": null,
+          "watch_anchor": null,
+          "change_pct": 1.19,
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 119,
+            "price": 70.60019937694705,
+            "date": "",
+            "reason": "处于60日低位区间；放量1.5倍；站上MA5/MA10",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min两阳夹一阴确认"
+            ],
+            "confirmation_evidence": {
+              "schema_version": 1,
+              "sufficient_bars": true,
+              "ema_bullish_alignment": true,
+              "close_above_ema5": false,
+              "ema5_rising_bars": 0,
+              "recent_peak_drawdown_pct": 2.690645,
+              "macd_hist_direction": "weakening",
+              "ema5_reclaim": false,
+              "stop_fall": false,
+              "buy_point": null,
+              "fresh_yang_pattern": "two_yang_one_yin",
+              "recovery_bundle_match": false
+            },
+            "daily_startup_grade": "weak",
+            "daily_startup_label": "弱启动确认",
+            "daily_startup_warning": "涨幅较小，属于观察型启动，不是追涨启动",
+            "sublevel_confirm_grade": "B",
+            "sublevel_confirm_label": "B级确认",
+            "sublevel_confirm_reason": "30分钟结构确认: 30min两阳夹一阴确认",
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-09-21",
+            "startup_index": 119,
+            "startup_date": "2026-09-21",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-09-21 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "处于60日低位区间；放量1.5倍；站上MA5/MA10",
+            "startup_signals": [
+              "close_above_ma5",
+              "close_above_ma10"
+            ],
+            "change_pct": 1.19,
+            "volume_ratio": 1.52
+          },
+          "gf_dma_health": {
+            "code": "003021",
+            "name": "兆威机电",
+            "label": "结构破坏",
+            "score": 0.0,
+            "trend_stage": "broken",
+            "ma": {
+              "ma20": 71.5732,
+              "ma50": 75.4541,
+              "ma100": 87.0228,
+              "ma200": null
+            },
+            "distance_pct": {
+              "vs_ma20": -1.36,
+              "vs_ma50": -6.43,
+              "vs_ma100": -18.87,
+              "vs_ma200": null
+            },
+            "alignment": "broken",
+            "extension_level": "normal",
+            "pullback_health": "broken_down",
+            "fomo_risk": "low",
+            "risk_flags": [],
+            "positive_flags": [
+              "趋势结构尚未触发明显风险"
+            ],
+            "summary": "跌破MA100，结构偏弱，未见明显短线异动，回撤broken_down。",
+            "data_quality": "insufficient_200"
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "无中枢",
+          "score": 35.2,
+          "market_cap": 207.4693,
+          "circulating_market_cap": 160.8069,
+          "float_market_cap": 160.8069,
+          "money20": null,
+          "liquidity_source": "missing",
+          "liquidity_window_bars": 0,
+          "industry": "",
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "003021",
+            "name": "兆威机电",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 53,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "未形成中枢/尚无趋势结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 35,
+              "reasons": [
+                "120日收盘分位低位"
+              ]
+            },
+            "sentiment": {
+              "score": 8,
+              "reasons": [
+                "放量启动",
+                "震荡市",
+                "趋势健康度偏弱",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": []
+          },
+          "position_distance_pct": 0.0,
+          "position_reference_price": 70.6002,
+          "position_reference_type": "low_position_channel:日线强势启动",
+          "position_data_status": "verified",
+          "position_evidence_date": "2026-09-21",
+          "position_absolute_percentile": 8.75,
+          "position_absolute_window": 120,
+          "sector": "电机Ⅱ",
+          "resonance": {},
+          "ma_bullish": false,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "",
+          "fusion_admission": {},
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 119,
+              "price": 70.60019937694705,
+              "date": "",
+              "reason": "处于60日低位区间；放量1.5倍；站上MA5/MA10",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 75,
+              "price": 72.5,
+              "date": "2026-07-20",
+              "reason": "swing笔底背驰(力度比=52.01%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null,
+          "opportunity_score": 30,
+          "watch_score": 30,
+          "view_rank": 2,
+          "rank_trace": {
+            "base_source": "baseline",
+            "source_count": 1,
+            "signal_score": 2.82,
+            "entry_score": 16.0,
+            "momentum_score": 1.78,
+            "market_score": 6.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 0.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "30min确认",
+                "ma_bullish": false,
+                "confirmations": [
+                  "30min两阳夹一阴确认"
+                ],
+                "startup_signals": [
+                  "close_above_ma5",
+                  "close_above_ma10"
+                ],
+                "distance": 0.0
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": null,
+                "volume_ratio20": null,
+                "display_volume_ratio20": null,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "unavailable",
+                "volume_evidence_status": "missing",
+                "liquidity_label": "待数量核验",
+                "liquidity_score": 0.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 100.0,
+                "market_cap_label": "强弹性流通市值",
+                "market_cap_source": "circulating_market_cap",
+                "ret20": null,
+                "ret20_score": 0.0,
+                "industry_key": "电机Ⅱ",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 0.0,
+                    "evaluated": false,
+                    "status": "missing",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 100.0,
+                    "source": "circulating_market_cap"
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 0.0
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 0.0,
+                "pool_quality_tags": [
+                  "强弹性流通市值"
+                ],
+                "market_cap": 207.4693,
+                "circulating_market_cap": 160.8069,
+                "float_market_cap": 160.8069,
+                "liquidity_source": "missing",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "missing",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "startup_signals": [
+                "close_above_ma5",
+                "close_above_ma10"
+              ]
+            },
+            "alpha_bonus": 2.6,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 0.0,
+            "pool_quality_tags": [
+              "强弹性流通市值"
+            ],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0032,
+            "base_opportunity_score": 27,
+            "risk_flags": [],
+            "opportunity_score": 30,
+            "distance_from_reference_pct": 0.0,
+            "change_pct": 1.19,
+            "source:baseline": 1,
+            "selected_reason": "基准池单源入榜"
+          }
+        }
+      ],
+      "picks_fusion": [
+        {
+          "code": "301075",
+          "name": "多瑞医药",
+          "signal_tier": "candidate",
+          "source_channel": "low_position",
+          "tier": "candidate",
+          "category": "A",
+          "quality_tier": "",
+          "view": "main",
+          "reference_type": "",
+          "price_basis": null,
+          "watch_anchor": null,
+          "change_pct": 5.32,
+          "best_buy_point": {
+            "type": "强势启动候选",
+            "tier": "candidate",
+            "index": 119,
+            "price": 68.53,
+            "date": "",
+            "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+            "strength": "中",
+            "source_type": "日线强势启动",
+            "confirmed_by": "30min确认",
+            "confirmations": [
+              "30min两阳夹一阴确认"
+            ],
+            "confirmation_evidence": {
+              "schema_version": 1,
+              "sufficient_bars": true,
+              "ema_bullish_alignment": true,
+              "close_above_ema5": true,
+              "ema5_rising_bars": 8,
+              "recent_peak_drawdown_pct": 1.735016,
+              "macd_hist_direction": "weakening",
+              "ema5_reclaim": false,
+              "stop_fall": false,
+              "buy_point": null,
+              "fresh_yang_pattern": "two_yang_one_yin",
+              "recovery_bundle_match": false
+            },
+            "daily_startup_grade": "strong",
+            "daily_startup_label": "强启动",
+            "daily_startup_warning": "",
+            "sublevel_confirm_grade": "A",
+            "sublevel_confirm_label": "A级确认",
+            "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+            "seed_type": "",
+            "seed_reason": "",
+            "signal_age_days": 0,
+            "is_recent": true,
+            "recency_reason": "信号发生在最近0个交易日内",
+            "signal_date": "2026-09-21",
+            "startup_index": 119,
+            "startup_date": "2026-09-21",
+            "startup_age_days": 0,
+            "confirm_index": 79,
+            "confirm_date": "2026-09-21 15:00:00",
+            "confirm_age_days": 0,
+            "reference_price": null,
+            "current_price": null,
+            "distance_from_reference_pct": null,
+            "startup_reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+            "startup_signals": [
+              "涨幅≥4.0%",
+              "close_above_ma5",
+              "close_above_ma10",
+              "break_20d_high",
+              "实体阳线≥3%"
+            ],
+            "change_pct": 5.32,
+            "volume_ratio": 1.68
+          },
+          "gf_dma_health": {
+            "code": "301075",
+            "name": "多瑞医药",
+            "label": "趋势健康",
+            "score": 76.0,
+            "trend_stage": "repairing",
+            "ma": {
+              "ma20": 59.628,
+              "ma50": 56.068,
+              "ma100": 64.1004,
+              "ma200": null
+            },
+            "distance_pct": {
+              "vs_ma20": 14.93,
+              "vs_ma50": 22.23,
+              "vs_ma100": 6.91,
+              "vs_ma200": null
+            },
+            "alignment": "repairing",
+            "extension_level": "warm",
+            "pullback_health": "healthy",
+            "fomo_risk": "low",
+            "risk_flags": [
+              "价格偏离20日线中等，回撤容忍度下降"
+            ],
+            "positive_flags": [
+              "放量上攻，量比1.22",
+              "价格位于MA20之上，具修复属性",
+              "回调后仍在MA20/MA50上方"
+            ],
+            "summary": "均线由弱转强，修复中，价格偏离20日线中等，回撤容忍度下降，回撤healthy。",
+            "data_quality": "insufficient_200"
+          },
+          "buy_points_30min": [],
+          "pivots": {},
+          "trend_type": "无中枢",
+          "score": 52.0,
+          "market_cap": 54.824,
+          "circulating_market_cap": 38.788,
+          "float_market_cap": 38.788,
+          "money20": null,
+          "liquidity_source": "missing",
+          "liquidity_window_bars": 0,
+          "industry": "",
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "301075",
+            "name": "多瑞医药",
+            "decision": "不推荐",
+            "decision_code": "reject",
+            "total_score": 37,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "未形成中枢/尚无趋势结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": -10,
+              "reasons": [
+                "120日收盘分位偏高"
+              ]
+            },
+            "sentiment": {
+              "score": 37,
+              "reasons": [
+                "板块热点",
+                "放量启动",
+                "震荡市",
+                "MA 均线多头",
+                "趋势健康度偏弱",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": []
+          },
+          "position_distance_pct": 0.0,
+          "position_reference_price": 68.53,
+          "position_reference_type": "low_position_channel:日线强势启动",
+          "position_data_status": "verified",
+          "position_evidence_date": "2026-09-21",
+          "position_absolute_percentile": 67.0833,
+          "position_absolute_window": 120,
+          "sector": "医药生物",
+          "resonance": {},
+          "ma_bullish": true,
+          "stop_loss": null,
+          "stop_loss_pct": null,
+          "trailing_targets": [],
+          "is_active": false,
+          "market_trend": "",
+          "version": "",
+          "market_regime": "strong",
+          "fusion_admission": {
+            "passed": true,
+            "reason": "强势启动候选强市通过",
+            "admission_regime": "strong",
+            "market_regime": "strong"
+          },
+          "buy_points": [
+            {
+              "type": "强势启动候选",
+              "tier": "candidate",
+              "index": 119,
+              "price": 68.53,
+              "date": "",
+              "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+              "strength": "中",
+              "source_type": "日线强势启动",
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹一阴确认"
+              ],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "reference_buy_points": [
+            {
+              "type": "swing底背驰参考",
+              "tier": "reference",
+              "index": 45,
+              "price": 68.17,
+              "date": "2026-06-08",
+              "reason": "swing笔底背驰(力度比=42.41%)，仅供参考",
+              "strength": "弱",
+              "source_type": "",
+              "confirmed_by": "",
+              "confirmations": [],
+              "confirmation_evidence": {},
+              "daily_startup_grade": "",
+              "daily_startup_label": "",
+              "daily_startup_warning": "",
+              "sublevel_confirm_grade": "",
+              "sublevel_confirm_label": "",
+              "sublevel_confirm_reason": "",
+              "seed_type": "",
+              "seed_reason": "",
+              "signal_age_days": null,
+              "is_recent": true,
+              "recency_reason": "",
+              "signal_date": "",
+              "startup_index": null,
+              "startup_date": "",
+              "startup_age_days": null,
+              "confirm_index": null,
+              "confirm_date": "",
+              "confirm_age_days": null,
+              "reference_price": null,
+              "current_price": null,
+              "distance_from_reference_pct": null,
+              "startup_reason": "",
+              "startup_signals": [],
+              "change_pct": null,
+              "volume_ratio": null
+            }
+          ],
+          "blocked_buy_points": [],
+          "pivot_zg": null,
+          "pivot_zd": null
+        }
+      ],
       "sector_flow": [
         {
           "code": "BK1216",
@@ -171257,7 +172313,7 @@
       "sector_heat": {
         "schema_version": 1,
         "date": "2026-09-21",
-        "as_of": "2026-09-21T15:05:08+08:00",
+        "as_of": "2026-09-21T15:20:10+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial",
         "items": [
@@ -171781,7 +172837,7 @@
             "limit_up_count": 22,
             "net_flow": 6742499840.0,
             "net_flow_text": "67.42亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -171845,7 +172901,7 @@
             "limit_up_count": 2,
             "net_flow": 2438010624.0,
             "net_flow_text": "24.38亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -171994,7 +173050,7 @@
             "limit_up_count": 1,
             "net_flow": 1171536368.0,
             "net_flow_text": "11.72亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -172462,7 +173518,7 @@
             "limit_up_count": 10,
             "net_flow": 1373880576.0,
             "net_flow_text": "13.74亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -172553,7 +173609,7 @@
             "limit_up_count": 1,
             "net_flow": 1146136576.0,
             "net_flow_text": "11.46亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -172659,7 +173715,7 @@
             "limit_up_count": 2,
             "net_flow": 2599397888.0,
             "net_flow_text": "25.99亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           },
@@ -172755,7 +173811,7 @@
             "limit_up_count": 2,
             "net_flow": 1287000064.0,
             "net_flow_text": "12.87亿",
-            "as_of": "2026-09-21T15:05:08+08:00",
+            "as_of": "2026-09-21T15:20:10+08:00",
             "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
             "status": "verified_partial"
           }
@@ -172838,7 +173894,7 @@
           "sector": "房地产服",
           "lianban": 1,
           "first_time": "09:25",
-          "fund": 2670413,
+          "fund": 3044145,
           "zhaban": 0
         },
         {
@@ -172849,7 +173905,7 @@
           "sector": "服装家纺",
           "lianban": 3,
           "first_time": "09:25",
-          "fund": 4466064,
+          "fund": 5398128,
           "zhaban": 1
         },
         {
@@ -172860,7 +173916,7 @@
           "sector": "小金属",
           "lianban": 1,
           "first_time": "09:25",
-          "fund": 3947630,
+          "fund": 4722165,
           "zhaban": 1
         },
         {
@@ -172871,7 +173927,7 @@
           "sector": "出版",
           "lianban": 1,
           "first_time": "09:25",
-          "fund": 105502660,
+          "fund": 109185364,
           "zhaban": 0
         },
         {
@@ -172882,7 +173938,7 @@
           "sector": "出版",
           "lianban": 4,
           "first_time": "09:25",
-          "fund": 8801605,
+          "fund": 8924694,
           "zhaban": 3
         },
         {
@@ -172926,7 +173982,7 @@
           "sector": "冶钢原料",
           "lianban": 2,
           "first_time": "09:30",
-          "fund": 4573128,
+          "fund": 5087556,
           "zhaban": 0
         },
         {
@@ -172959,7 +174015,7 @@
           "sector": "半导体",
           "lianban": 2,
           "first_time": "09:30",
-          "fund": 2318868,
+          "fund": 3385584,
           "zhaban": 2
         },
         {
@@ -172970,7 +174026,7 @@
           "sector": "出版",
           "lianban": 2,
           "first_time": "09:30",
-          "fund": 2553430,
+          "fund": 2677279,
           "zhaban": 6
         },
         {
@@ -172992,7 +174048,7 @@
           "sector": "纺织制造",
           "lianban": 3,
           "first_time": "09:31",
-          "fund": 3039257,
+          "fund": 2861095,
           "zhaban": 3
         },
         {
@@ -173003,7 +174059,7 @@
           "sector": "化学制药",
           "lianban": 1,
           "first_time": "09:31",
-          "fund": 30904500,
+          "fund": 30477975,
           "zhaban": 1
         },
         {
@@ -173014,7 +174070,7 @@
           "sector": "塑料",
           "lianban": 1,
           "first_time": "09:31",
-          "fund": 3483511,
+          "fund": 3361910,
           "zhaban": 1
         },
         {
@@ -173047,7 +174103,7 @@
           "sector": "医疗服务",
           "lianban": 1,
           "first_time": "09:32",
-          "fund": 10116406,
+          "fund": 10146403,
           "zhaban": 1
         },
         {
@@ -173069,7 +174125,7 @@
           "sector": "半导体",
           "lianban": 2,
           "first_time": "09:34",
-          "fund": 5381791,
+          "fund": 5329243,
           "zhaban": 10
         },
         {
@@ -173102,7 +174158,7 @@
           "sector": "IT服务Ⅱ",
           "lianban": 1,
           "first_time": "09:34",
-          "fund": 481208,
+          "fund": 487032,
           "zhaban": 3
         },
         {
@@ -173124,7 +174180,7 @@
           "sector": "化学原料",
           "lianban": 1,
           "first_time": "09:35",
-          "fund": 3273174,
+          "fund": 4419034,
           "zhaban": 2
         },
         {
@@ -173135,7 +174191,7 @@
           "sector": "一般零售",
           "lianban": 2,
           "first_time": "09:36",
-          "fund": 10305144,
+          "fund": 11057886,
           "zhaban": 3
         },
         {
@@ -173146,7 +174202,7 @@
           "sector": "服装家纺",
           "lianban": 2,
           "first_time": "09:36",
-          "fund": 428978,
+          "fund": 427831,
           "zhaban": 5
         },
         {
@@ -173157,7 +174213,7 @@
           "sector": "汽车零部",
           "lianban": 1,
           "first_time": "09:37",
-          "fund": 413500,
+          "fund": 419289,
           "zhaban": 4
         },
         {
@@ -173168,7 +174224,7 @@
           "sector": "通用设备",
           "lianban": 1,
           "first_time": "09:38",
-          "fund": 497501,
+          "fund": 515859,
           "zhaban": 15
         },
         {
@@ -173190,7 +174246,7 @@
           "sector": "化学制药",
           "lianban": 1,
           "first_time": "09:40",
-          "fund": 2789800,
+          "fund": 2750025,
           "zhaban": 2
         },
         {
@@ -173201,7 +174257,7 @@
           "sector": "小金属",
           "lianban": 1,
           "first_time": "09:41",
-          "fund": 1298784,
+          "fund": 1298286,
           "zhaban": 0
         },
         {
@@ -173212,7 +174268,7 @@
           "sector": "汽车零部",
           "lianban": 1,
           "first_time": "09:42",
-          "fund": 608202,
+          "fund": 534188,
           "zhaban": 5
         },
         {
@@ -173234,7 +174290,7 @@
           "sector": "游戏Ⅱ",
           "lianban": 1,
           "first_time": "09:45",
-          "fund": 1006071,
+          "fund": 1054317,
           "zhaban": 0
         },
         {
@@ -173256,7 +174312,7 @@
           "sector": "专用设备",
           "lianban": 1,
           "first_time": "09:49",
-          "fund": 639936,
+          "fund": 662112,
           "zhaban": 1
         },
         {
@@ -173267,7 +174323,7 @@
           "sector": "通信设备",
           "lianban": 1,
           "first_time": "09:49",
-          "fund": 2770768,
+          "fund": 2844985,
           "zhaban": 2
         },
         {
@@ -173289,7 +174345,7 @@
           "sector": "专用设备",
           "lianban": 1,
           "first_time": "09:50",
-          "fund": 528653,
+          "fund": 581203,
           "zhaban": 6
         },
         {
@@ -173300,7 +174356,7 @@
           "sector": "旅游及景",
           "lianban": 1,
           "first_time": "09:51",
-          "fund": 864546,
+          "fund": 1151109,
           "zhaban": 27
         },
         {
@@ -173311,7 +174367,7 @@
           "sector": "一般零售",
           "lianban": 1,
           "first_time": "09:53",
-          "fund": 3879430,
+          "fund": 4093945,
           "zhaban": 0
         },
         {
@@ -173366,7 +174422,7 @@
           "sector": "医疗服务",
           "lianban": 1,
           "first_time": "10:02",
-          "fund": 4319775,
+          "fund": 4970700,
           "zhaban": 0
         },
         {
@@ -173377,7 +174433,7 @@
           "sector": "医疗器械",
           "lianban": 1,
           "first_time": "10:02",
-          "fund": 610197,
+          "fund": 617461,
           "zhaban": 7
         },
         {
@@ -173399,7 +174455,7 @@
           "sector": "通用设备",
           "lianban": 1,
           "first_time": "10:07",
-          "fund": 685993,
+          "fund": 684936,
           "zhaban": 0
         },
         {
@@ -173432,7 +174488,7 @@
           "sector": "化学原料",
           "lianban": 1,
           "first_time": "10:14",
-          "fund": 1982750,
+          "fund": 2009700,
           "zhaban": 0
         },
         {
@@ -173454,7 +174510,7 @@
           "sector": "化学制药",
           "lianban": 1,
           "first_time": "10:17",
-          "fund": 645668,
+          "fund": 702056,
           "zhaban": 3
         },
         {
@@ -173498,7 +174554,7 @@
           "sector": "农产品加",
           "lianban": 3,
           "first_time": "10:24",
-          "fund": 18337725,
+          "fund": 18559800,
           "zhaban": 2
         },
         {
@@ -173509,7 +174565,7 @@
           "sector": "饲料",
           "lianban": 1,
           "first_time": "10:28",
-          "fund": 458750,
+          "fund": 466090,
           "zhaban": 0
         },
         {
@@ -173520,7 +174576,7 @@
           "sector": "医疗器械",
           "lianban": 1,
           "first_time": "10:30",
-          "fund": 990260,
+          "fund": 866980,
           "zhaban": 0
         },
         {
@@ -173553,7 +174609,7 @@
           "sector": "一般零售",
           "lianban": 1,
           "first_time": "10:33",
-          "fund": 1076103,
+          "fund": 1083171,
           "zhaban": 8
         },
         {
@@ -173564,7 +174620,7 @@
           "sector": "生物制品",
           "lianban": 1,
           "first_time": "10:33",
-          "fund": 2082552,
+          "fund": 2450956,
           "zhaban": 14
         },
         {
@@ -173630,7 +174686,7 @@
           "sector": "电机Ⅱ",
           "lianban": 1,
           "first_time": "11:00",
-          "fund": 1064062,
+          "fund": 1105654,
           "zhaban": 0
         },
         {
@@ -173641,7 +174697,7 @@
           "sector": "化学制品",
           "lianban": 1,
           "first_time": "11:05",
-          "fund": 514113,
+          "fund": 457548,
           "zhaban": 5
         },
         {
@@ -173652,7 +174708,7 @@
           "sector": "农化制品",
           "lianban": 1,
           "first_time": "11:06",
-          "fund": 1601166,
+          "fund": 1609608,
           "zhaban": 2
         },
         {
@@ -173674,7 +174730,7 @@
           "sector": "房地产开",
           "lianban": 1,
           "first_time": "11:14",
-          "fund": 1044414,
+          "fund": 1107351,
           "zhaban": 0
         },
         {
@@ -173696,7 +174752,7 @@
           "sector": "房地产开",
           "lianban": 2,
           "first_time": "11:18",
-          "fund": 4589440,
+          "fund": 4147520,
           "zhaban": 0
         },
         {
@@ -173707,7 +174763,7 @@
           "sector": "非白酒",
           "lianban": 2,
           "first_time": "11:18",
-          "fund": 2326128,
+          "fund": 2026332,
           "zhaban": 0
         },
         {
@@ -173740,7 +174796,7 @@
           "sector": "服装家纺",
           "lianban": 1,
           "first_time": "13:04",
-          "fund": 1148125,
+          "fund": 1172006,
           "zhaban": 7
         },
         {
@@ -173773,7 +174829,7 @@
           "sector": "一般零售",
           "lianban": 1,
           "first_time": "13:08",
-          "fund": 735074,
+          "fund": 732733,
           "zhaban": 0
         },
         {
@@ -173795,7 +174851,7 @@
           "sector": "电网设备",
           "lianban": 1,
           "first_time": "13:16",
-          "fund": 1128612,
+          "fund": 1222086,
           "zhaban": 0
         },
         {
@@ -173817,7 +174873,7 @@
           "sector": "房地产开",
           "lianban": 1,
           "first_time": "13:22",
-          "fund": 1103466,
+          "fund": 1233414,
           "zhaban": 5
         },
         {
@@ -173894,7 +174950,7 @@
           "sector": "化学制品",
           "lianban": 1,
           "first_time": "14:10",
-          "fund": 459644,
+          "fund": 468776,
           "zhaban": 0
         },
         {
@@ -173916,7 +174972,7 @@
           "sector": "多元金融",
           "lianban": 1,
           "first_time": "14:37",
-          "fund": 1106609,
+          "fund": 945724,
           "zhaban": 0
         },
         {
@@ -173933,8 +174989,8 @@
       ],
       "limit_up_snapshot": {
         "date": "2026-09-21",
-        "as_of": "2026-09-21T15:08:03+08:00",
-        "generated_at": "2026-09-21T15:09:20+08:00",
+        "as_of": "2026-09-21T15:21:48+08:00",
+        "generated_at": "2026-09-21T15:23:48+08:00",
         "source": "eastmoney_limit_pools",
         "status": "verified_complete",
         "raw_total": 103,
@@ -173984,7 +175040,7 @@
             "sector": "房地产服",
             "lianban": 1,
             "first_time": "09:25",
-            "fund": 2670413,
+            "fund": 3044145,
             "zhaban": 0
           },
           {
@@ -173995,7 +175051,7 @@
             "sector": "服装家纺",
             "lianban": 3,
             "first_time": "09:25",
-            "fund": 4466064,
+            "fund": 5398128,
             "zhaban": 1
           },
           {
@@ -174006,7 +175062,7 @@
             "sector": "小金属",
             "lianban": 1,
             "first_time": "09:25",
-            "fund": 3947630,
+            "fund": 4722165,
             "zhaban": 1
           },
           {
@@ -174017,7 +175073,7 @@
             "sector": "出版",
             "lianban": 1,
             "first_time": "09:25",
-            "fund": 105502660,
+            "fund": 109185364,
             "zhaban": 0
           },
           {
@@ -174028,7 +175084,7 @@
             "sector": "出版",
             "lianban": 4,
             "first_time": "09:25",
-            "fund": 8801605,
+            "fund": 8924694,
             "zhaban": 3
           },
           {
@@ -174072,7 +175128,7 @@
             "sector": "冶钢原料",
             "lianban": 2,
             "first_time": "09:30",
-            "fund": 4573128,
+            "fund": 5087556,
             "zhaban": 0
           },
           {
@@ -174105,7 +175161,7 @@
             "sector": "半导体",
             "lianban": 2,
             "first_time": "09:30",
-            "fund": 2318868,
+            "fund": 3385584,
             "zhaban": 2
           },
           {
@@ -174116,7 +175172,7 @@
             "sector": "出版",
             "lianban": 2,
             "first_time": "09:30",
-            "fund": 2553430,
+            "fund": 2677279,
             "zhaban": 6
           },
           {
@@ -174138,7 +175194,7 @@
             "sector": "纺织制造",
             "lianban": 3,
             "first_time": "09:31",
-            "fund": 3039257,
+            "fund": 2861095,
             "zhaban": 3
           },
           {
@@ -174149,7 +175205,7 @@
             "sector": "化学制药",
             "lianban": 1,
             "first_time": "09:31",
-            "fund": 30904500,
+            "fund": 30477975,
             "zhaban": 1
           },
           {
@@ -174160,7 +175216,7 @@
             "sector": "塑料",
             "lianban": 1,
             "first_time": "09:31",
-            "fund": 3483511,
+            "fund": 3361910,
             "zhaban": 1
           },
           {
@@ -174193,7 +175249,7 @@
             "sector": "医疗服务",
             "lianban": 1,
             "first_time": "09:32",
-            "fund": 10116406,
+            "fund": 10146403,
             "zhaban": 1
           },
           {
@@ -174215,7 +175271,7 @@
             "sector": "半导体",
             "lianban": 2,
             "first_time": "09:34",
-            "fund": 5381791,
+            "fund": 5329243,
             "zhaban": 10
           },
           {
@@ -174248,7 +175304,7 @@
             "sector": "IT服务Ⅱ",
             "lianban": 1,
             "first_time": "09:34",
-            "fund": 481208,
+            "fund": 487032,
             "zhaban": 3
           },
           {
@@ -174270,7 +175326,7 @@
             "sector": "化学原料",
             "lianban": 1,
             "first_time": "09:35",
-            "fund": 3273174,
+            "fund": 4419034,
             "zhaban": 2
           },
           {
@@ -174281,7 +175337,7 @@
             "sector": "一般零售",
             "lianban": 2,
             "first_time": "09:36",
-            "fund": 10305144,
+            "fund": 11057886,
             "zhaban": 3
           },
           {
@@ -174292,7 +175348,7 @@
             "sector": "服装家纺",
             "lianban": 2,
             "first_time": "09:36",
-            "fund": 428978,
+            "fund": 427831,
             "zhaban": 5
           },
           {
@@ -174303,7 +175359,7 @@
             "sector": "汽车零部",
             "lianban": 1,
             "first_time": "09:37",
-            "fund": 413500,
+            "fund": 419289,
             "zhaban": 4
           },
           {
@@ -174314,7 +175370,7 @@
             "sector": "通用设备",
             "lianban": 1,
             "first_time": "09:38",
-            "fund": 497501,
+            "fund": 515859,
             "zhaban": 15
           },
           {
@@ -174336,7 +175392,7 @@
             "sector": "化学制药",
             "lianban": 1,
             "first_time": "09:40",
-            "fund": 2789800,
+            "fund": 2750025,
             "zhaban": 2
           },
           {
@@ -174347,7 +175403,7 @@
             "sector": "小金属",
             "lianban": 1,
             "first_time": "09:41",
-            "fund": 1298784,
+            "fund": 1298286,
             "zhaban": 0
           },
           {
@@ -174358,7 +175414,7 @@
             "sector": "汽车零部",
             "lianban": 1,
             "first_time": "09:42",
-            "fund": 608202,
+            "fund": 534188,
             "zhaban": 5
           },
           {
@@ -174380,7 +175436,7 @@
             "sector": "游戏Ⅱ",
             "lianban": 1,
             "first_time": "09:45",
-            "fund": 1006071,
+            "fund": 1054317,
             "zhaban": 0
           },
           {
@@ -174402,7 +175458,7 @@
             "sector": "专用设备",
             "lianban": 1,
             "first_time": "09:49",
-            "fund": 639936,
+            "fund": 662112,
             "zhaban": 1
           },
           {
@@ -174413,7 +175469,7 @@
             "sector": "通信设备",
             "lianban": 1,
             "first_time": "09:49",
-            "fund": 2770768,
+            "fund": 2844985,
             "zhaban": 2
           },
           {
@@ -174435,7 +175491,7 @@
             "sector": "专用设备",
             "lianban": 1,
             "first_time": "09:50",
-            "fund": 528653,
+            "fund": 581203,
             "zhaban": 6
           },
           {
@@ -174446,7 +175502,7 @@
             "sector": "旅游及景",
             "lianban": 1,
             "first_time": "09:51",
-            "fund": 864546,
+            "fund": 1151109,
             "zhaban": 27
           },
           {
@@ -174457,7 +175513,7 @@
             "sector": "一般零售",
             "lianban": 1,
             "first_time": "09:53",
-            "fund": 3879430,
+            "fund": 4093945,
             "zhaban": 0
           },
           {
@@ -174512,7 +175568,7 @@
             "sector": "医疗服务",
             "lianban": 1,
             "first_time": "10:02",
-            "fund": 4319775,
+            "fund": 4970700,
             "zhaban": 0
           },
           {
@@ -174523,7 +175579,7 @@
             "sector": "医疗器械",
             "lianban": 1,
             "first_time": "10:02",
-            "fund": 610197,
+            "fund": 617461,
             "zhaban": 7
           },
           {
@@ -174545,7 +175601,7 @@
             "sector": "通用设备",
             "lianban": 1,
             "first_time": "10:07",
-            "fund": 685993,
+            "fund": 684936,
             "zhaban": 0
           },
           {
@@ -174578,7 +175634,7 @@
             "sector": "化学原料",
             "lianban": 1,
             "first_time": "10:14",
-            "fund": 1982750,
+            "fund": 2009700,
             "zhaban": 0
           },
           {
@@ -174600,7 +175656,7 @@
             "sector": "化学制药",
             "lianban": 1,
             "first_time": "10:17",
-            "fund": 645668,
+            "fund": 702056,
             "zhaban": 3
           },
           {
@@ -174644,7 +175700,7 @@
             "sector": "农产品加",
             "lianban": 3,
             "first_time": "10:24",
-            "fund": 18337725,
+            "fund": 18559800,
             "zhaban": 2
           },
           {
@@ -174655,7 +175711,7 @@
             "sector": "饲料",
             "lianban": 1,
             "first_time": "10:28",
-            "fund": 458750,
+            "fund": 466090,
             "zhaban": 0
           },
           {
@@ -174666,7 +175722,7 @@
             "sector": "医疗器械",
             "lianban": 1,
             "first_time": "10:30",
-            "fund": 990260,
+            "fund": 866980,
             "zhaban": 0
           },
           {
@@ -174699,7 +175755,7 @@
             "sector": "一般零售",
             "lianban": 1,
             "first_time": "10:33",
-            "fund": 1076103,
+            "fund": 1083171,
             "zhaban": 8
           },
           {
@@ -174710,7 +175766,7 @@
             "sector": "生物制品",
             "lianban": 1,
             "first_time": "10:33",
-            "fund": 2082552,
+            "fund": 2450956,
             "zhaban": 14
           },
           {
@@ -174776,7 +175832,7 @@
             "sector": "电机Ⅱ",
             "lianban": 1,
             "first_time": "11:00",
-            "fund": 1064062,
+            "fund": 1105654,
             "zhaban": 0
           },
           {
@@ -174787,7 +175843,7 @@
             "sector": "化学制品",
             "lianban": 1,
             "first_time": "11:05",
-            "fund": 514113,
+            "fund": 457548,
             "zhaban": 5
           },
           {
@@ -174798,7 +175854,7 @@
             "sector": "农化制品",
             "lianban": 1,
             "first_time": "11:06",
-            "fund": 1601166,
+            "fund": 1609608,
             "zhaban": 2
           },
           {
@@ -174820,7 +175876,7 @@
             "sector": "房地产开",
             "lianban": 1,
             "first_time": "11:14",
-            "fund": 1044414,
+            "fund": 1107351,
             "zhaban": 0
           },
           {
@@ -174842,7 +175898,7 @@
             "sector": "房地产开",
             "lianban": 2,
             "first_time": "11:18",
-            "fund": 4589440,
+            "fund": 4147520,
             "zhaban": 0
           },
           {
@@ -174853,7 +175909,7 @@
             "sector": "非白酒",
             "lianban": 2,
             "first_time": "11:18",
-            "fund": 2326128,
+            "fund": 2026332,
             "zhaban": 0
           },
           {
@@ -174886,7 +175942,7 @@
             "sector": "服装家纺",
             "lianban": 1,
             "first_time": "13:04",
-            "fund": 1148125,
+            "fund": 1172006,
             "zhaban": 7
           },
           {
@@ -174919,7 +175975,7 @@
             "sector": "一般零售",
             "lianban": 1,
             "first_time": "13:08",
-            "fund": 735074,
+            "fund": 732733,
             "zhaban": 0
           },
           {
@@ -174941,7 +175997,7 @@
             "sector": "电网设备",
             "lianban": 1,
             "first_time": "13:16",
-            "fund": 1128612,
+            "fund": 1222086,
             "zhaban": 0
           },
           {
@@ -174963,7 +176019,7 @@
             "sector": "房地产开",
             "lianban": 1,
             "first_time": "13:22",
-            "fund": 1103466,
+            "fund": 1233414,
             "zhaban": 5
           },
           {
@@ -175040,7 +176096,7 @@
             "sector": "化学制品",
             "lianban": 1,
             "first_time": "14:10",
-            "fund": 459644,
+            "fund": 468776,
             "zhaban": 0
           },
           {
@@ -175062,7 +176118,7 @@
             "sector": "多元金融",
             "lianban": 1,
             "first_time": "14:37",
-            "fund": 1106609,
+            "fund": 945724,
             "zhaban": 0
           },
           {
@@ -175557,8 +176613,8 @@
         "config_revision": "watchlist-20260820-01",
         "analysis_revision": "watchlist-20260820-01:2026-09-21:20dceb21a5f7",
         "date": "2026-09-21",
-        "as_of": "2026-09-21T15:05:08+08:00",
-        "generated_at": "2026-09-21T15:05:08+08:00",
+        "as_of": "2026-09-21T15:20:10+08:00",
+        "generated_at": "2026-09-21T15:20:10+08:00",
         "status": "ok",
         "fresh_count": 5,
         "stale_count": 0,
@@ -175745,7 +176801,7 @@
         "model": "gpt-5.6-luna",
         "prompt_version": "decision-brief-v4",
         "schema_version": "1",
-        "generated_at": "2026-09-21T15:05:08+08:00",
+        "generated_at": "2026-09-21T15:20:10+08:00",
         "evidence_registry": [
           {
             "evidence_ref": "event:2026-09-21:8d1748d11d62",
@@ -176429,7 +177485,7 @@
             ],
             "risk_reasons": [],
             "rule_summary": "半导体出现催化，需由资金、涨停梯队与重点股共同确认。",
-            "llm_summary": "市场修复与存储技术平台量产形成半导体催化，板块涨停主题已获验证，重点池覆盖晓程科技与佰维存储，但个股表现存在分化，仍需观察资金共振。",
+            "llm_summary": "半导体获得修复行情与存储技术量产催化，板块主题已有涨停证据，重点观察股呈现分化，方向偏积极但仍需资金共振确认。",
             "next_trigger": [
               "半导体资金与涨停梯队继续共振"
             ],
@@ -176472,7 +177528,7 @@
             "watchlist_impacts": [],
             "risk_reasons": [],
             "rule_summary": "消费电子出现催化，需由资金、涨停梯队与重点股共同确认。",
-            "llm_summary": "存储技术平台量产为消费电子带来催化，但当前缺少板块涨停主题与重点池交叉验证，方向仍处于发展阶段。",
+            "llm_summary": "存储技术量产催化向消费电子延伸，当前仅有事件驱动证据，尚缺板块资金、涨停梯队与重点股共振。",
             "next_trigger": [
               "消费电子资金与涨停梯队继续共振"
             ],
@@ -178274,22 +179330,21 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "A股第二轮修复行情开启，高景气与内需板块迎配置窗口",
+            "headline": "海外扰动缓和推动A股开启第二轮修复行情",
             "analysis": [
-              "油价和美债利率回落，外部压制因素阶段性缓解",
-              "国内利率宽松且汇率稳定，资金有望回流高景气方向",
-              "算力硬件涨价预期升温，工业有色获得需求与供给支撑",
-              "海外利率和美联储会议仍可能带来市场短期扰动"
+              "油价与美债利率回落缓解市场外部压力",
+              "宽松利率环境稳定有利于资金回流高景气板块",
+              "算力硬件和工业有色或成为进攻方向"
             ],
             "positive_sectors": [
               "半导体",
-              "电子元件",
-              "有色金属"
+              "电子",
+              "工业金属"
             ],
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
-            "summary": "A股第二轮修复行情开启，高景气与内需板块迎配置窗口",
+            "summary": "海外扰动缓和推动A股开启第二轮修复行情",
             "status": "ok",
             "model": "gpt-5.6-luna",
             "prompt_version": "event-impact-v1",
@@ -178325,11 +179380,11 @@
           "downgrade_reasons": [],
           "impact": {
             "no_impact": false,
-            "headline": "长鑫存储新平台量产，国产存储与消费电子产业链受益",
+            "headline": "长鑫存储量产升级强化半导体国产替代预期",
             "analysis": [
-              "第五代DRAM平台实现量产，国产存储技术成熟度进一步提升",
-              "24GB LPDDR5X产品容量升级，满足中高端终端性能需求",
-              "规模量产有望改善供应链自主可控能力并带动产业链扩产"
+              "第五代DRAM量产提升国产存储技术竞争力",
+              "高容量LPDDR5X有望扩大中高端消费电子应用",
+              "产业链国产替代预期升温提振半导体板块情绪"
             ],
             "positive_sectors": [
               "半导体",
@@ -178338,7 +179393,7 @@
             "negative_sectors": [],
             "positive_stocks": [],
             "negative_stocks": [],
-            "summary": "长鑫存储新平台量产，国产存储与消费电子产业链受益",
+            "summary": "长鑫存储量产升级强化半导体国产替代预期",
             "status": "ok",
             "model": "gpt-5.6-luna",
             "prompt_version": "event-impact-v1",
@@ -178376,7 +179431,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "内容主要反映盘中行情变化，未提供新增催化剂",
+              "板块涨跌体现短线资金博弈，难形成独立驱动"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178420,7 +179476,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "收评属于市场表现汇总，未出现新的政策或基本面信息",
+              "指数普涨反映风险偏好改善，持续性仍需后续验证"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178463,7 +179520,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "内容仅描述盘中板块表现，缺乏新增事件驱动",
+              "成交额较前日缩量显示资金追涨意愿仍需观察"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178505,7 +179563,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "地产股盘中拉升属于行情描述，未披露新增政策催化",
+              "个股触及涨停体现短线资金聚集，持续性尚待确认"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178547,7 +179606,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "房地产板块走强属于盘中表现，未形成新增基本面信息",
+              "板块普涨反映情绪修复，后续仍取决于政策落地情况"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178589,7 +179649,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "房地产板块上涨为行情跟踪信息，未提供新增催化因素",
+              "地产股集体走强或受情绪推动，持续性仍需观察"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178631,7 +179692,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "半导体板块走弱属于盘中行情变化，未披露新增利空",
+              "个股跌幅扩大反映短线资金分化，难判断行业趋势变化"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178673,7 +179735,8 @@
             "no_impact": true,
             "headline": "对A股无明显影响",
             "analysis": [
-              "对A股无明显影响"
+              "白酒板块走强属于盘中表现，未出现新增基本面催化",
+              "板块上涨主要体现资金轮动，行业景气改善仍待验证"
             ],
             "positive_sectors": [],
             "negative_sectors": [],
@@ -178692,18 +179755,18 @@
         }
       ],
       "forecast": {
-        "core_judgment": "指数普涨且资金共振，但日线无中枢，暂属修复性上行，非确认趋势反转",
-        "volume_note": "较5日均量增9.3%，但成交较盘中前值缩500亿，突破量能仍不足",
+        "core_judgment": "市场处于无中枢上行修复段，普涨但结构尚未确认突破",
+        "volume_note": "量较5日均量增9.3%，配合尚可但非强力放量",
         "short_term": [
-          "若上证放量站稳3949.91并突破4000点，短线延续上攻，关注医药、地产与金融轮动",
-          "若上证跌破3949.91且成交继续萎缩，修复行情转为震荡，避免追高弱势题材",
-          "若创业板指守住3399.59、科创50站回1657.48，科技成长有望获得二次上攻；否则关注板块分化"
+          "若上证放量站稳4000点，修复行情有望延续，关注半导体、医药和非银金融",
+          "若上证在3950点附近受阻并跌破3900点，需警惕无中枢上行转为震荡，暂不追高",
+          "若成交额重新放大且上涨家数维持4000家以上，可视为二买确认；若缩量滞涨则防三卖"
         ],
-        "mid_term": "当前缠论日线未形成可确认中枢，暂不能定义二买或三买。后续若放量突破4000点并形成回踩不破，可视为向上离开中枢的早期信号；若冲高后跌回3949.91下方，则更可能进入中枢震荡或构筑新中枢。",
+        "mid_term": "当前日线未识别中枢且无明显背驰，暂不能确认趋势性上涨。后续若放量突破4000点并形成回踩不破，可能构筑上行中枢后延续；若冲高缩量、资金广度收窄，可能回落至3900—3950点重新构筑中枢。",
         "risks": [
-          "医药、地产等权重轮动若不能持续，指数可能出现缩量冲高后的快速回撤",
-          "成交较盘中前值缩量近500亿，若上涨伴随量能衰减，存在假突破风险",
-          "半导体个股已出现利扬芯片跌近13%等剧烈分化，科技催化可能出现消息兑现和高位补跌"
+          "医药单日流入和涨幅突出，若资金集中度过高，板块冲高回落可能拖累市场情绪",
+          "成交额较盘中前值缩量近500亿，若指数上涨而量能继续萎缩，存在假突破风险",
+          "半导体内部出现利扬芯片等大跌，热点分化扩大时，普涨结构可能迅速转为高位兑现"
         ]
       },
       "sell_signals": [],
@@ -178713,7 +179776,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:9e47a6bbf6f8ffa4",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "000756",
           "name": "新华制药",
           "reference_close": 14.67,
@@ -178792,7 +179855,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:3efda981d7fe34b1",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "000829",
           "name": "天音控股",
           "reference_close": 9.87356890459364,
@@ -178870,7 +179933,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:7cc8f162eb83712e",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "001234",
           "name": "泰慕士",
           "reference_close": 26.251439764936347,
@@ -178948,7 +180011,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:c2f9079722811503",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "001373",
           "name": "翔腾新材",
           "reference_close": 32.44,
@@ -179026,7 +180089,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:c5102e8d5e5dc961",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "001389",
           "name": "广合科技",
           "reference_close": 185.93,
@@ -179105,7 +180168,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:33b493749775ee84",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "002080",
           "name": "中材科技",
           "reference_close": 66.24,
@@ -179184,7 +180247,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:7adee09aa829bb14",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "002321",
           "name": "华英农业",
           "reference_close": 2.2761658031088072,
@@ -179262,7 +180325,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:05cc999fcba17d00",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "002367",
           "name": "康力电梯",
           "reference_close": 6.28,
@@ -179340,7 +180403,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:4bd5c4f0dc1ecc22",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "002795",
           "name": "永和智控",
           "reference_close": 8.04,
@@ -179416,9 +180479,138 @@
         },
         {
           "schema_version": "1",
+          "recommendation_id": "rec:66c57ed9a0495f21",
+          "report_date": "2026-09-21",
+          "generated_at": "2026-09-21T15:20:10+08:00",
+          "code": "003021",
+          "name": "兆威机电",
+          "reference_close": 70.60019937694705,
+          "reference_close_source": "closes[-1]",
+          "policy_version": "decision-v2",
+          "config_revision": "sha256:d68dfdafb274b3a6",
+          "code_version": "unknown",
+          "strategy_contributions": [
+            {
+              "contribution_id": "contrib:1f35ec0208a44417",
+              "strategy_name": "daily_pure",
+              "display_name": "日线纯净策略",
+              "strategy_version": "daily-pure-close-v2",
+              "version_status": "verified",
+              "policy_version": "decision-v2",
+              "preclose_strategy_version": "preclose-1445-v3",
+              "upstream_strategy_version": "unknown",
+              "upstream_policy_version": "unknown",
+              "source_pool": "picks_pure",
+              "decision_code": "observe",
+              "decision_label": "观察",
+              "decision_engine_version": "decision-v2",
+              "entry_mode": "immediate_close",
+              "intended_horizon": null,
+              "publication_status": "published",
+              "user_action": "watch",
+              "cohort_eligible": false,
+              "evaluation_role": "baseline",
+              "publication_surface": "baseline_candidates",
+              "evaluation_eligible": true,
+              "eligibility_reason": "baseline_candidate",
+              "attribution_status": "verified",
+              "reason_snapshot": {
+                "decision_engine_v1": {
+                  "version": "decision-v2",
+                  "code": "003021",
+                  "name": "兆威机电",
+                  "decision": "观察",
+                  "decision_code": "observe",
+                  "total_score": 53,
+                  "structure": {
+                    "score": 10,
+                    "reasons": [
+                      "未形成中枢/尚无趋势结构",
+                      "回踩确认"
+                    ]
+                  },
+                  "position": {
+                    "score": 35,
+                    "reasons": [
+                      "120日收盘分位低位"
+                    ]
+                  },
+                  "sentiment": {
+                    "score": 8,
+                    "reasons": [
+                      "放量启动",
+                      "震荡市",
+                      "趋势健康度偏弱",
+                      "动能积极"
+                    ]
+                  },
+                  "risk_reasons": []
+                },
+                "best_buy_point": {
+                  "type": "强势启动候选",
+                  "tier": "candidate",
+                  "index": 119,
+                  "price": 70.60019937694705,
+                  "reason": "处于60日低位区间；放量1.5倍；站上MA5/MA10",
+                  "strength": "中",
+                  "source_type": "日线强势启动",
+                  "confirmed_by": "30min确认",
+                  "confirmations": [
+                    "30min两阳夹一阴确认"
+                  ],
+                  "confirmation_evidence": {
+                    "schema_version": 1,
+                    "sufficient_bars": true,
+                    "ema_bullish_alignment": true,
+                    "close_above_ema5": false,
+                    "ema5_rising_bars": 0,
+                    "recent_peak_drawdown_pct": 2.690645,
+                    "macd_hist_direction": "weakening",
+                    "ema5_reclaim": false,
+                    "stop_fall": false,
+                    "buy_point": null,
+                    "fresh_yang_pattern": "two_yang_one_yin",
+                    "recovery_bundle_match": false
+                  },
+                  "startup_reason": "处于60日低位区间；放量1.5倍；站上MA5/MA10",
+                  "startup_signals": [
+                    "close_above_ma5",
+                    "close_above_ma10"
+                  ],
+                  "startup_index": 119,
+                  "startup_date": "2026-09-21",
+                  "startup_age_days": 0,
+                  "confirm_index": 79,
+                  "confirm_date": "2026-09-21 15:00:00",
+                  "confirm_age_days": 0,
+                  "change_pct": 1.19,
+                  "volume_ratio": 1.52,
+                  "daily_startup_grade": "weak",
+                  "daily_startup_label": "弱启动确认",
+                  "daily_startup_warning": "涨幅较小，属于观察型启动，不是追涨启动",
+                  "sublevel_confirm_grade": "B",
+                  "sublevel_confirm_label": "B级确认",
+                  "sublevel_confirm_reason": "30分钟结构确认: 30min两阳夹一阴确认",
+                  "signal_age_days": 0,
+                  "is_recent": true,
+                  "signal_date": "2026-09-21",
+                  "recency_reason": "信号发生在最近0个交易日内"
+                },
+                "opportunity_score": null,
+                "watch_score": null,
+                "score": 35.2,
+                "source_channel": "low_position",
+                "trend_type": "无中枢",
+                "sector": "电机Ⅱ"
+              }
+            }
+          ]
+        },
+        {
+          "schema_version": "1",
           "recommendation_id": "rec:3bea62492b14ab57",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "300110",
           "name": "华仁药业",
           "reference_close": 3.29,
@@ -179497,7 +180689,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:4438b9a466453c7d",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "300691",
           "name": "联合光电",
           "reference_close": 17.682105263157897,
@@ -179574,9 +180766,259 @@
         },
         {
           "schema_version": "1",
+          "recommendation_id": "rec:433b31363352d412",
+          "report_date": "2026-09-21",
+          "generated_at": "2026-09-21T15:20:10+08:00",
+          "code": "301075",
+          "name": "多瑞医药",
+          "reference_close": 68.53,
+          "reference_close_source": "closes[-1]",
+          "policy_version": "decision-v2",
+          "config_revision": "sha256:d68dfdafb274b3a6",
+          "code_version": "unknown",
+          "strategy_contributions": [
+            {
+              "contribution_id": "contrib:3143f737d2ea3110",
+              "strategy_name": "daily_fusion",
+              "display_name": "日线融合策略",
+              "strategy_version": "daily-fusion-close-v2",
+              "version_status": "verified",
+              "policy_version": "decision-v2",
+              "preclose_strategy_version": "preclose-1445-v3",
+              "upstream_strategy_version": "unknown",
+              "upstream_policy_version": "unknown",
+              "source_pool": "picks_fusion",
+              "decision_code": "reject",
+              "decision_label": "不推荐",
+              "decision_engine_version": "decision-v2",
+              "entry_mode": "immediate_close",
+              "intended_horizon": null,
+              "publication_status": "published",
+              "user_action": "none",
+              "cohort_eligible": false,
+              "evaluation_role": "formal",
+              "publication_surface": "formal_recommendation",
+              "evaluation_eligible": false,
+              "eligibility_reason": "user_action_not_recommendation",
+              "attribution_status": "verified",
+              "reason_snapshot": {
+                "decision_engine_v1": {
+                  "version": "decision-v2",
+                  "code": "301075",
+                  "name": "多瑞医药",
+                  "decision": "不推荐",
+                  "decision_code": "reject",
+                  "total_score": 37,
+                  "structure": {
+                    "score": 10,
+                    "reasons": [
+                      "未形成中枢/尚无趋势结构",
+                      "回踩确认"
+                    ]
+                  },
+                  "position": {
+                    "score": -10,
+                    "reasons": [
+                      "120日收盘分位偏高"
+                    ]
+                  },
+                  "sentiment": {
+                    "score": 37,
+                    "reasons": [
+                      "板块热点",
+                      "放量启动",
+                      "震荡市",
+                      "MA 均线多头",
+                      "趋势健康度偏弱",
+                      "动能积极"
+                    ]
+                  },
+                  "risk_reasons": []
+                },
+                "best_buy_point": {
+                  "type": "强势启动候选",
+                  "tier": "candidate",
+                  "index": 119,
+                  "price": 68.53,
+                  "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+                  "strength": "中",
+                  "source_type": "日线强势启动",
+                  "confirmed_by": "30min确认",
+                  "confirmations": [
+                    "30min两阳夹一阴确认"
+                  ],
+                  "confirmation_evidence": {
+                    "schema_version": 1,
+                    "sufficient_bars": true,
+                    "ema_bullish_alignment": true,
+                    "close_above_ema5": true,
+                    "ema5_rising_bars": 8,
+                    "recent_peak_drawdown_pct": 1.735016,
+                    "macd_hist_direction": "weakening",
+                    "ema5_reclaim": false,
+                    "stop_fall": false,
+                    "buy_point": null,
+                    "fresh_yang_pattern": "two_yang_one_yin",
+                    "recovery_bundle_match": false
+                  },
+                  "startup_reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+                  "startup_signals": [
+                    "涨幅≥4.0%",
+                    "close_above_ma5",
+                    "close_above_ma10",
+                    "break_20d_high",
+                    "实体阳线≥3%"
+                  ],
+                  "startup_index": 119,
+                  "startup_date": "2026-09-21",
+                  "startup_age_days": 0,
+                  "confirm_index": 79,
+                  "confirm_date": "2026-09-21 15:00:00",
+                  "confirm_age_days": 0,
+                  "change_pct": 5.32,
+                  "volume_ratio": 1.68,
+                  "daily_startup_grade": "strong",
+                  "daily_startup_label": "强启动",
+                  "sublevel_confirm_grade": "A",
+                  "sublevel_confirm_label": "A级确认",
+                  "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+                  "signal_age_days": 0,
+                  "is_recent": true,
+                  "signal_date": "2026-09-21",
+                  "recency_reason": "信号发生在最近0个交易日内"
+                },
+                "opportunity_score": null,
+                "watch_score": null,
+                "score": 52.0,
+                "source_channel": "low_position",
+                "trend_type": "无中枢",
+                "sector": "医药生物"
+              }
+            },
+            {
+              "contribution_id": "contrib:3aedc6bd5e96a192",
+              "strategy_name": "daily_pure",
+              "display_name": "日线纯净策略",
+              "strategy_version": "daily-pure-close-v2",
+              "version_status": "verified",
+              "policy_version": "decision-v2",
+              "preclose_strategy_version": "preclose-1445-v3",
+              "upstream_strategy_version": "unknown",
+              "upstream_policy_version": "unknown",
+              "source_pool": "picks_pure",
+              "decision_code": "reject",
+              "decision_label": "不推荐",
+              "decision_engine_version": "decision-v2",
+              "entry_mode": "immediate_close",
+              "intended_horizon": null,
+              "publication_status": "published",
+              "user_action": "none",
+              "cohort_eligible": false,
+              "evaluation_role": "baseline",
+              "publication_surface": "baseline_candidates",
+              "evaluation_eligible": true,
+              "eligibility_reason": "baseline_candidate",
+              "attribution_status": "verified",
+              "reason_snapshot": {
+                "decision_engine_v1": {
+                  "version": "decision-v2",
+                  "code": "301075",
+                  "name": "多瑞医药",
+                  "decision": "不推荐",
+                  "decision_code": "reject",
+                  "total_score": 29,
+                  "structure": {
+                    "score": 10,
+                    "reasons": [
+                      "未形成中枢/尚无趋势结构",
+                      "回踩确认"
+                    ]
+                  },
+                  "position": {
+                    "score": -10,
+                    "reasons": [
+                      "120日收盘分位偏高"
+                    ]
+                  },
+                  "sentiment": {
+                    "score": 29,
+                    "reasons": [
+                      "板块热点",
+                      "放量启动",
+                      "震荡市",
+                      "趋势健康度偏弱",
+                      "动能积极"
+                    ]
+                  },
+                  "risk_reasons": []
+                },
+                "best_buy_point": {
+                  "type": "强势启动候选",
+                  "tier": "candidate",
+                  "index": 119,
+                  "price": 68.53,
+                  "reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+                  "strength": "中",
+                  "source_type": "日线强势启动",
+                  "confirmed_by": "30min确认",
+                  "confirmations": [
+                    "30min两阳夹一阴确认"
+                  ],
+                  "confirmation_evidence": {
+                    "schema_version": 1,
+                    "sufficient_bars": true,
+                    "ema_bullish_alignment": true,
+                    "close_above_ema5": true,
+                    "ema5_rising_bars": 8,
+                    "recent_peak_drawdown_pct": 1.735016,
+                    "macd_hist_direction": "weakening",
+                    "ema5_reclaim": false,
+                    "stop_fall": false,
+                    "buy_point": null,
+                    "fresh_yang_pattern": "two_yang_one_yin",
+                    "recovery_bundle_match": false
+                  },
+                  "startup_reason": "处于120日低位区间；放量1.7倍；站上MA5/MA10；突破20日平台；涨幅5.3%",
+                  "startup_signals": [
+                    "涨幅≥4.0%",
+                    "close_above_ma5",
+                    "close_above_ma10",
+                    "break_20d_high",
+                    "实体阳线≥3%"
+                  ],
+                  "startup_index": 119,
+                  "startup_date": "2026-09-21",
+                  "startup_age_days": 0,
+                  "confirm_index": 79,
+                  "confirm_date": "2026-09-21 15:00:00",
+                  "confirm_age_days": 0,
+                  "change_pct": 5.32,
+                  "volume_ratio": 1.68,
+                  "daily_startup_grade": "strong",
+                  "daily_startup_label": "强启动",
+                  "sublevel_confirm_grade": "A",
+                  "sublevel_confirm_label": "A级确认",
+                  "sublevel_confirm_reason": "日线强启动+30分钟最新两阳结构",
+                  "signal_age_days": 0,
+                  "is_recent": true,
+                  "signal_date": "2026-09-21",
+                  "recency_reason": "信号发生在最近0个交易日内"
+                },
+                "opportunity_score": null,
+                "watch_score": null,
+                "score": 35.2,
+                "source_channel": "low_position",
+                "trend_type": "无中枢",
+                "sector": "医药生物"
+              }
+            }
+          ]
+        },
+        {
+          "schema_version": "1",
           "recommendation_id": "rec:ba25c0d7b8f2e471",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "600325",
           "name": "华发股份",
           "reference_close": 2.773162055335968,
@@ -179654,7 +181096,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:52135b87802b5837",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "600503",
           "name": "华丽家族",
           "reference_close": 2.4072897196261693,
@@ -179732,7 +181174,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:9600793569fe221a",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "600587",
           "name": "新华医疗",
           "reference_close": 13.4,
@@ -179811,7 +181253,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:1a805de09756e901",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "600630",
           "name": "龙头股份",
           "reference_close": 9.132966633499171,
@@ -179889,7 +181331,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:fe2e1233167f0b80",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "603001",
           "name": "奥康国际",
           "reference_close": 11.059793672627235,
@@ -179967,7 +181409,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:8fd6c88925ce1155",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "603093",
           "name": "南华期货",
           "reference_close": 20.47913046405331,
@@ -180046,7 +181488,7 @@
           "schema_version": "1",
           "recommendation_id": "rec:01ff493ced7c5174",
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
           "code": "603289",
           "name": "泰瑞机器",
           "reference_close": 10.51,
@@ -180541,35 +181983,37 @@
             },
             "classification_status": "explicit",
             "classification_status_counts": {
-              "explicit": 5
+              "explicit": 6
             },
-            "signal_count": 5,
+            "signal_count": 6,
             "evaluation_contract_signal_count": 4,
-            "non_evaluation_signal_count": 1,
+            "non_evaluation_signal_count": 2,
             "eligible_signal_count": 4,
             "excluded_signal_count": 0,
-            "ledger_active_dates": 3,
+            "ledger_active_dates": 4,
             "ledger_date_start": "2026-09-14",
-            "ledger_date_end": "2026-09-17",
+            "ledger_date_end": "2026-09-21",
             "sample_exclusions": [],
             "gate_outcomes": {
               "observe": 1,
-              "recommend": 4
+              "recommend": 4,
+              "reject": 1
             },
             "publication_outcomes": {
               "watch": 1,
-              "recommendation": 4
+              "recommendation": 4,
+              "none": 1
             },
             "attribution_status_counts": {
-              "verified": 5
+              "verified": 6
             },
             "attribution_status": "verified",
             "evidence_tier": "prospective_ledger",
-            "latest_run_status": "verified_empty",
-            "latest_run_reason": "策略运行正常，今日没有信号",
+            "latest_run_status": "ran",
+            "latest_run_reason": "策略已运行并产生信号",
             "latest_run_blocking_reason": "",
-            "latest_signal_count": 0,
-            "latest_source_candidate_count": 0,
+            "latest_signal_count": 1,
+            "latest_source_candidate_count": 1,
             "latest_published_count": 0,
             "latest_report_date": "2026-09-21",
             "price_basis": null,
@@ -181281,43 +182725,43 @@
             },
             "classification_status": "explicit",
             "classification_status_counts": {
-              "explicit": 41
+              "explicit": 43
             },
-            "signal_count": 41,
-            "evaluation_contract_signal_count": 41,
+            "signal_count": 43,
+            "evaluation_contract_signal_count": 43,
             "non_evaluation_signal_count": 0,
-            "eligible_signal_count": 41,
+            "eligible_signal_count": 43,
             "excluded_signal_count": 0,
-            "ledger_active_dates": 4,
+            "ledger_active_dates": 5,
             "ledger_date_start": "2026-09-14",
-            "ledger_date_end": "2026-09-18",
+            "ledger_date_end": "2026-09-21",
             "sample_exclusions": [],
             "gate_outcomes": {
               "recommend": 15,
-              "reject": 3,
-              "observe": 23
+              "reject": 4,
+              "observe": 24
             },
             "publication_outcomes": {
               "recommendation": 15,
-              "none": 3,
-              "watch": 23
+              "none": 4,
+              "watch": 24
             },
             "attribution_status_counts": {
-              "verified": 41
+              "verified": 43
             },
             "attribution_status": "verified",
             "evidence_tier": "prospective_ledger",
-            "latest_run_status": "verified_empty",
-            "latest_run_reason": "策略运行正常，今日没有信号",
+            "latest_run_status": "ran",
+            "latest_run_reason": "策略已运行并产生信号",
             "latest_run_blocking_reason": "",
-            "latest_signal_count": 0,
-            "latest_source_candidate_count": 0,
+            "latest_signal_count": 2,
+            "latest_source_candidate_count": 2,
             "latest_published_count": null,
             "latest_report_date": "2026-09-21",
             "price_basis": null,
-            "active_dates": 4,
+            "active_dates": 5,
             "active_months": 1,
-            "episode_count": 41,
+            "episode_count": 43,
             "evaluable_episode_count": 41,
             "sample_size": null,
             "matured_by_horizon": {
@@ -181328,17 +182772,17 @@
             "maturity_by_horizon": {
               "t1": {
                 "mature": 41,
-                "waiting": 0,
+                "waiting": 2,
                 "unavailable": 0
               },
               "t3": {
                 "mature": 38,
-                "waiting": 3,
+                "waiting": 5,
                 "unavailable": 0
               },
               "t5": {
                 "mature": 4,
-                "waiting": 37,
+                "waiting": 39,
                 "unavailable": 0
               }
             },
@@ -181351,7 +182795,7 @@
               "t1": {
                 "status": "collecting",
                 "mature_samples": 41,
-                "waiting_samples": 0,
+                "waiting_samples": 2,
                 "unavailable_samples": 0,
                 "required_mature_samples": 100,
                 "active_dates": 4,
@@ -181362,7 +182806,7 @@
               "t3": {
                 "status": "collecting",
                 "mature_samples": 38,
-                "waiting_samples": 3,
+                "waiting_samples": 5,
                 "unavailable_samples": 0,
                 "required_mature_samples": 100,
                 "active_dates": 2,
@@ -181373,7 +182817,7 @@
               "t5": {
                 "status": "collecting",
                 "mature_samples": 4,
-                "waiting_samples": 37,
+                "waiting_samples": 39,
                 "unavailable_samples": 0,
                 "required_mature_samples": 100,
                 "active_dates": 1,
@@ -181397,7 +182841,8 @@
             "evaluation_status": "collecting",
             "evaluation_statuses": {
               "partial": 37,
-              "evaluated": 4
+              "evaluated": 4,
+              "right_censored": 2
             },
             "overall_verdict": null,
             "returns": {
@@ -182567,23 +184012,23 @@
           "entry_mode": "immediate_close",
           "intended_horizon": null,
           "report_date": "2026-09-21",
-          "run_status": "verified_empty",
-          "signal_count": 0,
-          "source_candidate_count": 0,
+          "run_status": "ran",
+          "signal_count": 2,
+          "source_candidate_count": 2,
           "published_count": null,
-          "reason": "策略运行正常，今日没有信号",
+          "reason": "策略已运行并产生信号",
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -182780,13 +184225,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         {
@@ -182800,7 +184245,7 @@
           "publication_surface": "formal_recommendation",
           "entry_mode": "immediate_close",
           "intended_horizon": null,
-          "source_candidate_count": 0,
+          "source_candidate_count": 1,
           "published_count": 0,
           "blocking_reason": "",
           "quantity_input_health": {
@@ -182812,21 +184257,21 @@
             "minimum_coverage": 0.9
           },
           "report_date": "2026-09-21",
-          "run_status": "verified_empty",
-          "signal_count": 0,
-          "reason": "策略运行正常，今日没有信号",
+          "run_status": "ran",
+          "signal_count": 1,
+          "reason": "策略已运行并产生信号",
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -183023,13 +184468,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         {
@@ -183052,15 +184497,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -183257,13 +184702,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         {
@@ -183286,15 +184731,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -183491,13 +184936,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         {
@@ -183521,15 +184966,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -183726,13 +185171,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         {
@@ -183766,15 +185211,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -183971,13 +185416,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         }
       ],
@@ -184006,22 +185451,22 @@
         },
         "sublevel_upgrade_pure": {
           "requested_30min": 332,
-          "fetched_30min": 208,
+          "fetched_30min": 303,
           "formal_kept": 0,
           "candidate_upgraded": 0,
-          "dropped_no_confirm": 208,
-          "dropped_no_30min": 124,
-          "dropped_risk_guard": 91,
-          "dropped_diverge_far": 117
+          "dropped_no_confirm": 303,
+          "dropped_no_30min": 29,
+          "dropped_risk_guard": 123,
+          "dropped_diverge_far": 180
         },
         "sublevel_upgrade_fusion": {
           "requested_30min": 332,
-          "fetched_30min": 208,
+          "fetched_30min": 303,
           "formal_kept": 0,
-          "candidate_upgraded": 0,
-          "dropped_no_confirm": 208,
-          "dropped_no_30min": 124,
-          "dropped_risk_guard": 91
+          "candidate_upgraded": 1,
+          "dropped_no_confirm": 303,
+          "dropped_no_30min": 29,
+          "dropped_risk_guard": 123
         },
         "kline_cache": {
           "day_hit": 0,
@@ -184035,31 +185480,39 @@
         "fusion_admission": {
           "market_regime": "strong",
           "admission_regime": "strong",
-          "input_count": 0,
-          "dropped_by_ma": 0,
+          "input_count": 2,
+          "dropped_by_ma": 1,
           "dropped_by_market_regime": 0,
           "dropped_by_signal_gate": 0,
           "kept_formal": 0,
-          "kept_candidate": 0,
-          "drop_details": [],
-          "output_count": 0,
-          "pure_fusion_identical": true,
-          "identical_reason": "pure无推荐"
+          "kept_candidate": 1,
+          "drop_details": [
+            {
+              "code": "003021",
+              "name": "兆威机电",
+              "type": "强势启动候选",
+              "reason": "强势启动候选要求MA多头(MA5>MA10>MA20)"
+            }
+          ],
+          "output_count": 1,
+          "pure_fusion_identical": false
         },
-        "signal_distribution": {},
+        "signal_distribution": {
+          "强势启动候选": 2
+        },
         "event_analysis_status_counts": {
           "ok": 10,
           "failed": 0,
           "skipped": 0
         },
         "chart_annotation_coverage": {
-          "total_picks": 0,
-          "with_annotations": 0
+          "total_picks": 2,
+          "with_annotations": 2
         },
         "data_quality": {
           "report_date": "2026-09-21",
-          "generated_at": "2026-09-21T15:05:08+08:00",
-          "as_of": "2026-09-21T15:05:08+08:00",
+          "generated_at": "2026-09-21T15:20:10+08:00",
+          "as_of": "2026-09-21T15:20:10+08:00",
           "bar_state": "closed",
           "is_trading_day": true,
           "is_official": true,
@@ -184151,7 +185604,7 @@
             "920974",
             "920976"
           ],
-          "daily_refresh_mode": "db_first",
+          "daily_refresh_mode": "missing_only",
           "missing_30min_count": 0,
           "stock_pool_incomplete": false,
           "sector_component_diagnostics": [
@@ -186938,19 +188391,19 @@
             "remote_error": "",
             "name_resolution_missing_codes": []
           },
-          "daily_run_mode": "db_first",
+          "daily_run_mode": "missing_only",
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -187147,13 +188600,13 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           },
           "runtime_policy": {
             "market_history_cutover_mode": "sqlite",
@@ -187251,9 +188704,9 @@
           },
           "market_cap_evidence": {
             "requested": 937,
-            "db_hits": 928,
-            "remote_requested": 9,
-            "remote_hits": 9,
+            "db_hits": 937,
+            "remote_requested": 0,
+            "remote_hits": 0,
             "hydrated": 937,
             "max_workers": 20
           },
@@ -187284,15 +188737,15 @@
             "market_close_snapshot": {
               "status": "partial",
               "report_date": "2026-09-21",
-              "requested": 5917,
-              "unique": 5917,
-              "valid_a_rows": 5917,
+              "requested": 0,
+              "unique": 0,
+              "valid_a_rows": 5781,
               "valid_bar_count": 5447,
-              "quoted_rows": 5553,
-              "written": 5447,
-              "skipped_unquoted": 364,
-              "skipped_missing_factor": 106,
-              "history_eligible_rows": 5781,
+              "quoted_rows": 0,
+              "written": 0,
+              "skipped_unquoted": 0,
+              "skipped_missing_factor": 0,
+              "history_eligible_rows": 0,
               "identity_pending_rows": 93,
               "identity_pending_codes": [
                 "920008",
@@ -187489,20 +188942,20 @@
               "coverage": 0.927307,
               "coverage_numerator": 5447,
               "coverage_denominator": 5874,
-              "eligible_coverage_numerator": 5447,
-              "eligible_coverage_denominator": 5781,
+              "eligible_coverage_numerator": 0,
+              "eligible_coverage_denominator": 0,
               "minimum_coverage": 0.9,
               "meets_minimum_coverage": true,
-              "remote_calls": 1,
-              "eligible_coverage": 0.942225,
-              "reason": "identity_migration_pending"
+              "remote_calls": 0,
+              "reason": "identity_migration_pending",
+              "source": "db"
             }
           },
           "by_strategy": {
             "daily_fusion": {
               "status": "verified",
               "required_date": "2026-09-21",
-              "dependent_candidate_count": 0,
+              "dependent_candidate_count": 1,
               "invalid_count": 0,
               "invalid_codes": [],
               "formal_actions_allowed": true,
@@ -188272,15 +189725,15 @@
               "market_close_snapshot": {
                 "status": "partial",
                 "report_date": "2026-09-21",
-                "requested": 5917,
-                "unique": 5917,
-                "valid_a_rows": 5917,
+                "requested": 0,
+                "unique": 0,
+                "valid_a_rows": 5781,
                 "valid_bar_count": 5447,
-                "quoted_rows": 5553,
-                "written": 5447,
-                "skipped_unquoted": 364,
-                "skipped_missing_factor": 106,
-                "history_eligible_rows": 5781,
+                "quoted_rows": 0,
+                "written": 0,
+                "skipped_unquoted": 0,
+                "skipped_missing_factor": 0,
+                "history_eligible_rows": 0,
                 "identity_pending_rows": 93,
                 "identity_pending_codes": [
                   "920008",
@@ -188477,19 +189930,19 @@
                 "coverage": 0.927307,
                 "coverage_numerator": 5447,
                 "coverage_denominator": 5874,
-                "eligible_coverage_numerator": 5447,
-                "eligible_coverage_denominator": 5781,
+                "eligible_coverage_numerator": 0,
+                "eligible_coverage_denominator": 0,
                 "minimum_coverage": 0.9,
                 "meets_minimum_coverage": true,
-                "remote_calls": 1,
-                "eligible_coverage": 0.942225,
-                "reason": "identity_migration_pending"
+                "remote_calls": 0,
+                "reason": "identity_migration_pending",
+                "source": "db"
               }
             },
             "h4_t3": {
               "status": "verified",
               "required_date": "2026-09-21",
-              "dependent_candidate_count": 0,
+              "dependent_candidate_count": 2,
               "invalid_count": 0,
               "invalid_codes": [],
               "formal_actions_allowed": true,
@@ -189259,15 +190712,15 @@
               "market_close_snapshot": {
                 "status": "partial",
                 "report_date": "2026-09-21",
-                "requested": 5917,
-                "unique": 5917,
-                "valid_a_rows": 5917,
+                "requested": 0,
+                "unique": 0,
+                "valid_a_rows": 5781,
                 "valid_bar_count": 5447,
-                "quoted_rows": 5553,
-                "written": 5447,
-                "skipped_unquoted": 364,
-                "skipped_missing_factor": 106,
-                "history_eligible_rows": 5781,
+                "quoted_rows": 0,
+                "written": 0,
+                "skipped_unquoted": 0,
+                "skipped_missing_factor": 0,
+                "history_eligible_rows": 0,
                 "identity_pending_rows": 93,
                 "identity_pending_codes": [
                   "920008",
@@ -189464,13 +190917,13 @@
                 "coverage": 0.927307,
                 "coverage_numerator": 5447,
                 "coverage_denominator": 5874,
-                "eligible_coverage_numerator": 5447,
-                "eligible_coverage_denominator": 5781,
+                "eligible_coverage_numerator": 0,
+                "eligible_coverage_denominator": 0,
                 "minimum_coverage": 0.9,
                 "meets_minimum_coverage": true,
-                "remote_calls": 1,
-                "eligible_coverage": 0.942225,
-                "reason": "identity_migration_pending"
+                "remote_calls": 0,
+                "reason": "identity_migration_pending",
+                "source": "db"
               }
             },
             "luojie_pool": {
@@ -189884,10 +191337,11 @@
               "required_date": "2026-09-21",
               "status": "partial",
               "requested_count": 332,
-              "verified_count": 208,
-              "missing_count": 124,
+              "verified_count": 303,
+              "missing_count": 29,
               "verified_codes": [
                 "000338",
+                "000513",
                 "000534",
                 "000539",
                 "000686",
@@ -189895,13 +191349,18 @@
                 "000786",
                 "000802",
                 "000810",
+                "000935",
                 "000963",
                 "000977",
                 "000987",
                 "001287",
                 "001309",
+                "001896",
+                "002006",
+                "002019",
                 "002027",
                 "002028",
+                "002031",
                 "002049",
                 "002056",
                 "002077",
@@ -189920,17 +191379,23 @@
                 "002281",
                 "002311",
                 "002353",
+                "002364",
                 "002380",
                 "002402",
                 "002410",
                 "002428",
+                "002432",
+                "002439",
                 "002459",
+                "002463",
                 "002475",
                 "002549",
                 "002552",
+                "002559",
                 "002560",
                 "002606",
                 "002635",
+                "002643",
                 "002654",
                 "002664",
                 "002747",
@@ -189942,15 +191407,20 @@
                 "002940",
                 "002943",
                 "002972",
+                "002979",
+                "002998",
+                "003021",
                 "300014",
                 "300015",
                 "300017",
                 "300033",
+                "300036",
                 "300043",
                 "300059",
                 "300065",
                 "300069",
                 "300073",
+                "300105",
                 "300113",
                 "300127",
                 "300129",
@@ -189959,23 +191429,35 @@
                 "300166",
                 "300170",
                 "300181",
+                "300201",
+                "300204",
                 "300251",
                 "300253",
+                "300261",
+                "300263",
                 "300274",
                 "300296",
+                "300302",
+                "300303",
+                "300315",
                 "300316",
                 "300339",
                 "300357",
+                "300380",
                 "300381",
                 "300395",
+                "300418",
                 "300435",
                 "300436",
+                "300442",
+                "300446",
                 "300455",
                 "300458",
                 "300476",
                 "300488",
                 "300503",
                 "300508",
+                "300529",
                 "300531",
                 "300540",
                 "300546",
@@ -189984,43 +191466,60 @@
                 "300617",
                 "300652",
                 "300660",
+                "300668",
                 "300679",
                 "300681",
+                "300699",
                 "300723",
+                "300724",
                 "300735",
                 "300745",
                 "300748",
                 "300777",
                 "300785",
+                "300861",
                 "300900",
                 "300964",
                 "300970",
+                "301012",
                 "301029",
+                "301075",
                 "301086",
                 "301095",
+                "301162",
                 "301188",
                 "301206",
                 "301217",
                 "301219",
+                "301232",
+                "301238",
+                "301246",
                 "301252",
                 "301261",
+                "301269",
                 "301293",
                 "301301",
+                "301308",
                 "301328",
                 "301371",
                 "301397",
                 "301555",
+                "301563",
+                "301588",
                 "301629",
                 "301658",
                 "301696",
                 "600021",
                 "600078",
+                "600118",
                 "600129",
+                "600160",
                 "600211",
                 "600276",
                 "600285",
                 "600288",
                 "600363",
+                "600380",
                 "600449",
                 "600539",
                 "600549",
@@ -190028,45 +191527,68 @@
                 "600563",
                 "600585",
                 "600588",
+                "600666",
                 "600703",
                 "600773",
                 "600777",
                 "600791",
+                "600867",
+                "600875",
+                "600888",
                 "600909",
                 "600958",
                 "600977",
+                "600999",
                 "601001",
                 "601126",
+                "601138",
                 "601231",
                 "601606",
                 "601615",
+                "601636",
                 "601696",
                 "601858",
                 "601888",
                 "603005",
+                "603019",
                 "603063",
+                "603072",
                 "603078",
+                "603090",
+                "603200",
                 "603226",
                 "603262",
                 "603267",
                 "603279",
+                "603283",
                 "603290",
+                "603311",
+                "603317",
+                "603319",
                 "603341",
                 "603505",
                 "603530",
                 "603589",
                 "603629",
                 "603638",
+                "603662",
                 "603667",
                 "603690",
+                "603698",
                 "603728",
                 "603777",
                 "603885",
                 "603906",
+                "603916",
+                "603929",
                 "603992",
                 "605060",
+                "605178",
+                "605366",
+                "605389",
                 "605398",
                 "605598",
+                "688006",
                 "688017",
                 "688036",
                 "688047",
@@ -190077,148 +191599,79 @@
                 "688099",
                 "688106",
                 "688107",
+                "688141",
                 "688146",
+                "688148",
                 "688155",
                 "688172",
-                "688221",
-                "688226",
-                "688268",
-                "688277",
-                "688308",
-                "688376",
-                "688379",
-                "688408",
-                "688439",
-                "688507",
-                "688567",
-                "688596",
-                "688629",
-                "688708",
-                "688778"
-              ],
-              "missing_codes": [
-                "000513",
-                "000617",
-                "000766",
-                "000935",
-                "001896",
-                "002006",
-                "002019",
-                "002031",
-                "002153",
-                "002273",
-                "002335",
-                "002364",
-                "002432",
-                "002439",
-                "002463",
-                "002555",
-                "002559",
-                "002643",
-                "002645",
-                "002733",
-                "002845",
-                "002939",
-                "002979",
-                "002993",
-                "002998",
-                "003021",
-                "300036",
-                "300100",
-                "300105",
-                "300201",
-                "300204",
-                "300261",
-                "300263",
-                "300302",
-                "300303",
-                "300315",
-                "300380",
-                "300418",
-                "300442",
-                "300446",
-                "300529",
-                "300668",
-                "300699",
-                "300724",
-                "300842",
-                "300861",
-                "300890",
-                "301012",
-                "301050",
-                "301075",
-                "301162",
-                "301232",
-                "301238",
-                "301246",
-                "301269",
-                "301308",
-                "301310",
-                "301377",
-                "301563",
-                "301588",
-                "600118",
-                "600160",
-                "600380",
-                "600392",
-                "600666",
-                "600683",
-                "600867",
-                "600875",
-                "600888",
-                "600999",
-                "601016",
-                "601138",
-                "601360",
-                "601619",
-                "601636",
-                "603019",
-                "603072",
-                "603090",
-                "603200",
-                "603283",
-                "603311",
-                "603317",
-                "603319",
-                "603501",
-                "603662",
-                "603698",
-                "603916",
-                "603929",
-                "605178",
-                "605366",
-                "605389",
-                "688006",
-                "688141",
-                "688148",
                 "688183",
                 "688187",
+                "688221",
+                "688226",
                 "688249",
                 "688262",
+                "688268",
                 "688271",
+                "688277",
+                "688308",
                 "688327",
                 "688347",
-                "688351",
                 "688359",
                 "688365",
                 "688371",
-                "688390",
+                "688376",
+                "688379",
                 "688400",
                 "688403",
-                "688410",
+                "688408",
+                "688439",
+                "688507",
                 "688522",
                 "688523",
                 "688525",
                 "688556",
+                "688567",
                 "688568",
+                "688596",
                 "688599",
                 "688626",
+                "688629",
                 "688676",
+                "688708",
                 "688733",
                 "688776",
+                "688778",
                 "688787",
+                "688811"
+              ],
+              "missing_codes": [
+                "000617",
+                "000766",
+                "002153",
+                "002273",
+                "002335",
+                "002555",
+                "002645",
+                "002733",
+                "002845",
+                "002939",
+                "002993",
+                "300100",
+                "300842",
+                "300890",
+                "301050",
+                "301310",
+                "301377",
+                "600392",
+                "600683",
+                "601016",
+                "601360",
+                "601619",
+                "603501",
+                "688351",
+                "688390",
+                "688410",
                 "688798",
-                "688811",
                 "688818",
                 "688981"
               ],
@@ -190228,15 +191681,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -190433,30 +191886,30 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         "common_upstream": {
           "picks_fusion": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
-            "input_count": 0,
-            "kept_count": 0,
+            "upstream_count": 2,
+            "input_count": 1,
+            "kept_count": 1,
             "excluded_count": 0,
             "excluded_codes": []
           },
           "startup_watchlist": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
-            "input_count": 76,
+            "upstream_count": 2,
+            "input_count": 74,
             "kept_count": 18,
-            "excluded_count": 58,
+            "excluded_count": 56,
             "excluded_codes": [
               "000963",
               "002019",
@@ -190467,7 +191920,6 @@
               "002249",
               "002271",
               "002845",
-              "003021",
               "300059",
               "300127",
               "300136",
@@ -190486,7 +191938,6 @@
               "300723",
               "300970",
               "301012",
-              "301075",
               "301162",
               "301188",
               "301246",
@@ -190541,7 +191992,7 @@
           },
           "trend_watchlist": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
+            "upstream_count": 2,
             "input_count": 0,
             "kept_count": 0,
             "excluded_count": 0,
@@ -190551,7 +192002,7 @@
           },
           "luojie_pool": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
+            "upstream_count": 2,
             "input_count": 0,
             "kept_count": 0,
             "excluded_count": 0,
@@ -193265,16 +194716,16 @@
             }
           },
           "upgrade": {
-            "startup_candidate": 0,
+            "startup_candidate": 2,
             "startup_watch": 0,
             "dropped_no_30min_confirm": 0,
-            "watch_due_to_no_30min_confirm": 58
+            "watch_due_to_no_30min_confirm": 56
           },
-          "startup_candidates": 0,
+          "startup_candidates": 2,
           "startup_watchlist": 18
         },
         "candidate_funnel": {
-          "run_id": "20260921-f63c9df0da93",
+          "run_id": "20260921-b599d63c2b04",
           "report_date": "2026-09-21",
           "as_of": "2026-09-21",
           "candidate_count": 5914,
@@ -193284,20 +194735,20 @@
             "retrieval": 934,
             "daily_channel": 348,
             "minute30": 58,
-            "fusion": 0,
-            "display": 18
+            "fusion": 1,
+            "display": 20
           },
           "terminal_counts": {
-            "main": 0,
+            "main": 2,
             "observe": 18,
-            "reject": 5896
+            "reject": 5894
           },
           "first_failure_counts": {
             "eligible": 2517,
             "retrieval": 2463,
             "daily_channel": 604,
             "minute30": 272,
-            "fusion": 58
+            "fusion": 56
           },
           "persist_status": "saved",
           "db_path": "/Users/yangfan/yf_source/ChanlunStrategy/.cache/chanlun/market_history.sqlite"
@@ -193305,10 +194756,10 @@
         "recall_shadow": {
           "mode": "active",
           "new_strategy_controls_publish": true,
-          "potential_pure_count": 0,
-          "potential_fusion_count": 0,
-          "published_pure_count": 0,
-          "published_fusion_count": 0,
+          "potential_pure_count": 2,
+          "potential_fusion_count": 1,
+          "published_pure_count": 2,
+          "published_fusion_count": 1,
           "suppressed_codes": []
         },
         "luojie_pool": {
@@ -193880,7 +195331,7 @@
           "partial_candidate_output_allowed": false,
           "final_common_upstream": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
+            "upstream_count": 2,
             "input_count": 0,
             "kept_count": 0,
             "excluded_count": 0,
@@ -193892,14 +195343,14 @@
         },
         "signal_recency": {
           "max_age_trading_days": 10,
-          "pure_input": 0,
-          "pure_kept": 0,
+          "pure_input": 2,
+          "pure_kept": 2,
           "pure_dropped_expired": 0,
-          "fusion_input": 0,
-          "fusion_kept": 0,
+          "fusion_input": 1,
+          "fusion_kept": 1,
           "fusion_dropped_expired": 0,
-          "watch_input": 76,
-          "watch_kept": 76,
+          "watch_input": 74,
+          "watch_kept": 74,
           "watch_dropped_expired": 0,
           "trend_watch_input": 0,
           "trend_watch_kept": 0,
@@ -193920,24 +195371,24 @@
         "recommendation_ledger": {
           "status": "finalized",
           "report_date": "2026-09-21",
-          "today_entries": 18,
-          "finalized_today_entries": 18,
+          "today_entries": 20,
+          "finalized_today_entries": 20,
           "missing_today_entries": 0,
-          "finalized_entries": 1404,
-          "evaluation_entries": 1404,
+          "finalized_entries": 1406,
+          "evaluation_entries": 1406,
           "evidence": "immutable_ledger_membership"
         },
         "strategy_review_benchmark_ingest": {
           "status": "ok",
           "code": "000300",
           "bars": 101,
-          "rows_written": 1,
+          "rows_written": 0,
           "latest_date": "2026-09-21"
         },
         "strategy_review": {
           "status": "ok",
-          "requested_codes": 1018,
-          "resolved_codes": 1018,
+          "requested_codes": 1019,
+          "resolved_codes": 1019,
           "missing_codes": [],
           "adjustment": "qfq",
           "calendar_source": "canonical_stock_market_dates",
@@ -193948,8 +195399,8 @@
       },
       "data_quality": {
         "report_date": "2026-09-21",
-        "generated_at": "2026-09-21T15:05:08+08:00",
-        "as_of": "2026-09-21T15:05:08+08:00",
+        "generated_at": "2026-09-21T15:20:10+08:00",
+        "as_of": "2026-09-21T15:20:10+08:00",
         "bar_state": "closed",
         "is_trading_day": true,
         "is_official": true,
@@ -194041,7 +195492,7 @@
           "920974",
           "920976"
         ],
-        "daily_refresh_mode": "db_first",
+        "daily_refresh_mode": "missing_only",
         "missing_30min_count": 0,
         "stock_pool_incomplete": false,
         "sector_component_diagnostics": [
@@ -196828,19 +198279,19 @@
           "remote_error": "",
           "name_resolution_missing_codes": []
         },
-        "daily_run_mode": "db_first",
+        "daily_run_mode": "missing_only",
         "market_close_snapshot": {
           "status": "partial",
           "report_date": "2026-09-21",
-          "requested": 5917,
-          "unique": 5917,
-          "valid_a_rows": 5917,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5781,
           "valid_bar_count": 5447,
-          "quoted_rows": 5553,
-          "written": 5447,
-          "skipped_unquoted": 364,
-          "skipped_missing_factor": 106,
-          "history_eligible_rows": 5781,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
           "identity_pending_rows": 93,
           "identity_pending_codes": [
             "920008",
@@ -197037,13 +198488,13 @@
           "coverage": 0.927307,
           "coverage_numerator": 5447,
           "coverage_denominator": 5874,
-          "eligible_coverage_numerator": 5447,
-          "eligible_coverage_denominator": 5781,
+          "eligible_coverage_numerator": 0,
+          "eligible_coverage_denominator": 0,
           "minimum_coverage": 0.9,
           "meets_minimum_coverage": true,
-          "remote_calls": 1,
-          "eligible_coverage": 0.942225,
-          "reason": "identity_migration_pending"
+          "remote_calls": 0,
+          "reason": "identity_migration_pending",
+          "source": "db"
         },
         "runtime_policy": {
           "market_history_cutover_mode": "sqlite",
@@ -197141,9 +198592,9 @@
         },
         "market_cap_evidence": {
           "requested": 937,
-          "db_hits": 928,
-          "remote_requested": 9,
-          "remote_hits": 9,
+          "db_hits": 937,
+          "remote_requested": 0,
+          "remote_hits": 0,
           "hydrated": 937,
           "max_workers": 20
         },
@@ -197174,15 +198625,15 @@
           "market_close_snapshot": {
             "status": "partial",
             "report_date": "2026-09-21",
-            "requested": 5917,
-            "unique": 5917,
-            "valid_a_rows": 5917,
+            "requested": 0,
+            "unique": 0,
+            "valid_a_rows": 5781,
             "valid_bar_count": 5447,
-            "quoted_rows": 5553,
-            "written": 5447,
-            "skipped_unquoted": 364,
-            "skipped_missing_factor": 106,
-            "history_eligible_rows": 5781,
+            "quoted_rows": 0,
+            "written": 0,
+            "skipped_unquoted": 0,
+            "skipped_missing_factor": 0,
+            "history_eligible_rows": 0,
             "identity_pending_rows": 93,
             "identity_pending_codes": [
               "920008",
@@ -197379,20 +198830,20 @@
             "coverage": 0.927307,
             "coverage_numerator": 5447,
             "coverage_denominator": 5874,
-            "eligible_coverage_numerator": 5447,
-            "eligible_coverage_denominator": 5781,
+            "eligible_coverage_numerator": 0,
+            "eligible_coverage_denominator": 0,
             "minimum_coverage": 0.9,
             "meets_minimum_coverage": true,
-            "remote_calls": 1,
-            "eligible_coverage": 0.942225,
-            "reason": "identity_migration_pending"
+            "remote_calls": 0,
+            "reason": "identity_migration_pending",
+            "source": "db"
           }
         },
         "by_strategy": {
           "daily_fusion": {
             "status": "verified",
             "required_date": "2026-09-21",
-            "dependent_candidate_count": 0,
+            "dependent_candidate_count": 1,
             "invalid_count": 0,
             "invalid_codes": [],
             "formal_actions_allowed": true,
@@ -198162,15 +199613,15 @@
             "market_close_snapshot": {
               "status": "partial",
               "report_date": "2026-09-21",
-              "requested": 5917,
-              "unique": 5917,
-              "valid_a_rows": 5917,
+              "requested": 0,
+              "unique": 0,
+              "valid_a_rows": 5781,
               "valid_bar_count": 5447,
-              "quoted_rows": 5553,
-              "written": 5447,
-              "skipped_unquoted": 364,
-              "skipped_missing_factor": 106,
-              "history_eligible_rows": 5781,
+              "quoted_rows": 0,
+              "written": 0,
+              "skipped_unquoted": 0,
+              "skipped_missing_factor": 0,
+              "history_eligible_rows": 0,
               "identity_pending_rows": 93,
               "identity_pending_codes": [
                 "920008",
@@ -198367,19 +199818,19 @@
               "coverage": 0.927307,
               "coverage_numerator": 5447,
               "coverage_denominator": 5874,
-              "eligible_coverage_numerator": 5447,
-              "eligible_coverage_denominator": 5781,
+              "eligible_coverage_numerator": 0,
+              "eligible_coverage_denominator": 0,
               "minimum_coverage": 0.9,
               "meets_minimum_coverage": true,
-              "remote_calls": 1,
-              "eligible_coverage": 0.942225,
-              "reason": "identity_migration_pending"
+              "remote_calls": 0,
+              "reason": "identity_migration_pending",
+              "source": "db"
             }
           },
           "h4_t3": {
             "status": "verified",
             "required_date": "2026-09-21",
-            "dependent_candidate_count": 0,
+            "dependent_candidate_count": 2,
             "invalid_count": 0,
             "invalid_codes": [],
             "formal_actions_allowed": true,
@@ -199149,15 +200600,15 @@
             "market_close_snapshot": {
               "status": "partial",
               "report_date": "2026-09-21",
-              "requested": 5917,
-              "unique": 5917,
-              "valid_a_rows": 5917,
+              "requested": 0,
+              "unique": 0,
+              "valid_a_rows": 5781,
               "valid_bar_count": 5447,
-              "quoted_rows": 5553,
-              "written": 5447,
-              "skipped_unquoted": 364,
-              "skipped_missing_factor": 106,
-              "history_eligible_rows": 5781,
+              "quoted_rows": 0,
+              "written": 0,
+              "skipped_unquoted": 0,
+              "skipped_missing_factor": 0,
+              "history_eligible_rows": 0,
               "identity_pending_rows": 93,
               "identity_pending_codes": [
                 "920008",
@@ -199354,13 +200805,13 @@
               "coverage": 0.927307,
               "coverage_numerator": 5447,
               "coverage_denominator": 5874,
-              "eligible_coverage_numerator": 5447,
-              "eligible_coverage_denominator": 5781,
+              "eligible_coverage_numerator": 0,
+              "eligible_coverage_denominator": 0,
               "minimum_coverage": 0.9,
               "meets_minimum_coverage": true,
-              "remote_calls": 1,
-              "eligible_coverage": 0.942225,
-              "reason": "identity_migration_pending"
+              "remote_calls": 0,
+              "reason": "identity_migration_pending",
+              "source": "db"
             }
           },
           "luojie_pool": {
@@ -199774,10 +201225,11 @@
             "required_date": "2026-09-21",
             "status": "partial",
             "requested_count": 332,
-            "verified_count": 208,
-            "missing_count": 124,
+            "verified_count": 303,
+            "missing_count": 29,
             "verified_codes": [
               "000338",
+              "000513",
               "000534",
               "000539",
               "000686",
@@ -199785,13 +201237,18 @@
               "000786",
               "000802",
               "000810",
+              "000935",
               "000963",
               "000977",
               "000987",
               "001287",
               "001309",
+              "001896",
+              "002006",
+              "002019",
               "002027",
               "002028",
+              "002031",
               "002049",
               "002056",
               "002077",
@@ -199810,17 +201267,23 @@
               "002281",
               "002311",
               "002353",
+              "002364",
               "002380",
               "002402",
               "002410",
               "002428",
+              "002432",
+              "002439",
               "002459",
+              "002463",
               "002475",
               "002549",
               "002552",
+              "002559",
               "002560",
               "002606",
               "002635",
+              "002643",
               "002654",
               "002664",
               "002747",
@@ -199832,15 +201295,20 @@
               "002940",
               "002943",
               "002972",
+              "002979",
+              "002998",
+              "003021",
               "300014",
               "300015",
               "300017",
               "300033",
+              "300036",
               "300043",
               "300059",
               "300065",
               "300069",
               "300073",
+              "300105",
               "300113",
               "300127",
               "300129",
@@ -199849,23 +201317,35 @@
               "300166",
               "300170",
               "300181",
+              "300201",
+              "300204",
               "300251",
               "300253",
+              "300261",
+              "300263",
               "300274",
               "300296",
+              "300302",
+              "300303",
+              "300315",
               "300316",
               "300339",
               "300357",
+              "300380",
               "300381",
               "300395",
+              "300418",
               "300435",
               "300436",
+              "300442",
+              "300446",
               "300455",
               "300458",
               "300476",
               "300488",
               "300503",
               "300508",
+              "300529",
               "300531",
               "300540",
               "300546",
@@ -199874,43 +201354,60 @@
               "300617",
               "300652",
               "300660",
+              "300668",
               "300679",
               "300681",
+              "300699",
               "300723",
+              "300724",
               "300735",
               "300745",
               "300748",
               "300777",
               "300785",
+              "300861",
               "300900",
               "300964",
               "300970",
+              "301012",
               "301029",
+              "301075",
               "301086",
               "301095",
+              "301162",
               "301188",
               "301206",
               "301217",
               "301219",
+              "301232",
+              "301238",
+              "301246",
               "301252",
               "301261",
+              "301269",
               "301293",
               "301301",
+              "301308",
               "301328",
               "301371",
               "301397",
               "301555",
+              "301563",
+              "301588",
               "301629",
               "301658",
               "301696",
               "600021",
               "600078",
+              "600118",
               "600129",
+              "600160",
               "600211",
               "600276",
               "600285",
               "600288",
               "600363",
+              "600380",
               "600449",
               "600539",
               "600549",
@@ -199918,45 +201415,68 @@
               "600563",
               "600585",
               "600588",
+              "600666",
               "600703",
               "600773",
               "600777",
               "600791",
+              "600867",
+              "600875",
+              "600888",
               "600909",
               "600958",
               "600977",
+              "600999",
               "601001",
               "601126",
+              "601138",
               "601231",
               "601606",
               "601615",
+              "601636",
               "601696",
               "601858",
               "601888",
               "603005",
+              "603019",
               "603063",
+              "603072",
               "603078",
+              "603090",
+              "603200",
               "603226",
               "603262",
               "603267",
               "603279",
+              "603283",
               "603290",
+              "603311",
+              "603317",
+              "603319",
               "603341",
               "603505",
               "603530",
               "603589",
               "603629",
               "603638",
+              "603662",
               "603667",
               "603690",
+              "603698",
               "603728",
               "603777",
               "603885",
               "603906",
+              "603916",
+              "603929",
               "603992",
               "605060",
+              "605178",
+              "605366",
+              "605389",
               "605398",
               "605598",
+              "688006",
               "688017",
               "688036",
               "688047",
@@ -199967,148 +201487,79 @@
               "688099",
               "688106",
               "688107",
+              "688141",
               "688146",
+              "688148",
               "688155",
               "688172",
-              "688221",
-              "688226",
-              "688268",
-              "688277",
-              "688308",
-              "688376",
-              "688379",
-              "688408",
-              "688439",
-              "688507",
-              "688567",
-              "688596",
-              "688629",
-              "688708",
-              "688778"
-            ],
-            "missing_codes": [
-              "000513",
-              "000617",
-              "000766",
-              "000935",
-              "001896",
-              "002006",
-              "002019",
-              "002031",
-              "002153",
-              "002273",
-              "002335",
-              "002364",
-              "002432",
-              "002439",
-              "002463",
-              "002555",
-              "002559",
-              "002643",
-              "002645",
-              "002733",
-              "002845",
-              "002939",
-              "002979",
-              "002993",
-              "002998",
-              "003021",
-              "300036",
-              "300100",
-              "300105",
-              "300201",
-              "300204",
-              "300261",
-              "300263",
-              "300302",
-              "300303",
-              "300315",
-              "300380",
-              "300418",
-              "300442",
-              "300446",
-              "300529",
-              "300668",
-              "300699",
-              "300724",
-              "300842",
-              "300861",
-              "300890",
-              "301012",
-              "301050",
-              "301075",
-              "301162",
-              "301232",
-              "301238",
-              "301246",
-              "301269",
-              "301308",
-              "301310",
-              "301377",
-              "301563",
-              "301588",
-              "600118",
-              "600160",
-              "600380",
-              "600392",
-              "600666",
-              "600683",
-              "600867",
-              "600875",
-              "600888",
-              "600999",
-              "601016",
-              "601138",
-              "601360",
-              "601619",
-              "601636",
-              "603019",
-              "603072",
-              "603090",
-              "603200",
-              "603283",
-              "603311",
-              "603317",
-              "603319",
-              "603501",
-              "603662",
-              "603698",
-              "603916",
-              "603929",
-              "605178",
-              "605366",
-              "605389",
-              "688006",
-              "688141",
-              "688148",
               "688183",
               "688187",
+              "688221",
+              "688226",
               "688249",
               "688262",
+              "688268",
               "688271",
+              "688277",
+              "688308",
               "688327",
               "688347",
-              "688351",
               "688359",
               "688365",
               "688371",
-              "688390",
+              "688376",
+              "688379",
               "688400",
               "688403",
-              "688410",
+              "688408",
+              "688439",
+              "688507",
               "688522",
               "688523",
               "688525",
               "688556",
+              "688567",
               "688568",
+              "688596",
               "688599",
               "688626",
+              "688629",
               "688676",
+              "688708",
               "688733",
               "688776",
+              "688778",
               "688787",
+              "688811"
+            ],
+            "missing_codes": [
+              "000617",
+              "000766",
+              "002153",
+              "002273",
+              "002335",
+              "002555",
+              "002645",
+              "002733",
+              "002845",
+              "002939",
+              "002993",
+              "300100",
+              "300842",
+              "300890",
+              "301050",
+              "301310",
+              "301377",
+              "600392",
+              "600683",
+              "601016",
+              "601360",
+              "601619",
+              "603501",
+              "688351",
+              "688390",
+              "688410",
               "688798",
-              "688811",
               "688818",
               "688981"
             ],
@@ -200118,15 +201569,15 @@
         "market_close_snapshot": {
           "status": "partial",
           "report_date": "2026-09-21",
-          "requested": 5917,
-          "unique": 5917,
-          "valid_a_rows": 5917,
+          "requested": 0,
+          "unique": 0,
+          "valid_a_rows": 5781,
           "valid_bar_count": 5447,
-          "quoted_rows": 5553,
-          "written": 5447,
-          "skipped_unquoted": 364,
-          "skipped_missing_factor": 106,
-          "history_eligible_rows": 5781,
+          "quoted_rows": 0,
+          "written": 0,
+          "skipped_unquoted": 0,
+          "skipped_missing_factor": 0,
+          "history_eligible_rows": 0,
           "identity_pending_rows": 93,
           "identity_pending_codes": [
             "920008",
@@ -200323,13 +201774,13 @@
           "coverage": 0.927307,
           "coverage_numerator": 5447,
           "coverage_denominator": 5874,
-          "eligible_coverage_numerator": 5447,
-          "eligible_coverage_denominator": 5781,
+          "eligible_coverage_numerator": 0,
+          "eligible_coverage_denominator": 0,
           "minimum_coverage": 0.9,
           "meets_minimum_coverage": true,
-          "remote_calls": 1,
-          "eligible_coverage": 0.942225,
-          "reason": "identity_migration_pending"
+          "remote_calls": 0,
+          "reason": "identity_migration_pending",
+          "source": "db"
         }
       },
       "next_day_boom": {
@@ -200339,7 +201790,7 @@
         "enable_threshold_pct": 1.0,
         "top_n": 5,
         "source_counts": {
-          "fusion_startup": 0,
+          "fusion_startup": 1,
           "startup_watch": 18
         },
         "candidates": []
@@ -200923,7 +202374,7 @@
           "partial_candidate_output_allowed": false,
           "final_common_upstream": {
             "upstream_pool": "picks_pure",
-            "upstream_count": 0,
+            "upstream_count": 2,
             "input_count": 0,
             "kept_count": 0,
             "excluded_count": 0,
@@ -201224,12 +202675,12 @@
         },
         "production_guard": {
           "unchanged": true,
-          "before_sha256": "daeeab325c896ea5e8f22808f836ba42028dad55ee7ff15e93cd08336a3a2967",
-          "after_sha256": "daeeab325c896ea5e8f22808f836ba42028dad55ee7ff15e93cd08336a3a2967"
+          "before_sha256": "196a808f6216f882e14eaea86a0d476198fb89fa0547166cd613c172d6b858a0",
+          "after_sha256": "196a808f6216f882e14eaea86a0d476198fb89fa0547166cd613c172d6b858a0"
         },
         "production_reference": {
           "pool": "picks_fusion",
-          "today_count": 0,
+          "today_count": 1,
           "comparison_eligible": false,
           "intended_horizon": null,
           "reason": "现网主推未声明统一主周期，只作数量与隔离参考"
