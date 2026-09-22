@@ -4,9 +4,26 @@ from pathlib import Path
 
 from chanlun.candidate_funnel import CandidateFunnel, FUNNEL_STAGES
 from chanlun.market_history_store import MarketHistoryStore
+from run import _minute30_funnel_pass_items
 
 
 class CandidateFunnelTest(unittest.TestCase):
+    def test_minute30_pass_items_exclude_observation_rows(self):
+        formal = [{"code": "600001"}]
+        fusion = [{"code": "600002"}]
+        observation = [{
+            "code": "600003",
+            "minute30_input_status": "missing",
+            "minute30_confirmation_status": "not_evaluated",
+        }]
+
+        passed = _minute30_funnel_pass_items(formal, fusion)
+
+        self.assertEqual(
+            [row["code"] for row in passed], ["600001", "600002"]
+        )
+        self.assertNotIn(observation[0], passed)
+
     def test_first_failure_is_recorded_once_and_raw_features_are_preserved(self):
         funnel = CandidateFunnel("run-1", "2026-07-15")
         funnel.register(

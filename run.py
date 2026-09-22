@@ -796,6 +796,11 @@ def _build_formal_input_health(items, report_date):
     }
 
 
+def _minute30_funnel_pass_items(pure_confirmed, fusion_confirmed):
+    """Return only candidates that passed independent 30m confirmation."""
+    return list(pure_confirmed or []) + list(fusion_confirmed or [])
+
+
 def _build_h4_input_health(h4_pool, report_date):
     value = h4_pool if isinstance(h4_pool, dict) else {}
     diagnostics = value.get("diagnostics")
@@ -3505,16 +3510,13 @@ def main(debug=False, preview=False, generated_at=None):
     observation_watchlist = startup_watchlist + (
         trend_watchlist if RIGHT_SIDE_STARTUP_MODE == "active" else []
     )
-    minute30_pass_items = (
-        list(pure_confirmed)
-        + list(fusion_confirmed)
-        + list(observation_watchlist)
+    minute30_pass_items = _minute30_funnel_pass_items(
+        pure_confirmed, fusion_confirmed
     )
     candidate_funnel.register_many(minute30_pass_items)
     candidate_funnel.mark_membership(
         "minute30",
         minute30_pass_items,
-        failure_reason="minute30_not_confirmed",
         eligible_codes=all_target_codes,
     )
     print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
@@ -3832,6 +3834,8 @@ def main(debug=False, preview=False, generated_at=None):
         if not isinstance(watch, dict) or not watch.get("code"):
             continue
         failure_gate = str(watch.get("failure_gate") or "").strip()
+        if failure_gate == "30min_confirm":
+            failure_gate = "minute30"
         if failure_gate not in {
             "eligible",
             "retrieval",
@@ -3868,6 +3872,9 @@ def main(debug=False, preview=False, generated_at=None):
                     "distance_from_reference_pct",
                     "upgrade_conditions",
                     "cancel_conditions",
+                    "minute30_input_status",
+                    "minute30_confirmation_status",
+                    "final_display_state",
                 )
                 if watch.get(key) is not None
             },

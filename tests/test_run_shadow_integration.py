@@ -901,6 +901,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             "            selected_luojie_stocks,\n"
             "            required_date=today,\n"
             "            as_of=time_metadata.get(\"as_of\"),\n"
+            "            failure_evidence=min15_failure_evidence,\n"
             "        )",
             source,
         )
@@ -910,6 +911,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
                 "            all_targets,\n"
                 "            required_date=today,\n"
                 "            as_of=time_metadata.get(\"as_of\"),\n"
+                "            failure_evidence=min30_failure_evidence,\n"
                 "        )"
             ),
             2,
