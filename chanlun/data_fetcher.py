@@ -11,6 +11,8 @@
 import json
 import os
 import math
+import inspect
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
@@ -95,6 +97,168 @@ class MarketDataUnavailable(RuntimeError):
 
 class MarketDataConflict(MarketDataUnavailable):
     """Raised when multiple live market sources disagree beyond tolerance."""
+
+
+_MINUTE_RESPONSE_SUMMARY_LIMIT = 160
+_MINUTE_CONTENT_TYPE_LIMIT = 96
+_MINUTE_SENSITIVE_VALUE_RE = re.compile(
+    r"(?i)\b(?:token|access[_-]?token|api[_-]?key|authorization|cookie|"
+    r"secret|password|passwd|session(?:id)?|sign)\b\s*[:=]\s*"
+    r"[^\s,;&<>\"']+(?:\s+[^\s,;&<>\"']+)?"
+)
+_MINUTE_URL_RE = re.compile(r"https?://[^\s<>\"']+")
+_MINUTE_CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _sanitize_minute_text(value, limit):
+    """Return a bounded diagnostic string without URLs or credential values."""
+    if value is None:
+        return ""
+    text = str(value)
+    text = _MINUTE_CONTROL_RE.sub(" ", text)
+    text = _MINUTE_URL_RE.sub("<url-redacted>", text)
+    text = _MINUTE_SENSITIVE_VALUE_RE.sub("<redacted>", text)
+    # Keep common credential words from surviving malformed key/value text.
+    text = re.sub(
+        r"(?i)\b(?:secret|token|password|passwd|cookie)\b",
+        "<redacted>",
+        text,
+    )
+    return text.strip()[: int(limit)]
+
+
+def _minute_response_content_type(response):
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return ""
+    try:
+        value = headers.get("Content-Type") or headers.get("content-type")
+    except Exception:
+        value = None
+    return _sanitize_minute_text(value, _MINUTE_CONTENT_TYPE_LIMIT)
+
+
+def _minute_json_shape(payload):
+    """Describe a decoded payload without retaining its contents."""
+    if isinstance(payload, dict):
+        return "json_object"
+    if isinstance(payload, (list, tuple)):
+        return "json_array length={}".format(min(len(payload), 10000))
+    if payload is None:
+        return "json_null"
+    return "json_{}".format(type(payload).__name__)
+
+
+def _minute_response_metadata(response, payload=None):
+    if response is None:
+        return {}
+    status = getattr(response, "status_code", None)
+    try:
+        if status is not None:
+            status = int(status)
+    except (TypeError, ValueError):
+        status = None
+    if payload is not None:
+        summary = _minute_json_shape(payload)
+    else:
+        try:
+            raw_text = getattr(response, "text", "")
+        except Exception:
+            raw_text = ""
+        summary = _sanitize_minute_text(
+            raw_text, _MINUTE_RESPONSE_SUMMARY_LIMIT
+        )
+    return {
+        "http_status": status,
+        "content_type": _minute_response_content_type(response),
+        "response_summary": summary,
+    }
+
+
+def _minute_exception_category(exc, *, status=None):
+    if status is not None:
+        try:
+            if int(status) >= 400:
+                return "http"
+        except (TypeError, ValueError):
+            pass
+    if isinstance(exc, (requests.Timeout, TimeoutError)):
+        return "timeout"
+    if isinstance(exc, (requests.ConnectionError, ConnectionError)):
+        return "connection"
+    if isinstance(exc, requests.HTTPError):
+        return "http"
+    if isinstance(exc, ValueError):
+        return "decode"
+    return "unknown"
+
+
+def _minute_failure_evidence(
+    exc,
+    *,
+    response=None,
+    payload=None,
+    reason=None,
+    category=None,
+    exception_type=None,
+):
+    metadata = _minute_response_metadata(response, payload=payload)
+    status = metadata.get("http_status") if metadata else None
+    category = category or _minute_exception_category(exc, status=status)
+    default_reason = {
+        "timeout": "timeout",
+        "connection": "connection_error",
+        "http": "http_error",
+        "decode": "decode_error",
+        "unknown": "provider_exception",
+    }.get(category, "provider_failure")
+    evidence = {
+        "reason": _sanitize_minute_text(reason or default_reason, 64),
+        "exception_category": _sanitize_minute_text(category, 32),
+        "exception_type": _sanitize_minute_text(
+            exception_type or type(exc).__name__, 64
+        ),
+    }
+    evidence.update(
+        {
+            key: key_value
+            for key, key_value in metadata.items()
+            if key_value not in (None, "")
+        }
+    )
+    return evidence
+
+
+class _MinuteProviderFailure(RuntimeError):
+    """Internal provider failure carrying only sanitized response metadata."""
+
+    def __init__(self, evidence):
+        self.evidence = dict(evidence or {})
+        super().__init__(self.evidence.get("reason") or "provider_failure")
+
+
+class _MinuteProviderPayload(dict):
+    """Mapping-compatible provider payload carrying bounded response metadata."""
+
+    def __init__(self, payload, *, response_metadata=None):
+        super().__init__(payload or {})
+        self.response_metadata = dict(response_metadata or {})
+
+
+class MinuteDataFetchError(RuntimeError):
+    """Raised after bounded minute-provider attempts are exhausted."""
+
+    def __init__(self, diagnostics):
+        self.diagnostics = dict(diagnostics or {})
+        interval = _sanitize_minute_text(self.diagnostics.get("interval"), 8)
+        identity = _sanitize_minute_text(self.diagnostics.get("identity"), 64)
+        trade_date = _sanitize_minute_text(
+            self.diagnostics.get("trade_date"), 16
+        )
+        message = "minute {} fetch exhausted for {} on {}".format(
+            interval or "data", identity or "instrument", trade_date or "unknown date"
+        )
+        super().__init__(message)
 
 
 def _normalize_generated_at(value=None):
@@ -1345,7 +1509,9 @@ def fetch_shanghai_index(required_date=None):
 # ============================================================
 # 分钟 K 线 — 新浪
 # ============================================================
-def _fetch_sina_minute_kline_remote(code, scale, count):
+def _fetch_sina_minute_kline_remote(
+    code, scale, count, *, capture_failure=False
+):
     """Fetch minute kline from Sina."""
     identity = _normalize_identity(code)
     sc = _sina_code(identity)
@@ -1354,11 +1520,27 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
         "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
         f"CN_MarketData.getKLineData?symbol={sc}&scale={scale}&datalen={datalen}"
     )
+    response = None
+    decoded = None
     try:
         resp = SESSION.get(url, timeout=15)
+        response = resp
+        raise_for_status = getattr(resp, "raise_for_status", None)
+        if callable(raise_for_status):
+            raise_for_status()
         klines = resp.json()
+        decoded = klines
         if not klines:
-            return None
+            raise _MinuteProviderFailure(
+                _minute_failure_evidence(
+                    ValueError("empty payload"),
+                    response=response,
+                    payload=decoded,
+                    reason="empty_response",
+                    category="validation",
+                    exception_type="EmptyResponse",
+                )
+            )
 
         dates, opens, highs, lows, closes, volumes = [], [], [], [], [], []
         for k in klines:
@@ -1374,25 +1556,61 @@ def _fetch_sina_minute_kline_remote(code, scale, count):
             "shares" if identity.asset_type == "stock" else "unknown",
         )
 
-        return {
-            "dates": dates,
-            "opens": np.array(opens),
-            "highs": np.array(highs),
-            "lows": np.array(lows),
-            "closes": np.array(closes),
-            "volumes": volumes_array,
-            "volume_unit": canonical_unit,
-            "volume_raw_unit": raw_unit,
-            "volume_source": "sina",
-            "amount_unit": "unknown",
-            "amount_source": "",
-        }
-    except Exception as e:
-        print(f"[ERROR] 获取{scale}分钟K线失败 {code}: {e}")
+        return _MinuteProviderPayload(
+            {
+                "dates": dates,
+                "opens": np.array(opens),
+                "highs": np.array(highs),
+                "lows": np.array(lows),
+                "closes": np.array(closes),
+                "volumes": volumes_array,
+                "volume_unit": canonical_unit,
+                "volume_raw_unit": raw_unit,
+                "volume_source": "sina",
+                "amount_unit": "unknown",
+                "amount_source": "",
+            },
+            response_metadata=_minute_response_metadata(
+                response, payload=decoded
+            ),
+        )
+    except _MinuteProviderFailure as failure:
+        if capture_failure:
+            raise
+        print(
+            "[ERROR] 获取{}分钟K线失败 {}: {}".format(
+                scale, identity.code, failure.evidence.get("reason", "provider_failure")
+            )
+        )
+        return None
+    except Exception as exc:
+        failure = _MinuteProviderFailure(
+            _minute_failure_evidence(
+                exc,
+                response=response,
+                payload=decoded,
+                category=("validation" if decoded is not None else None),
+                reason=(
+                    "payload_parse_error" if decoded is not None else None
+                ),
+                exception_type=(
+                    "PayloadParseError" if decoded is not None else None
+                ),
+            )
+        )
+        if capture_failure:
+            raise failure
+        print(
+            "[ERROR] 获取{}分钟K线失败 {}: {}".format(
+                scale, identity.code, failure.evidence.get("reason", "provider_failure")
+            )
+        )
         return None
 
 
-def _fetch_eastmoney_minute_kline_remote(code, scale, count):
+def _fetch_eastmoney_minute_kline_remote(
+    code, scale, count, *, capture_failure=False
+):
     """Fetch adjusted intraday bars without Sina's 240-record cap."""
     identity = _normalize_identity(code)
     params = {
@@ -1406,12 +1624,27 @@ def _fetch_eastmoney_minute_kline_remote(code, scale, count):
         "lmt": str(count),
     }
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
+    response = None
+    decoded = None
     try:
         response = SESSION.get(url, params=params, timeout=15)
+        raise_for_status = getattr(response, "raise_for_status", None)
+        if callable(raise_for_status):
+            raise_for_status()
         payload = response.json()
+        decoded = payload
         lines = payload.get("data", {}).get("klines", [])
         if not lines:
-            return None
+            raise _MinuteProviderFailure(
+                _minute_failure_evidence(
+                    ValueError("empty payload"),
+                    response=response,
+                    payload=decoded,
+                    reason="empty_response",
+                    category="validation",
+                    exception_type="EmptyResponse",
+                )
+            )
         dates, opens, highs, lows, closes, volumes, amounts = (
             [], [], [], [], [], [], []
         )
@@ -1427,21 +1660,35 @@ def _fetch_eastmoney_minute_kline_remote(code, scale, count):
             volumes.append(float(parts[5]))
             amounts.append(_extract_eastmoney_amount(parts))
         if not dates:
-            return None
-        result = {
-            "dates": dates,
-            "opens": np.array(opens, dtype=float),
-            "highs": np.array(highs, dtype=float),
-            "lows": np.array(lows, dtype=float),
-            "closes": np.array(closes, dtype=float),
-            "volumes": np.array(volumes, dtype=float),
-            "source": "eastmoney",
-            "volume_unit": "hands" if identity.asset_type == "stock" else "unknown",
-            "volume_raw_unit": "hands" if identity.asset_type == "stock" else "unknown",
-            "volume_source": "eastmoney",
-            "amount_unit": "unknown",
-            "amount_source": "",
-        }
+            raise _MinuteProviderFailure(
+                _minute_failure_evidence(
+                    ValueError("empty rows"),
+                    response=response,
+                    payload=decoded,
+                    reason="empty_response",
+                    category="validation",
+                    exception_type="EmptyResponse",
+                )
+            )
+        result = _MinuteProviderPayload(
+            {
+                "dates": dates,
+                "opens": np.array(opens, dtype=float),
+                "highs": np.array(highs, dtype=float),
+                "lows": np.array(lows, dtype=float),
+                "closes": np.array(closes, dtype=float),
+                "volumes": np.array(volumes, dtype=float),
+                "source": "eastmoney",
+                "volume_unit": "hands" if identity.asset_type == "stock" else "unknown",
+                "volume_raw_unit": "hands" if identity.asset_type == "stock" else "unknown",
+                "volume_source": "eastmoney",
+                "amount_unit": "unknown",
+                "amount_source": "",
+            },
+            response_metadata=_minute_response_metadata(
+                response, payload=decoded
+            ),
+        )
         amount_array = _ensure_amounts_array(amounts)
         if amount_array is not None:
             result["amounts"] = amount_array
@@ -1449,8 +1696,37 @@ def _fetch_eastmoney_minute_kline_remote(code, scale, count):
             result["amount_unit"] = "CNY"
             result["amount_source"] = "eastmoney"
         return result
+    except _MinuteProviderFailure as failure:
+        if capture_failure:
+            raise
+        print(
+            "[ERROR] 东方财富{}分钟K线失败 {}: {}".format(
+                scale, identity.code, failure.evidence.get("reason", "provider_failure")
+            )
+        )
+        return None
     except Exception as exc:
-        print("[ERROR] 东方财富{}分钟K线失败 {}: {}".format(scale, code, exc))
+        failure = _MinuteProviderFailure(
+            _minute_failure_evidence(
+                exc,
+                response=response,
+                payload=decoded,
+                category=("validation" if decoded is not None else None),
+                reason=(
+                    "payload_parse_error" if decoded is not None else None
+                ),
+                exception_type=(
+                    "PayloadParseError" if decoded is not None else None
+                ),
+            )
+        )
+        if capture_failure:
+            raise failure
+        print(
+            "[ERROR] 东方财富{}分钟K线失败 {}: {}".format(
+                scale, identity.code, failure.evidence.get("reason", "provider_failure")
+            )
+        )
         return None
 
 
@@ -1829,6 +2105,90 @@ def _fetch_15min_for_repository(
     )
 
 
+def _minute_requested_trade_date(required_date=None, as_of=None):
+    if required_date:
+        return _sanitize_minute_text(
+            str(required_date).strip().replace("T", " ").split(" ", 1)[0],
+            16,
+        )
+    if as_of:
+        try:
+            return _minute_context_datetime(as_of).date().isoformat()
+        except (TypeError, ValueError, OverflowError):
+            return _sanitize_minute_text(as_of, 16)
+    return _minute_context_datetime().date().isoformat()
+
+
+def _minute_attempt_evidence(
+    *,
+    trade_date,
+    identity,
+    scale,
+    provider,
+    attempt,
+    result,
+    reason,
+    details=None,
+):
+    """Build the stable, bounded evidence contract for one attempt."""
+    item = {
+        "trade_date": _sanitize_minute_text(trade_date, 16),
+        "identity": _sanitize_minute_text(identity.key, 64),
+        "interval": "{}m".format(int(scale)),
+        "provider": _sanitize_minute_text(provider, 32),
+        "attempt": int(attempt),
+        "result": _sanitize_minute_text(result, 24),
+        "reason": _sanitize_minute_text(reason, 64),
+    }
+    for key in (
+        "http_status",
+        "content_type",
+        "response_summary",
+        "exception_category",
+        "exception_type",
+    ):
+        if isinstance(details, dict) and details.get(key) not in (None, ""):
+            value = details[key]
+            limit = {
+                "content_type": _MINUTE_CONTENT_TYPE_LIMIT,
+                "response_summary": _MINUTE_RESPONSE_SUMMARY_LIMIT,
+                "exception_type": 64,
+                "exception_category": 32,
+            }.get(key, 16)
+            item[key] = (
+                int(value)
+                if key == "http_status"
+                else _sanitize_minute_text(value, limit)
+            )
+    return item
+
+
+def _call_minute_provider(fetcher, identity, scale, count):
+    """Call old and new provider helpers without changing their call contract."""
+    signature_target = getattr(fetcher, "side_effect", None)
+    if not callable(signature_target):
+        signature_target = fetcher
+    try:
+        parameters = inspect.signature(signature_target).parameters
+    except (TypeError, ValueError):
+        parameters = {}
+    accepts_capture = (
+        "capture_failure" in parameters
+        or any(
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
+            for parameter in parameters.values()
+        )
+    )
+    if accepts_capture:
+        return fetcher(
+            identity,
+            scale,
+            count,
+            capture_failure=True,
+        )
+    return fetcher(identity, scale, count)
+
+
 def _fetch_minute_for_repository(
     code,
     scale,
@@ -1841,65 +2201,104 @@ def _fetch_minute_for_repository(
     sleep_fn=time.sleep,
 ):
     identity = _normalize_identity(code)
-    providers = [
-        (
-            "eastmoney",
-            lambda: _fetch_eastmoney_minute_kline_remote(
-                identity, scale, count
-            ),
-        )
-    ]
+    providers = [("eastmoney", _fetch_eastmoney_minute_kline_remote)]
     if int(count) <= 240:
-        providers.append(
-            (
-                "sina",
-                lambda: _fetch_sina_minute_kline_remote(
-                    identity, scale, count
-                ),
-            )
-        )
+        providers.append(("sina", _fetch_sina_minute_kline_remote))
     attempts = max(1, int(max_attempts))
-    errors = []
+    trade_date = _minute_requested_trade_date(required_date, as_of)
+    attempt_evidence = []
+    rejected = []
     for attempt in range(attempts):
         source, fetcher = providers[attempt % len(providers)]
+        details = None
         try:
-            payload = fetcher()
+            payload = _call_minute_provider(
+                fetcher, identity, scale, count
+            )
+        except _MinuteProviderFailure as failure:
+            payload = None
+            details = failure.evidence
+            error = details.get("reason") or "provider_failure"
+            result = "failed"
         except Exception as exc:
             payload = None
-            error = "{}:{}".format(type(exc).__name__, exc)
+            details = _minute_failure_evidence(exc)
+            error = details.get("reason") or "provider_exception"
+            result = "failed"
         else:
-            error = _minute_payload_validation_error(
-                payload,
-                count=count,
-                required_date=required_date,
-                as_of=as_of,
-            )
+            if payload is None:
+                details = {
+                    "reason": "empty_response",
+                    "exception_category": "validation",
+                    "exception_type": "EmptyResponse",
+                }
+                error = "empty_response"
+                result = "failed"
+            else:
+                error = _minute_payload_validation_error(
+                    payload,
+                    count=count,
+                    required_date=required_date,
+                    as_of=as_of,
+                )
+                details = getattr(payload, "response_metadata", None)
+                if error:
+                    details = dict(details or {})
+                    details.update(
+                        {
+                            "exception_category": "validation",
+                            "exception_type": "PayloadValidationError",
+                        }
+                    )
+                    result = "rejected"
+                else:
+                    result = "success"
+        evidence = _minute_attempt_evidence(
+            trade_date=trade_date,
+            identity=identity,
+            scale=scale,
+            provider=source,
+            attempt=attempt + 1,
+            result=result,
+            reason=("accepted" if not error else error),
+            details=details,
+        )
+        attempt_evidence.append(evidence)
         if not error:
-            result = _with_source(payload, source)
-            result["_fetch_diagnostics"] = {
+            result_payload = _with_source(payload, source)
+            result_payload["_fetch_diagnostics"] = {
                 "attempts": attempt + 1,
                 "max_attempts": attempts,
                 "provider_order": [
                     providers[index % len(providers)][0]
                     for index in range(attempt + 1)
                 ],
-                "rejected": list(errors),
+                "rejected": list(rejected),
+                "attempt_evidence": list(attempt_evidence),
             }
-            return result
-        errors.append({"provider": source, "reason": error})
+            return result_payload
+        rejected.append({"provider": source, "reason": error})
         if attempt + 1 < attempts:
             sleep_fn(float(base_delay) * (2 ** attempt))
+
+    diagnostics = {
+        "trade_date": trade_date,
+        "identity": identity.key,
+        "interval": "{}m".format(int(scale)),
+        "attempts": attempts,
+        "max_attempts": attempts,
+        "provider_order": [
+            providers[index % len(providers)][0] for index in range(attempts)
+        ],
+        "rejected": list(rejected),
+        "attempt_evidence": list(attempt_evidence),
+    }
     print(
-        "[ERROR] {}分钟K线重试耗尽 {}: {}".format(
-            scale,
-            code,
-            ", ".join(
-                "{}={}".format(item["provider"], item["reason"])
-                for item in errors
-            ),
+        "[ERROR] {}分钟K线重试耗尽 {}".format(
+            scale, identity.code
         )
     )
-    return None
+    raise MinuteDataFetchError(diagnostics)
 
 
 def _legacy_shadow_reader(interval, identity, count):
@@ -2380,7 +2779,7 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
         bool(repository_result.stale)
         if repository_result is not None else bool(status.get("stale", True))
     )
-    return {
+    evidence = {
         "interval": interval,
         "status": repository_status,
         "latest_date": str(status.get("latest_date") or "").split(" ", 1)[0],
@@ -2396,6 +2795,27 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
             status.get("adjustment") or payload.get("adjustment") or ""
         ),
     }
+    if repository_result is not None:
+        diagnostics = repository_result.diagnostics
+        if isinstance(diagnostics, dict):
+            failure = diagnostics.get("fetch_failure")
+            if isinstance(failure, dict):
+                evidence["provider_failure"] = dict(failure)
+        evidence.update({
+            "latest_cache_date": evidence["latest_date"],
+            "cache_stale": repository_stale,
+            "cache_bars": evidence["bars"],
+            "final_adopted": bool(
+                repository_result.fetched_remote
+                and repository_result.status == "verified"
+            ),
+        })
+        evidence["rejection_reason"] = (
+            evidence.get("provider_failure", {}).get("reason")
+            if isinstance(evidence.get("provider_failure"), dict)
+            else None
+        ) or ("" if evidence["final_adopted"] else repository_status)
+    return evidence
 
 
 def _verified_sublevel_input(
@@ -2420,8 +2840,47 @@ def _verified_sublevel_input(
     )
 
 
+def _record_sublevel_failure(
+    failure_evidence, identity, interval, evidence, repository_result=None
+):
+    if failure_evidence is None:
+        return
+    details = dict(evidence or {})
+    diagnostics = (
+        repository_result.diagnostics
+        if repository_result is not None
+        and isinstance(repository_result.diagnostics, dict)
+        else {}
+    )
+    provider_failure = diagnostics.get("fetch_failure")
+    if isinstance(provider_failure, dict):
+        details["provider_failure"] = dict(provider_failure)
+    details.update({
+        "interval": interval,
+        "final_adopted": False,
+        "latest_cache_date": details.get("latest_date", ""),
+        "cache_stale": bool(
+            repository_result.stale
+            if repository_result is not None
+            else details.get("stale", True)
+        ),
+        "cache_bars": int(details.get("bars") or 0),
+        "rejection_reason": (
+            details.get("provider_failure", {}).get("reason")
+            if isinstance(details.get("provider_failure"), dict)
+            else None
+        ) or str(
+            repository_result.status
+            if repository_result is not None
+            else "input_unverified"
+        ),
+    })
+    failure_evidence[identity.key] = details
+
+
 def batch_fetch_30min_klines(
-    stocks, max_workers=8, required_date=None, as_of=None
+    stocks, max_workers=8, required_date=None, as_of=None,
+    failure_evidence=None,
 ):
     """
     并发批量获取30分钟K线。
@@ -2507,6 +2966,9 @@ def batch_fetch_30min_klines(
                 "klines": klines,
                 "input_evidence": evidence,
             }
+        _record_sublevel_failure(
+            failure_evidence, identity, "30m", evidence, repository_result
+        )
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -2519,7 +2981,8 @@ def batch_fetch_30min_klines(
 
 
 def batch_fetch_15min_klines(
-    stocks, max_workers=8, required_date=None, as_of=None
+    stocks, max_workers=8, required_date=None, as_of=None,
+    failure_evidence=None,
 ):
     """
     并发批量获取15分钟K线。
@@ -2605,6 +3068,9 @@ def batch_fetch_15min_klines(
                 "klines": klines,
                 "input_evidence": evidence,
             }
+        _record_sublevel_failure(
+            failure_evidence, identity, "15m", evidence, repository_result
+        )
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -2962,7 +3428,9 @@ def collect_daily_data(
     }
 
 
-def collect_30min_data(target_stocks, required_date=None, as_of=None):
+def collect_30min_data(
+    target_stocks, required_date=None, as_of=None, failure_evidence=None
+):
     """
     为目标池股票拉取30分钟K线。
     """
@@ -2971,7 +3439,10 @@ def collect_30min_data(target_stocks, required_date=None, as_of=None):
     print(f"  批量获取30分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_30min_klines(
-        target_stocks, required_date=required_date, as_of=as_of
+        target_stocks,
+        required_date=required_date,
+        as_of=as_of,
+        failure_evidence=failure_evidence,
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
@@ -3029,7 +3500,9 @@ def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
     return output
 
 
-def collect_15min_data(target_stocks, required_date=None, as_of=None):
+def collect_15min_data(
+    target_stocks, required_date=None, as_of=None, failure_evidence=None
+):
     """
     为目标池股票拉取15分钟K线。
     """
@@ -3038,7 +3511,10 @@ def collect_15min_data(target_stocks, required_date=None, as_of=None):
     print(f"  批量获取15分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_15min_klines(
-        target_stocks, required_date=required_date, as_of=as_of
+        target_stocks,
+        required_date=required_date,
+        as_of=as_of,
+        failure_evidence=failure_evidence,
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results

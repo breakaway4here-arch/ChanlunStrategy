@@ -423,6 +423,12 @@ class TestUpgrade30min(unittest.TestCase):
         self.assertEqual(len(watchlist), 1)
         self.assertTrue(watchlist[0]["confirmation_evidence"]["ema_bullish_alignment"])
         self.assertEqual(watchlist[0]["reason_code"], "alignment_without_confirmation")
+        self.assertEqual(diag["watch_valid_no_confirm"], 1)
+        self.assertEqual(diag["watch_missing_30min"], 0)
+        self.assertEqual(watchlist[0]["minute30_input_status"], "verified")
+        self.assertEqual(
+            watchlist[0]["minute30_confirmation_status"], "pending"
+        )
         self.assertIn("未形成独立确认", watchlist[0]["watch_reason"])
         self.assertTrue(any("两阳" in item for item in watchlist[0]["next_day_conditions"]))
         self.assertFalse(any("止跌结构" in item for item in watchlist[0]["next_day_conditions"]))
@@ -466,6 +472,11 @@ class TestUpgrade30min(unittest.TestCase):
         self.assertEqual(watchlist, [])
         self.assertEqual(candidates[0]["confirmations"], ["30min 二买"])
         self.assertEqual(candidates[0]["confirmation_evidence"]["buy_point"], "二买")
+        self.assertEqual(candidates[0]["minute30_input_status"], "verified")
+        self.assertEqual(
+            candidates[0]["minute30_confirmation_status"], "confirmed"
+        )
+        self.assertEqual(candidates[0]["final_display_state"], "candidate")
 
     def test_no_30min_confirm_goes_to_watch(self):
         """Seed with 30min data but no confirmation signals → watch."""
@@ -477,6 +488,8 @@ class TestUpgrade30min(unittest.TestCase):
             ss._check_30min_confirmations = lambda r, s, **kwargs: []
             candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [min30])
             self.assertEqual(diag["watch_due_to_no_30min_confirm"], 1)
+            self.assertEqual(diag["watch_valid_no_confirm"], 1)
+            self.assertEqual(diag["watch_missing_30min"], 0)
             self.assertEqual(len(watchlist), 1)
             self.assertEqual(watchlist[0]["type"], "强势启动观察")
         finally:
@@ -487,8 +500,15 @@ class TestUpgrade30min(unittest.TestCase):
         seed = _make_seed()
         candidates, watchlist, diag = upgrade_strong_startup_with_30min([seed], [])
         self.assertEqual(diag["watch_due_to_no_30min_confirm"], 1)
+        self.assertEqual(diag["watch_missing_30min"], 1)
+        self.assertEqual(diag["watch_valid_no_confirm"], 0)
+        self.assertEqual(diag["dropped_no_30min_confirm"], 1)
         self.assertEqual(len(watchlist), 1)
         self.assertEqual(watchlist[0]["reason_code"], "missing_30m_data")
+        self.assertEqual(watchlist[0]["minute30_input_status"], "missing")
+        self.assertEqual(
+            watchlist[0]["minute30_confirmation_status"], "not_evaluated"
+        )
         self.assertTrue(any("二买/三买" in item for item in watchlist[0]["next_day_conditions"]))
         self.assertTrue(any("两阳" in item for item in watchlist[0]["next_day_conditions"]))
         self.assertFalse(any("回踩不破" in item for item in watchlist[0]["next_day_conditions"]))

@@ -2028,6 +2028,35 @@ def _build_observation_top5(
             "source_channel": _safe_str(raw.get("source_channel")),
             "reason_code": _safe_str(raw.get("reason_code")) or "waiting_30m_confirm",
             "failure_gate": _safe_str(raw.get("failure_gate")) or "30min_confirm",
+            "observation_status": _safe_str(raw.get("observation_status")),
+            "observation_status_label": _safe_str(
+                raw.get("observation_status_label")
+            ) or (
+                "分钟数据不足"
+                if (
+                    raw.get("research_observation_projection")
+                    and _safe_str(raw.get("observation_status"))
+                    == "minute_data_insufficient"
+                )
+                else (
+                    "待确认"
+                    if raw.get("research_observation_projection")
+                    else ""
+                )
+            ),
+            "research_observation_projection": bool(
+                raw.get("research_observation_projection", False)
+            ),
+            "affects_formal": raw.get("affects_formal"),
+            "is_executable": raw.get("is_executable"),
+            "eligible_for_l1_v0": raw.get("eligible_for_l1_v0"),
+            "formal_actions_allowed": raw.get("formal_actions_allowed"),
+            "minute30_input_status": _safe_str(
+                raw.get("minute30_input_status")
+            ),
+            "minute30_confirmation_status": _safe_str(
+                raw.get("minute30_confirmation_status")
+            ),
             "actual_value": raw.get("actual_value"),
             "upgrade_conditions": list(raw.get("upgrade_conditions") or raw.get("next_day_conditions") or []),
             "cancel_conditions": list(raw.get("cancel_conditions") or []),

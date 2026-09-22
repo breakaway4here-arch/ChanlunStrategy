@@ -2380,6 +2380,25 @@ class TestStartupWatchlistSerialization(unittest.TestCase):
         self.assertIsInstance(sw["dates"], list)
         self.assertIsInstance(sw["closes"], list)
 
+    def test_serialized_preserves_research_observation_status_contract(self):
+        item = self._make_watch_item()
+        item.update({
+            "identity_key": "stock|SZ|002845",
+            "observation_status": "minute_data_insufficient",
+            "observation_status_label": "分钟数据不足",
+            "research_observation_projection": True,
+            "affects_formal": False,
+            "is_executable": False,
+            "eligible_for_l1_v0": False,
+        })
+
+        serialized = _serialize_startup_watchlist([item])[0]
+
+        self.assertEqual(serialized["identity_key"], "stock|SZ|002845")
+        self.assertEqual(serialized["observation_status_label"], "分钟数据不足")
+        self.assertTrue(serialized["research_observation_projection"])
+        self.assertFalse(serialized["eligible_for_l1_v0"])
+
     def test_chart_arrays_same_length(self):
         items = self._make_watch_item()
         result = _serialize_startup_watchlist([items])
@@ -3020,6 +3039,8 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
     def test_observation_top5_tab_and_failure_details_are_rendered(self):
         self.assertIn("observation_top5: '观察 Top5'", self.asset_js)
         self.assertIn("失败门：", self.asset_js)
+        self.assertIn("研究状态：", self.asset_js)
+        self.assertIn("正式动作：关闭（研究观察投影）", self.asset_js)
         self.assertIn("升级条件：", self.asset_js)
         self.assertIn("取消条件：", self.asset_js)
 

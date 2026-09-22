@@ -9,6 +9,7 @@ from unittest import mock
 from chanlun.nextday_candidates import load_rows, select_day
 from chanlun.nextday_outcomes import evaluate_frozen_selection
 from chanlun.nextday_research import (
+    _source_lists,
     adapt_report,
     freeze_selection,
     process_report,
@@ -135,6 +136,26 @@ def _create_outcome_database(path, rows):
 
 
 class NextdayResearchTests(unittest.TestCase):
+    def test_research_observation_projection_is_excluded_from_l1_sources(self):
+        report = _report()
+        projected = _candidate(
+            "002845",
+            "同兴达",
+            eligible_for_l1_v0=False,
+            research_observation_projection=True,
+            affects_formal=False,
+        )
+        report["observation_watchlist"] = [projected]
+        report["workspace"]["views"] = {
+            "observation_top5": [dict(projected)],
+        }
+
+        pool_rows, view_rows, errors = _source_lists(report)
+
+        self.assertFalse(errors)
+        self.assertNotIn("002845", [row.get("code") for _, row in pool_rows])
+        self.assertNotIn("002845", [row.get("code") for _, row in view_rows])
+
     def test_vendor_l1_selection_preserves_all_25_day_identity_order(self):
         signals = load_rows(PACKAGE / "data" / "signal_features.jsonl.gz")
         with gzip.open(

@@ -115,21 +115,26 @@ class KLineRepositoryTests(unittest.TestCase):
             "_fetch_sina_minute_kline_remote",
             side_effect=sina,
         ):
-            payload = data_fetcher._fetch_minute_for_repository(
-                "600000",
-                30,
-                40,
-                required_date="2026-08-26",
-                as_of="2026-08-26T15:05:00+08:00",
-                sleep_fn=sleeps.append,
-            )
+            with self.assertRaises(data_fetcher.MinuteDataFetchError) as caught:
+                data_fetcher._fetch_minute_for_repository(
+                    "600000",
+                    30,
+                    40,
+                    required_date="2026-08-26",
+                    as_of="2026-08-26T15:05:00+08:00",
+                    sleep_fn=sleeps.append,
+                )
 
-        self.assertIsNone(payload)
         self.assertEqual(
             calls,
             ["eastmoney", "sina", "eastmoney", "sina"],
         )
         self.assertEqual(sleeps, [0.5, 1.0, 2.0])
+        self.assertEqual(len(caught.exception.diagnostics["attempt_evidence"]), 4)
+        self.assertEqual(
+            caught.exception.diagnostics["attempt_evidence"][-1]["attempt"],
+            4,
+        )
 
     def test_minute_fetch_stale_first_provider_uses_fresh_second_provider(self):
         calls = []
@@ -505,6 +510,40 @@ class KLineRepositoryTests(unittest.TestCase):
         self.assertTrue(result.stale)
         self.assertEqual(result.kline["dates"][-1], "2026-07-01")
 
+    def test_remote_minute_failure_preserves_safe_fetch_diagnostics(self):
+        self.seed("600000", [_bar("2026-07-01"), _bar("2026-07-02")])
+        failure = data_fetcher.MinuteDataFetchError({
+            "trade_date": "2026-07-03",
+            "identity": "stock|SH|600000",
+            "interval": "30m",
+            "attempts": 4,
+            "attempt_evidence": [{
+                "provider": "eastmoney",
+                "attempt": 1,
+                "reason": "connection_error",
+                "exception_category": "connection",
+                "exception_type": "ConnectionError",
+            }],
+        })
+
+        def remote(_code, _count, **_context):
+            raise failure
+
+        repository = KLineRepository(
+            self.db_path, remote_fetchers={"30m": remote}
+        )
+        result = repository.get(
+            "30m", "600000", count=2, required_date="2026-07-03"
+        )
+
+        self.assertEqual(
+            result.diagnostics["fetch_failure"]["attempt_evidence"][0][
+                "reason"
+            ],
+            "connection_error",
+        )
+        self.assertTrue(result.stale)
+
     def test_nonfinal_data_is_preview_when_refresh_fails(self):
         self.seed(
             "600000",
@@ -857,6 +896,7 @@ class KLineRepositoryTests(unittest.TestCase):
                     ),
                 }
                 previous = data_fetcher._KLINE_REPOSITORY
+                failures = {}
                 try:
                     data_fetcher._KLINE_REPOSITORY = repository
                     rows = fetcher(
@@ -868,6 +908,7 @@ class KLineRepositoryTests(unittest.TestCase):
                         ],
                         required_date="2026-08-26",
                         as_of="2026-08-26T15:05:00+08:00",
+                        failure_evidence=failures,
                     )
                 finally:
                     data_fetcher._KLINE_REPOSITORY = previous
@@ -878,6 +919,11 @@ class KLineRepositoryTests(unittest.TestCase):
                     "2026-08-26",
                 )
                 self.assertTrue(rows[0]["input_evidence"]["is_final"])
+                self.assertEqual(
+                    set(failures), {"stock|SH|600001", "stock|SH|600002", "stock|SH|600003"}
+                )
+                self.assertTrue(failures["stock|SH|600001"]["cache_stale"])
+                self.assertFalse(failures["stock|SH|600001"]["final_adopted"])
                 self.assertEqual(
                     repository.get_many.call_args[1]["required_date"],
                     "2026-08-26",

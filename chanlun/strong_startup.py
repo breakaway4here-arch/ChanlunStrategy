@@ -250,6 +250,8 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         "startup_watch": 0,
         "dropped_no_30min_confirm": 0,
         "watch_due_to_no_30min_confirm": 0,
+        "watch_missing_30min": 0,
+        "watch_valid_no_confirm": 0,
     }
 
     # Index 30min results by code
@@ -268,6 +270,8 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         if min30_result is None:
             # No 30min data → watch
             diag["watch_due_to_no_30min_confirm"] += 1
+            diag["watch_missing_30min"] += 1
+            diag["dropped_no_30min_confirm"] += 1
             seed["confirmation_evidence"] = build_30min_confirmation_evidence(None)
             watch_item = _make_watch_item(seed, seed["startup_reason"],
                 "缺少30分钟数据，等待次日确认",
@@ -287,6 +291,9 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         if confirmations:
             # Has 30min confirmation → candidate
             diag["startup_candidate"] += 1
+            seed["minute30_input_status"] = "verified"
+            seed["minute30_confirmation_status"] = "confirmed"
+            seed["final_display_state"] = "candidate"
             seed["result_30min"] = min30_result
             seed["type"] = "强势启动候选"
             seed["tier"] = "candidate"
@@ -315,6 +322,12 @@ def upgrade_strong_startup_with_30min(startup_seeds, chan_results_30min):
         else:
             # No 30min confirmation → watch
             diag["watch_due_to_no_30min_confirm"] += 1
+            diag["watch_valid_no_confirm"] += 1
+            input_evidence = getattr(
+                min30_result, "strategy_input_evidence", None
+            )
+            if isinstance(input_evidence, dict):
+                seed["strategy_input_evidence"] = dict(input_evidence)
             if confirmation_evidence.get("ema_bullish_alignment"):
                 watch_reason = "30分钟均线仍为多头排列，但未形成独立确认，继续观察"
             else:
@@ -484,6 +497,15 @@ def _make_watch_item(
         derived_reason_code = "waiting_30m_confirm"
         failure_gate = "30min_confirm"
     reason_code = reason_code or derived_reason_code
+    if reason_code == "missing_30m_data":
+        minute30_input_status = "missing"
+        minute30_confirmation_status = "not_evaluated"
+    elif reason_code == "limit_up":
+        minute30_input_status = "not_required"
+        minute30_confirmation_status = "not_evaluated"
+    else:
+        minute30_input_status = "verified"
+        minute30_confirmation_status = "pending"
     return {
         "code": seed["code"],
         "name": seed["name"],
@@ -512,6 +534,9 @@ def _make_watch_item(
         "watch_reason": watch_reason,
         "reason_code": reason_code,
         "failure_gate": failure_gate,
+        "minute30_input_status": minute30_input_status,
+        "minute30_confirmation_status": minute30_confirmation_status,
+        "final_display_state": "observe",
         "actual_value": {
             "change_pct": seed.get("change_pct", 0),
             "volume_ratio": seed.get("volume_ratio", 0),

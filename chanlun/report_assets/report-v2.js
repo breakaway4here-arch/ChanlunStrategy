@@ -8260,6 +8260,12 @@
       details.push('量能比：' + formatNumber(raw.volume_ratio, 2));
     }
     if (item.failure_gate) details.push('失败门：' + item.failure_gate);
+    if (item.observation_status_label) {
+      details.push('研究状态：' + item.observation_status_label);
+    }
+    if (item.research_observation_projection) {
+      details.push('正式动作：关闭（研究观察投影）');
+    }
     if (item.actual_value !== undefined && item.actual_value !== null) {
       details.push('实际值：' + (typeof item.actual_value === 'object' ? JSON.stringify(item.actual_value) : item.actual_value));
     }

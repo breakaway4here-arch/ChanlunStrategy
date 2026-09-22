@@ -137,6 +137,7 @@ from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.h4_t3_pool import build_h4_t3_pool
+from chanlun.identity import normalize_identity
 from chanlun.shadow_evaluation import build_daily_shadow_evaluations
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
@@ -689,6 +690,94 @@ def _restrict_observation_to_common_upstream(items, upstream_candidates):
     }
 
 
+def _observation_identity_key(row):
+    if not isinstance(row, dict):
+        return ""
+    try:
+        return normalize_identity(row).key
+    except (TypeError, ValueError):
+        code = str(row.get("code") or "").strip()
+        return "stock||{}".format(code) if code else ""
+
+
+def _build_research_observation_projection(source_rows, kept_rows):
+    """Project common-upstream exclusions into the existing research view only."""
+    kept_keys = {
+        _observation_identity_key(row)
+        for row in (kept_rows or [])
+        if _observation_identity_key(row)
+    }
+    projected = []
+    for source in source_rows or []:
+        if not isinstance(source, dict):
+            continue
+        identity_key = _observation_identity_key(source)
+        if not identity_key or identity_key in kept_keys:
+            continue
+        item = copy.deepcopy(source)
+        missing = (
+            item.get("reason_code") == "missing_30m_data"
+            or item.get("minute30_input_status") == "missing"
+        )
+        item.update({
+            "identity_key": identity_key,
+            "research_observation_projection": True,
+            "affects_formal": False,
+            "is_executable": False,
+            "eligible_for_l1_v0": False,
+            "formal_actions_allowed": False,
+            "observation_status": (
+                "minute_data_insufficient" if missing else "pending_confirmation"
+            ),
+            "observation_status_label": (
+                "分钟数据不足" if missing else "待确认"
+            ),
+            "final_display_state": "observe",
+        })
+        projected.append(item)
+    return projected
+
+
+def _merge_observation_watchlists(base_rows, extra_rows):
+    """Merge research rows by canonical identity without overwriting facts."""
+    merged = []
+    positions = {}
+    for row in list(base_rows or []) + list(extra_rows or []):
+        if not isinstance(row, dict):
+            continue
+        key = _observation_identity_key(row)
+        if not key:
+            continue
+        position = positions.get(key)
+        if position is None:
+            item = copy.deepcopy(row)
+            item.setdefault("identity_key", key)
+            merged.append(item)
+            positions[key] = len(merged) - 1
+            continue
+        current = merged[position]
+        for field in ("sources", "source_refs", "observation_statuses"):
+            values = []
+            for candidate in (current.get(field), row.get(field)):
+                if isinstance(candidate, (list, tuple)):
+                    values.extend(candidate)
+            if values:
+                current[field] = list(dict.fromkeys(values))
+        if row.get("research_observation_projection"):
+            current["research_observation_projection"] = True
+            current["affects_formal"] = False
+            current["is_executable"] = False
+            current["eligible_for_l1_v0"] = False
+            current["formal_actions_allowed"] = False
+            current.setdefault(
+                "observation_status", row.get("observation_status")
+            )
+            current.setdefault(
+                "observation_status_label", row.get("observation_status_label")
+            )
+    return merged
+
+
 def _verified_strategy_input(evidence, interval, report_date):
     value = evidence if isinstance(evidence, dict) else {}
     return bool(
@@ -700,7 +789,9 @@ def _verified_strategy_input(evidence, interval, report_date):
     )
 
 
-def _build_sublevel_input_health(interval, requested, rows, report_date):
+def _build_sublevel_input_health(
+    interval, requested, rows, report_date, failure_evidence=None
+):
     requested_codes = sorted({
         str(item.get("code") or "")
         for item in (requested or [])
@@ -724,6 +815,12 @@ def _build_sublevel_input_health(interval, requested, rows, report_date):
         status = "partial"
     else:
         status = "verified"
+    failures = {}
+    for identity_key, evidence in (failure_evidence or {}).items():
+        key_text = str(identity_key)
+        code = key_text.rsplit("|", 1)[-1]
+        if code in missing_codes and isinstance(evidence, dict):
+            failures[code] = dict(evidence)
     return {
         "interval": interval,
         "required_date": str(report_date),
@@ -733,6 +830,7 @@ def _build_sublevel_input_health(interval, requested, rows, report_date):
         "missing_count": len(missing_codes),
         "verified_codes": verified_codes,
         "missing_codes": missing_codes,
+        "failure_evidence": failures,
         "blocks_strategy_output": bool(
             requested_codes and status == "unavailable"
         ),
@@ -785,6 +883,11 @@ def _build_formal_input_health(items, report_date):
             if invalid_codes else ""
         ),
     }
+
+
+def _minute30_funnel_pass_items(pure_confirmed, fusion_confirmed):
+    """Return only candidates that passed independent 30m confirmation."""
+    return list(pure_confirmed or []) + list(fusion_confirmed or [])
 
 
 def _build_h4_input_health(h4_pool, report_date):
@@ -3033,6 +3136,7 @@ def main(debug=False, preview=False, generated_at=None):
     all_targets = []
     formal_min30_data_list = []
     shadow_min30_data_list = []
+    min30_failure_evidence = {}
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
@@ -3056,6 +3160,7 @@ def main(debug=False, preview=False, generated_at=None):
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min30_failure_evidence,
         )
         if target_partition["readonly_shadow_codes"]:
             shadow_targets = [
@@ -3297,6 +3402,7 @@ def main(debug=False, preview=False, generated_at=None):
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min30_failure_evidence,
         )
 
         if not formal_min30_data_list:
@@ -3331,7 +3437,8 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     min30_input_health = _build_sublevel_input_health(
-        "30m", all_targets, formal_min30_data_list, today
+        "30m", all_targets, formal_min30_data_list, today,
+        failure_evidence=min30_failure_evidence,
     )
 
     if right_side_confirmed:
@@ -3353,11 +3460,13 @@ def main(debug=False, preview=False, generated_at=None):
     min15_data_list = []
     chan_results_15min = []
     analyzed_min15_rows = []
+    min15_failure_evidence = {}
     if selected_luojie_stocks:
         min15_data_list = collect_15min_data(
             selected_luojie_stocks,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min15_failure_evidence,
         ) or []
         seed_map = {
             str(row.get("code") or ""): row
@@ -3399,7 +3508,8 @@ def main(debug=False, preview=False, generated_at=None):
             chan_results_15min.append(result)
 
     min15_input_health = _build_sublevel_input_health(
-        "15m", selected_luojie_stocks, analyzed_min15_rows, today
+        "15m", selected_luojie_stocks, analyzed_min15_rows, today,
+        failure_evidence=min15_failure_evidence,
     )
     budget_excluded_count = luojie_research_plan["budget_excluded_count"]
     if budget_excluded_count and min15_input_health["status"] == "verified":
@@ -3467,6 +3577,9 @@ def main(debug=False, preview=False, generated_at=None):
     )
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
+    startup_observation_candidates_before_upstream = copy.deepcopy(
+        startup_watchlist
+    )
     trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
         trend_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS
     )
@@ -3489,16 +3602,13 @@ def main(debug=False, preview=False, generated_at=None):
     observation_watchlist = startup_watchlist + (
         trend_watchlist if RIGHT_SIDE_STARTUP_MODE == "active" else []
     )
-    minute30_pass_items = (
-        list(pure_confirmed)
-        + list(fusion_confirmed)
-        + list(observation_watchlist)
+    minute30_pass_items = _minute30_funnel_pass_items(
+        pure_confirmed, fusion_confirmed
     )
     candidate_funnel.register_many(minute30_pass_items)
     candidate_funnel.mark_membership(
         "minute30",
         minute30_pass_items,
-        failure_reason="minute30_not_confirmed",
         eligible_codes=all_target_codes,
     )
     print(f"  时效过滤: pure {recency_pure_diag['input']}→{recency_pure_diag['kept']} "
@@ -3593,6 +3703,17 @@ def main(debug=False, preview=False, generated_at=None):
         else empty_trend_upstream_diag
     )
     observation_watchlist = startup_watchlist + formal_trend_watchlist
+    startup_research_projection = _build_research_observation_projection(
+        startup_observation_candidates_before_upstream,
+        startup_watchlist,
+    )
+    observation_watchlist = _merge_observation_watchlists(
+        observation_watchlist,
+        startup_research_projection,
+    )
+    startup_final_upstream_diag["research_projection_count"] = len(
+        startup_research_projection
+    )
     _ignored_luojie_common_rows, luojie_final_upstream_diag = (
         _restrict_to_common_upstream(
             luojie_pool.get("candidates", []), pure_scored
@@ -3816,6 +3937,8 @@ def main(debug=False, preview=False, generated_at=None):
         if not isinstance(watch, dict) or not watch.get("code"):
             continue
         failure_gate = str(watch.get("failure_gate") or "").strip()
+        if failure_gate == "30min_confirm":
+            failure_gate = "minute30"
         if failure_gate not in {
             "eligible",
             "retrieval",
@@ -3852,6 +3975,9 @@ def main(debug=False, preview=False, generated_at=None):
                     "distance_from_reference_pct",
                     "upgrade_conditions",
                     "cancel_conditions",
+                    "minute30_input_status",
+                    "minute30_confirmation_status",
+                    "final_display_state",
                 )
                 if watch.get(key) is not None
             },

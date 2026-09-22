@@ -771,6 +771,43 @@ class TestReportViewModel(unittest.TestCase):
         self.assertEqual(row["tier"], "watch")
         self.assertEqual(row["price_limit_state"], "limit_up")
 
+    def test_observation_top5_exposes_research_projection_status(self):
+        workspace = build_workspace({
+            "observation_watchlist": [
+                {
+                    "code": "002845",
+                    "name": "同兴达",
+                    "reason_code": "missing_30m_data",
+                    "observation_status": "minute_data_insufficient",
+                    "observation_status_label": "分钟数据不足",
+                    "research_observation_projection": True,
+                    "affects_formal": False,
+                    "is_executable": False,
+                    "eligible_for_l1_v0": False,
+                },
+                {
+                    "code": "000963",
+                    "name": "华东医药",
+                    "reason_code": "waiting_30m_confirm",
+                    "observation_status": "pending_confirmation",
+                    "research_observation_projection": True,
+                    "affects_formal": False,
+                    "is_executable": False,
+                    "eligible_for_l1_v0": False,
+                },
+            ]
+        })
+
+        rows = workspace["views"]["observation_top5"]
+        by_code = {row["code"]: row for row in rows}
+        self.assertEqual(
+            by_code["002845"]["observation_status_label"], "分钟数据不足"
+        )
+        self.assertEqual(
+            by_code["000963"]["observation_status_label"], "待确认"
+        )
+        self.assertFalse(by_code["002845"]["is_executable"])
+
     def test_growth_quality_view_exists_but_default_is_main(self):
         report_data = _report_data(
             {

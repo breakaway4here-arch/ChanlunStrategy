@@ -1,0 +1,1169 @@
+{
+  "trade_date": "2026-09-21",
+  "missing_30m": [
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "000617"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "000766"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002153"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002273"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002335"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002555"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002645"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002733"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002845"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002939"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002993"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300100"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300842"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300890"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301050"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301310"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301377"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600392"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600683"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601016"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601360"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601619"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603501"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688351"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688390"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688410"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688798"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688818"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688981"
+      },
+      "expected": "minute30_missing"
+    }
+  ],
+  "missing_15m": [
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "001267"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "001309"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002028"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002077"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002185"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002212"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002261"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002371"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002409"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002560"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002902"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "003026"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300033"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300085"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300136"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300283"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300442"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300454"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300458"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300623"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300672"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300782"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300803"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300913"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301165"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301308"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301380"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600026"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600360"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600498"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600584"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600641"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601360"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601872"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601919"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603005"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603501"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603986"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "605358"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688012"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688041"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688048"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688082"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688110"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688120"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688123"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688141"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688146"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688225"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688256"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688347"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688362"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688372"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688385"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688403"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688521"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688525"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688702"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688783"
+      },
+      "expected": "minute15_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688981"
+      },
+      "expected": "minute15_missing"
+    }
+  ],
+  "research_observation": [
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "000963"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002019"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002031"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002081"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002169"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002196"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002249"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002271"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300059"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300127"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300136"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300170"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300181"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300204"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300253"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300357"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300436"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300458"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300476"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300488"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300546"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300652"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300660"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300723"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "300970"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301012"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301162"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301188"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301246"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301293"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301301"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "301371"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600129"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600276"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600380"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600791"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600867"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600888"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600909"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600977"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601636"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "601858"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603319"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603341"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603728"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "603777"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "605060"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688036"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688059"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688221"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688277"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688626"
+      },
+      "expected": "valid_no_confirm"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SZ",
+        "code": "002845"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600392"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "600683"
+      },
+      "expected": "minute30_missing"
+    },
+    {
+      "identity": {
+        "asset_type": "stock",
+        "exchange": "SH",
+        "code": "688410"
+      },
+      "expected": "minute30_missing"
+    }
+  ]
+}
