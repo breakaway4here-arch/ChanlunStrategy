@@ -700,7 +700,9 @@ def _verified_strategy_input(evidence, interval, report_date):
     )
 
 
-def _build_sublevel_input_health(interval, requested, rows, report_date):
+def _build_sublevel_input_health(
+    interval, requested, rows, report_date, failure_evidence=None
+):
     requested_codes = sorted({
         str(item.get("code") or "")
         for item in (requested or [])
@@ -724,6 +726,12 @@ def _build_sublevel_input_health(interval, requested, rows, report_date):
         status = "partial"
     else:
         status = "verified"
+    failures = {}
+    for identity_key, evidence in (failure_evidence or {}).items():
+        key_text = str(identity_key)
+        code = key_text.rsplit("|", 1)[-1]
+        if code in missing_codes and isinstance(evidence, dict):
+            failures[code] = dict(evidence)
     return {
         "interval": interval,
         "required_date": str(report_date),
@@ -733,6 +741,7 @@ def _build_sublevel_input_health(interval, requested, rows, report_date):
         "missing_count": len(missing_codes),
         "verified_codes": verified_codes,
         "missing_codes": missing_codes,
+        "failure_evidence": failures,
         "blocks_strategy_output": bool(
             requested_codes and status == "unavailable"
         ),
@@ -3033,6 +3042,7 @@ def main(debug=False, preview=False, generated_at=None):
     all_targets = []
     formal_min30_data_list = []
     shadow_min30_data_list = []
+    min30_failure_evidence = {}
 
     if ENABLE_30MIN_CANDIDATE_UPGRADE:
         # Collect codes from structure pool(s) + non-limit-up startup seeds
@@ -3056,6 +3066,7 @@ def main(debug=False, preview=False, generated_at=None):
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min30_failure_evidence,
         )
         if target_partition["readonly_shadow_codes"]:
             shadow_targets = [
@@ -3297,6 +3308,7 @@ def main(debug=False, preview=False, generated_at=None):
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min30_failure_evidence,
         )
 
         if not formal_min30_data_list:
@@ -3331,7 +3343,8 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     min30_input_health = _build_sublevel_input_health(
-        "30m", all_targets, formal_min30_data_list, today
+        "30m", all_targets, formal_min30_data_list, today,
+        failure_evidence=min30_failure_evidence,
     )
 
     if right_side_confirmed:
@@ -3353,11 +3366,13 @@ def main(debug=False, preview=False, generated_at=None):
     min15_data_list = []
     chan_results_15min = []
     analyzed_min15_rows = []
+    min15_failure_evidence = {}
     if selected_luojie_stocks:
         min15_data_list = collect_15min_data(
             selected_luojie_stocks,
             required_date=today,
             as_of=time_metadata.get("as_of"),
+            failure_evidence=min15_failure_evidence,
         ) or []
         seed_map = {
             str(row.get("code") or ""): row
@@ -3399,7 +3414,8 @@ def main(debug=False, preview=False, generated_at=None):
             chan_results_15min.append(result)
 
     min15_input_health = _build_sublevel_input_health(
-        "15m", selected_luojie_stocks, analyzed_min15_rows, today
+        "15m", selected_luojie_stocks, analyzed_min15_rows, today,
+        failure_evidence=min15_failure_evidence,
     )
     budget_excluded_count = luojie_research_plan["budget_excluded_count"]
     if budget_excluded_count and min15_input_health["status"] == "verified":

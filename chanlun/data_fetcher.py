@@ -2779,7 +2779,7 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
         bool(repository_result.stale)
         if repository_result is not None else bool(status.get("stale", True))
     )
-    return {
+    evidence = {
         "interval": interval,
         "status": repository_status,
         "latest_date": str(status.get("latest_date") or "").split(" ", 1)[0],
@@ -2795,6 +2795,27 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
             status.get("adjustment") or payload.get("adjustment") or ""
         ),
     }
+    if repository_result is not None:
+        diagnostics = repository_result.diagnostics
+        if isinstance(diagnostics, dict):
+            failure = diagnostics.get("fetch_failure")
+            if isinstance(failure, dict):
+                evidence["provider_failure"] = dict(failure)
+        evidence.update({
+            "latest_cache_date": evidence["latest_date"],
+            "cache_stale": repository_stale,
+            "cache_bars": evidence["bars"],
+            "final_adopted": bool(
+                repository_result.fetched_remote
+                and repository_result.status == "verified"
+            ),
+        })
+        evidence["rejection_reason"] = (
+            evidence.get("provider_failure", {}).get("reason")
+            if isinstance(evidence.get("provider_failure"), dict)
+            else None
+        ) or ("" if evidence["final_adopted"] else repository_status)
+    return evidence
 
 
 def _verified_sublevel_input(
@@ -2819,8 +2840,47 @@ def _verified_sublevel_input(
     )
 
 
+def _record_sublevel_failure(
+    failure_evidence, identity, interval, evidence, repository_result=None
+):
+    if failure_evidence is None:
+        return
+    details = dict(evidence or {})
+    diagnostics = (
+        repository_result.diagnostics
+        if repository_result is not None
+        and isinstance(repository_result.diagnostics, dict)
+        else {}
+    )
+    provider_failure = diagnostics.get("fetch_failure")
+    if isinstance(provider_failure, dict):
+        details["provider_failure"] = dict(provider_failure)
+    details.update({
+        "interval": interval,
+        "final_adopted": False,
+        "latest_cache_date": details.get("latest_date", ""),
+        "cache_stale": bool(
+            repository_result.stale
+            if repository_result is not None
+            else details.get("stale", True)
+        ),
+        "cache_bars": int(details.get("bars") or 0),
+        "rejection_reason": (
+            details.get("provider_failure", {}).get("reason")
+            if isinstance(details.get("provider_failure"), dict)
+            else None
+        ) or str(
+            repository_result.status
+            if repository_result is not None
+            else "input_unverified"
+        ),
+    })
+    failure_evidence[identity.key] = details
+
+
 def batch_fetch_30min_klines(
-    stocks, max_workers=8, required_date=None, as_of=None
+    stocks, max_workers=8, required_date=None, as_of=None,
+    failure_evidence=None,
 ):
     """
     并发批量获取30分钟K线。
@@ -2906,6 +2966,9 @@ def batch_fetch_30min_klines(
                 "klines": klines,
                 "input_evidence": evidence,
             }
+        _record_sublevel_failure(
+            failure_evidence, identity, "30m", evidence, repository_result
+        )
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -2918,7 +2981,8 @@ def batch_fetch_30min_klines(
 
 
 def batch_fetch_15min_klines(
-    stocks, max_workers=8, required_date=None, as_of=None
+    stocks, max_workers=8, required_date=None, as_of=None,
+    failure_evidence=None,
 ):
     """
     并发批量获取15分钟K线。
@@ -3004,6 +3068,9 @@ def batch_fetch_15min_klines(
                 "klines": klines,
                 "input_evidence": evidence,
             }
+        _record_sublevel_failure(
+            failure_evidence, identity, "15m", evidence, repository_result
+        )
         return None
 
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -3361,7 +3428,9 @@ def collect_daily_data(
     }
 
 
-def collect_30min_data(target_stocks, required_date=None, as_of=None):
+def collect_30min_data(
+    target_stocks, required_date=None, as_of=None, failure_evidence=None
+):
     """
     为目标池股票拉取30分钟K线。
     """
@@ -3370,7 +3439,10 @@ def collect_30min_data(target_stocks, required_date=None, as_of=None):
     print(f"  批量获取30分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_30min_klines(
-        target_stocks, required_date=required_date, as_of=as_of
+        target_stocks,
+        required_date=required_date,
+        as_of=as_of,
+        failure_evidence=failure_evidence,
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results
@@ -3428,7 +3500,9 @@ def load_30min_data_readonly(target_stocks, required_date=None, as_of=None):
     return output
 
 
-def collect_15min_data(target_stocks, required_date=None, as_of=None):
+def collect_15min_data(
+    target_stocks, required_date=None, as_of=None, failure_evidence=None
+):
     """
     为目标池股票拉取15分钟K线。
     """
@@ -3437,7 +3511,10 @@ def collect_15min_data(target_stocks, required_date=None, as_of=None):
     print(f"  批量获取15分钟K线（{len(target_stocks)} 只）...")
     t0 = time.time()
     results = batch_fetch_15min_klines(
-        target_stocks, required_date=required_date, as_of=as_of
+        target_stocks,
+        required_date=required_date,
+        as_of=as_of,
+        failure_evidence=failure_evidence,
     )
     print(f"  获取到 {len(results)} 只，耗时 {time.time() - t0:.1f}s")
     return results

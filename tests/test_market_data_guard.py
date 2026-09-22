@@ -434,6 +434,46 @@ class TestMarketDataGuard(unittest.TestCase):
         self.assertEqual(unavailable["status"], "unavailable")
         self.assertTrue(unavailable["blocks_strategy_output"])
 
+    def test_sublevel_input_health_keeps_failure_evidence_only_for_missing_codes(self):
+        evidence = {
+            "interval": "30m",
+            "status": "verified",
+            "latest_date": "2026-08-26",
+            "is_final": True,
+            "stale": False,
+        }
+        failures = {
+            "stock|SH|600001": {
+                "interval": "30m",
+                "latest_cache_date": "2026-08-21",
+                "cache_stale": True,
+                "final_adopted": False,
+                "rejection_reason": "stale_cache",
+                "provider_failure": {
+                    "attempts": 4,
+                    "attempt_evidence": [{
+                        "provider": "sina",
+                        "reason": "decode_error",
+                    }],
+                },
+            },
+            "stock|SH|600000": {"rejection_reason": "should_not_be_exported"},
+        }
+        health = run._build_sublevel_input_health(
+            "30m",
+            [{"code": "600000"}, {"code": "600001"}],
+            [{"code": "600000", "input_evidence": evidence}],
+            "2026-08-26",
+            failure_evidence=failures,
+        )
+
+        self.assertEqual(health["missing_codes"], ["600001"])
+        self.assertEqual(
+            health["failure_evidence"]["600001"]["rejection_reason"],
+            "stale_cache",
+        )
+        self.assertNotIn("600000", health["failure_evidence"])
+
     def test_formal_dependency_health_rejects_unverified_30min_candidate(self):
         valid = {
             "code": "600000", "signal_tier": "candidate",

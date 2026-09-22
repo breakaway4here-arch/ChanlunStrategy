@@ -662,6 +662,12 @@ class KLineRepository:
                         _returned_identity, remote_count, payload = future.result()
                         if not payload:
                             remote_failed[identity] = True
+                            remote_diagnostics[identity] = {
+                                "fetch_failure": {
+                                    "reason": "remote_empty_response",
+                                    "final_adopted": False,
+                                }
+                            }
                             continue
                         if isinstance(payload, Mapping):
                             diagnostics = payload.get("_fetch_diagnostics")
@@ -677,8 +683,21 @@ class KLineRepository:
                         )
                         prepared.append(item)
                         fetched_remote.add(identity)
-                    except Exception:
+                    except Exception as exc:
                         remote_failed[identity] = True
+                        diagnostics = getattr(exc, "diagnostics", None)
+                        if isinstance(diagnostics, Mapping):
+                            remote_diagnostics[identity] = {
+                                "fetch_failure": dict(diagnostics),
+                            }
+                        else:
+                            remote_diagnostics[identity] = {
+                                "fetch_failure": {
+                                    "reason": "remote_fetch_exception",
+                                    "exception_type": type(exc).__name__,
+                                    "final_adopted": False,
+                                }
+                            }
             if prepared:
                 try:
                     self._write_prepared(prepared)
