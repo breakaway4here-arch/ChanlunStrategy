@@ -137,6 +137,7 @@ from chanlun.signal_recency import filter_recent_picks, filter_recent_watchlist
 from chanlun.next_day_boom import build_next_day_boom_candidates
 from chanlun.luojie_pool import prefilter_luojie_theme_candidates, build_luojie_pool
 from chanlun.h4_t3_pool import build_h4_t3_pool
+from chanlun.identity import normalize_identity
 from chanlun.shadow_evaluation import build_daily_shadow_evaluations
 from chanlun.research_frameworks import calc_gf_dma_health
 from chanlun.market_history_store import MarketHistoryStore
@@ -687,6 +688,94 @@ def _restrict_observation_to_common_upstream(items, upstream_candidates):
         "limit_up_exception_count": len(exception_codes),
         "limit_up_exception_codes": exception_codes,
     }
+
+
+def _observation_identity_key(row):
+    if not isinstance(row, dict):
+        return ""
+    try:
+        return normalize_identity(row).key
+    except (TypeError, ValueError):
+        code = str(row.get("code") or "").strip()
+        return "stock||{}".format(code) if code else ""
+
+
+def _build_research_observation_projection(source_rows, kept_rows):
+    """Project common-upstream exclusions into the existing research view only."""
+    kept_keys = {
+        _observation_identity_key(row)
+        for row in (kept_rows or [])
+        if _observation_identity_key(row)
+    }
+    projected = []
+    for source in source_rows or []:
+        if not isinstance(source, dict):
+            continue
+        identity_key = _observation_identity_key(source)
+        if not identity_key or identity_key in kept_keys:
+            continue
+        item = copy.deepcopy(source)
+        missing = (
+            item.get("reason_code") == "missing_30m_data"
+            or item.get("minute30_input_status") == "missing"
+        )
+        item.update({
+            "identity_key": identity_key,
+            "research_observation_projection": True,
+            "affects_formal": False,
+            "is_executable": False,
+            "eligible_for_l1_v0": False,
+            "formal_actions_allowed": False,
+            "observation_status": (
+                "minute_data_insufficient" if missing else "pending_confirmation"
+            ),
+            "observation_status_label": (
+                "分钟数据不足" if missing else "待确认"
+            ),
+            "final_display_state": "observe",
+        })
+        projected.append(item)
+    return projected
+
+
+def _merge_observation_watchlists(base_rows, extra_rows):
+    """Merge research rows by canonical identity without overwriting facts."""
+    merged = []
+    positions = {}
+    for row in list(base_rows or []) + list(extra_rows or []):
+        if not isinstance(row, dict):
+            continue
+        key = _observation_identity_key(row)
+        if not key:
+            continue
+        position = positions.get(key)
+        if position is None:
+            item = copy.deepcopy(row)
+            item.setdefault("identity_key", key)
+            merged.append(item)
+            positions[key] = len(merged) - 1
+            continue
+        current = merged[position]
+        for field in ("sources", "source_refs", "observation_statuses"):
+            values = []
+            for candidate in (current.get(field), row.get(field)):
+                if isinstance(candidate, (list, tuple)):
+                    values.extend(candidate)
+            if values:
+                current[field] = list(dict.fromkeys(values))
+        if row.get("research_observation_projection"):
+            current["research_observation_projection"] = True
+            current["affects_formal"] = False
+            current["is_executable"] = False
+            current["eligible_for_l1_v0"] = False
+            current["formal_actions_allowed"] = False
+            current.setdefault(
+                "observation_status", row.get("observation_status")
+            )
+            current.setdefault(
+                "observation_status_label", row.get("observation_status_label")
+            )
+    return merged
 
 
 def _verified_strategy_input(evidence, interval, report_date):
@@ -3488,6 +3577,9 @@ def main(debug=False, preview=False, generated_at=None):
     )
     startup_watchlist, recency_watch_diag = filter_recent_watchlist(startup_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS)
     startup_watchlist = [_attach_liquidity(_attach_sector_metadata(item)) for item in startup_watchlist]
+    startup_observation_candidates_before_upstream = copy.deepcopy(
+        startup_watchlist
+    )
     trend_watchlist, recency_trend_watch_diag = filter_recent_watchlist(
         trend_watchlist, SIGNAL_MAX_AGE_TRADING_DAYS
     )
@@ -3611,6 +3703,17 @@ def main(debug=False, preview=False, generated_at=None):
         else empty_trend_upstream_diag
     )
     observation_watchlist = startup_watchlist + formal_trend_watchlist
+    startup_research_projection = _build_research_observation_projection(
+        startup_observation_candidates_before_upstream,
+        startup_watchlist,
+    )
+    observation_watchlist = _merge_observation_watchlists(
+        observation_watchlist,
+        startup_research_projection,
+    )
+    startup_final_upstream_diag["research_projection_count"] = len(
+        startup_research_projection
+    )
     _ignored_luojie_common_rows, luojie_final_upstream_diag = (
         _restrict_to_common_upstream(
             luojie_pool.get("candidates", []), pure_scored

@@ -1207,6 +1207,22 @@ def _serialize_startup_watchlist(watchlist):
             ),
             "reason_code": w.get("reason_code", ""),
             "failure_gate": w.get("failure_gate", ""),
+            "identity_key": w.get("identity_key", ""),
+            "minute30_input_status": w.get("minute30_input_status", ""),
+            "minute30_confirmation_status": w.get(
+                "minute30_confirmation_status", ""
+            ),
+            "observation_status": w.get("observation_status", ""),
+            "observation_status_label": w.get(
+                "observation_status_label", ""
+            ),
+            "research_observation_projection": bool(
+                w.get("research_observation_projection", False)
+            ),
+            "affects_formal": w.get("affects_formal"),
+            "is_executable": w.get("is_executable"),
+            "eligible_for_l1_v0": w.get("eligible_for_l1_v0"),
+            "formal_actions_allowed": w.get("formal_actions_allowed"),
             "actual_value": w.get("actual_value"),
             "upgrade_conditions": w.get("upgrade_conditions", []),
             "next_day_conditions": w.get("next_day_conditions", []),

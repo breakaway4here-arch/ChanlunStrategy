@@ -474,6 +474,78 @@ class TestMarketDataGuard(unittest.TestCase):
         )
         self.assertNotIn("600000", health["failure_evidence"])
 
+    def test_research_observation_projection_is_deduplicated_and_nonformal(self):
+        source = [
+            {
+                "code": "002845",
+                "name": "同兴达",
+                "reason_code": "missing_30m_data",
+                "minute30_input_status": "missing",
+            },
+            {
+                "code": "000963",
+                "name": "华东医药",
+                "reason_code": "waiting_30m_confirm",
+                "minute30_input_status": "verified",
+            },
+            {"code": "600001", "name": "已保留"},
+        ]
+        projected = run._build_research_observation_projection(
+            source, [{"code": "600001", "name": "已保留"}]
+        )
+        merged = run._merge_observation_watchlists(
+            [{"code": "002845", "name": "同兴达"}], projected
+        )
+
+        self.assertEqual(
+            [row["code"] for row in projected], ["002845", "000963"]
+        )
+        self.assertEqual(
+            projected[0]["observation_status_label"], "分钟数据不足"
+        )
+        self.assertEqual(projected[1]["observation_status_label"], "待确认")
+        self.assertTrue(all(
+            row["research_observation_projection"]
+            and row["affects_formal"] is False
+            and row["is_executable"] is False
+            and row["eligible_for_l1_v0"] is False
+            for row in projected
+        ))
+        self.assertEqual([row["code"] for row in merged].count("002845"), 1)
+
+    def test_fixed_0921_research_scope_projects_52_pending_and_4_missing(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "fixtures"
+            / "selection_2026_09_21_scope.json"
+        )
+        scope = json.loads(fixture_path.read_text(encoding="utf-8"))
+        source = [
+            {
+                "code": row["identity"]["code"],
+                "exchange": row["identity"]["exchange"],
+                "asset_type": "stock",
+                "reason_code": (
+                    "missing_30m_data"
+                    if row["expected"] == "minute30_missing"
+                    else "waiting_30m_confirm"
+                ),
+                "minute30_input_status": (
+                    "missing"
+                    if row["expected"] == "minute30_missing"
+                    else "verified"
+                ),
+            }
+            for row in scope["research_observation"]
+        ]
+
+        projected = run._build_research_observation_projection(source, [])
+        labels = [row["observation_status_label"] for row in projected]
+
+        self.assertEqual(len(projected), 56)
+        self.assertEqual(labels.count("分钟数据不足"), 4)
+        self.assertEqual(labels.count("待确认"), 52)
+
     def test_formal_dependency_health_rejects_unverified_30min_candidate(self):
         valid = {
             "code": "600000", "signal_tier": "candidate",

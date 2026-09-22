@@ -288,6 +288,14 @@ def _candidate_source(
     return item, None
 
 
+def _eligible_for_l1_v0(value: Any) -> bool:
+    """Research projections never become L1 v0 source candidates."""
+    return not (
+        isinstance(value, Mapping)
+        and value.get("eligible_for_l1_v0") is False
+    )
+
+
 def _snapshot_rows(
     report_date: str, snapshot: Any
 ) -> Tuple[bool, str, str, Dict[str, Dict[str, Any]]]:
@@ -364,7 +372,9 @@ def _source_lists(report: Mapping[str, Any]) -> Tuple[List[Tuple[str, Any]], Lis
         if not isinstance(rows, list):
             errors.append("{} must be an array".format(pool))
             continue
-        pool_rows.extend((pool, row) for row in rows)
+        pool_rows.extend(
+            (pool, row) for row in rows if _eligible_for_l1_v0(row)
+        )
     for pool in _CANDIDATE_POOLS:
         if pool not in report:
             errors.append("{} is missing".format(pool))
@@ -401,7 +411,11 @@ def _source_lists(report: Mapping[str, Any]) -> Tuple[List[Tuple[str, Any]], Lis
                     if not isinstance(rows, list):
                         errors.append("workspace.views.{} must be an array".format(view))
                         continue
-                    view_rows.extend((view, row) for row in rows)
+                    view_rows.extend(
+                        (view, row)
+                        for row in rows
+                        if _eligible_for_l1_v0(row)
+                    )
     return pool_rows, view_rows, errors
 
 
