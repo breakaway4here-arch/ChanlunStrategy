@@ -115,21 +115,26 @@ class KLineRepositoryTests(unittest.TestCase):
             "_fetch_sina_minute_kline_remote",
             side_effect=sina,
         ):
-            payload = data_fetcher._fetch_minute_for_repository(
-                "600000",
-                30,
-                40,
-                required_date="2026-08-26",
-                as_of="2026-08-26T15:05:00+08:00",
-                sleep_fn=sleeps.append,
-            )
+            with self.assertRaises(data_fetcher.MinuteDataFetchError) as caught:
+                data_fetcher._fetch_minute_for_repository(
+                    "600000",
+                    30,
+                    40,
+                    required_date="2026-08-26",
+                    as_of="2026-08-26T15:05:00+08:00",
+                    sleep_fn=sleeps.append,
+                )
 
-        self.assertIsNone(payload)
         self.assertEqual(
             calls,
             ["eastmoney", "sina", "eastmoney", "sina"],
         )
         self.assertEqual(sleeps, [0.5, 1.0, 2.0])
+        self.assertEqual(len(caught.exception.diagnostics["attempt_evidence"]), 4)
+        self.assertEqual(
+            caught.exception.diagnostics["attempt_evidence"][-1]["attempt"],
+            4,
+        )
 
     def test_minute_fetch_stale_first_provider_uses_fresh_second_provider(self):
         calls = []
