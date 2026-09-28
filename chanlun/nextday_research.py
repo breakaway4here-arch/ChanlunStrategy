@@ -13,6 +13,7 @@ import json
 import math
 import os
 import re
+import sqlite3
 import tempfile
 from collections import defaultdict
 from contextlib import contextmanager
@@ -252,6 +253,7 @@ def _candidate_source(
     view: Optional[str] = None,
     archive_rank: Any = None,
     archive_item: Optional[Mapping[str, Any]] = None,
+    db_path: Optional[Path] = None,
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     if not isinstance(value, Mapping):
         return None, "candidate row is not an object"
@@ -267,6 +269,33 @@ def _candidate_source(
     elif isinstance(row.get("name"), str) and row.get("name").strip():
         declared_names.append(row.get("name").strip())
     try:
+        if db_path is not None and "identity_key" in row and (
+            row["identity_key"] is None
+            or isinstance(row["identity_key"], str) and not row["identity_key"].strip()
+        ):
+            # Recover only missing metadata, never a conflicting declaration.
+            expected = normalize_identity(row)
+            try:
+                conn = sqlite3.connect(Path(db_path).resolve().as_uri() + "?mode=ro", uri=True)
+                try:
+                    conn.execute("PRAGMA query_only=ON")
+                    matches = conn.execute(
+                        "SELECT asset_type, exchange, code FROM instruments "
+                        "WHERE asset_type = 'stock' AND code = ?", (expected.code,)
+                    ).fetchall()
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                raise ValueError("identity registry unavailable") from None
+            if len(matches) != 1 or tuple(matches[0]) != (
+                expected.asset_type, expected.exchange, expected.code
+            ):
+                raise ValueError("identity registry missing, ambiguous or conflicting")
+            row["identity_key"] = expected.key
+            row["identity_recovery"] = {
+                "source": "market_history.instruments",
+                "identity_key": expected.key,
+            }
         identity = _identity_for(row, (archive_item,) if isinstance(archive_item, Mapping) else ())
     except (TypeError, ValueError) as exc:
         return None, "candidate identity invalid: {}".format(str(exc))
@@ -555,6 +584,8 @@ def _merge_candidate_records(
             "name": source.get("name"),
             "risk_fields": source["risk_fields"],
         }
+        if raw.get("identity_recovery"):
+            evidence["identity_recovery"] = copy.deepcopy(raw["identity_recovery"])
         if source.get("source_pool") or source.get("source_view"):
             prior["source_evidence"].append(evidence)
         if source.get("archive_rank") is not None:
@@ -594,7 +625,7 @@ def _merge_candidate_records(
 
 
 def adapt_report(
-    report: Mapping[str, Any], archived_workbench: Any = None
+    report: Mapping[str, Any], archived_workbench: Any = None, *, db_path: Optional[Path] = None
 ) -> Dict[str, Any]:
     """Return minimal normalized inputs and independent L1/B0 selections."""
     if not isinstance(report, Mapping):
@@ -612,7 +643,7 @@ def adapt_report(
     raw_candidate_count = 0
     for pool, raw in pool_rows:
         raw_candidate_count += 1
-        parsed, error = _candidate_source(raw, pool=pool)
+        parsed, error = _candidate_source(raw, pool=pool, db_path=db_path)
         if error:
             candidate_errors.append("{}: {}".format(pool, error))
         elif parsed:
@@ -620,7 +651,7 @@ def adapt_report(
             parsed_sources.append(parsed)
     for view, raw in view_rows:
         raw_candidate_count += 1
-        parsed, error = _candidate_source(raw, view=view)
+        parsed, error = _candidate_source(raw, view=view, db_path=db_path)
         if error:
             candidate_errors.append("workspace.views.{}: {}".format(view, error))
         elif parsed:
@@ -1703,7 +1734,7 @@ def process_report(
     if as_of_date is None:
         raise ResearchInputError("--as-of must be an ISO date")
     archived, archive_hash, archive_error = _read_archived_workbench(report_path, report, report_date)
-    prepared = adapt_report(report, archived_workbench=archived)
+    prepared = adapt_report(report, archived_workbench=archived, db_path=db_path)
     diagnostics = report.get("diagnostics")
     funnel = diagnostics.get("candidate_funnel") if isinstance(diagnostics, Mapping) else None
     if isinstance(funnel, Mapping) and isinstance(funnel.get("run_id"), str):
