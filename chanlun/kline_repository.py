@@ -15,6 +15,7 @@ import numpy as np
 
 from .market_history_store import MarketHistoryStore
 from .identity import InstrumentIdentity, normalize_identity
+from .minute_sources import align_daily_basis
 
 
 _CN_TZ = timezone(timedelta(hours=8))
@@ -45,11 +46,13 @@ class KLineRepository:
         max_workers: int = 8,
         trace_callback: Optional[Callable[[str], None]] = None,
         immutable_backtest: bool = True,
+        raw_daily_reader: Optional[Callable[..., Any]] = None,
     ):
         if mode not in ("ongoing", "backtest"):
             raise ValueError("mode must be ongoing or backtest")
         self.path = Path(path)
         self.remote_fetchers = dict(remote_fetchers or {})
+        self.raw_daily_reader = raw_daily_reader
         self.mode = mode
         self.shadow_reader = shadow_reader
         self.overlap_counts = dict(
@@ -235,7 +238,7 @@ class KLineRepository:
                     "volume_source": volume_source,
                     "amount_unit": amount_unit if has_amount else "unknown",
                     "amount_source": amount_source if has_amount else "",
-                    "adjustment": self.adjustment,
+                    "adjustment": str(payload.get("adjustment") or self.adjustment),
                     "is_final": final,
                     "source_batch": "ongoing:{}".format(provider),
                 }
@@ -618,6 +621,7 @@ class KLineRepository:
         remote_diagnostics = {}
         fetched_remote = set()
         prepared = []
+        read_only_remote = {}
 
         refresh_identities = [
             identity
@@ -639,7 +643,7 @@ class KLineRepository:
                 existing = local[identity]
                 remote_count = (
                     int(count)
-                    if force_refresh or len(existing) < int(count)
+                    if getattr(fetcher, 'requires_full_window', False) is True or force_refresh or len(existing) < int(count)
                     else int(self.overlap_counts[interval])
                 )
                 context = self._fetcher_context_kwargs(
@@ -673,6 +677,24 @@ class KLineRepository:
                             diagnostics = payload.get("_fetch_diagnostics")
                             if isinstance(diagnostics, Mapping):
                                 remote_diagnostics[identity] = dict(diagnostics)
+                        if (payload.get('schema') == 'free_minute_v1'
+                                and self.raw_daily_reader is not None
+                                and required_date and interval in ('30m', '15m')):
+                            try:
+                                references = self._load_many('day', [identity], 240, as_of)[identity]
+                                target_daily = {str(row['ts'])[:10]: {
+                                    **{k: row[k] for k in ('open', 'high', 'low', 'close', 'adjustment')},
+                                    'is_final': bool(row['is_final']),
+                                    'source': row.get('source_batch') or '',
+                                } for row in references}
+                                if not set(d[:10] for d in payload['dates']).issubset(target_daily):
+                                    raise ValueError('missing_canonical_daily_reference')
+                                raw_daily = self.raw_daily_reader(identity, required_date)
+                                payload = align_daily_basis(payload, raw_daily, target_daily,
+                                                            scale=int(interval[:-1]))
+                                remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
+                            except (ValueError, TypeError, KeyError) as exc:
+                                remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = str(exc)
                         item = self._prepare_remote(interval, identity, payload)
                         item["interval"] = interval
                         self._validate_prepared_remote(
@@ -681,8 +703,12 @@ class KLineRepository:
                             required_date=required_date,
                             as_of=as_of,
                         )
-                        prepared.append(item)
-                        fetched_remote.add(identity)
+                        if any(bar['adjustment'] != self.adjustment for bar in item['bars']):
+                            # Never relabel or splice a new source into the canonical price basis.
+                            read_only_remote[identity] = (item, payload)
+                        else:
+                            prepared.append(item)
+                            fetched_remote.add(identity)
                     except Exception as exc:
                         remote_failed[identity] = True
                         diagnostics = getattr(exc, "diagnostics", None)
@@ -727,6 +753,19 @@ class KLineRepository:
                 remote_failed=bool(remote_failed.get(identity)),
             )
             kline = self._rows_to_kline(rows, status, stale)
+            result_source = "market_history_db" if kline else "missing"
+            if identity in read_only_remote and status != 'verified':
+                item, payload = read_only_remote[identity]
+                fetched_remote.add(identity)
+                status, stale = 'price_basis_unverified', False
+                kline = self._rows_to_kline(item['bars'][-int(count):], status, stale)
+                result_source = str(payload.get('source') or 'remote')
+                kline['source'] = result_source
+                kline['_data_status']['source'] = result_source
+                for key in ('fetched_at', 'data_time', 'schema', 'raw_volumes', 'amounts', 'amount_available', 'amount_unit', 'amount_source'):
+                    if key in payload:
+                        kline[key] = payload[key][-int(count):] if key in ('raw_volumes', 'amounts', 'amount_available') else payload[key]
+                kline['_data_status']['degraded_reason'] = 'price_basis_unverified'
             diagnostics = {
                 "remote_failed": bool(remote_failed.get(identity)),
                 "mode": self.mode,
@@ -738,7 +777,7 @@ class KLineRepository:
             result = KLineResult(
                 kline=kline,
                 status=status,
-                source="market_history_db" if kline else "missing",
+                source=result_source,
                 stale=stale,
                 fetched_remote=identity in fetched_remote,
                 diagnostics=diagnostics,

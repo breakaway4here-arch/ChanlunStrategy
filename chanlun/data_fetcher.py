@@ -3,7 +3,7 @@
 - 板块资金流向: 东方财富 push2.eastmoney.com
 - 板块成分股:   东方财富 push2.eastmoney.com
 - 日线K线:      腾讯 web.ifzq.gtimg.cn
-- 30/15分钟K线: 东方财富优先，新浪短窗口兜底
+- 30/15分钟K线: 新浪优先，沪深腾讯次选；东方财富保留为备用及长窗口来源
 
 数据流: 板块资金TOP20 → 成分股列表 → 日线K线 → 30分钟K线
 """
@@ -48,6 +48,7 @@ from .kline_cache import (
 )
 from .kline_repository import KLineRepository
 from .price_basis import adjustment_factor
+from .minute_sources import clean_minutes, closed_window, decode_response
 from .identity import (
     InstrumentIdentity,
     normalize_identity,
@@ -1507,105 +1508,74 @@ def fetch_shanghai_index(required_date=None):
 
 
 # ============================================================
-# 分钟 K 线 — 新浪
+# 分钟 K 线 — 免费源清洗
 # ============================================================
-def _fetch_sina_minute_kline_remote(
-    code, scale, count, *, capture_failure=False
-):
-    """Fetch minute kline from Sina."""
+
+
+def _fetch_free_minute_remote(code, scale, count, source, *, capture_failure=False):
     identity = _normalize_identity(code)
-    sc = _sina_code(identity)
-    datalen = min(count, 240)
-    url = (
-        "https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/"
-        f"CN_MarketData.getKLineData?symbol={sc}&scale={scale}&datalen={datalen}"
-    )
     response = None
     decoded = None
     try:
-        resp = SESSION.get(url, timeout=15)
-        response = resp
-        raise_for_status = getattr(resp, "raise_for_status", None)
-        if callable(raise_for_status):
-            raise_for_status()
-        klines = resp.json()
-        decoded = klines
-        if not klines:
-            raise _MinuteProviderFailure(
-                _minute_failure_evidence(
-                    ValueError("empty payload"),
-                    response=response,
-                    payload=decoded,
-                    reason="empty_response",
-                    category="validation",
-                    exception_type="EmptyResponse",
-                )
-            )
-
-        dates, opens, highs, lows, closes, volumes = [], [], [], [], [], []
-        for k in klines:
-            dates.append(k["day"])
-            opens.append(float(k["open"]))
-            highs.append(float(k["high"]))
-            lows.append(float(k["low"]))
-            closes.append(float(k["close"]))
-            volumes.append(float(k["volume"]))
-
-        volumes_array, canonical_unit, raw_unit = _normalize_provider_volume(
-            volumes,
-            "shares" if identity.asset_type == "stock" else "unknown",
-        )
-
-        return _MinuteProviderPayload(
-            {
-                "dates": dates,
-                "opens": np.array(opens),
-                "highs": np.array(highs),
-                "lows": np.array(lows),
-                "closes": np.array(closes),
-                "volumes": volumes_array,
-                "volume_unit": canonical_unit,
-                "volume_raw_unit": raw_unit,
-                "volume_source": "sina",
-                "amount_unit": "unknown",
-                "amount_source": "",
-            },
-            response_metadata=_minute_response_metadata(
-                response, payload=decoded
-            ),
-        )
-    except _MinuteProviderFailure as failure:
-        if capture_failure:
-            raise
-        print(
-            "[ERROR] 获取{}分钟K线失败 {}: {}".format(
-                scale, identity.code, failure.evidence.get("reason", "provider_failure")
-            )
-        )
-        return None
+        if identity.asset_type != 'stock' or (source == 'tencent' and identity.exchange == 'BJ'):
+            raise ValueError('unsupported_free_minute_identity')
+        symbol = _tencent_code(identity)
+        if source == 'tencent':
+            url = 'https://ifzq.gtimg.cn/appstock/app/kline/mkline'
+            params = {'param': '{},m{},,320'.format(symbol, scale)}
+        else:
+            if identity.exchange == 'BJ':
+                # The BJ JSONP amount field conflicts with its price/volume in live samples.
+                # Keep the known OHLCV endpoint; absent amount stays absent.
+                url = ('https://money.finance.sina.com.cn/quotes_service/api/json_v2.php/'
+                       'CN_MarketData.getKLineData')
+            else:
+                url = ('https://quotes.sina.cn/cn/api/jsonp.php/var%20_DATA=/'
+                       'CN_MarketDataService.getKLineData')
+            params = {'symbol': symbol, 'scale': scale, 'datalen': 240, 'ma': 'no'}
+        response = SESSION.get(url, params=params, timeout=15,
+                               headers={'Referer': 'https://finance.sina.com.cn/'},
+                               allow_redirects=False)
+        status = getattr(response, 'status_code', 200)
+        if isinstance(status, int) and not 200 <= status < 300:
+            response.raise_for_status()
+            raise ValueError('unexpected_http_status')
+        text = getattr(response, 'text', '')
+        decoded = decode_response(text) if isinstance(text, str) and text else response.json()
+        result = clean_minutes(decoded, source=source, symbol=symbol, scale=scale)
+        return _MinuteProviderPayload(result, response_metadata=_minute_response_metadata(response, payload=decoded))
     except Exception as exc:
-        failure = _MinuteProviderFailure(
-            _minute_failure_evidence(
-                exc,
-                response=response,
-                payload=decoded,
-                category=("validation" if decoded is not None else None),
-                reason=(
-                    "payload_parse_error" if decoded is not None else None
-                ),
-                exception_type=(
-                    "PayloadParseError" if decoded is not None else None
-                ),
-            )
-        )
+        failure = _MinuteProviderFailure(_minute_failure_evidence(
+            exc, response=response, payload=decoded,
+            category=('validation' if isinstance(exc, (ValueError, KeyError, TypeError)) else None),
+            reason=('payload_parse_error' if isinstance(exc, (ValueError, KeyError, TypeError)) else None),
+        ))
         if capture_failure:
-            raise failure
-        print(
-            "[ERROR] 获取{}分钟K线失败 {}: {}".format(
-                scale, identity.code, failure.evidence.get("reason", "provider_failure")
-            )
-        )
+            raise failure from None
         return None
+    finally:
+        close = getattr(response, 'close', None)
+        if callable(close):
+            close()
+
+
+def _fetch_tencent_minute_kline_remote(code, scale, count, *, capture_failure=False):
+    return _fetch_free_minute_remote(code, scale, count, 'tencent', capture_failure=capture_failure)
+
+
+def _fetch_sina_minute_kline_remote(code, scale, count, *, capture_failure=False):
+    return _fetch_free_minute_remote(code, scale, count, 'sina', capture_failure=capture_failure)
+
+
+def _minute_providers(identity, count):
+    providers = []
+    if identity.asset_type == 'stock':
+        if int(count) <= 240:
+            providers.append(('sina', _fetch_sina_minute_kline_remote))
+        if identity.exchange != 'BJ' and int(count) <= 320:
+            providers.append(('tencent', _fetch_tencent_minute_kline_remote))
+    providers.append(('eastmoney', _fetch_eastmoney_minute_kline_remote))
+    return providers
 
 
 def _fetch_eastmoney_minute_kline_remote(
@@ -1732,23 +1702,33 @@ def _fetch_eastmoney_minute_kline_remote(
 
 def _fetch_30min_kline_remote(code, count=80):
     """
-    获取30分钟K线。东方财富支持长窗口，新浪用于短窗口兜底。
+    获取30分钟K线。腾讯/新浪免费窗口优先，东方财富保留长窗口路径。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
     """
-    return (
-        _fetch_eastmoney_minute_kline_remote(code, scale=30, count=count)
-        or _fetch_sina_minute_kline_remote(code, scale=30, count=count)
-    )
+    return _fetch_legacy_minute_remote(code, 30, count)
 
 
 def _fetch_15min_kline_remote(code, count=MIN15_LOOKBACK_BARS):
     """
     获取15分钟K线。罗姐池需要至少177根来计算生命线。
     """
-    return (
-        _fetch_eastmoney_minute_kline_remote(code, scale=15, count=count)
-        or _fetch_sina_minute_kline_remote(code, scale=15, count=count)
-    )
+    return _fetch_legacy_minute_remote(code, 15, count)
+
+
+def _fetch_legacy_minute_remote(code, scale, count):
+    for _source, fetcher in _minute_providers(_normalize_identity(code), count):
+        payload = fetcher(code, scale=scale, count=count)
+        if payload:
+            if payload.get('schema') == 'free_minute_v1':
+                payload = closed_window(payload, count=count, cutoff=_minute_context_datetime())
+                if len(payload['dates']) < int(count):
+                    continue
+                payload['_data_status'] = {'daily': 'price_basis_unverified',
+                    'stale': False, 'source': payload['source'], 'adjustment': 'unverified',
+                    'is_final': bool(payload['finals'][-1]), 'latest_date': payload['data_time'][:10],
+                    'bars': len(payload['dates']), 'degraded_reason': 'price_basis_unverified'}
+            return payload
+    return None
 
 
 def _fetch_30min_kline_legacy_cache(
@@ -1767,6 +1747,10 @@ def _fetch_30min_kline_legacy_cache(
         remote_count = count
 
     remote = _fetch_30min_kline_remote(code, count=remote_count)
+
+    if remote and remote.get('schema') == 'free_minute_v1':
+        # Never splice unverified free-source prices into the legacy adjusted cache.
+        return remote if len(remote['dates']) >= count else _fetch_30min_kline_remote(code, count=count)
 
     if remote:
         merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
@@ -1809,6 +1793,9 @@ def _fetch_15min_kline_legacy_cache(
         remote_count = count
 
     remote = _fetch_15min_kline_remote(code, count=remote_count)
+
+    if remote and remote.get('schema') == 'free_minute_v1':
+        return remote if len(remote['dates']) >= count else _fetch_15min_kline_remote(code, count=count)
 
     if remote:
         merged = merge_kline_records(cached_records, kline_dict_to_records(remote))
@@ -2105,6 +2092,10 @@ def _fetch_15min_for_repository(
     )
 
 
+_fetch_30min_for_repository.requires_full_window = True
+_fetch_15min_for_repository.requires_full_window = True
+
+
 def _minute_requested_trade_date(required_date=None, as_of=None):
     if required_date:
         return _sanitize_minute_text(
@@ -2201,9 +2192,7 @@ def _fetch_minute_for_repository(
     sleep_fn=time.sleep,
 ):
     identity = _normalize_identity(code)
-    providers = [("eastmoney", _fetch_eastmoney_minute_kline_remote)]
-    if int(count) <= 240:
-        providers.append(("sina", _fetch_sina_minute_kline_remote))
+    providers = _minute_providers(identity, count)
     attempts = max(1, int(max_attempts))
     trade_date = _minute_requested_trade_date(required_date, as_of)
     attempt_evidence = []
@@ -2235,6 +2224,15 @@ def _fetch_minute_for_repository(
                 error = "empty_response"
                 result = "failed"
             else:
+                if payload.get('schema') == 'free_minute_v1':
+                    cutoff = _minute_context_datetime(as_of)
+                    if required_date:
+                        cutoff = min(cutoff, _minute_context_datetime('{} 15:00:00'.format(required_date)))
+                    metadata = getattr(payload, 'response_metadata', None)
+                    day_bars = 240 // int(scale)
+                    full_day_count = ((int(count) + day_bars - 1) // day_bars) * day_bars if required_date else count
+                    payload = _MinuteProviderPayload(closed_window(payload, count=full_day_count, cutoff=cutoff),
+                                                     response_metadata=metadata)
                 error = _minute_payload_validation_error(
                     payload,
                     count=count,
@@ -2368,8 +2366,23 @@ def _get_kline_repository():
                 _legacy_shadow_reader if KLINE_REPOSITORY_SHADOW_JSON else None
             ),
             max_workers=8,
+            raw_daily_reader=_raw_daily_basis_reference,
         )
     return _KLINE_REPOSITORY
+
+
+def _raw_daily_basis_reference(identity, required_date):
+    payload = _fetch_daily_kline_tencent_plain_remote(identity, count=120)
+    if not payload:
+        raise ValueError('missing_raw_daily_reference')
+    result = {}
+    for i, date in enumerate(payload['dates']):
+        date = str(date)[:10]
+        if date <= str(required_date):
+            result[date] = {**{out: float(payload[key][i]) for out, key in (
+                ('open', 'opens'), ('high', 'highs'), ('low', 'lows'), ('close', 'closes'))},
+                'source': 'tencent_plain:' + identity.key, 'is_final': True, 'adjustment': 'raw'}
+    return result
 
 
 def _fetch_from_repository(
@@ -2821,6 +2834,8 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
 def _verified_sublevel_input(
     evidence, required_date, min_bars, expected_latest_ts=None
 ):
+    if isinstance(evidence, dict) and evidence.get('status') == 'price_basis_unverified':
+        return False
     if not required_date:
         return True
     value = evidence if isinstance(evidence, dict) else {}

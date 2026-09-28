@@ -98,23 +98,24 @@ class KLineRepositoryTests(unittest.TestCase):
         calls = []
         sleeps = []
 
-        def eastmoney(code, scale, count):
-            calls.append("eastmoney")
-            return _minute_payload("2026-08-25", count, source="eastmoney")
+        def tencent(code, scale, count):
+            calls.append("sina")
+            return _minute_payload("2026-08-25", count, source="sina")
 
         def sina(code, scale, count):
-            calls.append("sina")
+            calls.append("tencent")
             return None
 
         with patch.object(
             data_fetcher,
-            "_fetch_eastmoney_minute_kline_remote",
-            side_effect=eastmoney,
+            "_fetch_sina_minute_kline_remote",
+            side_effect=tencent,
         ), patch.object(
             data_fetcher,
-            "_fetch_sina_minute_kline_remote",
+            "_fetch_tencent_minute_kline_remote",
             side_effect=sina,
-        ):
+        ), patch.object(data_fetcher, "_fetch_eastmoney_minute_kline_remote",
+                        side_effect=lambda *a, **k: calls.append("eastmoney")):
             with self.assertRaises(data_fetcher.MinuteDataFetchError) as caught:
                 data_fetcher._fetch_minute_for_repository(
                     "600000",
@@ -127,7 +128,7 @@ class KLineRepositoryTests(unittest.TestCase):
 
         self.assertEqual(
             calls,
-            ["eastmoney", "sina", "eastmoney", "sina"],
+            ["sina", "tencent", "eastmoney", "sina"],
         )
         self.assertEqual(sleeps, [0.5, 1.0, 2.0])
         self.assertEqual(len(caught.exception.diagnostics["attempt_evidence"]), 4)
@@ -139,21 +140,21 @@ class KLineRepositoryTests(unittest.TestCase):
     def test_minute_fetch_stale_first_provider_uses_fresh_second_provider(self):
         calls = []
 
-        def eastmoney(code, scale, count):
-            calls.append("eastmoney")
-            return _minute_payload("2026-08-25", count, source="eastmoney")
+        def tencent(code, scale, count):
+            calls.append("sina")
+            return _minute_payload("2026-08-25", count, source="sina")
 
         def sina(code, scale, count):
-            calls.append("sina")
-            return _minute_payload("2026-08-26", count, source="sina")
+            calls.append("tencent")
+            return _minute_payload("2026-08-26", count, source="tencent")
 
         with patch.object(
             data_fetcher,
-            "_fetch_eastmoney_minute_kline_remote",
-            side_effect=eastmoney,
+            "_fetch_sina_minute_kline_remote",
+            side_effect=tencent,
         ), patch.object(
             data_fetcher,
-            "_fetch_sina_minute_kline_remote",
+            "_fetch_tencent_minute_kline_remote",
             side_effect=sina,
         ):
             payload = data_fetcher._fetch_minute_for_repository(
@@ -165,25 +166,25 @@ class KLineRepositoryTests(unittest.TestCase):
                 sleep_fn=lambda _delay: None,
             )
 
-        self.assertEqual(calls, ["eastmoney", "sina"])
-        self.assertEqual(payload["source"], "sina")
+        self.assertEqual(calls, ["sina", "tencent"])
+        self.assertEqual(payload["source"], "tencent")
         self.assertEqual(payload["dates"][-1], "2026-08-26 15:00:00")
 
     def test_minute_fetch_first_fresh_response_stops_without_retry(self):
         calls = []
         sleeps = []
 
-        def eastmoney(code, scale, count):
-            calls.append("eastmoney")
-            return _minute_payload("2026-08-26", count, source="eastmoney")
+        def tencent(code, scale, count):
+            calls.append("sina")
+            return _minute_payload("2026-08-26", count, source="sina")
 
         with patch.object(
             data_fetcher,
-            "_fetch_eastmoney_minute_kline_remote",
-            side_effect=eastmoney,
+            "_fetch_sina_minute_kline_remote",
+            side_effect=tencent,
         ), patch.object(
             data_fetcher,
-            "_fetch_sina_minute_kline_remote",
+            "_fetch_tencent_minute_kline_remote",
         ) as sina:
             payload = data_fetcher._fetch_minute_for_repository(
                 "600000",
@@ -194,8 +195,8 @@ class KLineRepositoryTests(unittest.TestCase):
                 sleep_fn=sleeps.append,
             )
 
-        self.assertEqual(calls, ["eastmoney"])
-        self.assertEqual(payload["source"], "eastmoney")
+        self.assertEqual(calls, ["sina"])
+        self.assertEqual(payload["source"], "sina")
         self.assertEqual(sleeps, [])
         sina.assert_not_called()
 

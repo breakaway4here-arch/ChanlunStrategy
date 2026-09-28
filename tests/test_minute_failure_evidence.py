@@ -12,10 +12,16 @@ TRADE_DATE = "2026-08-26"
 
 
 def _sina_rows(trade_date=TRADE_DATE, count=40):
-    end = datetime.fromisoformat("{} 14:30:00".format(trade_date))
+    end = datetime.fromisoformat("{} 15:00:00".format(trade_date))
     rows = []
-    for index in range(count):
-        timestamp = end - timedelta(minutes=30 * (count - index - 1))
+    timestamps = []
+    date = end
+    while len(timestamps) < count:
+        if date.weekday() < 5:
+            for hour, minute in [(15,0), (14,30), (14,0), (13,30), (11,30), (11,0), (10,30), (10,0)]:
+                timestamps.append(date.replace(hour=hour, minute=minute))
+        date -= timedelta(days=1)
+    for timestamp in reversed(timestamps[:count]):
         rows.append(
             {
                 "day": timestamp.strftime("%Y-%m-%d %H:%M:%S"),
@@ -29,23 +35,12 @@ def _sina_rows(trade_date=TRADE_DATE, count=40):
     return rows
 
 
-def _eastmoney_payload(trade_date=TRADE_DATE, count=40):
+def _tencent_payload(trade_date=TRADE_DATE, count=40):
     rows = _sina_rows(trade_date, count)
-    return {
-        "data": {
-            "klines": [
-                "{},{},{},{},{},{}".format(
-                    row["day"],
-                    row["open"],
-                    row["close"],
-                    row["high"],
-                    row["low"],
-                    row["volume"],
-                )
-                for row in rows
-            ]
-        }
-    }
+    return {'code': 0, 'data': {'sh600000': {'m30': [
+        [datetime.fromisoformat(row['day']).strftime('%Y%m%d%H%M'),
+         row['open'], row['close'], row['high'], row['low'], row['volume']]
+        for row in rows]}}}
 
 
 class _Response:
@@ -105,10 +100,10 @@ class MinuteFailureEvidenceTests(unittest.TestCase):
 
         attempts = diagnostics["attempt_evidence"]
         self.assertEqual(len(attempts), 4)
-        self.assertEqual(attempts[0]["provider"], "eastmoney")
-        self.assertEqual(attempts[1]["provider"], "sina")
+        self.assertEqual(attempts[0]["provider"], "sina")
+        self.assertEqual(attempts[1]["provider"], "tencent")
         self.assertEqual(attempts[0]["result"], "failed")
-        self.assertEqual(attempts[0]["reason"], "decode_error")
+        self.assertEqual(attempts[0]["reason"], "payload_parse_error")
         self.assertEqual(attempts[0]["http_status"], 200)
         self.assertEqual(attempts[0]["content_type"], "text/html; charset=utf-8")
         self.assertNotIn("https://", json.dumps(diagnostics))
@@ -136,11 +131,11 @@ class MinuteFailureEvidenceTests(unittest.TestCase):
         self.assertNotIn("timeout url", json.dumps(diagnostics))
 
     def test_valid_json_payload_rejected_by_business_validation_is_recorded(self):
-        response = _Response(_eastmoney_payload("2026-08-25"), content_type="application/json")
+        response = _Response(_sina_rows("2026-08-25"), content_type="application/json")
 
         def get(url, **_kwargs):
-            if "sina" in url:
-                return _Response(_sina_rows("2026-08-25"), content_type="application/json")
+            if "gtimg" in url:
+                return _Response(_tencent_payload("2026-08-25"), content_type="application/json")
             return response
 
         with patch.object(data_fetcher.SESSION, "get", side_effect=get):
@@ -165,12 +160,12 @@ class MinuteFailureEvidenceTests(unittest.TestCase):
     def test_previous_provider_failure_then_next_provider_success_keeps_rejection_evidence(self):
         calls = []
 
-        def eastmoney(code, scale, count):
-            calls.append("eastmoney")
+        def tencent(code, scale, count):
+            calls.append("sina")
             return None
 
         def sina(code, scale, count):
-            calls.append("sina")
+            calls.append("tencent")
             rows = _sina_rows(TRADE_DATE, count)
             rows[-1]["day"] = "{} 15:00:00".format(TRADE_DATE)
             return data_fetcher._with_source(
@@ -182,13 +177,13 @@ class MinuteFailureEvidenceTests(unittest.TestCase):
                     "closes": [10.1] * count,
                     "volumes": [1000] * count,
                 },
-                "sina",
+                "tencent",
             )
 
         with patch.object(
-            data_fetcher, "_fetch_eastmoney_minute_kline_remote", side_effect=eastmoney
+            data_fetcher, "_fetch_sina_minute_kline_remote", side_effect=tencent
         ), patch.object(
-            data_fetcher, "_fetch_sina_minute_kline_remote", side_effect=sina
+            data_fetcher, "_fetch_tencent_minute_kline_remote", side_effect=sina
         ):
             payload = data_fetcher._fetch_minute_for_repository(
                 "600000",
@@ -199,12 +194,12 @@ class MinuteFailureEvidenceTests(unittest.TestCase):
                 sleep_fn=lambda _delay: None,
             )
 
-        self.assertEqual(calls, ["eastmoney", "sina"])
-        self.assertEqual(payload["source"], "sina")
+        self.assertEqual(calls, ["sina", "tencent"])
+        self.assertEqual(payload["source"], "tencent")
         self.assertEqual(payload["_fetch_diagnostics"]["attempts"], 2)
         self.assertEqual(
             payload["_fetch_diagnostics"]["attempt_evidence"][0]["provider"],
-            "eastmoney",
+            "sina",
         )
         self.assertEqual(
             payload["_fetch_diagnostics"]["attempt_evidence"][0]["reason"],
