@@ -273,6 +273,32 @@ assert(html.includes('不代表可成交结果或实盘收益') && html.includes
 """,
         )
 
+    def test_public_research_loads_without_grant_and_does_not_grant_report_access(self):
+        _run_node_contract(
+            self,
+            "({ load: loadNextdayResearch, state: state, nodes: nodes })",
+            r"""
+const mount = { innerHTML: '', addEventListener: function () {} };
+__nextdayTest.nodes.nextdayResearch = mount;
+__nextdayTest.state.granted = false;
+__nextdayTest.state.data = { date: '2026-09-17' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-17', dataBasePrefix: '../' };
+let calls = 0;
+window.fetch = function (url) {
+  calls += 1;
+  assert(url === '../research/nextday/2026-09-17.json', 'only public sidecar may be fetched');
+  return Promise.resolve(response(samplePayload()));
+};
+await __nextdayTest.load();
+assert(calls === 1, 'public L1 was incorrectly gated on report grant');
+assert(mount.innerHTML.includes('金杯汽车'), 'public L1 did not render');
+assert(__nextdayTest.state.granted === false, 'L1 must not grant general report access');
+__nextdayTest.state.data = {};
+await __nextdayTest.load();
+assert(calls === 2 && mount.innerHTML.includes('金杯汽车'), 'public L1 must load from page date when private report is unavailable');
+""",
+        )
+
     def test_fetch_is_report_date_scoped_retries_404_and_rejects_wrong_date_locally(self):
         _run_node_contract(
             self,
@@ -280,7 +306,7 @@ assert(html.includes('不代表可成交结果或实盘收益') && html.includes
             r"""
 const mount = { innerHTML: '', addEventListener: function () {} };
 __nextdayTest.nodes.nextdayResearch = mount;
-__nextdayTest.state.granted = true;
+__nextdayTest.state.granted = false;
 __nextdayTest.state.data = { date: '2026-09-17' };
 window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-17', dataBasePrefix: '' };
 assert(__nextdayTest.url('2026-09-17') === 'research/nextday/2026-09-17.json', 'root sidecar URL is wrong');

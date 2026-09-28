@@ -13582,6 +13582,7 @@
     var bootstrapDate = normalizeString(getBootstrap().pageDate).trim();
     var data = state.data || {};
     var dataDate = normalizeString(data.date || data.report_date).trim();
+    if (!dataDate && isCanonicalIsoDate(bootstrapDate)) return bootstrapDate;
     if (!isCanonicalIsoDate(bootstrapDate) || !isCanonicalIsoDate(dataDate)
         || bootstrapDate !== dataDate) return '';
     return bootstrapDate;
@@ -13922,10 +13923,6 @@
     var reportDate = getVisibleNextdayResearchDate();
     if (!reportDate) {
       mount.innerHTML = nextdayResearchNoticeHtml('报告日期无法匹配，未加载研究结果。', false);
-      return Promise.resolve(false);
-    }
-    if (!state.granted) {
-      mount.innerHTML = nextdayResearchNoticeHtml('日报访问尚未授权，未读取研究结果。', false);
       return Promise.resolve(false);
     }
     var url = getNextdayResearchUrl(reportDate);
@@ -14335,6 +14332,7 @@
       }
     }).catch(function (error) {
       renderGlobalError(error && error.message ? error.message : '加载失败');
+      loadNextdayResearch();
     });
 
     if (nodes.drawerBackdrop) {
