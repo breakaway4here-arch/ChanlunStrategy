@@ -160977,7 +160977,6 @@
         "coverage": 0.0,
         "error": ""
       },
-      "sector_outflow": [],
       "limit_up_pool": [],
       "limit_up_snapshot": {
         "date": "2026-09-24",
@@ -180914,7 +180913,8 @@
           "ai_provider": "codex",
           "ai_model": "gpt-5.6-luna",
           "notifications_sent": false
-        }
+        },
+        "sector_outflow_status": "unavailable"
       },
       "selection_input_health": {
         "schema_version": 2,
