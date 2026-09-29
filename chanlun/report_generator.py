@@ -2499,6 +2499,7 @@ def build_full_daily_projection(
         "personal_watchlist": report_data.get("personal_watchlist", {}),
         "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),
+        "market_icepoint": report_data.get("market_icepoint", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []
         ),
@@ -2597,6 +2598,7 @@ def build_aggregate_day_projection(
         "personal_watchlist": report_data.get("personal_watchlist", {}),
         "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),
+        "market_icepoint": report_data.get("market_icepoint", {}),
         "market_sentiment_history": report_data.get(
             "market_sentiment_history", []
         ),

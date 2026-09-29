@@ -23,7 +23,7 @@ import copy
 import json
 import time
 import argparse
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import math
 from typing import Callable
 import uuid
@@ -168,6 +168,7 @@ from chanlun.volume_contract import (
 
 
 MINIMUM_DAILY_QUANTITY_COVERAGE = 0.90
+_CN_TZ = timezone(timedelta(hours=8))
 
 
 def _build_daily_h4_t3_pool(pure_candidates, trade_date):
@@ -1446,6 +1447,7 @@ def _load_limit_count_evidence(
     *,
     fetcher=fetch_limit_pool_counts,
     max_workers=20,
+    observed_times=None,
 ):
     """Read cached limit counts first and remotely fill only missing dates."""
     dates = list(dict.fromkeys(str(value) for value in trade_dates if value))
@@ -1458,16 +1460,21 @@ def _load_limit_count_evidence(
     ]
     fetched = {}
     if missing:
+        def timed_fetch(trade_date):
+            value = fetcher(trade_date.replace("-", ""))
+            return value, datetime.now(_CN_TZ).isoformat(timespec="seconds")
+
         workers = max(1, min(int(max_workers), len(missing)))
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
-                pool.submit(fetcher, trade_date.replace("-", "")): trade_date
+                pool.submit(timed_fetch, trade_date): trade_date
                 for trade_date in missing
             }
             for future in as_completed(futures):
                 trade_date = futures[future]
+                fetched_at = ""
                 try:
-                    evidence = future.result()
+                    evidence, fetched_at = future.result()
                 except Exception as exc:
                     evidence = {
                         "limit_up_count": None,
@@ -1480,6 +1487,8 @@ def _load_limit_count_evidence(
                 if not isinstance(evidence, dict):
                     continue
                 fetched[trade_date] = evidence
+                if isinstance(observed_times, dict) and fetched_at:
+                    observed_times[trade_date] = fetched_at
                 if (
                     evidence.get("data_status") == "verified"
                     and evidence.get("evidence_date") == trade_date
@@ -1502,6 +1511,7 @@ def _build_market_sentiment_history(
     minimum_instruments=1000,
     fetcher=fetch_limit_pool_counts,
     max_workers=20,
+    icepoint_capture=None,
 ):
     """Recalculate recent sentiment from one shared database window."""
     if not os.path.exists(db_path):
@@ -1535,11 +1545,13 @@ def _build_market_sentiment_history(
             minimum_instruments=1,
         )
         dates = stock_window.get("dates") or []
+        limit_fetch_times = {}
         limit_counts = _load_limit_count_evidence(
             store,
             dates,
             fetcher=fetcher,
             max_workers=max_workers,
+            observed_times=limit_fetch_times,
         )
 
     daily_inputs = build_daily_inputs_from_windows(
@@ -1547,6 +1559,20 @@ def _build_market_sentiment_history(
         index_window,
         limit_counts,
     )
+    if isinstance(icepoint_capture, dict):
+        recent_dates = set((stock_window.get("dates") or [])[-6:])
+        recent_index_dates = (index_window.get("dates") or [])[-6:]
+        icepoint_capture.update(
+            stock_window={
+                "dates": sorted(recent_dates),
+                "rows": [row for row in stock_window.get("rows") or []
+                         if str(row.get("ts") or "")[:10] in recent_dates],
+                "invalid_identity_rows": stock_window.get("invalid_identity_rows", 0),
+            },
+            index_window={"dates": list(recent_index_dates)},
+            limit_counts={report_date: limit_counts.get(report_date)},
+            limit_fetch_times={report_date: limit_fetch_times.get(report_date)},
+        )
     if daily_inputs and market_indices:
         daily_inputs[-1]["index_bars"] = [
             item
@@ -1558,6 +1584,15 @@ def _build_market_sentiment_history(
             if isinstance(item, dict)
         ]
     history = build_sentiment_history(daily_inputs, window=20)
+    if isinstance(icepoint_capture, dict):
+        icepoint_capture["fresh_sentiment"] = history[-1] if history else {}
+        icepoint_capture["turnover_quality"] = (
+            daily_inputs[-1].get("turnover_quality") if daily_inputs else None
+        )
+        icepoint_capture["turnover_input"] = {
+            key: daily_inputs[-1].get(key)
+            for key in ("date", "turnover", "turnover_ma5")
+        } if daily_inputs else {}
     fallback_history = _load_previous_sentiment_history(
         report_date,
         report_data_dir or os.path.join(OUTPUT_DIR, "data"),
@@ -2577,6 +2612,68 @@ def _refresh_active_universe_quality(
 # ============================================================
 # 主流程
 # ============================================================
+def _attach_market_icepoint(
+    report_data, *, capture, index_observed_at, market_data_status,
+    observed_at=None, etf_fetcher=None, allow_etf=True, allow_evidence=True,
+):
+    """Append an optional market observation after formal decisions are finished."""
+    from chanlun.market_icepoint import (
+        build_existing_evidence, build_report_icepoint, fetch_etf_quotes,
+    )
+
+    report_date = str(report_data.get("date") or "")
+    quality = report_data.get("data_quality") or {}
+    phase = "closed" if quality.get("bar_state") == "closed" else "intraday"
+    capture = capture if isinstance(capture, dict) else {}
+    if phase != "closed" or not allow_evidence:
+        cutoff = quality.get("as_of") or ""
+        report_data["market_icepoint"] = build_report_icepoint(
+            report_date, cutoff, phase
+        )
+        return
+    try:
+        instant = datetime.fromisoformat(observed_at) if observed_at is not None else datetime.now(_CN_TZ)
+        if instant.tzinfo is None:
+            raise ValueError("icepoint observation time requires timezone")
+        instant = instant.astimezone(_CN_TZ)
+        cutoff = instant.isoformat(timespec="seconds")
+    except (TypeError, ValueError, OverflowError):
+        cutoff = ""
+    etf = None
+    try:
+        # The optional quote is observed late in the job. Keep the original
+        # formal data_quality.as_of untouched, including replay/preclose cuts.
+        if (allow_etf and cutoff[:10] == report_date
+                and instant.hour >= 15):
+            etf = (etf_fetcher or fetch_etf_quotes)(report_date, now=cutoff)
+    except Exception:
+        etf = None
+    if observed_at is None:
+        cutoff = datetime.now(_CN_TZ).isoformat(timespec="seconds")
+    try:
+        existing = build_existing_evidence(
+            report_date, cutoff,
+            indices=report_data.get("market"),
+            index_observed_at=index_observed_at,
+            market_data_status=market_data_status,
+            sentiment=capture.get("fresh_sentiment"),
+            stock_window=capture.get("stock_window"),
+            index_window=capture.get("index_window"),
+            close_snapshot=quality.get("market_close_snapshot"),
+            limit_counts=capture.get("limit_counts"),
+            limit_fetch_times=capture.get("limit_fetch_times"),
+            turnover_quality=capture.get("turnover_quality"),
+            turnover_input=capture.get("turnover_input"),
+        )
+        report_data["market_icepoint"] = build_report_icepoint(
+            report_date, cutoff, phase, etf=etf, **existing
+        )
+    except Exception:
+        report_data["market_icepoint"] = build_report_icepoint(
+            report_date, cutoff, phase
+        )
+
+
 def main(debug=False, preview=False, generated_at=None):
     is_explicit_replay = generated_at is not None
     generated_at = generated_at or datetime.now().astimezone()
@@ -3783,6 +3880,7 @@ def main(debug=False, preview=False, generated_at=None):
             report_date=today,
             reason=index_error,
         )
+    market_index_observed_at = datetime.now(_CN_TZ).isoformat(timespec="seconds")
 
     # 上证缠论结构
     print("  分析上证缠论结构 ...")
@@ -3800,10 +3898,12 @@ def main(debug=False, preview=False, generated_at=None):
     events = normalize_events(enrich_events(ranked_events))
 
     # 决策引擎评分（可选字段）。情绪必须在决策前完成，避免风险证据只展示不生效。
+    icepoint_capture = {}
     market_sentiment, market_sentiment_history = (
         _build_market_sentiment_history(
             today,
             market_indices=market_indices,
+            icepoint_capture=icepoint_capture,
         )
     )
     market_sentiment_shadow_fields = _build_market_sentiment_shadow_fields(
@@ -4498,6 +4598,14 @@ def main(debug=False, preview=False, generated_at=None):
         report_data["kaipanla_context"] = fetch_themes(today)
     except Exception:
         report_data["kaipanla_context"] = {"status": "unavailable", "groups": [], "affects_formal": False}
+    _attach_market_icepoint(
+        report_data,
+        capture=icepoint_capture,
+        index_observed_at=market_index_observed_at,
+        market_data_status=market_data_status,
+        allow_etf=not (debug or preview or is_explicit_replay),
+        allow_evidence=not (debug or preview or is_explicit_replay),
+    )
     report_data["right_side_startup"] = {
         "mode": RIGHT_SIDE_STARTUP_MODE,
         "policy_version": RIGHT_SIDE_STARTUP_POLICY_VERSION,

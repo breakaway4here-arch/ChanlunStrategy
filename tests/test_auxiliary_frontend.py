@@ -3509,5 +3509,75 @@ assert(!wrongScorecardHtml.includes('+999.00%'), 'wrong scorecard identity was b
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
+class TestMarketIcepointFrontend(unittest.TestCase):
+    def test_icepoint_explicit_contract_old_report_and_bad_claim(self):
+        _assert_node_contract(
+            self,
+            "({ render: buildMarketIcepoint, shell: buildAppShell })",
+            r"""
+const data = { date: '2026-09-29', data_quality: { bar_state: 'closed' } };
+assert(__auxTest.render(data).includes('本期未记录'), 'old report must have empty state');
+data.market_icepoint = {};
+assert(__auxTest.render(data).includes('本期未记录'), 'empty projected field must have old-report state');
+const item = (status, actual) => ({ status, actual, threshold: '初版阈值', source: '可信源', as_of: '2026-09-29T15:10:00+08:00', scope: 'confirmed', reason: '' });
+data.market_icepoint = {
+  schema_version: 1, rule_version: 'extreme-icepoint-v1', date: data.date,
+  as_of: '2026-09-29T15:20:00+08:00', phase: 'closed', affects_production: false,
+  status: 'matched', matched_count: 4, verified_count: 4,
+  items: {
+    volume_drop: item('matched', { current_cny: 12000000000, prior_mean_cny: 10000000000, ratio: 1.2 }),
+    six_indices: item('matched', { changes_pct: { '上证指数': -2, '深证成指': -2, '创业板指': -2, '科创50': -2, '沪深300': -2, '中证500': -2 } }),
+    breadth: item('matched', { advance_count: 500, decline_count: 4500, flat_count: 0 }),
+    sealed_limits: item('matched', { limit_up_count: 10, limit_down_count: 100 })
+  },
+  etf: item('unavailable', { verified_count: 0, below_minus_four_count: 0, groups: [] })
+};
+let html = __auxTest.render(data);
+assert(html.includes('符合极端冰点条件') && html.includes('已满足 4/4'), 'matched summary missing');
+assert(html.includes('<details') && html.includes('查看四项依据'), 'native folded evidence missing');
+assert(html.includes('行业扩散佐证'), 'ETF auxiliary missing');
+data.market_icepoint.items.volume_drop.actual.current_cny = 11999600000;
+data.market_icepoint.items.volume_drop.status = 'not_matched';
+data.market_icepoint.status = 'not_matched';
+data.market_icepoint.matched_count = 3;
+assert(__auxTest.render(data).includes('未达极端冰点条件'), 'rounded 1.19996 was treated as matched');
+data.market_icepoint.items.volume_drop.actual.current_cny = 12000400000;
+data.market_icepoint.items.volume_drop.status = 'matched';
+data.market_icepoint.status = 'matched';
+data.market_icepoint.matched_count = 4;
+assert(__auxTest.render(data).includes('符合极端冰点条件'), 'unrounded 1.20004 was rejected');
+data.market_icepoint.items.volume_drop.actual.current_cny = 12000000000;
+data.market_icepoint.items.volume_drop.actual = {};
+assert(__auxTest.render(data).includes('证据不一致'), 'matched label contradicted missing amount');
+data.market_icepoint.items.volume_drop.actual = { current_cny: 12000000000, prior_mean_cny: 10000000000, ratio: 1.2 };
+data.market_icepoint.items.six_indices.as_of = '2026-09-29T10:00:00+08:00';
+assert(__auxTest.render(data).includes('证据不一致'), 'closed item accepted preclose evidence');
+data.market_icepoint.items.six_indices.as_of = '2026-09-29T15:10:00+08:00';
+data.market_icepoint.etf.status = 'matched';
+data.market_icepoint.etf.actual.verified_count = 8;
+html = __auxTest.render(data);
+assert(html.includes('符合极端冰点条件') && html.includes('行业扩散佐证 · 未核验'), 'bad ETF contaminated core');
+data.market_icepoint.etf.status = 'unavailable';
+data.market_icepoint.etf.actual.verified_count = 0;
+data.market_icepoint.items.breadth.status = 'not_matched';
+html = __auxTest.render(data);
+assert(!html.includes('符合极端冰点条件') && html.includes('证据不一致'), 'forged matched count was trusted');
+data.market_icepoint.date = '2026-09-28';
+assert(__auxTest.render(data).includes('证据不一致'), 'stale report evidence was trusted');
+data.market_icepoint.date = data.date;
+data.market_icepoint.items.volume_drop.source = '<img src=x onerror=alert(1)>';
+data.market_icepoint.items.breadth.status = 'matched';
+html = __auxTest.render(data);
+assert(!html.includes('<img') && html.includes('&lt;img'), 'source was not escaped');
+""",
+        )
+
+    def test_icepoint_mount_and_mobile_single_column(self):
+        self.assertIn('id="marketIcepoint"', JS)
+        self.assertIn('nodes.marketIcepoint', JS)
+        self.assertIn('.market-icepoint', CSS)
+        self.assertIn('grid-template-columns: 1fr', CSS)
+
+
 if __name__ == "__main__":
     unittest.main()

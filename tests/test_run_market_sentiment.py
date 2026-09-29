@@ -214,6 +214,7 @@ class RunMarketSentimentTests(unittest.TestCase):
                     "source": "test",
                 }
 
+            icepoint_capture = {}
             current, history = _build_market_sentiment_history(
                 "2026-05-45",
                 market_indices={"上证指数": {"change_pct": 0.5}},
@@ -221,11 +222,19 @@ class RunMarketSentimentTests(unittest.TestCase):
                 minimum_instruments=2,
                 fetcher=fetcher,
                 max_workers=4,
+                icepoint_capture=icepoint_capture,
             )
 
         self.assertEqual(len(history), 20)
         self.assertEqual(history[-1]["date"], "2026-05-45")
         self.assertEqual(current, history[-1])
+        self.assertEqual(len(icepoint_capture["stock_window"]["dates"]), 6)
+        self.assertEqual(len(icepoint_capture["stock_window"]["rows"]), 12)
+        self.assertLessEqual(len(icepoint_capture["index_window"]["dates"]), 6)
+        self.assertEqual(icepoint_capture["fresh_sentiment"]["date"], "2026-05-45")
+        self.assertEqual(icepoint_capture["turnover_input"], {
+            "date": "2026-05-45", "turnover": 200_000_090.0, "turnover_ma5": 200_000_084.0,
+        })
         self.assertEqual(
             history[-1]["evidence"]["limit_ecology"]["limit_up_count"],
             2,
