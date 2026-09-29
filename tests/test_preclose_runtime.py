@@ -619,7 +619,8 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(configs), 1)
-        self.assertLessEqual(configs[0].deadline_seconds, 82.0)
+        self.assertGreater(configs[0].deadline_seconds, 480.0)
+        self.assertLessEqual(configs[0].deadline_seconds, 504.0)
         self.assertEqual(
             set(timings["phase_seconds"]),
             {"input_acquisition", "pipeline", "delivery"},
@@ -631,7 +632,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(timings["source_sha"], "release-sha")
         self.assertEqual(timings["status"], "empty")
 
-    def test_1445_start_uses_extended_budget_without_crossing_1449_cutoff(self):
+    def test_1445_start_uses_extended_budget_without_crossing_1456_cutoff(self):
         cn_timezone = timezone(timedelta(hours=8))
         fixed_now = datetime(2026, 8, 28, 14, 45, 2, tzinfo=cn_timezone)
         market_inputs = {
@@ -680,7 +681,8 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertEqual(1, len(configs))
         self.assertGreater(configs[0].deadline_seconds, 120.0)
-        self.assertLessEqual(configs[0].deadline_seconds, 202.0)
+        self.assertGreater(configs[0].deadline_seconds, 600.0)
+        self.assertLessEqual(configs[0].deadline_seconds, 624.0)
 
     def test_scheduled_entry_skips_non_trading_day_before_acquisition(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -705,7 +707,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
     def test_scheduled_late_start_skips_acquisition_when_reserve_exhausts_window(self):
         cn_timezone = timezone(timedelta(hours=8))
-        fixed_now = datetime(2026, 8, 28, 14, 48, 40, tzinfo=cn_timezone)
+        fixed_now = datetime(2026, 8, 28, 14, 55, 24, tzinfo=cn_timezone)
         acquisition_calls = []
         pipeline_calls = []
 
@@ -752,10 +754,10 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
         self.assertEqual(acquisition_calls, [])
         self.assertEqual(pipeline_calls, [])
-        self.assertEqual(result["status"], "deadline_exceeded")
-        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["snapshot_status"], "failed")
         self.assertEqual(result["exit_code"], 1)
-        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(snapshot["status"], "failed")
 
     def test_scheduled_lock_covers_acquisition_and_preserves_existing_input(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -791,15 +793,15 @@ class PrecloseRuntimeTests(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertEqual(input_path.read_bytes(), b"existing-input-sentinel\n")
 
-    def test_scheduled_entry_fails_closed_when_wall_clock_reaches_1449_before_pipeline(self):
+    def test_scheduled_entry_fails_closed_when_wall_clock_reaches_1456_before_pipeline(self):
         cn_timezone = timezone(timedelta(hours=8))
-        start = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
-        cutoff = datetime(2026, 8, 28, 14, 49, 0, tzinfo=cn_timezone)
+        start = datetime(2026, 8, 28, 14, 55, 2, tzinfo=cn_timezone)
+        cutoff = datetime(2026, 8, 28, 14, 56, 0, tzinfo=cn_timezone)
         now_calls = [0]
 
         def wall_clock():
             now_calls[0] += 1
-            return start if now_calls[0] == 1 else cutoff
+            return start if now_calls[0] <= 3 else cutoff
 
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -817,7 +819,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
         def pipeline_runner(*_args, **_kwargs):
             pipeline_calls.append("pipeline")
-            raise AssertionError("pipeline must not start at or after 14:49")
+            raise AssertionError("pipeline must not start at or after 14:56")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
@@ -836,25 +838,18 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 skip_publish=True,
             )
             day_root = base / "preclose" / TRADE_DATE
-            snapshot = json.loads(
-                (day_root / "snapshot.json").read_text(encoding="utf-8")
-            )
-            failure = json.loads(
-                (day_root / "failure.json").read_text(encoding="utf-8")
-            )
+            self.assertFalse((day_root / "snapshot.json").exists())
+            self.assertTrue((day_root / "failure.json").exists())
 
         self.assertEqual(pipeline_calls, [])
         self.assertEqual(result["status"], "deadline_exceeded")
         self.assertEqual(result["snapshot_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertEqual(snapshot["status"], "deadline_exceeded")
-        self.assertEqual(failure["error_type"], "DeliveryReserveReached")
-        self.assertEqual(result["snapshot_id"], snapshot["snapshot_id"])
 
     def test_scheduled_wall_alarm_interrupts_one_stuck_pipeline_stage(self):
         cn_timezone = timezone(timedelta(hours=8))
         near_cutoff = datetime(
-            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+            2026, 8, 28, 14, 55, 59, 950000, tzinfo=cn_timezone
         )
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -898,14 +893,14 @@ class PrecloseRuntimeTests(unittest.TestCase):
             )
 
         self.assertLess(elapsed, 0.18)
-        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "failed")
         self.assertEqual(result["exit_code"], 1)
         self.assertGreaterEqual(snapshot["diagnostics"]["elapsed_seconds"], 0.03)
 
-    def test_scheduled_fallback_freeze_cannot_overrun_1449_hard_cutoff(self):
+    def test_scheduled_fallback_freeze_cannot_overrun_1456_hard_cutoff(self):
         cn_timezone = timezone(timedelta(hours=8))
         near_cutoff = datetime(
-            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+            2026, 8, 28, 14, 55, 59, 950000, tzinfo=cn_timezone
         )
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -955,15 +950,15 @@ class PrecloseRuntimeTests(unittest.TestCase):
             ]
 
         self.assertLess(elapsed, 0.18)
-        self.assertEqual(result["status"], "deadline_exceeded")
-        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["snapshot_status"], "failed")
         self.assertEqual(result["exit_code"], 1)
         self.assertEqual(
             Path(result["snapshot_path"]).resolve(), snapshot_path.resolve()
         )
-        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(snapshot["status"], "failed")
         self.assertEqual(snapshot["source_sha"], "release-sha")
-        self.assertEqual(failure["status"], "deadline_exceeded")
+        self.assertEqual(failure["status"], "failed")
         self.assertEqual(failure["source_sha"], "release-sha")
         self.assertEqual(failure["run_id"], snapshot["run_id"])
         self.assertEqual(failure["snapshot_id"], snapshot["snapshot_id"])
@@ -971,14 +966,14 @@ class PrecloseRuntimeTests(unittest.TestCase):
             [row["event"] for row in evidence],
             ["started", "finished"],
         )
-        self.assertEqual(evidence[-1]["status"], "deadline_exceeded")
+        self.assertEqual(evidence[-1]["status"], "failed")
         self.assertIn("elapsed_seconds", evidence[-1])
         self.assertEqual(publisher_calls, [])
 
     def test_scheduled_fallback_write_error_promotes_prepared_empty_evidence(self):
         cn_timezone = timezone(timedelta(hours=8))
         near_cutoff = datetime(
-            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+            2026, 8, 28, 14, 55, 59, 950000, tzinfo=cn_timezone
         )
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -1020,9 +1015,9 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 (day_root / "failure.json").read_text(encoding="utf-8")
             )
 
-        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["snapshot_status"], "failed")
         self.assertEqual(result["exit_code"], 1)
-        self.assertEqual(snapshot["status"], "deadline_exceeded")
+        self.assertEqual(snapshot["status"], "failed")
         self.assertEqual(failure["stage"], "fallback_freeze")
         self.assertEqual(failure["error_type"], "OSError")
 
@@ -1041,24 +1036,29 @@ class PrecloseRuntimeTests(unittest.TestCase):
             "min30": {},
             "market": {},
         }
-        clock_values = iter((0.0, 241.0))
+        delivery_phase = [False]
         publisher_calls = []
 
         def monotonic():
-            try:
-                return next(clock_values)
-            except StopIteration:
-                return 241.0
+            return 661.0 if delivery_phase[0] else 0.0
 
         def publisher(*_args, **_kwargs):
             publisher_calls.append(True)
             return {"publish": {"success": True}, "notifications": {}}
 
+        from preclose_run import _finalize_scheduled_result
+
+        def finalize(*args, **kwargs):
+            delivery_phase[0] = True
+            return _finalize_scheduled_result(*args, **kwargs)
+
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             db = base / "market.sqlite"
             db.write_bytes(b"formal-sentinel")
-            with patch("preclose_run.DELIVERY_RESERVE_SECONDS", 0.0):
+            with patch("preclose_run.DELIVERY_RESERVE_SECONDS", 0.0), patch(
+                "preclose_run._finalize_scheduled_result", side_effect=finalize
+            ):
                 result = run_scheduled_preclose(
                     root=base / "preclose",
                     formal_market_db=db,
@@ -1073,12 +1073,13 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 )
 
             delivery_path = base / "preclose" / TRADE_DATE / "delivery.json"
+            delivery_exists = delivery_path.exists()
 
         self.assertEqual(publisher_calls, [])
-        self.assertEqual(result["status"], "deadline_exceeded")
-        self.assertEqual(result["snapshot_status"], "deadline_exceeded")
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["run_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertFalse(delivery_path.exists())
+        self.assertTrue(delivery_exists)
 
     def test_scheduled_pipeline_exception_freezes_failed_snapshot_and_releases_lock(self):
         cn_timezone = timezone(timedelta(hours=8))

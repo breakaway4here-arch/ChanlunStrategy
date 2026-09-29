@@ -1,5 +1,7 @@
 # 推荐票证据展示综合优化 Implementation Plan
 
+> 时间契约更新（2026-09-29）：原 14:49／240 秒约定已被本次源码修复替代：北京时间 14:45 启动、14:56:00 前完成产出和发布，总预算 660 秒（含 36 秒交付预留），14:56:30 失效。下文时间说明已同步；部署与自然调度验收另行记录，本次不代表已上线。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 在不改变正式选股、池成员、排序、评分、动作、市场情绪和 14:47 链路的前提下，为日报增加推荐票横向比较、八模块证据详情、PSY12 从属展示、真实关键价格图层和历史验证提醒，并完成三种视口的真实页面验收。
@@ -909,4 +911,4 @@ push/合入后必须重新 fetch 并回读远端 `main` SHA、最终提交 SHA�
 
 **Step 8: Preserve long-running goal**
 
-本展示优化发布成功不等于整个 P0-P4 生产 goal 完成。仍需遵守原 25 项门槛和下一真实交易日的 14:47/14:49/14:56:30、盘后复核、WxPusher 手机到达等证据；门槛未齐不得调用 `update_goal(complete)`。
+本展示优化发布成功不等于整个 P0-P4 生产 goal 完成。仍需遵守原 25 项门槛和下一真实交易日的 14:45/14:56/14:56:30、盘后复核、WxPusher 手机到达等证据；门槛未齐不得调用 `update_goal(complete)`。

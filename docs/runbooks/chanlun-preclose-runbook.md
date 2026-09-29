@@ -2,7 +2,9 @@
 
 ## 运行边界
 
-预跑是 14:45 至 14:56:30 的临时建议，只生成主推、H4 T+3、加速三个池。它不调用新闻、公告/研报、LLM、iWencai、15 分钟策略、罗姐池、报告生成或 Git 发布，也不写正式行情库、推荐账本、日报、记分卡或 comparison index。盘后复核只读正式日报，失败不影响 `daily_run.sh` 的退出码或发布状态。
+预跑在北京时间 14:45:00 启动，必须在 14:56:00 硬截止前完成；页面临时建议到 14:56:30 失效。它只生成主推、H4 T+3、加速三个池，不调用新闻、公告/研报、LLM、iWencai、15 分钟策略、罗姐池、报告生成或 Git 发布，也不写正式行情库、推荐账本、日报、记分卡或 comparison index。盘后复核只读正式日报，失败不影响 `daily_run.sh` 的退出码或发布状态。
+
+产出/发布截止和失效时间分别为 14:56:00 与 14:56:30，不冲突；接近截止发布时只有约 30 秒有效期。14:56:00 起禁止新增执行；之前已冻结的快照仍按 expires_at 封存。36 秒交付预留保持不变，因此计算预算最晚在 14:55:24 用尽，提前耗尽计算预算记录 failed（ComputeBudgetExhausted／DeliveryReserveReached），保留空池失败关闭；仅到达 14:56 或 660 秒总预算耗尽才记录 deadline_exceeded；交付阶段同样使用该 run_status，普通请求/通知失败仍为 delivery_failed。既有冻结快照保留原身份和状态，不追溯改写。
 
 交易日门禁优先读取正式行情库中的 `trade_calendar`；没有本地覆盖时使用经 Review 的上交所 2026 年休市表。更新年度休市表时必须依据[上交所休市安排](https://www.sse.com.cn/disclosure/dealinstruc/closed/)重新 Review，未知年度默认跳过。
 
@@ -48,7 +50,28 @@ done
 
 禁止把原始 `launchctl print` 直接输出到终端、日志或验收记录；当前用户会话的继承环境可能包含与本任务无关的凭证。回读必须先按上面的方式脱敏，验收只记录 label、绝对路径、状态、运行次数和退出码。
 
-安装器拒绝覆盖已有同名 plist。若存在冲突，先查明来源，不要直接删除或覆盖。两个任务分别在工作日 14:45 和 15:05 启动；复核每 30 秒只读轮询，15:35 硬退出。15:35 到点不再启动新的正式校验、Worker 写入或提醒发送；已经启动的一轮也受同一个硬截止约束。
+安装器拒绝覆盖已有同名 plist。若存在冲突，先查明来源，不要直接删除或覆盖。预跑 LaunchAgent 每 60 秒唤起一次，由 `scripts/preclose_run.sh` 先按 `Asia/Shanghai` 判断 `[14:45, 14:56)`；窗口外安静退出，不启动 Python。复核任务在工作日 15:05 启动并每 30 秒只读轮询，15:35 硬退出。15:35 到点不再启动新的正式校验、Worker 写入或提醒发送；已经启动的一轮也受同一个硬截止约束。
+
+完整时间线：北京时间 14:45:00 允许启动；总墙钟窗口最多 660 秒，主数据获取和策略计算最多使用 624 秒（总预算扣除 36 秒交付预留）；14:55:24 起只保留冻结、发布和通知的预留区间；14:56:00 硬截止，之后不再启动、计算、冻结、发布或通知。
+
+仅在已确认模板与正式 checkout 版本一致后，按下面顺序完成预跑 plist 的安全 reload（只提供命令，本次未执行；不操作盘后复核 plist）：
+
+```bash
+/usr/bin/plutil -lint launchd/com.breakaway4here.chanlun-preclose.plist
+/bin/cp -p "$HOME/Library/LaunchAgents/com.breakaway4here.chanlun-preclose.plist" \
+  "$HOME/Library/LaunchAgents/com.breakaway4here.chanlun-preclose.plist.bak.$(/bin/date +%Y%m%d%H%M%S)"
+/bin/cp launchd/com.breakaway4here.chanlun-preclose.plist \
+  "$HOME/Library/LaunchAgents/com.breakaway4here.chanlun-preclose.plist"
+/bin/chmod 600 "$HOME/Library/LaunchAgents/com.breakaway4here.chanlun-preclose.plist"
+/bin/launchctl bootout "gui/$(id -u)/com.breakaway4here.chanlun-preclose" 2>/dev/null || true
+/bin/launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/com.breakaway4here.chanlun-preclose.plist"
+/bin/launchctl print "gui/$(id -u)/com.breakaway4here.chanlun-preclose" | /usr/bin/awk '
+  /inherited environment = \{/ { inside = 1; print; next }
+  inside && /^[[:space:]]*}/ { inside = 0; print; next }
+  inside { sub(/=>.*/, "=> [redacted]"); print; next }
+  { print }
+'
+```
 
 ## 手工 dry-run 与查看证据
 
@@ -78,7 +101,7 @@ ls -l .cache/chanlun/preclose/YYYY-MM-DD/
 
 “未运行”不能由一个从未启动的进程自行写文件；必须联合使用 launchd 当日运行次数、调度日志和当日隔离目录不存在这三项证据，不能用事后手工创建的 `not_run` 文件冒充。
 
-14:49 前若正常快照写入失败，任务会原子提升启动前已准备的空池截止快照，使网页只显示“本期未选出推荐票”；真实失败原因继续只保存在上述内部证据。验收时应同时核对这些文件的 `trade_date`、`run_id`、`source_sha`、`snapshot_id/content_hash`，不能仅以进程退出码代替。
+14:56:00 前若正常快照写入失败，任务会原子提升启动前已准备的空池截止快照，使网页只显示“本期未选出推荐票”；14:56:00 及以后禁止继续冻结、发布或通知，真实失败原因继续只保存在上述内部证据。验收时应同时核对这些文件的 `trade_date`、`run_id`、`source_sha`、`snapshot_id/content_hash`，不能仅以进程退出码代替。
 
 `run.lock` 与 `reconcile.lock` 是不同的短期活动锁。进程不存在但锁仍在时，先保留锁内容和日志作为证据，再由人工确认后处理；不要把删除锁当成常规重试。
 
@@ -136,7 +159,7 @@ WxPusher 只有 HTTP 成功且业务 JSON `success=true` 才算成功；手机�
 
 正式 shadow 跑数的逐日诊断独立原子写入 `.cache/chanlun/right-side-startup/formal/YYYY-MM-DD.json`，权限为 `0600`。文件包含策略版本、完整 Git SHA、`as_of`、正式/预跑身份，以及候选和观察项的代码、参考位/距离/量比、30 分钟 mandatory/structure/quality、失败门、实际值和阈值；不得只保存聚合数量。该目录是运维复核入口，不属于正式日报、行情库、推荐账本、scorecard、comparison index 或 Pages 发布面；审计写入异常只报警，不得反向阻塞正式任务。
 
-回放结果永不自动转正：`promotion_eligible` 固定为 `false`。还必须完成至少一个真实交易日 shadow 的 14:45 自然触发、14:49 截止、14:56:30 失效和盘后复核，并重新取得授权，才可把模式改为 `active`。任一门槛失败时继续 shadow，不得为了召回个别样例放宽阈值。
+回放结果永不自动转正：`promotion_eligible` 固定为 `false`。还必须完成至少一个真实交易日 shadow 的 14:45 自然触发、14:56:00 硬截止、14:56:30 失效和盘后复核，并重新取得授权，才可把模式改为 `active`。任一门槛失败时继续 shadow，不得为了召回个别样例放宽阈值。
 
 ## 关闭与回退
 
@@ -151,4 +174,4 @@ launchctl bootout gui/$(id -u)/com.breakaway4here.chanlun-preclose-reconcile
 
 ## 真实交易日验收
 
-首次先用 `PRECLOSE_NOTIFY=0`：核对 14:45 真实触发、14:49 截止、三池快照、14:56:30 双端失效，以及正式日报/账本/Pages 的 hash 和语义不变。人工验收后开启通知，记录 WxPusher 业务成功和手机到达；盘后无论一致或有变化都应收到一次主动复核，相同正式 hash 重试不应重发。若已错过 14:45，不得用手工补跑冒充真实定时证据。
+首次先用 `PRECLOSE_NOTIFY=0`：核对北京时间 14:45 进入窗口、14:56:00 硬截止、三池快照、14:56:30 双端失效，以及正式日报/账本/Pages 的 hash 和语义不变。人工验收后开启通知，记录 WxPusher 业务成功和手机到达；盘后无论一致或有变化都应收到一次主动复核，相同正式 hash 重试不应重发。若已错过 14:45，不得用手工补跑冒充真实定时证据。

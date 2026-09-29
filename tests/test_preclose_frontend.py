@@ -176,6 +176,7 @@ const available = globalThis.__precloseTest.build(snapshot, Date.parse('2026-08-
 assert(available.includes('<details class="preclose-snapshot-card preclose-snapshot-active" open>'), 'active snapshot is not expanded');
 assert(available.includes('14:48:20'), 'generated time missing');
 assert(available.includes('14:56:30'), 'expiry time missing');
+assert(available.includes('14:56前完成发布'), 'publication cutoff missing');
 assert(available.includes('宁波方正') && available.includes('参考 26.86'), 'main candidate missing');
 assert(available.includes('H4 T+3') && available.includes('本期未选出推荐票'), 'pool empty state missing');
 assert(available.includes('快照 aaaaaaaa'), 'snapshot hash identity missing');
@@ -214,6 +215,7 @@ globalThis.__precloseTest.failure();
 const advisory = globalThis.__precloseTest.nodes.precloseBody.innerHTML;
 assert(formal.innerHTML.includes('正式主推 宁波方正'), 'formal pool was overwritten');
 assert(advisory.includes('预跑暂不可用，请以盘后正式结果为准'), 'safe failure copy missing');
+assert(advisory.includes('14:56前完成发布'), 'failure cutoff missing');
 assert(!advisory.includes('本期未选出推荐票'), 'request failure pretended to be an empty pool');
 assert(!advisory.includes('reason') && !advisory.includes('校验'), 'failure leaked internal wording');
 """,

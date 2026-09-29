@@ -11,7 +11,7 @@ import signal
 import subprocess
 import sys
 import uuid
-from datetime import datetime, time as wall_time
+from datetime import datetime
 from pathlib import Path
 
 from chanlun.preclose_contract import (
@@ -29,16 +29,20 @@ from chanlun.preclose_notify import (
     publish_preclose_and_notify,
 )
 from chanlun.preclose_runtime import build_scheduled_preclose_input
-from chanlun.preclose_schedule import is_trading_day
+from chanlun.preclose_schedule import (
+    DELIVERY_RESERVE_SECONDS,
+    MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    PRE_CLOSE_CUTOFF_TIME,
+    PRE_CLOSE_START_TIME,
+    PRE_CLOSE_TIMEZONE,
+    is_trading_day,
+    normalize_preclose_datetime,
+)
 
 
 # One target can still have a running Sina + Eastmoney fallback thread for up
-# to 30 seconds after the main acquisition alarm.  Keep that drain window and
-# one bounded Worker request window inside the shared 14:49 cutoff.
-DELIVERY_RESERVE_SECONDS = 36.0
-MAX_PRE_CLOSE_RUNTIME_SECONDS = 240.0
-PRE_CLOSE_START_TIME = wall_time(14, 45)
-PRE_CLOSE_CUTOFF_TIME = wall_time(14, 49)
+# to 30 seconds after the main acquisition alarm. Keep that drain window and
+# one bounded Worker request window inside the Shanghai 14:56 cutoff.
 
 
 class PrecloseExecutionDeadline(BaseException):
@@ -51,7 +55,7 @@ class PrecloseExecutionDeadline(BaseException):
 
 @contextmanager
 def _deadline_alarm(seconds, stage="execution"):
-    """Interrupt one scheduled phase before the shared 14:49 wall deadline."""
+    """Interrupt one scheduled phase before the shared 14:56 wall deadline."""
 
     budget = max(0.001, float(seconds))
     if not hasattr(signal, "setitimer"):
@@ -200,11 +204,11 @@ def _prepare_deadline_fallback(
         generated_at=as_of,
         pools={"main": [], "h4_t3": [], "acceleration": []},
         source_sha=source_sha,
-        status="deadline_exceeded",
+        status="failed",
         diagnostics={
             "failure": {
                 "stage": "execution",
-                "type": "PrecloseExecutionDeadline",
+                "type": "ComputeBudgetExhausted",
             },
             "prepared_before_acquisition": True,
         },
@@ -232,9 +236,14 @@ def _promote_prepared_deadline_fallback(
         "deadline_exceeded", "failed"
     }:
         return result
-    current = now()
-    if current.time().replace(tzinfo=None) > wall_time(14, 49):
-        return result
+    current = normalize_preclose_datetime(now())
+    elapsed = max(0.0, float(monotonic()) - monotonic_started)
+    if (
+        current.time().replace(tzinfo=None) >= PRE_CLOSE_CUTOFF_TIME
+        or _scheduled_wall_budget(current) <= 0
+        or elapsed >= MAX_PRE_CLOSE_RUNTIME_SECONDS
+    ):
+        return dict(result, status="deadline_exceeded", snapshot_status="deadline_exceeded")
     try:
         os.replace(str(prepared_path), str(snapshot_path))
         snapshot = _read_frozen_snapshot(snapshot_path, result["trade_date"])
@@ -242,9 +251,9 @@ def _promote_prepared_deadline_fallback(
         result = dict(result)
         result["fallback_promotion_error"] = type(exc).__name__
         return result
-    elapsed = max(0.0, float(monotonic()) - monotonic_started)
     result = dict(result)
     result.update({
+        "status": snapshot["status"],
         "snapshot_status": snapshot["status"],
         "snapshot_id": snapshot["snapshot_id"],
         "content_hash": snapshot["content_hash"],
@@ -375,8 +384,12 @@ def _notify_from_env(env_file):
 
 
 def _scheduled_wall_budget(current):
+    current = normalize_preclose_datetime(current)
     deadline = current.replace(
-        hour=14, minute=49, second=0, microsecond=0
+        hour=PRE_CLOSE_CUTOFF_TIME.hour,
+        minute=PRE_CLOSE_CUTOFF_TIME.minute,
+        second=PRE_CLOSE_CUTOFF_TIME.second,
+        microsecond=0,
     )
     return max(0.0, min(
         MAX_PRE_CLOSE_RUNTIME_SECONDS,
@@ -464,15 +477,18 @@ def _finalize_scheduled_result(
     if skip_publish or not snapshot_path:
         return result
 
-    # A monotonic clock protects the 240-second total budget even if the wall
+    # A monotonic clock protects the 660-second total budget even if the wall
     # clock supplied by the scheduler is stale or moves backwards.
-    elapsed = max(0.0, float(monotonic()) - started_at)
-    wall_budget = _scheduled_wall_budget(now())
-    total_budget = max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed)
-    delivery_budget = min(wall_budget, total_budget)
+    def delivery_remaining():
+        elapsed = max(0.0, float(monotonic()) - started_at)
+        wall_budget = _scheduled_wall_budget(now())
+        total_budget = max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed)
+        return min(wall_budget, total_budget)
+
+    delivery_budget = delivery_remaining()
     if delivery_budget <= 0:
         result["exit_code"] = 1
-        result["run_status"] = "delivery_failed"
+        result["run_status"] = "deadline_exceeded"
         result["delivery_error"] = "PrecloseExecutionDeadline"
         record_delivery({
             "snapshot_id": result.get("snapshot_id"),
@@ -491,6 +507,8 @@ def _finalize_scheduled_result(
             notify_enabled = (
                 _notify_from_env(env_file) if notify is None else bool(notify)
             )
+            if delivery_remaining() <= 0:
+                raise PrecloseExecutionDeadline("delivery")
             delivery = selected_publisher(
                 snapshot_path,
                 root=root,
@@ -498,6 +516,8 @@ def _finalize_scheduled_result(
                 notify=notify_enabled,
                 timeout=max(0.25, min(6.0, delivery_budget / 4.0)),
             )
+            if delivery_remaining() <= 0:
+                raise PrecloseExecutionDeadline("delivery")
         publish_ok = delivery.get("publish", {}).get("success") is True
         notify_ok = (
             not notify_enabled
@@ -516,7 +536,7 @@ def _finalize_scheduled_result(
         })
     except PrecloseExecutionDeadline:
         result["exit_code"] = 1
-        result["run_status"] = "delivery_failed"
+        result["run_status"] = "deadline_exceeded"
         result["delivery_error"] = "PrecloseExecutionDeadline"
         record_delivery({
             "snapshot_id": result.get("snapshot_id"),
@@ -546,6 +566,7 @@ def _freeze_fallback_before_cutoff(
     now,
     monotonic,
     started_at,
+    write_guard=None,
 ):
     """Freeze a non-actionable fallback only while both hard budgets remain."""
 
@@ -572,6 +593,7 @@ def _freeze_fallback_before_cutoff(
                 config=config,
                 root=root,
                 pipeline_runner=pipeline_runner,
+                write_guard=write_guard,
             )
     except PrecloseExecutionDeadline:
         deadline_result["failure_type"] = "PrecloseExecutionDeadline"
@@ -598,7 +620,11 @@ def run_scheduled_preclose(
 ):
     """Acquire, freeze, publish and optionally notify within one total budget."""
 
-    now = now or (lambda: datetime.now().astimezone())
+    clock = now or (lambda: datetime.now(PRE_CLOSE_TIMEZONE))
+
+    def now():
+        return normalize_preclose_datetime(clock())
+
     monotonic = monotonic or __import__("time").monotonic
     current = now()
     trade_date = current.date().isoformat()
@@ -624,7 +650,16 @@ def run_scheduled_preclose(
     as_of = current.isoformat(timespec="seconds")
     run_id = "{}-{}".format(as_of, uuid.uuid4().hex[:12])
     started_at = float(monotonic())
-    initial_budget = _scheduled_wall_budget(current)
+
+    def snapshot_write_allowed():
+        current_clock = now()
+        elapsed = max(0.0, float(monotonic()) - started_at)
+        return (
+            current_clock.time().replace(tzinfo=None) < PRE_CLOSE_CUTOFF_TIME
+            and _scheduled_wall_budget(current_clock) > 0
+            and elapsed < MAX_PRE_CLOSE_RUNTIME_SECONDS
+        )
+
     lock = PrecloseRunLock(day_root / "run.lock", run_id)
     if not lock.acquire():
         return {
@@ -668,6 +703,13 @@ def run_scheduled_preclose(
                skip_publish=skip_publish, notify=notify, now=now,
                monotonic=monotonic, started_at=started_at)
 
+        if not snapshot_write_allowed():
+            return {
+                "status": "deadline_exceeded",
+                "trade_date": trade_date,
+                "exit_code": 1,
+            }
+
         prepared_path, _prepared_snapshot = _prepare_deadline_fallback(
             day_root,
             trade_date=trade_date,
@@ -691,16 +733,24 @@ def run_scheduled_preclose(
         market_inputs = None
         acquisition_error = None
         acquisition_status = None
-        compute_budget = max(
-            0.001, initial_budget - DELIVERY_RESERVE_SECONDS
-        )
         acquisition_started = float(monotonic())
         try:
-            if initial_budget <= DELIVERY_RESERVE_SECONDS:
+            elapsed_before_acquisition = max(
+                0.0, float(monotonic()) - started_at
+            )
+            total_budget = max(
+                0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed_before_acquisition
+            )
+            acquisition_budget = max(
+                0.0,
+                min(_scheduled_wall_budget(now()), total_budget)
+                - DELIVERY_RESERVE_SECONDS,
+            )
+            if acquisition_budget <= 0:
                 acquisition_status = "deadline_exceeded"
                 acquisition_error = "DeliveryReserveReached"
             else:
-                with _deadline_alarm(compute_budget, "input_acquisition"):
+                with _deadline_alarm(acquisition_budget, "input_acquisition"):
                     market_inputs = runtime_builder(
                         trade_date,
                         as_of,
@@ -815,6 +865,7 @@ def run_scheduled_preclose(
                 now=now,
                 monotonic=monotonic,
                 started_at=started_at,
+                write_guard=snapshot_write_allowed,
             )
         else:
             try:
@@ -824,6 +875,7 @@ def run_scheduled_preclose(
                         config=config,
                         root=root,
                         pipeline_runner=pipeline_runner,
+                        write_guard=snapshot_write_allowed,
                     )
             except PrecloseExecutionDeadline as exc:
                 result = _freeze_fallback_before_cutoff(
@@ -836,6 +888,7 @@ def run_scheduled_preclose(
                     now=now,
                     monotonic=monotonic,
                     started_at=started_at,
+                    write_guard=snapshot_write_allowed,
                 )
             except Exception as exc:
                 result = _freeze_fallback_before_cutoff(
@@ -848,6 +901,7 @@ def run_scheduled_preclose(
                     now=now,
                     monotonic=monotonic,
                     started_at=started_at,
+                    write_guard=snapshot_write_allowed,
                 )
         phase_seconds["pipeline"] = round(max(
             0.0, float(monotonic()) - pipeline_started
@@ -923,7 +977,8 @@ def _run_preclose_locked(
     config,
     root,
     components=None,
-    pipeline_runner=run_preclose_pipeline
+    pipeline_runner=run_preclose_pipeline,
+    write_guard=None,
 ):
     """Freeze one snapshot while the caller owns the same-day run lock."""
 
@@ -942,8 +997,32 @@ def _run_preclose_locked(
         config=config,
         components=components,
     )
-    _atomic_json(snapshot_path, snapshot)
+    def deadline_result():
+        return {
+            "status": "deadline_exceeded",
+            "snapshot_status": "deadline_exceeded",
+            "exit_code": 1,
+            "failure_stage": "snapshot_write",
+            "failure_type": "PrecloseExecutionDeadline",
+        }
+
+    if write_guard is not None and not write_guard():
+        return deadline_result()
+    if write_guard is not None and snapshot.get("status") == "deadline_exceeded":
+        # The scheduled compute budget excludes the delivery reserve. Running
+        # out of it before the hard cutoff is a failure, not a wall deadline.
+        diagnostics = dict(snapshot.get("diagnostics") or {})
+        diagnostics["budget_failure"] = "ComputeBudgetExhausted"
+        snapshot = build_preclose_snapshot(
+            trade_date=config.trade_date, as_of=config.as_of,
+            generated_at=config.generated_at, pools=snapshot.get("pools") or {},
+            source_sha=config.source_sha, status="failed",
+            diagnostics=diagnostics, run_id=config.run_id,
+        )
     _atomic_json(diagnostics_path, snapshot.get("diagnostics") or {})
+    if write_guard is not None and not write_guard():
+        return deadline_result()
+    _atomic_json(snapshot_path, snapshot)
     snapshot_status = snapshot.get("status")
     return {
         "status": "completed",
@@ -1079,7 +1158,7 @@ def main(argv=None):
         raise SystemExit("--input and --source-sha are required outside --scheduled")
     input_path = Path(args.input).expanduser().resolve()
     market_inputs = json.loads(input_path.read_text(encoding="utf-8"))
-    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    now = datetime.now(PRE_CLOSE_TIMEZONE).isoformat(timespec="seconds")
     trade_date = str(args.trade_date or market_inputs.get("trade_date") or "")
     as_of = str(args.as_of or market_inputs.get("as_of") or now)
     generated_at = str(args.generated_at or now)

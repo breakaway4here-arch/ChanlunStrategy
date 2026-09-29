@@ -1,7 +1,9 @@
 import hashlib
 import json
+import os
 import plistlib
 import re
+import subprocess
 import sqlite3
 import tempfile
 import unittest
@@ -16,7 +18,7 @@ PRODUCTION_ROOT = (
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
-    "f5821333f4c04be36f4bbb2d79fd3dc5a5463114ae2805dd503a51a636071c51"
+    "77dc136adba7c5fe28bc0a88db8c5d0b9b8da756a9088a82a677985cd0948f60"
 )
 RUNBOOK_PATH = ROOT / "docs" / "runbooks" / "chanlun-preclose-runbook.md"
 
@@ -51,6 +53,10 @@ class PrecloseLaunchdTests(unittest.TestCase):
         ):
             self.assertIn(evidence_name, text)
         self.assertIn("15:35 到点不再启动", text)
+        self.assertIn("660 秒", text)
+        self.assertIn("624 秒", text)
+        self.assertIn("14:55:24", text)
+        self.assertIn("14:56:00 硬截止", text)
         self.assertNotIn("npx wrangler secret put PRE_CLOSE_WRITE_TOKEN", text)
         self.assertNotIn("npx wrangler --cwd cloudflare/preclose-worker", text)
         self.assertNotRegex(
@@ -60,7 +66,7 @@ class PrecloseLaunchdTests(unittest.TestCase):
             ),
         )
 
-    def test_preclose_runs_each_weekday_at_1445_from_absolute_wrapper(self):
+    def test_preclose_polls_every_minute_and_wrapper_applies_shanghai_window(self):
         plist = _load_plist(PRECLOSE_LABEL + ".plist")
         self.assertEqual(plist["Label"], PRECLOSE_LABEL)
         self.assertEqual(plist["WorkingDirectory"], PRODUCTION_ROOT)
@@ -68,12 +74,90 @@ class PrecloseLaunchdTests(unittest.TestCase):
             "/bin/zsh",
             PRODUCTION_ROOT + "/scripts/preclose_run.sh",
         ])
-        schedule = plist["StartCalendarInterval"]
-        self.assertEqual(
-            {(row["Weekday"], row["Hour"], row["Minute"]) for row in schedule},
-            {(weekday, 14, 45) for weekday in range(1, 6)},
-        )
+        self.assertEqual(plist["StartInterval"], 60)
+        self.assertNotIn("StartCalendarInterval", plist)
         self.assertFalse(plist["RunAtLoad"])
+        wrapper = (ROOT / "scripts" / "preclose_run.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("TZ=Asia/Shanghai date +%H%M", wrapper)
+        self.assertIn("< 1445", wrapper)
+        self.assertIn(">= 1456", wrapper)
+        self.assertIn("exit 0", wrapper)
+
+    def test_wrapper_is_quiet_outside_window_and_calls_python_inside(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            repo = base / "repo"
+            scripts = repo / "scripts"
+            bin_dir = base / "bin"
+            scripts.mkdir(parents=True)
+            bin_dir.mkdir()
+            wrapper = scripts / "preclose_run.sh"
+            wrapper.write_text(
+                (ROOT / "scripts" / "preclose_run.sh").read_text(
+                    encoding="utf-8"
+                ),
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+            date_script = bin_dir / "date"
+            date_script.write_text(
+                "#!/bin/sh\n"
+                "set -e\n"
+                "test \"$TZ\" = Asia/Shanghai\n"
+                "cat \"$DATE_FIXTURE\"\n",
+                encoding="utf-8",
+            )
+            date_script.chmod(0o755)
+            marker = base / "python-called"
+            python_script = bin_dir / "python-fixture"
+            python_script.write_text(
+                "#!/bin/sh\n"
+                "printf '%s\\n' \"$@\" > \"$PYTHON_MARKER\"\n",
+                encoding="utf-8",
+            )
+            python_script.chmod(0o755)
+            date_fixture = base / "date-fixture"
+            environment = os.environ.copy()
+            environment.update({
+                "PATH": str(bin_dir) + ":/usr/bin:/bin",
+                "CHANLUN_PRECLOSE_PYTHON": str(python_script),
+                "CHANLUN_PRECLOSE_ENV_FILE": str(base / "preclose.env"),
+                "CHANLUN_MARKET_HISTORY_DB_PATH": str(base / "market.sqlite"),
+                "DATE_FIXTURE": str(date_fixture),
+                "PYTHON_MARKER": str(marker),
+                "HOME": str(base),
+                "TZ": "Asia/Tokyo",
+            })
+
+            date_fixture.write_text("1444\n", encoding="utf-8")
+            outside = subprocess.run(
+                ["/bin/zsh", str(wrapper)],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(outside.returncode, 0)
+            self.assertEqual(outside.stdout, "")
+            self.assertEqual(outside.stderr, "")
+            self.assertFalse(marker.exists())
+
+            date_fixture.write_text("1455\n", encoding="utf-8")
+            inside = subprocess.run(
+                ["/bin/zsh", str(wrapper)],
+                env=environment,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            self.assertEqual(inside.returncode, 0)
+            self.assertEqual(inside.stderr, "")
+            self.assertTrue(marker.exists())
+            called = marker.read_text(encoding="utf-8").splitlines()
+            self.assertIn(str((repo / "preclose_run.py").resolve()), called)
+            self.assertIn("--scheduled", called)
 
     def test_reconciliation_runs_independently_at_1505_and_polls_to_1535(self):
         plist = _load_plist(RECONCILE_LABEL + ".plist")

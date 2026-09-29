@@ -1,10 +1,12 @@
 # 独立右侧启动通道 Implementation Plan
 
+> 时间契约更新（2026-09-29）：原 14:49／240 秒约定已被本次源码修复替代：北京时间 14:45 启动、14:56:00 前完成产出和发布，总预算 660 秒（含 36 秒交付预留），14:56:30 失效。下文时间说明已同步；部署与自然调度验收另行记录，本次不代表已上线。
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** 在不放宽经典 `picks_pure`、不改变 H4 语义和正式 fail-closed 合同的前提下，实现一个 formal/preclose 同源的独立右侧启动通道；先以 shadow 上线，经样本外和真实交易日门槛后才允许 active。
 
-**Architecture:** 继续以 `chanlun.trend_continuation` 作为唯一右侧策略内核，从正式检索 `chan_results` 独立识别平台/中枢突破并做三层 30 分钟确认。`run.py` 与 `chanlun/preclose_pipeline.py` 只负责用相同纯函数编排 off/shadow/active；shadow 仅输出诊断，active 才将通过项送入现有评分、fusion admission 和 decision engine。经典强势启动仍受结构上游约束，H4 明确过滤右侧来源。预收盘由 launchd 在 14:45 自然启动，以 240 秒为总预算上限并保持 14:49 墙钟硬截止。
+**Architecture:** 继续以 `chanlun.trend_continuation` 作为唯一右侧策略内核，从正式检索 `chan_results` 独立识别平台/中枢突破并做三层 30 分钟确认。`run.py` 与 `chanlun/preclose_pipeline.py` 只负责用相同纯函数编排 off/shadow/active；shadow 仅输出诊断，active 才将通过项送入现有评分、fusion admission 和 decision engine。经典强势启动仍受结构上游约束，H4 明确过滤右侧来源。预收盘由 launchd 在 14:45 自然启动，以 660 秒为总预算上限并保持 14:56 墙钟硬截止。
 
 **Tech Stack:** Python 3、NumPy、SQLite 只读 URI、`unittest`、现有 ChanlunStrategy 决策/报告管线、Cloudflare preclose Worker 与 GitHub Pages 非回归验收。
 
@@ -292,8 +294,8 @@ git commit -m "feat: 接入盘后右侧启动通道"
 - 30 分钟 `target_codes` 是 classic structure、classic startup、right-side seeds 的并集并去重。
 - shadow 的 success/failure/timeout/not-run 四态均不改变正式文件 hash。
 - launchd 周一至周五均为 14:45，不再保留 14:47 条目。
-- 允许窗口为 `[14:45, 14:49)`；总预算上限从 120 秒增至 240 秒，但始终取墙钟剩余时间、交付预留和总预算的最小值。
-- 14:49 到达前若预算耗尽仍 fail-closed；14:49 之后绝不启动 pipeline 或新增动作。
+- 允许窗口为 `[14:45, 14:56)`；总预算上限从 120 秒增至 660 秒，但始终取墙钟剩余时间、交付预留和总预算的最小值。
+- 14:56 到达前若预算耗尽仍 fail-closed；14:56 之后绝不启动 pipeline 或新增动作。
 - executed stages 仍只有既有允许阶段。
 
 **Step 2: 运行确认现有 preclose 上游不一致**
@@ -541,7 +543,7 @@ feat: 增加独立右侧启动通道
 
 只观察 launchd 自然触发：
 
-- 14:45 启动、14:49 前完成；launchctl 回读必须证明新 plist 已 load 且绝对路径指向 production-runtime。
+- 14:45 启动、14:56 前完成；launchctl 回读必须证明新 plist 已 load 且绝对路径指向 production-runtime。
 - 14:56:30 Worker 与页面同步失效。
 - snapshot identity/content hash 一致。
 - 盘后正式与只读复核完成。

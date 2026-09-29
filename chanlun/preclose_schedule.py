@@ -3,9 +3,29 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, time as wall_time, timedelta
 from pathlib import Path
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
+
+
+PRE_CLOSE_TIMEZONE = ZoneInfo("Asia/Shanghai")
+PRE_CLOSE_START_TIME = wall_time(14, 45)
+PRE_CLOSE_CUTOFF_TIME = wall_time(14, 56)
+MAX_PRE_CLOSE_RUNTIME_SECONDS = 11 * 60.0
+DELIVERY_RESERVE_SECONDS = 36.0
+
+
+def normalize_preclose_datetime(value=None):
+    """Interpret injected naive clocks in Shanghai and normalize aware clocks."""
+
+    if value is None:
+        return datetime.now(PRE_CLOSE_TIMEZONE)
+    if not isinstance(value, datetime):
+        raise TypeError("pre-close clock must return datetime")
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=PRE_CLOSE_TIMEZONE)
+    return value.astimezone(PRE_CLOSE_TIMEZONE)
 
 
 # Shanghai Stock Exchange 2026 domestic-market closures. Weekends are handled

@@ -7,7 +7,7 @@ import inspect
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime, time as wall_time
+from datetime import datetime
 
 import numpy as np
 from config import SIGNAL_MAX_AGE_TRADING_DAYS
@@ -21,6 +21,11 @@ from .h4_t3_pool import build_h4_t3_pool, filter_h4_upstream_candidates
 from .market_sentiment import build_market_sentiment
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
+from .preclose_schedule import (
+    MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    PRE_CLOSE_CUTOFF_TIME,
+    normalize_preclose_datetime,
+)
 from .price_basis import scale_price
 from .scorer import apply_scores
 from .strategy_identity import PRE_CLOSE_STRATEGY_VERSION
@@ -60,7 +65,7 @@ EXECUTED_STAGES = (
 
 
 class PrecloseDeadlineExceeded(RuntimeError):
-    """Raised internally when the 14:49 output deadline has been reached."""
+    """Raised internally when the 14:56 output deadline has been reached."""
 
     def __init__(self, stage, elapsed):
         super().__init__("pre-close deadline exceeded")
@@ -99,7 +104,7 @@ class PreclosePipelineConfig:
     generated_at: str
     source_sha: str
     run_id: str
-    deadline_seconds: float = 240.0
+    deadline_seconds: float = MAX_PRE_CLOSE_RUNTIME_SECONDS
     monotonic: object = time.monotonic
 
     def __post_init__(self):
@@ -110,8 +115,11 @@ class PreclosePipelineConfig:
             raise ValueError("as_of date mismatch")
         if generated_at.date().isoformat() != trade_date:
             raise ValueError("generated_at date mismatch")
-        if float(self.deadline_seconds) <= 0 or float(self.deadline_seconds) > 240:
-            raise ValueError("deadline_seconds must be in (0, 240]")
+        if (
+            float(self.deadline_seconds) <= 0
+            or float(self.deadline_seconds) > MAX_PRE_CLOSE_RUNTIME_SECONDS
+        ):
+            raise ValueError("deadline_seconds must be in (0, 660]")
         if not callable(self.monotonic):
             raise TypeError("monotonic must be callable")
         if not str(self.source_sha or "").strip():
@@ -138,7 +146,7 @@ def _canonical_date(value):
 
 def _parse_datetime(value):
     text = str(value or "").strip().replace("Z", "+00:00")
-    return datetime.fromisoformat(text)
+    return normalize_preclose_datetime(datetime.fromisoformat(text))
 
 
 def _as_list(value):
@@ -1098,8 +1106,12 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
 
     try:
         as_of_dt = _parse_datetime(config.as_of)
-        if as_of_dt.time().replace(tzinfo=None) >= wall_time(14, 49):
-            raise PrecloseDeadlineExceeded("startup", 240.0)
+        if (
+            as_of_dt.time().replace(tzinfo=None) >= PRE_CLOSE_CUTOFF_TIME
+            or _parse_datetime(config.generated_at).time().replace(tzinfo=None)
+            >= PRE_CLOSE_CUTOFF_TIME
+        ):
+            raise PrecloseDeadlineExceeded("startup", config.deadline_seconds)
 
         def daily_operation():
             daily_results, rows_by_code, failures = _analyze_daily_inputs(

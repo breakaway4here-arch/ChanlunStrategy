@@ -752,6 +752,7 @@
       + '｜加速 ' + accelerationRows.length + '只';
     var meta = ''
       + '<div class="preclose-meta" aria-label="预跑快照信息">'
+      + '  <span>14:45启动 · 14:56前完成发布</span>'
       + '  <span>生成 ' + escapeHtml(formatPrecloseTime(source.generated_at)) + '</span>'
       + '  <span>' + (expired ? '封存 ' : '失效 ') + escapeHtml(formatPrecloseTime(expiresAt)) + '</span>'
       + '</div>';
@@ -884,7 +885,7 @@
     state.preclose.snapshot = null;
     state.preclose.reconciliation = null;
     if (nodes.precloseBody) {
-      nodes.precloseBody.innerHTML = '<div class="preclose-load-failure" role="status">预跑暂不可用，请以盘后正式结果为准</div>';
+      nodes.precloseBody.innerHTML = '<div class="preclose-load-failure" role="status">预跑暂不可用，请以盘后正式结果为准。预跑14:45启动，14:56前完成发布，14:56:30失效；截止前可稍后重试。</div>';
     }
     if (nodes.precloseReconciliation) {
       nodes.precloseReconciliation.innerHTML = '';
