@@ -62,6 +62,7 @@ from chanlun.data_fetcher import (
     fetch_sector_outflow, fetch_limit_up_pool, fetch_limit_pool_counts,
     fetch_sector_stocks, fetch_stock_market_caps,
     fetch_all_a_stocks,
+    fetch_full_market_quotes,
     deduplicate_sector_hierarchy,
 )
 from chanlun.chan_engine import analyze, calc_macd
@@ -2671,7 +2672,9 @@ def main(debug=False, preview=False, generated_at=None):
             close_snapshot_diagnostics = ingest_market_close_snapshot(
                 MARKET_HISTORY_DB_PATH,
                 today,
-                fetch_all_a_stocks=fetch_all_a_stocks,
+                fetch_all_a_stocks=lambda **kwargs: fetch_full_market_quotes(
+                    **kwargs, now=generated_at, db_path=MARKET_HISTORY_DB_PATH
+                ),
                 generated_at=generated_at,
             )
             if not _close_snapshot_allows_daily_run(

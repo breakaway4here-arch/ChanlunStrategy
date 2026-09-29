@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+from collections import Counter
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
@@ -19,7 +21,7 @@ def _number(value: Any) -> Optional[float]:
         number = float(value)
     except (TypeError, ValueError):
         return None
-    return number if number == number else None
+    return number if math.isfinite(number) else None
 
 
 def _raw_quote(row: Mapping[str, Any]) -> Optional[Dict[str, float]]:
@@ -229,6 +231,7 @@ def ingest_market_close_snapshot(
     requested = int(fetch_diagnostics.get("requested") or 0)
     unique = int(fetch_diagnostics.get("unique") or len(rows))
     diagnostics.update(requested=requested, unique=unique)
+    diagnostics["quote_fetch"] = dict(fetch_diagnostics)
     if (
         not fetch_diagnostics.get("complete")
         or requested <= 0
@@ -276,6 +279,12 @@ def ingest_market_close_snapshot(
         diagnostics["history_eligible_rows"] = len(history_eligible)
         diagnostics["eligible_coverage_denominator"] = len(history_eligible)
         for row, identity in normalized_rows:
+            source = row.get("quote_source") or "eastmoney"
+            if row.get("quote_source"):
+                from .quote_sources import valid_quote
+                if not valid_quote(row, now_cn):
+                    diagnostics["skipped_unquoted"] += 1
+                    continue
             quote = _raw_quote(row)
             if quote is None:
                 diagnostics["skipped_unquoted"] += 1
@@ -303,13 +312,13 @@ def ingest_market_close_snapshot(
                         "amount": quote["amount"],
                         "amount_available": quote["amount"] > 0,
                         "volume_unit": "hands",
-                        "volume_raw_unit": "hands",
-                        "volume_source": "eastmoney",
+                        "volume_raw_unit": row.get("volume_raw_unit") or "hands",
+                        "volume_source": source,
                         "amount_unit": "CNY",
-                        "amount_source": "eastmoney",
+                        "amount_source": source,
                         "adjustment": "qfq",
                         "is_final": True,
-                        "source_batch": "official_close_snapshot:eastmoney",
+                        "source_batch": "official_close_snapshot:" + source,
                     },
                 )
             )
@@ -325,6 +334,7 @@ def ingest_market_close_snapshot(
             else 0.0
         )
         diagnostics["coverage_numerator"] = len(prepared)
+        diagnostics["quote_sources"] = dict(Counter(bar["volume_source"] for _, _, bar in prepared))
         diagnostics["valid_bar_count"] = len(prepared)
         diagnostics["coverage"] = round(total_coverage, 6)
         diagnostics["eligible_coverage_numerator"] = len(prepared)

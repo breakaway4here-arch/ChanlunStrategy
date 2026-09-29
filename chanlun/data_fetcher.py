@@ -445,7 +445,7 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
             "invt": "2",
             "fid": "f12",
             "fs": "m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23,m:0+t:81+s:2048",
-            "fields": "f12,f14,f26,f100,f2,f3,f5,f6,f15,f16,f17,f18",
+            "fields": "f12,f14,f26,f100,f2,f3,f5,f6,f15,f16,f17,f18,f124",
         }
         try:
             payload = _fetch_eastmoney_json(params)
@@ -503,6 +503,8 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
                 "low": _safe_float(raw.get("f16")),
                 "open": _safe_float(raw.get("f17")),
                 "prev_close": _safe_float(raw.get("f18")),
+                "quote_source": "eastmoney",
+                "quote_asof": _quote_timestamp(raw.get("f124")),
             })
         diagnostics["unique"] = len(stocks_by_code)
         requested = diagnostics["requested"]
@@ -533,6 +535,26 @@ def fetch_all_a_stocks(page_size=100, max_pages=60, return_diagnostics=False):
 # ============================================================
 # 板块资金流向 — 东方财富
 # ============================================================
+def _quote_timestamp(value):
+    try:
+        return datetime.fromtimestamp(float(value), timezone(timedelta(hours=8))).isoformat()
+    except (ValueError, TypeError, OverflowError, OSError):
+        return None
+
+
+def fetch_full_market_quotes(return_diagnostics=False, *, now=None, db_path=None, cache_dir=None):
+    """Multi-source quotes; metadata-only callers keep fetch_all_a_stocks."""
+    from pathlib import Path
+    from .quote_sources import fetch_quotes
+    selected_db = Path(db_path or MARKET_HISTORY_DB_PATH)
+    selected_cache = Path(cache_dir) if cache_dir is not None else selected_db.parent / 'full_market_quotes'
+    with requests.Session() as session:
+        session.trust_env = False
+        rows, diagnostics = fetch_quotes(fetch_all_a_stocks, session=session, now=now,
+                                         db_path=selected_db, cache_dir=selected_cache)
+    return (rows, diagnostics) if return_diagnostics else rows
+
+
 def _sector_component_evidence(evidence):
     evidence = evidence if isinstance(evidence, dict) else {}
 

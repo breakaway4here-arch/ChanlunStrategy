@@ -670,8 +670,11 @@ def build_scheduled_preclose_input(
         raise ValueError("invalid trade_date")
     universe_loader = universe_loader or load_readonly_preclose_universe
     if quote_fetcher is None:
-        from .data_fetcher import fetch_all_a_stocks
-        quote_fetcher = lambda: fetch_all_a_stocks(return_diagnostics=True)
+        from .data_fetcher import fetch_full_market_quotes
+        quote_fetcher = lambda: fetch_full_market_quotes(
+            return_diagnostics=True, db_path=formal_market_db,
+            now=datetime.fromisoformat(str(as_of).replace('Z', '+00:00')),
+        )
     index_fetcher = index_fetcher or fetch_preclose_indices
     target_selector = target_selector or select_preclose_30m_targets
     min30_fetcher = min30_fetcher or fetch_preclose_30m
