@@ -1965,7 +1965,14 @@ def _fetch_daily_for_repository(
                     continue
                 candidates.append((source, _with_source(kline, source)))
     if not candidates:
-        return None
+        # Optional last resort: never add requests when an existing source works.
+        from .kaipanla import fetch_daily as fetch_kaipanla_daily
+        kline = fetch_kaipanla_daily(identity, count=count)
+        if not kline or _daily_payload_validation_error(
+            kline, count=count, required_date=required_date, as_of=as_of
+        ):
+            return None
+        return _with_source(kline, "kaipanla")
     priority = {"eastmoney": 0, "sina": 1, "tencent": 2}
 
     def _freshness_rank(item):

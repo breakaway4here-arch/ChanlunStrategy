@@ -15,6 +15,7 @@ import shutil
 import copy
 from collections.abc import Mapping
 from html.parser import HTMLParser
+from html import escape
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -2279,9 +2280,31 @@ def write_comparison_page(output_dir, top10_api_base, asset_version=None):
     return target_path
 
 
+def _render_kaipanla_context(context):
+    """Independent public-source supplement; no JS/data request dependency."""
+    if not isinstance(context, dict) or context.get('status') not in ('available', 'previous_day') or not context.get('groups'):
+        return ''
+    pieces=['<details class="decision-card" id="kaipanla-context" style="width:calc(100% - 32px);max-width:1440px;margin:16px auto;box-sizing:border-box;overflow-wrap:anywhere">',
+            '<summary><strong>开盘啦题材补充</strong> · 资料日期 '+escape(str(context.get('data_date') or '未记录'))+' · 点击展开</summary>',
+            '<p>来源：开盘啦；独立题材资料，不替代东财行业分类。已返回样本，不代表完整涨停池；不参与正式评分或 L1 排序。</p>']
+    if context.get('status')=='previous_day':
+        pieces.append('<p>往期资料，不是今日盘面。</p>')
+    for group in context['groups']:
+        pieces.append('<details><summary>'+escape(str(group.get('name') or '未命名题材'))+' · '+str(len(group.get('stocks') or []))+'只</summary>')
+        for stock in group.get('stocks') or []:
+            pieces.append('<p><strong>'+escape(str(stock.get('name') or ''))+' '+escape(str(stock.get('code') or ''))+'</strong><br>'+escape(str(stock.get('reason') or '未提供原因'))+'</p>')
+        pieces.append('</details>')
+    return ''.join(pieces)+'</details>'
+
+
 def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
     """Build the lightweight v2 HTML shell."""
     asset_query = f"?v={asset_version}" if asset_version else ""
+    try:
+        context = json.loads(bootstrap_json).get('inlineReportData', {}).get('kaipanla_context', {})
+        kaipanla_html = _render_kaipanla_context(context)
+    except (TypeError, ValueError, AttributeError):
+        kaipanla_html = ''
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2293,6 +2316,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 <link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
 </head>
 <body>
+{kaipanla_html}
 <div id="app"></div>
 
 <script>
@@ -2471,6 +2495,7 @@ def build_full_daily_projection(
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
+        "kaipanla_context": report_data.get("kaipanla_context", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
         "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),
@@ -2568,6 +2593,7 @@ def build_aggregate_day_projection(
         "sector_outflow": report_data.get("sector_outflow", []),
         "limit_up_pool": report_data.get("limit_up_pool", []),
         "limit_up_snapshot": report_data.get("limit_up_snapshot", {}),
+        "kaipanla_context": report_data.get("kaipanla_context", {}),
         "personal_watchlist": report_data.get("personal_watchlist", {}),
         "decision_brief": report_data.get("decision_brief", {}),
         "market_sentiment": report_data.get("market_sentiment", {}),

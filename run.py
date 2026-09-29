@@ -4492,6 +4492,12 @@ def main(debug=False, preview=False, generated_at=None):
         "luojie_pool": luojie_pool,
         "h4_t3_pool": h4_t3_pool,
     }
+    # Independent optional context, never an input to scoring or publish gates.
+    try:
+        from chanlun.kaipanla import fetch_themes
+        report_data["kaipanla_context"] = fetch_themes(today)
+    except Exception:
+        report_data["kaipanla_context"] = {"status": "unavailable", "groups": [], "affects_formal": False}
     report_data["right_side_startup"] = {
         "mode": RIGHT_SIDE_STARTUP_MODE,
         "policy_version": RIGHT_SIDE_STARTUP_POLICY_VERSION,
