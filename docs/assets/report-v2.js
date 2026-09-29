@@ -5001,6 +5001,7 @@
       + '      <section class="market-decision-bar" id="marketDecisionBar" aria-label="大盘正式证据">'
       + '        <header class="market-evidence-heading"><div><h2>大盘证据</h2><p>先看市场环境，再核对个股条件</p></div><a href="#decisionOverview">看本期选股结论 ↓</a></header>'
       + '        <div class="market-decision-summary" id="marketDecisionSummary"></div>'
+      + '        <div id="marketIcepoint"></div>'
       + '        <div class="market-evidence" id="marketEvidence"></div>'
       + '      </section>'
       + '      <!-- id="directionQuickSummary" is mounted after 我的关注 with the other supplemental facts. -->'
@@ -5086,6 +5087,7 @@
     nodes.mobileDecisionSummary = app.querySelector('#mobileDecisionSummary');
     nodes.marketDecisionBar = app.querySelector('#marketDecisionBar');
     nodes.marketDecisionSummary = app.querySelector('#marketDecisionSummary');
+    nodes.marketIcepoint = app.querySelector('#marketIcepoint');
     nodes.sectorStrip = app.querySelector('#sectorStrip');
     nodes.supportingStack = app.querySelector('#supportingDecisionsStack');
     nodes.personalWatchlistStack = app.querySelector('#personalWatchlistStack');
@@ -5339,7 +5341,176 @@
   function renderDecisionMarketBar(data) {
     var html = buildDecisionMarketSummary(data);
     if (nodes.marketDecisionSummary) nodes.marketDecisionSummary.innerHTML = html;
+    if (nodes.marketIcepoint) nodes.marketIcepoint.innerHTML = buildMarketIcepoint(data);
     return html;
+  }
+
+  function buildMarketIcepoint(data) {
+    var source = data || {};
+    var raw = source.market_icepoint;
+    var empty = '<section class="market-icepoint" aria-labelledby="marketIcepointTitle">'
+      + '<h3 id="marketIcepointTitle">极端冰点判定</h3><p>本期未记录</p></section>';
+    if (!raw || typeof raw !== 'object' || !Object.keys(raw).length) return empty;
+    var keys = ['volume_drop', 'six_indices', 'breadth', 'sealed_limits'];
+    var expectedPhase = (source.data_quality || {}).bar_state === 'closed' ? 'closed' : 'intraday';
+    var validTime = function (value) {
+      return typeof value === 'string' && value.slice(0, 10) === source.date
+        && /T\d{2}:\d{2}:\d{2}\+08:00$/.test(value)
+        && Number.isFinite(Date.parse(value));
+    };
+    var items = raw.items || {};
+    var statuses = ['matched', 'not_matched', 'unavailable'];
+    var valid = raw.schema_version === 1 && raw.rule_version === 'extreme-icepoint-v1'
+      && raw.date === source.date && raw.phase === expectedPhase
+      && raw.affects_production === false && validTime(raw.as_of)
+      && (expectedPhase !== 'closed' || Number(raw.as_of.slice(11, 13)) >= 15)
+      && keys.every(function (key) {
+        var item = items[key];
+        return item && typeof item === 'object' && statuses.indexOf(item.status) !== -1
+          && item.actual && typeof item.actual === 'object'
+          && typeof item.threshold === 'string' && !!item.threshold;
+      });
+    var finite = function (value) { return typeof value === 'number' && Number.isFinite(value); };
+    var count = function (value) { return finite(value) && Number.isInteger(value) && value >= 0; };
+    var indexNames = ['上证指数', '深证成指', '创业板指', '科创50', '沪深300', '中证500'];
+    function validItemTime(value) {
+      if (typeof value === 'string') {
+        return validTime(value) && Date.parse(value) <= Date.parse(raw.as_of)
+          && (expectedPhase !== 'closed' || Number(value.slice(11, 13)) >= 15);
+      }
+      return value && typeof value === 'object' && indexNames.every(function (name) {
+        return validItemTime(value[name]);
+      });
+    }
+    if (valid) {
+      var indexActual = items.six_indices.actual.changes_pct || {};
+      var allIndices = indexNames.every(function (name) { return finite(indexActual[name]); });
+      var indexMatched = allIndices && indexNames.every(function (name) { return indexActual[name] <= -2; });
+      valid = keys.every(function (key) {
+        var item = items[key];
+        if (item.status === 'unavailable') return true;
+        if (!validItemTime(item.as_of)) return false;
+        var actual = item.actual;
+        var condition;
+        if (key === 'six_indices') condition = allIndices ? indexMatched : null;
+        else if (key === 'volume_drop') {
+          condition = finite(actual.current_cny) && finite(actual.prior_mean_cny)
+            && actual.prior_mean_cny > 0 && finite(actual.ratio)
+            && Math.abs(actual.current_cny / actual.prior_mean_cny - actual.ratio) <= 0.0002
+            && allIndices ? actual.current_cny / actual.prior_mean_cny >= 1.2 && indexMatched : null;
+        } else if (key === 'breadth') {
+          condition = count(actual.advance_count) && count(actual.decline_count)
+            && count(actual.flat_count)
+            ? actual.decline_count > 0 && actual.decline_count >= actual.advance_count * 9 : null;
+        } else {
+          condition = count(actual.limit_up_count) && count(actual.limit_down_count)
+            ? actual.limit_down_count >= 100 && actual.limit_up_count <= 10 : null;
+        }
+        return condition !== null && (item.status === 'matched') === condition;
+      });
+    }
+    var matched = valid ? keys.filter(function (key) { return items[key].status === 'matched'; }).length : 0;
+    var verified = valid ? keys.filter(function (key) { return items[key].status !== 'unavailable'; }).length : 0;
+    var status = verified < 4 ? 'insufficient' : matched === 4 ? 'matched' : 'not_matched';
+    if (!valid || raw.status !== status || raw.matched_count !== matched || raw.verified_count !== verified) {
+      return '<section class="market-icepoint" aria-labelledby="marketIcepointTitle">'
+        + '<h3 id="marketIcepointTitle">极端冰点判定</h3><p>证据不一致，暂不能判定</p></section>';
+    }
+    var n = function (value, digits) { return finite(value) ? formatNumber(value, digits || 0) : '—'; };
+    var labels = { matched: '满足', not_matched: '未满足', unavailable: '未核验' };
+    var title = { matched: '符合极端冰点条件', not_matched: '未达极端冰点条件',
+      insufficient: '暂不能完整判定' }[status];
+    var names = { volume_drop: '放量大跌', six_indices: '六指数同跌',
+      breadth: '涨跌家数', sealed_limits: '涨跌停数量' };
+    var sourceLabels = { market_history: '历史行情库', eastmoney_limit_pools: '东财涨跌停池',
+      eastmoney: '东方财富', sina: '新浪', tencent: '腾讯', verified_index_kline: '已核验指数日线' };
+    var scopeLabels = { all_a_cny: '全A成交额（元）', six_fixed_indices: '六个指定指数',
+      all_a: '全A股票', eastmoney_topic_pools: '东财涨跌停专题池' };
+    var reasonLabels = { comparable_full_market_amount_or_indices_missing: '完整成交额或指数证据不足',
+      same_time_history_unavailable: '缺少相同时点历史成交额',
+      six_same_day_indices_required: '六指数同日数据不齐',
+      all_a_breadth_or_coverage_missing: '全A广度或覆盖证据不足',
+      same_day_sealed_pool_totals_missing: '当日封板统计未核验' };
+    function labelSource(value) { return sourceLabels[value] || normalizeString(value); }
+    function fact(key, actual) {
+      if (key === 'volume_drop') return '当日成交额 ' + n(finite(actual.current_cny) ? actual.current_cny / 1e8 : null, 2)
+        + ' 亿元 · 前5日均额 ' + n(finite(actual.prior_mean_cny) ? actual.prior_mean_cny / 1e8 : null, 2)
+        + ' 亿元 · 比值 ' + n(actual.ratio, 2) + ' 倍';
+      if (key === 'six_indices') return indexNames.map(function (name) {
+        var value = (actual.changes_pct || {})[name];
+        return name + ' ' + n(value, 2) + (finite(value) ? '%' : '');
+      }).join(' · ');
+      if (key === 'breadth') return '上涨 ' + n(actual.advance_count)
+        + ' · 下跌 ' + n(actual.decline_count) + ' · 平盘 ' + n(actual.flat_count);
+      return '跌停 ' + n(actual.limit_down_count) + ' · 涨停 ' + n(actual.limit_up_count);
+    }
+    function sourceText(value) {
+      if (typeof value === 'string') return value ? labelSource(value) : '来源未记录';
+      if (!value || typeof value !== 'object') return '来源未记录';
+      if (value.database) return labelSource(value.database) + '（逐日金额来源见数据记录）';
+      return indexNames.filter(function (name) { return value[name]; }).map(function (name) {
+        return name + ' ' + labelSource(value[name]);
+      }).join(' · ') || '来源未记录';
+    }
+    function timeText(value) {
+      if (typeof value === 'string') return validTime(value) ? value.replace('T', ' ') : '时间未核验';
+      if (!value || typeof value !== 'object') return '时间未核验';
+      var times = indexNames.map(function (name) { return value[name]; }).filter(validTime);
+      return times.length === 6 ? times.map(function (stamp) { return stamp.replace('T', ' '); }).join(' · ') : '部分时间未核验';
+    }
+    var rows = keys.map(function (key) {
+      var item = items[key];
+      return '<div class="market-icepoint-row"><div><strong>' + escapeHtml(names[key])
+        + '</strong><span>' + escapeHtml(labels[item.status]) + '</span></div>'
+        + '<p>' + escapeHtml(fact(key, item.actual)) + '</p>'
+        + '<small>条件：' + escapeHtml(item.threshold) + ' · 来源：' + escapeHtml(sourceText(item.source))
+        + ' · 截至：' + escapeHtml(timeText(item.as_of))
+        + ' · 范围：' + escapeHtml(scopeLabels[item.scope] || '范围未核验')
+        + (item.status === 'unavailable' && item.reason ? ' · 原因：' + escapeHtml(reasonLabels[item.reason] || '证据不足') : '')
+        + '</small></div>';
+    }).join('');
+    var etf = raw.etf || {};
+    var etfActual = etf.actual || {};
+    var etfState = 'unavailable';
+    var etfValid = false;
+    var etfSymbols = ['sh512800', 'sh512170', 'sh512480', 'sh512660', 'sz159928', 'sh512400', 'sh512200'];
+    var etfGroups = asArray(etfActual.groups);
+    if (etfGroups.length === 7 && etfGroups.every(function (group, index) {
+      return group && group.symbol === etfSymbols[index]
+        && (group.change_pct === null || finite(group.change_pct));
+    })) {
+      var etfVerified = etfGroups.filter(function (group) { return finite(group.change_pct); }).length;
+      var etfBelow = etfGroups.filter(function (group) { return finite(group.change_pct) && group.change_pct < -4; }).length;
+      var derivedEtf = etfBelow >= 5 ? 'matched' : etfVerified === 7 ? 'not_matched' : 'unavailable';
+      if (etfActual.verified_count === etfVerified
+          && etfActual.below_minus_four_count === etfBelow && etf.status === derivedEtf
+          && (etfVerified === 0 || (etf.source === 'tencent' && validItemTime(etf.as_of)
+            && etfGroups.every(function (group) {
+              return !finite(group.change_pct) || validItemTime(group.as_of);
+            })))) {
+        etfState = derivedEtf;
+        etfValid = true;
+      }
+    }
+    var groups = (etfValid ? etfGroups : []).map(function (group) {
+      return escapeHtml(group.group || '') + ' ' + escapeHtml(group.symbol || '')
+        + ' ' + escapeHtml(n(group.change_pct, 2))
+        + (finite(group.change_pct) ? '%' : '');
+    }).join(' · ');
+    return '<section class="market-icepoint" aria-labelledby="marketIcepointTitle">'
+      + '<div class="market-icepoint-head"><div><h3 id="marketIcepointTitle">极端冰点判定</h3>'
+      + '<strong>' + escapeHtml(title) + '</strong></div><span>已满足 ' + matched
+      + '/4 · 已核验 ' + verified + '/4 · ' + escapeHtml(raw.date)
+      + ' · ' + escapeHtml(raw.phase === 'closed' ? '收盘后' : '盘中')
+      + ' · 截至 ' + escapeHtml(timeText(raw.as_of)) + '</span></div>'
+      + '<p class="market-icepoint-note">描述市场状态，不代表已见底或即将反弹。</p>'
+      + '<details><summary>查看四项依据</summary><div class="market-icepoint-rows">' + rows + '</div>'
+      + '<div class="market-icepoint-etf"><strong>行业扩散佐证 · ' + escapeHtml(labels[etfState])
+      + '</strong><p>固定7组ETF，' + escapeHtml(etfValid ? n(etfActual.verified_count) : '—')
+      + ' 组已核验，' + escapeHtml(etfValid ? n(etfActual.below_minus_four_count) : '—')
+      + ' 组跌幅低于-4%；至少5组为满足。来源：腾讯 · 截至：'
+      + escapeHtml(timeText(etfValid ? etf.as_of : '')) + '</p><small>' + groups + '</small></div>'
+      + '</details></section>';
   }
 
   function buildExpandedMarketEvidence(data) {
