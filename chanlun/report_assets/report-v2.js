@@ -11665,6 +11665,7 @@
     var hasIn = Object.prototype.hasOwnProperty.call(source, 'sector_flow');
     var hasOut = Object.prototype.hasOwnProperty.call(source, 'sector_outflow');
     var trustedSource = normalizeString(quality.sector_source);
+    var sectorDataStatus = normalizeString(quality.sector_data_status);
     if (!hasIn && !hasOut) {
       return { label: '证据不足', tone: 'danger', detail: '板块资金字段未生成，不等于资金流为空。' };
     }
@@ -11672,9 +11673,12 @@
       return { label: '部分可用', tone: 'warning', detail: '流入或流出侧缺失，仅展示已取得部分。' };
     }
     if (!sectorIn.length && !sectorOut.length) {
-      return trustedSource
+      if (sectorDataStatus === 'unavailable' || trustedSource === 'fallback_static') {
+        return { label: '暂不可用', tone: 'warning', detail: '板块资金缺失，暂不可用。' };
+      }
+      return trustedSource === 'eastmoney' && (!sectorDataStatus || sectorDataStatus === 'verified')
         ? { label: '确认空池', tone: 'neutral', detail: '已连接 ' + trustedSource + '，本次上游返回空列表。' }
-        : { label: '证据不足', tone: 'danger', detail: '板块来源未登记，空数组不能作为确认空池。' };
+        : { label: '证据不足', tone: 'danger', detail: '板块来源未核验，空数组不能作为确认空池。' };
     }
     return { label: '数据可用', tone: 'positive', detail: '' };
   }

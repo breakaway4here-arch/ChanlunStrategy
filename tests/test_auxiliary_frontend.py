@@ -1607,6 +1607,50 @@ assert(verifiedEmpty.includes('确认空池'), 'trusted empty sector result was 
 """,
         )
 
+    def test_unavailable_sector_flow_is_not_a_confirmed_empty_pool_in_both_views(self):
+        _assert_node_contract(
+            self,
+            "{ model: buildFundingMainlineModel, main: renderFundingMainline, card: renderSectorFlowCard }",
+            r"""
+const unavailable = {
+  sector_flow: [], sector_outflow: [],
+  data_quality: { sector_source: 'fallback_static', sector_data_status: 'unavailable' }
+};
+const model = globalThis.__auxTest.model(unavailable);
+const mainHtml = globalThis.__auxTest.main(model, '');
+const cardHtml = globalThis.__auxTest.card(unavailable);
+for (const html of [mainHtml, cardHtml]) {
+  assert(html.includes('暂不可用') && html.includes('板块资金缺失'), 'missing sector funds were not disclosed');
+  assert(!html.includes('确认空池') && !html.includes('已连接 fallback_static'), 'fallback source was presented as a confirmed empty pool');
+}
+const unavailableEastmoney = {
+  sector_flow: [], sector_outflow: [],
+  data_quality: { sector_source: 'eastmoney', sector_data_status: 'unavailable' }
+};
+assert(!globalThis.__auxTest.card(unavailableEastmoney).includes('确认空池'), 'unavailable status was ignored');
+const unknownEastmoney = {
+  sector_flow: [], sector_outflow: [],
+  data_quality: { sector_source: 'eastmoney', sector_data_status: 'unknown' }
+};
+assert(globalThis.__auxTest.card(unknownEastmoney).includes('证据不足'), 'unknown status was treated as verified');
+const fallbackWithoutStatus = {
+  sector_flow: [], sector_outflow: [], data_quality: { sector_source: 'fallback_static' }
+};
+assert(globalThis.__auxTest.card(fallbackWithoutStatus).includes('暂不可用'), 'static fallback without status looked verified');
+const unknownSource = {
+  sector_flow: [], sector_outflow: [], data_quality: { sector_source: 'unverified_source' }
+};
+assert(globalThis.__auxTest.card(unknownSource).includes('证据不足'), 'unknown source was trusted');
+assert(!globalThis.__auxTest.card(unknownSource).includes('已连接 unverified_source'), 'unknown source was treated as connected');
+const verifiedEmpty = {
+  sector_flow: [], sector_outflow: [],
+  data_quality: { sector_source: 'eastmoney', sector_data_status: 'verified' }
+};
+assert(globalThis.__auxTest.main(globalThis.__auxTest.model(verifiedEmpty), '').includes('确认空池'), 'verified empty funding mainline regressed');
+assert(globalThis.__auxTest.card(verifiedEmpty).includes('确认空池'), 'verified empty sector card regressed');
+""",
+        )
+
     def test_sector_flow_preserves_real_zero_and_discloses_unknown_hierarchy(self):
         _assert_node_contract(
             self,
