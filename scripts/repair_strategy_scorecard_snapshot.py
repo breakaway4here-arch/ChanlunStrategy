@@ -1207,7 +1207,7 @@ def _validate_staged_artifacts(
             asset_prefix=prefix,
             asset_version=asset_version,
         )
-        if html_path.read_text(encoding="utf-8") != expected_html:
+        if html_path.read_bytes().decode("utf-8") != expected_html:
             raise RuntimeError("HTML mismatch: {}".format(name))
     return planes
 

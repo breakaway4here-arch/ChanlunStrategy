@@ -14,6 +14,52 @@ from chanlun.market_news import (
 
 
 class TestLocalCodexProvider(unittest.TestCase):
+    def test_forecast_missing_pivot_requires_evidence_bounded_language(self):
+        prompt = market_news._build_forecast_user_prompt(
+            {"上证指数": {"close": 3830.45, "change_pct": 0.2}},
+            {"trend_type": "盘整", "daily_pivot": {}}, [], [], [],
+        )
+        self.assertIn("日线中枢: 未识别", prompt)
+        self.assertNotIn("当前价格位置:", prompt)
+        self.assertIn("不得称为无中枢震荡或已确认趋势", prompt)
+        self.assertIn("关键结构价位待核验", prompt)
+        self.assertIn("不得创造输入未给出的具体点位", market_news._FORECAST_SYSTEM_PROMPT)
+        self.assertIn("不得推断一买、二买、三买", market_news._FORECAST_SYSTEM_PROMPT)
+        self.assertNotIn("3150", market_news._FORECAST_SYSTEM_PROMPT)
+
+    def test_forecast_valid_pivot_stays_identified(self):
+        prompt = market_news._build_forecast_user_prompt(
+            {"上证指数": {"close": 3830.45, "change_pct": 0.2}},
+            {"trend_type": "盘整", "daily_pivot": {"ZG": 3850, "ZD": 3800}},
+            [], [], [],
+        )
+        self.assertIn("日线中枢: [3800 — 3850]", prompt)
+        self.assertIn("当前价格位置: 中枢区间内", prompt)
+        self.assertNotIn("日线中枢: 未识别", prompt)
+        self.assertNotIn("关键结构价位待核验", prompt)
+
+    def test_forecast_prompt_marks_missing_sector_funds_without_zero_breadth(self):
+        prompt = market_news._build_forecast_user_prompt({}, {}, [], [], [])
+        self.assertIn("资金信息暂缺，不能推断无流入", prompt)
+        self.assertNotIn("0/1", prompt)
+        self.assertNotIn("资金流入0.00亿", prompt)
+
+    def test_forecast_prompt_keeps_real_sector_breadth(self):
+        prompt = market_news._build_forecast_user_prompt(
+            {}, {}, [
+                {"name": "甲", "flow": 2.0, "change_pct": 1.0},
+                {"name": "乙", "flow": -1.0, "change_pct": -1.0},
+            ], [], []
+        )
+        self.assertIn("板块广度: 1/2（50%）板块正流入", prompt)
+
+    def test_forecast_prompt_does_not_turn_missing_flow_into_zero(self):
+        prompt = market_news._build_forecast_user_prompt(
+            {}, {}, [{"name": "未核验板块", "flow": None}], [], []
+        )
+        self.assertIn("资金信息暂缺，不能推断无流入", prompt)
+        self.assertNotIn("资金流入0.00亿", prompt)
+
     def test_provider_defaults_to_ephemeral_codex_cli(self):
         self.assertEqual(getattr(market_news, "_LLM_PROVIDER", None), "codex")
         self.assertTrue(callable(getattr(market_news, "_codex_exec_json", None)))

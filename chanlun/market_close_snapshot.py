@@ -11,9 +11,14 @@ from typing import Any, Callable, Dict, Mapping, Optional
 from .industry_metadata import _is_a_share_identity
 from .market_history_store import MarketHistoryStore
 from .identity import normalize_identity
+from .preclose_schedule import _SSE_2026_CLOSED
 
 
 _CN_TZ = timezone(timedelta(hours=8))
+VERIFIED_INDEPENDENT_CLOSE_BATCHES = frozenset({
+    "ongoing:eastmoney", "ongoing:sina", "ongoing:tencent",
+    "ongoing:kaipanla",
+})
 
 
 def _number(value: Any) -> Optional[float]:
@@ -50,25 +55,53 @@ def _raw_quote(row: Mapping[str, Any]) -> Optional[Dict[str, float]]:
     return values  # type: ignore[return-value]
 
 
+def _previous_trade_date(
+    report_date: str, store: MarketHistoryStore
+) -> Optional[str]:
+    try:
+        current = datetime.strptime(str(report_date), "%Y-%m-%d").date()
+    except ValueError:
+        return None
+    for days_back in range(1, 32):
+        candidate_date = current - timedelta(days=days_back)
+        candidate = candidate_date.isoformat()
+        rows = store.connection.execute(
+            "SELECT exchange, is_open FROM trade_calendar "
+            "WHERE trade_date=? AND exchange IN ('SH', 'SZ')",
+            (candidate,),
+        ).fetchall()
+        if rows:
+            flags = {str(row["exchange"]): row["is_open"] for row in rows}
+            if (set(flags) != {"SH", "SZ"}
+                    or any(flag not in (0, 1) for flag in flags.values())
+                    or len(set(flags.values())) != 1):
+                return None
+            if flags["SH"] == 1:
+                return candidate if candidate_date.weekday() < 5 else None
+            continue
+        if candidate_date.weekday() >= 5:
+            continue
+        if candidate_date.year != 2026:
+            return None
+        if candidate not in _SSE_2026_CLOSED:
+            return candidate
+    return None
+
+
 def _previous_final_closes(
-    store: MarketHistoryStore, report_date: str
+    store: MarketHistoryStore, previous_trade_date: Optional[str]
 ) -> Dict[Any, float]:
+    if not previous_trade_date:
+        return {}
     rows = store.connection.execute(
         """
         SELECT i.exchange, i.code, b.close
         FROM instruments i
         JOIN bars_day b ON b.instrument_id=i.instrument_id
         WHERE i.asset_type='stock'
-          AND b.is_final=1
-          AND b.ts=(
-              SELECT MAX(previous.ts)
-              FROM bars_day previous
-              WHERE previous.instrument_id=i.instrument_id
-                AND previous.is_final=1
-                AND previous.ts < ?
-          )
+          AND b.ts=? AND b.is_final=1 AND b.adjustment='qfq'
         """,
-        (str(report_date),),
+        (previous_trade_date,),
     ).fetchall()
     return {
         "stock|{}|{}".format(
@@ -104,6 +137,7 @@ def ingest_market_close_snapshot(
         "written": 0,
         "skipped_unquoted": 0,
         "skipped_missing_factor": 0,
+        "previous_trade_date": "",
         "history_eligible_rows": 0,
         "identity_pending_rows": 0,
         "identity_pending_codes": [],
@@ -118,6 +152,11 @@ def ingest_market_close_snapshot(
         "minimum_coverage": float(min_coverage),
         "meets_minimum_coverage": False,
         "remote_calls": 0,
+        "rechecked_cached_snapshot": False,
+        "preserved_independent_final_count": 0,
+        "preserved_independent_final_rows": [],
+        "quote_identity_keys": [],
+        "cached_snapshot_unverified_count": 0,
     }
     if str(report_date) != now_cn.date().isoformat() or now_cn.hour < 15:
         return diagnostics
@@ -168,22 +207,65 @@ def ingest_market_close_snapshot(
         ]
         expected_instrument_count = len(instruments) + len(pending_identity_rows)
         diagnostics["coverage_denominator"] = expected_instrument_count
+        final_rows = store.connection.execute(
+            """
+            SELECT i.asset_type, i.exchange, i.code,
+                   b.ts, b.source_batch, b.adjustment, b.is_final
+            FROM instruments i
+            JOIN bars_day b ON b.instrument_id=i.instrument_id
+            WHERE i.asset_type='stock' AND b.ts=? AND b.is_final=1
+            """,
+            (str(report_date),),
+        ).fetchall()
         final_identities = {
             (
                 str(row["asset_type"]),
                 str(row["exchange"]),
                 str(row["code"]),
             )
-            for row in store.connection.execute(
-                """
-                SELECT i.asset_type, i.exchange, i.code
-                FROM instruments i
-                JOIN bars_day b ON b.instrument_id=i.instrument_id
-                WHERE i.asset_type='stock' AND b.ts=? AND b.is_final=1
-                """,
-                (str(report_date),),
-            ).fetchall()
+            for row in final_rows
         }
+        a_share_identities = {
+            (str(row["asset_type"]), str(row["exchange"]), str(row["code"]))
+            for row in instruments
+        }
+        cached_snapshot_final = {
+            "{}|{}|{}".format(
+                str(row["asset_type"]),
+                str(row["exchange"]),
+                str(row["code"]),
+            )
+            for row in final_rows
+            if (str(row["asset_type"]), str(row["exchange"]), str(row["code"]))
+            in a_share_identities
+            and str(row["source_batch"] or "").startswith(
+                "official_close_snapshot:"
+            )
+        }
+        cached_snapshot_needs_recheck = bool(cached_snapshot_final)
+        preserved_rows_by_identity = {
+            "{}|{}|{}".format(
+                str(row["asset_type"]), str(row["exchange"]), str(row["code"])
+            ): {
+                "identity_key": "{}|{}|{}".format(
+                    str(row["asset_type"]), str(row["exchange"]), str(row["code"])
+                ),
+                "asset_type": str(row["asset_type"]),
+                "exchange": str(row["exchange"]),
+                "code": str(row["code"]),
+                "date": str(row["ts"]),
+                "source_batch": str(row["source_batch"]),
+                "adjustment": str(row["adjustment"]),
+                "is_final": row["is_final"] == 1,
+            }
+            for row in final_rows
+            if (str(row["asset_type"]), str(row["exchange"]), str(row["code"]))
+            in a_share_identities
+            and str(row["ts"]) == str(report_date)
+            and str(row["adjustment"] or "") == "qfq"
+            and row["is_final"] == 1
+            and str(row["source_batch"] or "") in VERIFIED_INDEPENDENT_CLOSE_BATCHES
+        } if (cached_snapshot_needs_recheck and not force_remote) else {}
         final_count = sum(
             (
                 str(row.get("asset_type") or "stock"),
@@ -205,6 +287,7 @@ def ingest_market_close_snapshot(
             not force_remote
             and instruments
             and db_coverage >= float(min_coverage)
+            and not cached_snapshot_needs_recheck
         ):
             diagnostics.update(
                 status=("partial" if pending_identity_rows else "complete"),
@@ -217,6 +300,9 @@ def ingest_market_close_snapshot(
                 coverage=round(db_coverage, 6),
             )
             return diagnostics
+        diagnostics["rechecked_cached_snapshot"] = bool(
+            cached_snapshot_needs_recheck and db_coverage >= float(min_coverage)
+        )
 
     diagnostics["remote_calls"] = 1
     result = fetch_all_a_stocks(return_diagnostics=True)
@@ -257,7 +343,9 @@ def ingest_market_close_snapshot(
         return diagnostics
 
     with MarketHistoryStore(path) as store:
-        previous_closes = _previous_final_closes(store, str(report_date))
+        previous_trade_date = _previous_trade_date(str(report_date), store)
+        diagnostics["previous_trade_date"] = previous_trade_date or ""
+        previous_closes = _previous_final_closes(store, previous_trade_date)
         prepared = []
         valid_identities = set()
         normalized_rows = []
@@ -273,12 +361,24 @@ def ingest_market_close_snapshot(
                 status="incomplete", reason="provider_identity_incomplete"
             )
             return diagnostics
+        preserved_independent_final = (
+            set(preserved_rows_by_identity) & valid_identities
+        )
+        diagnostics["preserved_independent_final_count"] = len(
+            preserved_independent_final
+        )
+        diagnostics["preserved_independent_final_rows"] = [
+            preserved_rows_by_identity[key]
+            for key in sorted(preserved_independent_final)
+        ]
         history_eligible = {
             key for key in valid_identities if key in previous_closes
         }
         diagnostics["history_eligible_rows"] = len(history_eligible)
         diagnostics["eligible_coverage_denominator"] = len(history_eligible)
         for row, identity in normalized_rows:
+            if identity.key in preserved_independent_final:
+                continue
             source = row.get("quote_source") or "eastmoney"
             if row.get("quote_source"):
                 from .quote_sources import valid_quote
@@ -323,25 +423,43 @@ def ingest_market_close_snapshot(
                 )
             )
 
+        unverified_cached = cached_snapshot_final - {
+            identity.key for _, identity, _ in prepared
+        }
+        diagnostics["cached_snapshot_unverified_count"] = len(
+            unverified_cached
+        )
+
+        eligible_valid_count = len(prepared) + len(
+            preserved_independent_final & history_eligible
+        )
+        valid_bar_count = len(prepared) + len(preserved_independent_final)
         write_coverage = (
-            len(prepared) / float(len(history_eligible))
+            eligible_valid_count / float(len(history_eligible))
             if history_eligible
             else 0.0
         )
         total_coverage = (
-            len(prepared) / float(expected_instrument_count)
+            valid_bar_count / float(expected_instrument_count)
             if expected_instrument_count
             else 0.0
         )
-        diagnostics["coverage_numerator"] = len(prepared)
+        diagnostics["coverage_numerator"] = valid_bar_count
         diagnostics["quote_sources"] = dict(Counter(bar["volume_source"] for _, _, bar in prepared))
-        diagnostics["valid_bar_count"] = len(prepared)
+        if preserved_independent_final:
+            diagnostics["quote_identity_keys"] = sorted(
+                identity.key for _, identity, _ in prepared
+            )
+        diagnostics["valid_bar_count"] = valid_bar_count
         diagnostics["coverage"] = round(total_coverage, 6)
-        diagnostics["eligible_coverage_numerator"] = len(prepared)
+        diagnostics["eligible_coverage_numerator"] = eligible_valid_count
         diagnostics["eligible_coverage"] = round(write_coverage, 6)
         diagnostics["meets_minimum_coverage"] = bool(
             total_coverage >= float(min_coverage)
         )
+        if unverified_cached:
+            diagnostics.update(status="incomplete", reason="cached_snapshot_unverified")
+            return diagnostics
         if total_coverage < float(min_coverage):
             diagnostics.update(
                 status="insufficient_coverage",
@@ -364,7 +482,7 @@ def ingest_market_close_snapshot(
         diagnostics.update(
             status=("partial" if pending_identity_rows else "complete"),
             reason=("identity_migration_pending" if pending_identity_rows else ""),
-            valid_bar_count=len(prepared),
+            valid_bar_count=valid_bar_count,
             written=changed,
         )
     return diagnostics

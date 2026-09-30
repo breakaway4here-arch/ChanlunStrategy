@@ -64,6 +64,7 @@ from chanlun.data_fetcher import (
     fetch_all_a_stocks,
     fetch_full_market_quotes,
     deduplicate_sector_hierarchy,
+    _TRUSTED_STOCK_KLINE_SOURCES,
 )
 from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
@@ -2585,8 +2586,43 @@ def _refresh_active_universe_quality(
     stale_count = 0
     missing_count = 0
     selected = list(selected_stocks or [])
+    identities = set()
+    selected_sources_verified = bool(selected)
     for stock in selected:
+        if not isinstance(stock, dict):
+            selected_sources_verified = False
+            missing_count += 1
+            continue
         status = stock.get("data_status") or {}
+        klines = stock.get("klines") or {}
+        if not isinstance(status, dict):
+            status = {}
+            selected_sources_verified = False
+        if not isinstance(klines, dict):
+            klines = {}
+            selected_sources_verified = False
+        try:
+            if not stock.get("exchange") or not stock.get("asset_type"):
+                raise ValueError("active stock identity is not explicit")
+            identity = normalize_identity(stock)
+            if identity.asset_type != "stock" or identity.key in identities:
+                raise ValueError("active stock identity is invalid or duplicated")
+            identities.add(identity.key)
+        except (TypeError, ValueError, AttributeError):
+            selected_sources_verified = False
+        adjustment = str(klines.get("adjustment") or "")
+        selected_sources_verified = bool(
+            selected_sources_verified
+            and status.get("daily") == "verified"
+            and str(status.get("latest_date") or "") == str(report_date)
+            and status.get("source") in _TRUSTED_STOCK_KLINE_SOURCES
+            and status.get("is_final") is True
+            and status.get("stale") is not True
+            and adjustment == "qfq"
+            and str(status.get("adjustment") or "") == adjustment
+            and list(klines.get("dates") or [])
+            and str(klines["dates"][-1]).split(" ", 1)[0] == str(report_date)
+        )
         if (
             status.get("daily") != "verified"
             or not status.get("latest_date")
@@ -2597,13 +2633,83 @@ def _refresh_active_universe_quality(
     data_quality["stale_stock_count"] = stale_count
     data_quality["missing_daily_count"] = missing_count
     data_quality["official_pool_scope"] = "active_retrieval_pool"
+    snapshot = data_quality.get("market_close_snapshot")
+    snapshot = snapshot if isinstance(snapshot, dict) else {}
+    universe = data_quality.get("universe_builder")
+    universe = universe if isinstance(universe, dict) else {}
+    try:
+        as_of = datetime.fromisoformat(str(data_quality.get("as_of") or ""))
+        as_of_cn = as_of.astimezone(_CN_TZ) if as_of.utcoffset() is not None else None
+        numerator = snapshot.get("coverage_numerator")
+        denominator = snapshot.get("coverage_denominator")
+        pending_count = snapshot.get("identity_pending_rows")
+        minimum = float(snapshot.get("minimum_coverage"))
+        snapshot_coverage_verified = bool(
+            type(numerator) is int
+            and type(denominator) is int
+            and type(pending_count) is int
+            and pending_count >= 0
+            and (snapshot.get("status") != "complete" or pending_count == 0)
+            and math.isfinite(minimum)
+            and denominator > 0
+            and 0 <= numerator <= denominator
+            and 0.9 <= minimum <= 1.0
+            and numerator / denominator >= minimum
+        )
+    except (TypeError, ValueError, OverflowError):
+        as_of_cn = None
+        snapshot_coverage_verified = False
+    snapshot_verified = bool(
+        isinstance(snapshot, dict)
+        and snapshot.get("report_date") == str(report_date)
+        and snapshot.get("meets_minimum_coverage") is True
+        and snapshot_coverage_verified
+        and _close_snapshot_allows_daily_run(snapshot)
+    )
+    active_pool_verified = bool(
+        isinstance(universe, dict)
+        and universe.get("status") == "activated"
+        and type(universe.get("final_count")) is int
+        and universe["final_count"] == len(selected)
+        and selected_sources_verified
+    )
+    sector_source = data_quality.get("sector_source")
+    sector_missing = sector_source == "fallback_static"
+    sector_degradation_safe = bool(
+        (
+            sector_source == "eastmoney"
+            and data_quality.get("fallback_used") is False
+            and data_quality.get("stock_pool_incomplete") is False
+        ) or (
+            sector_missing
+            and data_quality.get("fallback_used") is True
+            and data_quality.get("stock_pool_source") == "full_a_db+expanded_base"
+            and universe.get("retrieval_mode") == "base_expanded_no_overlay"
+            and universe.get("overlay_count") == 0
+        )
+    )
+    data_quality["sources_trusted"] = bool(
+        snapshot_verified and active_pool_verified
+    )
+    data_quality["sector_data_status"] = (
+        "verified" if (
+            sector_source == "eastmoney"
+            and data_quality.get("fallback_used") is False
+            and data_quality.get("stock_pool_incomplete") is False
+        )
+        else ("unavailable" if sector_missing else "unknown")
+    )
     data_quality["is_official"] = bool(
         selected
         and data_quality.get("bar_state") == "closed"
         and data_quality.get("market_status") == "verified"
         and data_quality.get("sources_trusted")
-        and not data_quality.get("fallback_used")
-        and not data_quality.get("stock_pool_incomplete")
+        and sector_degradation_safe
+        and data_quality.get("report_date") == str(report_date)
+        and data_quality.get("index_latest_date") == str(report_date)
+        and as_of_cn is not None
+        and as_of_cn.date().isoformat() == str(report_date)
+        and (as_of_cn.hour, as_of_cn.minute) >= (15, 0)
         and stale_count == 0
         and missing_count == 0
     )

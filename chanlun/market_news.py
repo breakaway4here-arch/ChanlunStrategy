@@ -1080,15 +1080,16 @@ _FORECAST_SYSTEM_PROMPT = """你是一位资深A股市场分析师，精通缠�
 4. 热点事件：重大催化剂的利多/利空方向
 
 分析框架（缠论为核心）：
-- 先判断大盘在缠论结构中的位置（中枢构建中/向上离开中枢/向下离开中枢/中枢震荡）
+- 先核验日线中枢是否识别；只有输入给出有效ZG/ZD时，才讨论中枢内/上方/下方。未识别时只陈述可核验的指数、量能等事实，不得称为“无中枢震荡”或已确认趋势
 - 用资金流向验证：有效突破需量能+资金配合，无量突破可能是假突破
 - 用事件判断情绪：热点事件是短期情绪驱动还是中期逻辑变化
 - 板块广度判断是普涨/结构性/分化行情
-- 结合多个维度给出买卖点参考区域（一买/二买/三买或一卖/二卖/三卖）
+- 只有输入具备对应级别的完整结构、离开与回拉证据时才可讨论缠论买卖点；未识别中枢或缺确认时不得推断一买、二买、三买及对应卖点
 
 输出要求：
-- 结论要具体，引用实际价格位和数据，不要泛泛而谈
-- 短期预判给3-4条，包含具体观察条件（如"若放量站上3150则..."）
+- 结论要具体，引用已提供的事实。具体价位只能来自输入中的真实价位并说明所据；不得创造输入未给出的具体点位、支撑压力、区间或买卖点
+- 缺结构锚点时写“关键结构价位待核验”，短期观察条件可用量能和已给出的相对强弱，不要求编造数字价位
+- 短期预判给3-4条，包含可核验的观察条件
 - 中期预判要有关键观察点和可能的路径推演
 - 风险提示要针对当前市场状态的具体风险，不要"外部扰动"这类废话
 
@@ -1269,9 +1270,19 @@ def _build_forecast_user_prompt(market_indices, chanlun_structure, sector_flow, 
     # --- 缠论结构 ---
     lines.append("")
     lines.append("## 上证缠论结构")
-    if zg is not None and zd is not None:
+    pivot_valid = (
+        all(
+            isinstance(value, (int, float, np.number))
+            and not isinstance(value, (bool, np.bool_))
+            and np.isfinite(value) and value > 0
+            for value in (zg, zd)
+        )
+        and zg >= zd
+    )
+    if pivot_valid:
         sh = market_indices.get("上证指数", {})
         sh_close = sh.get("close", 0)
+        lines.append(f"- 日线中枢: [{zd:.0f} — {zg:.0f}]")
         if sh_close > 0:
             if sh_close > zg:
                 pos = f"站上中枢上沿（{sh_close:.0f} > ZG {zg:.0f}）"
@@ -1279,11 +1290,14 @@ def _build_forecast_user_prompt(market_indices, chanlun_structure, sector_flow, 
                 pos = f"跌破中枢下沿（{sh_close:.0f} < ZD {zd:.0f}）"
             else:
                 pos = f"中枢区间内（ZD {zd:.0f} ≤ {sh_close:.0f} ≤ ZG {zg:.0f}）"
-            lines.append(f"- 日线中枢: [{zd:.0f} — {zg:.0f}]")
             lines.append(f"- 当前价格位置: {pos}")
-    if not lines[-1].startswith("- 日线中枢"):
-        lines.append(f"- 日线中枢: 未识别")
-    lines.append(f"- 走势类型: {trend_type or '未识别'}")
+    else:
+        lines.append("- 日线中枢: 未识别")
+        lines.append("- 关键结构价位待核验；不得称为无中枢震荡或已确认趋势，不得从概括状态推断买卖点")
+    lines.append(
+        f"- 走势类型{'（原始概括，结构未确认）' if not pivot_valid else ''}: "
+        f"{trend_type or '未识别'}"
+    )
     if key_signal:
         lines.append(f"- 关键信号: {key_signal}")
     if conclusion:
@@ -1307,18 +1321,31 @@ def _build_forecast_user_prompt(market_indices, chanlun_structure, sector_flow, 
     # --- 板块资金 ---
     lines.append("")
     lines.append("## 板块资金流向 TOP10")
-    pos_count = 0
-    for i, s in enumerate(sector_flow[:10]):
-        flow_val = s.get("flow", 0)
-        if flow_val > 0:
-            pos_count += 1
-        chg = s.get("change_pct", 0) or 0
-        sign = "+" if chg >= 0 else ""
-        lines.append(f"{i+1}. {s['name']}: 资金{'流入' if flow_val>=0 else '流出'}{abs(flow_val):.2f}亿, 涨跌{sign}{chg:.2f}%")
+    verified_sector_flow = [
+        row for row in (sector_flow or [])
+        if isinstance(row, dict)
+        and isinstance(row.get("flow"), (int, float, np.number))
+        and not isinstance(row.get("flow"), (bool, np.bool_))
+        and np.isfinite(row["flow"])
+    ]
+    if not verified_sector_flow:
+        lines.append("- 资金信息暂缺，不能推断无流入")
+        lines.append("板块广度: 未评估（0个可核验板块）")
+    else:
+        pos_count = 0
+        for i, s in enumerate(verified_sector_flow[:10]):
+            flow_val = s["flow"]
+            if flow_val > 0:
+                pos_count += 1
+            chg = s.get("change_pct", 0) or 0
+            sign = "+" if chg >= 0 else ""
+            lines.append(f"{i+1}. {s['name']}: 资金{'流入' if flow_val>=0 else '流出'}{abs(flow_val):.2f}亿, 涨跌{sign}{chg:.2f}%")
 
-    total = len(sector_flow) if sector_flow else 1
-    breadth = pos_count / total * 100
-    lines.append(f"\n板块广度: {pos_count}/{total}（{breadth:.0f}%）板块正流入")
+        total = len(verified_sector_flow)
+        breadth = pos_count / total * 100
+        lines.append(f"\n板块广度: {pos_count}/{total}（{breadth:.0f}%）板块正流入")
+        if total != len(sector_flow):
+            lines.append("- 其余板块资金未核验，不计入广度分母")
 
     # --- 热点事件 ---
     if events:

@@ -1,3 +1,4 @@
+import copy
 import os
 import subprocess
 import sys
@@ -143,22 +144,57 @@ class RuntimeCutoverTest(unittest.TestCase):
         )
 
     def test_active_universe_quality_uses_the_actual_published_pool(self):
+        # Match collect_daily_data + _apply_full_a_universe output: the old
+        # sector-pool counts are stale, while the actual active pool is healthy.
         quality = {
+            "report_date": "2026-07-16",
+            "as_of": "2026-07-16T15:05:00+08:00",
             "bar_state": "closed",
             "market_status": "verified",
+            "index_latest_date": "2026-07-16",
             "sources_trusted": True,
+            "sector_source": "eastmoney",
+            "stock_pool_source": "full_a_db+sector_overlay",
+            "fallback_used": False,
             "stock_pool_incomplete": False,
             "stale_stock_count": 3,
             "missing_daily_count": 63,
             "is_official": False,
+            "market_close_snapshot": {
+                "status": "complete",
+                "report_date": "2026-07-16",
+                "source": "db",
+                "coverage_numerator": 950,
+                "coverage_denominator": 1000,
+                "minimum_coverage": 0.90,
+                "meets_minimum_coverage": True,
+                "identity_pending_rows": 0,
+                "identity_pending_codes": [],
+            },
+            "universe_builder": {
+                "status": "activated",
+                "retrieval_mode": "base_plus_overlay",
+                "base_count": 1,
+                "overlay_count": 0,
+                "final_count": 1,
+            },
         }
         selected = [
             {
                 "code": "600000",
+                "asset_type": "stock",
+                "exchange": "SH",
+                "klines": {
+                    "dates": ["2026-07-16"],
+                    "adjustment": "qfq",
+                },
                 "data_status": {
                     "daily": "verified",
                     "latest_date": "2026-07-16",
                     "source": "market_history_db",
+                    "is_final": True,
+                    "stale": False,
+                    "adjustment": "qfq",
                 },
             }
         ]
@@ -176,6 +212,23 @@ class RuntimeCutoverTest(unittest.TestCase):
             "active_retrieval_pool",
             quality["official_pool_scope"],
         )
+
+        for daily, latest_date, stale_count, missing_count in (
+            ("verified", "2026-07-15", 1, 0),
+            ("missing", "", 0, 1),
+        ):
+            with self.subTest(daily=daily, latest_date=latest_date):
+                unhealthy_quality = copy.deepcopy(quality)
+                unhealthy_selected = copy.deepcopy(selected)
+                unhealthy_selected[0]["data_status"].update(
+                    daily=daily, latest_date=latest_date
+                )
+                _refresh_active_universe_quality(
+                    unhealthy_quality, unhealthy_selected, "2026-07-16"
+                )
+                self.assertEqual(stale_count, unhealthy_quality["stale_stock_count"])
+                self.assertEqual(missing_count, unhealthy_quality["missing_daily_count"])
+                self.assertFalse(unhealthy_quality["is_official"])
 
 
 if __name__ == "__main__":

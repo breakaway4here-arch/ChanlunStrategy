@@ -1,9 +1,12 @@
 import copy
 import json
+import tempfile
 import unittest
 from pathlib import Path
 
 
+from scripts import repair_strategy_scorecard_snapshot as repair
+from chanlun.kaipanla import parse_themes
 from scripts.repair_strategy_scorecard_snapshot import (
     _workspace_upstream_contract_violations,
     protected_report_digest,
@@ -25,6 +28,93 @@ class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
             "gates": [],
             "classification_failures": [],
         }
+
+    def test_staged_html_keeps_kpl_reason_crlf_and_detects_real_tamper(self):
+        report_date = "2026-09-29"
+        raw_stock = ["600241", "时代万恒"] + [""] * 15 + [
+            "涨停原因第一行\r\n涨停原因第二行"
+        ]
+        report = {
+            "date": report_date,
+            "picks_pure": [],
+            "workspace": {"views": {"main": [], "h4_t3": []}},
+            "strategy_scorecards": self._empty_scorecards(),
+            "diagnostics": {
+                "strategy_review": {"status": "ok"},
+                "recommendation_ledger": {"status": "finalized"},
+            },
+            "kaipanla_context": parse_themes({
+                "errcode": "0", "date": report_date,
+                "list": [{"ZSCode": "801000", "ZSName": "当日题材",
+                          "StockList": [raw_stock]}],
+            }, report_date),
+        }
+        self.assertEqual(report["kaipanla_context"]["status"], "available")
+        formal_sha = repair.atomic.formal_report_digest(report)
+        report["shadow_evaluations"] = {"production_guard": {
+            "unchanged": True,
+            "before_sha256": formal_sha,
+            "after_sha256": formal_sha,
+        }}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            docs = Path(temp_dir) / "docs"
+            (docs / "data").mkdir(parents=True)
+            (docs / report_date).mkdir()
+            (docs / "data" / "index.json").write_text("{}", encoding="utf-8")
+            (docs / "data" / "comparison-index.json").write_text(
+                json.dumps({"reports": {report_date: {"views": {
+                    "main": [], "h4_t3": [],
+                }}}}), encoding="utf-8",
+            )
+            (docs / "data" / (report_date + ".json")).write_text(
+                json.dumps(report, ensure_ascii=False), encoding="utf-8",
+            )
+            (docs / "data.json").write_text(
+                json.dumps({"reports": {report_date: report}}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+            repair.copy_report_assets(str(docs))
+            for name, relative, prefix in (
+                ("inline", "index.html", ""),
+                ("archive", report_date + "/index.html", "../"),
+            ):
+                html = repair._build_report_v2_html(
+                    report_date,
+                    repair._escape_inline_json({"inlineReportData": report}),
+                    asset_prefix=prefix,
+                    asset_version=repair._report_asset_version(),
+                )
+                (docs / relative).write_bytes(html.encode("utf-8"))
+                self.assertIn(b"\r\n", (docs / relative).read_bytes(), name)
+
+            names = ("daily", "aggregate", "inline", "archive")
+            planes = repair._validate_staged_artifacts(
+                docs, report_date,
+                {name: repair.protected_report_digest(report) for name in names},
+                {name: repair.workspace_selection_projection(report) for name in names},
+                {name: set() for name in names},
+                report["strategy_scorecards"],
+                report["diagnostics"]["strategy_review"],
+                report["diagnostics"]["recommendation_ledger"],
+                {},
+            )
+            self.assertEqual(planes["daily"]["kaipanla_context"], report["kaipanla_context"])
+
+            archive = docs / report_date / "index.html"
+            archive.write_bytes(archive.read_bytes().replace(
+                "涨停原因第二行".encode("utf-8"), "伪造原因第二行".encode("utf-8"), 1,
+            ))
+            with self.assertRaisesRegex(RuntimeError, "HTML mismatch: archive"):
+                repair._validate_staged_artifacts(
+                    docs, report_date,
+                    {name: repair.protected_report_digest(report) for name in names},
+                    {name: repair.workspace_selection_projection(report) for name in names},
+                    {name: set() for name in names},
+                    report["strategy_scorecards"],
+                    report["diagnostics"]["strategy_review"],
+                    report["diagnostics"]["recommendation_ledger"],
+                    {},
+                )
 
     def _rebuild(self, report):
         return rebuild_strategy_scorecard_report(

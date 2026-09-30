@@ -3160,8 +3160,10 @@ def collect_daily_data(
     warnings = []
     fallback_used = False
     sectors = fetch_sector_flow(TOP_SECTOR_COUNT)
+    component_lookup_sectors = sectors
     if not sectors:
-        # API 不可用时（如周末），使用热门板块兜底
+        # Historical sector identifiers can aid component lookup, but have no
+        # current-day fund-flow ranking or amount evidence.
         FALLBACK_SECTORS = [
             ("BK0480", "人工智能"), ("BK0477", "汽车零部件"), ("BK0473", "新能源车"),
             ("BK0476", "半导体"), ("BK0479", "机器人概念"), ("BK0481", "算力概念"),
@@ -3171,12 +3173,13 @@ def collect_daily_data(
             ("BK0472", "光学光电子"), ("BK0459", "国防军工"), ("BK0485", "化学制药"),
             ("BK0474", "光伏概念"), ("BK0447", "建筑装饰"),
         ]
-        sectors = [{"code": c, "name": n, "change_pct": 0, "flow": 0, "flow_str": "0"}
-                   for c, n in FALLBACK_SECTORS]
+        component_lookup_sectors = [
+            {"code": code, "name": name} for code, name in FALLBACK_SECTORS
+        ]
         used_fallback_sector_source = True
         fallback_used = True
-        warnings.append("板块资金流向接口不可用，使用静态TOP20板块兜底")
-        print(f"  板块API超时，使用兜底 {len(sectors)} 个板块")
+        warnings.append("板块资金流向接口不可用；静态板块代码仅供成分检索，资金排名缺失")
+        print(f"  板块资金不可用，尝试 {len(component_lookup_sectors)} 个静态成分入口")
     else:
         print(f"  获取到 {len(sectors)} 个板块")
     for s in sectors[:5]:
@@ -3190,7 +3193,7 @@ def collect_daily_data(
     stock_pool_incomplete = False
     sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
     stock_pool_source = "sector_components"
-    for sector_rank, sector in enumerate(sectors, start=1):
+    for sector_rank, sector in enumerate(component_lookup_sectors, start=1):
         stocks, component_diagnostics = fetch_sector_stocks(
             sector["code"], return_diagnostics=True
         )
@@ -3220,7 +3223,7 @@ def collect_daily_data(
             # 连续 5 个板块全部失败 → 代理大概率已挂，直接放弃剩余请求
             if consecutive_failures >= 5:
                 print(f"  连续 {consecutive_failures} 个板块API失败，跳过剩余板块")
-                remaining_sectors = sectors[sector_rank:]
+                remaining_sectors = component_lookup_sectors[sector_rank:]
                 for skipped_sector in remaining_sectors:
                     sector_component_diagnostics.append({
                         "sector_code": skipped_sector["code"],
@@ -3253,7 +3256,7 @@ def collect_daily_data(
                     sector.get("sector_strength_label")
                     or sector.get("strength_label")
                     or f"资金流入TOP{sector_rank}"
-                )
+                ) if not used_fallback_sector_source else ""
                 stock_map[code] = {
                     "code": code,
                     "name": st.get("name", ""),
@@ -3261,8 +3264,12 @@ def collect_daily_data(
                     "raw_current_price": st.get("close"),
                     "sector": sector["name"],
                     "sector_tags": [sector["name"]],
-                    "sector_rank": sector_rank,
-                    "sector_flow": sector.get("flow"),
+                    "sector_rank": (
+                        sector_rank if not used_fallback_sector_source else None
+                    ),
+                    "sector_flow": (
+                        sector.get("flow") if not used_fallback_sector_source else None
+                    ),
                     "sector_strength_label": sector_strength_label,
                     "market_cap": st.get("market_cap"),
                     "circulating_market_cap": st.get("circulating_market_cap"),
@@ -3273,7 +3280,7 @@ def collect_daily_data(
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
 
     expected_sector_codes = [
-        str(sector.get("code") or "") for sector in sectors
+        str(sector.get("code") or "") for sector in component_lookup_sectors
     ]
     complete_empty_sector_pool = bool(
         expected_sector_codes
@@ -3395,7 +3402,7 @@ def collect_daily_data(
         print(f"  [PREVIEW] 上证指数未校验，继续生成预览: {index_error}")
     print(f"  上证数据: {len(sh_kline['closes']) if sh_kline else 0} 根K线")
 
-    if not sectors:
+    if not sectors and not used_fallback_sector_source:
         sector_source = "empty"
 
     report_date = required_date or ""
@@ -3440,6 +3447,7 @@ def collect_daily_data(
         ),
         "sources_trusted": sources_trusted,
         "market_status": "verified" if sh_kline else "unverified",
+        "index_latest_date": _latest_date(sh_kline),
         "stock_pool_source": stock_pool_source,
         "sector_source": sector_source,
         "stale_stock_count": stale_stock_count,

@@ -14,6 +14,10 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from run import fetch_market_indices  # noqa: E402
+from chanlun.data_fetcher import _TRUSTED_STOCK_KLINE_SOURCES  # noqa: E402
+from chanlun.industry_metadata import _is_a_share_identity  # noqa: E402
+from chanlun.identity import normalize_identity  # noqa: E402
+from chanlun.market_close_snapshot import VERIFIED_INDEPENDENT_CLOSE_BATCHES  # noqa: E402
 from chanlun.pool_contract import (  # noqa: E402
     resolve_list_pool,
     resolve_nested_strategy_pool,
@@ -24,6 +28,11 @@ from chanlun.strategy_review import (  # noqa: E402
 from typing import Any, Optional
 
 TZ_CN = timezone(timedelta(hours=8))
+VERIFIED_INDEX_RESULT_SOURCES = frozenset({
+    "tencent", "tencent_plain", "eastmoney", "sina_daily", "sina_quote",
+    "sina_daily+sina_quote",
+})
+VERIFIED_CLOSE_QUOTE_SOURCES = frozenset({"eastmoney", "sina", "tencent"})
 COMPARISON_VIEWS = {
     "main", "h4_t3", "highlights", "observation_top5", "acceleration",
     "luojie", "confirming", "growth_quality", "baseline",
@@ -985,6 +994,241 @@ def _luojie_unavailable_contract_is_safe(
     )
 
 
+def _verified_active_sector_degradation(report, quality):
+    """Permit a missing sector card only when the active market path is attested."""
+    report_date = report.get("date")
+    if not _is_date_text(report_date):
+        return False
+    runtime = _as_mapping(quality.get("runtime_policy"))
+    universe = _as_mapping(quality.get("universe_builder"))
+    snapshot = _as_mapping(quality.get("market_close_snapshot"))
+    selection = _as_mapping(report.get("selection_input_health"))
+    formal = _as_mapping(selection.get("formal"))
+    by_strategy = _as_mapping(selection.get("by_strategy"))
+    funnel = _as_mapping(_as_mapping(report.get("diagnostics")).get("candidate_funnel"))
+    stages = _as_mapping(funnel.get("stage_counts"))
+    sh_index = _as_mapping(_as_mapping(report.get("market")).get("上证指数"))
+    index_close = sh_index.get("close")
+    if not (
+        quality.get("report_date") == report_date
+        and quality.get("bar_state") == "closed"
+        and quality.get("market_status") == "verified"
+        and quality.get("sources_trusted") is True
+        and quality.get("sector_source") == "fallback_static"
+        and quality.get("sector_data_status") == "unavailable"
+        and quality.get("fallback_used") is True
+        and type(quality.get("stock_pool_incomplete")) is bool
+        and quality.get("stock_pool_source") == "full_a_db+expanded_base"
+        and quality.get("official_pool_scope") == "active_retrieval_pool"
+        and quality.get("index_latest_date") == report_date
+        and type(quality.get("stale_stock_count")) is int
+        and quality.get("stale_stock_count") == 0
+        and type(quality.get("missing_daily_count")) is int
+        and quality.get("missing_daily_count") == 0
+        and isinstance(report.get("sector_flow"), list)
+        and not report["sector_flow"]
+        and runtime.get("market_history_cutover_mode") == "sqlite"
+        and runtime.get("recall_strategy_mode") == "active"
+        and universe.get("status") == "activated"
+        and universe.get("retrieval_mode") == "base_expanded_no_overlay"
+        and type(universe.get("final_count")) is int
+        and type(universe.get("base_count")) is int
+        and universe["final_count"] > 0
+        and universe["base_count"] == universe["final_count"]
+        and type(universe.get("overlay_count")) is int
+        and universe.get("overlay_count") == 0
+        and funnel.get("persist_status") == "saved"
+        and funnel.get("report_date") == report_date
+        and type(stages.get("retrieval")) is int
+        and stages["retrieval"] == universe["final_count"]
+        and sh_index.get("date") == report_date
+        and sh_index.get("source") in VERIFIED_INDEX_RESULT_SOURCES
+        and isinstance(index_close, (int, float))
+        and not isinstance(index_close, bool)
+        and math.isfinite(index_close) and index_close > 0
+        and selection.get("required_date") == report_date
+        and formal.get("required_date") == report_date
+        and formal.get("status") == "verified"
+        and formal.get("formal_actions_allowed") is True
+        and type(formal.get("invalid_count")) is int
+        and formal.get("invalid_count") == 0
+        and all(
+            _as_mapping(by_strategy.get(name)).get("status") == "verified"
+            and _as_mapping(by_strategy.get(name)).get("formal_actions_allowed") is True
+            for name in ("daily_fusion", "h4_t3")
+        )
+        and selection.get("market_close_snapshot") == snapshot
+        and formal.get("market_close_snapshot") == snapshot
+    ):
+        return False
+
+    numerator = snapshot.get("coverage_numerator")
+    denominator = snapshot.get("coverage_denominator")
+    pending = snapshot.get("identity_pending_rows")
+    minimum = snapshot.get("minimum_coverage")
+    if not (
+        snapshot.get("report_date") == report_date
+        and snapshot.get("status") in {"complete", "partial"}
+        and type(numerator) is int and type(denominator) is int
+        and type(pending) is int and denominator > 0
+        and 0 <= numerator <= denominator and 0 <= pending
+        and numerator + pending <= denominator
+        and isinstance(minimum, (int, float)) and not isinstance(minimum, bool)
+        and math.isfinite(minimum) and 0.90 <= minimum <= 1.0
+        and numerator / denominator >= minimum
+        and snapshot.get("meets_minimum_coverage") is True
+    ):
+        return False
+    pending_codes = snapshot.get("identity_pending_codes")
+    if not (
+        isinstance(pending_codes, list)
+        and all(isinstance(code, str) and code.isdigit() and len(code) == 6
+                for code in pending_codes)
+        and len(set(pending_codes)) == pending
+    ):
+        return False
+    if snapshot["status"] == "complete":
+        if pending or pending_codes:
+            return False
+    elif snapshot.get("reason") != "identity_migration_pending" or pending == 0:
+        return False
+    if snapshot.get("source") != "db":
+        quote_sources = snapshot.get("quote_sources")
+        if not isinstance(quote_sources, Mapping) or not quote_sources:
+            return False
+        if any(
+            source not in VERIFIED_CLOSE_QUOTE_SOURCES or not _is_count(count)
+            for source, count in quote_sources.items()
+        ):
+            return False
+        preserved_count = snapshot.get("preserved_independent_final_count", 0)
+        preserved_rows = snapshot.get("preserved_independent_final_rows", [])
+        if (
+            not _is_count(preserved_count)
+            or not isinstance(preserved_rows, list)
+            or len(preserved_rows) != preserved_count
+            or sum(quote_sources.values()) + preserved_count != numerator
+        ):
+            return False
+        if preserved_count:
+            quote_identities = snapshot.get("quote_identity_keys")
+            if (
+                not isinstance(quote_identities, list)
+                or len(quote_identities) != sum(quote_sources.values())
+                or not all(isinstance(key, str) for key in quote_identities)
+                or len(set(quote_identities)) != len(quote_identities)
+            ):
+                return False
+            for key in quote_identities:
+                parts = key.split("|")
+                if len(parts) != 3:
+                    return False
+                try:
+                    quote_identity = normalize_identity({
+                        "asset_type": parts[0], "exchange": parts[1],
+                        "code": parts[2],
+                    })
+                except (TypeError, ValueError, AttributeError):
+                    return False
+                if (
+                    quote_identity.asset_type != "stock"
+                    or quote_identity.key != key
+                    or not _is_a_share_identity(quote_identity.as_dict())
+                ):
+                    return False
+            preserved_identities = set()
+            for row in preserved_rows:
+                if not isinstance(row, Mapping):
+                    return False
+                try:
+                    identity = normalize_identity(row)
+                except (TypeError, ValueError, AttributeError):
+                    return False
+                if (
+                    identity.asset_type != "stock"
+                    or not _is_a_share_identity(row)
+                    or row.get("identity_key") != identity.key
+                    or row.get("asset_type") != identity.asset_type
+                    or row.get("exchange") != identity.exchange
+                    or row.get("code") != identity.code
+                    or row.get("date") != report_date
+                    or row.get("source_batch") not in VERIFIED_INDEPENDENT_CLOSE_BATCHES
+                    or row.get("adjustment") != "qfq"
+                    or row.get("is_final") is not True
+                    or identity.key in preserved_identities
+                ):
+                    return False
+                preserved_identities.add(identity.key)
+            if preserved_identities.intersection(quote_identities):
+                return False
+        elif snapshot.get("quote_identity_keys") not in (None, []):
+            return False
+    elif snapshot.get("preserved_independent_final_count", 0) != 0 or snapshot.get(
+        "preserved_independent_final_rows", []
+    ) not in ([], None):
+        return False
+
+    minute = _as_mapping(_as_mapping(selection.get("sublevels")).get("30m"))
+    requested = minute.get("requested_count")
+    verified = minute.get("verified_count")
+    missing = minute.get("missing_count")
+    verified_codes = minute.get("verified_codes")
+    missing_codes = minute.get("missing_codes")
+    failure_evidence = minute.get("failure_evidence") or {}
+    if not (
+        minute.get("interval") == "30m"
+        and minute.get("required_date") == report_date
+        and all(_is_count(value) for value in (requested, verified, missing))
+        and requested == verified + missing
+        and isinstance(verified_codes, list)
+        and isinstance(missing_codes, list)
+        and all(isinstance(code, str) and code.isdigit() and len(code) == 6
+                for code in verified_codes + missing_codes)
+        and len(set(verified_codes)) == verified
+        and len(set(missing_codes)) == missing
+        and not set(verified_codes).intersection(missing_codes)
+        and isinstance(failure_evidence, Mapping)
+        and set(failure_evidence).issubset(missing_codes)
+        and minute.get("blocks_strategy_output") is False
+        and (
+            (requested == 0 and minute.get("status") == "not_required")
+            or (requested > 0 and verified > 0 and minute.get("status") in {"partial", "verified"})
+        )
+    ):
+        return False
+    minute30_pass = stages.get("minute30", 0)
+    if not _is_count(minute30_pass) or minute30_pass > verified:
+        return False
+
+    forecast_text = json.dumps(
+        _as_mapping(report.get("forecast")), ensure_ascii=False
+    )
+    if any(claim in forecast_text for claim in (
+        "板块资金全为0", "板块正流入为0/", "板块正流入0/",
+    )):
+        return False
+
+    for pool in ("picks_pure", "picks_fusion"):
+        for row in _resolve_candidate_candidates(report, pool):
+            status = _as_mapping(_as_mapping(row).get("data_status"))
+            try:
+                identity = normalize_identity(row)
+            except (TypeError, ValueError, AttributeError):
+                return False
+            if (
+                identity.asset_type != "stock"
+                or (row.get("identity_key") and row["identity_key"] != identity.key)
+                or status.get("daily") != "verified"
+                or status.get("latest_date") != report_date
+                or status.get("source") not in _TRUSTED_STOCK_KLINE_SOURCES
+                or status.get("adjustment") != "qfq"
+                or status.get("is_final") is not True
+                or status.get("stale") is True
+            ):
+                return False
+    return True
+
+
 def validate_report_contract(
     report: Mapping[str, Any], require_official: bool = False
 ) -> list[str]:
@@ -1113,9 +1357,23 @@ def validate_report_contract(
             errors.append("official report data_quality.as_of must be at or after 15:00 Asia/Shanghai")
         if data_quality.get("market_status") != "verified":
             errors.append("official report requires data_quality.market_status == 'verified'")
-        if data_quality.get("fallback_used") is not False:
+        sector_source = str(data_quality.get("sector_source") or "").strip()
+        sector_claim_needs_proof = bool(
+            (sector_source and sector_source != "eastmoney")
+            or data_quality.get("sector_data_status") in {"unavailable", "unknown"}
+        )
+        sector_degradation_verified = _verified_active_sector_degradation(
+            report, data_quality
+        ) if (
+            data_quality.get("fallback_used") is True
+            or data_quality.get("stock_pool_incomplete") is True
+            or sector_claim_needs_proof
+        ) else False
+        if sector_claim_needs_proof and not sector_degradation_verified:
+            errors.append("official report sector fallback lacks verified active full-A evidence")
+        if data_quality.get("fallback_used") is not False and not sector_degradation_verified:
             errors.append("official report requires data_quality.fallback_used == False")
-        if data_quality.get("stock_pool_incomplete") is not False:
+        if data_quality.get("stock_pool_incomplete") is not False and not sector_degradation_verified:
             errors.append("official report requires data_quality.stock_pool_incomplete == False")
         if _coerce_int(data_quality.get("stale_stock_count"), default=-1) != 0:
             errors.append("official report requires data_quality.stale_stock_count == 0")

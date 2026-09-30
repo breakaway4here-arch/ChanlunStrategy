@@ -120,6 +120,380 @@ class MarketCloseSnapshotTests(unittest.TestCase):
         # OHLC must be converted by the same factor before entering bars_day.
         self.assertEqual(record["close"], 5.1)
 
+    def test_missing_previous_trading_day_never_scales_from_older_close(self):
+        # Frozen 9/29 case: 9/24 qfq close 16.05 is not the 9/28 close
+        # represented by the 9/29 Sina quote's prev_close=15.98.
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-09-24", "open": 16.02, "high": 16.11,
+                "low": 15.94, "close": 16.05, "volume": 100,
+                "amount": 160000, "adjustment": "qfq", "is_final": True,
+            }])
+        quote = _row("600062", "SH")
+        quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY", volume_raw_unit="shares",
+        )
+        result = ingest_market_close_snapshot(
+            self.path,
+            "2026-09-29",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [quote], {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "insufficient_coverage")
+        self.assertEqual(result["skipped_missing_factor"], 1)
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            current = store.connection.execute(
+                "SELECT COUNT(*) FROM bars_day WHERE ts='2026-09-29'"
+            ).fetchone()[0]
+        self.assertEqual(current, 0)
+
+    def test_exact_previous_trading_day_uses_that_close_not_older_history(self):
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            for date, close in (("2026-09-24", 16.05), ("2026-09-28", 15.98)):
+                store.upsert_bars("day", instrument_id, [{
+                    "ts": date, "open": close, "high": close,
+                    "low": close, "close": close, "volume": 100,
+                    "amount": 100000, "adjustment": "qfq", "is_final": True,
+                }])
+        quote = _row("600062", "SH")
+        quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY", volume_raw_unit="shares",
+        )
+        result = ingest_market_close_snapshot(
+            self.path,
+            "2026-09-29",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [quote], {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["previous_trade_date"], "2026-09-28")
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            current = store.connection.execute(
+                "SELECT open, high, low, close, volume, amount, "
+                "volume_raw_unit, source_batch FROM bars_day WHERE ts='2026-09-29'"
+            ).fetchone()
+        self.assertEqual(tuple(current), (
+            15.90, 16.08, 15.86, 15.92, 37976.88, 60530546.0,
+            "shares", "official_close_snapshot:sina",
+        ))
+
+    def test_unknown_calendar_year_does_not_treat_unknown_weekdays_as_holidays(self):
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-12-31", "open": 10, "high": 10,
+                "low": 10, "close": 10, "volume": 100,
+                "amount": 100000, "adjustment": "qfq", "is_final": True,
+            }])
+        result = ingest_market_close_snapshot(
+            self.path,
+            "2027-01-05",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [_row("600062", "SH")],
+                {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2027, 1, 5, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "insufficient_coverage")
+        self.assertEqual(result["previous_trade_date"], "")
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            current = store.connection.execute(
+                "SELECT COUNT(*) FROM bars_day WHERE ts='2027-01-05'"
+            ).fetchone()[0]
+        self.assertEqual(current, 0)
+
+    def test_known_holiday_gap_keeps_exact_previous_trading_day(self):
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-09-24", "open": 16.02, "high": 16.11,
+                "low": 15.94, "close": 16.05, "volume": 100,
+                "amount": 160000, "adjustment": "qfq", "is_final": True,
+            }])
+        quote = _row("600062", "SH")
+        quote.update(
+            open=16.14, high=16.18, low=15.91, current_price=15.98,
+            prev_close=16.05, volume=45135, amount=72000000,
+            quote_source="sina", quote_asof="2026-09-28T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY",
+        )
+        result = ingest_market_close_snapshot(
+            self.path,
+            "2026-09-28",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [quote], {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2026, 9, 28, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["previous_trade_date"], "2026-09-24")
+        self.assertEqual(result["status"], "complete")
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            close = store.connection.execute(
+                "SELECT close FROM bars_day WHERE ts='2026-09-28'"
+            ).fetchone()[0]
+        self.assertEqual(close, 15.98)
+
+    def test_explicit_future_calendar_can_supply_previous_trading_day(self):
+        with MarketHistoryStore(self.path) as store:
+            for exchange in ("SH", "SZ"):
+                store.upsert_trade_calendar(exchange, "2027-01-04", True)
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2027-01-04", "open": 10, "high": 10,
+                "low": 10, "close": 10, "volume": 100,
+                "amount": 100000, "adjustment": "qfq", "is_final": True,
+            }])
+        result = ingest_market_close_snapshot(
+            self.path,
+            "2027-01-05",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [_row("600062", "SH")],
+                {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2027, 1, 5, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["previous_trade_date"], "2027-01-04")
+        self.assertEqual(result["status"], "complete")
+
+    def test_cached_final_snapshot_is_rechecked_after_prior_day_is_restored(self):
+        quote = _row("600062", "SH")
+        quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY", volume_raw_unit="shares",
+        )
+        stale_factor = 16.05 / 15.98
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            for date, close in (("2026-09-24", 16.05), ("2026-09-28", 15.98)):
+                store.upsert_bars("day", instrument_id, [{
+                    "ts": date, "open": close, "high": close,
+                    "low": close, "close": close, "volume": 100,
+                    "amount": 100000, "adjustment": "qfq", "is_final": True,
+                }])
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-09-29", "open": 15.90 * stale_factor,
+                "high": 16.08 * stale_factor, "low": 15.86 * stale_factor,
+                "close": 15.92 * stale_factor, "volume": 37976.88,
+                "amount": 60530546.0, "adjustment": "qfq", "is_final": True,
+                "source_batch": "official_close_snapshot:sina",
+            }])
+        calls = []
+
+        def frozen_quotes(**_kwargs):
+            calls.append(True)
+            return [quote], {"complete": True, "requested": 1, "unique": 1}
+
+        result = ingest_market_close_snapshot(
+            self.path, "2026-09-29", frozen_quotes,
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(calls, [True])
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["previous_trade_date"], "2026-09-28")
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            close = store.connection.execute(
+                "SELECT close FROM bars_day WHERE ts='2026-09-29'"
+            ).fetchone()[0]
+        self.assertEqual(close, 15.92)
+        again = ingest_market_close_snapshot(
+            self.path, "2026-09-29", frozen_quotes,
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(calls, [True, True])
+        self.assertTrue(again["rechecked_cached_snapshot"])
+        self.assertEqual(again["written"], 0)
+
+    def test_cached_final_snapshot_without_exact_prior_day_cannot_fast_pass(self):
+        with MarketHistoryStore(self.path) as store:
+            instrument_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-09-24", "open": 16.05, "high": 16.05,
+                "low": 16.05, "close": 16.05, "volume": 100,
+                "amount": 100000, "adjustment": "qfq", "is_final": True,
+            }])
+            store.upsert_bars("day", instrument_id, [{
+                "ts": "2026-09-29", "open": 15.9696495619524,
+                "high": 16.1504380475594, "low": 15.9294743429287,
+                "close": 15.9897371714643, "volume": 37976.88,
+                "amount": 60530546.0, "adjustment": "qfq", "is_final": True,
+                "source_batch": "official_close_snapshot:sina",
+            }])
+        quote = _row("600062", "SH")
+        quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY",
+        )
+        result = ingest_market_close_snapshot(
+            self.path, "2026-09-29",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                [quote], {"complete": True, "requested": 1, "unique": 1},
+            ),
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(result["reason"], "cached_snapshot_unverified")
+        self.assertTrue(result["rechecked_cached_snapshot"])
+        self.assertEqual(result["skipped_missing_factor"], 1)
+        self.assertEqual(result["written"], 0)
+
+    def test_rechecking_snapshot_preserves_independent_current_qfq_bar(self):
+        with MarketHistoryStore(self.path) as store:
+            snapshot_id = store.upsert_instrument("stock", "SH", "600062")
+            direct_id = store.upsert_instrument("stock", "SZ", "000001")
+            kpl_id = store.upsert_instrument("stock", "SZ", "000002")
+            for instrument_id, close in (
+                (snapshot_id, 15.98), (direct_id, 10.0), (kpl_id, 8.0)
+            ):
+                store.upsert_bars("day", instrument_id, [{
+                    "ts": "2026-09-28", "open": close, "high": close,
+                    "low": close, "close": close, "volume": 100,
+                    "amount": 100000, "adjustment": "qfq", "is_final": True,
+                }])
+            store.upsert_bars("day", snapshot_id, [{
+                "ts": "2026-09-29", "open": 15.9696495619524,
+                "high": 16.1504380475594, "low": 15.9294743429287,
+                "close": 15.9897371714643, "volume": 37976.88,
+                "amount": 60530546.0, "adjustment": "qfq", "is_final": True,
+                "source_batch": "official_close_snapshot:sina",
+            }])
+            store.upsert_bars("day", direct_id, [{
+                "ts": "2026-09-29", "open": 10, "high": 10.3,
+                "low": 9.9, "close": 10.2, "volume": 12345,
+                "amount": 12600000, "adjustment": "qfq", "is_final": True,
+                "source_batch": "ongoing:tencent",
+            }])
+            store.upsert_bars("day", kpl_id, [{
+                "ts": "2026-09-29", "open": 8, "high": 8.2,
+                "low": 7.9, "close": 8.1, "volume": 10000,
+                "amount": 8100000, "adjustment": "qfq", "is_final": True,
+                "source_batch": "ongoing:kaipanla",
+            }])
+        quote = _row("600062", "SH")
+        quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY",
+        )
+        rows = [quote, _row("000001", "SZ"), _row("000002", "SZ")]
+        result = ingest_market_close_snapshot(
+            self.path, "2026-09-29",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                rows, {"complete": True, "requested": 3, "unique": 3},
+            ),
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "complete")
+        self.assertEqual(result["coverage_numerator"], 3)
+        self.assertEqual(result["quote_sources"], {"sina": 1})
+        self.assertEqual(result["quote_identity_keys"], ["stock|SH|600062"])
+        self.assertEqual(result["preserved_independent_final_count"], 2)
+        self.assertEqual(result["preserved_independent_final_rows"], [{
+            "identity_key": "stock|SZ|000001",
+            "asset_type": "stock", "exchange": "SZ", "code": "000001",
+            "date": "2026-09-29", "source_batch": "ongoing:tencent",
+            "adjustment": "qfq", "is_final": True,
+        }, {
+            "identity_key": "stock|SZ|000002",
+            "asset_type": "stock", "exchange": "SZ", "code": "000002",
+            "date": "2026-09-29", "source_batch": "ongoing:kaipanla",
+            "adjustment": "qfq", "is_final": True,
+        }])
+        with MarketHistoryStore(self.path, readonly=True) as store:
+            values = store.connection.execute(
+                "SELECT i.code, b.close, b.source_batch FROM bars_day b "
+                "JOIN instruments i ON i.instrument_id=b.instrument_id "
+                "WHERE b.ts='2026-09-29' ORDER BY i.code"
+            ).fetchall()
+        self.assertEqual([tuple(row) for row in values], [
+            ("000001", 10.2, "ongoing:tencent"),
+            ("000002", 8.1, "ongoing:kaipanla"),
+            ("600062", 15.92, "official_close_snapshot:sina"),
+        ])
+
+    def test_one_unverified_cached_snapshot_cannot_hide_behind_healthy_coverage(self):
+        rows = [_row("600%03d" % index, "SH") for index in range(9)]
+        bad_quote = _row("600062", "SH")
+        bad_quote.update(
+            open=15.90, high=16.08, low=15.86, current_price=15.92,
+            prev_close=15.98, volume=37976.88, amount=60530546.0,
+            quote_source="sina", quote_asof="2026-09-29T15:00:00+08:00",
+            volume_unit="hands", amount_unit="CNY",
+        )
+        rows.append(bad_quote)
+        with MarketHistoryStore(self.path) as store:
+            for row in rows[:9]:
+                instrument_id = store.upsert_instrument("stock", "SH", row["code"])
+                store.upsert_bars("day", instrument_id, [{
+                    "ts": "2026-09-29", "open": 10, "high": 10.3,
+                    "low": 9.9, "close": 10.2, "volume": 12345,
+                    "amount": 12600000, "adjustment": "qfq", "is_final": True,
+                    "source_batch": "ongoing:tencent",
+                }])
+            bad_id = store.upsert_instrument("stock", "SH", "600062")
+            store.upsert_bars("day", bad_id, [{
+                "ts": "2026-09-24", "open": 16.05, "high": 16.05,
+                "low": 16.05, "close": 16.05, "volume": 100,
+                "amount": 100000, "adjustment": "qfq", "is_final": True,
+            }])
+            store.upsert_bars("day", bad_id, [{
+                "ts": "2026-09-29", "open": 15.9696495619524,
+                "high": 16.1504380475594, "low": 15.9294743429287,
+                "close": 15.9897371714643, "volume": 37976.88,
+                "amount": 60530546.0, "adjustment": "qfq", "is_final": True,
+                "source_batch": "official_close_snapshot:sina",
+            }])
+        result = ingest_market_close_snapshot(
+            self.path, "2026-09-29",
+            fetch_all_a_stocks=lambda **_kwargs: (
+                rows, {"complete": True, "requested": 10, "unique": 10},
+            ),
+            generated_at=datetime(
+                2026, 9, 29, 15, 20, tzinfo=timezone(timedelta(hours=8))
+            ),
+        )
+        self.assertEqual(result["status"], "incomplete")
+        self.assertEqual(result["reason"], "cached_snapshot_unverified")
+        self.assertEqual(result["cached_snapshot_unverified_count"], 1)
+        self.assertEqual(result["coverage_numerator"], 9)
+        self.assertEqual(result["coverage_denominator"], 10)
+        self.assertEqual(result["valid_bar_count"], 9)
+        self.assertEqual(result["written"], 0)
+
     def test_incomplete_universe_fails_closed_without_writes(self):
         result = ingest_market_close_snapshot(
             self.path,
@@ -194,6 +568,7 @@ class MarketCloseSnapshotTests(unittest.TestCase):
                 "ts": "2026-07-17", "open": 10, "high": 10, "low": 10,
                 "close": 10, "volume": 1, "amount": 1000,
                 "adjustment": "qfq", "is_final": True,
+                "source_batch": "ongoing:tencent",
             }])
         calls = []
         result = ingest_market_close_snapshot(
