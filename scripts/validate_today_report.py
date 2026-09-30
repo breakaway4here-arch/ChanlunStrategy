@@ -1009,13 +1009,53 @@ def _verified_active_sector_degradation(report, quality):
     stages = _as_mapping(funnel.get("stage_counts"))
     sh_index = _as_mapping(_as_mapping(report.get("market")).get("上证指数"))
     index_close = sh_index.get("close")
+    sector_source = quality.get("sector_source")
+    sector_flow = report.get("sector_flow")
+    component_diagnostics = quality.get("sector_component_diagnostics")
+    static_sector_gap = bool(
+        sector_source == "fallback_static"
+        and quality.get("sector_data_status") == "unavailable"
+        and isinstance(sector_flow, list)
+        and not sector_flow
+    )
+    component_gap = bool(
+        sector_source == "eastmoney"
+        and quality.get("sector_data_status") == "verified"
+        and quality.get("fallback_used") is True
+        and quality.get("stock_pool_incomplete") is True
+        and isinstance(sector_flow, list)
+        and sector_flow
+        and all(
+            isinstance(row, Mapping)
+            and isinstance(row.get("code"), str)
+            and bool(row["code"])
+            and isinstance(row.get("flow"), (int, float))
+            and not isinstance(row.get("flow"), bool)
+            and math.isfinite(row["flow"])
+            for row in sector_flow
+        )
+        and isinstance(component_diagnostics, list)
+        and component_diagnostics
+        and all(
+            isinstance(item, Mapping)
+            and isinstance(item.get("sector_code"), str)
+            and bool(item["sector_code"])
+            and type(item.get("complete")) is bool
+            for item in component_diagnostics
+        )
+        and len({item["sector_code"] for item in component_diagnostics})
+            == len(component_diagnostics)
+        and {row["code"] for row in sector_flow}.issubset(
+            {item["sector_code"] for item in component_diagnostics}
+        )
+        and any(item["complete"] is False for item in component_diagnostics)
+    )
     if not (
         quality.get("report_date") == report_date
         and quality.get("bar_state") == "closed"
         and quality.get("market_status") == "verified"
         and quality.get("sources_trusted") is True
-        and quality.get("sector_source") == "fallback_static"
-        and quality.get("sector_data_status") == "unavailable"
+        and (static_sector_gap or component_gap)
         and quality.get("fallback_used") is True
         and type(quality.get("stock_pool_incomplete")) is bool
         and quality.get("stock_pool_source") == "full_a_db+expanded_base"
@@ -1025,8 +1065,6 @@ def _verified_active_sector_degradation(report, quality):
         and quality.get("stale_stock_count") == 0
         and type(quality.get("missing_daily_count")) is int
         and quality.get("missing_daily_count") == 0
-        and isinstance(report.get("sector_flow"), list)
-        and not report["sector_flow"]
         and runtime.get("market_history_cutover_mode") == "sqlite"
         and runtime.get("recall_strategy_mode") == "active"
         and universe.get("status") == "activated"

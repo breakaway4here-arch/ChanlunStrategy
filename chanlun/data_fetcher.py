@@ -3315,11 +3315,12 @@ def collect_daily_data(
                 }
             if stock_map:
                 print(
-                    f"  [FALLBACK] 板块API全部不可用，从行情数据库恢复 "
+                    f"  [FALLBACK] 板块成分API不可用，从行情数据库恢复 "
                     f"{len(stock_map)} 只股票"
                 )
                 stock_pool_source = "market_history_db"
-                sector_source = "fallback_static"
+                if not sectors:
+                    sector_source = "fallback_static"
                 fallback_used = True
                 warnings.append("板块成分抓取失败，从行情数据库恢复股票池")
             else:
@@ -3351,7 +3352,8 @@ def collect_daily_data(
                     }
                 if stock_map:
                     stock_pool_source = "kline_cache"
-                    sector_source = "fallback_static"
+                    if not sectors:
+                        sector_source = "fallback_static"
                     fallback_used = True
                     warnings.append("板块API全部不可用，使用 K线缓存兜底")
 

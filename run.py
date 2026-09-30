@@ -1996,7 +1996,13 @@ def _apply_full_a_universe(
             )
             return stocks_with_kline
 
-        sector_groups = build_sector_groups(sectors, stocks_with_kline)
+        # A partial component response cannot supply a trustworthy overlay.
+        # Keep the fund-flow rows for display, but recall from the full-A base.
+        component_gap = data_quality.get("stock_pool_incomplete") is True
+        sector_groups = (
+            [] if component_gap
+            else build_sector_groups(sectors, stocks_with_kline)
+        )
         config, retrieval_mode = _universe_config_for_sector_groups(
             sector_groups
         )
@@ -2005,7 +2011,9 @@ def _apply_full_a_universe(
             sector_groups,
             config=config,
         )
-        selected = attach_sector_context(result["final"], stocks_with_kline)
+        selected = attach_sector_context(
+            result["final"], [] if component_gap else stocks_with_kline
+        )
         if len(selected) < int(config.base_limit):
             diagnostics.update(
                 status="fallback",
@@ -2034,6 +2042,8 @@ def _apply_full_a_universe(
             if retrieval_mode == "base_plus_overlay"
             else "full_a_db+expanded_base"
         )
+        if component_gap:
+            data_quality["fallback_used"] = True
         if RECALL_STRATEGY_MODE == "shadow":
             selected_codes = {
                 str(item.get("code") or "") for item in selected
@@ -2675,13 +2685,31 @@ def _refresh_active_universe_quality(
     )
     sector_source = data_quality.get("sector_source")
     sector_missing = sector_source == "fallback_static"
+    component_diagnostics = data_quality.get("sector_component_diagnostics")
+    component_gap = bool(
+        sector_source == "eastmoney"
+        and data_quality.get("fallback_used") is True
+        and data_quality.get("stock_pool_incomplete") is True
+        and isinstance(component_diagnostics, list)
+        and component_diagnostics
+        and all(
+            isinstance(item, dict)
+            and isinstance(item.get("sector_code"), str)
+            and bool(item["sector_code"])
+            and type(item.get("complete")) is bool
+            for item in component_diagnostics
+        )
+        and len({item["sector_code"] for item in component_diagnostics})
+            == len(component_diagnostics)
+        and any(item["complete"] is False for item in component_diagnostics)
+    )
     sector_degradation_safe = bool(
         (
             sector_source == "eastmoney"
             and data_quality.get("fallback_used") is False
             and data_quality.get("stock_pool_incomplete") is False
         ) or (
-            sector_missing
+            (sector_missing or component_gap)
             and data_quality.get("fallback_used") is True
             and data_quality.get("stock_pool_source") == "full_a_db+expanded_base"
             and universe.get("retrieval_mode") == "base_expanded_no_overlay"
@@ -2694,8 +2722,13 @@ def _refresh_active_universe_quality(
     data_quality["sector_data_status"] = (
         "verified" if (
             sector_source == "eastmoney"
-            and data_quality.get("fallback_used") is False
-            and data_quality.get("stock_pool_incomplete") is False
+            and (
+                (
+                    data_quality.get("fallback_used") is False
+                    and data_quality.get("stock_pool_incomplete") is False
+                )
+                or component_gap
+            )
         )
         else ("unavailable" if sector_missing else "unknown")
     )

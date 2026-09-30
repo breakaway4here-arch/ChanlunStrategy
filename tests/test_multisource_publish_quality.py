@@ -150,7 +150,192 @@ def mixed_source_report():
     return report
 
 
+def eastmoney_flow_component_gap_report():
+    """Funds succeeded while one of two component pages failed."""
+    report = active_report(sector_missing=False)
+    quality = report["data_quality"]
+    quality.update(
+        fallback_used=True,
+        stock_pool_incomplete=True,
+        stock_pool_source="full_a_db+expanded_base",
+        sector_component_diagnostics=[
+            {"sector_code": "BK001", "complete": True, "error": ""},
+            {"sector_code": "BK002", "complete": False, "error": "request_failed"},
+        ],
+    )
+    quality["universe_builder"].update(
+        retrieval_mode="base_expanded_no_overlay", overlay_count=0
+    )
+    report["sector_flow"] = [
+        {"code": "BK001", "name": "一号板块", "flow": 123456789},
+        {"code": "BK002", "name": "二号板块", "flow": 98765432},
+    ]
+    return report
+
+
 class ActivePublishQualityTests(unittest.TestCase):
+    def test_component_gap_never_overrides_market_or_identity_safety(self):
+        cases = {
+            "missing_components": lambda q, s: q.pop("sector_component_diagnostics"),
+            "all_components_complete": lambda q, s: q["sector_component_diagnostics"][1].update(complete=True),
+            "duplicated_component_identity": lambda q, s: q["sector_component_diagnostics"][1].update(sector_code="BK001"),
+            "list_component_identity": lambda q, s: q["sector_component_diagnostics"][0].update(sector_code=["BK001"]),
+            "dict_component_identity": lambda q, s: q["sector_component_diagnostics"][0].update(sector_code={"code": "BK001"}),
+            "integer_component_identity": lambda q, s: q["sector_component_diagnostics"][0].update(sector_code=123),
+            "unknown_source": lambda q, s: q.update(sector_source="mystery"),
+            "false_fallback": lambda q, s: q.update(fallback_used=False),
+            "false_incomplete": lambda q, s: q.update(stock_pool_incomplete=False),
+            "partial_overlay": lambda q, s: q["universe_builder"].update(retrieval_mode="base_plus_overlay", overlay_count=1),
+            "low_coverage": lambda q, s: q["market_close_snapshot"].update(coverage_numerator=5000),
+            "intraday": lambda q, s: q.update(bar_state="intraday"),
+            "wrong_date": lambda q, s: q.update(index_latest_date="2026-09-28"),
+            "raw_basis": lambda q, s: s[0]["data_status"].update(adjustment="raw"),
+            "wrong_identity": lambda q, s: s[0].update(exchange="invalid"),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label):
+                quality = eastmoney_flow_component_gap_report()["data_quality"]
+                selected = [selected_stock()]
+                mutate(quality, selected)
+                run._refresh_active_universe_quality(quality, selected, REPORT_DATE)
+                self.assertFalse(quality["is_official"], quality)
+
+    def test_real_component_results_reach_active_publish_without_partial_overlay(self):
+        funds = [
+            {"code": "BK001", "name": "一号板块", "flow": 123456789},
+            {"code": "BK002", "name": "二号板块", "flow": 98765432},
+        ]
+        candidate = selected_stock()
+        candidate.update(low_position_retrieval_score=3.0,
+                         trend_retrieval_score=2.0,
+                         neutral_retrieval_score=1.0)
+
+        def verified(rows, **_):
+            return [{**row, "klines": candidate["klines"],
+                     "data_status": candidate["data_status"]} for row in rows]
+
+        for mode in ("all_failed", "partly_failed"):
+            with self.subTest(mode=mode):
+                def components(code, *, return_diagnostics=False):
+                    complete = mode == "partly_failed" and code == "BK001"
+                    rows = ([{"code": "600000", "name": "浦发银行"}]
+                            if complete else [])
+                    diag = {"sector_code": code, "complete": complete,
+                            "error": "" if complete else "connection_closed"}
+                    return (rows, diag) if return_diagnostics else rows
+
+                with patch.object(data_fetcher, "fetch_sector_flow", return_value=funds), \
+                     patch.object(data_fetcher, "fetch_sector_stocks", side_effect=components), \
+                     patch.object(data_fetcher, "_get_kline_repository") as repository, \
+                     patch.object(data_fetcher, "batch_fetch_daily_klines", side_effect=verified), \
+                     patch.object(data_fetcher, "fetch_shanghai_index", return_value={"dates": [REPORT_DATE], "closes": [3830.45]}), \
+                     patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", True):
+                    repository.return_value.list_instruments.return_value = [
+                        {"code": "600000", "name": "浦发银行"}
+                    ]
+                    collected = data_fetcher.collect_daily_data(
+                        required_date=REPORT_DATE, generated_at=CLOSED
+                    )
+
+                quality = collected["data_quality"]
+                self.assertEqual(quality["sector_source"], "eastmoney")
+                self.assertEqual(quality["fallback_used"], mode == "all_failed")
+                self.assertTrue(quality["stock_pool_incomplete"])
+                report = active_report(sector_missing=False)
+                quality["market_close_snapshot"] = copy.deepcopy(
+                    report["data_quality"]["market_close_snapshot"]
+                )
+                quality["runtime_policy"] = report["data_quality"]["runtime_policy"]
+                with patch.multiple(
+                    run, MARKET_HISTORY_DB_PATH=__file__, FULL_A_MIN_ELIGIBLE_COUNT=1,
+                    FULL_A_FINAL_LIMIT=1, FULL_A_NO_OVERLAY_LOW_QUOTA=1,
+                    FULL_A_NO_OVERLAY_TREND_QUOTA=0,
+                    FULL_A_NO_OVERLAY_NEUTRAL_QUOTA=0,
+                ), patch.object(run, "hydrate_industry_metadata", return_value={"status": "complete"}), \
+                     patch.object(run, "MarketHistoryStore"), \
+                     patch.object(run, "load_eligible_candidates", return_value=(
+                         [candidate], {"instrument_count": 1, "eligible_count": 1}
+                     )):
+                    selected = run._apply_full_a_universe(
+                        collected["stocks"], collected["sectors"],
+                        quality, REPORT_DATE,
+                    )
+                self.assertEqual(quality["universe_builder"]["retrieval_mode"],
+                                 "base_expanded_no_overlay")
+                self.assertEqual(quality["universe_builder"]["overlay_count"], 0)
+                self.assertTrue(quality["fallback_used"])
+                self.assertIsNone(selected[0]["sector_rank"])
+                run._refresh_active_universe_quality(quality, selected, REPORT_DATE)
+                self.assertTrue(quality["is_official"])
+                report["data_quality"] = quality
+                report["sector_flow"] = collected["sectors"]
+                self.assertEqual(validate_report_contract(report, require_official=True), [])
+                self.assertEqual(validate_runtime_cutover(report), [])
+
+    def test_eastmoney_flow_survives_all_failed_components(self):
+        funds = [{"code": "BK001", "name": "一号板块", "flow": 123456789}]
+        def missing_component(code, *, return_diagnostics=False):
+            diag = {"sector_code": code, "complete": False, "error": "connection_closed"}
+            return ([], diag) if return_diagnostics else []
+
+        with patch.object(data_fetcher, "fetch_sector_flow", return_value=funds), \
+             patch.object(data_fetcher, "fetch_sector_stocks", side_effect=missing_component), \
+             patch.object(data_fetcher, "_get_kline_repository") as repository, \
+             patch.object(data_fetcher, "batch_fetch_daily_klines", side_effect=lambda rows, **_: rows), \
+             patch.object(data_fetcher, "fetch_shanghai_index", return_value={"dates": [REPORT_DATE], "closes": [3830.45]}), \
+             patch.object(data_fetcher, "KLINE_REPOSITORY_ENABLED", True):
+            repository.return_value.list_instruments.return_value = [
+                {"code": "600000", "name": "浦发银行"}
+            ]
+            result = data_fetcher.collect_daily_data(
+                required_date=REPORT_DATE, generated_at=CLOSED
+            )
+
+        self.assertEqual(result["sectors"], funds)
+        self.assertEqual(result["data_quality"]["sector_source"], "eastmoney")
+        self.assertTrue(result["data_quality"]["fallback_used"])
+        self.assertTrue(result["data_quality"]["stock_pool_incomplete"])
+
+    def test_partial_component_pool_never_enters_overlay(self):
+        candidate = selected_stock()
+        candidate.update(low_position_retrieval_score=3.0,
+                         trend_retrieval_score=2.0,
+                         neutral_retrieval_score=1.0)
+        partial = dict(candidate, sector="一号板块", sector_tags=["一号板块"],
+                       sector_rank=1, sector_flow=123456789)
+        funds = [{"code": "BK001", "name": "一号板块", "flow": 123456789}]
+        quality = eastmoney_flow_component_gap_report()["data_quality"]
+        with patch.multiple(
+            run, MARKET_HISTORY_DB_PATH=__file__, FULL_A_MIN_ELIGIBLE_COUNT=1,
+            FULL_A_FINAL_LIMIT=1, FULL_A_NO_OVERLAY_LOW_QUOTA=1,
+            FULL_A_NO_OVERLAY_TREND_QUOTA=0,
+            FULL_A_NO_OVERLAY_NEUTRAL_QUOTA=0,
+        ), patch.object(run, "hydrate_industry_metadata", return_value={"status": "complete"}), \
+             patch.object(run, "MarketHistoryStore"), \
+             patch.object(run, "load_eligible_candidates", return_value=(
+                 [candidate], {"instrument_count": 1, "eligible_count": 1}
+             )):
+            selected = run._apply_full_a_universe(
+                [partial], funds, quality, REPORT_DATE
+            )
+
+        self.assertEqual(quality["universe_builder"]["status"], "activated", quality["universe_builder"])
+        self.assertEqual(quality["universe_builder"]["retrieval_mode"], "base_expanded_no_overlay")
+        self.assertEqual(quality["universe_builder"]["overlay_count"], 0)
+        self.assertEqual(quality["stock_pool_source"], "full_a_db+expanded_base")
+        self.assertIsNone(selected[0]["sector_rank"])
+        run._refresh_active_universe_quality(quality, selected, REPORT_DATE)
+        self.assertTrue(quality["is_official"])
+
+    def test_eastmoney_funds_with_component_gap_keep_official_active_pool(self):
+        quality = eastmoney_flow_component_gap_report()["data_quality"]
+        run._refresh_active_universe_quality(quality, [selected_stock()], REPORT_DATE)
+        self.assertTrue(quality["is_official"])
+        self.assertTrue(quality["sources_trusted"])
+        self.assertEqual(quality["sector_data_status"], "verified")
+        self.assertTrue(quality["fallback_used"])
+        self.assertTrue(quality["stock_pool_incomplete"])
+
     def test_sector_outage_does_not_veto_verified_active_close(self):
         quality = active_quality()
         run._refresh_active_universe_quality(quality, [selected_stock()], REPORT_DATE)
@@ -274,6 +459,35 @@ class ActivePublishQualityTests(unittest.TestCase):
 
 
 class ActivePublishValidatorTests(unittest.TestCase):
+    def test_component_gap_validator_rejects_forged_or_unsafe_evidence(self):
+        cases = {
+            "missing_components": lambda r: r["data_quality"].pop("sector_component_diagnostics"),
+            "duplicated_component_identity": lambda r: r["data_quality"]["sector_component_diagnostics"][1].update(sector_code="BK001"),
+            "flow_not_in_components": lambda r: r["sector_flow"][1].update(code="BK999"),
+            "empty_flow": lambda r: r.update(sector_flow=[]),
+            "unknown_source": lambda r: r["data_quality"].update(sector_source="mystery"),
+            "false_sector_status": lambda r: r["data_quality"].update(sector_data_status="unavailable"),
+            "false_fallback": lambda r: r["data_quality"].update(fallback_used=False),
+            "false_incomplete": lambda r: r["data_quality"].update(stock_pool_incomplete=False),
+            "partial_overlay": lambda r: r["data_quality"]["universe_builder"].update(overlay_count=1),
+            "bad_retrieval_mode": lambda r: r["data_quality"]["universe_builder"].update(retrieval_mode="base_plus_overlay"),
+            "low_coverage": lambda r: r["data_quality"]["market_close_snapshot"].update(coverage_numerator=5000),
+            "wrong_day": lambda r: r["data_quality"].update(index_latest_date="2026-09-28"),
+            "intraday": lambda r: r["data_quality"].update(bar_state="intraday"),
+        }
+        for label, mutate in cases.items():
+            with self.subTest(label=label):
+                report = eastmoney_flow_component_gap_report()
+                mutate(report)
+                self.assertTrue(
+                    validate_report_contract(report, require_official=True), label
+                )
+
+    def test_eastmoney_funds_with_component_gap_pass_verified_active_report(self):
+        report = eastmoney_flow_component_gap_report()
+        self.assertEqual(validate_report_contract(report, require_official=True), [])
+        self.assertEqual(validate_runtime_cutover(report), [])
+
     def test_mixed_source_snapshot_counts_verified_independent_rows(self):
         report = mixed_source_report()
         self.assertEqual(validate_report_contract(report, require_official=True), [])
