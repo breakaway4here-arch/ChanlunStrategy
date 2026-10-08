@@ -2129,7 +2129,7 @@ def _minute_payload_validation_error(
 
 
 def _fetch_30min_for_repository(
-    code, count, required_date=None, as_of=None
+    code, count, required_date=None, as_of=None, final_validator=None
 ):
     return _fetch_minute_for_repository(
         code,
@@ -2137,11 +2137,12 @@ def _fetch_30min_for_repository(
         count,
         required_date=required_date,
         as_of=as_of,
+        final_validator=final_validator,
     )
 
 
 def _fetch_15min_for_repository(
-    code, count, required_date=None, as_of=None
+    code, count, required_date=None, as_of=None, final_validator=None
 ):
     return _fetch_minute_for_repository(
         code,
@@ -2149,6 +2150,7 @@ def _fetch_15min_for_repository(
         count,
         required_date=required_date,
         as_of=as_of,
+        final_validator=final_validator,
     )
 
 
@@ -2250,6 +2252,7 @@ def _fetch_minute_for_repository(
     max_attempts=4,
     base_delay=0.5,
     sleep_fn=time.sleep,
+    final_validator=None,
 ):
     identity = _normalize_identity(code)
     providers = _minute_providers(identity, count)
@@ -2257,6 +2260,7 @@ def _fetch_minute_for_repository(
     trade_date = _minute_requested_trade_date(required_date, as_of)
     attempt_evidence = []
     rejected = []
+    read_only_payload = None
     for attempt in range(attempts):
         source, fetcher = providers[attempt % len(providers)]
         details = None
@@ -2310,7 +2314,27 @@ def _fetch_minute_for_repository(
                     )
                     result = "rejected"
                 else:
-                    result = "success"
+                    if final_validator is not None:
+                        try:
+                            validated = final_validator(payload)
+                            if not isinstance(validated, dict):
+                                raise ValueError('final_validator_invalid_payload')
+                        except (ValueError, TypeError, KeyError) as exc:
+                            error = _sanitize_minute_text(str(exc), 64)
+                            if error.startswith(('raw_daily_conflict:', 'missing_canonical_daily_reference',
+                                'missing_final_daily_reference:', 'unverified_daily_reference:',
+                                'missing_raw_daily_reference', 'invalid_raw_daily_reference', 'raw_daily_reference_unavailable',
+                                'incomplete_day:', 'non_affine_daily_reference:', 'indeterminate_flat_day:',
+                                'invalid_basis_mapping:', 'price_basis_unverified')) and payload.get('schema') == 'free_minute_v1':
+                                read_only_payload = payload
+                            result = 'rejected'
+                            details = dict(details or {})
+                            details.update(exception_category='validation', exception_type='FinalValidationError')
+                        else:
+                            payload = validated
+                            result = 'success'
+                    else:
+                        result = "success"
         evidence = _minute_attempt_evidence(
             trade_date=trade_date,
             identity=identity,
@@ -2333,6 +2357,8 @@ def _fetch_minute_for_repository(
                 ],
                 "rejected": list(rejected),
                 "attempt_evidence": list(attempt_evidence),
+                "final_adopted": final_validator is not None,
+                "rejection_reason": "",
             }
             return result_payload
         rejected.append({"provider": source, "reason": error})
@@ -2350,7 +2376,13 @@ def _fetch_minute_for_repository(
         ],
         "rejected": list(rejected),
         "attempt_evidence": list(attempt_evidence),
+        "reason": rejected[-1]['reason'] if rejected else 'minute_sources_exhausted',
+        "final_adopted": False,
     }
+    if read_only_payload is not None:
+        result_payload = dict(read_only_payload)
+        result_payload['_fetch_diagnostics'] = diagnostics
+        return result_payload
     print(
         "[ERROR] {}分钟K线重试耗尽 {}".format(
             scale, identity.code
@@ -2880,6 +2912,9 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
             failure = diagnostics.get("fetch_failure")
             if isinstance(failure, dict):
                 evidence["provider_failure"] = dict(failure)
+            for key in ('price_basis_failure', 'attempt_evidence', 'rejected'):
+                if diagnostics.get(key):
+                    evidence[key] = diagnostics[key]
         evidence.update({
             "latest_cache_date": evidence["latest_date"],
             "cache_stale": repository_stale,
@@ -2889,11 +2924,11 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
                 and repository_result.status == "verified"
             ),
         })
-        evidence["rejection_reason"] = (
+        evidence["rejection_reason"] = "" if evidence["final_adopted"] else evidence.get('price_basis_failure') or (
             evidence.get("provider_failure", {}).get("reason")
             if isinstance(evidence.get("provider_failure"), dict)
             else None
-        ) or ("" if evidence["final_adopted"] else repository_status)
+        ) or repository_status
     return evidence
 
 
@@ -2946,7 +2981,7 @@ def _record_sublevel_failure(
             else details.get("stale", True)
         ),
         "cache_bars": int(details.get("bars") or 0),
-        "rejection_reason": (
+        "rejection_reason": details.get('rejection_reason') or (
             details.get("provider_failure", {}).get("reason")
             if isinstance(details.get("provider_failure"), dict)
             else None

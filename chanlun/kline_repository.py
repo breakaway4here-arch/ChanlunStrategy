@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import math
+import copy
 import inspect
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -705,6 +708,7 @@ class KLineRepository:
         fetcher: Callable[..., Any],
         required_date: Optional[str],
         as_of: Optional[str],
+        final_validator=None,
     ) -> Dict[str, Any]:
         signature_target = getattr(fetcher, "side_effect", None)
         if not callable(signature_target):
@@ -721,10 +725,62 @@ class KLineRepository:
         for name, value in (
             ("required_date", required_date),
             ("as_of", as_of),
+            ("final_validator", final_validator),
         ):
+            if name == 'final_validator' and value is None:
+                continue
             if accepts_kwargs or name in parameters:
                 context[name] = value
         return context
+
+    def _minute_final_validator(self, interval, identity, count, required_date, as_of):
+        references = {}
+
+        def validate(payload):
+            aligned = payload
+            if payload.get('schema') == 'free_minute_v1':
+                if payload.get('adjustment') != 'unverified':
+                    raise ValueError('already_adjusted_or_invalid_scale')
+                if payload.get('symbol') != identity.exchange.lower() + identity.code:
+                    raise ValueError('minute_identity_mismatch')
+                if payload.get('volume_unit') != 'hands':
+                    raise ValueError('minute_volume_unit_unverified')
+                if self.raw_daily_reader is not None and required_date:
+                    if not references.get('loaded'):
+                        references['loaded'] = True
+                        try:
+                            rows = self._load_many('day', [identity], 240, as_of)[identity]
+                            target = {str(row['ts'])[:10]: {
+                                **{k: row[k] for k in ('open', 'high', 'low', 'close', 'adjustment')},
+                                'is_final': bool(row['is_final']), 'source': row.get('source_batch') or '',
+                            } for row in rows}
+                            raw = copy.deepcopy(self.raw_daily_reader(identity, required_date))
+                            if not isinstance(raw, Mapping) or not raw:
+                                raise ValueError('missing_raw_daily_reference')
+                            if any(not isinstance(v, Mapping) for v in raw.values()):
+                                raise ValueError('invalid_raw_daily_reference')
+                            references['raw'] = MappingProxyType({k: MappingProxyType(dict(v)) for k,v in raw.items()})
+                            references['target'] = MappingProxyType({k: MappingProxyType(v) for k,v in target.items()})
+                        except Exception as exc:
+                            reason = str(exc)
+                            references['failure'] = reason if reason in ('missing_raw_daily_reference',
+                                'invalid_raw_daily_reference') else 'raw_daily_reference_unavailable'
+                    if references.get('failure'):
+                        raise ValueError(references['failure'])
+                    if not set(d[:10] for d in payload['dates']).issubset(references['target']):
+                        raise ValueError('missing_canonical_daily_reference')
+                    aligned = align_daily_basis(payload,
+                        {k:dict(v) for k,v in references['raw'].items()},
+                        {k:dict(v) for k,v in references['target'].items()}, scale=int(interval[:-1]))
+            item = self._prepare_remote(interval, identity, aligned)
+            item['interval'] = interval
+            self._validate_prepared_remote(item, count=count, required_date=required_date, as_of=as_of)
+            if any(not bar['is_final'] for bar in item['bars']):
+                raise ValueError('minute_nonfinal_bar')
+            if any(bar['adjustment'] != self.adjustment for bar in item['bars']):
+                raise ValueError('price_basis_unverified')
+            return aligned, item
+        return validate
 
     @classmethod
     def _validate_prepared_remote(
@@ -892,12 +948,15 @@ class KLineRepository:
                     if getattr(fetcher, 'requires_full_window', False) is True or force_refresh or len(existing) < int(count)
                     else int(self.overlap_counts[interval])
                 )
+                validator = self._minute_final_validator(interval, identity, remote_count, required_date, as_of) if interval in ('30m','15m') else None
+                def check_source(payload):
+                    validator(payload)
+                    return payload
                 context = self._fetcher_context_kwargs(
-                    fetcher, required_date, as_of
-                )
+                    fetcher, required_date, as_of, check_source if validator else None)
                 return identity, remote_count, fetcher(
                     fetch_values[identity], remote_count, **context
-                )
+                ), validator
 
             with ThreadPoolExecutor(
                 max_workers=min(self.max_workers, len(refresh_identities))
@@ -909,7 +968,7 @@ class KLineRepository:
                 for future in as_completed(futures):
                     identity = futures[future]
                     try:
-                        _returned_identity, remote_count, payload = future.result()
+                        _returned_identity, remote_count, payload, validator = future.result()
                         if not payload:
                             remote_failed[identity] = True
                             remote_diagnostics[identity] = {
@@ -923,24 +982,39 @@ class KLineRepository:
                             diagnostics = payload.get("_fetch_diagnostics")
                             if isinstance(diagnostics, Mapping):
                                 remote_diagnostics[identity] = dict(diagnostics)
-                        if (payload.get('schema') == 'free_minute_v1'
-                                and self.raw_daily_reader is not None
-                                and required_date and interval in ('30m', '15m')):
+                        if validator is not None:
                             try:
-                                references = self._load_many('day', [identity], 240, as_of)[identity]
-                                target_daily = {str(row['ts'])[:10]: {
-                                    **{k: row[k] for k in ('open', 'high', 'low', 'close', 'adjustment')},
-                                    'is_final': bool(row['is_final']),
-                                    'source': row.get('source_batch') or '',
-                                } for row in references}
-                                if not set(d[:10] for d in payload['dates']).issubset(target_daily):
-                                    raise ValueError('missing_canonical_daily_reference')
-                                raw_daily = self.raw_daily_reader(identity, required_date)
-                                payload = align_daily_basis(payload, raw_daily, target_daily,
-                                                            scale=int(interval[:-1]))
-                                remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
+                                payload, _checked = validator(payload)
+                                if payload.get('price_basis_evidence'):
+                                    remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
                             except (ValueError, TypeError, KeyError) as exc:
-                                remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = str(exc)
+                                reason = str(exc)
+                                remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = (
+                                    reason if re.fullmatch(r'[a-z_]+(?::\d{4}-\d{2}-\d{2})?', reason)
+                                    else 'final_validation_rejected')
+                                safe_readonly = (payload.get('schema') == 'free_minute_v1'
+                                    and payload.get('adjustment') == 'unverified'
+                                    and reason.startswith(('raw_daily_conflict:', 'missing_canonical_daily_reference',
+                                        'missing_final_daily_reference:', 'unverified_daily_reference:',
+                                        'missing_raw_daily_reference', 'invalid_raw_daily_reference', 'raw_daily_reference_unavailable',
+                                        'incomplete_day:', 'non_affine_daily_reference:', 'indeterminate_flat_day:',
+                                        'invalid_basis_mapping:', 'price_basis_unverified')))
+                                if (reason == 'price_basis_unverified'
+                                        and payload.get('schema') != 'free_minute_v1'
+                                        and payload.get('adjustment') in ('raw', 'unverified')
+                                        and payload.get('volume_unit') in ('hands', 'unknown')
+                                        and payload.get('symbol') in (None, identity.exchange.lower()+identity.code)):
+                                    safe_readonly = True
+                                if not safe_readonly:
+                                    raise
+                                readonly = self._prepare_remote(interval, identity, payload)
+                                readonly['interval'] = interval
+                                self._validate_prepared_remote(readonly, count=remote_count,
+                                                               required_date=required_date, as_of=as_of)
+                                if not all(bar['is_final'] for bar in readonly['bars']):
+                                    raise ValueError('minute_nonfinal_bar')
+                                read_only_remote[identity] = (readonly, payload)
+                                continue
                         item = self._prepare_remote(interval, identity, payload)
                         item["interval"] = interval
                         self._validate_prepared_remote(
@@ -959,17 +1033,17 @@ class KLineRepository:
                         remote_failed[identity] = True
                         diagnostics = getattr(exc, "diagnostics", None)
                         if isinstance(diagnostics, Mapping):
-                            remote_diagnostics[identity] = {
+                            remote_diagnostics.setdefault(identity, {}).update({
                                 "fetch_failure": dict(diagnostics),
-                            }
+                            })
                         else:
-                            remote_diagnostics[identity] = {
+                            remote_diagnostics.setdefault(identity, {}).update({
                                 "fetch_failure": {
-                                    "reason": "remote_fetch_exception",
+                                    "reason": remote_diagnostics.get(identity, {}).get('price_basis_failure') or "remote_fetch_exception",
                                     "exception_type": type(exc).__name__,
                                     "final_adopted": False,
                                 }
-                            }
+                            })
             if prepared:
                 try:
                     self._write_prepared(prepared)

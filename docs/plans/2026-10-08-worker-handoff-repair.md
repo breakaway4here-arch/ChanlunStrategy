@@ -20,7 +20,7 @@
 | A | 1/6/7：14:56 绝对交付截止、状态区分、等待自动刷新与手动刷新 | preclose_run、pipeline、contract、preclose-worker、report-v2.js、调度脚本/运行文档 | 14:45/14:50、205秒采集、36秒余量、墙钟/阻塞、发布GET同hash；empty/failed/timeout/not_run/expired；404恢复、防并发/晚回/跨日、桌面手机可见操作 | 已通过，未上线 |
 | B1 | 3：同身份/日期已核验风险进入资格 | market_close_snapshot、market_history_store、universe_builder及下游过滤 | 普通→ST/退市、缺失/冲突、历史asof；新增排除与保留的代码集合/计数 | 已通过，未上线 |
 | B2 | 2：实际120根资格窗口具体缺口、有界真实修复、同次重检 | kline_repository、data_fetcher、universe_builder、run/preclose | 完整/历史nonfinal/末根nonfinal、边界、失败/预算、混合集合、预跑正式库只读 | 已通过，未上线 |
-| C | 5：最终可采用才算来源成功 | 分钟data_fetcher、kline_repository与诊断 | 首源成功不多请求；首源价基失败→次源完整成功；全失败/截止/身份日期单位错误；具体失败原因 | 准备中 |
+| C | 5：最终可采用才算来源成功 | 分钟data_fetcher、kline_repository与诊断 | 首源成功不多请求；首源价基失败→次源完整成功；全失败/截止/身份日期单位错误；具体失败原因 | 已通过，未上线 |
 | D1 | 8：合法B研究投影经过finalizer保留观察Top5 | report_view_model、repair_strategy_scorecard_snapshot | 冻结9/30五股保留及顺序；缺/冲突标志、假正式/L1/可执行拒绝；正式/H4/L1评分排序不变 | 准备中 |
 | D2 | 4：HTML清理后同报告身份版本发布成员登记不缩水 | report_comparison、report_generator及R2消费者 | 登记→清理→重建；修订/冲突不继承；缺原始、legacy、去重顺序、价格用途和收益分母 | 准备中 |
 
@@ -35,7 +35,7 @@
 
 准备阶段完成附件读取、最新远端同步、独立工作树建立和规则跟踪核对。各批实际结果如下；未运行生产入口。
 
-已验收的本地提交：A `9496c9ca`、B1 `9115bd1b`。分支尚未最终推送，未合并或部署。
+已验收的本地提交在同步最新main后为：A `241ed06d`、B1 `d00dab4c`、B2 `46eeee3f`（原验收提交依次9496c9ca/9115bd1b/3f55b7e3，补丁留证）。分支尚未最终推送，未合并或部署。
 
 ### A：预跑交付、状态和刷新
 
@@ -77,3 +77,17 @@ A最终回查通过：资源版本`4a24efa974f8`；手机最终源码真实计�
 - 主进程和独立审查实际复现并关闭写保护阻断：取数期间目标被其他writer修成final，或健康价基参照变尺度/来源/新增行时，事务内核对整个<=120原窗口，冲突整股不写，其他股继续。只写原坏日期；已实际提交不在事后报失败。并发已final不进入当前gap缓存，同次重读真实DB；readonly采用和资格消费再次校验expected窗口，当前事实优先。诊断保留失败尝试及initial/current具体缺口，不把并发完成归功于本修复。
 - 主进程独立隔离回归409项全部通过，其中31项新增测试；独立11组真实调用规格入口及并发旧值/健康参照复现通过。日志`/private/tmp/chanlun-handoff-acceptance/batch-b2-python-final.log`、`batch-b2-independent-spec.json`及`batch-b2-reference-cas.json`。旧测试仅补一处repository stub新方法，原断言不删；Python3.7实际导入、diff检查及34/3/96保护指纹通过。规格和质量最终复审无剩余问题；提交前同步main仍3678e770且祖先核对/140项关键回归通过。本批未上线。
 - 未访问生产行情或正式库、未进行实际补数/重跑/通知；全部SQLite在临时目录，测试进程退出，未启动服务或监听。生产已有470排除计数不解释为同一组、不声称已实际补齐或收益改善。
+
+### 提交前上游同步（C批期间）
+
+main由另一独立任务推进至`a5a59a96`（开盘啦按日资料与补更），生产运行树也已切到该提交。此更新不是本八项修复的发布。提交C前只暂存本任务C文件，重放已验收A/B1/B2至该目标并恢复C，规则blob及C源码/测试指纹不变，target为当前HEAD祖先。新main两份10/8日报JSON、两个HTML及开盘啦代码/计划完整保留；本任务18个HTML仍只改自己的资源版本属性，source/assets保持一致。原根工作区34项及运行树3项既有脏文件指纹全保持，运行树HEAD变化明确记录为上游更新；保护基线随上游保存新JSON哈希，原验收基线留证不覆盖。同步后相关回归重新执行，未修改生产运行树或触发生产补更。
+
+随后上游追加`2ea4ae5b`的开盘啦验收文档（仅1文档10行），再次隔离C并同步。源码指纹仍一致；最新目标是HEAD祖先。主进程同步后518项（包含上游开盘啦48项）和文档同步后77项受影响回归全部通过，最新main的96份JSON及原34/3脏文件保护通过。
+
+### C：分钟来源最终采用与诊断
+
+- 只修改data_fetcher/repository最短链：原完整来源初检之后、success之前执行最终价基/身份/单位/final/完整窗校验，15/30适配传回调，仓库后置校验保留以防旧custom忽略回调。每源完整窗口，原4次尝试/backoff及数据asof语义不变，不放宽0.011容差、不拼源、不自报qfq。
+- 冻结反例Sina high10.4冲突→Tencent high10.3通过：请求由原只Sina变Sina/Tencent，最终verified；有效首源只1次。日线规范/原价参照成功或受控失败都只加载1次，失败不为每provider重置额外网络请求。
+- 合法完整raw/unverified保持price_basis_unverified只读，含旧两参数generic raw的80根/1调用/0规范写入；缺/空/非mapping原价引用保留合法原价窗口，错误身份/单位/final及free自行qfq拒绝规范写入。已有健康qfq缓存无新增请求；成功次源的早期失败保留history而不污染最终健康。
+- raw_daily_conflict等具体原因沿repository→两诊断消费者→实际80/220桶15/30批量→run健康摘要保留；成功final_adopted=true、rejection_reason空。主进程470项独立隔离回归通过，新12测试；实际核心2组、独立边界9组、规格和质量复审均通过。最新main同步后518及77回归通过；日志`/private/tmp/chanlun-handoff-acceptance/batch-c-python-final.log`、`batch-c-post-sync.log`及`batch-c-boundary.json`。
+- 固定数据下仅原不可采用来源后新增使用可验证来源；不改变正式/H4/L1规则或评分。Python3.7导入、差异/规则跟踪、源码资源及最新96份JSON保护通过；无生产行情调用/正式写库/服务/部署。
