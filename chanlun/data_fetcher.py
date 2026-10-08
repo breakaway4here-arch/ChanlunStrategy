@@ -1118,7 +1118,7 @@ def _ensure_amounts_array(values):
     return np.array(arr, dtype=float)
 
 
-def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
+def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK, *, timeout=15, request_budget=None):
     """
     获取日线K线（前复权）。腾讯 API。
     返回: {"dates": [...], "opens": [...], "highs": [...], "lows": [...], "closes": [...], "volumes": [...]}
@@ -1127,14 +1127,27 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK):
     tc = _tencent_code(identity)
     url = f"https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param={tc},day,,,{count},qfq"
     try:
-        resp = SESSION.get(url, timeout=15)
+        request_kwargs = {'timeout': timeout}
+        if request_budget is not None:
+            request_kwargs.update(timeout=request_budget.take_request(), allow_redirects=False)
+        resp = SESSION.get(url, **request_kwargs)
+        if request_budget is not None and not 200 <= resp.status_code < 300:
+            return None
         data = resp.json()
         stock_data = data.get("data", {}).get(tc, {})
         # qfqday: 前复权日线
         klines = stock_data.get("qfqday", stock_data.get("day", []))
+        if request_budget is not None:
+            klines = stock_data.get('qfqday', [])
         if not klines:
             return None
-        return _parse_tencent_kline(klines, volume_source="tencent")
+        if request_budget is not None and any(len(line) < 6 for line in klines):
+            return None
+        result = _parse_tencent_kline(klines[-count:] if request_budget is not None else klines, volume_source="tencent")
+        if request_budget is not None:
+            result.update(asset_type=identity.asset_type, exchange=identity.exchange,
+                          code=identity.code, source='tencent', adjustment='qfq')
+        return result
     except Exception as e:
         print(f"[ERROR] 获取日线失败 {code}: {e}")
         return None
@@ -1160,7 +1173,7 @@ def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
         return None
 
 
-def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
+def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK, *, timeout=15, request_budget=None):
     """获取日线K线。东方财富历史K线 API。"""
     identity = _normalize_identity(code)
     params = {
@@ -1175,9 +1188,20 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
     }
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     try:
-        resp = SESSION.get(url, params=params, timeout=15)
+        request_kwargs = {'timeout': timeout}
+        if request_budget is not None:
+            request_kwargs.update(timeout=request_budget.take_request(), allow_redirects=False)
+        resp = SESSION.get(url, params=params, **request_kwargs)
+        if request_budget is not None and not 200 <= resp.status_code < 300:
+            return None
         data = resp.json()
-        klines = data.get("data", {}).get("klines", [])
+        stock_data = data.get('data') or {}
+        if request_budget is not None and (
+            str(stock_data.get('code') or '') != identity.code
+            or str(stock_data.get('market')) != _em_secid(identity).split('.')[0]
+        ):
+            return None
+        klines = stock_data.get("klines", [])
         if not klines:
             return None
         raw_lines = []
@@ -1185,12 +1209,16 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
         for line in klines:
             parts = str(line).split(",")
             if len(parts) < 6:
+                if request_budget is not None:
+                    return None
                 continue
             # 统一为腾讯解析格式: 日期, 开盘, 收盘, 最高, 最低, 成交量
             raw_lines.append([parts[0], parts[1], parts[2], parts[3], parts[4], parts[5]])
             amounts.append(_extract_eastmoney_amount(parts))
         if not raw_lines:
             return None
+        if request_budget is not None:
+            raw_lines, amounts = raw_lines[-count:], amounts[-count:]
         kline = _parse_tencent_kline(
             raw_lines,
             volume_unit="hands" if identity.asset_type == "stock" else "unknown",
@@ -1202,6 +1230,9 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK):
             kline["amount_available"] = np.isfinite(amount_array) & (amount_array > 0)
             kline["amount_unit"] = "CNY"
             kline["amount_source"] = "eastmoney"
+        if request_budget is not None:
+            kline.update(asset_type=identity.asset_type, exchange=identity.exchange,
+                         code=identity.code, source='eastmoney', adjustment='qfq')
         return kline
     except Exception as e:
         print(f"[ERROR] 东方财富日线失败 {code}: {e}")
@@ -2380,6 +2411,12 @@ def reset_kline_repository():
     _KLINE_REPOSITORY = None
 
 
+def daily_nonfinal_repair_providers():
+    """Separate bounded sequence; never invokes the ordinary parallel fanout."""
+    return [('eastmoney', _fetch_daily_kline_eastmoney_remote),
+            ('tencent', _fetch_daily_kline_remote)]
+
+
 def _get_kline_repository():
     global _KLINE_REPOSITORY
     if _KLINE_REPOSITORY is None:
@@ -3298,9 +3335,11 @@ def collect_daily_data(
     if complete_empty_sector_pool:
         print("  板块成分抓取完整，A股业务池为空")
 
+    daily_repository = None
     if not stock_map and not complete_empty_sector_pool:
         if KLINE_REPOSITORY_ENABLED:
-            for instrument in _get_kline_repository().list_instruments():
+            daily_repository = _get_kline_repository()
+            for instrument in daily_repository.list_instruments():
                 code = str(instrument.get("code") or "")
                 stock_map[code] = {
                     "code": code,
@@ -3358,6 +3397,12 @@ def collect_daily_data(
                     warnings.append("板块API全部不可用，使用 K线缓存兜底")
 
     all_stocks = list(stock_map.values())
+    daily_nonfinal_repair = {}
+    if all_stocks and required_date and KLINE_REPOSITORY_ENABLED and KLINE_REPOSITORY_MODE == 'ongoing':
+        daily_repository = daily_repository or _get_kline_repository()
+        daily_nonfinal_repair = daily_repository.repair_daily_nonfinal(
+            required_date, providers=daily_nonfinal_repair_providers(),
+            as_of=time_metadata['as_of'])['diagnostics']
     print(f"[3/4] 批量获取日线（{len(all_stocks)} 只）...")
     t0 = time.time()
     stocks_with_kline = batch_fetch_daily_klines(
@@ -3384,7 +3429,7 @@ def collect_daily_data(
         if status.get("daily") == "stale_cache":
             stale_stock_count += 1
             stale_daily_codes.append(str(st.get("code") or ""))
-        elif status.get("daily") == "missing":
+        elif status.get("daily") in ("missing", "repair_pending"):
             missing_daily_count += 1
             missing_daily_codes.append(str(st.get("code") or ""))
         if status.get("remote_refreshed"):
@@ -3464,6 +3509,7 @@ def collect_daily_data(
             code for code in remote_refresh_failed_codes if code
         ),
         "daily_refresh_mode": "missing_only" if missing_only else "db_first",
+        "daily_nonfinal_repair": daily_nonfinal_repair,
         "missing_30min_count": 0,
         "stock_pool_incomplete": stock_pool_incomplete,
         "sector_component_diagnostics": sector_component_diagnostics,

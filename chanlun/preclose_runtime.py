@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import inspect
 import sqlite3
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,6 +23,7 @@ from config import (
 )
 
 from .market_history_store import MarketHistoryStore, preserve_previous_quote_risk, quote_stock_risk
+from .kline_repository import DailyRepairBudget, KLineRepository
 from .identity import normalize_index_identity
 from .preclose_data import MARKET_INDICES, fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
@@ -140,10 +142,18 @@ def _previous_market_date(formal_market_db, trade_date):
     return str(row[0])
 
 
-def load_readonly_preclose_universe(formal_market_db, trade_date):
+def load_readonly_preclose_universe(formal_market_db, trade_date, *,
+                                   repair_budget_remaining=None, repair_providers=None, repair_as_of=None):
     """Select the current no-overlay retrieval universe from prior final bars."""
 
     previous_date = _previous_market_date(formal_market_db, trade_date)
+    if repair_providers is None:
+        from .data_fetcher import daily_nonfinal_repair_providers
+        repair_providers = daily_nonfinal_repair_providers()
+    repository = KLineRepository(formal_market_db, mode='backtest', immutable_backtest=False)
+    repair = repository.repair_daily_nonfinal(previous_date, providers=repair_providers,
+        write=False, fetch_buffer=True, as_of=repair_as_of, require_full_quantity=True,
+        budget=DailyRepairBudget(remaining=repair_budget_remaining))
     with MarketHistoryStore(formal_market_db, readonly=True) as store:
         candidates, eligibility = load_eligible_candidates(
             store,
@@ -152,6 +162,8 @@ def load_readonly_preclose_universe(formal_market_db, trade_date):
             min_listed_days=MIN_LISTED_DAYS,
             min_daily_amount=MIN_DAILY_AMOUNT,
             return_diagnostics=True,
+            daily_rows_override=repair['daily_rows_override'],
+            daily_rows_expected=repair['daily_rows_expected'],
         )
     config = UniverseConfig(
         low_quota=FULL_A_NO_OVERLAY_LOW_QUOTA,
@@ -171,6 +183,7 @@ def load_readonly_preclose_universe(formal_market_db, trade_date):
         "retrieval": retrieval.get("diagnostics") or {},
         "selected_count": len(selected),
         "source": "formal_market_history_readonly",
+        "daily_nonfinal_repair": repair['diagnostics'],
     }
 
 
@@ -682,6 +695,7 @@ def build_scheduled_preclose_input(
     target_selector=None,
     min30_fetcher=None,
     turnover_loader=None,
+    repair_budget_remaining=None,
 ):
     """Build one complete input using only batch quotes and read-only history."""
 
@@ -700,9 +714,17 @@ def build_scheduled_preclose_input(
     min30_fetcher = min30_fetcher or fetch_preclose_30m
     turnover_loader = turnover_loader or load_market_turnover_history
 
+    loader_kwargs = {}
+    signature_target = getattr(universe_loader, 'side_effect', None)
+    if not callable(signature_target):
+        signature_target = universe_loader
+    parameters = inspect.signature(signature_target).parameters
+    if 'repair_budget_remaining' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        loader_kwargs['repair_budget_remaining'] = repair_budget_remaining
+    if 'repair_as_of' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        loader_kwargs['repair_as_of'] = as_of
     universe, universe_diagnostics = universe_loader(
-        formal_market_db, str(trade_date)
-    )
+        formal_market_db, str(trade_date), **loader_kwargs)
     quotes, quote_diagnostics = quote_fetcher()
     quotes = list(quotes or [])
     quote_diagnostics = (

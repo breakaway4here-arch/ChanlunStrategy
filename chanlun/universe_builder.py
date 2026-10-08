@@ -258,6 +258,8 @@ def load_eligible_candidates(
     required_date: Optional[str] = None,
     return_diagnostics: bool = False,
     audit_records: Optional[List[Dict[str, Any]]] = None,
+    daily_rows_override: Optional[Mapping[int, Sequence[Mapping[str, Any]]]] = None,
+    daily_rows_expected: Optional[Mapping[int, Sequence[Mapping[str, Any]]]] = None,
 ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
     """Load an as-of-safe eligible universe and compute retrieval-only features."""
     instruments = store.list_instruments(asset_type="stock")
@@ -266,6 +268,13 @@ def load_eligible_candidates(
     rows_by_id = store.query_bars_many(
         "day", ids, as_of=as_of, limit=lookback_bars
     )
+    if daily_rows_override:
+        for instrument_id, override in daily_rows_override.items():
+            if instrument_id in rows_by_id:
+                if daily_rows_expected is not None and rows_by_id[instrument_id] != list(daily_rows_expected.get(instrument_id, [])):
+                    continue
+                rows_by_id[instrument_id] = [dict(row) for row in override
+                    if str(row['ts'])[:10] <= str(as_of)[:10]][-int(lookback_bars):]
     candidates = []
     excluded = {
         "missing_meta": 0,

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import json
+import inspect
 import math
 import os
 import signal
@@ -738,10 +739,22 @@ def run_scheduled_preclose(
                 acquisition_error = "DeliveryReserveReached"
             else:
                 with _deadline_alarm(compute_budget, "input_acquisition"):
+                    def repair_remaining():
+                        return max(0.0, min(
+                            initial_budget - max(0.0, float(monotonic()) - started_at),
+                            _scheduled_wall_budget(now()),
+                        ) - DELIVERY_RESERVE_SECONDS)
+                    runtime_kwargs = {'formal_market_db': formal_market_db}
+                    signature_target = getattr(runtime_builder, 'side_effect', None)
+                    if not callable(signature_target):
+                        signature_target = runtime_builder
+                    parameters = inspect.signature(signature_target).parameters
+                    if 'repair_budget_remaining' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+                        runtime_kwargs['repair_budget_remaining'] = repair_remaining
                     market_inputs = runtime_builder(
                         trade_date,
                         as_of,
-                        formal_market_db=formal_market_db,
+                        **runtime_kwargs,
                     )
                     frozen_input_path = write_preclose_input_snapshot(
                         paths, market_inputs

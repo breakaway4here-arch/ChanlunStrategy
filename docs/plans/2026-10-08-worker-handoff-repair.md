@@ -19,7 +19,7 @@
 | --- | --- | --- | --- | --- |
 | A | 1/6/7：14:56 绝对交付截止、状态区分、等待自动刷新与手动刷新 | preclose_run、pipeline、contract、preclose-worker、report-v2.js、调度脚本/运行文档 | 14:45/14:50、205秒采集、36秒余量、墙钟/阻塞、发布GET同hash；empty/failed/timeout/not_run/expired；404恢复、防并发/晚回/跨日、桌面手机可见操作 | 已通过，未上线 |
 | B1 | 3：同身份/日期已核验风险进入资格 | market_close_snapshot、market_history_store、universe_builder及下游过滤 | 普通→ST/退市、缺失/冲突、历史asof；新增排除与保留的代码集合/计数 | 已通过，未上线 |
-| B2 | 2：实际120根资格窗口具体缺口、有界真实修复、同次重检 | kline_repository、data_fetcher、universe_builder、run/preclose | 完整/历史nonfinal/末根nonfinal、边界、失败/预算、混合集合、正式只读 | 准备中 |
+| B2 | 2：实际120根资格窗口具体缺口、有界真实修复、同次重检 | kline_repository、data_fetcher、universe_builder、run/preclose | 完整/历史nonfinal/末根nonfinal、边界、失败/预算、混合集合、预跑正式库只读 | 已通过，未上线 |
 | C | 5：最终可采用才算来源成功 | 分钟data_fetcher、kline_repository与诊断 | 首源成功不多请求；首源价基失败→次源完整成功；全失败/截止/身份日期单位错误；具体失败原因 | 准备中 |
 | D1 | 8：合法B研究投影经过finalizer保留观察Top5 | report_view_model、repair_strategy_scorecard_snapshot | 冻结9/30五股保留及顺序；缺/冲突标志、假正式/L1/可执行拒绝；正式/H4/L1评分排序不变 | 准备中 |
 | D2 | 4：HTML清理后同报告身份版本发布成员登记不缩水 | report_comparison、report_generator及R2消费者 | 登记→清理→重建；修订/冲突不继承；缺原始、legacy、去重顺序、价格用途和收益分母 | 准备中 |
@@ -33,7 +33,9 @@
 
 ## 实际结果
 
-准备完成：附件读取、最新远端同步、独立工作树建立、规则跟踪核对。代码修复及验收结果尚未完成；未启动服务或运行生产入口。
+准备阶段完成附件读取、最新远端同步、独立工作树建立和规则跟踪核对。各批实际结果如下；未运行生产入口。
+
+已验收的本地提交：A `9496c9ca`、B1 `9115bd1b`。分支尚未最终推送，未合并或部署。
 
 ### A：预跑交付、状态和刷新
 
@@ -65,4 +67,13 @@ A最终回查通过：资源版本`4a24efa974f8`；手机最终源码真实计�
 - 最小实施方向：保留常规分析100根和资格最多120/最少60；资格前用专用有界修复检查具体nonfinal日期，同次重检。一般读取不再把有历史nonfinal的窗口标verified，但不因此在旧全池路径新增无界远端调用。修复只替换已验证坏日期，健康final行和价格保护保留。
 - 资源预算采用最多8只、16次实际HTTP、20秒、单次请求不超过3秒的上限，无额外重试；预跑同时受A采集剩余时间约束，原正式库只读，在内存中采用验证数据。常规多源请求不冒充单次repair预算。60～119根完整数据不新增根数门；修复失败和预算未覆盖明确记录待补齐。
 - 直接消费者包括正式采集后的stale/missing/is_official、fallback/final-floor/shadow及预跑空集合；修复必须先于相应状态冻结或重新消费实际结果，不能只改资格数、缓存标签或正式性文案。
-- 冻结输入/入口位于`/private/tmp/chanlun-b2-acceptance-20261008/`；产品尚未实施。
+- 冻结输入/入口位于`/private/tmp/chanlun-b2-acceptance-20261008/`；这是实施前证据，实际修复结果见下节。
+
+### B2：实际修复与消费者验收
+
+- 实际修改5个产品文件：repository明确返回日线历史nonfinal日期及repair_pending，专用序列逐请求记账、禁redirect、验证响应身份/来源/日期/量纲/实际收盘时间及健康价基参照；常规100根分析、13根量/5根额资格用途和60根最少不改。修复只替换原坏日期，健康行逐列保留，未知字段不借坏行金额或猜hands。
+- 正式采集在collect状态冻结前进行有界修复并重读，activated、activation-floor/final-floor fallback、shadow的既有消费者同次采用。冻结9股资格6→9，仅600005/600006/600008的3个日期变化；60/80/100/119完整及120窗外坏日期600007不变。实际成分组5股继续100根分析、missing/stale=0，已有健康规则下official成立，不靠资格数量强行升正式性。
+- 预跑以readonly仓库产生内存覆盖，前日取数缓冲同步裁掉当日尾，并消费A真实采集remaining回调。有效来源时真实builder日线9股、30分钟目标9股，原库SHA不变；Eastmoney失败/Tencent历史量额unknown时按原预跑全窗数量合同拒绝对应覆盖，保留原6股requested=available=6、coverage=1，具体3缺口pending。普通健康窗口不新增来源请求；过期/0请求/单股双源故障/0.5秒剩余后0.75秒迟到均不伪造修复。
+- 主进程和独立审查实际复现并关闭写保护阻断：取数期间目标被其他writer修成final，或健康价基参照变尺度/来源/新增行时，事务内核对整个<=120原窗口，冲突整股不写，其他股继续。只写原坏日期；已实际提交不在事后报失败。并发已final不进入当前gap缓存，同次重读真实DB；readonly采用和资格消费再次校验expected窗口，当前事实优先。诊断保留失败尝试及initial/current具体缺口，不把并发完成归功于本修复。
+- 主进程独立隔离回归409项全部通过，其中31项新增测试；独立11组真实调用规格入口及并发旧值/健康参照复现通过。日志`/private/tmp/chanlun-handoff-acceptance/batch-b2-python-final.log`、`batch-b2-independent-spec.json`及`batch-b2-reference-cas.json`。旧测试仅补一处repository stub新方法，原断言不删；Python3.7实际导入、diff检查及34/3/96保护指纹通过。规格和质量最终复审无剩余问题；提交前同步main仍3678e770且祖先核对/140项关键回归通过。本批未上线。
+- 未访问生产行情或正式库、未进行实际补数/重跑/通知；全部SQLite在临时目录，测试进程退出，未启动服务或监听。生产已有470排除计数不解释为同一组、不声称已实际补齐或收益改善。
