@@ -175,6 +175,7 @@ class PrecloseNotifyTests(unittest.TestCase):
             return FakeResponse(payload={
                 "snapshot_id": snapshot["snapshot_id"],
                 "content_hash": snapshot["content_hash"],
+                "trade_date": snapshot["trade_date"],
             })
 
         result = publish_preclose_snapshot(

@@ -6,12 +6,13 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 import json
+import math
 import os
 import signal
 import subprocess
 import sys
 import uuid
-from datetime import datetime, time as wall_time
+from datetime import datetime
 from pathlib import Path
 
 from chanlun.preclose_contract import (
@@ -29,16 +30,16 @@ from chanlun.preclose_notify import (
     publish_preclose_and_notify,
 )
 from chanlun.preclose_runtime import build_scheduled_preclose_input
-from chanlun.preclose_schedule import is_trading_day
+from chanlun.preclose_schedule import (
+    DELIVERY_RESERVE_SECONDS, MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    PRE_CLOSE_START_TIME, PRE_CLOSE_CUTOFF_TIME, PRE_CLOSE_TIMEZONE,
+    is_trading_day, normalize_preclose_datetime,
+)
 
 
 # One target can still have a running Sina + Eastmoney fallback thread for up
 # to 30 seconds after the main acquisition alarm.  Keep that drain window and
-# one bounded Worker request window inside the shared 14:49 cutoff.
-DELIVERY_RESERVE_SECONDS = 36.0
-MAX_PRE_CLOSE_RUNTIME_SECONDS = 240.0
-PRE_CLOSE_START_TIME = wall_time(14, 45)
-PRE_CLOSE_CUTOFF_TIME = wall_time(14, 49)
+# bounded Worker PUT and GET windows inside the shared 14:56 cutoff.
 
 
 class PrecloseExecutionDeadline(BaseException):
@@ -51,7 +52,7 @@ class PrecloseExecutionDeadline(BaseException):
 
 @contextmanager
 def _deadline_alarm(seconds, stage="execution"):
-    """Interrupt one scheduled phase before the shared 14:49 wall deadline."""
+    """Interrupt one scheduled phase within the shared delivery deadline."""
 
     budget = max(0.001, float(seconds))
     if not hasattr(signal, "setitimer"):
@@ -121,7 +122,7 @@ class PrecloseRunLock:
         self.release()
 
 
-def _atomic_json(path, payload):
+def _atomic_json(path, payload, write_guard=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_name("." + path.name + ".tmp")
@@ -133,6 +134,9 @@ def _atomic_json(path, payload):
         allow_nan=False,
     ) + "\n"
     temporary.write_text(encoded, encoding="utf-8")
+    if write_guard is not None and not write_guard():
+        temporary.unlink(missing_ok=True)
+        raise PrecloseExecutionDeadline("snapshot_write")
     os.replace(str(temporary), str(path))
 
 
@@ -227,13 +231,17 @@ def _promote_prepared_deadline_fallback(
     now,
     monotonic,
     monotonic_started,
+    budget_seconds=MAX_PRE_CLOSE_RUNTIME_SECONDS,
 ):
     if result.get("snapshot_path") or result.get("status") not in {
         "deadline_exceeded", "failed"
     }:
         return result
-    current = now()
-    if current.time().replace(tzinfo=None) > wall_time(14, 49):
+    current = normalize_preclose_datetime(now())
+    elapsed = max(0.0, float(monotonic()) - monotonic_started)
+    if (current.date().isoformat() != result["trade_date"]
+            or current.time().replace(tzinfo=None) >= PRE_CLOSE_CUTOFF_TIME
+            or elapsed >= budget_seconds):
         return result
     try:
         os.replace(str(prepared_path), str(snapshot_path))
@@ -375,8 +383,10 @@ def _notify_from_env(env_file):
 
 
 def _scheduled_wall_budget(current):
+    current = normalize_preclose_datetime(current)
     deadline = current.replace(
-        hour=14, minute=49, second=0, microsecond=0
+        hour=PRE_CLOSE_CUTOFF_TIME.hour, minute=PRE_CLOSE_CUTOFF_TIME.minute,
+        second=0, microsecond=0
     )
     return max(0.0, min(
         MAX_PRE_CLOSE_RUNTIME_SECONDS,
@@ -430,6 +440,7 @@ def _finalize_scheduled_result(
     now,
     monotonic,
     started_at,
+    budget_seconds=MAX_PRE_CLOSE_RUNTIME_SECONDS,
 ):
     """Publish a frozen result while enforcing both deadline clocks."""
 
@@ -464,15 +475,19 @@ def _finalize_scheduled_result(
     if skip_publish or not snapshot_path:
         return result
 
-    # A monotonic clock protects the 240-second total budget even if the wall
+    # Cap by the initial remaining window even if the wall
     # clock supplied by the scheduler is stale or moves backwards.
-    elapsed = max(0.0, float(monotonic()) - started_at)
-    wall_budget = _scheduled_wall_budget(now())
-    total_budget = max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed)
-    delivery_budget = min(wall_budget, total_budget)
+    def delivery_remaining():
+        current = now()
+        if current.date().isoformat() != trade_date:
+            return 0.0
+        elapsed = max(0.0, float(monotonic()) - started_at)
+        return min(_scheduled_wall_budget(current), max(0.0, budget_seconds - elapsed))
+
+    delivery_budget = delivery_remaining()
     if delivery_budget <= 0:
         result["exit_code"] = 1
-        result["run_status"] = "delivery_failed"
+        result["run_status"] = "deadline_exceeded"
         result["delivery_error"] = "PrecloseExecutionDeadline"
         record_delivery({
             "snapshot_id": result.get("snapshot_id"),
@@ -491,13 +506,18 @@ def _finalize_scheduled_result(
             notify_enabled = (
                 _notify_from_env(env_file) if notify is None else bool(notify)
             )
+            if delivery_remaining() <= 0:
+                raise PrecloseExecutionDeadline("delivery")
             delivery = selected_publisher(
                 snapshot_path,
                 root=root,
                 env_file=env_file,
                 notify=notify_enabled,
                 timeout=max(0.25, min(6.0, delivery_budget / 4.0)),
+                **({"budget_remaining": delivery_remaining} if publisher is None else {}),
             )
+            if delivery_remaining() <= 0:
+                raise PrecloseExecutionDeadline("delivery")
         publish_ok = delivery.get("publish", {}).get("success") is True
         notify_ok = (
             not notify_enabled
@@ -516,7 +536,7 @@ def _finalize_scheduled_result(
         })
     except PrecloseExecutionDeadline:
         result["exit_code"] = 1
-        result["run_status"] = "delivery_failed"
+        result["run_status"] = "deadline_exceeded"
         result["delivery_error"] = "PrecloseExecutionDeadline"
         record_delivery({
             "snapshot_id": result.get("snapshot_id"),
@@ -546,13 +566,15 @@ def _freeze_fallback_before_cutoff(
     now,
     monotonic,
     started_at,
+    budget_seconds=MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    write_guard=None,
 ):
     """Freeze a non-actionable fallback only while both hard budgets remain."""
 
     elapsed = max(0.0, float(monotonic()) - started_at)
     remaining = min(
         _scheduled_wall_budget(now()),
-        max(0.0, MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed),
+        max(0.0, budget_seconds - elapsed),
     )
     budget = max(0.0, remaining - DELIVERY_RESERVE_SECONDS)
     deadline_result = {
@@ -572,6 +594,7 @@ def _freeze_fallback_before_cutoff(
                 config=config,
                 root=root,
                 pipeline_runner=pipeline_runner,
+                write_guard=write_guard,
             )
     except PrecloseExecutionDeadline:
         deadline_result["failure_type"] = "PrecloseExecutionDeadline"
@@ -595,10 +618,12 @@ def run_scheduled_preclose(
     publisher=None,
     skip_publish=False,
     notify=None,
+    deadline_seconds=MAX_PRE_CLOSE_RUNTIME_SECONDS,
 ):
     """Acquire, freeze, publish and optionally notify within one total budget."""
 
-    now = now or (lambda: datetime.now().astimezone())
+    clock = now or (lambda: datetime.now(PRE_CLOSE_TIMEZONE))
+    now = lambda: normalize_preclose_datetime(clock())
     monotonic = monotonic or __import__("time").monotonic
     current = now()
     trade_date = current.date().isoformat()
@@ -624,7 +649,16 @@ def run_scheduled_preclose(
     as_of = current.isoformat(timespec="seconds")
     run_id = "{}-{}".format(as_of, uuid.uuid4().hex[:12])
     started_at = float(monotonic())
-    initial_budget = _scheduled_wall_budget(current)
+    if not math.isfinite(float(deadline_seconds)) or not 0 < float(deadline_seconds) <= MAX_PRE_CLOSE_RUNTIME_SECONDS:
+        raise ValueError("deadline_seconds must be finite and in (0, 660]")
+    initial_budget = min(float(deadline_seconds), _scheduled_wall_budget(current))
+
+    def snapshot_write_allowed():
+        current_clock = now()
+        elapsed = max(0.0, float(monotonic()) - started_at)
+        return (current_clock.date().isoformat() == trade_date
+                and PRE_CLOSE_START_TIME <= current_clock.time().replace(tzinfo=None) < PRE_CLOSE_CUTOFF_TIME
+                and elapsed < initial_budget)
     lock = PrecloseRunLock(day_root / "run.lock", run_id)
     if not lock.acquire():
         return {
@@ -651,7 +685,8 @@ def run_scheduled_preclose(
                 }, root=root, trade_date=trade_date, paths=paths,
                    env_file=env_file, publisher=publisher,
                    skip_publish=skip_publish, notify=notify, now=now,
-                   monotonic=monotonic, started_at=started_at)
+                   monotonic=monotonic, started_at=started_at,
+                   budget_seconds=initial_budget)
             return _finalize_scheduled_result({
                 "status": "already_completed",
                 "snapshot_status": frozen_snapshot["status"],
@@ -666,7 +701,8 @@ def run_scheduled_preclose(
             }, root=root, trade_date=trade_date, paths=paths,
                env_file=env_file, publisher=publisher,
                skip_publish=skip_publish, notify=notify, now=now,
-               monotonic=monotonic, started_at=started_at)
+               monotonic=monotonic, started_at=started_at,
+               budget_seconds=initial_budget)
 
         prepared_path, _prepared_snapshot = _prepare_deadline_fallback(
             day_root,
@@ -691,12 +727,13 @@ def run_scheduled_preclose(
         market_inputs = None
         acquisition_error = None
         acquisition_status = None
-        compute_budget = max(
-            0.001, initial_budget - DELIVERY_RESERVE_SECONDS
-        )
+        compute_budget = max(0.0, min(
+            initial_budget - max(0.0, float(monotonic()) - started_at),
+            _scheduled_wall_budget(now()),
+        ) - DELIVERY_RESERVE_SECONDS)
         acquisition_started = float(monotonic())
         try:
-            if initial_budget <= DELIVERY_RESERVE_SECONDS:
+            if compute_budget <= 0:
                 acquisition_status = "deadline_exceeded"
                 acquisition_error = "DeliveryReserveReached"
             else:
@@ -724,9 +761,13 @@ def run_scheduled_preclose(
             ), 6)
 
         generated = now()
+        if generated.date().isoformat() != trade_date:
+            acquisition_status = "deadline_exceeded"
+            acquisition_error = "TradeDateChanged"
+            generated = current
         elapsed = max(0.0, float(monotonic()) - started_at)
         strategy_remaining = min(
-            MAX_PRE_CLOSE_RUNTIME_SECONDS - elapsed - DELIVERY_RESERVE_SECONDS,
+            initial_budget - elapsed - DELIVERY_RESERVE_SECONDS,
             _scheduled_wall_budget(generated) - DELIVERY_RESERVE_SECONDS,
         )
         if strategy_remaining <= 0 and not acquisition_status:
@@ -815,6 +856,8 @@ def run_scheduled_preclose(
                 now=now,
                 monotonic=monotonic,
                 started_at=started_at,
+                budget_seconds=initial_budget,
+                write_guard=snapshot_write_allowed,
             )
         else:
             try:
@@ -824,6 +867,7 @@ def run_scheduled_preclose(
                         config=config,
                         root=root,
                         pipeline_runner=pipeline_runner,
+                        write_guard=snapshot_write_allowed,
                     )
             except PrecloseExecutionDeadline as exc:
                 result = _freeze_fallback_before_cutoff(
@@ -836,6 +880,8 @@ def run_scheduled_preclose(
                     now=now,
                     monotonic=monotonic,
                     started_at=started_at,
+                    budget_seconds=initial_budget,
+                    write_guard=snapshot_write_allowed,
                 )
             except Exception as exc:
                 result = _freeze_fallback_before_cutoff(
@@ -848,6 +894,8 @@ def run_scheduled_preclose(
                     now=now,
                     monotonic=monotonic,
                     started_at=started_at,
+                    budget_seconds=initial_budget,
+                    write_guard=snapshot_write_allowed,
                 )
         phase_seconds["pipeline"] = round(max(
             0.0, float(monotonic()) - pipeline_started
@@ -864,6 +912,7 @@ def run_scheduled_preclose(
             now=now,
             monotonic=monotonic,
             monotonic_started=started_at,
+            budget_seconds=initial_budget,
         )
         delivery_started = float(monotonic())
         final_result = _finalize_scheduled_result(
@@ -878,6 +927,7 @@ def run_scheduled_preclose(
             now=now,
             monotonic=monotonic,
             started_at=started_at,
+            budget_seconds=initial_budget,
         )
         phase_seconds["delivery"] = round(max(
             0.0, float(monotonic()) - delivery_started
@@ -923,7 +973,8 @@ def _run_preclose_locked(
     config,
     root,
     components=None,
-    pipeline_runner=run_preclose_pipeline
+    pipeline_runner=run_preclose_pipeline,
+    write_guard=None,
 ):
     """Freeze one snapshot while the caller owns the same-day run lock."""
 
@@ -942,8 +993,10 @@ def _run_preclose_locked(
         config=config,
         components=components,
     )
-    _atomic_json(snapshot_path, snapshot)
     _atomic_json(diagnostics_path, snapshot.get("diagnostics") or {})
+    if write_guard is not None and not write_guard():
+        raise PrecloseExecutionDeadline("snapshot_write")
+    _atomic_json(snapshot_path, snapshot, write_guard=write_guard)
     snapshot_status = snapshot.get("status")
     return {
         "status": "completed",
@@ -1024,7 +1077,7 @@ def _arguments(argv=None):
     return parser.parse_args(argv)
 
 
-def publish_frozen_snapshot(snapshot_path, *, root, env_file, notify, timeout=10):
+def publish_frozen_snapshot(snapshot_path, *, root, env_file, notify, timeout=10, budget_remaining=None):
     """Publish one already-frozen snapshot without touching formal artifacts."""
 
     snapshot_path = Path(snapshot_path).expanduser().resolve()
@@ -1046,6 +1099,7 @@ def publish_frozen_snapshot(snapshot_path, *, root, env_file, notify, timeout=10
         outbox=outbox,
         notify=notify,
         timeout=timeout,
+        budget_remaining=budget_remaining,
     )
 
 
@@ -1060,6 +1114,7 @@ def main(argv=None):
             source_sha=source_sha,
             skip_publish=args.skip_publish,
             notify=True if args.notify else None,
+            deadline_seconds=args.deadline_seconds,
         )
         print(json.dumps({
             key: result.get(key)
@@ -1079,7 +1134,7 @@ def main(argv=None):
         raise SystemExit("--input and --source-sha are required outside --scheduled")
     input_path = Path(args.input).expanduser().resolve()
     market_inputs = json.loads(input_path.read_text(encoding="utf-8"))
-    now = datetime.now().astimezone().isoformat(timespec="seconds")
+    now = datetime.now(PRE_CLOSE_TIMEZONE).isoformat(timespec="seconds")
     trade_date = str(args.trade_date or market_inputs.get("trade_date") or "")
     as_of = str(args.as_of or market_inputs.get("as_of") or now)
     generated_at = str(args.generated_at or now)

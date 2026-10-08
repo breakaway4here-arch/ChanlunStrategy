@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "test:contract": "node --test test/public-contract.node.mjs",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types src/worker-configuration.d.ts --include-runtime=false"
   },

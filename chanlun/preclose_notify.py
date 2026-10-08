@@ -407,6 +407,7 @@ def publish_preclose_snapshot(
     put=None,
     get=None,
     timeout=10,
+    budget_remaining=None,
 ):
     """PUT the frozen snapshot and require exact public GET identity/hash readback."""
 
@@ -416,12 +417,18 @@ def publish_preclose_snapshot(
     token = str(write_token or "").strip()
     if not base or not token:
         return {"success": False, "error": "missing_publish_configuration"}
+    def request_timeout():
+        remaining = float(budget_remaining()) if budget_remaining is not None else float(timeout)
+        if remaining <= 0:
+            raise TimeoutError("pre-close delivery deadline")
+        return min(float(timeout), remaining)
+
     try:
         write_response = put(
             base + "/api/preclose/snapshot",
             json=snapshot,
             headers={"authorization": "Bearer " + token},
-            timeout=timeout,
+            timeout=request_timeout(),
         )
         write_response.raise_for_status()
         write_payload = write_response.json()
@@ -429,22 +436,25 @@ def publish_preclose_snapshot(
             base + "/api/preclose/latest",
             params={"date": snapshot.get("trade_date")},
             headers={"cache-control": "no-cache"},
-            timeout=timeout,
+            timeout=request_timeout(),
         )
         read_response.raise_for_status()
         read_payload = read_response.json()
+        request_timeout()
     except Exception as exc:
         return _request_result_error(exc)
     if not isinstance(read_payload, dict):
         return {"success": False, "error": "invalid_readback"}
     identity_matches = read_payload.get("snapshot_id") == snapshot.get("snapshot_id")
     hash_matches = read_payload.get("content_hash") == snapshot.get("content_hash")
-    if not identity_matches or not hash_matches:
+    date_matches = read_payload.get("trade_date") == snapshot.get("trade_date")
+    if not identity_matches or not hash_matches or not date_matches:
         return {
             "success": False,
             "error": "readback_mismatch",
             "snapshot_id_matches": identity_matches,
             "content_hash_matches": hash_matches,
+            "trade_date_matches": date_matches,
         }
     return {
         "success": True,
@@ -469,6 +479,7 @@ def publish_preclose_and_notify(
     get=None,
     post=None,
     timeout=10,
+    budget_remaining=None,
 ):
     """Publish first; only a matching GET can unlock independent notifications."""
 
@@ -479,6 +490,7 @@ def publish_preclose_and_notify(
         put=put,
         get=get,
         timeout=timeout,
+        budget_remaining=budget_remaining,
     )
     result = {"publish": publish, "notifications": {}}
     if not publish.get("success") or not notify:
@@ -490,6 +502,11 @@ def publish_preclose_and_notify(
     if wecom_webhook:
         channels.append(("wecom", True))
     for channel, configured in channels:
+        remaining = float(budget_remaining()) if budget_remaining is not None else float(timeout)
+        if remaining <= 0:
+            result["notifications"][channel] = {"success": False, "error": "delivery_deadline"}
+            break
+        channel_timeout = min(float(timeout), remaining)
         if outbox.was_successful(content_hash, channel):
             delivery = {"success": True, "status": "already_sent"}
         elif not configured:
@@ -500,14 +517,14 @@ def publish_preclose_and_notify(
                 app_token=wxpusher_app_token,
                 uid=wxpusher_uid,
                 post=post,
-                timeout=timeout,
+                timeout=channel_timeout,
             )
         else:
             delivery = send_wecom_text(
                 message,
                 webhook=wecom_webhook,
                 post=post,
-                timeout=timeout,
+                timeout=channel_timeout,
             )
         if delivery.get("status") != "already_sent":
             outbox.record(

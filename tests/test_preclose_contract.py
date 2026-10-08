@@ -80,7 +80,7 @@ class PrecloseContractTests(unittest.TestCase):
             build_preclose_snapshot(**changed_as_of)["content_hash"],
         )
 
-    def test_empty_and_failed_states_use_one_public_empty_message(self):
+    def test_empty_and_failed_states_keep_distinct_public_messages(self):
         empty = build_preclose_snapshot(**_fixture("empty.json"))
         failed = build_preclose_snapshot(
             **_fixture("empty.json"),
@@ -93,7 +93,8 @@ class PrecloseContractTests(unittest.TestCase):
                 snapshot,
                 now="2026-08-27T14:50:00+08:00",
             )
-            self.assertEqual(public["message"], "本期未选出推荐票")
+            self.assertEqual(public["message"] == "本期未选出推荐票", snapshot["status"] == "empty")
+            self.assertEqual(public["status"], snapshot["status"])
             self.assertEqual(public["pools"], {
                 "main": [], "h4_t3": [], "acceleration": []
             })

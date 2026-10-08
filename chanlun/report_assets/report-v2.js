@@ -106,6 +106,12 @@
       reconciliation: null,
       loading: false,
       expiryTimer: null,
+      refreshTimer: null,
+      refreshCount: 0,
+      requestToken: 0,
+      requestDate: '',
+      requestPromise: null,
+      controller: null,
     },
     nextdayResearch: {
       requestToken: 0,
@@ -165,6 +171,7 @@
     top10Result: null,
     precloseAdvisory: null,
     precloseBody: null,
+    precloseRefresh: null,
     precloseReconciliation: null,
     directionQuick: null,
     marketHotspot: null,
@@ -742,6 +749,7 @@
     var h4Rows = preclosePoolRows(source, 'h4_t3');
     var accelerationRows = preclosePoolRows(source, 'acceleration');
     var rowCount = mainRows.length + h4Rows.length + accelerationRows.length;
+    if (status === 'available' && !rowCount) status = 'failed';
     var available = status === 'available'
       && rowCount > 0
       && !expired;
@@ -757,7 +765,7 @@
       + '</div>';
     if (!expired && !available) {
       return meta
-        + '<div class="preclose-unified-empty" role="status">本期未选出推荐票</div>';
+        + '<div class="preclose-unified-empty" role="status">' + escapeHtml(precloseStatusMessage(status)) + '</div>';
     }
     var archived = expired;
     var cardClass = archived ? 'preclose-snapshot-archived' : 'preclose-snapshot-active';
@@ -768,7 +776,10 @@
         + buildPreclosePoolHtml(source, 'h4_t3', 'H4 T+3')
         + buildPreclosePoolHtml(source, 'acceleration', '加速观察')
         + '</div>'
-      : '<div class="preclose-unified-empty" role="status">本期未选出推荐票</div>';
+      : '<div class="preclose-unified-empty" role="status">' + escapeHtml(
+        source.result_status ? precloseStatusMessage(source.result_status)
+          : status === 'expired' ? '本期无可回看候选' : precloseStatusMessage(status)
+      ) + '</div>';
     return ''
       + '<details class="preclose-snapshot-card ' + cardClass + '"' + (archived ? '' : ' open') + '>'
       + '  <summary>'
@@ -782,6 +793,16 @@
       + poolsHtml
       + '  </div>'
       + '</details>';
+  }
+
+  function precloseStatusMessage(status) {
+    return ({
+      empty: '本期未选出推荐票',
+      waiting: '正在等待预跑结果',
+      failed: '预跑失败，暂不提供候选',
+      deadline_exceeded: '预跑超时，暂不提供候选',
+      not_run: '本期预跑未运行',
+    })[status] || '预跑状态暂不可用';
   }
 
   function precloseDiffNames(value) {
@@ -892,7 +913,63 @@
     }
   }
 
+  function precloseRefreshRemaining(pageDate, nowMs) {
+    var today = new Date(nowMs + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    var finish = Date.parse(today + 'T14:56:00+08:00');
+    return pageDate === today ? Math.max(0, finish - nowMs) : 0;
+  }
+
+  function stopPrecloseRefresh() {
+    if (state.preclose.refreshTimer !== null && window.clearTimeout) {
+      window.clearTimeout(state.preclose.refreshTimer);
+    }
+    state.preclose.refreshTimer = null;
+  }
+
+  function schedulePrecloseRefresh(pageDate, status) {
+    stopPrecloseRefresh();
+    var remaining = precloseRefreshRemaining(pageDate, Date.now());
+    if (remaining <= 250) {
+      finishPrecloseWaiting(pageDate);
+      return;
+    }
+    if (!window.setTimeout || state.preclose.refreshCount >= 64
+      || ['available', 'empty', 'expired', 'failed', 'deadline_exceeded', 'not_run'].indexOf(status) >= 0) return;
+    var untilStart = Date.parse(pageDate + 'T14:45:00+08:00') - Date.now();
+    var delay = untilStart > 0 ? untilStart : Math.min(15000, Math.max(250, remaining / 2));
+    state.preclose.refreshTimer = window.setTimeout(function () {
+      state.preclose.refreshTimer = null;
+      if (getPreclosePageDate() !== pageDate) return null;
+      if (precloseRefreshRemaining(pageDate, Date.now()) <= 250) {
+        finishPrecloseWaiting(pageDate);
+        return null;
+      }
+      state.preclose.refreshCount += 1;
+      return loadPrecloseAdvisory();
+    }, delay);
+  }
+
+  function finishPrecloseWaiting(pageDate) {
+    if (getPreclosePageDate() !== pageDate) return;
+    var snapshot = state.preclose.snapshot;
+    if (!snapshot || snapshot.status === 'waiting' || snapshot.status === 'unavailable') {
+      renderPrecloseFailure();
+    }
+  }
+
   function loadPrecloseAdvisory() {
+    var pageDate = getPreclosePageDate();
+    if (state.preclose.loading && state.preclose.requestDate === pageDate) {
+      return state.preclose.requestPromise || Promise.resolve(null);
+    }
+    stopPrecloseRefresh();
+    if (state.preclose.controller) state.preclose.controller.abort();
+    if (state.preclose.requestDate !== pageDate) state.preclose.refreshCount = 0;
+    state.preclose.requestDate = pageDate;
+    var requestToken = ++state.preclose.requestToken;
+    function currentRequest() {
+      return requestToken === state.preclose.requestToken && getPreclosePageDate() === pageDate;
+    }
     var apiBase = getPrecloseApiBase();
     if (!apiBase) {
       if (nodes.precloseAdvisory && nodes.precloseAdvisory.classList) {
@@ -908,35 +985,71 @@
       return Promise.resolve(null);
     }
     state.preclose.loading = true;
-    if (nodes.precloseBody) {
+    if (nodes.precloseRefresh) nodes.precloseRefresh.disabled = true;
+    if (nodes.precloseBody && !state.preclose.snapshot) {
       nodes.precloseBody.innerHTML = '<div class="preclose-loading">正在读取当天预跑快照…</div>';
     }
-    var pageDate = getPreclosePageDate();
     var snapshotUrl = apiBase + '/api/preclose/latest?date=' + encodeURIComponent(pageDate);
     var reconciliationUrl = apiBase + '/api/preclose/reconciliation?date=' + encodeURIComponent(pageDate);
-    return window.fetch(snapshotUrl).then(function (response) {
+    var remaining = precloseRefreshRemaining(pageDate, Date.now());
+    var controller = window.AbortController ? new window.AbortController() : null;
+    state.preclose.controller = controller;
+    var timeoutTimer = null;
+    var timeout = new Promise(function (_resolve, reject) {
+      if (window.setTimeout) timeoutTimer = window.setTimeout(function () {
+        if (controller) controller.abort();
+        reject(new Error('pre-close read timeout'));
+      }, remaining > 0 ? Math.min(6000, remaining) : 6000);
+    });
+    var read = window.fetch(snapshotUrl, controller ? {signal: controller.signal, cache: 'no-store'} : {cache: 'no-store'}).then(function (response) {
+      if (response && response.status === 404) {
+        return {status: precloseRefreshRemaining(pageDate, Date.now()) > 0 ? 'waiting' : 'unavailable', trade_date: pageDate};
+      }
       if (!response || !response.ok) throw new Error('pre-close snapshot unavailable');
       return response.json();
-    }).then(function (snapshot) {
+    });
+    state.preclose.requestPromise = Promise.race([read, timeout]).then(function (snapshot) {
+      if (!currentRequest()) return null;
+      if (remaining > 0 && precloseRefreshRemaining(pageDate, Date.now()) <= 0) throw new Error('pre-close delivery cutoff');
       if (!snapshot || typeof snapshot !== 'object') throw new Error('invalid pre-close snapshot');
+      if (snapshot.trade_date !== pageDate) throw new Error('pre-close date mismatch');
       renderPrecloseSnapshot(snapshot, Date.now());
-      return window.fetch(reconciliationUrl).then(function (response) {
+      var status = normalizeString(snapshot.status);
+      var expiresMs = Date.parse(normalizeString(snapshot.expires_at));
+      if (Number.isFinite(expiresMs) && Date.now() >= expiresMs) status = 'expired';
+      if (status === 'available' && !['main', 'h4_t3', 'acceleration'].some(function (key) { return preclosePoolRows(snapshot, key).length; })) status = 'failed';
+      schedulePrecloseRefresh(pageDate, status);
+      if (!snapshot.content_hash) { renderPrecloseReconciliation(null); return snapshot; }
+      var reconciliationRead = window.fetch(reconciliationUrl, controller ? {signal: controller.signal, cache: 'no-store'} : {cache: 'no-store'}).then(function (response) {
         if (response && response.status === 404) return null;
         if (!response || !response.ok) throw new Error('reconciliation unavailable');
         return response.json();
-      }).then(function (reconciliation) {
+      });
+      return Promise.race([reconciliationRead, timeout]).then(function (reconciliation) {
+        if (!currentRequest()) return null;
+        if (reconciliation && reconciliation.trade_date && reconciliation.trade_date !== pageDate) throw new Error('reconciliation date mismatch');
         renderPrecloseReconciliation(reconciliation);
         return snapshot;
       }).catch(function () {
-        renderPrecloseReconciliation(null);
+        if (currentRequest()) renderPrecloseReconciliation(null);
         return snapshot;
       });
     }).catch(function () {
-      renderPrecloseFailure();
+      if (currentRequest()) {
+        renderPrecloseFailure();
+        schedulePrecloseRefresh(pageDate, 'unavailable');
+      }
       return null;
     }).finally(function () {
-      state.preclose.loading = false;
+      if (timeoutTimer !== null && window.clearTimeout) window.clearTimeout(timeoutTimer);
+      if (requestToken === state.preclose.requestToken) {
+        state.preclose.loading = false;
+        state.preclose.controller = null;
+        state.preclose.requestPromise = null;
+        if (nodes.precloseRefresh) nodes.precloseRefresh.disabled = false;
+      }
     });
+    return state.preclose.requestPromise;
   }
 
   function getDecisionWatchlistUrl() {
@@ -5031,6 +5144,7 @@
       + '    <section class="preclose-advisory hidden" id="precloseAdvisory" aria-labelledby="precloseAdvisoryTitle">'
       + '      <header class="preclose-advisory-head">'
       + '        <span><strong id="precloseAdvisoryTitle">14:45预跑</strong><small>盘中建议 · 不改写盘后正式结果</small></span>'
+      + '        <button type="button" id="precloseRefresh">刷新预跑</button>'
       + '      </header>'
       + '      <div class="preclose-body" id="precloseBody" aria-live="polite"></div>'
       + '      <div class="preclose-reconciliation hidden" id="precloseReconciliation" aria-live="polite"></div>'
@@ -5109,6 +5223,7 @@
     nodes.top10Result = app.querySelector('#top10Result');
     nodes.precloseAdvisory = app.querySelector('#precloseAdvisory');
     nodes.precloseBody = app.querySelector('#precloseBody');
+    nodes.precloseRefresh = app.querySelector('#precloseRefresh');
     nodes.precloseReconciliation = app.querySelector('#precloseReconciliation');
     nodes.directionQuick = app.querySelector('#directionQuickSummary');
     nodes.marketHotspot = app.querySelector('#marketHotspotSection');
@@ -14471,6 +14586,12 @@
       state.nextdayResearch.hashListenerBound = true;
     }
     loadPrecloseAdvisory();
+    if (nodes.precloseRefresh) {
+      nodes.precloseRefresh.addEventListener('click', function () {
+        state.preclose.refreshCount = 0;
+        loadPrecloseAdvisory();
+      });
+    }
     state.rawPoolCandidates = null;
     resetTop10State();
     renderTop10Control();
