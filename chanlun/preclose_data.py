@@ -13,6 +13,14 @@ from urllib.parse import quote
 
 
 _CN_TZ = timezone(timedelta(hours=8))
+MARKET_INDICES = {
+    "上证指数": "000001",
+    "深证成指": "399001",
+    "创业板指": "399006",
+    "科创50": "000688",
+    "沪深300": "000300",
+    "中证500": "000905",
+}
 _CORE_ARRAY_KEYS = ("opens", "highs", "lows", "closes", "volumes")
 _ROW_METADATA_KEYS = (
     ("volume_units", "volume_unit", "unknown"),

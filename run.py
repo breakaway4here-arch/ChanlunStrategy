@@ -1970,6 +1970,29 @@ def _apply_full_a_universe(
                 audit_records=eligibility_audit,
             )
         diagnostics["eligibility"] = load_diagnostics
+        # Current validated risk also applies to the original pool on fallback
+        # and to shadow's legacy extras; other eligibility exclusions keep their
+        # existing behavior.
+        risk_blocked = {
+            normalize_identity(audit).key for audit in eligibility_audit
+            if audit.get("eligibility_failure_reason") in ("st_or_delisting", "risk_evidence_conflict")
+            and (audit.get("stock_meta_asof") or {}).get("risk_source") in ("eastmoney", "sina", "tencent")
+            and str((audit.get("stock_meta_asof") or {}).get("risk_as_of") or "")[:10] == str(report_date)
+        }
+        if risk_blocked:
+            retained, removed_codes = [], []
+            for item in stocks_with_kline or []:
+                try:
+                    blocked = normalize_identity(item).key in risk_blocked
+                except (TypeError, ValueError):
+                    blocked = False
+                if blocked:
+                    removed_codes.append(str(item.get("code") or ""))
+                else:
+                    retained.append(item)
+            stocks_with_kline = retained
+            diagnostics["risk_filtered_existing_count"] = len(removed_codes)
+            diagnostics["risk_filtered_existing_codes"] = sorted(set(removed_codes))
         if candidate_funnel is not None:
             candidate_funnel.set_stage_count(
                 "full_a", load_diagnostics.get("instrument_count", 0)

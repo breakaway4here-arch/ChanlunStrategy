@@ -19,8 +19,10 @@ from .daily_structure_pool import build_daily_structure_pool
 from .fusion_admission import apply_fusion_admission
 from .h4_t3_pool import build_h4_t3_pool, filter_h4_upstream_candidates
 from .market_sentiment import build_market_sentiment
+from .market_history_store import quote_stock_risk
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
+from .preclose_data import MARKET_INDICES
 from .preclose_schedule import (
     MAX_PRE_CLOSE_RUNTIME_SECONDS, PRE_CLOSE_CUTOFF_TIME,
     normalize_preclose_datetime,
@@ -1084,6 +1086,68 @@ def _shanghai_closes(market_inputs):
     return _as_list(shanghai.get("closes"))
 
 
+def _verified_risk_only_empty(market_inputs, config):
+    """Recognize a complete quote input wholly excluded by current business risk."""
+    runtime = market_inputs.get("runtime_diagnostics") or {}
+    splice = runtime.get("daily_splice") or {}
+    quotes = runtime.get("quote_snapshot") or {}
+    evidence = splice.get("risk_exclusions") or []
+    count = splice.get("requested_count")
+    market = market_inputs.get("market") or {}
+    stock_bars = market.get("stock_bars") or []
+    stock_by_code = {str(row.get("code") or ""): row for row in stock_bars}
+    stock_codes = set(stock_by_code)
+    if (market_inputs.get("daily") or market_inputs.get("target_codes")
+            or not isinstance(count, int) or isinstance(count, bool) or count <= 0
+            or splice.get("risk_excluded_count") != count or splice.get("quote_eligible_count") != 0
+            or splice.get("available_count") != count or splice.get("business_available_count") != 0
+            or splice.get("coverage") != 1
+            or quotes.get("complete") is not True or quotes.get("requested") != quotes.get("unique")
+            or len(stock_codes) != quotes.get("unique") or len(evidence) != count
+            or len(stock_bars) != len(stock_codes)
+            or set(market.get("market_indices") or {}) != set(MARKET_INDICES)):
+        return None
+    for name, code in MARKET_INDICES.items():
+        index = market["market_indices"][name]
+        if not isinstance(index, dict) or not isinstance(index.get("closes"), (list, tuple)):
+            return None
+        closes = [_finite(value) for value in index["closes"]]
+        close, change = _finite(index.get("close")), _finite(index.get("change_pct"))
+        if (index.get("code") != code or index.get("date") != config.trade_date
+                or index.get("source") != "tencent+tencent_plain_verified"
+                or len(closes) < 2 or any(value is None or value <= 0 for value in closes)
+                or close is None or close <= 0 or change is None
+                or close != round(closes[-1], 4)
+                or change != round((closes[-1] / closes[-2] - 1) * 100, 4)):
+            return None
+    for bar in stock_bars:
+        close, previous = _finite(bar.get("close")), _finite(bar.get("prev_close"))
+        if (close is None or close <= 0 or previous is None or previous <= 0
+                or (bar.get("is_st") is not None and not isinstance(bar["is_st"], bool))):
+            return None
+    codes = []
+    for entry in evidence:
+        quote = entry.get("quote") or {}
+        code = str(entry.get("code") or "")
+        if quote.get("code") != code or code not in stock_codes:
+            return None
+        risk = quote_stock_risk(quote, quote, config.as_of)
+        reason = ("st_or_delisting" if risk["risk_status"] != "conflict"
+                  and (risk["is_st"] is True or risk["delisting_risk"] is True) else "")
+        if not reason or entry.get("reason") != reason or not risk["risk_source"]:
+            return None
+        bar = stock_by_code[code]
+        if (bar.get("name") != risk.get("name", "") or bar.get("is_st") is not risk["is_st"]
+                or _finite(bar.get("close")) != _finite(quote.get("current_price"))
+                or _finite(bar.get("prev_close")) != _finite(quote.get("prev_close"))):
+            return None
+        codes.append(code)
+    if len(set(codes)) != count or sorted(codes) != sorted(
+            str(entry.get("code") or "") for entry in splice.get("excluded_codes") or []):
+        return None
+    return codes
+
+
 def run_preclose_pipeline(market_inputs, *, config, components=None):
     """Run only daily/30m/main/H4/acceleration and freeze one advisory snapshot."""
 
@@ -1113,6 +1177,16 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 or _parse_datetime(config.generated_at).time().replace(tzinfo=None)
                 >= PRE_CLOSE_CUTOFF_TIME):
             raise PrecloseDeadlineExceeded("startup", config.deadline_seconds)
+
+        risk_empty_codes = _verified_risk_only_empty(market_inputs, config)
+        if risk_empty_codes:
+            _stage_clock(config, diagnostics, started_at, "market_context", lambda: build_preclose_market_context(market_inputs, components=components))
+            diagnostics["risk_excluded_codes"] = risk_empty_codes
+            diagnostics["input_health"]["daily"] = {"status": "verified", "requested_count": 0,
+                "available_count": 0, "coverage": 1.0, "business_excluded_count": len(risk_empty_codes)}
+            return build_preclose_snapshot(config.trade_date, config.as_of, config.generated_at,
+                pools={"main": [], "h4_t3": [], "acceleration": []}, source_sha=config.source_sha,
+                diagnostics=diagnostics, run_id=config.run_id)
 
         def daily_operation():
             daily_results, rows_by_code, failures = _analyze_daily_inputs(

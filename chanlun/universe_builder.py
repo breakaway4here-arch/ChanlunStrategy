@@ -278,7 +278,9 @@ def load_eligible_candidates(
         "amount_evidence_incomplete": 0,
         "volume_evidence_incomplete": 0,
         "invalid_identity": 0,
+        "risk_evidence_conflict": 0,
     }
+    risk_unknown_count = 0
     for instrument in instruments:
         try:
             canonical = normalize_identity(instrument)
@@ -303,7 +305,6 @@ def load_eligible_candidates(
             "code": canonical.code,
             "name": (
                 (meta or {}).get("name")
-                or instrument.get("name")
                 or instrument["code"]
             ),
             "exchange": canonical.exchange,
@@ -337,10 +338,18 @@ def load_eligible_candidates(
             excluded["missing_meta"] += 1
             reject("missing_meta")
             continue
-        if meta.get("is_st") is True or meta.get("delisting_risk") is True:
+        if meta.get("risk_status") == "conflict":
+            excluded["risk_evidence_conflict"] += 1
+            reject("risk_evidence_conflict")
+            continue
+        name = str(meta.get("name") or "")
+        if (meta.get("is_st") is True or meta.get("delisting_risk") is True
+                or "ST" in name.upper() or "退" in name):
             excluded["st_or_delisting"] += 1
             reject("st_or_delisting")
             continue
+        if meta.get("risk_status") == "unknown":
+            risk_unknown_count += 1
         try:
             listed_days = int(meta.get("listed_days"))
         except (TypeError, ValueError):
@@ -400,7 +409,7 @@ def load_eligible_candidates(
         )
         candidate = {
             "code": canonical.code,
-            "name": meta.get("name") or instrument.get("name") or instrument["code"],
+            "name": meta.get("name") or instrument["code"],
             "exchange": canonical.exchange,
             "asset_type": canonical.asset_type,
             "stock_meta_asof": meta,
@@ -438,6 +447,7 @@ def load_eligible_candidates(
         "required_date": str(required_date or ""),
         "instrument_count": len(instruments),
         "eligible_count": len(candidates),
+        "risk_unknown_count": risk_unknown_count,
         "excluded": excluded,
     }
     if return_diagnostics:
