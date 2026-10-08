@@ -1,4 +1,5 @@
 import copy
+import inspect
 import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
@@ -12,6 +13,111 @@ NOW=datetime(2026,9,29,10,0,tzinfo=timezone(timedelta(hours=8)))
 
 
 class KaipanlaTests(unittest.TestCase):
+    @staticmethod
+    def _themes_raw(date='2026-10-08', name='样例题材'):
+        # Synthetic response follows the archived apphis shape and stock offsets.
+        stock=['600000','浦发银行']+['']*15+['样例原因']+['','']
+        return {'errcode':'0','date':date,'nums':{},'ttag':'',
+                'list':[{'ZSCode':'801000','ZSName':name,'num':1,'StockList':[stock]}]}
+
+    def test_fetch_themes_uses_historical_date_and_anonymous_device(self):
+        with tempfile.TemporaryDirectory() as tmp, patch.object(k,'_cooldown_until',0), \
+             patch.object(k.time,'sleep'), patch.object(k.requests,'Session') as session:
+            response=Mock()
+            response.json.return_value=self._themes_raw()
+            post=session.return_value.__enter__.return_value.post
+            post.return_value=response
+            result=k.fetch_themes('2026-10-08',cache_dir=tmp)
+            self.assertEqual(result['status'],'available')
+            self.assertEqual(result['data_date'],'2026-10-08')
+            self.assertEqual(result['coverage'],'returned_sample')
+            self.assertFalse(result['affects_formal'])
+            args,kwargs=post.call_args
+            self.assertEqual(args[0],'https://apphis.longhuvip.com/w1/api/index.php')
+            self.assertEqual(kwargs['data']['c'],'HisLimitResumption')
+            self.assertEqual(kwargs['data']['Date'],'2026-10-08')
+            self.assertNotIn('Day',kwargs['data'])
+            self.assertEqual(kwargs['data']['DeviceID'],k._anonymous_device_id)
+            self.assertEqual(kwargs['headers']['User-Agent'],'Dalvik/2.1.0 (Linux; U; Android 9)')
+            self.assertFalse(session.return_value.__enter__.return_value.trust_env)
+
+    def test_invalid_dated_theme_cache_does_not_hide_later_valid_sample(self):
+        invalids=[self._themes_raw('2026-09-30'),self._themes_raw('2026-10-09'),
+                  dict(self._themes_raw(),list=[]),
+                  dict(self._themes_raw(),list=[{'ZSName':'坏样本','StockList':[['bad','坏样本']]}])]
+        for invalid in invalids:
+            with self.subTest(raw_date=invalid['date'],groups=invalid['list']), \
+                 tempfile.TemporaryDirectory() as tmp, patch.object(k,'_cooldown_until',0), \
+                 patch.object(k.time,'sleep'), patch.object(k.requests,'Session') as session:
+                response=Mock()
+                response.json.side_effect=[invalid,self._themes_raw()]
+                post=session.return_value.__enter__.return_value.post
+                post.return_value=response
+                one=k.fetch_themes('2026-10-08',cache_dir=tmp)
+                two=k.fetch_themes('2026-10-08',cache_dir=tmp)
+                self.assertNotEqual(one['status'],'available')
+                if invalid['date']=='2026-09-30':
+                    self.assertEqual(one['status'],'previous_day')
+                    self.assertEqual(one['data_date'],'2026-09-30')
+                self.assertEqual(two['status'],'available')
+                self.assertEqual(two['data_date'],'2026-10-08')
+                self.assertEqual(post.call_count,2)
+
+    def test_force_refresh_only_bypasses_dated_theme_cache(self):
+        self.assertIn('force_refresh',inspect.signature(k.fetch_themes).parameters)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(k,'_cooldown_until',0), \
+             patch.object(k.time,'sleep'), patch.object(k.requests,'Session') as session:
+            response=Mock()
+            response.json.side_effect=[self._themes_raw(name='首次样本'),self._themes_raw(name='晚到样本')]
+            post=session.return_value.__enter__.return_value.post
+            post.return_value=response
+            one=k.fetch_themes('2026-10-08',cache_dir=tmp)
+            cached=k.fetch_themes('2026-10-08',cache_dir=tmp)
+            refreshed=k.fetch_themes('2026-10-08',cache_dir=tmp,force_refresh=True)
+            self.assertEqual(cached,one)
+            self.assertEqual(one['groups'][0]['name'],'首次样本')
+            self.assertEqual(refreshed['status'],'available')
+            self.assertEqual(refreshed['groups'][0]['name'],'晚到样本')
+            self.assertEqual(post.call_count,2)
+
+    def test_theme_force_refresh_respects_request_failure_cooldown(self):
+        self.assertIn('force_refresh',inspect.signature(k.fetch_themes).parameters)
+        with tempfile.TemporaryDirectory() as tmp, patch.object(k,'_cooldown_until',0), \
+             patch.object(k.time,'sleep'), patch.object(k.time,'monotonic',return_value=100) as clock, \
+             patch.object(k.requests,'Session') as session:
+            response=Mock()
+            response.json.side_effect=[{'errcode':'1016'},self._themes_raw()]
+            post=session.return_value.__enter__.return_value.post
+            post.return_value=response
+            self.assertEqual(k.fetch_themes('2026-10-08',cache_dir=tmp)['status'],'unavailable')
+            self.assertEqual(k.fetch_themes('2026-10-08',cache_dir=tmp,force_refresh=True)['status'],'unavailable')
+            self.assertEqual(post.call_count,1)
+            clock.return_value=161
+            self.assertEqual(k.fetch_themes('2026-10-08',cache_dir=tmp,force_refresh=True)['status'],'available')
+            self.assertEqual(post.call_count,2)
+
+    def test_theme_refresh_preserves_daily_cache_and_request_headers(self):
+        self.assertIn('force_refresh',inspect.signature(k.fetch_themes).parameters)
+        raw={'StockID':'600000','errcode':'0','x':['20260928'],
+             'y':[[10,11,12,9]],'vol':[100],'bal':[110000]}
+        with tempfile.TemporaryDirectory() as tmp, patch.object(k,'_cooldown_until',0), \
+             patch.object(k.time,'sleep'), patch.object(k.requests,'Session') as session:
+            response=Mock()
+            response.json.side_effect=[raw,self._themes_raw(),self._themes_raw(name='晚到样本')]
+            post=session.return_value.__enter__.return_value.post
+            post.return_value=response
+            one=k.fetch_daily('600000',1,cache_dir=tmp,now=NOW)
+            daily_args,daily_kwargs=post.call_args
+            k.fetch_themes('2026-10-08',cache_dir=tmp)
+            k.fetch_themes('2026-10-08',cache_dir=tmp,force_refresh=True)
+            two=k.fetch_daily('600000',1,cache_dir=tmp,now=NOW)
+            self.assertEqual(one['closes'].tolist(),two['closes'].tolist())
+            self.assertEqual(one['fetched_at'],two['fetched_at'])
+            self.assertEqual(post.call_count,3)
+            self.assertEqual(daily_args[0],'https://pchis.kaipanla.com/w1/api/index.php')
+            self.assertNotIn('DeviceID',daily_kwargs['data'])
+            self.assertEqual(daily_kwargs['headers']['User-Agent'],'Mozilla/5.0')
+
     def test_theme_uses_response_date_and_is_never_formal(self):
         stock=['600000','浦发银行']+['']*15+['题材原因 <script>bad</script>']
         result=k.parse_themes({'errcode':'0','date':'2026-09-28','Day':['2026-09-29'],

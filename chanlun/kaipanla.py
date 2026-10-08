@@ -26,13 +26,14 @@ def _cache_root():
     return Path(MARKET_HISTORY_DB_PATH).parent / 'kaipanla'
 
 
-def _request(url, data, *, cache_dir=None, now=None):
+def _request(url, data, *, cache_dir=None, now=None, force_refresh=False):
     """One anonymous request, short timeout, cached successes and failed attempts."""
     global _last_request, _cooldown_until
     now = now or datetime.now(CN)
     root = Path(cache_dir) if cache_dir is not None else _cache_root()
     key = hashlib.sha256(json.dumps(['kpl-v1',url,data],sort_keys=True).encode()).hexdigest()
     path = root / (key+'.json')
+    dated_themes = data.get('c')=='HisLimitResumption' and data.get('a')=='GetPlateInfo_w38'
     with _lock:
         try:
             saved = json.loads(path.read_text())
@@ -40,7 +41,11 @@ def _request(url, data, *, cache_dir=None, now=None):
             age = (now-stamp).total_seconds()
             if (stamp.date()==now.date() and 0<=age<900
                     and (stamp.hour>=15)==(now.hour>=15)):
-                return saved.get('payload')
+                payload=saved.get('payload')
+                # An early empty or wrong-day theme response must not hide late data.
+                if not dated_themes or (not force_refresh and
+                        parse_themes(payload,str(data.get('Date')))['status']=='available'):
+                    return payload
         except (OSError, ValueError, TypeError, KeyError):
             pass
         if time.monotonic() < _cooldown_until:
@@ -54,7 +59,8 @@ def _request(url, data, *, cache_dir=None, now=None):
                 session.trust_env=False
                 body=dict(data)
                 headers={'User-Agent':'Mozilla/5.0','Referer':'https://www.kaipanla.com/'}
-                if url.startswith('https://apphwhq.longhuvip.com/'):
+                if (url.startswith('https://apphwhq.longhuvip.com/') or
+                        (dated_themes and url.startswith('https://apphis.longhuvip.com/'))):
                     body['DeviceID']=_anonymous_device_id
                     headers={'User-Agent':'Dalvik/2.1.0 (Linux; U; Android 9)',
                              'Content-Type':'application/x-www-form-urlencoded; charset=UTF-8'}
@@ -120,11 +126,12 @@ def parse_themes(raw, report_date):
         return empty
 
 
-def fetch_themes(report_date, *, cache_dir=None):
+def fetch_themes(report_date, *, cache_dir=None, force_refresh=False):
     try:
-        raw=_request('https://apphwhq.longhuvip.com/w1/api/index.php',{
-            'c':'DailyLimitResumption','a':'GetPlateInfo_w38','st':'100','Index':'0',
-            'Day':str(report_date),'apiv':'w42','PhoneOSNew':'1','VerSion':'5.21.0.2'},cache_dir=cache_dir)
+        raw=_request('https://apphis.longhuvip.com/w1/api/index.php',{
+            'c':'HisLimitResumption','a':'GetPlateInfo_w38','st':'100','Index':'0',
+            'Date':str(report_date),'apiv':'w42','PhoneOSNew':'1','VerSion':'5.21.0.2'},
+            cache_dir=cache_dir,force_refresh=force_refresh)
         return parse_themes(raw,report_date)
     except Exception:
         # Optional context cannot stop the report, including local cache errors.
