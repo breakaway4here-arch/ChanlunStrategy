@@ -21,7 +21,7 @@
 | B1 | 3：同身份/日期已核验风险进入资格 | market_close_snapshot、market_history_store、universe_builder及下游过滤 | 普通→ST/退市、缺失/冲突、历史asof；新增排除与保留的代码集合/计数 | 已通过，未上线 |
 | B2 | 2：实际120根资格窗口具体缺口、有界真实修复、同次重检 | kline_repository、data_fetcher、universe_builder、run/preclose | 完整/历史nonfinal/末根nonfinal、边界、失败/预算、混合集合、预跑正式库只读 | 已通过，未上线 |
 | C | 5：最终可采用才算来源成功 | 分钟data_fetcher、kline_repository与诊断 | 首源成功不多请求；首源价基失败→次源完整成功；全失败/截止/身份日期单位错误；具体失败原因 | 已通过，未上线 |
-| D1 | 8：合法B研究投影经过finalizer保留观察Top5 | report_view_model、repair_strategy_scorecard_snapshot | 冻结9/30五股保留及顺序；缺/冲突标志、假正式/L1/可执行拒绝；正式/H4/L1评分排序不变 | 准备中 |
+| D1 | 8：合法B研究投影经过finalizer保留观察Top5 | report_view_model、repair_strategy_scorecard_snapshot | 冻结9/30五股保留及顺序；缺/冲突标志、假正式/L1/可执行拒绝；正式/H4/L1评分排序不变 | 已通过，未上线 |
 | D2 | 4：HTML清理后同报告身份版本发布成员登记不缩水 | report_comparison、report_generator及R2消费者 | 登记→清理→重建；修订/冲突不继承；缺原始、legacy、去重顺序、价格用途和收益分母 | 准备中 |
 
 ## 保护边界
@@ -35,7 +35,7 @@
 
 准备阶段完成附件读取、最新远端同步、独立工作树建立和规则跟踪核对。各批实际结果如下；未运行生产入口。
 
-已验收的本地提交在同步最新main后为：A `241ed06d`、B1 `d00dab4c`、B2 `46eeee3f`（原验收提交依次9496c9ca/9115bd1b/3f55b7e3，补丁留证）。分支尚未最终推送，未合并或部署。
+已验收的本地提交在同步最新main后为：A `241ed06d`、B1 `d00dab4c`、B2 `46eeee3f`、C `1d86c721`（原A/B1/B2验收提交依次9496c9ca/9115bd1b/3f55b7e3，补丁留证）。分支尚未最终推送，未合并或部署。
 
 ### A：预跑交付、状态和刷新
 
@@ -47,7 +47,7 @@
 - 测试资源：dev-3 Worker测试PID/PGID3118108已退出，所属任务进程为0；临时UI进程3120560/端口18768在本批浏览器验收结束后停止并回查。未运行生产入口、自然launchd、通知或已部署Worker；本批未上线。
 - 证据：主进程日志`/private/tmp/chanlun-handoff-acceptance/batch-a-python-final.log`和`worker-integration.log`；临时UI全部为合成验收，不是日报交付。
 
-后续只读复现：B1同日ST报价仍被旧元数据放行；B2两股历史nonfinal连续两次标verified、远端请求0，资格仅健康股保留。主进程已独立运行`/private/tmp/chanlun-worker-b1b2-diagnosis.py`，退出0。C/D1/D2的最新基线复现分别为最终价基失败不切源、9/30研究Top5的5→0、HTML清理登记2→1；这些仍未实施或通过验收。
+准备阶段的只读复现：B1同日ST报价仍被旧元数据放行；B2两股历史nonfinal连续两次标verified、远端请求0，资格仅健康股保留。主进程已独立运行`/private/tmp/chanlun-worker-b1b2-diagnosis.py`，退出0。C/D1/D2的当时基线分别为最终价基失败不切源、9/30研究Top5的5→0、HTML清理登记2→1；各批后续结果见下文，不将这段历史状态作为当前结论。
 
 A最终回查通过：资源版本`4a24efa974f8`；手机最终源码真实计时器GET由1→2自动显示候选，手动刷新和展开已封存失败卡片均显示正确，正式9只/H4 1只合成对照保留，390宽无横向溢出。浏览器临时标签已关闭、尺寸已恢复。dev-3 UI进程3120560/进程组3120560已终止，无存活子进程，18768端口已释放并在实际主机读回确认；临时目录随后仅清理本任务材料。自然调度、真实行情/通知和部署仍未验收。
 
@@ -91,3 +91,10 @@ main由另一独立任务推进至`a5a59a96`（开盘啦按日资料与补更）
 - 合法完整raw/unverified保持price_basis_unverified只读，含旧两参数generic raw的80根/1调用/0规范写入；缺/空/非mapping原价引用保留合法原价窗口，错误身份/单位/final及free自行qfq拒绝规范写入。已有健康qfq缓存无新增请求；成功次源的早期失败保留history而不污染最终健康。
 - raw_daily_conflict等具体原因沿repository→两诊断消费者→实际80/220桶15/30批量→run健康摘要保留；成功final_adopted=true、rejection_reason空。主进程470项独立隔离回归通过，新12测试；实际核心2组、独立边界9组、规格和质量复审均通过。最新main同步后518及77回归通过；日志`/private/tmp/chanlun-handoff-acceptance/batch-c-python-final.log`、`batch-c-post-sync.log`及`batch-c-boundary.json`。
 - 固定数据下仅原不可采用来源后新增使用可验证来源；不改变正式/H4/L1规则或评分。Python3.7导入、差异/规则跟踪、源码资源及最新96份JSON保护通过；无生产行情调用/正式写库/服务/部署。
+
+### D1：研究观察Top5与最终状态
+
+- 产品只改finalizer，复用现有workspace投影。Top5的B声明优先于旧pure/涨停观察例外：原始observation_watchlist和实际投影双侧严格布尔、规范股票身份/ref、source、watch/observation及三个既定原因/分钟状态合同一致才可保留；冲突重复、字符串/数字布尔、冒充正式/L1/可执行继续拒绝。普通非B的既有例外保持；highlights既有阻断不混修。
+- 冻结9/30五股300890/300893/002176/000692/002317保持原顺序。主进程发现并复现旧by_view隐藏标记导致实际JS仍报上游不匹配；仅撤销本报告精确、当前合法B误拒集合的旧标准标记，其他health完整保留。已存空Top5须有匹配meta/incident关闭证据才恢复；无证据仍拒绝。主进程另复现非空reverse/subset错误替换，已限制豁免仅用于旧空关闭，原非空名单/顺序保护继续生效。
+- 主进程独立515项回归全部通过，新13项测试；62组严格绑定、8组真实full-finalizer→实际JS阻断消费者及冻结Top5入口全部通过。原保护摘要、main/H4/acceleration/Luojie/confirming投影及formal/其他by_view保持；Python3.7真实冻结入口通过。日志`/private/tmp/chanlun-handoff-acceptance/batch-d1-python-final.log`、`batch-d1-binding-final.json`、`batch-d1-fullhealth-final.json`和`batch-d1-top5-final.json`。
+- 提交前已同步最新main仍2ea4ae5b且是HEAD祖先，相关回归在同步后运行；34/3项原脏改动、最新96份日报JSON、daily_run及源码资源保护通过。只读冻结输入、网络/线程/写库阻断验收，未改真实日报或执行生产finalizer、服务、通知、部署。
