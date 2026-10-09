@@ -3575,12 +3575,25 @@
   function decisionConditionChangeCount(changes) {
     var value = changes && typeof changes === 'object' ? changes : {};
     if (!Array.isArray(value.changed)) return null;
-    if (value.changed.length) return value.changed.length;
+    if (value.changed.length) {
+      var valid = decisionChangeUniqueEntries(value.changed).length;
+      return valid || null;
+    }
     var coverage = value.condition_comparison && typeof value.condition_comparison === 'object'
       ? value.condition_comparison : {};
     if ((coverage.status === 'available' || coverage.status === 'partial')
         && coverage.changed_count === 0) return 0;
     return value.status === 'available' ? 0 : null;
+  }
+
+  function decisionChangeUniqueEntries(entries) {
+    var seen = Object.create(null);
+    return asArray(entries).filter(function (entry) {
+      var code = decisionChangeCode(entry);
+      if (!/^\d{6}$/.test(code) || seen[code]) return false;
+      seen[code] = true;
+      return true;
+    });
   }
 
   function renderDecisionChangesSummary(changes, compact) {
@@ -3590,8 +3603,8 @@
     var membersKnown = membership.status === 'available'
       && Array.isArray(membership.added) && Array.isArray(membership.removed);
     var conditionCount = decisionConditionChangeCount(value);
-    var counts = '新增 ' + (membersKnown ? membership.added.length : '—') + ' · 移出 '
-      + (membersKnown ? membership.removed.length : '—') + ' · 条件变化 '
+    var counts = '新增 ' + (membersKnown ? decisionChangeUniqueEntries(membership.added).length : '—') + ' · 移出 '
+      + (membersKnown ? decisionChangeUniqueEntries(membership.removed).length : '—') + ' · 条件变化 '
       + (conditionCount === null ? '—' : conditionCount);
     if (!membersKnown) return (membership.reason === 'no_previous_report'
       ? '暂无可核验的上份报告：' : '成员比较未核验：') + counts;
@@ -3724,7 +3737,9 @@
         var names = unique.map(function (source) {
           return comparisonStrategyLabel(source) + (source === 'observation_top5' ? '收录' : '');
         });
-        if (found.page_status === 'watch_only') names.push('研究观察');
+        if (found.page_status === 'watch_only' || asArray(found.strategy_results).some(function (row) {
+          return row && row.role === 'research';
+        })) names.push('研究观察');
         return names.join('、');
       }
     }
@@ -3807,7 +3822,39 @@
     return openCurrentCandidateDetail(code, requestedView);
   }
 
-  function decisionChangeEntryText(kind, entry, projection, changes) {
+  function decisionChangeFieldDiffs(changes, code) {
+    var details = changes && changes.change_details && changes.change_details[code];
+    if (!Array.isArray(details)) return '';
+    var labels = { formal_action: '正式动作', page_status: '页面状态',
+      action_reason: '观察说明', primary_reason: '主要说明',
+      next_confirmation: '待确认条件', invalidation: '取消条件' };
+    function display(value, readability) {
+      if (readability === 'unreadable') return '原文不可读';
+      if (value === null || value === undefined || value === '') return '未记录';
+      if (Array.isArray(value)) return value.length ? value.map(normalizeString).join('、') : '未记录';
+      return normalizeString(value);
+    }
+    var known = details.filter(function (row) {
+      return row && Object.prototype.hasOwnProperty.call(labels, row.field);
+    });
+    var unreadableCount = known.filter(function (row) {
+      return row.before_readability === 'unreadable' || row.after_readability === 'unreadable';
+    }).length;
+    var rows = known.map(function (row) {
+      var prefix = row.status === 'newly_recorded' ? '本期新记录该字段 · ' : '';
+      return '<li><strong>' + escapeHtml(prefix + labels[row.field]) + '</strong><span>上份原文：'
+        + escapeHtml(display(row.before, row.before_readability)) + '</span><span>本期原文：'
+        + escapeHtml(display(row.after, row.after_readability)) + '</span></li>';
+    });
+    var label = unreadableCount
+      ? (rows.length > unreadableCount ? '可读原文变化 ' + (rows.length - unreadableCount) + ' 项 · ' : '')
+        + '登记字段变化 ' + unreadableCount + ' 项原文不可读，展开记录'
+      : '已核验文字变化 ' + rows.length + ' 项，展开原文';
+    return rows.length ? '<details class="decision-change-field-diffs"><summary>'
+      + label + '</summary><ul>' + rows.join('') + '</ul></details>' : '';
+  }
+
+  function decisionChangeEntryText(kind, entry, projection, changes, tags) {
     var code = decisionChangeCode(entry) || '未提供股票代码';
     var name = decisionChangeName(entry, projection, changes, kind);
     var source = decisionChangeSource(entry, projection, changes, kind);
@@ -3837,15 +3884,33 @@
     var currentAction = currentCandidate
       ? '<button type="button" class="decision-change-current-button" data-change-current="'
         + escapeHtml(code) + '" data-change-current-view="' + escapeHtml(view)
-        + '">查看当前图表</button>' : '';
-    return '<li><div class="decision-change-entry"><button type="button" class="decision-change-item" data-change-drill="'
-      + escapeHtml(code) + '" data-change-kind="' + escapeHtml(kind)
+        + '">看当前条件</button>' : '';
+    var historyPanelId = 'decision-change-history-' + code;
+    var historyControl = 'data-change-history="' + escapeHtml(code)
+      + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId) + '"';
+    var historyAction = previous ? '<button type="button" class="decision-change-history-button" data-change-history="'
+      + escapeHtml(code) + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId)
+      + '">' + (kind === 'changed' ? '比较两期' : '看上次记录')
+      + '</button>' : '';
+    var primaryHistory = kind === 'removed' || (kind === 'changed' && !!previous)
+      || (!currentCandidate && !!previous);
+    var primary = primaryHistory ? historyControl
+      : currentCandidate ? 'data-change-current="' + escapeHtml(code)
+        + '" data-change-current-view="' + escapeHtml(view) + '"'
+        : historyControl;
+    var tagText = asArray(tags).map(function (tag) {
+      return { added: '加入', removed: '移出', changed: '条件更新', unavailable: '部分不可比' }[tag] || '';
+    }).filter(Boolean).join(' · ');
+    var actions = primaryHistory ? (currentAction + historyAction) : historyAction;
+    return '<li data-change-row="' + escapeHtml(code) + '"><div class="decision-change-entry"><button type="button" class="decision-change-item" '
+      + primary + ' data-change-kind="' + escapeHtml(kind)
       + '" data-change-code="' + escapeHtml(code)
       + '" data-change-view="' + escapeHtml(view) + '"><strong>'
       + escapeHtml(name) + '</strong><span>' + escapeHtml(code) + '</span><small>'
-      + escapeHtml(label + (details ? ' · ' + details : ''))
-      + '</small></button>' + currentAction + '<button type="button" class="decision-change-history-button" data-change-history="'
-      + escapeHtml(code) + '">查看已有快照</button></div></li>';
+      + escapeHtml(label + (tagText ? ' · ' + tagText : '') + (details ? ' · ' + details : ''))
+      + '</small></button>' + actions + decisionChangeFieldDiffs(changes, code)
+      + '</div><div class="decision-change-history" id="' + escapeHtml(historyPanelId)
+      + '" hidden></div></li>';
   }
 
   function decisionHistoryDataUrl(dateStr) {
@@ -3868,6 +3933,7 @@
       snapshot: normalizeString(value.previous_snapshot_id || member.previous_snapshot_id || nested.snapshot_id || nested.id).trim(),
       version: normalizeString(value.previous_version || nested.version).trim(),
       priceBasis: nested.price_basis || value.previous_price_basis || value.previous_price_basis_id || '',
+      rawBytesSha256: normalizeString(member.previous_raw_report_bytes_sha256).trim(),
     };
   }
 
@@ -4049,6 +4115,75 @@
     return entries;
   }
 
+  function decodeBoundDecisionHistoryBytes(bytes, expectedSha256) {
+    var digest = normalizeString(expectedSha256).trim();
+    var subtle = window.crypto && window.crypto.subtle;
+    if (!/^[0-9a-f]{64}$/.test(digest) || !subtle || !(bytes instanceof ArrayBuffer)) {
+      return Promise.reject(new Error('历史原始文件绑定依据不可用'));
+    }
+    return subtle.digest('SHA-256', bytes).then(function (value) {
+      var actual = Array.from(new Uint8Array(value)).map(function (byte) {
+        return byte.toString(16).padStart(2, '0');
+      }).join('');
+      if (actual !== digest) throw new Error('历史原始文件内容与绑定依据不符');
+      return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(bytes));
+    });
+  }
+
+  function decisionHistoryBoundEntries(payload, code, previousItem, expectedIdentity) {
+    var unavailable = { status: 'unavailable', entries: [] };
+    expectedIdentity = expectedIdentity && typeof expectedIdentity === 'object' ? expectedIdentity : {};
+    var targetCode = toCodeKey(code);
+    var bound = previousItem && typeof previousItem === 'object' ? previousItem : {};
+    var refs = Array.isArray(bound.source_refs) ? bound.source_refs : [];
+    var allowedPools = ['picks_fusion', 'picks_pure', 'startup_watchlist',
+      'observation_watchlist', 'next_day_boom', 'luojie_pool', 'h4_t3_pool'];
+    if (!targetCode || toCodeKey(bound.code) !== targetCode || !refs.length) return unavailable;
+    if (bound.report_date && bound.report_date !== expectedIdentity.date) return unavailable;
+    if (bound.phase && bound.phase !== expectedIdentity.phase) return unavailable;
+    if (bound.snapshot_id && expectedIdentity.snapshot
+        && bound.snapshot_id !== expectedIdentity.snapshot) return unavailable;
+    var entries = [];
+    var seen = Object.create(null);
+    for (var i = 0; i < refs.length; i += 1) {
+      var source = refs[i] && typeof refs[i] === 'object' ? refs[i] : {};
+      var ref = source.ref && typeof source.ref === 'object' ? source.ref : {};
+      var pool = normalizeString(ref.pool || ref.source_pool).trim();
+      var view = normalizeString(source.view).trim();
+      if (allowedPools.indexOf(pool) < 0 || DEFAULT_VIEW_ORDER.indexOf(view) < 0
+          || toCodeKey(ref.code) !== targetCode) return unavailable;
+      var value = payload && payload[pool];
+      var rows = value && typeof value === 'object' && !Array.isArray(value)
+        ? value.candidates : value;
+      if (!Array.isArray(rows)) return unavailable;
+      var index = ref.index;
+      if (index !== undefined) {
+        if (!Number.isInteger(index) || index < 0 || index >= rows.length
+            || !rows[index] || toCodeKey(rows[index].code) !== targetCode) return unavailable;
+      } else {
+        var matches = [];
+        rows.forEach(function (row, offset) {
+          if (row && toCodeKey(row.code) === targetCode) matches.push(offset);
+        });
+        if (matches.length !== 1) return unavailable;
+        index = matches[0];
+      }
+      var key = pool + ':' + index;
+      if (seen[key]) {
+        var label = comparisonStrategyLabel(view);
+        if (seen[key].source.indexOf(label) < 0) seen[key].source += '、' + label;
+        continue;
+      }
+      var row = rows[index];
+      var found = { record: row, source: comparisonStrategyLabel(view) + ' · ' + pool,
+        identity: decisionHistoryRowIdentity(row, pool + ':' + index),
+        validation: validateDecisionHistoryRow(row, expectedIdentity || {}) };
+      seen[key] = found;
+      entries.push(found);
+    }
+    return { status: 'available', entries: entries };
+  }
+
   function decisionHistoryIdentityText(identity) {
     var value = identity && typeof identity === 'object' ? identity : {};
     return [
@@ -4201,13 +4336,17 @@
     var currentText = renderDecisionHistorySnapshot('当前有效快照', currentIdentity,
       currentEntries, '当前快照没有该股票记录，不能据此认定失效或破位。');
     var previousText = renderDecisionHistorySnapshot('上一有效交易快照', previousIdentity,
-      previousEntries, '上一有效交易快照未找到该股票记录；这是已有历史缺口，不等于破位或失效。', value.previous && value.previous.validation);
+      previousEntries, value.previousOverview
+        ? value.previousOverview + '；完整原始条件暂不可用。'
+        : '上一有效交易快照未找到该股票记录；这是已有历史缺口，不等于破位或失效。',
+      value.previous && value.previous.validation);
     return '<section class="decision-history-timeline" data-history-code="' + escapeHtml(code)
-      + '"><header><h3>' + escapeHtml(code) + ' · 已有快照复盘</h3><p>仅读取当前与上一有效交易快照；跨期计算暂不可用，仅并列原记录，不输出未变化或数值变化结论。</p></header>'
+      + '"><header><h3 tabindex="-1">' + escapeHtml(code) + ' · 已有快照复盘</h3><p>仅读取当前与上一有效交易快照；跨期计算暂不可用，仅并列原记录，不输出未变化或数值变化结论。</p>'
+      + (value.previousOverview ? '<p>上份名单：' + escapeHtml(value.previousOverview) + '</p>' : '') + '</header>'
       + currentText + previousText + renderDecisionHistoryValidationNote(value.previous && value.previous.validation) + '</section>';
   }
 
-  function loadDecisionChangeHistory(code, target) {
+  function loadDecisionChangeHistory(code, target, trigger) {
     target = target || nodes.decisionChanges;
     if (!target || typeof target.querySelector !== 'function') return;
     var panel = target.querySelector('.decision-change-history');
@@ -4218,69 +4357,141 @@
     var previousIdentity = decisionHistoryPreviousIdentity(changes);
     var currentDate = projection && projection.report_date || (state.data || {}).date || '';
     var previousDate = previousIdentity.date;
+    var member = changes.membership && typeof changes.membership === 'object'
+      ? changes.membership : {};
+    var previousItem = member.previous_items && member.previous_items[code];
+    if (!previousItem || toCodeKey(previousItem.code) !== toCodeKey(code)) previousItem = null;
     var currentEntries = decisionHistoryEntries(state.data, code, projection);
     var context = {
       current: { date: currentDate, phase: projection && projection.phase,
         version: projection && projection.version,
         snapshot: projection && (projection.snapshot_id || projection.payload_hash) },
       previous: previousIdentity,
+      previousOverview: previousItem ? [normalizeString(previousItem.name).trim() || code,
+        asArray(previousItem.sources).map(comparisonStrategyLabel).join('、'),
+        previousDate].filter(Boolean).join(' · ') : '',
     };
-    panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, [], context)
-      + '<p class="decision-history-loading">正在读取上一有效交易快照…</p>';
-    if (!previousDate) {
-      panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, [], context);
-      return;
-    }
-    if (!window.fetch) {
-      panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, [], context)
-        + '<p class="decision-history-missing">当前环境未提供历史快照读取能力，已保留当前记录与历史缺口。</p>';
-      return;
-    }
     var token = Number(state.reviewHistoryRequestToken || 0) + 1;
     state.reviewHistoryRequestToken = token;
+    var reportKey = [projection && projection.report_date, projection && projection.snapshot_id,
+      previousDate, previousIdentity.snapshot].map(normalizeString).join('|');
+    function requestBindingKey(workbench) {
+      var value = workbench && workbench.changes && typeof workbench.changes === 'object'
+        ? workbench.changes : {};
+      var membership = value.membership && typeof value.membership === 'object'
+        ? value.membership : {};
+      var item = membership.previous_items && membership.previous_items[code];
+      return JSON.stringify([code, membership.previous_raw_report_bytes_sha256,
+        item && item.code, item && item.report_date, item && item.phase,
+        item && item.snapshot_id, item && item.source_refs]);
+    }
+    var bindingKey = requestBindingKey(projection);
+    if (nodes.decisionChanges && typeof nodes.decisionChanges.querySelectorAll === 'function') {
+      Array.prototype.slice.call(nodes.decisionChanges.querySelectorAll('.decision-change-history')).forEach(function (other) {
+        if (other !== panel) {
+          other.hidden = true; other.innerHTML = '';
+          var oldRow = typeof other.closest === 'function' ? other.closest('[data-change-row]') : null;
+          if (oldRow && typeof oldRow.querySelectorAll === 'function') {
+            Array.prototype.slice.call(oldRow.querySelectorAll('[data-change-history]')).forEach(function (button) {
+              if (typeof button.setAttribute === 'function') button.setAttribute('aria-expanded', 'false');
+            });
+          }
+        }
+      });
+    }
+    function setExpanded(value) {
+      if (typeof target.querySelectorAll === 'function') {
+        Array.prototype.slice.call(target.querySelectorAll('[data-change-history]')).forEach(function (button) {
+          if (typeof button.setAttribute === 'function') button.setAttribute('aria-expanded', value ? 'true' : 'false');
+        });
+      }
+    }
+    function active() {
+      var current = getDecisionWorkbench();
+      var key = [current && current.report_date, current && current.snapshot_id,
+        decisionHistoryPreviousIdentity(current && current.changes).date,
+        decisionHistoryPreviousIdentity(current && current.changes).snapshot]
+        .map(normalizeString).join('|');
+      return token === state.reviewHistoryRequestToken && key === reportKey
+        && requestBindingKey(current) === bindingKey
+        && panel.isConnected !== false;
+    }
+    function show(entries, note, focus) {
+      if (!active()) return;
+      var restoreFocus = !focus && document.activeElement
+        && typeof panel.contains === 'function' && panel.contains(document.activeElement);
+      panel.hidden = false;
+      setExpanded(true);
+      panel.innerHTML = '<button type="button" class="decision-change-close" data-change-history-close aria-label="关闭历史详情">关闭</button>'
+        + renderDecisionChangeHistory(code, currentEntries, entries, context)
+        + (note ? '<p class="decision-history-missing">' + escapeHtml(note) + '</p>' : '');
+      var close = panel.querySelector && panel.querySelector('[data-change-history-close]');
+      if (close && typeof close.addEventListener === 'function') close.addEventListener('click', function () {
+        state.reviewHistoryRequestToken = Number(state.reviewHistoryRequestToken || 0) + 1;
+        panel.hidden = true;
+        panel.innerHTML = '';
+        setExpanded(false);
+        var focusTarget = trigger || (target.querySelector && target.querySelector('[data-change-history]'));
+        if (focusTarget && typeof focusTarget.focus === 'function') focusTarget.focus();
+      });
+      if (focus || restoreFocus) {
+        var heading = panel.querySelector && panel.querySelector('.decision-history-timeline h3');
+        if (heading && typeof heading.focus === 'function') heading.focus();
+        if (heading && typeof heading.scrollIntoView === 'function') {
+          heading.scrollIntoView({ block: 'nearest' });
+        }
+      }
+    }
+    var knownPools = ['picks_fusion', 'picks_pure', 'startup_watchlist',
+      'observation_watchlist', 'next_day_boom', 'luojie_pool', 'h4_t3_pool'];
+    var refs = previousItem && previousItem.source_refs;
+    var bound = Array.isArray(refs) && refs.length > 0 && refs.every(function (source) {
+      var ref = source && source.ref;
+      var pool = normalizeString(ref && (ref.pool || ref.source_pool)).trim();
+      return source && DEFAULT_VIEW_ORDER.indexOf(source.view) >= 0
+        && ref && knownPools.indexOf(pool) >= 0 && toCodeKey(ref.code) === toCodeKey(code)
+        && (ref.index === undefined || Number.isInteger(ref.index) && ref.index >= 0);
+    }) && /^[0-9a-f]{64}$/.test(previousIdentity.rawBytesSha256)
+      && /^\d{4}-\d{2}-\d{2}$/.test(previousDate);
+    if (!bound || !window.fetch || !window.crypto || !window.crypto.subtle) {
+      show([], previousItem ? '原始条件缺少完整绑定依据，已保留上份名单概览。'
+        : '上份清单未提供该证券的已绑定概览。', true);
+      return;
+    }
+    show([], '正在核验上份原始文件…', true);
     window.fetch(decisionHistoryDataUrl(previousDate)).then(function (response) {
       if (!response || !response.ok) throw new Error('历史快照读取失败');
-      return response.json();
+      return response.arrayBuffer();
+    }).then(function (bytes) {
+      return decodeBoundDecisionHistoryBytes(bytes, previousIdentity.rawBytesSha256);
     }).then(function (payload) {
-      if (token !== state.reviewHistoryRequestToken) return;
+      if (!active()) return;
       var validation = validateDecisionHistoryPayload(payload, previousIdentity);
       context.previous.validation = validation;
-      if (!validation.ok) {
-        panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, [], context)
-          + '<p class="decision-history-missing">' + escapeHtml(validation.reasons.join('；') || '上一有效交易快照身份未核验')
-          + '，未将该文件当作上一快照。</p>';
+      if (!validation.ok || validation.phaseStatus !== 'verified') {
+        show([], (validation.reasons.join('；') || '上一有效交易快照身份未核验')
+          + '，未将该文件当作上一快照。', false);
         return;
       }
-      var previousEntries = decisionHistoryEntries(payload, code, null, previousIdentity);
-      panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, previousEntries, context);
+      var resolved = decisionHistoryBoundEntries(payload, code, previousItem, previousIdentity);
+      if (resolved.status !== 'available') {
+        show([], '上份来源引用未能唯一匹配原始记录，已保留绑定概览。', false);
+        return;
+      }
+      show(resolved.entries, '', false);
     }).catch(function () {
-      if (token !== state.reviewHistoryRequestToken) return;
-      panel.innerHTML = renderDecisionChangeHistory(code, currentEntries, [], context)
-        + '<p class="decision-history-missing">上一有效交易快照读取失败；当前记录保留，历史缺口未补齐。</p>';
+      show([], '上份原始文件读取或校验失败；已保留绑定概览。', false);
     });
   }
 
   function bindDecisionChangeDrilldowns(target) {
     if (!target || typeof target.querySelectorAll !== 'function') return;
-    var buttons = target.querySelectorAll('[data-change-drill]');
-    for (var index = 0; index < buttons.length; index += 1) {
-      buttons[index].addEventListener('click', function (event) {
-        var button = event.currentTarget;
-        var code = normalizeString(button.getAttribute('data-change-code')).trim();
-        var requestedView = normalizeString(button.getAttribute('data-change-view')).trim();
-        var views = getCandidateViews().views || {};
-        var destination = requestedView && views[requestedView] ? requestedView : 'decision_all';
-        if (!views[destination]) return;
-        if (destination !== state.currentView) activateWorkspaceView(destination, false);
-        state.candidateQuery = code;
-        if (nodes.candidateSearch) nodes.candidateSearch.value = code;
-        refreshCandidateWorkspace();
-      });
-    }
     var historyButtons = target.querySelectorAll('[data-change-history]');
     for (var historyIndex = 0; historyIndex < historyButtons.length; historyIndex += 1) {
       historyButtons[historyIndex].addEventListener('click', function (event) {
-        loadDecisionChangeHistory(event.currentTarget.getAttribute('data-change-history'), target);
+        var button = event.currentTarget;
+        var row = typeof button.closest === 'function' ? button.closest('[data-change-row]') : null;
+        loadDecisionChangeHistory(button.getAttribute('data-change-history'), row || target, button);
       });
     }
     var currentButtons = target.querySelectorAll('[data-change-current]');
@@ -4297,10 +4508,20 @@
     for (var groupIndex = 0; groupIndex < groupToggles.length; groupIndex += 1) {
       groupToggles[groupIndex].addEventListener('click', function (event) {
         var group = normalizeString(event.currentTarget.getAttribute('data-change-group-toggle')).trim();
+        state.decisionChangeFilter = group;
+        state.decisionChangeShowAll = false;
+        state.reviewHistoryRequestToken = Number(state.reviewHistoryRequestToken || 0) + 1;
+        renderDecisionChangesPanel(target);
         var section = target.querySelector('[data-change-group="' + group + '"]');
-        if (!section) return;
-        if (section.classList && typeof section.classList.add === 'function') section.classList.add('is-focused');
-        if (typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'nearest' });
+        if (section && typeof section.scrollIntoView === 'function') section.scrollIntoView({ block: 'nearest' });
+      });
+    }
+    var showAll = target.querySelectorAll('[data-change-show-all]');
+    for (var showIndex = 0; showIndex < showAll.length; showIndex += 1) {
+      showAll[showIndex].addEventListener('click', function () {
+        state.decisionChangeShowAll = !state.decisionChangeShowAll;
+        state.reviewHistoryRequestToken = Number(state.reviewHistoryRequestToken || 0) + 1;
+        renderDecisionChangesPanel(target);
       });
     }
   }
@@ -4375,9 +4596,9 @@
     var memberKnown = membership.status === 'available'
       && Array.isArray(membership.added) && Array.isArray(membership.removed);
     var groups = [
+      ['changed', '条件更新', '本期没有已登记的状态或条件变化'],
       ['added', '加入当前集合', '本期没有新增记录'],
       ['removed', '移出当前集合', '本期没有移出记录'],
-      ['changed', '状态/条件变化', '本期没有已登记的状态或条件变化'],
     ];
     var unavailableCodes = asArray(changes.unavailable_codes)
       .concat(asArray(changes.value_unavailable_codes)).map(decisionChangeCode)
@@ -4385,12 +4606,22 @@
     if (unavailableCodes.length) {
       groups.push(['unavailable', '部分字段不可比较', '本期没有单股不可比较记录']);
     }
-    var lists = groups.map(function (group) {
+    var reportKey = [projection.report_date, projection.snapshot_id, previousDate,
+      previousSnapshot].map(normalizeString).join('|');
+    if (state.decisionChangeReportKey !== reportKey) {
+      state.decisionChangeReportKey = reportKey;
+      state.decisionChangeFilter = 'all';
+      state.decisionChangeShowAll = false;
+      state.reviewHistoryRequestToken = Number(state.reviewHistoryRequestToken || 0) + 1;
+    }
+    var ordered = [], byCode = Object.create(null);
+    var grouped = groups.map(function (group) {
       var entries = group[0] === 'unavailable'
         ? unavailableCodes.map(function (code) { return { code: code }; })
         : group[0] === 'added' || group[0] === 'removed'
           ? (memberKnown ? asArray(membership[group[0]]) : asArray(changes[group[0]]))
           : asArray(changes[group[0]]);
+      entries = decisionChangeUniqueEntries(entries);
       var conditionCount = group[0] === 'changed'
         ? decisionConditionChangeCount(changes) : null;
       var count = (group[0] === 'added' || group[0] === 'removed') && !memberKnown
@@ -4400,23 +4631,56 @@
           : status === 'available' ? group[2] : '已比较的成员没有登记字段变化'
         : (group[0] === 'added' || group[0] === 'removed') && !memberKnown
           ? '成员比较未核验' : group[2];
-      return '<section class="decision-change-group" id="decision-change-group-' + escapeHtml(group[0])
-        + '" data-change-group="' + group[0] + '">'
-        + '<h4><button type="button" class="decision-change-count" data-change-group-toggle="'
-        + escapeHtml(group[0]) + '" aria-controls="decision-change-group-' + escapeHtml(group[0]) + '">'
-        + escapeHtml(group[1]) + ' <span>' + count + '</span></button></h4>'
-        + (entries.length
-          ? '<ul>' + entries.map(function (entry) {
-            return decisionChangeEntryText(group[0], entry, projection, changes);
-          }).join('') + '</ul>'
-          : '<p>' + escapeHtml(emptyText) + '</p>') + '</section>';
+      entries.forEach(function (entry) {
+        var code = decisionChangeCode(entry);
+        if (!/^\d{6}$/.test(code)) return;
+        if (!byCode[code]) {
+          byCode[code] = { code: code, kind: group[0], entry: entry, tags: [] };
+          ordered.push(byCode[code]);
+        }
+        if (byCode[code].tags.indexOf(group[0]) < 0) byCode[code].tags.push(group[0]);
+      });
+      return { kind: group[0], label: group[1], count: count, empty: emptyText };
+    });
+    var selected = normalizeString(state.decisionChangeFilter || 'all');
+    if (selected !== 'all' && !grouped.some(function (group) { return group.kind === selected; })) {
+      selected = 'all';
+    }
+    var matching = selected === 'all' ? ordered : ordered.filter(function (row) {
+      return row.tags.indexOf(selected) >= 0;
+    });
+    var visible = state.decisionChangeShowAll ? matching : matching.slice(0, 5);
+    var currentGroup = grouped.find(function (group) { return group.kind === selected; });
+    var empty = currentGroup ? currentGroup.empty : '本期没有可展示的已核验变化';
+    var counters = grouped.map(function (group) {
+      return '<button type="button" class="decision-change-count" data-change-group-toggle="'
+        + escapeHtml(group.kind) + '" aria-pressed="' + (selected === group.kind ? 'true' : 'false')
+        + '">' + escapeHtml(group.label) + ' <span>' + group.count + '</span></button>';
     }).join('');
-    var html = '<section class="decision-changes-panel" aria-label="跨期变化复盘">'
-      + '<header><div><h3>变化复盘</h3><p>' + escapeHtml(statusText) + '</p></div>'
-      + '<small>' + escapeHtml(identity) + '</small></header>'
-      + '<p class="decision-changes-boundary">新增/移出只表示集合成员变化，不等于首次出现、破位或正式升级；跨期计算暂不可用，无完整比较时不得把状态写成未变化。</p>'
-      + '<div class="decision-change-groups">' + lists + '</div>'
-      + '<div class="decision-change-history"><p>打开个股的“查看已有快照”后读取当前与上一有效交易快照。</p></div></section>';
+    var rows = visible.length ? '<ul class="decision-change-list">' + visible.map(function (row) {
+      return decisionChangeEntryText(row.kind, row.entry, projection, changes, row.tags);
+    }).join('') + '</ul>' : '<p class="decision-change-empty">' + escapeHtml(empty) + '</p>';
+    var shortStatus = !memberKnown ? '上份完整名单未核验；加入与移出未比较。'
+      : decisionConditionChangeCount(changes) === null ? '名单成员已核验；条件变化未比较。'
+        : status === 'partial' ? '名单成员已核验；部分字段不可比。'
+          : '名单成员与已登记条件已分别核对。';
+    var html = '<section class="decision-changes-panel" aria-label="名单变化">'
+      + '<header><div><h3>名单变化</h3><p>'
+      + escapeHtml(previousDate ? previousDate + ' → ' + (projection.report_date || '') : '上份报告未核验')
+      + '</p><p>' + escapeHtml(shortStatus) + '</p></div></header>'
+      + '<div class="decision-change-groups"><button type="button" class="decision-change-count" data-change-group-toggle="all" aria-pressed="'
+      + (selected === 'all' ? 'true' : 'false') + '">全部 <span>' + ordered.length + '</span></button>'
+      + counters + '</div>'
+      + '<div class="decision-change-results" data-change-group="' + escapeHtml(selected) + '">'
+      + rows + '<div class="decision-change-list-footer"><span>显示 ' + visible.length + ' / ' + matching.length
+      + ' 只证券；分组可重叠，数量不可相加。</span>'
+      + (matching.length > 5 ? '<button type="button" data-change-show-all aria-expanded="'
+        + (state.decisionChangeShowAll ? 'true' : 'false') + '">'
+        + (state.decisionChangeShowAll ? '收起' : '查看全部') + '</button>' : '')
+      + '</div></div>'
+      + '<p class="decision-changes-boundary">名单进出不等于买入或卖出信号。价格不可比时仅展示可核验的文字条件。</p>'
+      + '<details class="decision-change-basis"><summary>比较依据</summary><p>'
+      + escapeHtml(identity) + '</p><p>' + escapeHtml(statusText) + '</p></details></section>';
     target.innerHTML = html;
     bindDecisionChangeDrilldowns(target);
     return html;
@@ -9337,7 +9601,9 @@
       missing: '未提供',
     };
     var statusText = statusLabels[status] || '状态不可验证';
-    var items = contractValid ? recommendationEvidenceList(value.event_risks) : [];
+    var items = contractValid ? recommendationEvidenceList(asArray(value.event_risks).filter(function (item) {
+      return typeof item === 'string';
+    })) : [];
     var emptyCopy = status === 'unverified'
       ? '本期事件风险未通过正式验证'
       : (status === 'available' && !contractValid

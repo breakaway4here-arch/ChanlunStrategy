@@ -2705,7 +2705,7 @@ def _load_previous_full_projection(output_dir, historical_reports, date_str, bef
     fallback = None
     fallback_snapshot = None
     skipped = []
-    def published_projection(snapshot, report_date, skipped_dates):
+    def published_projection(snapshot, report_date, skipped_dates, raw_bytes_sha256):
         published = snapshot.get("workbench")
         if published is None:
             receipt_items = []
@@ -2727,6 +2727,7 @@ def _load_previous_full_projection(output_dir, historical_reports, date_str, bef
             "membership_status": "available",
             "comparison_source": snapshot["source"],
             "comparison_skipped": list(skipped_dates),
+            "comparison_raw_report_bytes_sha256": raw_bytes_sha256,
         })
         return projection
     for candidate_date in reversed(previous_dates):
@@ -2737,8 +2738,9 @@ def _load_previous_full_projection(output_dir, historical_reports, date_str, bef
             skipped.append({"report_date": candidate_date, "reason": "report_json_missing"})
             continue
         try:
-            with open(candidate_path, "r", encoding="utf-8") as handle:
-                candidate_payload = json.load(handle)
+            with open(candidate_path, "rb") as handle:
+                candidate_bytes = handle.read()
+            candidate_payload = json.loads(candidate_bytes)
         except (OSError, ValueError, TypeError):
             skipped.append({"report_date": candidate_date, "reason": "report_json_invalid"})
             continue
@@ -2755,16 +2757,19 @@ def _load_previous_full_projection(output_dir, historical_reports, date_str, bef
         )
         if snapshot["membership_status"] == "available":
             if snapshot["phase"] == "formal":
-                return published_projection(snapshot, candidate_date, skipped)
+                return published_projection(snapshot, candidate_date, skipped,
+                                            hashlib.sha256(candidate_bytes).hexdigest())
             if fallback_snapshot is None:
-                fallback_snapshot = (snapshot, candidate_date)
+                fallback_snapshot = (snapshot, candidate_date,
+                                     hashlib.sha256(candidate_bytes).hexdigest())
             skipped.append({"report_date": candidate_date, "reason": "published_phase_unverified"})
             continue
         skipped.append({"report_date": candidate_date, "reason": snapshot.get("reason")})
         if fallback is None:
             fallback = candidate_payload
     if fallback_snapshot is not None:
-        return published_projection(fallback_snapshot[0], fallback_snapshot[1], skipped)
+        return published_projection(fallback_snapshot[0], fallback_snapshot[1],
+                                    skipped, fallback_snapshot[2])
     if fallback is None:
         return None
     # The old JSON projection is still useful for its own fields; it cannot

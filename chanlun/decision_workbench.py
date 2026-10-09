@@ -943,11 +943,15 @@ def _previous_member_summaries(previous):
 
 def _membership_changes(current, previous):
     """Compare full display membership independently of strategy and price."""
+    raw_digest = previous.get('comparison_raw_report_bytes_sha256')
+    if not isinstance(raw_digest, str) or not re.fullmatch(r'[0-9a-f]{64}', raw_digest):
+        raw_digest = None
     unknown = {'status': 'unavailable', 'added': None, 'removed': None,
                'shared': None, 'previous_items': _previous_member_summaries(previous),
                'previous_report_date': previous.get('report_date'),
                'previous_phase': previous.get('phase'),
                'previous_snapshot_id': previous.get('snapshot_id'),
+               'previous_raw_report_bytes_sha256': raw_digest,
                'source': previous.get('comparison_source'),
                'skipped': previous.get('comparison_skipped', [])}
     if not previous:
@@ -986,6 +990,7 @@ def _membership_changes(current, previous):
         'previous_report_date': previous.get('report_date'),
         'previous_phase': previous.get('phase'),
         'previous_snapshot_id': previous.get('snapshot_id'),
+        'previous_raw_report_bytes_sha256': raw_digest,
         'source': previous.get('comparison_source'),
         'skipped': previous.get('comparison_skipped', []),
     }
@@ -1083,6 +1088,16 @@ def _changes(current, previous):
             x.get('primary_reason'), x.get('next_confirmation'),
             x.get('invalidation'),
         )
+    def semantic_text(field, value):
+        if value is None:
+            return None, 'not_recorded'
+        if field in ('next_confirmation', 'invalidation'):
+            if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
+                return list(value), 'recorded' if value else 'not_recorded'
+            return None, 'unreadable'
+        if isinstance(value, str):
+            return value, 'recorded' if value else 'not_recorded'
+        return None, 'unreadable'
     def price_semantic(x):
         anchor = _map(x.get('watch_anchor'))
         return (
@@ -1091,6 +1106,7 @@ def _changes(current, previous):
             anchor.get('value'),
         )
     changed = []
+    change_details = {}
     value_unavailable = []
     value_unavailable_reasons = {}
     for key in sorted(after.keys() & before.keys()):
@@ -1116,6 +1132,24 @@ def _changes(current, previous):
                 value_unavailable_reasons[after[key]['code']] = 'price_basis_missing'
         if semantic(after[key]) != semantic(before[key]):
             changed.append(after[key]['code'])
+            rows = []
+            for field in ('formal_action', 'page_status', 'action_reason',
+                          'primary_reason', 'next_confirmation', 'invalidation'):
+                old_value, new_value = before[key].get(field), after[key].get(field)
+                if old_value == new_value:
+                    continue
+                old_text, old_readability = semantic_text(field, old_value)
+                new_text, new_readability = semantic_text(field, new_value)
+                rows.append({
+                    'field': field, 'before': old_text, 'after': new_text,
+                    'before_readability': old_readability,
+                    'after_readability': new_readability,
+                    'status': 'unreadable' if 'unreadable' in (old_readability, new_readability)
+                    else 'newly_recorded' if old_readability == 'not_recorded'
+                    else 'no_current_record' if new_readability == 'not_recorded' else 'updated',
+                })
+            if rows:
+                change_details[after[key]['code']] = rows
         elif price_semantic(after[key]) != price_semantic(before[key]):
             if basis_compatible:
                 changed.append(after[key]['code'])
@@ -1136,6 +1170,8 @@ def _changes(current, previous):
         'compared_count': compared_count,
         'changed_count': len(changed) if condition_status != 'unavailable' else None,
     }
+    if change_details:
+        result['change_details'] = change_details
     if unavailable_codes:
         result['unavailable_codes'] = unavailable_codes
         result['unavailable_reasons'] = {

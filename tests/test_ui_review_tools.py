@@ -21,9 +21,9 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;
 function check(expected,emptyText){
- const summary=t.summary(changes,false);const html=t.render();
+ const summary=t.summary(changes,false);t.render();t.state.decisionChangeFilter='changed';const html=t.render();
  if(summary.indexOf('条件变化 '+expected)<0)throw Error('wrong condition summary: '+summary);
- if(html.indexOf('状态&#47;条件变化 <span>'+expected+'</span>')<0)
+ if(html.indexOf('条件更新 <span>'+expected+'</span>')<0)
   throw Error('wrong condition group count');
  if(emptyText && html.indexOf(emptyText)<0)throw Error('wrong empty state');
 }
@@ -53,15 +53,16 @@ const workbench={schema_version:'decision-workbench-v1',report_date:day,phase:'f
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:workbench};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;let html=t.render();
-let entryAt=html.indexOf('data-change-kind="unavailable"');
-let row=html.slice(html.lastIndexOf('<li>',entryAt),html.indexOf('</li>',entryAt)+5);
+let entryAt=html.indexOf('data-change-row="000400"');
+let row=html.slice(html.lastIndexOf('<li ',entryAt),html.indexOf('</li>',entryAt)+5);
 if(row.indexOf('许继电气')<0 || row.indexOf('罗姐池')<0
  || row.indexOf('上份 2026-10-08')<0 || row.indexOf('当前 2026-10-09')>=0)
- throw Error('old-only unavailable borrowed current context or lost bound previous context');
+ throw Error('old-only unavailable borrowed current context or lost bound previous context: '+row);
 workbench.items=[{code:'000400',name:'本期同码名称',sources:['observation_top5'],
  strategy_results:[{strategy_id:'observation_top5',role:'research'}]}];
-html=t.render();entryAt=html.indexOf('data-change-kind="unavailable"');
-row=html.slice(html.lastIndexOf('<li>',entryAt),html.indexOf('</li>',entryAt)+5);
+changes.membership.removed=[];changes.membership.shared=['000400'];
+html=t.render();entryAt=html.indexOf('data-change-row="000400"');
+row=html.slice(html.lastIndexOf('<li ',entryAt),html.indexOf('</li>',entryAt)+5);
 if(row.indexOf('本期同码名称')<0 || row.indexOf('观察 Top5收录')<0
  || row.indexOf('当前 2026-10-09')<0 || row.indexOf('许继电气')>=0)
  throw Error('current member failed to keep current snapshot precedence');
@@ -132,8 +133,10 @@ const changes={status:'partial',previous_report_date:'2026-09-30',
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:[],changes:changes}};
 const target={innerHTML:'',querySelectorAll(){return [];}};const t=globalThis.__auxTest;
-t.state.data={date:day};t.nodes.decisionChanges=target;const html=t.render();
-if(!/data-change-group="unavailable"[\s\S]*?<span>26<\/span>/.test(html))throw Error('23+3 union was lost');
+t.state.data={date:day};t.nodes.decisionChanges=target;t.render();
+t.state.decisionChangeFilter='unavailable';t.state.decisionChangeShowAll=true;
+const html=t.render();
+if(!/data-change-group-toggle="unavailable"[\s\S]*?<span>26<\/span>/.test(html))throw Error('23+3 union was lost');
 if(html.indexOf('data-change-code="600100"')<0 || html.indexOf('策略&#47;条件不可比')<0)
  throw Error('changed overlap lost strategy reason');
 if(html.indexOf('data-change-code="300001"')<0 || html.indexOf('价格不可比')<0)
@@ -186,10 +189,10 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  strategy_results:[{strategy_id:'observation_top5',role:'research'}]}],changes:changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render();
-if(!/data-change-group="unavailable"[\s\S]*?<span>1<\/span>/.test(html))
+if(!/data-change-group-toggle="unavailable"[\s\S]*?<span>1<\/span>/.test(html))
  throw Error('overlap counted more than once');
 if(html.indexOf('策略&#47;条件不可比')<0 || html.indexOf('价格不可比')<0
- || html.indexOf('状态或条件变化')<0)throw Error('known change or unavailable reason lost');
+  || html.indexOf('条件更新')<0)throw Error('known change or unavailable reason lost');
 if(html.indexOf('观察 Top5收录')<0 || html.indexOf('研究观察')<0)
  throw Error('research source identity lost');
 ''')
@@ -269,7 +272,7 @@ if(html.indexOf('参考价 10')<0 || html.indexOf('参考价 9.5')<0 || html.ind
 if(html.indexOf('最早')>=0 || html.indexOf('首次出现')>=0)throw Error('history renderer invented first appearance');
 ''')
 
-    def test_u11_history_button_reads_previous_snapshot_only_when_opened(self):
+    def test_u11_unbound_history_does_not_read_same_code_raw_file(self):
         _assert_node_contract(self, "{ load:loadDecisionChangeHistory,state:state }", r'''
 const day='2026-09-12';let requested='';
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
@@ -289,12 +292,14 @@ window.fetch=function(url){
 };
 t.load('600001',target);
 setTimeout(function(){
-  if(requested!=='data/2026-09-11.json')throw Error('previous snapshot was not read on demand');
-  if(history.innerHTML.indexOf('上一期动作')<0)throw Error('loaded previous snapshot was not rendered');
+  if(requested)throw Error('unbound same-code history was fetched');
+  if(history.innerHTML.indexOf('上一期动作')>=0)throw Error('unbound raw action was rendered');
+  if(history.innerHTML.indexOf('上份清单未提供该证券的已绑定概览')<0)
+    throw Error('missing bound overview was not explained');
 },10);
 ''')
 
-    def test_u11_nested_previous_identity_drives_on_demand_request(self):
+    def test_u11_nested_previous_identity_alone_cannot_fetch_raw(self):
         _assert_node_contract(self, "{ load:loadDecisionChangeHistory,state:state }", r'''
 const day='2026-09-12';let requested='';
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
@@ -304,7 +309,8 @@ const t=globalThis.__auxTest;t.state.data={date:day,workspace:{views:{}}};
 const history={innerHTML:'',querySelector(){return history;}};const target={querySelector(){return history;}};
 window.fetch=function(url){requested=url;return Promise.resolve({ok:true,json(){return Promise.resolve({date:'2026-09-11',workspace:{views:{main:[]}}});}});};
 t.load('600001',target);
-setTimeout(function(){if(requested!=='data/2026-09-11.json')throw Error('nested previous identity was ignored');},10);
+setTimeout(function(){if(requested || history.innerHTML.indexOf('上份清单未提供该证券的已绑定概览')<0)
+ throw Error('nested date without bound refs or bytes digest opened raw history');},10);
 ''')
 
     def test_u11_history_identity_validation_rejects_wrong_date_and_phase_and_marks_missing_contract(self):
@@ -369,7 +375,7 @@ const day='2026-09-12';window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:
 const t=globalThis.__auxTest;t.state.data={date:day};t.nodes.decisionChanges=target;t.render();
 if(target.innerHTML.indexOf('data-change-group-toggle="changed"')<0)throw Error('change count was not actionable');
 toggle.handlers.click({currentTarget:toggle});
-if(!focused || !scrolled)throw Error('change count did not focus its existing group');
+if(t.state.decisionChangeFilter!=='changed' || !scrolled)throw Error('change count did not filter and show its group');
 ''')
 
     def test_u13_quick_comparison_caps_three_preserves_sources_and_keeps_filtered_selection(self):
