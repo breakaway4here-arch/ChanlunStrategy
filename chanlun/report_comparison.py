@@ -597,11 +597,13 @@ def _bound_receipt_entries(receipt, report, report_date):
                     "action", "strategy_version", "decision_version", "policy_version",
                 ))
                 or source["rank"] is not None and type(source["rank"]) is not int
-                or source["score"] is not None and (
-                    type(source["score"]) not in {int, float}
-                    or not math.isfinite(source["score"])
-                )
+                or source["score"] is not None and type(source["score"]) not in {int, float}
             ):
+                return None
+            try:
+                if source["score"] is not None and not math.isfinite(source["score"]):
+                    return None
+            except OverflowError:
                 return None
             sources.append(dict(source, formal_performance_status=_source_performance_status(
                 report, report_date, source["view"], member["code"]

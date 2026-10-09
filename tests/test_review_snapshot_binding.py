@@ -192,6 +192,71 @@ class ReviewSnapshotBindingTests(unittest.TestCase):
                 self.assertEqual(self.codes(after), ["600001"])
                 self.assertEqual(after["review_registry"]["published_member_snapshots"], {})
 
+    @staticmethod
+    def receipt_with_score(index, report_date, score):
+        stored = copy.deepcopy(index)
+        receipt = stored["review_registry"]["published_member_snapshots"][report_date]
+        receipt["members"][1]["sources"][0]["score"] = score
+        unsigned = {key: value for key, value in receipt.items()
+                    if key != "content_sha256"}
+        encoded = json.dumps(unsigned, ensure_ascii=False, sort_keys=True,
+                             separators=(",", ":"), allow_nan=False)
+        receipt["content_sha256"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+        return stored
+
+    def test_overflowing_receipt_score_only_falls_back_affected_date(self):
+        healthy_date = "2026-01-06"
+        self.fixture._write_report(str(self.data), healthy_date)
+        healthy_raw_path = self.data / (healthy_date + ".json")
+        healthy_raw = json.loads(healthy_raw_path.read_text())
+        healthy_raw["workspace"]["views"]["highlights"] = []
+        healthy_raw_path.write_text(json.dumps(healthy_raw), encoding="utf-8")
+        self.fixture._write_archived_workbench(str(self.root), healthy_date, self.items)
+        (self.data / "index.json").write_text(json.dumps({
+            "dates": [self.DATE, healthy_date], "date_meta": {
+                date: {"is_trading_day": True, "is_official": True}
+                for date in (self.DATE, healthy_date)
+            },
+        }), encoding="utf-8")
+        valid = self.build()
+        self.html.unlink()
+        (self.root / healthy_date / "index.html").unlink()
+        for score in (10 ** 400, -(10 ** 400)):
+            with self.subTest(score_sign="positive" if score > 0 else "negative"):
+                self.persist(self.receipt_with_score(valid, self.DATE, score))
+                after = self.build()
+                registry = after["review_registry"]
+                self.assertEqual(registry["status"], "available")
+                self.assertEqual([(row["report_date"], row["code"])
+                                  for row in registry["entries"]],
+                                 [(self.DATE, "600001"), (healthy_date, "600001"),
+                                  (healthy_date, "300456")])
+                self.assertEqual(registry["entries"][0]["coverage_status"],
+                                 "unconfirmed_legacy_workspace")
+                self.assertTrue(all(row["coverage_status"] == "confirmed_display_snapshot"
+                                    for row in registry["entries"][1:]))
+                self.assertEqual(set(registry["published_member_snapshots"]), {healthy_date})
+                for date in (self.DATE, healthy_date):
+                    self.assertEqual(after["reports"][date]["views"],
+                                     valid["reports"][date]["views"])
+
+    def test_valid_integer_float_and_unknown_receipt_scores_preserve_members(self):
+        valid = self.build()
+        self.html.unlink()
+        for score in (0, 98, 98.25, None):
+            with self.subTest(score=score):
+                self.persist(self.receipt_with_score(valid, self.DATE, score))
+                after = self.build()
+                registry = after["review_registry"]
+                self.assertEqual(registry["status"], "available")
+                self.assertEqual(self.codes(after), ["600001", "300456"])
+                self.assertEqual(set(registry["published_member_snapshots"]), {self.DATE})
+                actual = registry["entries"][1]["sources"][0]["score"]
+                self.assertEqual(actual, score)
+                self.assertIs(type(actual), type(score))
+                self.assertEqual(after["reports"][self.DATE]["views"],
+                                 valid["reports"][self.DATE]["views"])
+
     def test_restored_members_recompute_current_formal_incident_eligibility(self):
         before = self.build()
         self.assertEqual(before["review_registry"]["entries"][0]["sources"][0]

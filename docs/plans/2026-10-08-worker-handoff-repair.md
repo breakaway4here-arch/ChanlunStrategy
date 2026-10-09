@@ -112,3 +112,12 @@ main由另一独立任务推进至`a5a59a96`（开盘啦按日资料与补更）
 - 10/9恢复时原五批提交和D2工作成果保留；重新fetch main仍2ea4ae5b，目标是当前HEAD祖先。主进程39模块928项综合隔离回归：927通过、1项基线已有静态JS调用字符串断言失败、0错误。失败为`TestAccessControl.test_v2_asset_uses_correct_raw_pools_and_kline_order`要求旧`findChartCandidate(targetCode, found)`；该串在origin/main、已验收D1和最终候选均不存在，其余raw pools/OHLC断言保持。已接受HEAD同输入也失败，本批未改该图表路径或删断言；不把该扩展测试记作通过。日志`final-combined-named-python-20261009.log`与`root-old-js-baseline-20261009.json`。初跑另1失败来自临时隔离DB basename与旧测试后缀不符，仅将/tmp runner命名调整为market_history.sqlite后该例通过，产品路径未改。
 - 最新96份日报JSON、原34项脏文件与运行树3项脏文件、daily_run、规则及源码/共享资源核对通过。18个HTML相对最新main只有资源查询版本，资源版本4a24efa974f8，未重建真实日报。A的真实dev-3 Worker18项和桌面/手机验收仍为该批实际证据；D2仅改变登记producer，实际JS消费者验证不称新增浏览器或自然生产验收。
 - 暂停恢复时重新核查本地无本任务残留；实际dev-3旧Worker/UI PID不存在、18768无监听、原临时目录不存在。后续测试仅本地自动释放临时SQLite/文件，测试进程退出，不启动服务。未访问生产行情/正式库、补历史、重跑、通知、部署或切换R1；无绑定且旧HTML已清理的历史仍明确legacy，不声称恢复所有旧42条登记或收益改善。
+
+## 10/9 发布前code review与新增授权
+
+用户在修复分支交付后明确要求“做好code review，没问题就合并到main上线”。该授权替代本记录此前仅交分支、无合并部署许可的等待状态；仅执行本八项修复的审查、合并和代码/Worker/静态资源部署及读回，不手工触发正式任务、历史补数、收益重算、通知或R1切换。后续自然生产调度沿用原配置和已验证的数据保护。
+
+- 最新main仍2ea4ae5b，实际运行树在该版本且有原两个HTML删除和compare改动；原34/3脏文件保护继续适用。四个launchd任务均未运行，预跑/复核关键plist与候选相同、RunAtLoad=false/无KeepAlive；更新同一路径代码即可，无需重装或kickstart。生产更新按共享发布锁隔离原三项脏状态、前进到已合并版本后精确恢复，不拿候选HTML覆盖原内容。
+- 独立行情审查无确认P0/P1/P2，262项及实际CAS/分钟换源入口通过。独立交付审查170项/Worker纯8项、绑定62及归档/实际JS消费者通过，但发现D2合法JSON整数score=10**400触发math.isfinite的OverflowError，令双日整个登记不可用。主进程独立复现后补局部异常拒绝，仅坏日期legacy，正常日期两成员保留；不改公共数值工具、策略或价基。新增两测试，产品blob ba84f4a7ea0faee72f0e1fed866ad5d86e7fd912/test4a1781b53b920a16f10b5bb288c922b1b846af95，主进程137项和同步main后31项均通过；独立审查49项及原反例复核通过，无剩余本批代码阻断。
+- 本次部署前只读线上首页/10-08归档/JS精确等旧main；原09-30预跑DO快照GET expired、identity/hash可读，旧接口无result_status。新版部署后必须保持相同原快照身份并回看原状态，无生产PUT测试。Top10前后只读hash对照，既有路由/binding/migration及secret不变。
+- Wrangler已安装，现有OAuth过期且自动刷新失败；扩大文件访问确认仍失败，非代码测试通过即可部署。Worker账户、旧版本、secret名称必须恢复认证后实际核对，再部署兼容Worker、合并main/Pages并同步运行树，最后验证实际资源和桌面/手机。当前本节是发布准备和审查回执，尚不宣称合并或上线；实际结果继续追加。
