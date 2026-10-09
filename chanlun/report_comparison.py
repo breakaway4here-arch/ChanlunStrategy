@@ -7,6 +7,7 @@ being generated or compared.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import math
 import os
@@ -48,6 +49,23 @@ _CURRENT_REVIEW_SNAPSHOTS = ContextVar(
 )
 _BOOTSTRAP_ASSIGNMENT_RE = re.compile(
     r"window\s*\.\s*CHANLUN_BOOTSTRAP\s*="
+)
+_REVIEW_RECEIPT_SCHEMA = "published-review-members-v1"
+_CONFIRMED_SNAPSHOT_KINDS = {
+    "current_generation_bootstrap", "published_html_bootstrap",
+}
+_REVIEW_MEMBER_FIELDS = (
+    "report_date", "snapshot_id", "snapshot_kind", "coverage_status",
+    "instrument_id", "identity_status", "code", "name", "sources",
+    "current_execution_status", "current_page_status", "risk_flags", "signal_date",
+)
+_REVIEW_SOURCE_FIELDS = (
+    "view", "role", "rank", "action", "score", "strategy_version",
+    "decision_version", "policy_version",
+)
+_COMPARISON_IDENTITY_FIELDS = (
+    "strategy_id", "strategy_version", "policy_version", "source_pool",
+    "entry_mode", "intended_horizon", "research_tier",
 )
 
 
@@ -212,18 +230,22 @@ def _read_archived_workbench(data_dir, report_date, source_report):
     try:
         with open(archive_path, "r", encoding="utf-8") as handle:
             html = handle.read()
-    except (OSError, UnicodeDecodeError):
+    except FileNotFoundError:
         return None
+    except (OSError, UnicodeDecodeError):
+        return {"unavailable_reason": "unreadable_html"}
     parser = _InlineScriptParser()
     try:
         parser.feed(html)
         parser.close()
     except Exception:
-        return None
+        return {"unavailable_reason": "invalid_html"}
     decoder = json.JSONDecoder()
     workbenches = []
+    assignment_count = 0
     for script in parser.scripts:
         for match in _BOOTSTRAP_ASSIGNMENT_RE.finditer(script):
+            assignment_count += 1
             json_start = match.end()
             while json_start < len(script) and script[json_start] in " \t\r\n":
                 json_start += 1
@@ -249,8 +271,8 @@ def _read_archived_workbench(data_dir, report_date, source_report):
                 "workbench": workbench,
                 "identity_matches": identity_matches,
             })
-    if len(workbenches) != 1:
-        return None
+    if assignment_count != 1 or len(workbenches) != 1:
+        return {"unavailable_reason": "ambiguous_or_invalid_bootstrap"}
     return workbenches[0]
 
 
@@ -418,6 +440,176 @@ def _workbench_review_entries(report, report_date, workbench, snapshot_kind, cov
             "signal_date": next(iter(signal_dates))
                 if len(signal_dates) == 1 else None,
         })
+    return entries
+
+
+def _canonical_sha256(value):
+    try:
+        serialized = json.dumps(
+            value, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+            allow_nan=False,
+        )
+    except (TypeError, ValueError):
+        return None
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _receipt_comparison_contract(workbench):
+    """Keep declared comparison identities, excluding price/basis payloads."""
+    contract = workbench.get("comparison_contract")
+    contract = contract if isinstance(contract, dict) else {}
+    versions = contract.get("strategy_version")
+    versions = {
+        key: value if isinstance(value, str) else None
+        for key, value in versions.items() if isinstance(key, str)
+    } if isinstance(versions, dict) else None
+    policy = contract.get("policy_version")
+    return {
+        "strategy_version": versions,
+        "policy_version": policy if isinstance(policy, str) else None,
+        "strategy_identities": [{
+            key: identity.get(key) if isinstance(identity.get(key), str) else None
+            for key in _COMPARISON_IDENTITY_FIELDS
+        } for identity in _as_list(contract.get("strategy_identities"))
+            if isinstance(identity, dict)],
+    }
+
+
+def _published_member_receipt(report, report_date, workbench, snapshot_kind, entries):
+    raw_hash = _canonical_sha256(report)
+    snapshot_id = workbench.get("snapshot_id")
+    if (
+        report.get("date") != report_date
+        or workbench.get("report_date") != report_date
+        or workbench.get("schema_version") != "decision-workbench-v1"
+        or not isinstance(snapshot_id, str) or not snapshot_id.strip()
+        or not isinstance(workbench.get("items"), list) or raw_hash is None
+    ):
+        return None
+    members = []
+    for entry in entries:
+        member = {key: entry[key] for key in _REVIEW_MEMBER_FIELDS}
+        member["sources"] = [
+            {key: source[key] for key in _REVIEW_SOURCE_FIELDS}
+            for source in entry["sources"]
+        ]
+        members.append(member)
+    receipt = {
+        "schema_version": _REVIEW_RECEIPT_SCHEMA,
+        "binding": {
+            "report_date": report_date, "raw_report_sha256": raw_hash,
+            "workbench_schema": workbench["schema_version"],
+            "snapshot_id": snapshot_id.strip(),
+            "comparison_contract": _receipt_comparison_contract(workbench),
+        },
+        "snapshot_kind": snapshot_kind,
+        "members": members,
+    }
+    receipt["content_sha256"] = _canonical_sha256(receipt)
+    return receipt if receipt["content_sha256"] is not None else None
+
+
+def _bound_receipt_entries(receipt, report, report_date):
+    """Validate only this report's light receipt; all derived facts are rebuilt."""
+    if not isinstance(receipt, dict) or set(receipt) != {
+        "schema_version", "binding", "snapshot_kind", "members", "content_sha256",
+    }:
+        return None
+    unsigned = {key: value for key, value in receipt.items() if key != "content_sha256"}
+    digest = _canonical_sha256(unsigned)
+    if digest is None or receipt["content_sha256"] != digest:
+        return None
+    binding = receipt["binding"]
+    if (
+        receipt["schema_version"] != _REVIEW_RECEIPT_SCHEMA
+        or not isinstance(receipt["snapshot_kind"], str)
+        or receipt["snapshot_kind"] not in _CONFIRMED_SNAPSHOT_KINDS
+        or not isinstance(binding, dict) or set(binding) != {
+            "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
+            "comparison_contract",
+        }
+        or report.get("date") != report_date
+        or binding["report_date"] != report_date
+        or binding["raw_report_sha256"] != _canonical_sha256(report)
+        or binding["workbench_schema"] != "decision-workbench-v1"
+        or not isinstance(binding["snapshot_id"], str) or not binding["snapshot_id"].strip()
+    ):
+        return None
+    contract = binding["comparison_contract"]
+    if not isinstance(contract, dict) or set(contract) != {
+        "strategy_version", "policy_version", "strategy_identities",
+    }:
+        return None
+    optional_text = lambda value: value is None or isinstance(value, str)
+    versions = contract["strategy_version"]
+    if (
+        not optional_text(contract["policy_version"])
+        or versions is not None and (
+            not isinstance(versions, dict)
+            or any(not isinstance(key, str) or not optional_text(value)
+                   for key, value in versions.items())
+        )
+        or not isinstance(contract["strategy_identities"], list)
+        or any(not isinstance(identity, dict)
+               or set(identity) != set(_COMPARISON_IDENTITY_FIELDS)
+               or any(not optional_text(value) for value in identity.values())
+               for identity in contract["strategy_identities"])
+        or not isinstance(receipt["members"], list)
+    ):
+        return None
+    entries = []
+    for member in receipt["members"]:
+        if not isinstance(member, dict) or set(member) != set(_REVIEW_MEMBER_FIELDS):
+            return None
+        if (
+            member["report_date"] != report_date
+            or member["snapshot_id"] != binding["snapshot_id"]
+            or member["snapshot_kind"] != receipt["snapshot_kind"]
+            or member["coverage_status"] != "confirmed_display_snapshot"
+            or any(not isinstance(member[key], str) for key in (
+                "code", "name", "identity_status", "current_execution_status",
+            ))
+            or not member["code"]
+            or any(not optional_text(member[key]) for key in (
+                "instrument_id", "current_page_status", "signal_date",
+            ))
+            or not isinstance(member["risk_flags"], list)
+            or any(not isinstance(value, str) for value in member["risk_flags"])
+            or not isinstance(member["sources"], list)
+        ):
+            return None
+        canonical_identity, _ = _review_identity(member["code"], None)
+        if (
+            member["identity_status"] == "verified"
+            and (canonical_identity is None or member["instrument_id"] != canonical_identity)
+            or member["identity_status"] in {"unresolved", "conflict"}
+            and member["instrument_id"] is not None
+            or member["identity_status"] not in {"verified", "unresolved", "conflict"}
+        ):
+            return None
+        sources = []
+        for source in member["sources"]:
+            if (
+                not isinstance(source, dict) or set(source) != set(_REVIEW_SOURCE_FIELDS)
+                or source["view"] not in VIEW_NAMES
+                or not isinstance(source["role"], str)
+                or any(not optional_text(source[key]) for key in (
+                    "action", "strategy_version", "decision_version", "policy_version",
+                ))
+                or source["rank"] is not None and type(source["rank"]) is not int
+                or source["score"] is not None and type(source["score"]) not in {int, float}
+            ):
+                return None
+            try:
+                if source["score"] is not None and not math.isfinite(source["score"]):
+                    return None
+            except OverflowError:
+                return None
+            sources.append(dict(source, formal_performance_status=_source_performance_status(
+                report, report_date, source["view"], member["code"]
+            )))
+        entry = dict(member, sources=sources, risk_flags=list(member["risk_flags"]))
+        entries.append(entry)
     return entries
 
 
@@ -853,33 +1045,61 @@ def _build_review_registry(
 ):
     current = _CURRENT_REVIEW_SNAPSHOTS.get()
     entries = []
+    published = {}
+    old_registry = existing_index.get("review_registry") \
+        if isinstance(existing_index, dict) else {}
+    old_registry = old_registry if isinstance(old_registry, dict) else {}
+    old_published = old_registry.get("published_member_snapshots")
+    old_published = old_published if isinstance(old_published, dict) else {}
     for report_date in dates:
         report = reports[report_date]
         workbench = current.get(report_date) if isinstance(current, dict) else None
         if isinstance(workbench, dict):
-            entries.extend(_workbench_review_entries(
+            current_entries = _workbench_review_entries(
                 report, report_date, workbench,
                 "current_generation_bootstrap", "confirmed_display_snapshot",
-            ))
+            )
+            entries.extend(current_entries)
+            receipt = _published_member_receipt(
+                report, report_date, workbench, "current_generation_bootstrap", current_entries
+            )
+            if receipt is not None:
+                published[report_date] = receipt
             continue
         archived = _read_archived_workbench(data_dir, report_date, report)
-        if isinstance(archived, dict):
+        if isinstance(archived, dict) and isinstance(archived.get("workbench"), dict):
             identity_matches = archived.get("identity_matches") is True
-            entries.extend(_workbench_review_entries(
+            snapshot_kind = (
+                "published_html_bootstrap"
+                if identity_matches else "postprocessed_html_bootstrap"
+            )
+            archived_entries = _workbench_review_entries(
                 report,
                 report_date,
                 archived["workbench"],
-                (
-                    "published_html_bootstrap"
-                    if identity_matches else "postprocessed_html_bootstrap"
-                ),
+                snapshot_kind,
                 (
                     "confirmed_display_snapshot"
                     if identity_matches else "unconfirmed_report_identity"
                 ),
-            ))
+            )
+            entries.extend(archived_entries)
+            if identity_matches:
+                receipt = _published_member_receipt(
+                    report, report_date, archived["workbench"], snapshot_kind, archived_entries
+                )
+                if receipt is not None:
+                    published[report_date] = receipt
         else:
-            entries.extend(_legacy_review_entries(report, report_date))
+            # Only an absent archive permits reuse. An existing invalid/conflicting
+            # archive revokes its previous receipt when this index is persisted.
+            receipt = old_published.get(report_date) if archived is None else None
+            restored = _bound_receipt_entries(receipt, report, report_date)
+            if restored is not None:
+                entries.extend(restored)
+                published[report_date] = receipt
+            else:
+                entries.extend(_legacy_review_entries(report, report_date))
     entries = _deduplicate_review_entries(entries)
     occurrences = {}
     totals = {}
@@ -915,6 +1135,7 @@ def _build_review_registry(
         "calendar_status": calendar_status,
         "price_data_cutoff": data_cutoff or None,
         "horizon_summary": horizon_summary,
+        "published_member_snapshots": published,
         "entries": entries,
     }
 

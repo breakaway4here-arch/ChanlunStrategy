@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Mapping, Optional
 
 from .industry_metadata import _is_a_share_identity
-from .market_history_store import MarketHistoryStore
+from .market_history_store import MarketHistoryStore, preserve_previous_quote_risk, quote_stock_risk
 from .identity import normalize_identity
 from .preclose_schedule import _SSE_2026_CLOSED
 
@@ -479,6 +479,11 @@ def ingest_market_close_snapshot(
                 changed += store.upsert_bars(
                     "day", instrument_id, [bar], adjustment="qfq"
                 )
+                existing = store.query_stock_meta(instrument_id, as_of=str(report_date)) or {}
+                risk = preserve_previous_quote_risk(quote_stock_risk(row, identity, now_cn.isoformat()), existing, identity, now_cn.isoformat())
+                existing.pop("as_of", None)
+                existing.update(risk)
+                store.upsert_stock_meta(instrument_id, str(report_date), existing)
         diagnostics.update(
             status=("partial" if pending_identity_rows else "complete"),
             reason=("identity_migration_pending" if pending_identity_rows else ""),

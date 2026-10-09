@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Isolated 14:45 advisory. Python validates and reads only the dedicated 0600
+# Isolated 14:45–14:56 Shanghai advisory. Python reads the dedicated 0600
 # preclose.env; this wrapper deliberately does not source formal strategy flags.
 
 set -euo pipefail
@@ -13,12 +13,20 @@ LOG_DIR="${REPO_DIR}/.cache/chanlun/preclose/logs"
 ENV_FILE="${CHANLUN_PRECLOSE_ENV_FILE:-${HOME}/.config/chanlun-strategy/preclose.env}"
 MARKET_DB="${CHANLUN_MARKET_HISTORY_DB_PATH:-${REPO_DIR}/.cache/chanlun/market_history.sqlite}"
 
+if (( $# == 0 )); then
+    SHANGHAI_HHMM="$(TZ=Asia/Shanghai /bin/date +%H%M)"
+    if (( 10#$SHANGHAI_HHMM < 1445 || 10#$SHANGHAI_HHMM >= 1456 )); then
+        exit 0
+    fi
+fi
+
 mkdir -p "$LOG_DIR"
 cd "$REPO_DIR"
 
 if (( $# == 0 )); then
     exec "$PYTHON_BIN" "$REPO_DIR/preclose_run.py" \
         --scheduled \
+        --deadline-seconds 660 \
         --root "$REPO_DIR/.cache/chanlun/preclose" \
         --formal-market-db "$MARKET_DB" \
         --env-file "$ENV_FILE" \

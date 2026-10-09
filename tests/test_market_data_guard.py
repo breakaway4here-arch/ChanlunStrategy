@@ -2093,7 +2093,7 @@ class TestMarketDataGuard(unittest.TestCase):
 
                 def repository():
                     repository_calls.append("list")
-                    return SimpleNamespace(list_instruments=lambda: [
+                    return SimpleNamespace(repair_daily_nonfinal=lambda *a, **kw: {'diagnostics': {}}, list_instruments=lambda: [
                         {"code": "000333", "name": "故障恢复股票"}
                     ])
 

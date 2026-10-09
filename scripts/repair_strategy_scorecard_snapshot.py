@@ -24,6 +24,7 @@ if os.fspath(ROOT_DIR) not in sys.path:
 
 from chanlun.recommendation_ledger import load_recommendation_entries  # noqa: E402
 from chanlun.pool_contract import resolve_nested_strategy_pool  # noqa: E402
+from chanlun.identity import normalize_identity  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
     _build_report_v2_html,
     _escape_inline_json,
@@ -504,9 +505,61 @@ def _assert_restored_luojie_workspace(workspace, independent_contract):
             raise RuntimeError("independent luojie workspace restoration failed")
 
 
+def _bound_research_observation_is_safe(row, originals):
+    """Authenticate the B projection against its actual source member."""
+    if not isinstance(row, dict):
+        return False
+    code = row.get('code')
+    ref = row.get('ref')
+    if not isinstance(ref, dict) or ref.get('pool') != 'observation_watchlist' or ref.get('code') != code:
+        return False
+    matched = [item for item in originals if isinstance(item, dict) and item.get('code') == code]
+    if not matched or any(item != matched[0] for item in matched[1:]):
+        return False
+    try:
+        canonical = normalize_identity({'asset_type': 'stock', 'code': code})
+    except (TypeError, ValueError):
+        return False
+    if code != canonical.code:
+        return False
+    state_contracts = {
+        'missing_30m_data': ('minute_data_insufficient', 'missing', 'not_evaluated'),
+        'waiting_30m_confirm': ('pending_confirmation', 'verified', 'pending'),
+        'alignment_without_confirmation': ('pending_confirmation', 'verified', 'pending'),
+    }
+    fields = ('source_channel', 'reason_code', 'observation_status',
+              'minute30_input_status', 'minute30_confirmation_status')
+    for item in [row] + matched:
+        try:
+            if normalize_identity(item).key != canonical.key:
+                return False
+        except (TypeError, ValueError):
+            return False
+        if item.get('research_observation_projection') is not True or any(
+                item.get(flag) is not False for flag in ('affects_formal', 'is_executable',
+                    'eligible_for_l1_v0', 'formal_actions_allowed')):
+            return False
+        if item.get('view') != 'observation' or item.get('tier') != 'watch' or item.get('source_channel') != 'low_position':
+            return False
+        reason = item.get('reason_code')
+        expected = state_contracts.get(reason) if isinstance(reason, str) else None
+        actual = tuple(item.get(field) for field in fields[2:])
+        if expected is None or actual != expected:
+            return False
+        if 'identity_key' in item and item.get('identity_key') != canonical.key:
+            return False
+        if 'final_display_state' in item and item.get('final_display_state') != 'observe':
+            return False
+    if any(item.get('identity_key') != canonical.key for item in matched):
+        return False
+    return all(row.get(field) == matched[0].get(field) for field in fields)
+
+
 def _workspace_upstream_contract_violations(report):
     report = report if isinstance(report, dict) else {}
     independent_luojie = _independent_luojie_research_contract(report)
+    observation_originals = report.get('observation_watchlist')
+    observation_originals = observation_originals if isinstance(observation_originals, list) else []
     pure_codes = {
         str(row.get("code") or "")
         for row in report.get("picks_pure") or []
@@ -531,17 +584,71 @@ def _workspace_upstream_contract_violations(report):
                 and row.get("price_limit_state") == "limit_up"
             )
 
+        def _violates(row):
+            if not isinstance(row, dict) or not row.get('code'):
+                return False
+            code = row.get('code')
+            source_rows = [item for item in observation_originals
+                           if isinstance(item, dict) and item.get('code') == code]
+            declares_b = any(item.get('research_observation_projection') is not None
+                             and item.get('research_observation_projection') is not False
+                             for item in [row] + source_rows)
+            if view_name == 'observation_top5' and declares_b:
+                return not _bound_research_observation_is_safe(row, observation_originals)
+            return str(code) not in pure_codes and not _is_limit_up_observation_exception(row)
+
         invalid_codes = sorted({
             str(row.get("code") or "")
             for row in rows
-            if isinstance(row, dict)
-            and row.get("code")
-            and str(row.get("code") or "") not in pure_codes
-            and not _is_limit_up_observation_exception(row)
+            if _violates(row)
         })
         if invalid_codes:
             violations[view_name] = invalid_codes
     return violations
+
+
+def _has_legacy_observation_upstream_marker(report, report_date, workspace):
+    """Only remove the exact old common-pool rejection of now-valid B rows."""
+    current = dict(report, workspace=workspace)
+    rows = (workspace.get('views') or {}).get('observation_top5') or []
+    if not rows or 'observation_top5' in _workspace_upstream_contract_violations(current):
+        return False
+    originals = report.get('observation_watchlist') or []
+    pure_codes = {str(r.get('code') or '') for r in report.get('picks_pure') or [] if isinstance(r, dict)}
+    invalid_codes = sorted({row['code'] for row in rows
+        if _bound_research_observation_is_safe(row, originals)
+        and row['code'] not in pure_codes and row.get('price_limit_state') != 'limit_up'})
+    if not invalid_codes:
+        return False
+    health = report.get('selection_input_health')
+    by_view = health.get('by_view') if isinstance(health, dict) else None
+    if not isinstance(by_view, dict):
+        return False
+    marker = by_view.get('observation_top5')
+    expected = dict(status='unavailable', required_date=report_date,
+        blocking_reason='strategy_upstream_contract_mismatch', invalid_count=len(invalid_codes),
+        invalid_codes=invalid_codes, output_hidden=True)
+    if (not isinstance(marker, dict) or marker != expected
+            or type(marker.get('invalid_count')) is not int or marker.get('output_hidden') is not True):
+        return False
+    old_workspace = report.get('workspace') or {}
+    if not isinstance(old_workspace, dict):
+        return False
+    old_rows = (old_workspace.get('views') or {}).get('observation_top5')
+    if old_rows:
+        return 'observation_top5' not in _workspace_upstream_contract_violations(report)
+    # A stored empty view needs the original finalizer's matching closing receipt.
+    meta = (old_workspace.get('view_meta') or {}).get('observation_top5') or {}
+    incidents = (old_workspace.get('diagnostics') or {}).get('upstream_contract_incidents') or []
+    observation_incidents = [r for r in incidents if isinstance(r, dict) and r.get('view') == 'observation_top5']
+    return (old_rows == [] and (old_workspace.get('counts') or {}).get('observation_top5') == 0
+        and meta.get('role') == 'research' and meta.get('source_pool') == 'observation_watchlist'
+        and meta.get('action_semantics') == 'watch_only' and meta.get('upstream_contract') == expected
+        and meta.get('availability') == dict(state='unavailable', reason=(
+            '历史输出含 {} 只不在 picks_pure 共同上游全集；该视图已封闭，保留原始池追溯但不重排。'
+        ).format(len(invalid_codes)))
+        and observation_incidents == [dict(view='observation_top5',
+            blocking_reason=expected['blocking_reason'], invalid_count=len(invalid_codes), invalid_codes=invalid_codes)])
 
 
 def _apply_workspace_upstream_contract_health(report, report_date):
@@ -939,12 +1046,19 @@ def rebuild_strategy_scorecard_report(
         report_date,
         independent_luojie,
     )
+    rebuilt_observation_workspace = build_workspace(report)
+    restore_observation = _has_legacy_observation_upstream_marker(
+        report, report_date, rebuilt_observation_workspace)
+    restore_empty_observation = (restore_observation and
+        report.get('workspace', {}).get('views', {}).get('observation_top5') == [])
     original_contract_views = set(
         _workspace_upstream_contract_violations(report)
     )
     rebuilt = _deepcopy_json(report)
     if restore_luojie:
         _remove_legacy_luojie_upstream_marker(rebuilt)
+    if restore_observation:
+        rebuilt['selection_input_health']['by_view'].pop('observation_top5')
     _apply_registered_input_health(rebuilt, report_date)
     removed = _remove_unproven_zero_changes(rebuilt)
     rebuilt["strategy_scorecards"] = _deepcopy_json(scorecards)
@@ -970,6 +1084,8 @@ def rebuild_strategy_scorecard_report(
     ignored_contract_views = original_contract_views | rebuilt_contract_views
     if restore_luojie:
         ignored_contract_views.add("luojie")
+    if restore_empty_observation:
+        ignored_contract_views.add('observation_top5')
     baseline_workspace = workspace_selection_projection(
         report,
         ignore_formal=incident_correction,
@@ -1000,6 +1116,7 @@ def rebuild_strategy_scorecard_report(
             rebuilt_contract_views
         ),
         "restored_independent_views": ["luojie"] if restore_luojie else [],
+        "restored_observation_views": ['observation_top5'] if restore_observation else [],
     }
 
 

@@ -11,7 +11,7 @@ import json
 import math
 import sqlite3
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import quote
@@ -24,6 +24,122 @@ BAR_TABLES = {
     "30m": "bars_30m",
     "15m": "bars_15m",
 }
+
+
+def stock_risk_metadata(metadata: Mapping[str, Any], as_of: str, read_as_of: Optional[str] = None) -> Dict[str, Any]:
+    """Keep legacy risk provenance separate from the enclosing metadata date."""
+    result = dict(metadata)
+    result.setdefault("risk_as_of", str(as_of))
+    result.setdefault("risk_source", "legacy_metadata")
+    stamp = str(result.get("risk_as_of") or "")
+    if stamp:
+        try:
+            cn = timezone(timedelta(hours=8))
+            risk_time = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            risk_time = risk_time.replace(tzinfo=cn) if risk_time.utcoffset() is None else risk_time.astimezone(cn)
+            cutoff = datetime.fromisoformat(str(read_as_of or as_of).replace("Z", "+00:00"))
+            cutoff = cutoff.replace(tzinfo=cn) if cutoff.utcoffset() is None else cutoff.astimezone(cn)
+            future = risk_time.date() > cutoff.date() if len(str(read_as_of or as_of)) == 10 else risk_time > cutoff
+            if future:
+                result.update(is_st=None, delisting_risk=None, name="", risk_status="unknown")
+                return result
+        except ValueError:
+            result["risk_status"] = "conflict"
+    flags = [result.get(key) for key in ("is_st", "delisting_risk")]
+    result.setdefault("risk_status", "conflict" if any(
+        value is not None and not isinstance(value, bool) for value in flags
+    ) else "legacy" if all(isinstance(value, bool) for value in flags) else "unknown")
+    if any(value is not None and not isinstance(value, bool) for value in flags):
+        result["risk_status"] = "conflict"
+    elif result["risk_status"] == "verified" and (
+            not stamp or result["risk_source"] not in ("eastmoney", "sina", "tencent")
+            or not all(isinstance(value, bool) for value in flags)):
+        result["risk_status"] = "unknown"
+    return result
+
+
+def quote_stock_risk(quote_row: Mapping[str, Any], identity: Any, as_of: str) -> Dict[str, Any]:
+    """Project only same-identity, same-day validated quote risk and name."""
+    result = {"is_st": None, "delisting_risk": None, "risk_as_of": "",
+              "risk_source": "", "risk_status": "unknown"}
+    try:
+        expected = normalize_identity(identity)
+        actual = normalize_identity(quote_row)
+        if expected != actual:
+            return dict(result, risk_status="conflict", risk_reason="quote_identity_mismatch")
+        now = datetime.fromisoformat(str(as_of).replace("Z", "+00:00"))
+        cn = timezone(timedelta(hours=8))
+        now = now.replace(tzinfo=cn) if now.utcoffset() is None else now.astimezone(cn)
+        from .quote_sources import valid_quote
+        if not valid_quote(quote_row, now) or quote_row.get("quote_status") not in (None, "valid"):
+            return result
+        if datetime.fromisoformat(str(quote_row["quote_asof"]).replace("Z", "+00:00")) > now:
+            return result
+    except (TypeError, ValueError, KeyError):
+        return result
+
+    source = str(quote_row["quote_source"])
+    stamp = str(quote_row["quote_asof"])
+    name = str(quote_row.get("name") or "").strip()
+    result.update(risk_source=source, risk_as_of=stamp)
+    if name:
+        result["name"] = name
+    name_st, name_delisting = "ST" in name.upper(), "退" in name
+    raw_st, raw_delisting = quote_row.get("is_st"), quote_row.get("delisting_risk")
+    conflict = any(value is not None and not isinstance(value, bool)
+                   for value in (raw_st, raw_delisting))
+    conflict = conflict or (name_st and raw_st is False) or (name_delisting and raw_delisting is False)
+    conflict = conflict or quote_row.get("risk_source") not in (None, "", source)
+    if quote_row.get("risk_as_of"):
+        try:
+            conflict = conflict or datetime.fromisoformat(str(quote_row["risk_as_of"]).replace("Z", "+00:00")) != datetime.fromisoformat(stamp)
+        except ValueError:
+            conflict = True
+    result["is_st"] = raw_st if isinstance(raw_st, bool) else True if name_st else None
+    result["delisting_risk"] = raw_delisting if isinstance(raw_delisting, bool) else True if name_delisting else None
+    result["risk_status"] = ("conflict" if conflict else "verified"
+                             if all(isinstance(result[key], bool) for key in ("is_st", "delisting_risk")) else "unknown")
+    return result
+
+
+def preserve_previous_quote_risk(current: Mapping[str, Any], previous: Mapping[str, Any], identity: Any, as_of: str) -> Dict[str, Any]:
+    """A missing current flag cannot clear an as-of-checked prior positive."""
+    result = dict(current, risk_conflicts=[], risk_conflict_reason="")
+    identity_key = normalize_identity(identity).key
+    if any(previous.get(key) is not None for key in ("code", "exchange", "asset_type")):
+        try:
+            if normalize_identity(previous).key != identity_key:
+                previous = {}
+        except (TypeError, ValueError):
+            previous = {}
+    previous = stock_risk_metadata(previous, str(previous.get("as_of") or ""), as_of)
+    prior = list(previous.get("risk_conflicts") or [])
+    for field in ("is_st", "delisting_risk"):
+        if previous.get(field) is True and previous.get("as_of") and previous.get("risk_as_of"):
+            prior.append({"field": field, "reason": "previous_positive_not_cleared",
+                "previous_value": True,
+                "previous_meta_as_of": previous.get("as_of"),
+                "previous_as_of": previous.get("risk_as_of"),
+                "previous_source": previous.get("risk_source"),
+                "previous_identity_key": identity_key})
+        if result.get(field) is True or (result.get(field) is False and result["risk_status"] != "conflict"):
+            continue
+        for evidence in prior:
+            checked = stock_risk_metadata({field: evidence.get("previous_value"),
+                "risk_as_of": evidence.get("previous_as_of"),
+                "risk_source": evidence.get("previous_source")},
+                str(evidence.get("previous_meta_as_of") or ""), as_of)
+            if (evidence.get("field") == field and evidence.get("previous_identity_key") == identity_key
+                    and checked.get(field) is True and checked["risk_status"] != "conflict"
+                    and str(evidence.get("previous_meta_as_of") or "") <= str(as_of)
+                    and str(evidence.get("previous_as_of") or "")[:10] <= str(as_of)[:10]):
+                result["risk_conflicts"].append(dict(evidence))
+                break
+    if result["risk_conflicts"]:
+        if result["risk_status"] != "conflict":
+            result["risk_conflict_reason"] = "previous_positive_not_cleared"
+        result["risk_status"] = "conflict"
+    return result
 
 
 def _utc_now() -> str:
@@ -638,8 +754,53 @@ class MarketHistoryStore:
         row = self.connection.execute(sql, params).fetchone()
         if row is None:
             return None
-        payload = json.loads(row["metadata_json"])
+        payload = stock_risk_metadata(json.loads(row["metadata_json"]), row["as_of"], as_of)
         payload["as_of"] = row["as_of"]
+        return self._validate_pending_risk(payload, instrument_id, as_of)
+
+    def _validate_pending_risk(self, payload, instrument_id, as_of):
+        if payload.get("risk_conflict_reason") != "previous_positive_not_cleared":
+            return payload
+        instrument = self.connection.execute(
+            "SELECT asset_type,exchange,code FROM instruments WHERE instrument_id=?", (instrument_id,)
+        ).fetchone()
+        identity_key = normalize_identity(dict(instrument)).key if instrument else ""
+        valid = []
+        for evidence in payload.get("risk_conflicts") or []:
+            field = evidence.get("field")
+            date = str(evidence.get("previous_meta_as_of") or "")
+            if (field not in ("is_st", "delisting_risk") or not date
+                    or evidence.get("previous_value") is not True
+                    or date > str(as_of or payload["as_of"])
+                    or evidence.get("previous_identity_key") != identity_key):
+                continue
+            if date == str(payload["as_of"]):
+                # Same-day upsert replaced this row. Preserve the actual value
+                # captured before overwrite, with its own date/source/identity.
+                captured = stock_risk_metadata({field: evidence.get("previous_value"),
+                    "risk_as_of": evidence.get("previous_as_of"),
+                    "risk_source": evidence.get("previous_source")}, date, as_of or payload["as_of"])
+                if (captured.get(field) is True
+                        and captured["risk_status"] != "conflict"
+                        and captured.get("risk_source") in ("eastmoney", "sina", "tencent", "legacy_metadata")
+                        and evidence.get("previous_as_of")):
+                    valid.append(evidence)
+                continue
+            row = self.connection.execute(
+                "SELECT metadata_json FROM stock_meta_asof WHERE instrument_id=? AND as_of=?",
+                (instrument_id, date),
+            ).fetchone()
+            if row is None:
+                continue
+            previous = stock_risk_metadata(json.loads(row["metadata_json"]), date, as_of or payload["as_of"])
+            if (previous.get(field) is True and previous.get("risk_as_of") == evidence.get("previous_as_of")
+                    and previous.get("risk_source") == evidence.get("previous_source")):
+                valid.append(evidence)
+        payload["risk_conflicts"] = valid
+        if not valid and not any(payload.get(field) is not None and not isinstance(payload[field], bool)
+                                 for field in ("is_st", "delisting_risk")):
+            payload["risk_status"] = "unknown"
+            payload["risk_conflict_reason"] = ""
         return payload
 
     def query_stock_meta_many(
@@ -676,9 +837,9 @@ class MarketHistoryStore:
                 params,
             ).fetchall()
             for row in rows:
-                payload = json.loads(row["metadata_json"])
+                payload = stock_risk_metadata(json.loads(row["metadata_json"]), row["as_of"], as_of)
                 payload["as_of"] = row["as_of"]
-                result[int(row["instrument_id"])] = payload
+                result[int(row["instrument_id"])] = self._validate_pending_risk(payload, int(row["instrument_id"]), as_of)
         return result
 
     def upsert_market_sentiment_evidence(

@@ -619,7 +619,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
         self.assertEqual(result["status"], "completed")
         self.assertEqual(len(configs), 1)
-        self.assertLessEqual(configs[0].deadline_seconds, 82.0)
+        self.assertEqual(configs[0].deadline_seconds, 502.0)
         self.assertEqual(
             set(timings["phase_seconds"]),
             {"input_acquisition", "pipeline", "delivery"},
@@ -631,7 +631,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(timings["source_sha"], "release-sha")
         self.assertEqual(timings["status"], "empty")
 
-    def test_1445_start_uses_extended_budget_without_crossing_1449_cutoff(self):
+    def test_1445_start_uses_extended_budget_without_crossing_1456_cutoff(self):
         cn_timezone = timezone(timedelta(hours=8))
         fixed_now = datetime(2026, 8, 28, 14, 45, 2, tzinfo=cn_timezone)
         market_inputs = {
@@ -680,7 +680,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual("completed", result["status"])
         self.assertEqual(1, len(configs))
         self.assertGreater(configs[0].deadline_seconds, 120.0)
-        self.assertLessEqual(configs[0].deadline_seconds, 202.0)
+        self.assertEqual(configs[0].deadline_seconds, 622.0)
 
     def test_scheduled_entry_skips_non_trading_day_before_acquisition(self):
         cn_timezone = timezone(timedelta(hours=8))
@@ -705,7 +705,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
     def test_scheduled_late_start_skips_acquisition_when_reserve_exhausts_window(self):
         cn_timezone = timezone(timedelta(hours=8))
-        fixed_now = datetime(2026, 8, 28, 14, 48, 40, tzinfo=cn_timezone)
+        fixed_now = datetime(2026, 8, 28, 14, 55, 40, tzinfo=cn_timezone)
         acquisition_calls = []
         pipeline_calls = []
 
@@ -791,10 +791,10 @@ class PrecloseRuntimeTests(unittest.TestCase):
             self.assertEqual(calls, [])
             self.assertEqual(input_path.read_bytes(), b"existing-input-sentinel\n")
 
-    def test_scheduled_entry_fails_closed_when_wall_clock_reaches_1449_before_pipeline(self):
+    def test_scheduled_entry_fails_closed_when_wall_clock_reaches_1456_before_pipeline(self):
         cn_timezone = timezone(timedelta(hours=8))
         start = datetime(2026, 8, 28, 14, 47, 2, tzinfo=cn_timezone)
-        cutoff = datetime(2026, 8, 28, 14, 49, 0, tzinfo=cn_timezone)
+        cutoff = datetime(2026, 8, 28, 14, 56, 0, tzinfo=cn_timezone)
         now_calls = [0]
 
         def wall_clock():
@@ -817,7 +817,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
 
         def pipeline_runner(*_args, **_kwargs):
             pipeline_calls.append("pipeline")
-            raise AssertionError("pipeline must not start at or after 14:49")
+            raise AssertionError("pipeline must not start at or after 14:56")
 
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
@@ -836,9 +836,7 @@ class PrecloseRuntimeTests(unittest.TestCase):
                 skip_publish=True,
             )
             day_root = base / "preclose" / TRADE_DATE
-            snapshot = json.loads(
-                (day_root / "snapshot.json").read_text(encoding="utf-8")
-            )
+            self.assertFalse((day_root / "snapshot.json").exists())
             failure = json.loads(
                 (day_root / "failure.json").read_text(encoding="utf-8")
             )
@@ -847,14 +845,12 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(result["status"], "deadline_exceeded")
         self.assertEqual(result["snapshot_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertEqual(snapshot["status"], "deadline_exceeded")
-        self.assertEqual(failure["error_type"], "DeliveryReserveReached")
-        self.assertEqual(result["snapshot_id"], snapshot["snapshot_id"])
+        self.assertEqual(failure["error_type"], "PrecloseExecutionDeadline")
 
     def test_scheduled_wall_alarm_interrupts_one_stuck_pipeline_stage(self):
         cn_timezone = timezone(timedelta(hours=8))
         near_cutoff = datetime(
-            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+            2026, 8, 28, 14, 55, 59, 950000, tzinfo=cn_timezone
         )
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -891,21 +887,18 @@ class PrecloseRuntimeTests(unittest.TestCase):
                     skip_publish=True,
                 )
             elapsed = time.monotonic() - started
-            snapshot = json.loads(
-                (base / "preclose" / TRADE_DATE / "snapshot.json").read_text(
-                    encoding="utf-8"
-                )
-            )
+            self.assertFalse((base / "preclose" / TRADE_DATE / "snapshot.json").exists())
+            failure = json.loads((base / "preclose" / TRADE_DATE / "failure.json").read_text())
 
         self.assertLess(elapsed, 0.18)
         self.assertEqual(result["snapshot_status"], "deadline_exceeded")
         self.assertEqual(result["exit_code"], 1)
-        self.assertGreaterEqual(snapshot["diagnostics"]["elapsed_seconds"], 0.03)
+        self.assertGreaterEqual(failure["elapsed_seconds"], 0.03)
 
-    def test_scheduled_fallback_freeze_cannot_overrun_1449_hard_cutoff(self):
+    def test_scheduled_fallback_freeze_cannot_overrun_1456_hard_cutoff(self):
         cn_timezone = timezone(timedelta(hours=8))
         near_cutoff = datetime(
-            2026, 8, 28, 14, 48, 59, 950000, tzinfo=cn_timezone
+            2026, 8, 28, 14, 55, 59, 950000, tzinfo=cn_timezone
         )
         market_inputs = {
             "schema_version": "preclose-input-v1",
@@ -1041,14 +1034,14 @@ class PrecloseRuntimeTests(unittest.TestCase):
             "min30": {},
             "market": {},
         }
-        clock_values = iter((0.0, 241.0))
+        clock_values = iter((0.0, 661.0))
         publisher_calls = []
 
         def monotonic():
             try:
                 return next(clock_values)
             except StopIteration:
-                return 241.0
+                return 661.0
 
         def publisher(*_args, **_kwargs):
             publisher_calls.append(True)

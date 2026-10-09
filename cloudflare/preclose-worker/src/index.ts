@@ -157,11 +157,12 @@ function normalizeSnapshot(value: unknown): PrecloseSnapshotBody | null {
   } as PrecloseSnapshotBody;
 }
 
-function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: number) {
+export function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: number) {
   const expired = now >= Date.parse(snapshot.expires_at);
   const hasRows = POOL_KEYS.some((key) => snapshot.pools[key].length > 0);
-  const available = snapshot.status === "available" && hasRows && !expired;
-  const replayable = snapshot.status === "available" && expired;
+  const sourceStatus = snapshot.status === "available" && !hasRows ? "failed" : snapshot.status;
+  const available = sourceStatus === "available" && !expired;
+  const replayable = sourceStatus === "available" && expired;
   const showPools = available || replayable;
   const pools = {} as Record<PoolKey, PrecloseCandidate[]>;
   for (const key of POOL_KEYS) pools[key] = showPools ? snapshot.pools[key].map(normalizeCandidate).filter(Boolean) as PrecloseCandidate[] : [];
@@ -176,14 +177,21 @@ function publicSnapshot(snapshot: PrecloseSnapshotBody, revision: number, now: n
     as_of: snapshot.as_of,
     generated_at: snapshot.generated_at,
     expires_at: snapshot.expires_at,
-    status: expired ? "expired" : available ? "available" : "empty",
+    status: expired ? "expired" : sourceStatus,
+    result_status: sourceStatus,
     is_final: false,
     affects_formal: false,
     revision,
     pools,
     message: expired
       ? "预跑已封存，仅供回看；14:57后不再依据预跑清单新增动作"
-      : available ? "14:56:30前有效" : "本期未选出推荐票",
+      : available ? "14:56:30前有效" : ({
+        empty: "本期未选出推荐票",
+        waiting: "正在等待预跑结果",
+        failed: "预跑失败，暂不提供候选",
+        deadline_exceeded: "预跑超时，暂不提供候选",
+        not_run: "本期预跑未运行",
+      } as Record<string, string>)[sourceStatus] || "预跑状态暂不可用",
   };
 }
 

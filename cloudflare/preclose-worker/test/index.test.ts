@@ -158,7 +158,7 @@ describe("pre-close worker", () => {
     });
   });
 
-  it("maps an available snapshot with three empty pools to the unified empty state", async () => {
+  it("treats an available snapshot with three empty pools as inconsistent", async () => {
     vi.useFakeTimers();
     const date = "2026-09-19";
     vi.setSystemTime(new Date(`${date}T06:50:00Z`));
@@ -169,8 +169,8 @@ describe("pre-close worker", () => {
     const response = await SELF.fetch(request(`/api/preclose/latest?date=${date}`));
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      status: "empty",
-      message: "本期未选出推荐票",
+      status: "failed",
+      message: "预跑失败，暂不提供候选",
       pools: { main: [], h4_t3: [], acceleration: [] },
     });
   });

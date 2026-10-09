@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import math
+import copy
 import inspect
+import re
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 
 import numpy as np
@@ -20,6 +24,42 @@ from .minute_sources import align_daily_basis
 
 _CN_TZ = timezone(timedelta(hours=8))
 _INTERVAL_MINUTES = {"30m": 30, "15m": 15}
+
+
+class _RepairRowsChanged(ValueError):
+    pass
+
+
+class DailyRepairBudget:
+    """One request ledger and monotonic deadline shared by the entire repair."""
+
+    def __init__(self, max_stocks=8, max_requests=16, seconds=20,
+                 remaining=None, monotonic=time.monotonic):
+        self.max_stocks = min(8, max(0, int(max_stocks)))
+        self.max_requests = min(16, max(0, int(max_requests)))
+        self.monotonic = monotonic
+        self.deadline = float(monotonic()) + min(20., max(0., float(seconds)))
+        self.external_remaining = remaining
+        self.requests = 0
+
+    def remaining(self):
+        left = self.deadline - float(self.monotonic())
+        if self.external_remaining is not None:
+            left = min(left, float(self.external_remaining()))
+        return max(0., left)
+
+    def ensure(self):
+        if self.remaining() <= 0:
+            raise ValueError('daily_repair_deadline')
+
+    def take_request(self):
+        remaining = self.remaining()
+        if remaining <= 0:
+            raise ValueError('daily_repair_deadline')
+        if self.requests >= self.max_requests:
+            raise ValueError('daily_repair_request_limit')
+        self.requests += 1
+        return min(3., remaining)
 
 
 @dataclass
@@ -64,6 +104,7 @@ class KLineRepository:
         self.immutable_backtest = bool(immutable_backtest)
         self._write_lock = threading.Lock()
         self._memory = {}
+        self._daily_repair_pending = {}
         if self.mode == "ongoing":
             with MarketHistoryStore(self.path):
                 pass
@@ -362,6 +403,7 @@ class KLineRepository:
             "stale": bool(stale),
             "is_final": latest_final,
             "adjustment": str(rows[-1]["adjustment"]),
+            "nonfinal_dates": [str(row['ts']) for row in rows if not bool(row['is_final'])],
         }
         return result
 
@@ -413,6 +455,8 @@ class KLineRepository:
         )
         enough = len(rows) >= count
         latest_final = bool(rows[-1]["is_final"])
+        if interval == 'day' and latest_final and any(not bool(row['is_final']) for row in rows):
+            return 'repair_pending', True
         if self.mode == "backtest":
             return ("verified", False) if (
                 enough and latest_matches and close_complete and latest_final
@@ -432,35 +476,239 @@ class KLineRepository:
             return "preview", False
         return "stale_cache", True
 
-    def _write_prepared(self, prepared: Sequence[Mapping[str, Any]]) -> None:
+    def _write_prepared(self, prepared: Sequence[Mapping[str, Any]], budget=None) -> None:
         if not prepared:
             return
         with self._write_lock:
             with self._open(readonly=False) as store:
                 try:
+                    if budget is not None:
+                        budget.ensure()
                     store.connection.execute("BEGIN IMMEDIATE")
                     for item in prepared:
+                        if budget is not None:
+                            budget.ensure()
                         instrument_id = store.upsert_instrument(
                             item["asset_type"],
                             item["exchange"],
                             item["code"],
                         )
+                        if 'repair_expected_rows' in item:
+                            self._check_repair_rows(store, instrument_id, item['repair_expected_rows'])
                         store.upsert_bars(
                             item["interval"],
                             instrument_id,
                             item["bars"],
                             adjustment=self.adjustment,
                         )
+                    if budget is not None:
+                        budget.ensure()
                     store.connection.commit()
                 except Exception:
                     store.connection.rollback()
                     raise
 
     @staticmethod
+    def _check_repair_rows(store, instrument_id, expected, require_nonfinal=True):
+        expected = list(expected)
+        current = {r['ts']:r for r in store.query_bars('day', instrument_id,
+            start=min(r['ts'] for r in expected), end=max(r['ts'] for r in expected))}
+        if len(current) != len(expected):
+            raise _RepairRowsChanged('repair_local_window_changed')
+        for old in expected:
+            row = current.get(old['ts'])
+            if row != dict(old) or (require_nonfinal and not bool(old['is_final'])
+                                   and row and bool(row['is_final'])):
+                raise _RepairRowsChanged('repair_local_row_changed:{}'.format(old['ts']))
+
+    def repair_daily_nonfinal(self, required_date, *, providers, write=True,
+                              budget=None, fetch_buffer=False, as_of=None,
+                              require_full_quantity=False):
+        """Replace only concrete nonfinal dates in the existing <=120 qualification window.
+
+        The ordinary missing-only fetcher is deliberately not used here. Read-only
+        callers receive overrides, never a writable connection to their database.
+        """
+        budget = budget or DailyRepairBudget()
+        evidence_as_of = as_of or datetime.now(_CN_TZ).isoformat()
+        if write and self.mode != 'ongoing':
+            raise ValueError('read-only repository cannot write repairs')
+        with self._open(readonly=True) as store:
+            instruments = store.list_instruments(asset_type='stock')
+            rows_by_id = store.query_bars_many('day', [int(i['instrument_id']) for i in instruments],
+                                               as_of=required_date, limit=120)
+        gaps = [(i, rows_by_id[int(i['instrument_id'])]) for i in instruments
+                if any(not bool(r['is_final']) for r in rows_by_id[int(i['instrument_id'])])]
+        overrides, expected_overrides, repaired, pending = {}, {}, [], []
+        for index, (instrument, rows) in enumerate(gaps):
+            bad_dates = [r['ts'] for r in rows if not bool(r['is_final'])]
+            try:
+                identity = self._identity(instrument)
+            except (TypeError, ValueError):
+                pending.append(dict(code=instrument['code'], exchange=instrument['exchange'],
+                                    nonfinal_dates=bad_dates, reasons=['invalid_identity']))
+                continue
+            detail = dict(code=identity.code, exchange=identity.exchange,
+                          nonfinal_dates=bad_dates, reasons=[])
+            if index >= budget.max_stocks or budget.remaining() <= 0 or budget.requests >= budget.max_requests:
+                detail['reasons'].append('repair_budget_exhausted')
+                pending.append(detail)
+                continue
+            if len(rows) < 60 or self._latest_date(rows) != str(required_date):
+                detail['reasons'].append('local_qualification_window_incomplete')
+                pending.append(detail)
+                continue
+            adopted = False
+            for source, fetcher in list(providers)[:2]:
+                if budget.remaining() <= 0 or budget.requests >= budget.max_requests:
+                    detail['reasons'].append('repair_budget_exhausted')
+                    break
+                try:
+                    payload = fetcher(identity, len(rows) + int(bool(fetch_buffer)), request_budget=budget)
+                    budget.ensure()
+                    item = self._prepare_daily_repair(identity, rows, payload, source, required_date,
+                                                      evidence_as_of, require_full_quantity)
+                    replacements = {bar['ts']:bar for bar in item['bars'] if bar['ts'] in bad_dates}
+                    if set(replacements) != set(bad_dates):
+                        raise ValueError('repair_dates_not_covered')
+                    budget.ensure()
+                    if write:
+                        self._write_prepared([dict(item, bars=list(replacements.values()),
+                            repair_expected_rows=rows)], budget=budget)
+                        self._memory.clear()
+                    else:
+                        with self._open(readonly=True) as store:
+                            self._check_repair_rows(store, int(instrument['instrument_id']), rows,
+                                                    require_nonfinal=False)
+                        budget.ensure()
+                    merged = [dict(r, **replacements[r['ts']]) if r['ts'] in replacements else dict(r) for r in rows]
+                    overrides[int(instrument['instrument_id'])] = merged
+                    expected_overrides[int(instrument['instrument_id'])] = rows
+                    repaired.append(dict(detail, source=source))
+                    adopted = True
+                    break
+                except _RepairRowsChanged as exc:
+                    detail['reasons'].append('{}:{}'.format(source, str(exc)))
+                    break
+                except Exception as exc:
+                    detail['reasons'].append('{}:{}'.format(source, str(exc)))
+            if not adopted:
+                pending.append(detail)
+        if write:
+            self._memory.clear()
+            self._daily_repair_pending = {}
+        # A different writer may already have resolved a gap. The failed
+        # attempt remains auditable, while current final rows stay usable.
+        instrument_ids = {(i['exchange'], i['code']): int(i['instrument_id']) for i in instruments}
+        with self._open(readonly=True) as store:
+            current_rows = store.query_bars_many('day',
+                [instrument_ids[(d['exchange'], d['code'])] for d in pending],
+                as_of=required_date, limit=120)
+        for detail in pending:
+            actual_dates = [r['ts'] for r in current_rows[instrument_ids[(detail['exchange'], detail['code'])]]
+                            if not bool(r['is_final'])]
+            if actual_dates != detail['nonfinal_dates']:
+                detail['initial_nonfinal_dates'] = detail['nonfinal_dates']
+                detail['nonfinal_dates'] = actual_dates
+        if write:
+            for detail in pending:
+                if not detail['nonfinal_dates']:
+                    continue
+                try:
+                    identity = InstrumentIdentity('stock', detail['exchange'], detail['code'])
+                except ValueError:
+                    continue
+                self._daily_repair_pending[identity] = (str(required_date), detail['nonfinal_dates'])
+        return dict(daily_rows_override=overrides, daily_rows_expected=expected_overrides, diagnostics=dict(
+            nonfinal_stock_count=len(gaps), repaired_count=len(repaired), repaired=repaired,
+            pending_count=len(pending), pending=pending, http_requests=budget.requests))
+
+    def _prepare_daily_repair(self, identity, rows, payload, source, required_date, as_of,
+                              require_full_quantity=False):
+        if not isinstance(payload, Mapping):
+            raise ValueError('repair_source_unavailable')
+        if source not in ('eastmoney', 'tencent') or payload.get('source') != source:
+            raise ValueError('repair_source_mismatch')
+        if not all(payload.get(k) == getattr(identity, k) for k in ('asset_type','exchange','code')):
+            raise ValueError('repair_identity_mismatch')
+        dates = self._safe_list(payload.get('dates'))
+        normalized = [self._normalized_timestamp('day', d) for d in dates]
+        if any(a >= b for a,b in zip(normalized, normalized[1:])):
+            raise ValueError('repair_dates_not_increasing')
+        arrays = ('opens','highs','lows','closes','volumes','amounts','amount_available','finals')
+        for key in arrays:
+            if key in payload and len(self._safe_list(payload[key])) != len(dates):
+                raise ValueError('repair_array_length_mismatch')
+        # A prior-close request can return today's trailing bar. Slice every
+        # parallel array together, before validating the previous-date window.
+        keep = [i for i,d in enumerate(normalized) if d <= str(required_date)]
+        if len(dates) - len(keep) > 1:
+            raise ValueError('repair_unexpected_future_tail')
+        trimmed = dict(payload, dates=[dates[i] for i in keep])
+        for key in arrays:
+            if key in payload:
+                values = self._safe_list(payload[key])
+                trimmed[key] = [values[i] for i in keep]
+        if trimmed.get('adjustment') != self.adjustment:
+            raise ValueError('repair_adjustment_mismatch')
+        if trimmed.get('volume_unit') not in ('hands', 'unknown') or trimmed.get('volume_raw_unit') not in ('hands','shares','unknown'):
+            raise ValueError('repair_volume_unit_unverified')
+        if trimmed.get('volume_source') != source:
+            raise ValueError('repair_volume_source_mismatch')
+        if trimmed.get('amount_unit') not in ('CNY', 'unknown'):
+            raise ValueError('repair_amount_unit_mismatch')
+        if 'amounts' in trimmed and trimmed.get('amount_source') != source:
+            raise ValueError('repair_amount_source_mismatch')
+        item = self._prepare_remote('day', identity, trimmed,
+                                    now=self._parse_timestamp(as_of))
+        item['interval'] = 'day'
+        self._validate_prepared_remote(item, count=len(rows), required_date=required_date,
+                                       as_of=as_of)
+        if any(not self._infer_final('day', bar['ts'], self._parse_timestamp(as_of)) for bar in item['bars']):
+            raise ValueError('repair_bar_not_closed_as_of')
+        remote = {bar['ts']:bar for bar in item['bars']}
+        if not all(bool(r['is_final']) for r in item['bars']):
+            raise ValueError('repair_nonfinal_source')
+        if any(r['ts'] not in remote for r in rows):
+            raise ValueError('repair_dates_not_covered')
+        healthy = [r for r in rows if bool(r['is_final'])]
+        if len(healthy) < 2:
+            raise ValueError('repair_healthy_overlap_missing')
+        for original in healthy:
+            replacement = remote[original['ts']]
+            if original['adjustment'] != self.adjustment:
+                raise ValueError('repair_local_basis_unverified')
+            if require_full_quantity and (original.get('volume_unit') != 'hands'
+                    or not original.get('amount_available') or original.get('amount_unit') != 'CNY'
+                    or not original.get('volume_source') or not original.get('amount_source')):
+                raise ValueError('repair_local_quantity_incomplete')
+            keys = ('open','high','low','close')
+            if original.get('volume_unit') == replacement['volume_unit'] == 'hands':
+                keys += ('volume',)
+            for key in keys:
+                if not math.isclose(float(original[key]), float(replacement[key]), rel_tol=1e-6, abs_tol=1e-8):
+                    raise ValueError('repair_healthy_overlap_conflict')
+            if original.get('amount_available') and replacement['amount_available']:
+                if original.get('amount_unit') != replacement['amount_unit'] or not math.isclose(
+                        float(original['amount']), float(replacement['amount']), rel_tol=1e-6, abs_tol=1e-8):
+                    raise ValueError('repair_healthy_amount_conflict')
+        for index, original in enumerate(rows):
+            if bool(original['is_final']):
+                continue
+            replacement = remote[original['ts']]
+            # Match the existing qualification consumers (13 volume / 5 amount).
+            if (require_full_quantity or index >= len(rows)-13) and replacement['volume_unit'] != 'hands':
+                raise ValueError('repair_volume_evidence_missing')
+            if (require_full_quantity or index >= len(rows)-5) and (not replacement['amount_available'] or replacement['amount_unit'] != 'CNY' or replacement['amount_source'] != source):
+                raise ValueError('repair_amount_evidence_missing')
+        return item
+
+    @staticmethod
     def _fetcher_context_kwargs(
         fetcher: Callable[..., Any],
         required_date: Optional[str],
         as_of: Optional[str],
+        final_validator=None,
     ) -> Dict[str, Any]:
         signature_target = getattr(fetcher, "side_effect", None)
         if not callable(signature_target):
@@ -477,10 +725,62 @@ class KLineRepository:
         for name, value in (
             ("required_date", required_date),
             ("as_of", as_of),
+            ("final_validator", final_validator),
         ):
+            if name == 'final_validator' and value is None:
+                continue
             if accepts_kwargs or name in parameters:
                 context[name] = value
         return context
+
+    def _minute_final_validator(self, interval, identity, count, required_date, as_of):
+        references = {}
+
+        def validate(payload):
+            aligned = payload
+            if payload.get('schema') == 'free_minute_v1':
+                if payload.get('adjustment') != 'unverified':
+                    raise ValueError('already_adjusted_or_invalid_scale')
+                if payload.get('symbol') != identity.exchange.lower() + identity.code:
+                    raise ValueError('minute_identity_mismatch')
+                if payload.get('volume_unit') != 'hands':
+                    raise ValueError('minute_volume_unit_unverified')
+                if self.raw_daily_reader is not None and required_date:
+                    if not references.get('loaded'):
+                        references['loaded'] = True
+                        try:
+                            rows = self._load_many('day', [identity], 240, as_of)[identity]
+                            target = {str(row['ts'])[:10]: {
+                                **{k: row[k] for k in ('open', 'high', 'low', 'close', 'adjustment')},
+                                'is_final': bool(row['is_final']), 'source': row.get('source_batch') or '',
+                            } for row in rows}
+                            raw = copy.deepcopy(self.raw_daily_reader(identity, required_date))
+                            if not isinstance(raw, Mapping) or not raw:
+                                raise ValueError('missing_raw_daily_reference')
+                            if any(not isinstance(v, Mapping) for v in raw.values()):
+                                raise ValueError('invalid_raw_daily_reference')
+                            references['raw'] = MappingProxyType({k: MappingProxyType(dict(v)) for k,v in raw.items()})
+                            references['target'] = MappingProxyType({k: MappingProxyType(v) for k,v in target.items()})
+                        except Exception as exc:
+                            reason = str(exc)
+                            references['failure'] = reason if reason in ('missing_raw_daily_reference',
+                                'invalid_raw_daily_reference') else 'raw_daily_reference_unavailable'
+                    if references.get('failure'):
+                        raise ValueError(references['failure'])
+                    if not set(d[:10] for d in payload['dates']).issubset(references['target']):
+                        raise ValueError('missing_canonical_daily_reference')
+                    aligned = align_daily_basis(payload,
+                        {k:dict(v) for k,v in references['raw'].items()},
+                        {k:dict(v) for k,v in references['target'].items()}, scale=int(interval[:-1]))
+            item = self._prepare_remote(interval, identity, aligned)
+            item['interval'] = interval
+            self._validate_prepared_remote(item, count=count, required_date=required_date, as_of=as_of)
+            if any(not bar['is_final'] for bar in item['bars']):
+                raise ValueError('minute_nonfinal_bar')
+            if any(bar['adjustment'] != self.adjustment for bar in item['bars']):
+                raise ValueError('price_basis_unverified')
+            return aligned, item
+        return validate
 
     @classmethod
     def _validate_prepared_remote(
@@ -627,6 +927,8 @@ class KLineRepository:
             identity
             for identity in identities
             if self.mode == "ongoing"
+            and not (self._daily_repair_pending.get(identity, ('',))[0] == str(required_date)
+                     and interval == 'day' and not force_refresh)
             and self._needs_refresh(
                 interval,
                 local[identity],
@@ -646,12 +948,15 @@ class KLineRepository:
                     if getattr(fetcher, 'requires_full_window', False) is True or force_refresh or len(existing) < int(count)
                     else int(self.overlap_counts[interval])
                 )
+                validator = self._minute_final_validator(interval, identity, remote_count, required_date, as_of) if interval in ('30m','15m') else None
+                def check_source(payload):
+                    validator(payload)
+                    return payload
                 context = self._fetcher_context_kwargs(
-                    fetcher, required_date, as_of
-                )
+                    fetcher, required_date, as_of, check_source if validator else None)
                 return identity, remote_count, fetcher(
                     fetch_values[identity], remote_count, **context
-                )
+                ), validator
 
             with ThreadPoolExecutor(
                 max_workers=min(self.max_workers, len(refresh_identities))
@@ -663,7 +968,7 @@ class KLineRepository:
                 for future in as_completed(futures):
                     identity = futures[future]
                     try:
-                        _returned_identity, remote_count, payload = future.result()
+                        _returned_identity, remote_count, payload, validator = future.result()
                         if not payload:
                             remote_failed[identity] = True
                             remote_diagnostics[identity] = {
@@ -677,24 +982,39 @@ class KLineRepository:
                             diagnostics = payload.get("_fetch_diagnostics")
                             if isinstance(diagnostics, Mapping):
                                 remote_diagnostics[identity] = dict(diagnostics)
-                        if (payload.get('schema') == 'free_minute_v1'
-                                and self.raw_daily_reader is not None
-                                and required_date and interval in ('30m', '15m')):
+                        if validator is not None:
                             try:
-                                references = self._load_many('day', [identity], 240, as_of)[identity]
-                                target_daily = {str(row['ts'])[:10]: {
-                                    **{k: row[k] for k in ('open', 'high', 'low', 'close', 'adjustment')},
-                                    'is_final': bool(row['is_final']),
-                                    'source': row.get('source_batch') or '',
-                                } for row in references}
-                                if not set(d[:10] for d in payload['dates']).issubset(target_daily):
-                                    raise ValueError('missing_canonical_daily_reference')
-                                raw_daily = self.raw_daily_reader(identity, required_date)
-                                payload = align_daily_basis(payload, raw_daily, target_daily,
-                                                            scale=int(interval[:-1]))
-                                remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
+                                payload, _checked = validator(payload)
+                                if payload.get('price_basis_evidence'):
+                                    remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
                             except (ValueError, TypeError, KeyError) as exc:
-                                remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = str(exc)
+                                reason = str(exc)
+                                remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = (
+                                    reason if re.fullmatch(r'[a-z_]+(?::\d{4}-\d{2}-\d{2})?', reason)
+                                    else 'final_validation_rejected')
+                                safe_readonly = (payload.get('schema') == 'free_minute_v1'
+                                    and payload.get('adjustment') == 'unverified'
+                                    and reason.startswith(('raw_daily_conflict:', 'missing_canonical_daily_reference',
+                                        'missing_final_daily_reference:', 'unverified_daily_reference:',
+                                        'missing_raw_daily_reference', 'invalid_raw_daily_reference', 'raw_daily_reference_unavailable',
+                                        'incomplete_day:', 'non_affine_daily_reference:', 'indeterminate_flat_day:',
+                                        'invalid_basis_mapping:', 'price_basis_unverified')))
+                                if (reason == 'price_basis_unverified'
+                                        and payload.get('schema') != 'free_minute_v1'
+                                        and payload.get('adjustment') in ('raw', 'unverified')
+                                        and payload.get('volume_unit') in ('hands', 'unknown')
+                                        and payload.get('symbol') in (None, identity.exchange.lower()+identity.code)):
+                                    safe_readonly = True
+                                if not safe_readonly:
+                                    raise
+                                readonly = self._prepare_remote(interval, identity, payload)
+                                readonly['interval'] = interval
+                                self._validate_prepared_remote(readonly, count=remote_count,
+                                                               required_date=required_date, as_of=as_of)
+                                if not all(bar['is_final'] for bar in readonly['bars']):
+                                    raise ValueError('minute_nonfinal_bar')
+                                read_only_remote[identity] = (readonly, payload)
+                                continue
                         item = self._prepare_remote(interval, identity, payload)
                         item["interval"] = interval
                         self._validate_prepared_remote(
@@ -713,17 +1033,17 @@ class KLineRepository:
                         remote_failed[identity] = True
                         diagnostics = getattr(exc, "diagnostics", None)
                         if isinstance(diagnostics, Mapping):
-                            remote_diagnostics[identity] = {
+                            remote_diagnostics.setdefault(identity, {}).update({
                                 "fetch_failure": dict(diagnostics),
-                            }
+                            })
                         else:
-                            remote_diagnostics[identity] = {
+                            remote_diagnostics.setdefault(identity, {}).update({
                                 "fetch_failure": {
-                                    "reason": "remote_fetch_exception",
+                                    "reason": remote_diagnostics.get(identity, {}).get('price_basis_failure') or "remote_fetch_exception",
                                     "exception_type": type(exc).__name__,
                                     "final_adopted": False,
                                 }
-                            }
+                            })
             if prepared:
                 try:
                     self._write_prepared(prepared)
@@ -752,7 +1072,12 @@ class KLineRepository:
                 required_date,
                 remote_failed=bool(remote_failed.get(identity)),
             )
+            pending_repair = self._daily_repair_pending.get(identity)
+            if interval == 'day' and pending_repair and pending_repair[0] == str(required_date):
+                status, stale = 'repair_pending', True
             kline = self._rows_to_kline(rows, status, stale)
+            if kline and interval == 'day' and pending_repair and pending_repair[0] == str(required_date):
+                kline['_data_status']['nonfinal_dates'] = list(pending_repair[1])
             result_source = "market_history_db" if kline else "missing"
             if identity in read_only_remote and status != 'verified':
                 item, payload = read_only_remote[identity]

@@ -7,7 +7,7 @@ import inspect
 import math
 import time
 from dataclasses import dataclass
-from datetime import datetime, time as wall_time
+from datetime import datetime
 
 import numpy as np
 from config import SIGNAL_MAX_AGE_TRADING_DAYS
@@ -19,8 +19,14 @@ from .daily_structure_pool import build_daily_structure_pool
 from .fusion_admission import apply_fusion_admission
 from .h4_t3_pool import build_h4_t3_pool, filter_h4_upstream_candidates
 from .market_sentiment import build_market_sentiment
+from .market_history_store import quote_stock_risk
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
+from .preclose_data import MARKET_INDICES
+from .preclose_schedule import (
+    MAX_PRE_CLOSE_RUNTIME_SECONDS, PRE_CLOSE_CUTOFF_TIME,
+    normalize_preclose_datetime,
+)
 from .price_basis import scale_price
 from .scorer import apply_scores
 from .strategy_identity import PRE_CLOSE_STRATEGY_VERSION
@@ -60,7 +66,7 @@ EXECUTED_STAGES = (
 
 
 class PrecloseDeadlineExceeded(RuntimeError):
-    """Raised internally when the 14:49 output deadline has been reached."""
+    """Raised internally when the pre-close computation budget is exhausted."""
 
     def __init__(self, stage, elapsed):
         super().__init__("pre-close deadline exceeded")
@@ -99,7 +105,7 @@ class PreclosePipelineConfig:
     generated_at: str
     source_sha: str
     run_id: str
-    deadline_seconds: float = 240.0
+    deadline_seconds: float = MAX_PRE_CLOSE_RUNTIME_SECONDS
     monotonic: object = time.monotonic
 
     def __post_init__(self):
@@ -110,14 +116,21 @@ class PreclosePipelineConfig:
             raise ValueError("as_of date mismatch")
         if generated_at.date().isoformat() != trade_date:
             raise ValueError("generated_at date mismatch")
-        if float(self.deadline_seconds) <= 0 or float(self.deadline_seconds) > 240:
-            raise ValueError("deadline_seconds must be in (0, 240]")
+        if (not math.isfinite(float(self.deadline_seconds))
+                or not 0 < float(self.deadline_seconds) <= MAX_PRE_CLOSE_RUNTIME_SECONDS):
+            raise ValueError("deadline_seconds must be finite and in (0, 660]")
         if not callable(self.monotonic):
             raise TypeError("monotonic must be callable")
         if not str(self.source_sha or "").strip():
             raise ValueError("source_sha is required")
         if not str(self.run_id or "").strip():
             raise ValueError("run_id is required")
+        cutoff = generated_at.replace(hour=PRE_CLOSE_CUTOFF_TIME.hour,
+            minute=PRE_CLOSE_CUTOFF_TIME.minute, second=0, microsecond=0)
+        remaining = (cutoff - generated_at).total_seconds()
+        if remaining > 0:
+            # Replay uses its frozen generated_at, never the real wall clock.
+            object.__setattr__(self, "deadline_seconds", min(float(self.deadline_seconds), remaining))
         object.__setattr__(self, "trade_date", trade_date)
         object.__setattr__(self, "as_of", as_of.isoformat(timespec="seconds"))
         object.__setattr__(
@@ -138,7 +151,7 @@ def _canonical_date(value):
 
 def _parse_datetime(value):
     text = str(value or "").strip().replace("Z", "+00:00")
-    return datetime.fromisoformat(text)
+    return normalize_preclose_datetime(datetime.fromisoformat(text))
 
 
 def _as_list(value):
@@ -1073,6 +1086,68 @@ def _shanghai_closes(market_inputs):
     return _as_list(shanghai.get("closes"))
 
 
+def _verified_risk_only_empty(market_inputs, config):
+    """Recognize a complete quote input wholly excluded by current business risk."""
+    runtime = market_inputs.get("runtime_diagnostics") or {}
+    splice = runtime.get("daily_splice") or {}
+    quotes = runtime.get("quote_snapshot") or {}
+    evidence = splice.get("risk_exclusions") or []
+    count = splice.get("requested_count")
+    market = market_inputs.get("market") or {}
+    stock_bars = market.get("stock_bars") or []
+    stock_by_code = {str(row.get("code") or ""): row for row in stock_bars}
+    stock_codes = set(stock_by_code)
+    if (market_inputs.get("daily") or market_inputs.get("target_codes")
+            or not isinstance(count, int) or isinstance(count, bool) or count <= 0
+            or splice.get("risk_excluded_count") != count or splice.get("quote_eligible_count") != 0
+            or splice.get("available_count") != count or splice.get("business_available_count") != 0
+            or splice.get("coverage") != 1
+            or quotes.get("complete") is not True or quotes.get("requested") != quotes.get("unique")
+            or len(stock_codes) != quotes.get("unique") or len(evidence) != count
+            or len(stock_bars) != len(stock_codes)
+            or set(market.get("market_indices") or {}) != set(MARKET_INDICES)):
+        return None
+    for name, code in MARKET_INDICES.items():
+        index = market["market_indices"][name]
+        if not isinstance(index, dict) or not isinstance(index.get("closes"), (list, tuple)):
+            return None
+        closes = [_finite(value) for value in index["closes"]]
+        close, change = _finite(index.get("close")), _finite(index.get("change_pct"))
+        if (index.get("code") != code or index.get("date") != config.trade_date
+                or index.get("source") != "tencent+tencent_plain_verified"
+                or len(closes) < 2 or any(value is None or value <= 0 for value in closes)
+                or close is None or close <= 0 or change is None
+                or close != round(closes[-1], 4)
+                or change != round((closes[-1] / closes[-2] - 1) * 100, 4)):
+            return None
+    for bar in stock_bars:
+        close, previous = _finite(bar.get("close")), _finite(bar.get("prev_close"))
+        if (close is None or close <= 0 or previous is None or previous <= 0
+                or (bar.get("is_st") is not None and not isinstance(bar["is_st"], bool))):
+            return None
+    codes = []
+    for entry in evidence:
+        quote = entry.get("quote") or {}
+        code = str(entry.get("code") or "")
+        if quote.get("code") != code or code not in stock_codes:
+            return None
+        risk = quote_stock_risk(quote, quote, config.as_of)
+        reason = ("st_or_delisting" if risk["risk_status"] != "conflict"
+                  and (risk["is_st"] is True or risk["delisting_risk"] is True) else "")
+        if not reason or entry.get("reason") != reason or not risk["risk_source"]:
+            return None
+        bar = stock_by_code[code]
+        if (bar.get("name") != risk.get("name", "") or bar.get("is_st") is not risk["is_st"]
+                or _finite(bar.get("close")) != _finite(quote.get("current_price"))
+                or _finite(bar.get("prev_close")) != _finite(quote.get("prev_close"))):
+            return None
+        codes.append(code)
+    if len(set(codes)) != count or sorted(codes) != sorted(
+            str(entry.get("code") or "") for entry in splice.get("excluded_codes") or []):
+        return None
+    return codes
+
+
 def run_preclose_pipeline(market_inputs, *, config, components=None):
     """Run only daily/30m/main/H4/acceleration and freeze one advisory snapshot."""
 
@@ -1098,8 +1173,20 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
 
     try:
         as_of_dt = _parse_datetime(config.as_of)
-        if as_of_dt.time().replace(tzinfo=None) >= wall_time(14, 49):
-            raise PrecloseDeadlineExceeded("startup", 240.0)
+        if (as_of_dt.time().replace(tzinfo=None) >= PRE_CLOSE_CUTOFF_TIME
+                or _parse_datetime(config.generated_at).time().replace(tzinfo=None)
+                >= PRE_CLOSE_CUTOFF_TIME):
+            raise PrecloseDeadlineExceeded("startup", config.deadline_seconds)
+
+        risk_empty_codes = _verified_risk_only_empty(market_inputs, config)
+        if risk_empty_codes:
+            _stage_clock(config, diagnostics, started_at, "market_context", lambda: build_preclose_market_context(market_inputs, components=components))
+            diagnostics["risk_excluded_codes"] = risk_empty_codes
+            diagnostics["input_health"]["daily"] = {"status": "verified", "requested_count": 0,
+                "available_count": 0, "coverage": 1.0, "business_excluded_count": len(risk_empty_codes)}
+            return build_preclose_snapshot(config.trade_date, config.as_of, config.generated_at,
+                pools={"main": [], "h4_t3": [], "acceleration": []}, source_sha=config.source_sha,
+                diagnostics=diagnostics, run_id=config.run_id)
 
         def daily_operation():
             daily_results, rows_by_code, failures = _analyze_daily_inputs(

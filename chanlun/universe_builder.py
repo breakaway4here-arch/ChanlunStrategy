@@ -258,6 +258,8 @@ def load_eligible_candidates(
     required_date: Optional[str] = None,
     return_diagnostics: bool = False,
     audit_records: Optional[List[Dict[str, Any]]] = None,
+    daily_rows_override: Optional[Mapping[int, Sequence[Mapping[str, Any]]]] = None,
+    daily_rows_expected: Optional[Mapping[int, Sequence[Mapping[str, Any]]]] = None,
 ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], Dict[str, Any]]]:
     """Load an as-of-safe eligible universe and compute retrieval-only features."""
     instruments = store.list_instruments(asset_type="stock")
@@ -266,6 +268,13 @@ def load_eligible_candidates(
     rows_by_id = store.query_bars_many(
         "day", ids, as_of=as_of, limit=lookback_bars
     )
+    if daily_rows_override:
+        for instrument_id, override in daily_rows_override.items():
+            if instrument_id in rows_by_id:
+                if daily_rows_expected is not None and rows_by_id[instrument_id] != list(daily_rows_expected.get(instrument_id, [])):
+                    continue
+                rows_by_id[instrument_id] = [dict(row) for row in override
+                    if str(row['ts'])[:10] <= str(as_of)[:10]][-int(lookback_bars):]
     candidates = []
     excluded = {
         "missing_meta": 0,
@@ -278,7 +287,9 @@ def load_eligible_candidates(
         "amount_evidence_incomplete": 0,
         "volume_evidence_incomplete": 0,
         "invalid_identity": 0,
+        "risk_evidence_conflict": 0,
     }
+    risk_unknown_count = 0
     for instrument in instruments:
         try:
             canonical = normalize_identity(instrument)
@@ -303,7 +314,6 @@ def load_eligible_candidates(
             "code": canonical.code,
             "name": (
                 (meta or {}).get("name")
-                or instrument.get("name")
                 or instrument["code"]
             ),
             "exchange": canonical.exchange,
@@ -337,10 +347,18 @@ def load_eligible_candidates(
             excluded["missing_meta"] += 1
             reject("missing_meta")
             continue
-        if meta.get("is_st") is True or meta.get("delisting_risk") is True:
+        if meta.get("risk_status") == "conflict":
+            excluded["risk_evidence_conflict"] += 1
+            reject("risk_evidence_conflict")
+            continue
+        name = str(meta.get("name") or "")
+        if (meta.get("is_st") is True or meta.get("delisting_risk") is True
+                or "ST" in name.upper() or "退" in name):
             excluded["st_or_delisting"] += 1
             reject("st_or_delisting")
             continue
+        if meta.get("risk_status") == "unknown":
+            risk_unknown_count += 1
         try:
             listed_days = int(meta.get("listed_days"))
         except (TypeError, ValueError):
@@ -400,7 +418,7 @@ def load_eligible_candidates(
         )
         candidate = {
             "code": canonical.code,
-            "name": meta.get("name") or instrument.get("name") or instrument["code"],
+            "name": meta.get("name") or instrument["code"],
             "exchange": canonical.exchange,
             "asset_type": canonical.asset_type,
             "stock_meta_asof": meta,
@@ -438,6 +456,7 @@ def load_eligible_candidates(
         "required_date": str(required_date or ""),
         "instrument_count": len(instruments),
         "eligible_count": len(candidates),
+        "risk_unknown_count": risk_unknown_count,
         "excluded": excluded,
     }
     if return_diagnostics:

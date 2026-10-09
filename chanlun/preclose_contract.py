@@ -203,10 +203,16 @@ def build_public_preclose_view(snapshot, now):
 
     source = snapshot if isinstance(snapshot, dict) else {}
     expired = is_preclose_expired(source, now)
-    available = source.get("status") == "available" and not expired
-    replayable = source.get("status") == "available" and expired
+    source_status = source.get("status")
+    has_rows = any((source.get("pools") or {}).get(key) for key in POOL_KEYS)
+    if source_status == "available" and not has_rows:
+        source_status = "failed"
+    if source_status not in {"available", "empty", "failed", "deadline_exceeded", "not_run", "waiting"}:
+        source_status = "unavailable"
+    available = source_status == "available" and not expired
+    replayable = source_status == "available" and expired
     show_pools = available or replayable
-    status = "available" if available else ("expired" if expired else "empty")
+    status = "expired" if expired else source_status
     pools = {
         pool_key: list((source.get("pools") or {}).get(pool_key) or [])
         if show_pools
@@ -218,7 +224,13 @@ def build_public_preclose_view(snapshot, now):
     elif available:
         message = "14:56:30前有效"
     else:
-        message = "本期未选出推荐票"
+        message = {
+            "empty": "本期未选出推荐票",
+            "waiting": "正在等待预跑结果",
+            "failed": "预跑失败，暂不提供候选",
+            "deadline_exceeded": "预跑超时，暂不提供候选",
+            "not_run": "本期预跑未运行",
+        }.get(status, "预跑状态暂不可用")
     return {
         "schema_version": source.get("schema_version"),
         "mode": source.get("mode"),
@@ -230,6 +242,7 @@ def build_public_preclose_view(snapshot, now):
         "generated_at": source.get("generated_at"),
         "expires_at": source.get("expires_at"),
         "status": status,
+        "result_status": source_status,
         "is_final": False,
         "affects_formal": False,
         "source_sha": source.get("source_sha"),

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import inspect
 import sqlite3
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,9 +22,10 @@ from config import (
     MIN_LISTED_DAYS,
 )
 
-from .market_history_store import MarketHistoryStore
+from .market_history_store import MarketHistoryStore, preserve_previous_quote_risk, quote_stock_risk
+from .kline_repository import DailyRepairBudget, KLineRepository
 from .identity import normalize_index_identity
-from .preclose_data import fetch_target_30m_snapshots
+from .preclose_data import MARKET_INDICES, fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
 from .price_basis import adjustment_factor, scale_price
 from .right_side_startup import (
@@ -35,16 +37,9 @@ from .universe_builder import (
     build_candidate_universe,
     load_eligible_candidates,
 )
+from .volume_contract import canonical_amount_window, canonical_volume_window
 
 
-MARKET_INDICES = {
-    "上证指数": "000001",
-    "深证成指": "399001",
-    "创业板指": "399006",
-    "科创50": "000688",
-    "沪深300": "000300",
-    "中证500": "000905",
-}
 _ARRAY_KEYS = ("dates", "opens", "highs", "lows", "closes", "volumes")
 _VOLUME_METADATA_KEYS = (
     ("volume_units", "volume_unit", "unknown"),
@@ -147,10 +142,18 @@ def _previous_market_date(formal_market_db, trade_date):
     return str(row[0])
 
 
-def load_readonly_preclose_universe(formal_market_db, trade_date):
+def load_readonly_preclose_universe(formal_market_db, trade_date, *,
+                                   repair_budget_remaining=None, repair_providers=None, repair_as_of=None):
     """Select the current no-overlay retrieval universe from prior final bars."""
 
     previous_date = _previous_market_date(formal_market_db, trade_date)
+    if repair_providers is None:
+        from .data_fetcher import daily_nonfinal_repair_providers
+        repair_providers = daily_nonfinal_repair_providers()
+    repository = KLineRepository(formal_market_db, mode='backtest', immutable_backtest=False)
+    repair = repository.repair_daily_nonfinal(previous_date, providers=repair_providers,
+        write=False, fetch_buffer=True, as_of=repair_as_of, require_full_quantity=True,
+        budget=DailyRepairBudget(remaining=repair_budget_remaining))
     with MarketHistoryStore(formal_market_db, readonly=True) as store:
         candidates, eligibility = load_eligible_candidates(
             store,
@@ -159,6 +162,8 @@ def load_readonly_preclose_universe(formal_market_db, trade_date):
             min_listed_days=MIN_LISTED_DAYS,
             min_daily_amount=MIN_DAILY_AMOUNT,
             return_diagnostics=True,
+            daily_rows_override=repair['daily_rows_override'],
+            daily_rows_expected=repair['daily_rows_expected'],
         )
     config = UniverseConfig(
         low_quota=FULL_A_NO_OVERLAY_LOW_QUOTA,
@@ -178,6 +183,7 @@ def load_readonly_preclose_universe(formal_market_db, trade_date):
         "retrieval": retrieval.get("diagnostics") or {},
         "selected_count": len(selected),
         "source": "formal_market_history_readonly",
+        "daily_nonfinal_repair": repair['diagnostics'],
     }
 
 
@@ -216,6 +222,9 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
     values = _valid_quote(quote)
     if not values:
         return None, "invalid_quote"
+    risk = preserve_previous_quote_risk(quote_stock_risk(quote, candidate, as_of), candidate.get("stock_meta_asof") or {}, candidate, as_of)
+    if risk.get("risk_reason") == "quote_identity_mismatch":
+        return None, "quote_identity_mismatch"
     source_kline = candidate.get("klines")
     source_kline = source_kline if isinstance(source_kline, dict) else {}
     arrays = {key: _as_list(source_kline.get(key)) for key in _ARRAY_KEYS}
@@ -312,10 +321,14 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
     output_kline["adjustment"] = adjustment
 
     row = dict(candidate)
+    metadata = dict(candidate.get("stock_meta_asof") or {})
+    metadata.update(risk)
     row.update({
-        "name": str(quote.get("name") or candidate.get("name") or ""),
+        "name": str(risk.get("name") or candidate.get("name") or ""),
         "sector": str(quote.get("industry") or candidate.get("sector") or ""),
-        "is_st": bool(quote.get("is_st")),
+        "is_st": risk["is_st"],
+        "delisting_risk": risk["delisting_risk"],
+        "stock_meta_asof": metadata,
         "listed_date": str(quote.get("listed_date") or ""),
         "change_pct": _finite(quote.get("change_pct")),
         "volume": values["volume"],
@@ -341,6 +354,26 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
             "raw_current_price": values["current_price"],
         },
     })
+    if risk["risk_status"] == "conflict":
+        return None, "risk_evidence_conflict"
+    if risk["is_st"] is True or risk["delisting_risk"] is True:
+        # A business exclusion is not evidence that unhealthy input was spliced.
+        # Preserve the existing coverage denominator and count only a verified
+        # complete price/quantity window as a successful splice.
+        finals = _as_list(source_kline.get("finals") or [])
+        price_rows = zip(*(output_kline[key] for key in ("opens", "highs", "lows", "closes")))
+        prices_valid = all(
+            all(_finite(value) is not None and value > 0 for value in prices)
+            and prices[1] >= max(prices[0], prices[2], prices[3])
+            and prices[2] <= min(prices[0], prices[1], prices[3])
+            for prices in price_rows
+        )
+        if (not prices_valid or adjustment != "qfq"
+                or (finals and not all(value is True for value in finals))
+                or canonical_volume_window(output_kline, slice(None)) is None
+                or canonical_amount_window(output_kline, slice(None)) is None):
+            return None, "risk_history_unverified"
+        return None, "st_or_delisting"
     return row, ""
 
 
@@ -662,6 +695,7 @@ def build_scheduled_preclose_input(
     target_selector=None,
     min30_fetcher=None,
     turnover_loader=None,
+    repair_budget_remaining=None,
 ):
     """Build one complete input using only batch quotes and read-only history."""
 
@@ -680,9 +714,17 @@ def build_scheduled_preclose_input(
     min30_fetcher = min30_fetcher or fetch_preclose_30m
     turnover_loader = turnover_loader or load_market_turnover_history
 
+    loader_kwargs = {}
+    signature_target = getattr(universe_loader, 'side_effect', None)
+    if not callable(signature_target):
+        signature_target = universe_loader
+    parameters = inspect.signature(signature_target).parameters
+    if 'repair_budget_remaining' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        loader_kwargs['repair_budget_remaining'] = repair_budget_remaining
+    if 'repair_as_of' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+        loader_kwargs['repair_as_of'] = as_of
     universe, universe_diagnostics = universe_loader(
-        formal_market_db, str(trade_date)
-    )
+        formal_market_db, str(trade_date), **loader_kwargs)
     quotes, quote_diagnostics = quote_fetcher()
     quotes = list(quotes or [])
     quote_diagnostics = (
@@ -707,6 +749,7 @@ def build_scheduled_preclose_input(
     daily = []
     excluded = Counter()
     excluded_codes = []
+    risk_exclusions = []
     for candidate in universe or []:
         code = str((candidate or {}).get("code") or "")
         quote = quotes_by_code.get(code)
@@ -721,6 +764,8 @@ def build_scheduled_preclose_input(
             reason = reason or "daily_splice_failed"
             excluded[reason] += 1
             excluded_codes.append({"code": code, "reason": reason})
+            if reason == "st_or_delisting":
+                risk_exclusions.append({"code": code, "reason": reason, "quote": dict(quote)})
             continue
         context = sector_by_name.get(str(row.get("sector") or ""), {})
         for key in ("sector_rank", "sector_strength_label"):
@@ -728,18 +773,24 @@ def build_scheduled_preclose_input(
                 row[key] = context[key]
         daily.append(row)
     requested_daily = len(universe or [])
-    daily_coverage = (
-        len(daily) / float(requested_daily) if requested_daily else 0.0
-    )
+    risk_excluded = excluded.get("st_or_delisting", 0)
+    quote_eligible_count = requested_daily - risk_excluded
+    spliced_count = len(daily) + risk_excluded
+    daily_coverage = spliced_count / float(requested_daily) if requested_daily else 0.0
     daily_splice_diagnostics = {
         "requested_count": requested_daily,
-        "available_count": len(daily),
+        "available_count": spliced_count,
         "coverage": round(daily_coverage, 6),
         "minimum_coverage": MINIMUM_DAILY_SPLICE_COVERAGE,
         "excluded_by_reason": dict(sorted(excluded.items())),
         "excluded_codes": excluded_codes,
     }
-    if not daily:
+    if risk_excluded:
+        daily_splice_diagnostics["risk_excluded_count"] = risk_excluded
+        daily_splice_diagnostics["quote_eligible_count"] = quote_eligible_count
+        daily_splice_diagnostics["business_available_count"] = len(daily)
+        daily_splice_diagnostics["risk_exclusions"] = risk_exclusions
+    if not daily and not risk_excluded:
         raise RuntimeError("no eligible intraday daily rows")
     if daily_coverage < MINIMUM_DAILY_SPLICE_COVERAGE:
         raise RuntimeError(
@@ -760,12 +811,13 @@ def build_scheduled_preclose_input(
         values = _valid_quote(quote)
         if not values:
             continue
+        quote_risk = quote_stock_risk(quote, quote, str(as_of))
         stock_bars.append({
             "code": str(quote.get("code") or ""),
-            "name": str(quote.get("name") or ""),
+            "name": str(quote_risk.get("name") or ""),
             "prev_close": values["prev_close"],
             "close": values["current_price"],
-            "is_st": bool(quote.get("is_st")),
+            "is_st": quote_risk["is_st"],
         })
         current_turnover += values["amount"]
     turnover_history = turnover_loader(formal_market_db, str(trade_date))
