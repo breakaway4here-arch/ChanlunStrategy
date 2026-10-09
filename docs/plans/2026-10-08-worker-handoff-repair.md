@@ -121,3 +121,14 @@ main由另一独立任务推进至`a5a59a96`（开盘啦按日资料与补更）
 - 独立行情审查无确认P0/P1/P2，262项及实际CAS/分钟换源入口通过。独立交付审查170项/Worker纯8项、绑定62及归档/实际JS消费者通过，但发现D2合法JSON整数score=10**400触发math.isfinite的OverflowError，令双日整个登记不可用。主进程独立复现后补局部异常拒绝，仅坏日期legacy，正常日期两成员保留；不改公共数值工具、策略或价基。新增两测试，产品blob ba84f4a7ea0faee72f0e1fed866ad5d86e7fd912/test4a1781b53b920a16f10b5bb288c922b1b846af95，主进程137项和同步main后31项均通过；独立审查49项及原反例复核通过，无剩余本批代码阻断。
 - 本次部署前只读线上首页/10-08归档/JS精确等旧main；原09-30预跑DO快照GET expired、identity/hash可读，旧接口无result_status。新版部署后必须保持相同原快照身份并回看原状态，无生产PUT测试。Top10前后只读hash对照，既有路由/binding/migration及secret不变。
 - Wrangler已安装，现有OAuth过期且自动刷新失败；扩大文件访问确认仍失败，非代码测试通过即可部署。Worker账户、旧版本、secret名称必须恢复认证后实际核对，再部署兼容Worker、合并main/Pages并同步运行树，最后验证实际资源和桌面/手机。当前本节是发布准备和审查回执，尚不宣称合并或上线；实际结果继续追加。
+
+## 10/9 合并与上线验收
+
+- 认证核查更正：用户指出使用密钥后，从交互终端配置引用找到既有`~/.cloudflare.env`（权限0600）。工具终端没有加载该配置，先前失败只证明过期OAuth回退，不能据此判断密钥不可用。显式内存加载现有Account API Token后，正确账户的tokens/verify返回200/active，Wrangler whoami确认账户匹配；没有输出密钥、重新登录或替换凭证。
+- 预跑Worker仅发布已审查源码，配置SHA256仍为`7d980015c89499156b11880a8ca4484fc0e8126de14d5f2d8b74a5cf882b9c8c`。旧版本`20db94c5-1ed4-4150-8d4e-f109aa4b34d9`留作兼容回退；新版本`1cf27ab9-d9d0-4b00-897b-ba116e3cc885`于2026-10-09 11:00+08:00上线，部署读回100%。DO绑定和迁移保持，secret名称前后均仅PRE_CLOSE_WRITE_TOKEN，没有替换其值。
+- 真实只读GET验证：9/30快照identity仍`preclose:2026-09-30:e0cb622e28a9d33d`、原content_hash和revision=1保持，新result_status=failed与expired并存；合法Origin/no-store及非法Origin403保持。10/9缺快照仍404。未进行生产PUT。Top10未部署，原返回SHA256`56ce1bc5393807c4554d1045bacfb298ffc93eecf41393a587f4e3e14363c2d7`保持。
+- [PR #15](https://github.com/breakaway4here-arch/ChanlunStrategy/pull/15)按审查头`d78accdb`合并，main产品合并提交`e727c7509edf895ac8af1aa2454c69cf6a3a314e`与候选整树一致。Pages run`37877384845`成功；公开首页、10/8归档、JS和JSON逐字等候选，资源版本`4a24efa974f8`。首页/归档/JS SHA256分别`4bc655520008b80012f131504904158c04e99efe2f37c36eb2e9cf3ecc5e30c8`、`3a6551a327424edf37add1e5cce2818936b2ad240bd6b8e844090bf7e638338a`、`404fa13d14ecb4c9358f2adc5f4b1714d2fb3eb870518a9ca499ab4bc3508c28`；10/8原JSON保持`71bc21eb244e68f5981e957ac3788edec8b0eeb1c340a52164f792f3d67c1888`。
+- 运行目录是独立Git检出，单独fetch后持原共享docs发布锁快进至e727c750。只隔离原三项脏状态，随后精确恢复两个HTML删除和compare原字节（SHA256`f07f6ea8614ea7a10b5cc1413bc620f0c2b0f78044914cd30b57fa8df582a4a4`），未用候选覆盖。原根工作区保持，既有调度无需重装或kickstart；后续自然执行从同一运行路径读取新版代码。
+- 主进程实际打开正式网页：1440桌面与390×844手机候选详情、真实K线和60根切换可用，手机关闭/重开通过；本来源缺K线时只显示局部空态，未核验原价保留说明。首页按当日读预跑，11点404显示等待；归档按报告日读取10/8真实快照，展开后明确显示已封存/预跑失败，没有标作真空池；浏览器无新增error日志。
+- 评分边界修正后最终39模块综合929/930，唯一已核验旧JS静态字符串断言继续单列，0错误；不记为全绿。同步已合main后的预跑/发布快照39项定向回归全部通过（网络阻断、临时SQLite），上线后的代码树没有产品追加修正。验收证据在`/private/tmp/chanlun-handoff-acceptance/`：`cloudflare-account-token-verify.json`、`wrangler-deploy-result.json`、`worker-release-live-readback.json`、`pages-release-live-readback.json`、`runtime-release-e727c750.json`、`release-browser-acceptance.json`、`release-after-main-sync.log`及`release-mobile-kline.jpg`/`release-archive-preclose.jpg`。
+- 本次完成代码、Worker、Pages和运行目录上线；没有手工重跑正式任务、写库补数、收益重算、通知或R1切换。下一次14:45自然执行及真实通知效果尚未观察，保持待自然验收，不能用部署或历史快照读回替代。
