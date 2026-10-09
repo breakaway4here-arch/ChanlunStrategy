@@ -83,7 +83,7 @@ assert(globalThis.__auxTest.current({ date: data.date, strategy_run_manifest: [e
     def test_october_eighth_scorecard_keeps_current_run_and_history_separate(self):
         _assert_node_contract(
             self,
-            "({ render: renderStrategyScorecards })",
+            "({ render: renderStrategyScorecards, gate: renderGateDiagnostics })",
             r"""
 const raw = JSON.parse(fs.readFileSync('docs/data/2026-10-08.json', 'utf8'));
 const data = {
@@ -98,16 +98,17 @@ const data = {
   diagnostics: { strategy_review: { benchmark_status: 'ok' } }
 };
 const html = globalThis.__auxTest.render(data);
+const gateHtml = globalThis.__auxTest.gate(data);
 assert(html.includes('部分可用') && html.includes('20 只已核验研究候选'), 'Luojie partial run hidden');
 assert(html.includes('127&#47;100') && html.includes('8&#47;20') && html.includes('1&#47;2'), 'mature horizon progress lost');
 assert(html.includes('基准数据已取得；策略收益比较尚未达到样本要求'), 'benchmark confused with return readiness');
-assert(html.includes('本期 2026-10-08 处理 72 条信号'), 'current gate run count lost');
-assert(html.includes('账本累计') && html.includes('270'), 'gate ledger total lost');
-assert(html.includes('推荐 / 观察 / 拒绝：3 / 77 / 190') && html.includes('仅观察：270'),
+assert(gateHtml.includes('本期 2026-10-08 处理 72 条信号'), 'current gate run count lost');
+assert(gateHtml.includes('本版本累计') && gateHtml.includes('270'), 'gate ledger total lost');
+assert(gateHtml.includes('推荐 / 观察 / 拒绝：3 / 77 / 190') && gateHtml.includes('仅观察：270'),
   'rule classifications were promoted to page actions');
-assert(html.includes('本期运行状态未记录'), 'historical gate identity passed as current');
-assert((html.match(/门控运行正常/g) || []).length === 1, 'historical ledger masqueraded as normal current run');
-const nextDate = globalThis.__auxTest.render(Object.assign({}, data, { date: '2026-10-09' }));
+assert(gateHtml.includes('本期运行状态未记录'), 'historical gate identity passed as current');
+assert((gateHtml.match(/门控运行正常/g) || []).length === 1, 'historical ledger masqueraded as normal current run');
+const nextDate = globalThis.__auxTest.gate(Object.assign({}, data, { date: '2026-10-09' }));
 assert(!nextDate.includes('门控运行正常') && !nextDate.includes('本期 2026-10-09 处理 72 条信号'),
   'prior report manifest was treated as current');
 """,
@@ -428,7 +429,7 @@ window.CHANLUN_BOOTSTRAP = {
   }
 };
 const html = globalThis.__auxTest.render(base);
-assert(html.includes('PSY12 影子情绪'), 'PSY12 research card missing');
+assert(html.includes('上涨持续性（PSY12）'), 'PSY12 research card missing');
 assert(html.includes('2026-08-11 至 2026-08-26'), 'PSY12 window missing');
 assert(html.includes('6 / 12'), 'PSY12 up-day evidence missing');
 assert(html.includes('正式分'), 'formal score missing');
@@ -2380,7 +2381,7 @@ assert(globalThis.__auxTest.description('baseline').includes('共同上游全集
             "renderPersonalWatchlist(source)",
             "renderLimitUpEcologyCard(source)",
             "renderHoldingRiskSection(source)",
-            "renderStrategyScorecards(source)",
+            "renderStrategyScorecards(source, 'current')",
             "renderShadowEvaluations(source)",
         ):
             self.assertIn(call, primary)
@@ -2532,7 +2533,7 @@ const html = globalThis.__auxTest.render({
   },
   diagnostics: { strategy_review: { benchmark_status: 'missing' } }
 });
-for (const label of ['正式推荐收益', '基础候选基线', '研究策略回看', '门控运行诊断']) {
+for (const label of ['正式推荐收益', '基础候选基线', '研究策略回看']) {
   assert(html.includes(label), 'missing section ' + label);
 }
 assert(html.includes('T+1 收盘'), 'T+1 close semantics missing');
@@ -2543,7 +2544,7 @@ assert(html.includes('参考收盘价缺失'), 'blocking reason was not translat
 assert(!html.includes('≥5%命中'), 'small-sample hit-rate conclusion leaked');
 assert(!html.includes('期间最高'), 'small-sample excursion conclusion leaked');
 assert(!html.includes('期间最低'), 'small-sample excursion conclusion leaked');
-assert(html.includes('该门控不计算收益'), 'gate was presented as return strategy');
+assert(!html.includes('门控运行诊断'), 'gate was presented as return strategy');
 assert(html.includes('1 条账本身份无法安全分类'), 'classification failures were silently hidden');
 assert(html.includes('罗姐主题策略'), 'known historical name was not normalized');
 assert(!html.includes('罗杰主题策略'), 'legacy typo leaked into current UI');
@@ -2655,7 +2656,7 @@ assert(staleHtml.includes('<strong>本期证据不足</strong>'), 'stale input d
     def test_gate_scorecard_separates_today_from_ledger_cumulative_counts(self):
         _assert_node_contract(
             self,
-            "{ render: renderStrategyScorecards }",
+            "{ render: renderGateDiagnostics }",
             r"""
 const gate = {
     strategy: 'observation_gate', version: 'v1',
@@ -2677,7 +2678,7 @@ const html = globalThis.__auxTest.render({ date: '2026-08-26', strategy_run_mani
   gates: [gate], classification_failures: []
 }, diagnostics: {} });
 assert(html.includes('本期 2026-08-26 处理 321 条信号'), 'today run count missing');
-assert(html.includes('账本累计（2026-08-15 至 2026-08-26 · 8 个交易日）'), 'cumulative window was not labeled');
+assert(html.includes('本版本累计（2026-08-15 至 2026-08-26 · 8 个交易日）'), 'cumulative window was not labeled');
 assert(html.includes('推荐 / 观察 / 拒绝：182 / 310 / 203'), 'cumulative gate counts missing');
 """,
         )
@@ -3066,7 +3067,7 @@ assert(html.includes('新闻丁·事件点名'), 'news named mislabeled');
             primary.index("renderPersonalWatchlist(source)"),
         )
         self.assertLess(
-            primary.index("renderPsy12ShadowSubpanel(source)"),
+            primary.index("renderPsy12ShadowSubpanel(source, true)"),
             primary.index("renderStrategyDisagreementAudit(source)"),
         )
 
@@ -3312,7 +3313,7 @@ assert(html.includes('入场口径：未知'), 'unknown entry mode was not expli
         primary = JS[primary_start:primary_end]
 
         self.assertLess(
-            primary.index("renderStrategyScorecards(source)"),
+            primary.index("renderStrategyScorecards(source, 'current')"),
             primary.index("renderShadowEvaluations(source)"),
         )
         self.assertLess(

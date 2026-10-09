@@ -224,6 +224,19 @@
     return text;
   }
 
+  function safeVisibleDiagnosticReason(value) {
+    var text = userFacingEvidenceText(value, false).trim();
+    // A public summary accepts only a short natural Chinese reason. Technical
+    // errors, including paths and credentials without labels, stay in details.
+    if (text.length > 0 && text.length <= 80
+      && /[\u3400-\u9fff]/u.test(text)
+      && /^[\u3400-\u9fff0-9 ，。；：、（）“”‘’《》？！·　]+$/u.test(text)) {
+      return text;
+    }
+    return (/(?:read|reader|load|open|读取)/i.test(text) ? '读取失败' : '运行异常')
+      + '，详见诊断';
+  }
+
   function isMobileViewport() {
     if (!window.matchMedia) return false;
     return window.matchMedia('(max-width: 760px)').matches;
@@ -11470,7 +11483,7 @@
       + '</div>' + boundary;
   }
 
-  function renderPsy12ShadowSubpanel(data) {
+  function renderPsy12ShadowSubpanel(data, compact) {
     data = data || {};
     var psy12 = data.psy12 || {};
     var shadow = data.psy12_shadow || {};
@@ -11543,48 +11556,54 @@
       ? Number(shadow.shadow_score_with_psy12) : null;
     var delta = isRecommendationEvidenceFiniteNumber(shadow.delta_vs_formal)
       ? Number(shadow.delta_vs_formal) : null;
-    if (!contractValid) {
+    var compactWarning = !contractValid
+      ? 'PSY12 影子合同不可用，正式决策未采用该结果。'
+      : (!psy12WeightValid
+        ? '影子权重不可验证，正式决策未采用该结果。'
+        : (shadow.status === 'available' && formalScore !== null && shadowScore !== null
+          ? '影子验证已有结果；展开查看完整分数、差值与审计。'
+          : '影子综合分暂缺：' + shadowReason));
+    function renderPsy12Panel(badge, detailHtml) {
+      var bodyHtml = baseHtml;
+      if (compact) {
+        bodyHtml += '<div class="psy12-shadow-notice' + (!contractValid || !psy12WeightValid ? ' is-error' : '')
+          + '">' + escapeHtml(compactWarning) + '</div>'
+          + '<details class="psy12-research-audit"><summary>查看影子分与审计</summary>'
+          + detailHtml + '</details>';
+      } else {
+        bodyHtml += detailHtml;
+      }
       return renderDecisionCard({
-        title: 'PSY12 影子情绪',
+        title: '上涨持续性（PSY12）',
         subtitle: '最近 12 个有效交易日上涨持续性',
-        badge: { text: '合同不可用', tone: 'danger' },
+        badge: badge,
         className: 'psy12-shadow-card psy12-shadow-subpanel',
-        bodyHtml: baseHtml
-          + '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>'
-          + auditProgress,
+        bodyHtml: bodyHtml,
       });
+    }
+    if (!contractValid) {
+      return renderPsy12Panel({ text: '合同不可用', tone: 'danger' },
+        '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>'
+        + auditProgress);
     }
 
     if (!psy12WeightValid) {
-      return renderDecisionCard({
-        title: 'PSY12 影子情绪',
-        subtitle: '最近 12 个有效交易日上涨持续性',
-        badge: { text: '权重不可验证', tone: 'danger' },
-        className: 'psy12-shadow-card psy12-shadow-subpanel',
-        bodyHtml: baseHtml
-          + '<div class="psy12-shadow-notice is-error">影子权重不可验证，未展示加权后的影子结果；正式决策未采用该结果。</div>'
-          + auditProgress,
-      });
+      return renderPsy12Panel({ text: '权重不可验证', tone: 'danger' },
+        '<div class="psy12-shadow-notice is-error">影子权重不可验证，未展示加权后的影子结果；正式决策未采用该结果。</div>'
+        + auditProgress);
     }
 
     var available = shadow.status === 'available'
       && formalScore !== null && shadowScore !== null;
     if (!available) {
-      return renderDecisionCard({
-        title: 'PSY12 影子情绪',
-        subtitle: '最近 12 个有效交易日上涨持续性',
-        badge: { text: baseAvailable ? '影子分暂缺' : '数据不足', tone: 'neutral' },
-        className: 'psy12-shadow-card psy12-shadow-subpanel',
-        bodyHtml: ''
-          + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
-          + baseHtml
-          + '<div class="psy12-shadow-grid">'
-          + '<div><span>正式分</span><strong>' + escapeHtml(formalScore === null ? '—' : formatNumber(formalScore, 0)) + '</strong></div>'
-          + '<div><span>影子分</span><strong>—</strong></div>'
-          + '<div><span>差值</span><strong>—</strong></div></div>'
-          + '<div class="psy12-shadow-notice">影子综合分暂缺：' + escapeHtml(shadowReason) + '</div>'
-          + auditProgress,
-      });
+      return renderPsy12Panel({ text: baseAvailable ? '影子分暂缺' : '数据不足', tone: 'neutral' },
+        '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
+        + '<div class="psy12-shadow-grid">'
+        + '<div><span>正式分</span><strong>' + escapeHtml(formalScore === null ? '—' : formatNumber(formalScore, 0)) + '</strong></div>'
+        + '<div><span>影子分</span><strong>—</strong></div>'
+        + '<div><span>差值</span><strong>—</strong></div></div>'
+        + '<div class="psy12-shadow-notice">影子综合分暂缺：' + escapeHtml(shadowReason) + '</div>'
+        + auditProgress);
     }
 
     var psy12WeightText = formatNumber(psy12Weight * 100, 0) + '%';
@@ -11606,7 +11625,6 @@
       : '';
     var body = ''
       + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
-      + baseHtml
       + (baseAvailable ? '' : '<div class="psy12-shadow-notice is-error">基础指标与影子分状态不一致，仅展示各自可核验字段。</div>')
       + '<div class="psy12-shadow-grid">'
       + '  <div><span>正式分</span><strong>' + escapeHtml(formatNumber(formalScore, 0)) + '</strong></div>'
@@ -11619,13 +11637,7 @@
       + labelDifference
       + audit
       + auditProgress;
-    return renderDecisionCard({
-      title: 'PSY12 影子情绪',
-      subtitle: '最近 12 个有效交易日上涨持续性',
-      badge: { text: '影子评测', tone: 'info' },
-      className: 'psy12-shadow-card psy12-shadow-subpanel',
-      bodyHtml: body,
-    });
+    return renderPsy12Panel({ text: '影子评测', tone: 'info' }, body);
   }
 
   function renderPsy12ShadowCard(data) {
@@ -13061,7 +13073,7 @@
       + '</span>';
   }
 
-  function renderStrategyHorizon(horizonKey, metrics, maturity, publishable, blockers, evaluationStatus, progress, readiness) {
+  function renderStrategyHorizon(horizonKey, metrics, maturity, publishable, blockers, evaluationStatus, progress, readiness, scope) {
     var horizon = horizonKey.toUpperCase().replace('T', 'T+');
     var rec = metrics || {};
     var state = maturity || {};
@@ -13071,14 +13083,15 @@
     var unavailable = safeNumber(state.unavailable, null);
     var evaluation = normalizeString(evaluationStatus);
     var gateStatus = normalizeString(gate.status || readiness);
+    var period = scope === 'history' ? '历史登记' : (scope === 'unknown' ? '身份未核实记录' : '本期');
     var statusHtml = '';
     var metricsHtml = '';
     if (['no_signals', 'no_formal_recommendations', 'normal_empty'].indexOf(evaluation) !== -1) {
-      statusHtml = '<div class="strategy-horizon-state"><strong>本期无信号</strong><small>正常空选，不计算收益</small></div>';
+      statusHtml = '<div class="strategy-horizon-state"><strong>' + escapeHtml(period) + '无信号</strong><small>正常空选，不计算收益</small></div>';
     } else if (evaluation === 'disabled') {
-      statusHtml = '<div class="strategy-horizon-state"><strong>本期未启用</strong><small>策略未运行，不计算收益</small></div>';
+      statusHtml = '<div class="strategy-horizon-state"><strong>' + escapeHtml(period) + '未启用</strong><small>策略未运行，不计算收益</small></div>';
     } else if (!publishable) {
-      statusHtml = '<div class="strategy-horizon-state is-danger"><strong>本期证据不足</strong><small>'
+      statusHtml = '<div class="strategy-horizon-state is-danger"><strong>' + escapeHtml(period) + '证据不足</strong><small>'
         + escapeHtml(asArray(blockers).map(getScorecardBlockingReasonLabel).join('；') || '评测条件不成立')
         + '</small></div>';
     } else if (mature === null || waiting === null || unavailable === null) {
@@ -13194,10 +13207,59 @@
     return start + ' 至 ' + end + ' · ' + formatNumber(count, 0) + ' 个交易日';
   }
 
-  function renderScorecardV2Card(data, item) {
+  function getScorecardProgressSummary(rec, scope) {
+    var progress = rec.comparison_progress_by_horizon || {};
+    var maturity = rec.maturity_by_horizon || {};
+    var key = ['t1', 't3', 't5'].find(function (name) {
+      return progress[name] || maturity[name] || (rec.metrics_by_horizon || {})[name];
+    }) || 't1';
+    var horizon = key.toUpperCase().replace('T', 'T+');
+    var gate = progress[key] || {};
+    var state = maturity[key] || {};
+    var evaluation = normalizeString(rec.evaluation_status);
+    var period = scope === 'history' ? '历史登记' : (scope === 'unknown' ? '身份未核实记录' : '本期');
+    if (evaluation === 'disabled') return horizon + '：' + period + '未启用';
+    if (['no_signals', 'no_formal_recommendations', 'normal_empty'].indexOf(evaluation) !== -1) {
+      return horizon + '：' + period + '无信号，不计算收益';
+    }
+    if (rec.metrics_publishable === false) {
+      return horizon + '：证据不足 · ' + (asArray(rec.metrics_blocking_reasons)
+        .map(getScorecardBlockingReasonLabel).join('；') || '评测条件不成立');
+    }
+    var mature = safeNumber(gate.mature_samples, null);
+    var required = safeNumber(gate.required_mature_samples, null);
+    var dates = safeNumber(gate.active_dates, null);
+    var requiredDates = safeNumber(gate.required_active_dates, null);
+    var months = safeNumber(gate.active_months, null);
+    var requiredMonths = safeNumber(gate.required_calendar_months, null);
+    var waiting = safeNumber(state.waiting, null);
+    var unavailable = safeNumber(state.unavailable, null);
+    if (mature === null || required === null || dates === null || requiredDates === null
+      || months === null || requiredMonths === null) {
+      return horizon + '：样本门合同未完整记录';
+    }
+    var parts = [horizon + '：成熟 ' + formatNumber(mature, 0) + '/' + formatNumber(required, 0),
+      '成熟覆盖日 ' + formatNumber(dates, 0) + '/' + formatNumber(requiredDates, 0),
+      '成熟覆盖月 ' + formatNumber(months, 0) + '/' + formatNumber(requiredMonths, 0)];
+    if (waiting > 0) parts.push('待到期 ' + formatNumber(waiting, 0));
+    if (unavailable > 0) parts.push('缺行情 ' + formatNumber(unavailable, 0));
+    return parts.join(' · ');
+  }
+
+  function getScorecardScopeLabel(data, rec, scope, currentRun) {
+    if (scope === 'current') return getStrategyLatestRunLabel(rec, currentRun);
+    if (scope === 'history') return '历史记录 · ' + getStrategyLedgerWindowLabel(rec);
+    return '身份未核实 · ' + getStrategyLedgerWindowLabel(rec);
+  }
+
+  function renderScorecardV2Card(data, item, scope) {
+    scope = scope || 'current';
     var rec = item || {};
     var currentRun = getStrategyCurrentRun(data, rec);
     var status = getScorecardStatusMeta(rec.evaluation_status);
+    var statusLabel = scope === 'current' ? status.label
+      : (scope === 'history' ? '历史登记 · ' : '身份未核实 · ')
+        + status.label.replace(/本期/g, '当时');
     var entryMode = resolveStrategyEntryMode(data, rec);
     var maturity = rec.maturity_by_horizon || {};
     var metrics = rec.metrics_by_horizon || {};
@@ -13226,17 +13288,23 @@
     var primaryReady = primaryKey
       && normalizeString((rec.horizon_readiness || {})[primaryKey]) === 'ready_for_manual_comparison';
     return ''
-      + '<details class="strategy-scorecard">'
+      + '<details class="strategy-scorecard is-' + escapeHtml(scope || 'unknown') + '">'
       + '  <summary>'
-      + '    <span><strong>' + escapeHtml(getStrategyDisplayName(rec)) + '</strong><small>' + escapeHtml((rec.version || '版本未知') + ' · ' + getScorecardSourceLabel(rec.source_pool)) + '</small></span>'
-      + '    <span><strong>' + escapeHtml(formatNumber(episodeCount, 0)) + '</strong><small>收益评测去重回合</small></span>'
-      + '    <span class="status-badge is-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span>'
+      + '    <span><strong>' + escapeHtml(getStrategyDisplayName(rec)) + '</strong><small>' + escapeHtml(rec.evaluation_role === 'research' ? '研究观察' : (rec.evaluation_role === 'baseline' ? '比较基线' : '正式策略')) + '</small></span>'
+      + '    <span class="strategy-card-summary"><strong>' + escapeHtml(getScorecardScopeLabel(data, rec, scope, currentRun)) + '</strong><small>' + escapeHtml(getScorecardProgressSummary(rec, scope)) + '</small></span>'
+      + '    <span class="status-badge is-' + escapeHtml(status.tone) + '">' + escapeHtml(statusLabel) + '</span>'
       + '  </summary>'
       + '  <div class="strategy-attribution-meta">'
+      + '    <span>完整身份：' + escapeHtml((rec.version || '版本未知') + ' · '
+      + getScorecardSourceLabel(rec.source_pool) + ' · '
+      + (rec.policy_version || '政策版本未记录')) + '</span>'
       + '    <span>入场口径：' + escapeHtml(getStrategyEntryModeLabel(entryMode)) + '</span>'
       + '    <span>' + escapeHtml(intended) + '；页面逐周期独立展示</span>'
       + '    <span>研究层级：' + escapeHtml(getStrategyResearchTierLabel(rec.research_tier)) + '</span>'
-      + '    <span class="strategy-universe-line">本期运行：' + escapeHtml(getStrategyLatestRunLabel(rec, currentRun)) + (currentRun && rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '') + '</span>'
+      + '    <span class="strategy-universe-line">' + (scope === 'current'
+        ? '本期运行：' + escapeHtml(getStrategyLatestRunLabel(rec, currentRun))
+          + (currentRun && rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '')
+        : '运行身份：' + (scope === 'history' ? '历史登记，不代表本期状态' : '本期身份未核实')) + '</span>'
       + '    <span class="strategy-universe-line">账本累计：' + escapeHtml(getStrategyLedgerWindowLabel(rec))
       + '；累计信号 ' + escapeHtml(formatNumber(signalCount, 0))
       + '；规则判定 推荐 / 观察 / 拒绝 ' + escapeHtml(formatNumber(gateOutcomes.recommend, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.observe, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.reject, 0))
@@ -13257,45 +13325,88 @@
       + '    <span>身份证据：' + escapeHtml(getStrategyEvidenceTierLabel(rec.evidence_tier)) + '</span>'
       + '  </div>'
       + '  <div class="strategy-returns">'
-      + renderStrategyHorizon('t1', metrics.t1, maturity.t1, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t1, (rec.horizon_readiness || {}).t1)
-      + renderStrategyHorizon('t3', metrics.t3, maturity.t3, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t3, (rec.horizon_readiness || {}).t3)
-      + renderStrategyHorizon('t5', metrics.t5, maturity.t5, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t5, (rec.horizon_readiness || {}).t5)
+      + renderStrategyHorizon('t1', metrics.t1, maturity.t1, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t1, (rec.horizon_readiness || {}).t1, scope)
+      + renderStrategyHorizon('t3', metrics.t3, maturity.t3, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t3, (rec.horizon_readiness || {}).t3, scope)
+      + renderStrategyHorizon('t5', metrics.t5, maturity.t5, rec.metrics_publishable !== false, blockers, rec.evaluation_status, (rec.comparison_progress_by_horizon || {}).t5, (rec.horizon_readiness || {}).t5, scope)
       + '  </div>'
       + (primaryReady ? '  <ul class="strategy-samples">' + renderStrategySamples(rec.representative_samples, rec.evaluation_role) + '</ul>' : '')
       + '</details>';
   }
 
-  function renderGateScorecard(data, item) {
+  function renderGateScorecard(data, item, scope) {
     var rec = item || {};
-    var current = getStrategyCurrentRun(data, rec);
+    var current = scope === 'current' ? getStrategyCurrentRun(data, rec) : null;
+    var runStatus = normalizeString(current && current.run_status);
     var gateStatus = current ? {
       ran: 'running', verified_empty: 'normal_empty', disabled: 'disabled',
       unavailable: 'data_unavailable', partial: 'data_unavailable'
-    }[normalizeString(current.run_status)] || 'unrecorded' : 'unrecorded';
+    }[runStatus] || 'unrecorded' : 'unrecorded';
     var status = getScorecardStatusMeta(gateStatus);
     var gateOutcomes = rec.gate_outcomes || {};
     var publicationOutcomes = rec.publication_outcomes || {};
+    var currentText = current && runStatus === 'ran'
+      ? '观察筛选已运行 · 本期 ' + normalizeString((data || {}).date) + ' '
+        + (isRecommendationEvidenceFiniteNumber(current.signal_count)
+          ? '处理 ' + formatNumber(Number(current.signal_count), 0) + ' 条信号'
+          : '处理信号数未记录') + ' · 仅作观察'
+      : getStrategyLatestRunLabel(rec, current);
+    var reason = current && (current.reason || current.blocking_reason);
     return ''
-      + '<article class="strategy-gate-card">'
-      + '  <div><strong>' + escapeHtml(getStrategyDisplayName(rec)) + '</strong><small>' + escapeHtml((rec.version || '版本未知') + ' · ' + getScorecardSourceLabel(rec.source_pool)) + '</small></div>'
-      + '  <span class="status-badge is-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span>'
-      + '  <p>' + (current && normalizeString(current.run_status) === 'ran'
-        ? '本期 ' + escapeHtml(normalizeString((data || {}).date)) + ' 处理 '
-          + escapeHtml(isRecommendationEvidenceFiniteNumber(current.signal_count) ? formatNumber(Number(current.signal_count), 0) : '—') + ' 条信号 · 仅作观察'
-        : escapeHtml(getStrategyLatestRunLabel(rec, current)))
-        + (current && current.reason ? '；' + escapeHtml(current.reason) : '')
-        + (current && current.blocking_reason ? '；' + escapeHtml(current.blocking_reason) : '') + '</p>'
-      + '  <p>账本累计（' + escapeHtml(getStrategyLedgerWindowLabel(rec)) + '）规则判定 推荐 / 观察 / 拒绝：' + escapeHtml(formatNumber(gateOutcomes.recommend, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.observe, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.reject, 0)) + '</p>'
-      + '  <p>账本累计页面动作 仅观察：' + escapeHtml(formatNumber(publicationOutcomes.watch, 0)) + '</p>'
-      + '  <small class="strategy-gate-note">该门控不计算收益，只回答运行与分流是否正常。</small>'
-      + '</article>';
+      + '<details class="strategy-gate-card is-' + escapeHtml(scope || 'unknown') + '">'
+      + '  <summary><span><strong>' + escapeHtml(getStrategyDisplayName(rec)) + '</strong><small>'
+      + escapeHtml(currentText + (reason && runStatus !== 'ran'
+        ? '；影响范围：观察筛选；' + safeVisibleDiagnosticReason(reason) : ''))
+      + '</small></span><span class="status-badge is-'
+      + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span></summary>'
+      + (reason ? '<p class="strategy-gate-warning">影响范围：观察筛选；' + escapeHtml(reason) + '</p>' : '')
+      + '  <div class="strategy-gate-detail"><p>本期结果：' + escapeHtml(currentText) + '</p>'
+      + '  <p>本版本累计（' + escapeHtml(getStrategyLedgerWindowLabel(rec))
+      + '）规则判定 推荐 / 观察 / 拒绝：' + escapeHtml(formatNumber(gateOutcomes.recommend, 0))
+      + ' / ' + escapeHtml(formatNumber(gateOutcomes.observe, 0)) + ' / '
+      + escapeHtml(formatNumber(gateOutcomes.reject, 0)) + '</p>'
+      + '  <p>本版本累计页面动作 仅观察：'
+      + escapeHtml(formatNumber(publicationOutcomes.watch, 0)) + '</p>'
+      + '  <small class="strategy-gate-note">该门控不计算收益；内部规则“推荐”不等于正式推荐。</small>'
+      + '  <p>身份：' + escapeHtml((rec.version || '版本未知') + ' · '
+      + getStrategyResearchTierLabel(rec.research_tier)) + '</p></div>'
+      + '</details>';
   }
 
-  function renderScorecardSection(data, title, description, rows, kind) {
+  function renderGateDiagnostics(data) {
+    var gates = asArray((((data || {}).strategy_scorecards || {}).gates));
+    var manifest = asArray((data || {}).strategy_run_manifest);
+    var current = [];
+    var older = [];
+    var uncertain = [];
+    gates.forEach(function (item) {
+      if (getStrategyCurrentRun(data, item)) current.push(item);
+      else if (manifest.length) older.push(item);
+      else uncertain.push(item);
+    });
+    var currentHtml = current.length
+      ? current.map(function (item) { return renderGateScorecard(data, item, 'current'); }).join('')
+      : '<p class="strategy-gate-warning">'
+        + (gates.length ? '本期运行状态未记录；已有累计账本仅供历史查阅。' : '暂无门控记录；本期运行状态未记录。')
+        + '</p>';
+    var olderHtml = older.length
+      ? '<details class="strategy-gate-history"><summary>历史身份 · '
+        + escapeHtml(formatNumber(older.length, 0)) + ' 个记录</summary>'
+        + older.map(function (item) { return renderGateScorecard(data, item, 'history'); }).join('')
+        + '</details>' : '';
+    var uncertainHtml = uncertain.length
+      ? '<details class="strategy-gate-history"><summary>身份未核实 · '
+        + escapeHtml(formatNumber(uncertain.length, 0)) + ' 个记录</summary>'
+        + uncertain.map(function (item) { return renderGateScorecard(data, item, 'unknown'); }).join('')
+        + '</details>' : '';
+    return '<section class="strategy-gate-diagnostics"><h4>观察筛选运行情况</h4>'
+      + currentHtml + olderHtml + uncertainHtml + '</section>';
+  }
+
+  function renderScorecardSection(data, title, description, rows, kind, scope) {
     var items = asArray(rows);
     var body = items.length
       ? items.map(function (item) {
-        return kind === 'gate' ? renderGateScorecard(data, item) : renderScorecardV2Card(data, item);
+        return kind === 'gate' ? renderGateScorecard(data, item, scope) : renderScorecardV2Card(data, item, scope);
       }).join('')
       : '<div class="decision-empty">本区暂无已登记分组；这是空分组，不是 0% 收益。</div>';
     return ''
@@ -13317,25 +13428,97 @@
       }).join('') : '<div class="decision-empty">策略归因账本尚无记录。</div>');
   }
 
-  function renderStrategyScorecards(data) {
+  function renderStrategyScorecards(data, mode) {
     var scorecards = (data || {}).strategy_scorecards || {};
     var isV2 = !Array.isArray(scorecards) && Number(scorecards.schema_version) === 2;
     var rows = isV2
       ? asArray(scorecards.formal).concat(asArray(scorecards.baselines), asArray(scorecards.research), asArray(scorecards.gates))
       : (Array.isArray(scorecards) ? scorecards : asArray(scorecards.items || scorecards.scorecards));
+    if (!isV2 && mode === 'current') {
+      return renderDecisionCard({
+        title: '策略验证进度', subtitle: '本期逐周期身份未登记，旧记录可在历史区查看',
+        badge: { text: '旧口径', tone: 'neutral' }, className: 'strategy-scorecards-card',
+        bodyHtml: '<div class="decision-empty">本期逐周期验证进度未记录。</div>',
+      });
+    }
+    if (!isV2 && mode === 'history') {
+      return renderDecisionCard({
+        title: '历史记录', subtitle: '旧口径仅供追溯，不作为收益成绩',
+        badge: { text: '旧口径', tone: 'neutral' }, className: 'strategy-history-card',
+        bodyHtml: renderLegacyScorecards(data, rows),
+      });
+    }
     var classificationFailures = isV2 ? asArray(scorecards.classification_failures) : [];
     var classificationWarning = classificationFailures.length
       ? '<div class="strategy-scorecard-contract-warning"><strong>'
         + escapeHtml(formatNumber(classificationFailures.length, 0))
         + ' 条账本身份无法安全分类</strong><small>这些记录已停止计入任何收益；请在数据诊断中修复策略、版本与来源池映射。</small></div>'
       : '';
-    var body = isV2
-      ? ''
-        + renderScorecardSection(data, '正式推荐收益', '只统计真正对用户生效的正式推荐；基础候选和研究池不混入。', scorecards.formal, 'formal')
-        + renderScorecardSection(data, '基础候选基线', 'picks_pure 是各策略共同上游全集，用来回答筛选是否带来增益。', scorecards.baselines, 'baseline')
-        + renderScorecardSection(data, '研究策略回看', '独立策略各用自己的筛选结果；研究成绩不影响正式推荐。', scorecards.research, 'research')
-        + renderScorecardSection(data, '门控运行诊断', '只检查观察与拒绝分流，不计算收益。', scorecards.gates, 'gate')
-      : renderLegacyScorecards(data, rows);
+    var body;
+    var currentCount = 0;
+    var returnCount = 0;
+    if (isV2) {
+      var manifest = asArray((data || {}).strategy_run_manifest);
+      var scopes = { current: {}, history: {}, unknown: {} };
+      ['formal', 'baselines', 'research'].forEach(function (section) {
+        scopes.current[section] = [];
+        scopes.history[section] = [];
+        scopes.unknown[section] = [];
+        asArray(scorecards[section]).forEach(function (item) {
+          var scope = getStrategyCurrentRun(data, item) ? 'current'
+            : (manifest.length ? 'history' : 'unknown');
+          scopes[scope][section].push(item);
+        });
+      });
+      function sectionGroup(scope) {
+        var group = scopes[scope];
+        var definitions = [
+          ['formal', '正式推荐收益', '只统计真正对用户生效的正式推荐。', 'formal'],
+          ['baselines', '基础候选基线', '各策略共同上游全集。', 'baseline'],
+          ['research', '研究策略回看', '研究结果不改变正式推荐。', 'research']
+        ];
+        var sections = definitions.filter(function (definition) {
+          return group[definition[0]].length > 0;
+        }).map(function (definition) {
+          return renderScorecardSection(data, definition[1], definition[2],
+            group[definition[0]], definition[3], scope);
+        }).join('');
+        return sections || '<div class="decision-empty">'
+          + (scope === 'current' ? '本期收益身份未登记；旧记录仍可在历史区查看。' : '暂无已登记分组。')
+          + '</div>';
+      }
+      currentCount = ['formal', 'baselines', 'research'].reduce(function (total, key) {
+        return total + scopes.current[key].length;
+      }, 0);
+      returnCount = ['formal', 'baselines', 'research'].reduce(function (total, key) {
+        return total + asArray(scorecards[key]).length;
+      }, 0);
+      var historyCount = ['formal', 'baselines', 'research'].reduce(function (total, key) {
+        return total + scopes.history[key].length;
+      }, 0);
+      var unknownCount = ['formal', 'baselines', 'research'].reduce(function (total, key) {
+        return total + scopes.unknown[key].length;
+      }, 0);
+      var historyBlock = historyCount
+        ? '<details class="strategy-history-records"><summary>历史记录 · '
+          + escapeHtml(formatNumber(historyCount, 0)) + ' 个评测分组</summary>'
+          + sectionGroup('history') + '</details>' : '';
+      if (mode === 'history') {
+        return historyBlock ? renderDecisionCard({
+          title: '历史记录',
+          subtitle: '旧身份与逐周期依据；保留原版本、政策、来源和事故排除',
+          badge: { text: historyCount + '个收益身份', tone: 'neutral' },
+          className: 'strategy-history-card',
+          bodyHtml: historyBlock,
+        }) : '';
+      }
+      body = sectionGroup('current')
+        + (unknownCount ? '<details class="strategy-identity-unknown"><summary>身份未核实 · '
+          + escapeHtml(formatNumber(unknownCount, 0)) + ' 个记录</summary>' + sectionGroup('unknown') + '</details>' : '')
+        + (mode === 'current' ? '' : historyBlock);
+    } else {
+      body = renderLegacyScorecards(data, rows);
+    }
     var reviewDiagnostics = (((data || {}).diagnostics || {}).strategy_review || {});
     var benchmarkReady = normalizeString(reviewDiagnostics.benchmark_status) === 'ok';
     var comparisonReady = ['formal', 'baselines', 'research'].some(function (section) {
@@ -13353,15 +13536,18 @@
         : '基准数据已取得；策略收益比较尚未达到样本要求。') + '</div>'
       : '<div class="strategy-benchmark-status is-warning">沪深300基准历史暂不可用，超额收益显示 --，绝不以 0 代替。</div>';
     return renderDecisionCard({
-      title: '策略收益回看（记分牌）',
-      subtitle: '先按完整比较身份分组，再逐周期核算；成熟前只展示采集进度，达到门槛后展示可解释统计',
+      title: '策略验证进度',
+      subtitle: '本期身份优先；默认展示 T+1 的成熟样本进度，展开逐周期核算',
       badge: isV2
-        ? { text: rows.length ? rows.length + '个评测分组' : '待积累', tone: rows.length ? 'info' : 'neutral' }
+        ? { text: mode === 'current'
+            ? (currentCount ? currentCount + '个本期身份' : '本期身份未核实')
+            : (returnCount ? returnCount + '个收益身份' : '待积累'),
+            tone: currentCount || returnCount ? 'info' : 'neutral' }
         : { text: rows.length ? '旧口径，仅追溯' : '旧口径，无记录', tone: 'neutral' },
       className: 'strategy-scorecards-card',
-      bodyHtml: ''
-        + '<div class="strategy-scorecard-guide"><strong>读数说明</strong><span><b>0.00%</b> 是真实零收益</span><span><b>等待到期</b> 是目标交易日未到</span><span><b>证据不足</b> 是评测条件不完整</span><span><b>正常空选</b> 是策略当天没有信号</span><span><b>研究回看</b> 不影响正式推荐</span></div>'
-        + benchmarkNote + classificationWarning + body,
+      bodyHtml: benchmarkNote + classificationWarning + body
+        + '<details class="strategy-reading-guide"><summary>读数说明</summary>'
+        + '<div class="strategy-scorecard-guide"><span><b>0.00%</b> 是真实零收益</span><span><b>等待到期</b> 是目标交易日未到</span><span><b>证据不足</b> 是评测条件不完整</span><span><b>正常空选</b> 是策略当天没有信号</span><span><b>研究回看</b> 不影响正式推荐</span></div></details>',
     });
   }
 
@@ -13596,11 +13782,12 @@
     var unavailable = !isolated || (!disabled && !collecting);
     var statusText = collectionFailed
       ? '影子采集失败'
-      : (collecting ? '影子评测中' : (disabled ? '影子模式已关闭' : '影子评测暂不可用'));
+      : (collecting ? '影子评测中' : (disabled ? '未启用' : '影子评测暂不可用'));
     var statusTone = collectionFailed
       ? 'warning'
       : (collecting ? 'info' : (disabled ? 'neutral' : 'warning'));
     var body = '';
+    var soleExperimentIssue = '';
 
     if (disabled) {
       body = '<div class="shadow-state"><strong>影子模式已关闭</strong><span>未采集新的影子样本；正式主推不受影响。</span></div>';
@@ -13699,12 +13886,15 @@
         var experimentTrusted = experimentContractValid;
         var experimentWarning = '';
         if (experimentStatus !== 'available') {
+          if (experiments.length === 1) soleExperimentIssue = '单项实验暂不可用 · 实验输出未生成或输入失败';
           experimentWarning = ''
             + '<div class="shadow-state is-warning"><strong>单项实验暂不可用</strong><span>'
             + escapeHtml(rec.error || '实验输出未生成') + '；正式主推不受影响。</span></div>';
         } else if (!promotionBoundaryValid) {
+          if (experiments.length === 1) soleExperimentIssue = '晋级边界异常 · 研究结果已停止展示';
           experimentWarning = '<div class="shadow-state is-warning"><strong>晋级边界异常</strong><span>promotion_eligible 必须显式为 false；研究指标与候选已隐藏。</span></div>';
         } else if (!experimentContractValid) {
+          if (experiments.length === 1) soleExperimentIssue = '实验合同异常 · 身份、隔离、周期或入场口径未通过校验';
           experimentWarning = '<div class="shadow-state is-warning"><strong>实验合同异常</strong><span>实验身份、隔离、周期或入场口径未通过校验；研究指标与候选已隐藏。</span></div>';
         }
         var experimentResearch = experimentTrusted ? ''
@@ -13743,8 +13933,68 @@
       }).join('') : '<div class="shadow-state"><strong>等待首个收盘样本</strong><span>影子评测已启用，当前没有可展示的实验；正式主推不受影响。</span></div>';
     }
 
+    var soleExperiment = experiments.length === 1 ? experiments[0] : null;
+    var isH4Experiment = !!soleExperiment
+      && normalizeString(soleExperiment.source_pool) === 'h4_t3_pool'
+      && normalizeString(soleExperiment.upstream_pool) === 'picks_pure'
+      && normalizeString(soleExperiment.experiment_id).indexOf('h4-t3-') === 0;
+    if (collecting && isH4Experiment) {
+      var h4Card = asArray((((data || {}).strategy_scorecards || {}).formal)).find(function (item) {
+        return normalizeString(item.strategy) === 'h4_t3'
+          && !!getStrategyCurrentRun(data, item);
+      });
+      var h4Run = h4Card ? getStrategyCurrentRun(data, h4Card) : null;
+      var pendingTargets = ['t1', 't3', 't5'].reduce(function (count, key) {
+        return Math.max(count, safeNumber((outcomeMaturity[key] || {}).right_censored, 0));
+      }, 0);
+      var matureTargets = ['t1', 't3', 't5'].reduce(function (count, key) {
+        return Math.max(count, safeNumber((outcomeMaturity[key] || {}).mature, 0));
+      }, 0);
+      var sampleSize = safeNumber(soleExperiment.sample_size, null);
+      var h4Pool = (data || {}).h4_t3_pool || {};
+      var h4Diagnostics = h4Pool.diagnostics || {};
+      var shapeMissVerified = normalizeString(h4Pool.status) === 'ok'
+        && normalizeString(h4Pool.strategy_version) === normalizeString(soleExperiment.version)
+        && h4Card && normalizeString(h4Card.version) === normalizeString(soleExperiment.version)
+        && normalizeString(h4Diagnostics.upstream_pool) === 'picks_pure'
+        && safeNumber(h4Diagnostics.input_upstream_count, null) > 0
+        && safeNumber(h4Diagnostics.microstate_count, null) === 0
+        && safeNumber(h4Diagnostics.selected_count, null) === 0;
+      var h4Summary = '';
+      if (soleExperimentIssue) {
+        h4Summary = soleExperimentIssue;
+      } else if (normalizeString(soleExperiment.status) === 'disabled') {
+        h4Summary = '未启用';
+      } else if (normalizeString(soleExperiment.status) !== 'available') {
+        h4Summary = '单项实验暂不可用 · '
+          + (normalizeString(soleExperiment.error) || '实验输出未生成');
+      } else if (sampleSize > 0 || matureTargets > 0) {
+        h4Summary = '已有 ' + formatNumber(Math.max(sampleSize || 0, matureTargets), 0)
+          + ' 个可核验样本 · '
+          + (collectionStatus === 'partial' ? '采集部分成功，其余待核' : '逐周期结果见详情');
+      } else if (pendingTargets > 0) {
+        h4Summary = '跟踪 ' + formatNumber(pendingTargets, 0) + ' 个样本，等待目标交易日结果'
+          + (collectionStatus === 'partial' ? ' · 采集部分成功，其余待核' : '');
+      } else if (collectionStatus === 'partial') {
+        h4Summary = '采集部分成功 · 样本状态待核';
+      } else if (collectionStatus === 'ok' && sampleSize === 0
+        && safeNumber(collectionHealth.candidate_count, null) === 0
+        && h4Run && normalizeString(h4Run.run_status) === 'verified_empty'
+        && shapeMissVerified) {
+        h4Summary = '暂无可评测样本 · 本期形态未命中';
+      } else if (collectionStatus === 'ok' && sampleSize === 0
+        && safeNumber(collectionHealth.candidate_count, null) === 0) {
+        h4Summary = '暂无可评测样本 · 未核实未命中阶段';
+      } else {
+        h4Summary = '样本状态未完整核实 · 查看运行依据';
+      }
+      body = '<p class="shadow-experiment-summary">' + escapeHtml(h4Summary) + '</p>'
+        + '<details class="shadow-experiment-details"><summary>查看实验依据与逐周期明细</summary>'
+        + body + '</details>';
+    }
+
     return renderDecisionCard({
-      title: '影子评测',
+      title: isH4Experiment ? 'H4 上游样本实验' : '影子评测',
       subtitle: isolated
         ? '收盘价研究区：独立记录候选、收益与盘中最高/最低轨迹，不改变正式选股结果'
         : '影子合同未通过隔离校验，不展示研究结论',
@@ -13932,7 +14182,46 @@
     var summaryText = keys.length
       ? '展示 ' + keys.length + ' / ' + allKeys.length + ' 项，优先显示异常和提醒，点击展开'
       : '暂无诊断信息';
-    var body = ''
+    function trustedSelectionInputAlert(value) {
+      var formal = (value || {}).formal || {};
+      var knownStrategies = { daily_fusion: '正式主推', h4_t3: 'H4 T+3' };
+      var names = [];
+      asArray(formal.blocked_strategies).forEach(function (key) {
+        var label = knownStrategies[normalizeString(key)] || '未登记策略';
+        if (names.indexOf(label) === -1) names.push(label);
+      });
+      var codes = [];
+      asArray(formal.invalid_codes).map(normalizeString).forEach(function (code) {
+        if (/^\d{6}$/.test(code) && codes.indexOf(code) === -1) codes.push(code);
+      });
+      var headline = formal.formal_actions_allowed === true
+        ? '部分策略输入未核验' : '正式策略输入未核验';
+      return headline + (names.length ? '：' + names.join('、') : '')
+        + (codes.length ? '；代码 ' + codes.slice(0, 3).join('、')
+          + (codes.length > 3 ? '，共' + formatNumber(codes.length, 0) + '只；完整列表见诊断' : '') : '');
+    }
+    var alertKey = orderedKeys.find(function (key) {
+      return diagnosticPriority(key, diagnostics[key]) >= 3;
+    });
+    var alertHtml = '';
+    if (alertKey) {
+      var alertValue = diagnostics[alertKey] || {};
+      var alertReason = diagnosticStatusText(alertKey, alertValue);
+      var explicitError = normalizeString(alertValue.error || asArray(alertValue.errors)[0]);
+      if (explicitError && alertReason.indexOf(explicitError) === -1) {
+        alertReason += '；原因：' + userFacingEvidenceText(explicitError, false);
+      }
+      var formalInput = (alertValue || {}).formal || {};
+      var formalInputAffected = formalInput.formal_actions_allowed !== true
+        || formalInput.all_formal_actions_allowed === false;
+      var visibleReason = alertKey === 'selection_input_health' && formalInputAffected
+        ? trustedSelectionInputAlert(alertValue)
+        : safeVisibleDiagnosticReason(explicitError || alertReason);
+      alertHtml = '<p class="diagnostic-alert-summary">影响范围：'
+        + escapeHtml(keyLabels[alertKey] || alertKey) + '；'
+        + escapeHtml(visibleReason) + '</p>';
+    }
+    var body = renderGateDiagnostics(source) + alertHtml
       + '<details class="diagnostics-details">'
       + '  <summary>'
       + '    <strong>后台数据诊断</strong>'
@@ -13941,8 +14230,8 @@
       + '  <div class="diagnostics-list">' + rowsHtml + '</div>'
       + '</details>';
     return renderDecisionCard({
-      title: '数据诊断',
-      subtitle: '数据完整性与生成状态',
+      title: '数据与运行诊断',
+      subtitle: '本期异常与数据完整性；正常技术详情可展开',
       badge: keys.length ? badgeMeta : { text: '暂无', tone: 'neutral' },
       className: 'diagnostics-card',
       bodyHtml: body,
@@ -13987,11 +14276,12 @@
       // watchlist and factual supplements in separate ordered anchors.
       today: directions + sectorFlow + limitUp + watchlist + holding,
       research: ''
-        + renderDecisionCard({ title: 'PSY12 影子验证', subtitle: '独立观察，不参与正式市场评分与推荐', className: 'psy12-research-card', bodyHtml: renderPsy12ShadowSubpanel(source) })
+        + renderStrategyScorecards(source, 'current')
+        + renderDecisionCard({ title: '研究实验', subtitle: '只记录独立研究，不改变正式动作', className: 'psy12-research-card', bodyHtml:
+          renderPsy12ShadowSubpanel(source, true) + renderShadowEvaluations(source) })
         + renderStrategyDisagreementAudit(source)
-        + renderStrategyScorecards(source)
-        + renderShadowEvaluations(source)
-        + renderDiagnosticsCard(source),
+        + renderDiagnosticsCard(source)
+        + renderStrategyScorecards(source, 'history'),
     };
   }
 

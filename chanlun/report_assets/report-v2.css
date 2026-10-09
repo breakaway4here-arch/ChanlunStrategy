@@ -7767,3 +7767,120 @@ body {
   .l1-nextday-overlap { grid-column: 2; justify-self: start; }
   .l1-nextday-code { white-space: normal; }
 }
+
+/* B1: keep current research conclusions readable before technical evidence. */
+.strategy-scorecard > summary {
+  grid-template-columns: minmax(120px, .8fr) minmax(0, 2fr) auto auto;
+}
+.strategy-card-summary strong {
+  color: #0f172a;
+  font-size: 12px;
+}
+.strategy-card-summary small {
+  margin-top: 3px;
+  color: #475569 !important;
+  line-height: 1.5;
+}
+.strategy-history-records,
+.strategy-identity-unknown,
+.strategy-gate-history,
+.shadow-experiment-details {
+  margin-top: 10px;
+  border: 1px solid #dbe2ea;
+  border-radius: 10px;
+  min-width: 0;
+}
+.strategy-history-records > summary,
+.strategy-identity-unknown > summary,
+.strategy-gate-history > summary,
+.shadow-experiment-details > summary {
+  padding: 10px 12px;
+  cursor: pointer;
+  color: #1e3a8a;
+  font-weight: 700;
+}
+.strategy-history-records > .strategy-scorecard-section,
+.strategy-identity-unknown > .strategy-scorecard-section,
+.strategy-gate-history > .strategy-gate-card {
+  margin: 10px;
+}
+.strategy-gate-diagnostics {
+  min-width: 0;
+  margin-bottom: 12px;
+}
+.strategy-gate-diagnostics h4 {
+  margin: 0 0 8px;
+  color: #0f172a;
+  font-size: 14px;
+}
+.strategy-gate-card {
+  display: block;
+  padding: 0;
+  overflow: hidden;
+  background: #fff;
+}
+.strategy-gate-card + .strategy-gate-card { margin-top: 8px; }
+.strategy-gate-card > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.strategy-gate-card > summary span:first-child { min-width: 0; }
+.strategy-gate-card > summary small {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  color: #475569;
+  line-height: 1.45;
+}
+.strategy-gate-detail {
+  padding: 10px 12px;
+  border-top: 1px solid #dbe2ea;
+}
+.strategy-gate-detail p + p { margin-top: 6px; }
+.strategy-gate-warning {
+  margin: 0 0 8px;
+  color: #9a3412;
+  overflow-wrap: anywhere;
+}
+.shadow-experiment-summary {
+  margin: 0;
+  padding: 12px 14px;
+  color: #0f172a;
+  font-weight: 700;
+}
+.shadow-experiment-details { margin: 0 12px 12px; }
+.shadow-experiment-details > .shadow-guard-rail { margin-top: 0; }
+@media (max-width: 760px) {
+  .strategy-scorecard > summary {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .strategy-card-summary {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+  .strategy-scorecard > summary .status-badge { grid-column: 2; grid-row: 1; }
+  .strategy-scorecard > summary::after { grid-column: 3; grid-row: 1; }
+}
+
+.strategy-reading-guide { margin-top: 12px; }
+.strategy-reading-guide > summary { cursor: pointer; color: #475569; font-size: 11px; }
+.strategy-reading-guide .strategy-scorecard-guide { margin: 8px 0 0; }
+
+.diagnostic-alert-summary {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border: 1px solid #fed7aa;
+  border-radius: 9px;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.psy12-research-audit { margin-top: 10px; border-top: 1px solid #dbe2ea; }
+.psy12-research-audit > summary { padding: 10px 2px; cursor: pointer; color: #1e3a8a; font-weight: 700; }
+.psy12-research-audit > .psy12-shadow-grid { margin-top: 8px; }

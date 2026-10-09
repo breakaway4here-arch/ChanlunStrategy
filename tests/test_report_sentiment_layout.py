@@ -1,6 +1,8 @@
 import unittest
 from pathlib import Path
 
+from tests.css_test_helpers import media_rule_blocks
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -41,7 +43,7 @@ class ReportSentimentLayoutTests(unittest.TestCase):
         self.assertIn(".today-workspace", tablet_css)
         self.assertNotIn("grid-template-columns: repeat(3, minmax(0, 1fr));", tablet_css)
 
-        mobile_css = self.asset_css.rsplit("@media (max-width: 760px)", 1)[1]
+        mobile_css = "\n".join(media_rule_blocks(self.asset_css, "@media (max-width: 760px)"))
         self.assertIn(".market-temp-layout {\n    grid-template-columns: 1fr;", mobile_css)
         self.assertIn(".market-sentiment-chart {\n    height: 240px;", mobile_css)
         self.assertIn(
@@ -52,7 +54,7 @@ class ReportSentimentLayoutTests(unittest.TestCase):
         self.assertIn(".today-workspace", mobile_css)
 
     def test_mobile_first_screen_avoids_direction_scroller_and_three_row_header(self):
-        mobile_css = self.asset_css.rsplit("@media (max-width: 760px)", 1)[1]
+        mobile_css = "\n".join(media_rule_blocks(self.asset_css, "@media (max-width: 760px)"))
         self.assertIn(
             ".compact-header-facts {\n    grid-template-columns: repeat(3, minmax(0, 1fr));",
             mobile_css,
@@ -70,7 +72,7 @@ class ReportSentimentLayoutTests(unittest.TestCase):
         self.assertIn(".psy12-shadow-grid", self.asset_css)
         self.assertIn(".psy12-shadow-notice", self.asset_css)
 
-        mobile_css = self.asset_css.rsplit("@media (max-width: 760px)", 1)[1]
+        mobile_css = "\n".join(media_rule_blocks(self.asset_css, "@media (max-width: 760px)"))
         self.assertIn(
             ".psy12-shadow-grid {\n    grid-template-columns: 1fr;",
             mobile_css,
