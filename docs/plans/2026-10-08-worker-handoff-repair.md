@@ -22,7 +22,7 @@
 | B2 | 2：实际120根资格窗口具体缺口、有界真实修复、同次重检 | kline_repository、data_fetcher、universe_builder、run/preclose | 完整/历史nonfinal/末根nonfinal、边界、失败/预算、混合集合、预跑正式库只读 | 已通过，未上线 |
 | C | 5：最终可采用才算来源成功 | 分钟data_fetcher、kline_repository与诊断 | 首源成功不多请求；首源价基失败→次源完整成功；全失败/截止/身份日期单位错误；具体失败原因 | 已通过，未上线 |
 | D1 | 8：合法B研究投影经过finalizer保留观察Top5 | report_view_model、repair_strategy_scorecard_snapshot | 冻结9/30五股保留及顺序；缺/冲突标志、假正式/L1/可执行拒绝；正式/H4/L1评分排序不变 | 已通过，未上线 |
-| D2 | 4：HTML清理后同报告身份版本发布成员登记不缩水 | report_comparison、report_generator及R2消费者 | 登记→清理→重建；修订/冲突不继承；缺原始、legacy、去重顺序、价格用途和收益分母 | 准备中 |
+| D2 | 4：HTML清理后同报告身份版本发布成员登记不缩水 | report_comparison、report_generator及R2消费者 | 登记→清理→重建；修订/冲突不继承；缺原始、legacy、去重顺序、价格用途和收益分母 | 已通过，未上线 |
 
 ## 保护边界
 
@@ -35,7 +35,7 @@
 
 准备阶段完成附件读取、最新远端同步、独立工作树建立和规则跟踪核对。各批实际结果如下；未运行生产入口。
 
-已验收的本地提交在同步最新main后为：A `241ed06d`、B1 `d00dab4c`、B2 `46eeee3f`、C `1d86c721`（原A/B1/B2验收提交依次9496c9ca/9115bd1b/3f55b7e3，补丁留证）。分支尚未最终推送，未合并或部署。
+已验收的本地提交在同步最新main后为：A `241ed06d`、B1 `d00dab4c`、B2 `46eeee3f`、C `1d86c721`、D1 `80625e82`（原A/B1/B2验收提交依次9496c9ca/9115bd1b/3f55b7e3，补丁留证）。D2见本记录所在修复提交；最终分支提交和远端读回以Git历史及当前任务交付消息为准。未合并或部署。
 
 ### A：预跑交付、状态和刷新
 
@@ -98,3 +98,17 @@ main由另一独立任务推进至`a5a59a96`（开盘啦按日资料与补更）
 - 冻结9/30五股300890/300893/002176/000692/002317保持原顺序。主进程发现并复现旧by_view隐藏标记导致实际JS仍报上游不匹配；仅撤销本报告精确、当前合法B误拒集合的旧标准标记，其他health完整保留。已存空Top5须有匹配meta/incident关闭证据才恢复；无证据仍拒绝。主进程另复现非空reverse/subset错误替换，已限制豁免仅用于旧空关闭，原非空名单/顺序保护继续生效。
 - 主进程独立515项回归全部通过，新13项测试；62组严格绑定、8组真实full-finalizer→实际JS阻断消费者及冻结Top5入口全部通过。原保护摘要、main/H4/acceleration/Luojie/confirming投影及formal/其他by_view保持；Python3.7真实冻结入口通过。日志`/private/tmp/chanlun-handoff-acceptance/batch-d1-python-final.log`、`batch-d1-binding-final.json`、`batch-d1-fullhealth-final.json`和`batch-d1-top5-final.json`。
 - 提交前已同步最新main仍2ea4ae5b且是HEAD祖先，相关回归在同步后运行；34/3项原脏改动、最新96份日报JSON、daily_run及源码资源保护通过。只读冻结输入、网络/线程/写库阻断验收，未改真实日报或执行生产finalizer、服务、通知、部署。
+
+### D2：发布成员登记与归档清理（10/9恢复后完成）
+
+- 产品只改report_comparison，在现有schema1登记中增加轻量published_member_snapshots。绑定本日报规范JSON哈希、日期、workbench schema/snapshot及原比较合同和各source版本；完整轻量内容摘要包括成员/来源/顺序，不保存candidate、图表、访问配置、私人字段或派生收益/正式资格。未知版本保持None。优先当前生成、当前HTML；仅HTML缺失且严格同报告绑定通过才使用已存快照，其他情况明确legacy。
+- 当前权威快照直接替换，合法空members仍为0，不与旧名单合并。真实报告/版本修订、缺raw、无绑定legacy、错误身份拒绝继承；存在但坏/歧义/冲突HTML使旧快照在新索引内失效，之后清理HTML不会复活旧成员。沿用去重和原价格/绩效规则，正式事故资格、出现次数和收益端点重新计算。
+- 主进程亲自执行实际write_comparison_index→HISTORY_DAYS归档清理→原子重写：原登记2→2，raw仍在、归档确已删除，来源/顺序与正式视图保留。直接消费者两代码600001/300456继续进入价格查询；T+1登记2/成熟2/可算1/缺1，T+3/T+5各待到期2；旧return=999重算为既有内部诊断10%/缺价None，实际JS计数及覆盖标签一致，不把内部诊断写成新验证收益。
+- 恢复后修正一处临时验收夹具错误：raw_revision旧probe把原rank2再赋2，实际没有修订；改成rank3并断言原始哈希确实改变，旧拒绝继承断言保留。独立质量复现有效摘要下snapshot_kind=[]导致两日整份registry不可用；最小字符串类型检查后坏日期单独legacy、健康日期原两成员保留，正式views不变。
+- 新12项测试；主进程135项直接回归全部通过、8生命周期/27字段/多来源跨日出现次数/实际JS和价格分母/真实writer/双日畸形快照七入口全部通过，Python3.7真实清理入口通过。实现、规格和质量在product blob `d573718ec8a6e388c6ab9f5e8b21703d713a07d1` / test `077756af24c8fb677903b386826172b3e034b64c`同版本验收，无剩余本批阻断。证据目录`/private/tmp/chanlun-handoff-acceptance/`：`batch-d2-root-direct-final.log`、`root-d2-final-*.json`、`spec-d2-final-summary.json`和`review-d2-quality-resume-final-20261009.md`。
+
+### 最终综合核对与限制
+
+- 10/9恢复时原五批提交和D2工作成果保留；重新fetch main仍2ea4ae5b，目标是当前HEAD祖先。主进程39模块928项综合隔离回归：927通过、1项基线已有静态JS调用字符串断言失败、0错误。失败为`TestAccessControl.test_v2_asset_uses_correct_raw_pools_and_kline_order`要求旧`findChartCandidate(targetCode, found)`；该串在origin/main、已验收D1和最终候选均不存在，其余raw pools/OHLC断言保持。已接受HEAD同输入也失败，本批未改该图表路径或删断言；不把该扩展测试记作通过。日志`final-combined-named-python-20261009.log`与`root-old-js-baseline-20261009.json`。初跑另1失败来自临时隔离DB basename与旧测试后缀不符，仅将/tmp runner命名调整为market_history.sqlite后该例通过，产品路径未改。
+- 最新96份日报JSON、原34项脏文件与运行树3项脏文件、daily_run、规则及源码/共享资源核对通过。18个HTML相对最新main只有资源查询版本，资源版本4a24efa974f8，未重建真实日报。A的真实dev-3 Worker18项和桌面/手机验收仍为该批实际证据；D2仅改变登记producer，实际JS消费者验证不称新增浏览器或自然生产验收。
+- 暂停恢复时重新核查本地无本任务残留；实际dev-3旧Worker/UI PID不存在、18768无监听、原临时目录不存在。后续测试仅本地自动释放临时SQLite/文件，测试进程退出，不启动服务。未访问生产行情/正式库、补历史、重跑、通知、部署或切换R1；无绑定且旧HTML已清理的历史仍明确legacy，不声称恢复所有旧42条登记或收益改善。
