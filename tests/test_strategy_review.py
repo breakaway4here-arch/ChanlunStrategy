@@ -893,8 +893,27 @@ class StrategyScorecardTests(unittest.TestCase):
             trading_calendar=_kline()["dates"],
         )["gates"][0]
 
-        self.assertEqual(card["evaluation_status"], "running")
-        self.assertEqual(card["gate_status"], "running")
+        self.assertEqual(card["evaluation_status"], "unrecorded")
+        self.assertEqual(card["gate_status"], "unrecorded")
+        self.assertEqual(card["signal_count"], 1)
+
+        current_run = dict(card["comparison_identity"])
+        current_run.update({
+            "evaluation_role": "diagnostic",
+            "publication_surface": "gate_diagnostic",
+            "name": "观察池门控",
+            "report_date": "2026-08-20",
+            "run_status": "ran",
+            "signal_count": 1,
+        })
+        with_run = build_strategy_scorecards(
+            [entry], {"300308": _kline()},
+            trading_calendar=_kline()["dates"],
+            run_manifest=[current_run],
+        )["gates"][0]
+        self.assertEqual(with_run["gate_status"], "running")
+        self.assertEqual(with_run["latest_signal_count"], 1)
+        self.assertEqual(with_run["latest_report_date"], "2026-08-20")
 
     def test_readiness_uses_intended_horizon_and_exposes_each_horizon(self):
         maturity = {

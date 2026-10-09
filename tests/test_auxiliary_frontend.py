@@ -45,6 +45,98 @@ __BODY__
 
 
 class TestAuxiliaryCockpitContract(unittest.TestCase):
+    def test_current_run_price_basis_ignores_key_order_but_rejects_real_difference(self):
+        _assert_node_contract(
+            self,
+            "({ current: getStrategyCurrentRun })",
+            r"""
+const identity = {
+  strategy: 'observation_gate', version: 'gate-v1', source_pool: 'observation_watchlist',
+  entry_mode: 'immediate_close', intended_horizon: null,
+  research_tier: 'prospective_ledger', policy_version: 'decision-v2',
+  preclose_strategy_version: 'preclose-v3', upstream_strategy_version: 'unknown',
+  upstream_policy_version: 'unknown',
+  price_basis: { adjustment: 'qfq', evidence: { source: 'bars_day', revision: 2 } }
+};
+const card = { evaluation_role: 'diagnostic', publication_surface: 'gate_diagnostics',
+  comparison_identity: identity };
+const run = Object.assign({}, identity, {
+  evaluation_role: card.evaluation_role, publication_surface: card.publication_surface,
+  report_date: '2026-10-08', run_status: 'ran', signal_count: 72,
+  price_basis: { evidence: { revision: 2, source: 'bars_day' }, adjustment: 'qfq' }
+});
+const data = { date: '2026-10-08', strategy_run_manifest: [run] };
+assert(globalThis.__auxTest.current(data, card) === run, 'same price basis rejected on key order');
+const changed = Object.assign({}, run, { price_basis: {
+  evidence: { revision: 3, source: 'bars_day' }, adjustment: 'qfq'
+} });
+assert(globalThis.__auxTest.current({ date: data.date, strategy_run_manifest: [changed] }, card) === null,
+  'changed nested price basis was accepted');
+const extra = Object.assign({}, run, { price_basis: {
+  evidence: { revision: 2, source: 'bars_day', extra: true }, adjustment: 'qfq'
+} });
+assert(globalThis.__auxTest.current({ date: data.date, strategy_run_manifest: [extra] }, card) === null,
+  'changed price basis field set was accepted');
+""",
+        )
+
+    def test_october_eighth_scorecard_keeps_current_run_and_history_separate(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderStrategyScorecards })",
+            r"""
+const raw = JSON.parse(fs.readFileSync('docs/data/2026-10-08.json', 'utf8'));
+const data = {
+  date: raw.date, strategy_scorecards: raw.strategy_scorecards,
+  strategy_run_manifest: raw.strategy_run_manifest.map(function (row) {
+    return Object.fromEntries(['strategy','version','source_pool','entry_mode',
+      'evaluation_role','publication_surface',
+      'intended_horizon','research_tier','policy_version','preclose_strategy_version',
+      'upstream_strategy_version','upstream_policy_version','report_date',
+      'run_status','signal_count','reason'].map(function (key) { return [key,row[key]]; }));
+  }),
+  diagnostics: { strategy_review: { benchmark_status: 'ok' } }
+};
+const html = globalThis.__auxTest.render(data);
+assert(html.includes('部分可用') && html.includes('20 只已核验研究候选'), 'Luojie partial run hidden');
+assert(html.includes('127&#47;100') && html.includes('8&#47;20') && html.includes('1&#47;2'), 'mature horizon progress lost');
+assert(html.includes('基准数据已取得；策略收益比较尚未达到样本要求'), 'benchmark confused with return readiness');
+assert(html.includes('本期 2026-10-08 处理 72 条信号'), 'current gate run count lost');
+assert(html.includes('账本累计') && html.includes('270'), 'gate ledger total lost');
+assert(html.includes('推荐 / 观察 / 拒绝：3 / 77 / 190') && html.includes('仅观察：270'),
+  'rule classifications were promoted to page actions');
+assert(html.includes('本期运行状态未记录'), 'historical gate identity passed as current');
+assert((html.match(/门控运行正常/g) || []).length === 1, 'historical ledger masqueraded as normal current run');
+const nextDate = globalThis.__auxTest.render(Object.assign({}, data, { date: '2026-10-09' }));
+assert(!nextDate.includes('门控运行正常') && !nextDate.includes('本期 2026-10-09 处理 72 条信号'),
+  'prior report manifest was treated as current');
+""",
+        )
+
+    def test_eligible_horizon_still_displays_valid_return_and_escapes_labels(self):
+        _assert_node_contract(
+            self,
+            "({ render: renderStrategyScorecards })",
+            r"""
+const raw = JSON.parse(fs.readFileSync('docs/data/2026-10-08.json', 'utf8'));
+const luojie = JSON.parse(JSON.stringify(raw.strategy_scorecards.research[0]));
+luojie.version = '<img src=x onerror=alert(1)>';
+luojie.horizon_readiness.t1 = 'ready_for_manual_comparison';
+luojie.comparison_progress_by_horizon.t1.status = 'ready_for_manual_comparison';
+luojie.metrics_by_horizon.t1 = {
+  n: 127, date_start: '2026-09-01', date_end: '2026-10-08',
+  median: 1.5, mean: 2.5, excess_mean: 1.2, excess_n: 127,
+  max_drawdown: -3, mae_n: 127, mean_mfe: 4, mfe_n: 127, mean_mae: -2
+};
+const scorecards = { schema_version: 2, formal: [], baselines: [], research: [luojie], gates: [] };
+const html = globalThis.__auxTest.render({ date: '2026-10-08', strategy_scorecards: scorecards,
+  diagnostics: { strategy_review: { benchmark_status: 'ok' } } });
+assert(html.includes('基准超额') && html.includes('+1.20%') && html.includes('n=127'), 'eligible return hidden');
+assert(html.includes('已有策略周期满足比较条件'), 'eligible horizon was still labeled as unavailable');
+assert(!html.includes('<img') && html.includes('&lt;img'), 'malicious label not escaped');
+""",
+        )
+
     def test_candidate_evidence_comparison_preserves_workspace_order(self):
         _assert_node_contract(
             self,
@@ -2193,8 +2285,12 @@ assert(html.includes('策略输入日期过期或未核验'), 'incident reason h
             self,
             "{ render: renderScorecardV2Card }",
             r"""
-const html = globalThis.__auxTest.render({}, {
+const card = {
   strategy: 'daily_fusion', version: 'v1', source_pool: 'picks_fusion',
+  publication_surface: 'formal_recommendation', entry_mode: 'immediate_close',
+  intended_horizon: null, research_tier: 'prospective_ledger',
+  policy_version: 'decision-v2', preclose_strategy_version: 'preclose-v3',
+  upstream_strategy_version: 'unknown', upstream_policy_version: 'unknown',
   evaluation_role: 'formal', evaluation_status: 'collecting',
   latest_run_status: 'ran', latest_signal_count: 3,
   signal_count: 12, eligible_signal_count: 8, excluded_signal_count: 4,
@@ -2203,8 +2299,10 @@ const html = globalThis.__auxTest.render({}, {
   gate_outcomes: { recommend: 7, observe: 4, reject: 1 },
   publication_outcomes: { recommendation: 5, watch: 7 },
   metrics_publishable: true, metrics_by_horizon: {}, maturity_by_horizon: {}
-});
-assert(html.includes('今日运行：今日已运行，产生 3 个信号'), 'today universe missing');
+};
+const run = Object.assign({}, card, { report_date: '2026-08-26', run_status: 'ran', signal_count: 3 });
+const html = globalThis.__auxTest.render({ date: '2026-08-26', strategy_run_manifest: [run] }, card);
+assert(html.includes('本期运行：本期已运行，产生 3 条信号'), 'today universe missing');
 assert(html.includes('账本累计：2026-08-14 至 2026-08-26'), 'ledger window missing');
 assert(html.includes('累计信号 12'), 'ledger signal count missing');
 assert(html.includes('收益评测：可评 8'), 'return-evaluation universe missing');
@@ -2543,7 +2641,7 @@ const disabledHtml = globalThis.__auxTest.horizon(
   't1', {}, { mature: 0, waiting: 0, unavailable: 0 },
   false, [], 'disabled'
 );
-assert(disabledHtml.includes('今日未启用'), 'disabled horizon was not neutral');
+assert(disabledHtml.includes('本期未启用'), 'disabled horizon was not neutral');
 assert(!disabledHtml.includes('<strong>本期证据不足</strong>'), 'disabled strategy looked broken');
 const staleHtml = globalThis.__auxTest.horizon(
   't1', {}, { mature: 0, waiting: 0, unavailable: 1 },
@@ -2559,19 +2657,26 @@ assert(staleHtml.includes('<strong>本期证据不足</strong>'), 'stale input d
             self,
             "{ render: renderStrategyScorecards }",
             r"""
-const html = globalThis.__auxTest.render({ strategy_scorecards: {
-  schema_version: 2, formal: [], baselines: [], research: [],
-  gates: [{
+const gate = {
     strategy: 'observation_gate', version: 'v1',
     source_pool: 'observation_watchlist', evaluation_status: 'running',
+    evaluation_role: 'diagnostic', publication_surface: 'gate_diagnostics',
+    entry_mode: 'immediate_close', intended_horizon: null,
+    research_tier: 'prospective_ledger', policy_version: 'decision-v2',
+    preclose_strategy_version: 'preclose-v3', upstream_strategy_version: 'unknown',
+    upstream_policy_version: 'unknown',
     latest_run_status: 'ran', latest_signal_count: 321,
     active_dates: 8, ledger_active_dates: 8,
     ledger_date_start: '2026-08-15', ledger_date_end: '2026-08-26',
     gate_outcomes: { recommend: 182, observe: 310, reject: 203 },
     publication_outcomes: { watch: 695 }
-  }], classification_failures: []
+};
+const run = Object.assign({}, gate, { report_date: '2026-08-26', run_status: 'ran', signal_count: 321 });
+const html = globalThis.__auxTest.render({ date: '2026-08-26', strategy_run_manifest: [run], strategy_scorecards: {
+  schema_version: 2, formal: [], baselines: [], research: [],
+  gates: [gate], classification_failures: []
 }, diagnostics: {} });
-assert(html.includes('当日运行：今日已运行，产生 321 个信号'), 'today run count missing');
+assert(html.includes('本期 2026-08-26 处理 321 条信号'), 'today run count missing');
 assert(html.includes('账本累计（2026-08-15 至 2026-08-26 · 8 个交易日）'), 'cumulative window was not labeled');
 assert(html.includes('推荐 / 观察 / 拒绝：182 / 310 / 203'), 'cumulative gate counts missing');
 """,

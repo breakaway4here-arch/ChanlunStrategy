@@ -10,6 +10,7 @@ import re
 import unittest
 
 from tests.test_auxiliary_frontend import CSS, _assert_node_contract
+from tests.css_test_helpers import media_rule_blocks
 
 
 def _valid_market_fixture(audit=None):
@@ -131,6 +132,74 @@ def _audit_literal(**overrides):
 
 
 class TestPsy12ShadowFrontend(unittest.TestCase):
+    def test_october_eighth_report_keeps_actual_psy12_when_shadow_is_missing(self):
+        _assert_node_contract(
+            self,
+            "({ panel: renderPsy12ShadowSubpanel })",
+            r"""
+const raw = JSON.parse(fs.readFileSync('docs/data/2026-10-08.json', 'utf8'));
+const html = globalThis.__auxTest.panel(raw);
+assert(raw.psy12.score === 50 && raw.psy12.up_days === 6 && raw.psy12.valid_days === 12,
+  'frozen PSY12 evidence changed');
+assert(raw.psy12_shadow.shadow_score_with_psy12 === null && raw.psy12_shadow.delta_vs_formal === null,
+  'frozen shadow gap changed');
+assert(html.includes('2026-09-15 至 2026-10-08') && html.includes('6 / 12')
+  && html.includes('PSY12</span><strong>50'), 'existing PSY12 evidence hidden');
+assert(html.includes('成交额组件不可用'), 'known turnover gap hidden');
+assert(html.includes('影子分</span><strong>—') && html.includes('差值</span><strong>—'),
+  'missing shadow total or delta fabricated');
+""",
+        )
+
+    def test_available_psy12_survives_missing_shadow_component(self):
+        fixture = _valid_market_fixture(audit=_audit_literal())
+        _assert_node_contract(
+            self,
+            "({ panel: renderPsy12ShadowSubpanel })",
+            fixture + r"""
+const missing = Object.assign({}, base.psy12_shadow, {
+  status: 'unavailable', reason: 'missing_formal_components',
+  shadow_score_with_psy12: null, delta_vs_formal: null
+});
+const market = Object.assign({}, base.market_sentiment, {
+  components: Object.assign({}, base.market_sentiment.components, { turnover: null })
+});
+const html = globalThis.__auxTest.panel(Object.assign({}, base, {
+  market_sentiment: market, psy12_shadow: missing
+}));
+assert(html.includes('6 / 12') && html.includes('>50<'), 'valid base PSY12 hidden');
+assert(html.includes('成交额组件不可用'), 'known missing component hidden');
+assert(html.includes('影子分') && html.includes('差值'), 'shadow breakdown hidden');
+assert(!html.includes('影子分</span><strong>0'), 'missing shadow score fabricated as zero');
+const unknown = globalThis.__auxTest.panel(Object.assign({}, base, {
+  market_sentiment: base.market_sentiment, psy12_shadow: missing
+}));
+assert(!unknown.includes('成交额组件不可用'), 'unknown component fabricated as turnover');
+assert(unknown.includes('原因未完整记录'), 'unknown cause not disclosed');
+const unrecorded = globalThis.__auxTest.panel(Object.assign({}, base, {
+  psy12_shadow: Object.assign({}, missing, { reason: null })
+}));
+assert(unrecorded.includes('影子分原因未记录') && !unrecorded.includes('PSY12 数据不足'),
+  'missing shadow reason was wrongly blamed on valid PSY12');
+""",
+        )
+
+    def test_psy12_zero_is_valid_but_null_and_nonfinite_are_not(self):
+        fixture = _valid_market_fixture(audit=_audit_literal())
+        _assert_node_contract(
+            self,
+            "({ panel: renderPsy12ShadowSubpanel })",
+            fixture + r"""
+for (const score of [0, null, undefined, Infinity]) {
+  const psy12 = Object.assign({}, base.psy12, { score });
+  const html = globalThis.__auxTest.panel(Object.assign({}, base, { psy12 }));
+  assert(html.includes('PSY12'), 'panel missing');
+  if (score === 0) assert(html.includes('PSY12</span><strong>0'), 'zero hidden');
+  else assert(!html.includes('PSY12</span><strong>0'), 'invalid score fabricated');
+}
+""",
+        )
+
     def test_psy12_is_nested_once_in_its_research_card(self):
         fixture = _valid_market_fixture(audit=_audit_literal())
         _assert_node_contract(
@@ -512,9 +581,9 @@ assert(html.includes('&lt;svg'), 'escaped audit date is missing');
         )
 
     def test_psy12_shadow_subpanel_is_single_column_at_390px(self):
-        start = CSS.rfind("@media (max-width: 390px)")
-        self.assertGreaterEqual(start, 0, "390px media query missing")
-        mobile = CSS[start:]
+        blocks = media_rule_blocks(CSS, "@media (max-width: 390px)")
+        self.assertTrue(blocks, "390px media query missing")
+        mobile = "\n".join(blocks)
         self.assertRegex(
             mobile,
             re.compile(

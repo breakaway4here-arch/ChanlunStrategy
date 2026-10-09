@@ -11383,13 +11383,56 @@
       && contract.promotion_eligible === false
       && contract.promotion_requires_new_authorization === true
       && (!projectedContract || projectedContract.status === 'available');
+    var baseAvailable = psy12.status === 'available'
+      && isRecommendationEvidenceFiniteNumber(psy12.score)
+      && isRecommendationEvidenceFiniteNumber(psy12.up_days)
+      && isRecommendationEvidenceFiniteNumber(psy12.valid_days)
+      && Number(psy12.valid_days) === 12;
+    var baseHtml = baseAvailable
+      ? '<div class="psy12-shadow-grid">'
+        + '<div><span>窗口</span><strong>' + escapeHtml(normalizeString(psy12.start_date)) + ' 至 ' + escapeHtml(normalizeString(psy12.end_date)) + '</strong></div>'
+        + '<div><span>上涨日</span><strong>' + escapeHtml(String(psy12.up_days)) + ' / ' + escapeHtml(String(psy12.valid_days)) + '</strong></div>'
+        + '<div><span>PSY12</span><strong>' + escapeHtml(formatNumber(Number(psy12.score), 0)) + '</strong></div>'
+        + '</div>'
+      : '<div class="decision-empty">' + escapeHtml(psy12UnavailableText(psy12.reason, psy12.valid_days)) + '</div>';
+    var componentNames = {
+      breadth: '市场宽度', limit_ecology: '涨跌停生态', index: '指数',
+      turnover: '成交额', trend: '趋势'
+    };
+    var missingComponents = asArray(shadow.missing_formal_components);
+    if (!missingComponents.length && shadow.reason === 'missing_formal_components') {
+      var formalComponents = (data.market_sentiment || {}).components || {};
+      missingComponents = Object.keys(componentNames).filter(function (key) {
+        return Object.prototype.hasOwnProperty.call(formalComponents, key)
+          && !isRecommendationEvidenceFiniteNumber(formalComponents[key]);
+      });
+    }
+    var knownMissing = missingComponents.filter(function (key) {
+      return Object.prototype.hasOwnProperty.call(componentNames, key);
+    });
+    var shadowReason = shadow.reason === 'missing_formal_components'
+      ? (knownMissing.length && knownMissing.length === missingComponents.length
+        ? knownMissing.map(function (key) { return componentNames[key]; }).join('、') + '组件不可用'
+        : '部分基础组件缺失，原因未完整记录')
+      : (shadow.reason === 'formal_score_unavailable'
+        ? '正式分暂不可用'
+        : (baseAvailable
+          ? (shadow.reason ? '影子分证据与基础指标状态不一致' : '影子分原因未记录')
+          : psy12UnavailableText(shadow.reason, psy12.valid_days)));
+    var formalScore = isRecommendationEvidenceFiniteNumber(shadow.formal_score)
+      ? Number(shadow.formal_score) : null;
+    var shadowScore = isRecommendationEvidenceFiniteNumber(shadow.shadow_score_with_psy12)
+      ? Number(shadow.shadow_score_with_psy12) : null;
+    var delta = isRecommendationEvidenceFiniteNumber(shadow.delta_vs_formal)
+      ? Number(shadow.delta_vs_formal) : null;
     if (!contractValid) {
       return renderDecisionCard({
         title: 'PSY12 影子情绪',
         subtitle: '最近 12 个有效交易日上涨持续性',
         badge: { text: '合同不可用', tone: 'danger' },
         className: 'psy12-shadow-card psy12-shadow-subpanel',
-        bodyHtml: '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>'
+        bodyHtml: baseHtml
+          + '<div class="psy12-shadow-notice is-error">PSY12 影子合同不可用，正式决策未采用该结果。</div>'
           + auditProgress,
       });
     }
@@ -11400,36 +11443,32 @@
         subtitle: '最近 12 个有效交易日上涨持续性',
         badge: { text: '权重不可验证', tone: 'danger' },
         className: 'psy12-shadow-card psy12-shadow-subpanel',
-        bodyHtml: '<div class="psy12-shadow-notice is-error">影子权重不可验证，未展示加权后的影子结果；正式决策未采用该结果。</div>'
+        bodyHtml: baseHtml
+          + '<div class="psy12-shadow-notice is-error">影子权重不可验证，未展示加权后的影子结果；正式决策未采用该结果。</div>'
           + auditProgress,
       });
     }
 
-    var available = psy12.status === 'available'
-      && shadow.status === 'available'
-      && safeNumber(psy12.score, null) !== null
-      && safeNumber(psy12.up_days, null) !== null
-      && safeNumber(psy12.valid_days, null) === 12
-      && safeNumber(shadow.formal_score, null) !== null
-      && safeNumber(shadow.shadow_score_with_psy12, null) !== null;
+    var available = shadow.status === 'available'
+      && formalScore !== null && shadowScore !== null;
     if (!available) {
       return renderDecisionCard({
         title: 'PSY12 影子情绪',
         subtitle: '最近 12 个有效交易日上涨持续性',
-        badge: { text: '数据不足', tone: 'neutral' },
+        badge: { text: baseAvailable ? '影子分暂缺' : '数据不足', tone: 'neutral' },
         className: 'psy12-shadow-card psy12-shadow-subpanel',
         bodyHtml: ''
           + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
-          + '<div class="decision-empty">'
-          + escapeHtml(psy12UnavailableText(psy12.reason || shadow.reason, psy12.valid_days))
-          + '</div>'
+          + baseHtml
+          + '<div class="psy12-shadow-grid">'
+          + '<div><span>正式分</span><strong>' + escapeHtml(formalScore === null ? '—' : formatNumber(formalScore, 0)) + '</strong></div>'
+          + '<div><span>影子分</span><strong>—</strong></div>'
+          + '<div><span>差值</span><strong>—</strong></div></div>'
+          + '<div class="psy12-shadow-notice">影子综合分暂缺：' + escapeHtml(shadowReason) + '</div>'
           + auditProgress,
       });
     }
 
-    var formalScore = safeNumber(shadow.formal_score, null);
-    var shadowScore = safeNumber(shadow.shadow_score_with_psy12, null);
-    var delta = safeNumber(shadow.delta_vs_formal, shadowScore - formalScore);
     var psy12WeightText = formatNumber(psy12Weight * 100, 0) + '%';
     var formalLabel = normalizeString(shadow.formal_label || '--');
     var shadowLabel = normalizeString(shadow.shadow_label || '--');
@@ -11449,17 +11488,16 @@
       : '';
     var body = ''
       + '<div class="psy12-shadow-notice">影子，不影响正式决策</div>'
+      + baseHtml
+      + (baseAvailable ? '' : '<div class="psy12-shadow-notice is-error">基础指标与影子分状态不一致，仅展示各自可核验字段。</div>')
       + '<div class="psy12-shadow-grid">'
-      + '  <div><span>窗口</span><strong>' + escapeHtml(normalizeString(psy12.start_date)) + ' 至 ' + escapeHtml(normalizeString(psy12.end_date)) + '</strong></div>'
-      + '  <div><span>上涨日</span><strong>' + escapeHtml(String(psy12.up_days)) + ' / ' + escapeHtml(String(psy12.valid_days)) + '</strong></div>'
-      + '  <div><span>PSY12</span><strong>' + escapeHtml(formatNumber(psy12.score, 0)) + '</strong></div>'
       + '  <div><span>正式分</span><strong>' + escapeHtml(formatNumber(formalScore, 0)) + '</strong></div>'
       + '  <div><span>影子分</span><strong>' + escapeHtml(formatNumber(shadowScore, 0)) + '</strong></div>'
-      + '  <div><span>差值</span><strong>' + escapeHtml((delta > 0 ? '+' : '') + formatNumber(delta, 0)) + '</strong></div>'
+      + '  <div><span>差值</span><strong>' + escapeHtml(delta === null ? '—' : (delta > 0 ? '+' : '') + formatNumber(delta, 0)) + '</strong></div>'
       + '</div>'
-      + '<div class="psy12-shadow-notice">加入 ' + escapeHtml(psy12WeightText) + ' 后：'
-      + escapeHtml(formatNumber(shadowScore, 0) + ' · ' + shadowLabel + ' · Δ' + (delta > 0 ? '+' : '') + formatNumber(delta, 0))
-      + '</div>'
+      + (delta === null ? '' : '<div class="psy12-shadow-notice">加入 ' + escapeHtml(psy12WeightText) + ' 后：'
+        + escapeHtml(formatNumber(shadowScore, 0) + ' · ' + shadowLabel + ' · Δ' + (delta > 0 ? '+' : '') + formatNumber(delta, 0))
+        + '</div>')
       + labelDifference
       + audit
       + auditProgress;
@@ -12757,8 +12795,9 @@
       no_formal_recommendations: { label: '本期无正式推荐', tone: 'neutral' },
       running: { label: '门控运行正常', tone: 'positive' },
       normal_empty: { label: '本期无门控记录', tone: 'neutral' },
+      unrecorded: { label: '本期运行状态未记录', tone: 'neutral' },
       no_signals: { label: '正常空选', tone: 'neutral' },
-      disabled: { label: '今日未启用', tone: 'neutral' },
+      disabled: { label: '本期未启用', tone: 'neutral' },
     };
     return labels[normalizeString(status)] || { label: '状态未知', tone: 'neutral' };
   }
@@ -12801,18 +12840,66 @@
     return labels[normalizeString(value)] || normalizeString(value || '研究层级未知');
   }
 
-  function getStrategyLatestRunLabel(item) {
+  function sameStrategyPriceBasis(left, right) {
+    if (left === right) return true;
+    if (left === null || right === null || typeof left !== 'object' || typeof right !== 'object') return false;
+    if (Array.isArray(left) || Array.isArray(right)) {
+      return Array.isArray(left) && Array.isArray(right)
+        && left.length === right.length
+        && left.every(function (value, index) { return sameStrategyPriceBasis(value, right[index]); });
+    }
+    var leftKeys = Object.keys(left).sort();
+    var rightKeys = Object.keys(right).sort();
+    return leftKeys.length === rightKeys.length
+      && leftKeys.every(function (key, index) {
+        return key === rightKeys[index] && sameStrategyPriceBasis(left[key], right[key]);
+      });
+  }
+
+  function getStrategyCurrentRun(data, item) {
     var rec = item || {};
-    var status = normalizeString(rec.latest_run_status);
-    var count = safeNumber(rec.latest_signal_count, null);
+    var identity = rec.comparison_identity || rec;
+    var reportDate = normalizeString((data || {}).date).trim();
+    if (!reportDate) return null;
+    var fields = [
+      'strategy', 'version', 'source_pool', 'entry_mode', 'intended_horizon',
+      'research_tier', 'policy_version', 'preclose_strategy_version',
+      'upstream_strategy_version', 'upstream_policy_version'
+    ];
+    return asArray((data || {}).strategy_run_manifest).find(function (run) {
+      if (!run || normalizeString(run.report_date).trim() !== reportDate
+        || normalizeString(run.evaluation_role) !== normalizeString(rec.evaluation_role)
+        || normalizeString(run.publication_surface) !== normalizeString(rec.publication_surface)) return false;
+      return fields.every(function (field) {
+        var actual = run[field];
+        var expected = identity[field];
+        if (field === 'research_tier' && !actual) actual = 'prospective_ledger';
+        if (field === 'upstream_strategy_version' || field === 'upstream_policy_version') {
+          actual = actual || 'unknown';
+        }
+        if (field === 'intended_horizon') return (actual === null || actual === undefined ? null : Number(actual))
+          === (expected === null || expected === undefined ? null : Number(expected));
+        return normalizeString(actual) === normalizeString(expected);
+      }) && (!identity.price_basis || sameStrategyPriceBasis(run.price_basis, identity.price_basis));
+    }) || null;
+  }
+
+  function getStrategyLatestRunLabel(item, current) {
+    var rec = item || {};
+    if (!current) return '本期运行状态未记录';
+    var status = normalizeString(current.run_status);
+    var count = isRecommendationEvidenceFiniteNumber(current.signal_count)
+      ? Number(current.signal_count) : null;
     var labels = {
-      ran: '今日已运行' + (count === null ? '' : '，产生 ' + formatNumber(count, 0) + ' 个信号'),
-      verified_empty: '今日运行正常，0 个信号',
-      disabled: '今日条件未触发，策略未启用',
-      unavailable: '今日运行或生产证明不可用',
-      unrecorded: '当日运行状态未记录',
+      ran: '本期已运行' + (count === null ? '' : '，产生 ' + formatNumber(count, 0) + ' 条信号'),
+      verified_empty: '本期运行正常，0 条信号',
+      partial: '本期部分可用' + (count === null ? '' : '，' + formatNumber(count, 0)
+        + (rec.strategy === 'luojie_pool' ? ' 只已核验研究候选' : ' 条信号')),
+      disabled: '本期条件未触发，策略未启用',
+      unavailable: '本期运行或生产证明不可用',
+      unrecorded: '本期运行状态未记录',
     };
-    return labels[status] || '当日运行状态未记录';
+    return labels[status] || '本期运行状态未记录';
   }
 
   function getStrategyDisplayName(item) {
@@ -12871,7 +12958,7 @@
     if (['no_signals', 'no_formal_recommendations', 'normal_empty'].indexOf(evaluation) !== -1) {
       statusHtml = '<div class="strategy-horizon-state"><strong>本期无信号</strong><small>正常空选，不计算收益</small></div>';
     } else if (evaluation === 'disabled') {
-      statusHtml = '<div class="strategy-horizon-state"><strong>今日未启用</strong><small>策略未运行，不计算收益</small></div>';
+      statusHtml = '<div class="strategy-horizon-state"><strong>本期未启用</strong><small>策略未运行，不计算收益</small></div>';
     } else if (!publishable) {
       statusHtml = '<div class="strategy-horizon-state is-danger"><strong>本期证据不足</strong><small>'
         + escapeHtml(asArray(blockers).map(getScorecardBlockingReasonLabel).join('；') || '评测条件不成立')
@@ -12991,6 +13078,7 @@
 
   function renderScorecardV2Card(data, item) {
     var rec = item || {};
+    var currentRun = getStrategyCurrentRun(data, rec);
     var status = getScorecardStatusMeta(rec.evaluation_status);
     var entryMode = resolveStrategyEntryMode(data, rec);
     var maturity = rec.maturity_by_horizon || {};
@@ -13030,7 +13118,7 @@
       + '    <span>入场口径：' + escapeHtml(getStrategyEntryModeLabel(entryMode)) + '</span>'
       + '    <span>' + escapeHtml(intended) + '；页面逐周期独立展示</span>'
       + '    <span>研究层级：' + escapeHtml(getStrategyResearchTierLabel(rec.research_tier)) + '</span>'
-      + '    <span class="strategy-universe-line">今日运行：' + escapeHtml(getStrategyLatestRunLabel(rec)) + (rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '') + '</span>'
+      + '    <span class="strategy-universe-line">本期运行：' + escapeHtml(getStrategyLatestRunLabel(rec, currentRun)) + (currentRun && rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '') + '</span>'
       + '    <span class="strategy-universe-line">账本累计：' + escapeHtml(getStrategyLedgerWindowLabel(rec))
       + '；累计信号 ' + escapeHtml(formatNumber(signalCount, 0))
       + '；规则判定 推荐 / 观察 / 拒绝 ' + escapeHtml(formatNumber(gateOutcomes.recommend, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.observe, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.reject, 0))
@@ -13059,16 +13147,26 @@
       + '</details>';
   }
 
-  function renderGateScorecard(item) {
+  function renderGateScorecard(data, item) {
     var rec = item || {};
-    var status = getScorecardStatusMeta(rec.evaluation_status);
+    var current = getStrategyCurrentRun(data, rec);
+    var gateStatus = current ? {
+      ran: 'running', verified_empty: 'normal_empty', disabled: 'disabled',
+      unavailable: 'data_unavailable', partial: 'data_unavailable'
+    }[normalizeString(current.run_status)] || 'unrecorded' : 'unrecorded';
+    var status = getScorecardStatusMeta(gateStatus);
     var gateOutcomes = rec.gate_outcomes || {};
     var publicationOutcomes = rec.publication_outcomes || {};
     return ''
       + '<article class="strategy-gate-card">'
       + '  <div><strong>' + escapeHtml(getStrategyDisplayName(rec)) + '</strong><small>' + escapeHtml((rec.version || '版本未知') + ' · ' + getScorecardSourceLabel(rec.source_pool)) + '</small></div>'
       + '  <span class="status-badge is-' + escapeHtml(status.tone) + '">' + escapeHtml(status.label) + '</span>'
-      + '  <p>当日运行：' + escapeHtml(getStrategyLatestRunLabel(rec)) + (rec.latest_run_reason ? '；' + escapeHtml(rec.latest_run_reason) : '') + '</p>'
+      + '  <p>' + (current && normalizeString(current.run_status) === 'ran'
+        ? '本期 ' + escapeHtml(normalizeString((data || {}).date)) + ' 处理 '
+          + escapeHtml(isRecommendationEvidenceFiniteNumber(current.signal_count) ? formatNumber(Number(current.signal_count), 0) : '—') + ' 条信号 · 仅作观察'
+        : escapeHtml(getStrategyLatestRunLabel(rec, current)))
+        + (current && current.reason ? '；' + escapeHtml(current.reason) : '')
+        + (current && current.blocking_reason ? '；' + escapeHtml(current.blocking_reason) : '') + '</p>'
       + '  <p>账本累计（' + escapeHtml(getStrategyLedgerWindowLabel(rec)) + '）规则判定 推荐 / 观察 / 拒绝：' + escapeHtml(formatNumber(gateOutcomes.recommend, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.observe, 0)) + ' / ' + escapeHtml(formatNumber(gateOutcomes.reject, 0)) + '</p>'
       + '  <p>账本累计页面动作 仅观察：' + escapeHtml(formatNumber(publicationOutcomes.watch, 0)) + '</p>'
       + '  <small class="strategy-gate-note">该门控不计算收益，只回答运行与分流是否正常。</small>'
@@ -13079,7 +13177,7 @@
     var items = asArray(rows);
     var body = items.length
       ? items.map(function (item) {
-        return kind === 'gate' ? renderGateScorecard(item) : renderScorecardV2Card(data, item);
+        return kind === 'gate' ? renderGateScorecard(data, item) : renderScorecardV2Card(data, item);
       }).join('')
       : '<div class="decision-empty">本区暂无已登记分组；这是空分组，不是 0% 收益。</div>';
     return ''
@@ -13122,8 +13220,19 @@
       : renderLegacyScorecards(data, rows);
     var reviewDiagnostics = (((data || {}).diagnostics || {}).strategy_review || {});
     var benchmarkReady = normalizeString(reviewDiagnostics.benchmark_status) === 'ok';
+    var comparisonReady = ['formal', 'baselines', 'research'].some(function (section) {
+      return asArray(scorecards[section]).some(function (item) {
+        if (item.metrics_publishable === false) return false;
+        return ['t1', 't3', 't5'].some(function (key) {
+          return normalizeString(((item.horizon_readiness || {})[key])) === 'ready_for_manual_comparison'
+            && normalizeString((((item.comparison_progress_by_horizon || {})[key] || {}).status)) === 'ready_for_manual_comparison';
+        });
+      });
+    });
     var benchmarkNote = benchmarkReady
-      ? '<div class="strategy-benchmark-status is-ok">沪深300基准已对齐，超额收益可用。</div>'
+      ? '<div class="strategy-benchmark-status is-ok">' + (comparisonReady
+        ? '沪深300基准已对齐；已有策略周期满足比较条件，可查看对应收益。'
+        : '基准数据已取得；策略收益比较尚未达到样本要求。') + '</div>'
       : '<div class="strategy-benchmark-status is-warning">沪深300基准历史暂不可用，超额收益显示 --，绝不以 0 代替。</div>';
     return renderDecisionCard({
       title: '策略收益回看（记分牌）',
