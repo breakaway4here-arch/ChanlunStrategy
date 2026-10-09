@@ -30,7 +30,8 @@ if os.fspath(ROOT_DIR) not in sys.path:
 from chanlun.recommendation_evidence import (  # noqa: E402
     build_recommendation_evidence_projection,
 )
-from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
+from chanlun.decision_workbench import build_decision_workbench, _changes  # noqa: E402
+from chanlun.report_comparison import _review_identity  # noqa: E402
 from chanlun.report_view_model import build_workspace  # noqa: E402
 from chanlun.psy12_shadow_audit import evaluate_shadow_reports  # noqa: E402
 from chanlun.psy12_shadow_history import (  # noqa: E402
@@ -38,6 +39,7 @@ from chanlun.psy12_shadow_history import (  # noqa: E402
 )
 from chanlun.report_generator import (  # noqa: E402
     _escape_inline_json,
+    _load_previous_full_projection,
     replace_report_asset_versions,
 )
 try:  # noqa: E402 - optional shared checkout configuration
@@ -403,19 +405,22 @@ def _inject_evidence(
     evidence: dict,
     asset_version: str,
     previous_workbench=None,
+    current_workbench=None,
 ) -> str:
     info = _read_bootstrap_info(html, path)
     raw_json = html[info["json_start"] : info["json_end"]]
     updated_raw = _insert_or_replace_evidence(raw_json, evidence)
     daily = info['payload']['inlineReportData']
-    workbench = build_decision_workbench(
-        daily,
-        _workspace_for(daily),
-        evidence,
-        phase="formal",
-        snapshot_id=daily.get("snapshot_id", ""),
-        previous=previous_workbench,
-    )
+    if current_workbench is None:
+        workbench = build_decision_workbench(
+            daily, _workspace_for(daily), evidence, phase="formal",
+            snapshot_id=daily.get("snapshot_id", ""), previous=previous_workbench,
+        )
+    else:
+        # The bound published page is the display fact. Rebuilding it from an
+        # old JSON workspace can silently drop observation members.
+        workbench = dict(current_workbench)
+        workbench["changes"] = _changes(workbench, previous_workbench)
     updated_raw = _insert_or_replace_evidence(updated_raw, workbench, 'decisionWorkbench')
     updated = (
         html[: info["json_start"]]
@@ -423,6 +428,31 @@ def _inject_evidence(
         + html[info["json_end"] :]
     )
     return replace_report_asset_versions(updated, asset_version)
+
+
+def _bound_current_workbench(payload: dict, daily: dict, path: Path):
+    workbench = payload.get("decisionWorkbench")
+    if workbench is None:
+        return None
+    if (
+        not isinstance(workbench, dict)
+        or workbench.get("schema_version") != "decision-workbench-v1"
+        or workbench.get("report_date") != daily.get("date")
+        or workbench.get("phase") != "formal"
+        or not isinstance(workbench.get("snapshot_id"), str)
+        or not workbench["snapshot_id"].strip()
+        or not isinstance(workbench.get("items"), list)
+    ):
+        raise StageRecommendationEvidenceError("current published workbench identity invalid: {}".format(path))
+    seen = set()
+    for item in workbench["items"]:
+        if not isinstance(item, dict):
+            raise StageRecommendationEvidenceError("current published member invalid: {}".format(path))
+        instrument, status = _review_identity(item.get("code"), item.get("instrument_id"))
+        if status != "verified" or instrument != item.get("instrument_id") or instrument in seen:
+            raise StageRecommendationEvidenceError("current published member identity conflict: {}".format(path))
+        seen.add(instrument)
+    return workbench
 
 
 def _head_bytes(repo_root: Path, relative_path: str):
@@ -633,6 +663,12 @@ def _snapshot_inputs(paths):
 
 def _assert_snapshot_unchanged(snapshot):
     for path, expected in snapshot.items():
+        if expected is None:
+            if path.exists():
+                raise StageRecommendationEvidenceError(
+                    "input changed during staging: {}".format(path)
+                )
+            continue
         try:
             actual = path.read_bytes()
         except OSError as exc:
@@ -768,25 +804,62 @@ def stage_recommendation_evidence_pages(
             "recommendation evidence is not strict JSON"
         ) from exc
 
-    previous_data, previous_path = _load_previous_daily_payload(
-        daily_path.parent, report_date
+    historical_dates = {path.stem: {} for path in daily_path.parent.glob("????-??-??.json")}
+    previous_read_snapshot = {}
+    def capture_previous_input(value):
+        path = Path(value)
+        if path in previous_read_snapshot:
+            return
+        try:
+            previous_read_snapshot[path] = path.read_bytes() if path.is_file() else None
+        except OSError as exc:
+            raise StageRecommendationEvidenceError(
+                "cannot snapshot previous comparison input: {}".format(path)
+            ) from exc
+    previous_workbench = _load_previous_full_projection(
+        os.fspath(docs_dir), historical_dates, report_date,
+        before_read=capture_previous_input,
     )
-    previous_workbench = _build_previous_workbench(previous_data)
-    expected_workbench = build_decision_workbench(
-        daily_data,
-        _workspace_for(daily_data),
-        evidence,
-        phase="formal",
-        snapshot_id=daily_data.get("snapshot_id", ""),
-        previous=previous_workbench,
-    )
+    _assert_snapshot_unchanged(previous_read_snapshot)
+    current_home = _bound_current_workbench(home_info["payload"], daily_data, home_path)
+    current_archive = _bound_current_workbench(archive_info["payload"], daily_data, archive_path)
+    if current_home != current_archive:
+        raise StageRecommendationEvidenceError("home/archive published workbench diverged")
+    if current_home is None:
+        expected_workbench = build_decision_workbench(
+            daily_data, _workspace_for(daily_data), evidence, phase="formal",
+            snapshot_id=daily_data.get("snapshot_id", ""), previous=previous_workbench,
+        )
+    else:
+        expected_workbench = dict(current_home)
+        expected_workbench["changes"] = _changes(expected_workbench, previous_workbench)
 
     asset_version = _asset_version(source_assets_dir)
     input_paths = [home_path, archive_path, compare_path, daily_path, aggregate_path]
-    if previous_path is not None:
-        input_paths.append(previous_path)
+    if isinstance(previous_workbench, dict):
+        read_dates = [previous_workbench.get("report_date")]
+        read_dates.extend(row.get("report_date") for row in
+                          previous_workbench.get("comparison_skipped", [])
+                          if isinstance(row, dict))
+        receipt_read = False
+        for date_value in read_dates:
+            if not isinstance(date_value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date_value):
+                continue
+            prior_json = daily_path.parent / (date_value + ".json")
+            prior_html = docs_dir / date_value / "index.html"
+            if prior_json.is_file():
+                input_paths.append(prior_json)
+            if prior_html.is_file():
+                input_paths.append(prior_html)
+            else:
+                receipt_read = True
+        receipt_index = daily_path.parent / "comparison-index.json"
+        if receipt_read and receipt_index.is_file():
+            input_paths.append(receipt_index)
+    input_paths = list(dict.fromkeys(input_paths))
     input_paths += [source_assets_dir / name for name in REPORT_ASSETS]
     input_snapshot = _snapshot_inputs(input_paths)
+    input_snapshot.update(previous_read_snapshot)
     before_protected = _protected_hashes(
         repo_root, docs_dir, report_date, protected_paths
     )
@@ -815,6 +888,13 @@ def stage_recommendation_evidence_pages(
             path,
             bootstrap=has_bootstrap,
         )
+        if has_bootstrap and current_home is not None:
+            baseline_workbench = _read_bootstrap_info(baseline_html, path)["payload"].get("decisionWorkbench")
+            current_workbench = current_home if path == home_path else current_archive
+            if isinstance(baseline_workbench, dict):
+                stable = lambda wb: {key: value for key, value in wb.items() if key != "changes"}
+                if stable(baseline_workbench) != stable(current_workbench):
+                    raise StageRecommendationEvidenceError("published workbench facts changed outside changes: {}".format(path))
 
     # Verify real links/scripts before and after the replacement.  This also
     # prevents a comment, data-src, title, or embedded string from being
@@ -825,6 +905,7 @@ def stage_recommendation_evidence_pages(
         evidence,
         asset_version,
         previous_workbench=previous_workbench,
+        current_workbench=current_home,
     )
     updated_archive = _inject_evidence(
         archive_html,
@@ -832,6 +913,7 @@ def stage_recommendation_evidence_pages(
         evidence,
         asset_version,
         previous_workbench=previous_workbench,
+        current_workbench=current_archive,
     )
     updated_compare = replace_report_asset_versions(compare_html, asset_version)
     _assert_asset_queries(updated_home, asset_version, home_path)

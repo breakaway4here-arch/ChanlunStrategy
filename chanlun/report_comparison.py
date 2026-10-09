@@ -97,7 +97,10 @@ class _InlineScriptParser(HTMLParser):
         if tag.lower() != "script":
             return
         attributes = {str(key).lower(): value for key, value in attrs}
-        self._inside_inline_script = not attributes.get("src")
+        script_type = _as_text(attributes.get("type")).lower()
+        self._inside_inline_script = not attributes.get("src") and script_type in {
+            "", "text/javascript", "application/javascript", "module",
+        }
         self._chunks = []
 
     def handle_data(self, data):
@@ -109,6 +112,42 @@ class _InlineScriptParser(HTMLParser):
             self.scripts.append("".join(self._chunks))
             self._inside_inline_script = False
             self._chunks = []
+
+
+def _bootstrap_assignment_positions(script):
+    """Find assignments outside JavaScript literals and comments."""
+    positions = []
+    index = 0
+    while index < len(script):
+        char = script[index]
+        if char in "'\"`":
+            quote = char
+            index += 1
+            while index < len(script):
+                if script[index] == "\\":
+                    index += 2
+                elif script[index] == quote:
+                    index += 1
+                    break
+                else:
+                    index += 1
+            continue
+        if char == "/" and index + 1 < len(script):
+            if script[index + 1] == "/":
+                end = script.find("\n", index + 2)
+                index = len(script) if end < 0 else end + 1
+                continue
+            if script[index + 1] == "*":
+                end = script.find("*/", index + 2)
+                index = len(script) if end < 0 else end + 2
+                continue
+        match = _BOOTSTRAP_ASSIGNMENT_RE.match(script, index)
+        if match:
+            positions.append(match.end())
+            index = match.end()
+        else:
+            index += 1
+    return positions
 
 
 def _registered_incident_codes(report_date, view_name):
@@ -244,14 +283,21 @@ def _read_archived_workbench(data_dir, report_date, source_report):
     workbenches = []
     assignment_count = 0
     for script in parser.scripts:
-        for match in _BOOTSTRAP_ASSIGNMENT_RE.finditer(script):
+        for assignment_end in _bootstrap_assignment_positions(script):
             assignment_count += 1
-            json_start = match.end()
+            json_start = assignment_end
             while json_start < len(script) and script[json_start] in " \t\r\n":
                 json_start += 1
             try:
-                bootstrap, _ = decoder.raw_decode(script, json_start)
+                bootstrap, json_end = decoder.raw_decode(script, json_start)
             except (TypeError, ValueError):
+                continue
+            line_start = script.rfind("\n", 0, assignment_end) + 1
+            statement_prefix = script[line_start:assignment_end].strip()
+            if not re.fullmatch(r"window\s*\.\s*CHANLUN_BOOTSTRAP\s*=",
+                                statement_prefix):
+                continue
+            if script[json_end:].lstrip()[:1] != ";":
                 continue
             workbench = bootstrap.get("decisionWorkbench") \
                 if isinstance(bootstrap, dict) else None
@@ -505,6 +551,8 @@ def _published_member_receipt(report, report_date, workbench, snapshot_kind, ent
         "snapshot_kind": snapshot_kind,
         "members": members,
     }
+    if isinstance(workbench.get("phase"), str) and workbench["phase"].strip():
+        receipt["binding"]["phase"] = workbench["phase"].strip()
     receipt["content_sha256"] = _canonical_sha256(receipt)
     return receipt if receipt["content_sha256"] is not None else None
 
@@ -524,15 +572,21 @@ def _bound_receipt_entries(receipt, report, report_date):
         receipt["schema_version"] != _REVIEW_RECEIPT_SCHEMA
         or not isinstance(receipt["snapshot_kind"], str)
         or receipt["snapshot_kind"] not in _CONFIRMED_SNAPSHOT_KINDS
-        or not isinstance(binding, dict) or set(binding) != {
+        or not isinstance(binding, dict) or set(binding) not in ({
             "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
             "comparison_contract",
-        }
+        }, {
+            "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
+            "comparison_contract", "phase",
+        })
         or report.get("date") != report_date
         or binding["report_date"] != report_date
         or binding["raw_report_sha256"] != _canonical_sha256(report)
         or binding["workbench_schema"] != "decision-workbench-v1"
         or not isinstance(binding["snapshot_id"], str) or not binding["snapshot_id"].strip()
+        or "phase" in binding and (
+            not isinstance(binding["phase"], str) or not binding["phase"].strip()
+        )
     ):
         return None
     contract = binding["comparison_contract"]
@@ -611,6 +665,70 @@ def _bound_receipt_entries(receipt, report, report_date):
         entry = dict(member, sources=sources, risk_flags=list(member["risk_flags"]))
         entries.append(entry)
     return entries
+
+
+def load_published_comparison_snapshot(data_dir, report_date, report):
+    """Read one bound published membership snapshot for page comparison.
+
+    A receipt is usable only after an archive was actually removed. An existing
+    invalid archive is evidence of conflict, not permission to revive a receipt.
+    """
+    archived = _read_archived_workbench(data_dir, report_date, report)
+    if archived is None:
+        index = _read_existing_comparison_index(data_dir)
+        registry = index.get("review_registry") if isinstance(index, dict) else {}
+        receipts = registry.get("published_member_snapshots") if isinstance(registry, dict) else {}
+        receipt = receipts.get(report_date) if isinstance(receipts, dict) else None
+        entries = _bound_receipt_entries(receipt, report, report_date)
+        if entries is None:
+            return {"membership_status": "unavailable", "reason": "published_snapshot_missing"}
+        source = "published_receipt"
+        workbench = None
+        rows = entries
+        snapshot_id = receipt["binding"]["snapshot_id"]
+        phase = receipt["binding"].get("phase")
+    elif (
+        not isinstance(archived, dict)
+        or archived.get("identity_matches") is not True
+        or not isinstance(archived.get("workbench"), dict)
+    ):
+        return {"membership_status": "unavailable", "reason": (
+            archived.get("unavailable_reason", "published_snapshot_identity_conflict")
+            if isinstance(archived, dict) else "published_snapshot_identity_conflict"
+        )}
+    else:
+        workbench = archived["workbench"]
+        if (
+            workbench.get("schema_version") != "decision-workbench-v1"
+            or workbench.get("report_date") != report_date
+            or workbench.get("phase") is not None and (
+                not isinstance(workbench["phase"], str)
+                or not workbench["phase"].strip()
+            )
+            or not isinstance(workbench.get("snapshot_id"), str)
+            or not workbench["snapshot_id"].strip()
+            or not isinstance(workbench.get("items"), list)
+        ):
+            return {"membership_status": "unavailable", "reason": "published_workbench_invalid"}
+        source = "published_html_bootstrap"
+        rows = workbench["items"]
+        snapshot_id = workbench["snapshot_id"]
+        phase = workbench.get("phase")
+    members = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            return {"membership_status": "unavailable", "reason": "published_member_invalid"}
+        code = row.get("code")
+        instrument = row.get("instrument_id")
+        canonical, identity_status = _review_identity(code, instrument)
+        if identity_status != "verified" or canonical != instrument or canonical in members:
+            return {"membership_status": "unavailable", "reason": "published_member_identity_conflict"}
+        members[canonical] = row
+    return {
+        "membership_status": "available", "source": source,
+        "report_date": report_date, "phase": phase, "snapshot_id": snapshot_id,
+        "members": members, "workbench": workbench,
+    }
 
 
 def _legacy_review_entries(report, report_date):

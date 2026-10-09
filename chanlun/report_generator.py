@@ -23,6 +23,7 @@ import numpy as np
 from chanlun.chan_engine import calc_macd
 from chanlun.report_comparison import (
     comparison_review_snapshot,
+    load_published_comparison_snapshot,
     write_comparison_index,
 )
 from chanlun.report_view_model import build_workspace
@@ -2683,7 +2684,7 @@ def _load_psy12_shadow_history(output_dir, as_of_date=None):
     )
 
 
-def _load_previous_full_projection(output_dir, historical_reports, date_str):
+def _load_previous_full_projection(output_dir, historical_reports, date_str, before_read=None):
     if not output_dir or not date_str:
         return None
     if isinstance(historical_reports, Mapping):
@@ -2701,18 +2702,83 @@ def _load_previous_full_projection(output_dir, historical_reports, date_str):
         for candidate_date in candidates
         if isinstance(candidate_date, str) and candidate_date < date_str
     })
+    fallback = None
+    fallback_snapshot = None
+    skipped = []
+    def published_projection(snapshot, report_date, skipped_dates):
+        published = snapshot.get("workbench")
+        if published is None:
+            receipt_items = []
+            for member in snapshot["members"].values():
+                receipt_items.append({
+                    "instrument_id": member["instrument_id"],
+                    "code": member["code"], "name": member["name"],
+                    "page_status": member["current_page_status"],
+                    "sources": [row["view"] for row in member["sources"]],
+                    "source_refs": [{"view": row["view"]} for row in member["sources"]],
+                    "strategy_results": [{"strategy_id": row["view"], "role": row["role"]}
+                                         for row in member["sources"]],
+                })
+            published = {"items": receipt_items, "comparison_contract": {}}
+        projection = copy.deepcopy(published)
+        projection.update({
+            "report_date": report_date, "phase": snapshot["phase"],
+            "snapshot_id": snapshot["snapshot_id"],
+            "membership_status": "available",
+            "comparison_source": snapshot["source"],
+            "comparison_skipped": list(skipped_dates),
+        })
+        return projection
     for candidate_date in reversed(previous_dates):
         candidate_path = os.path.join(output_dir, "data", f"{candidate_date}.json")
+        if before_read is not None:
+            before_read(candidate_path)
         if not os.path.isfile(candidate_path):
+            skipped.append({"report_date": candidate_date, "reason": "report_json_missing"})
             continue
         try:
             with open(candidate_path, "r", encoding="utf-8") as handle:
                 candidate_payload = json.load(handle)
         except (OSError, ValueError, TypeError):
+            skipped.append({"report_date": candidate_date, "reason": "report_json_invalid"})
             continue
-        if isinstance(candidate_payload, Mapping) and candidate_payload.get('date') == candidate_date:
-            return dict(candidate_payload)
-    return None
+        if not isinstance(candidate_payload, Mapping) or candidate_payload.get('date') != candidate_date:
+            skipped.append({"report_date": candidate_date, "reason": "report_date_conflict"})
+            continue
+        if before_read is not None:
+            archive_path = os.path.join(output_dir, candidate_date, "index.html")
+            before_read(archive_path)
+            if not os.path.isfile(archive_path):
+                before_read(os.path.join(output_dir, "data", "comparison-index.json"))
+        snapshot = load_published_comparison_snapshot(
+            os.path.join(output_dir, "data"), candidate_date, candidate_payload,
+        )
+        if snapshot["membership_status"] == "available":
+            if snapshot["phase"] == "formal":
+                return published_projection(snapshot, candidate_date, skipped)
+            if fallback_snapshot is None:
+                fallback_snapshot = (snapshot, candidate_date)
+            skipped.append({"report_date": candidate_date, "reason": "published_phase_unverified"})
+            continue
+        skipped.append({"report_date": candidate_date, "reason": snapshot.get("reason")})
+        if fallback is None:
+            fallback = candidate_payload
+    if fallback_snapshot is not None:
+        return published_projection(fallback_snapshot[0], fallback_snapshot[1], skipped)
+    if fallback is None:
+        return None
+    # The old JSON projection is still useful for its own fields; it cannot
+    # prove which members the reader actually saw on the previous page.
+    old = build_decision_workbench(
+        fallback, fallback.get("workspace", {}),
+        build_recommendation_evidence_projection(fallback, fallback),
+        phase="formal", snapshot_id=fallback.get("snapshot_id", ""),
+    )
+    old["membership_status"] = "unavailable"
+    old["membership_reason"] = "previous_display_membership_unverified"
+    old["comparison_source"] = "legacy_json_view"
+    old["comparison_skipped"] = skipped
+    return old
 
 
 def _build_psy12_shadow_audit(daily_data, historical_reports, date_str):
@@ -2751,19 +2817,11 @@ def _build_report_bootstrap(
         psy12_shadow_audit=psy12_shadow_audit,
     )
     previous = None
-    previous_payload = _load_previous_full_projection(
+    previous = _load_previous_full_projection(
         output_dir,
         historical_reports,
         date_str,
     )
-    if isinstance(previous_payload, Mapping):
-        previous = build_decision_workbench(
-            previous_payload,
-            previous_payload.get("workspace", {}),
-            build_recommendation_evidence_projection(previous_payload, previous_payload),
-            phase="formal",
-            snapshot_id=previous_payload.get("snapshot_id", ""),
-        )
     return {
         "pageDate": date_str,
         "inlineReportData": daily_data,

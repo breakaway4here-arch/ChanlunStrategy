@@ -3559,11 +3559,29 @@
       + '<a href="#decisionOverview">查看完整结论与策略拆解 ↓</a>';
   }
 
+  function decisionConditionChangeCount(changes) {
+    var value = changes && typeof changes === 'object' ? changes : {};
+    if (!Array.isArray(value.changed)) return null;
+    if (value.changed.length) return value.changed.length;
+    var coverage = value.condition_comparison && typeof value.condition_comparison === 'object'
+      ? value.condition_comparison : {};
+    if ((coverage.status === 'available' || coverage.status === 'partial')
+        && coverage.changed_count === 0) return 0;
+    return value.status === 'available' ? 0 : null;
+  }
+
   function renderDecisionChangesSummary(changes, compact) {
     var value = changes && typeof changes === 'object' ? changes : {};
     var status = normalizeString(value.status).trim();
-    var counts = '新增 ' + asArray(value.added).length + ' · 移出 '
-      + asArray(value.removed).length + ' · 条件变化 ' + asArray(value.changed).length;
+    var membership = value.membership && typeof value.membership === 'object' ? value.membership : {};
+    var membersKnown = membership.status === 'available'
+      && Array.isArray(membership.added) && Array.isArray(membership.removed);
+    var conditionCount = decisionConditionChangeCount(value);
+    var counts = '新增 ' + (membersKnown ? membership.added.length : '—') + ' · 移出 '
+      + (membersKnown ? membership.removed.length : '—') + ' · 条件变化 '
+      + (conditionCount === null ? '—' : conditionCount);
+    if (!membersKnown) return (membership.reason === 'no_previous_report'
+      ? '暂无可核验的上份报告：' : '成员比较未核验：') + counts;
     if (status === 'available') return '较前期：' + counts;
     if (status === 'partial') {
       var suffix = value.value_comparison_status === 'unavailable_price_basis_missing'
@@ -3578,7 +3596,11 @@
       comparison_contract_unavailable_or_changed: '身份合同缺失，未比较',
       comparison_health_unavailable: '事实健康度不足，未比较',
     };
-    return reasons[normalizeString(value.reason).trim()] || '跨期暂无同口径结论';
+    var reason = normalizeString(value.reason).trim();
+    var reasonText = reasons[reason] || '同口径依据未记录';
+    var unavailablePart = reason.indexOf('price_basis_') === 0
+      ? '价格未比较' : '策略/条件未比较';
+    return '较前期（成员已核验）：' + counts + '；' + unavailablePart + '：' + reasonText;
   }
 
   function decisionChangeCode(entry) {
@@ -3605,12 +3627,29 @@
 
   function decisionChangeReason(entry, changes, code) {
     var value = entry && typeof entry === 'object' ? entry : {};
-    var reasons = changes && changes.value_unavailable_reasons
-      && typeof changes.value_unavailable_reasons === 'object'
-      ? changes.value_unavailable_reasons : {};
+    var strategyReasons = changes && changes.unavailable_reasons
+      && typeof changes.unavailable_reasons === 'object' ? changes.unavailable_reasons : {};
+    var priceReasons = changes && changes.value_unavailable_reasons
+      && typeof changes.value_unavailable_reasons === 'object' ? changes.value_unavailable_reasons : {};
+    var labels = [];
+    var strategyCode = normalizeString(strategyReasons[code]).trim();
+    var priceCode = normalizeString(priceReasons[code]).trim();
+    if (asArray(changes && changes.unavailable_codes).some(function (item) { return decisionChangeCode(item) === code; })) {
+      labels.push('策略/条件不可比：' + ({
+        candidate_strategy_unavailable: '策略运行或身份不可核验',
+        candidate_evidence_unavailable: '候选证据不可核验',
+        version_conflict: '策略版本冲突',
+      }[strategyCode] || '原因未记录'));
+    }
+    if (asArray(changes && changes.value_unavailable_codes).some(function (item) { return decisionChangeCode(item) === code; })) {
+      labels.push('价格不可比：' + ({
+        price_basis_missing: '价基缺失', price_basis_changed: '价基变化',
+        price_basis_invalid: '价基声明无效', price_basis_conflict: '价基冲突',
+      }[priceCode] || '原因未记录'));
+    }
+    if (labels.length) return labels.join('；');
     var reason = normalizeString(value.reason || value.change_reason || value.why
-      || value.status_reason || reasons[code]
-      || (changes && (changes.value_comparison_reason || changes.reason))).trim();
+      || value.status_reason || (changes && (changes.value_comparison_reason || changes.reason))).trim();
     var labels = {
       price_basis_missing: '价基缺失，价格数值不可比',
       price_basis_changed: '价基变化，价格数值不可比',
@@ -3621,33 +3660,64 @@
       comparison_health_unavailable: '事实健康度不足，不能作完整比较',
     };
     if (labels[reason]) return labels[reason];
-    if (reason) return reason;
+    if (reason) return '比较原因未记录';
     var fields = decisionChangeFieldText(entry);
     return fields ? '变化字段：' + fields : '';
   }
 
-  function decisionChangeName(entry, projection) {
+  function decisionChangePreviousItem(entry, changes) {
     var code = decisionChangeCode(entry);
+    var membership = changes && changes.membership || {};
+    var old = membership.previous_items && membership.previous_items[code];
+    return old && typeof old === 'object' ? old : null;
+  }
+
+  function decisionChangeBoundItem(entry, projection, changes, kind) {
+    if (kind === 'removed') return decisionChangePreviousItem(entry, changes);
+    var code = decisionChangeCode(entry);
+    var current = asArray(projection && projection.items).find(function (item) {
+      return decisionChangeCode(item) === code;
+    }) || null;
+    if (current) return current;
+    return kind === 'unavailable' || kind === 'changed'
+      ? decisionChangePreviousItem(entry, changes) : null;
+  }
+
+  function decisionChangeName(entry, projection, changes, kind) {
+    var found = decisionChangeBoundItem(entry, projection, changes, kind);
+    if (found) {
+      var bound = normalizeString(found.name || (found.candidate || {}).name).trim();
+      if (bound) return bound;
+    }
     var direct = entry && typeof entry === 'object'
       ? normalizeString(entry.name || entry.stock_name).trim() : '';
     if (direct) return direct;
-    var items = projection && Array.isArray(projection.items) ? projection.items : [];
-    var found = items.find(function (item) {
-      return decisionChangeCode(item) === code;
-    });
-    if (found) return normalizeString(found.name || (found.candidate || {}).name).trim();
-    return code;
+    return '名称未记录';
   }
 
-  function decisionChangeSource(entry, projection) {
+  function decisionChangeSource(entry, projection, changes, kind) {
     var value = entry && typeof entry === 'object' ? entry : {};
+    var found = decisionChangeBoundItem(entry, projection, changes, kind);
+    if (found) {
+      var sources = asArray(found.strategy_results).map(function (row) {
+        return row && row.strategy_id;
+      }).concat(asArray(found.source_refs).map(function (row) {
+        return row && row.view;
+      })).concat(asArray(found.sources).map(function (row) {
+        return row && typeof row === 'object' ? row.view : row;
+      })).map(function (source) { return normalizeString(source).trim(); }).filter(Boolean);
+      var unique = sources.filter(function (source, index) { return sources.indexOf(source) === index; });
+      if (unique.length) {
+        var names = unique.map(function (source) {
+          return comparisonStrategyLabel(source) + (source === 'observation_top5' ? '收录' : '');
+        });
+        if (found.page_status === 'watch_only') names.push('研究观察');
+        return names.join('、');
+      }
+    }
     var source = normalizeString(value.source_strategy || value.strategy_id
       || value.source || value.view).trim();
     if (source) return comparisonStrategyLabel(source);
-    var identities = projection && projection.comparison_contract
-      && Array.isArray(projection.comparison_contract.strategy_identities)
-      ? projection.comparison_contract.strategy_identities : [];
-    if (identities.length === 1) return comparisonStrategyLabel(identities[0].strategy_id);
     return '来源策略未单独记录';
   }
 
@@ -3726,20 +3796,29 @@
 
   function decisionChangeEntryText(kind, entry, projection, changes) {
     var code = decisionChangeCode(entry) || '未提供股票代码';
-    var name = decisionChangeName(entry, projection) || code;
-    var source = decisionChangeSource(entry, projection);
+    var name = decisionChangeName(entry, projection, changes, kind);
+    var source = decisionChangeSource(entry, projection, changes, kind);
     var value = entry && typeof entry === 'object' ? entry : {};
-    var date = normalizeString(value.report_date || value.date || projection.report_date).trim();
-    var phase = normalizeString(value.phase || projection.phase).trim();
+    var previousIdentity = decisionHistoryPreviousIdentity(changes);
+    var bound = decisionChangeBoundItem(entry, projection, changes, kind);
+    var previous = decisionChangePreviousItem(entry, changes);
+    var usesPrevious = kind === 'removed' || (bound && previous && bound === previous);
+    var date = normalizeString(usesPrevious ? ((bound && bound.report_date) || previousIdentity.date)
+      : (value.report_date || value.date || projection.report_date)).trim();
+    var phase = normalizeString(usesPrevious ? ((bound && bound.phase) || previousIdentity.phase)
+      : (value.phase || projection.phase)).trim();
     var reason = decisionChangeReason(entry, changes, code);
-    var label = kind === 'added' ? '本期加入当前集合'
+    var memberKnown = changes && changes.membership
+      && changes.membership.status === 'available';
+    var label = (kind === 'added' || kind === 'removed') && !memberKnown
+      ? '旧视图比较记录（完整成员未核验）'
+      : kind === 'added' ? '本期加入当前集合'
       : (kind === 'removed' ? '移出本期集合（不等于破位）'
         : (kind === 'unavailable' ? '部分字段不可比较' : '状态或条件变化'));
-    var previousIdentity = decisionHistoryPreviousIdentity(changes);
     var previousDate = kind === 'removed' && previousIdentity.date
       ? '上一有效快照 ' + previousIdentity.date : '';
-    var details = [source, date ? '当前 ' + date : '', previousDate,
-      phase ? '阶段 ' + phase : '', reason].filter(Boolean).join(' · ');
+    var details = [source, date ? (usesPrevious ? '上份 ' : '当前 ') + date : '', previousDate,
+      phase ? '阶段 ' + (phase === 'formal' ? '收盘报告' : phase) : '', reason].filter(Boolean).join(' · ');
     var view = normalizeString(value.view || value.source_strategy || value.strategy_id).trim();
     var currentCandidate = findCurrentCandidateForCode(code, view);
     var currentAction = currentCandidate
@@ -3769,10 +3848,11 @@
       ? source.changes : (source || {});
     var nested = value.previous_snapshot && typeof value.previous_snapshot === 'object'
       ? value.previous_snapshot : {};
+    var member = value.membership && typeof value.membership === 'object' ? value.membership : {};
     return {
-      date: normalizeString(value.previous_report_date || nested.report_date || nested.date).trim(),
-      phase: normalizeString(value.previous_phase || nested.phase).trim(),
-      snapshot: normalizeString(value.previous_snapshot_id || nested.snapshot_id || nested.id).trim(),
+      date: normalizeString(value.previous_report_date || member.previous_report_date || nested.report_date || nested.date).trim(),
+      phase: normalizeString(value.previous_phase || member.previous_phase || nested.phase).trim(),
+      snapshot: normalizeString(value.previous_snapshot_id || member.previous_snapshot_id || nested.snapshot_id || nested.id).trim(),
       version: normalizeString(value.previous_version || nested.version).trim(),
       priceBasis: nested.price_basis || value.previous_price_basis || value.previous_price_basis_id || '',
     };
@@ -4235,7 +4315,7 @@
       || (projection.snapshot || {}).version).trim();
     var identity = [
       previousDate ? '上一有效交易快照 ' + previousDate : '上一有效交易快照未记录',
-      previousPhase ? '上一阶段 ' + previousPhase : '',
+      previousPhase ? '上一阶段 ' + (previousPhase === 'formal' ? '收盘报告' : previousPhase) : '',
       previousSnapshot ? '上一快照标识 ' + decisionIdentityToken(previousSnapshot) : '',
       previousVersion ? '上一版本 ' + previousVersion : '',
       currentSnapshot ? '当前快照标识 ' + decisionIdentityToken(currentSnapshot) : '',
@@ -4252,33 +4332,71 @@
     } else {
       statusText = '跨期比较未完整，不能确认跨期是否变化；保留当前记录与历史缺口。';
     }
+    var memberBasis = changes.membership && typeof changes.membership === 'object'
+      ? changes.membership : {};
+    if (memberBasis.status === 'available') {
+      statusText += ' 完整成员清单已核验；策略与价格字段按各自证据比较。';
+    } else if (memberBasis.reason === 'no_previous_report') {
+      statusText = '暂无可核验的上份报告；当前清单照常展示，加入与移出未比较。';
+    } else if (memberBasis.source === 'legacy_json_view') {
+      statusText += ' 仅保留旧数据视图中的局部记录，上次完整展示清单未核验。';
+    }
+    if (asArray(memberBasis.skipped).length) {
+      var skipReasons = {
+        published_phase_unverified: '阶段未核验', report_json_missing: '日报缺失',
+        report_json_invalid: '日报损坏', report_date_conflict: '日期冲突',
+        ambiguous_or_invalid_bootstrap: '归档内容无效',
+        published_snapshot_identity_conflict: '快照身份冲突',
+        published_snapshot_missing: '发布快照缺失',
+      };
+      statusText += ' 已跳过 ' + asArray(memberBasis.skipped).map(function (row) {
+        var date = normalizeString(row && row.report_date).trim();
+        var reason = skipReasons[normalizeString(row && row.reason).trim()] || '依据未核验';
+        return (date ? date + ' ' : '') + reason;
+      }).join('、') + (memberBasis.status === 'available' && previousPhase === 'formal'
+        ? '，使用最近可核验报告。' : '；未找到可比收盘依据。');
+    }
     var reason = decisionChangeReason({}, changes, '');
     if (status !== 'available' && reason) statusText += ' 原因：' + reason + '。';
+    var membership = changes.membership && typeof changes.membership === 'object' ? changes.membership : {};
+    var memberKnown = membership.status === 'available'
+      && Array.isArray(membership.added) && Array.isArray(membership.removed);
     var groups = [
       ['added', '加入当前集合', '本期没有新增记录'],
       ['removed', '移出当前集合', '本期没有移出记录'],
       ['changed', '状态/条件变化', '本期没有已登记的状态或条件变化'],
     ];
-    var changedCodes = asArray(changes.changed).map(decisionChangeCode);
-    var unavailableCodes = asArray(changes.value_unavailable_codes || changes.unavailable_codes)
-      .filter(function (code) { return changedCodes.indexOf(decisionChangeCode(code)) === -1; });
+    var unavailableCodes = asArray(changes.unavailable_codes)
+      .concat(asArray(changes.value_unavailable_codes)).map(decisionChangeCode)
+      .filter(function (code, index, all) { return code && all.indexOf(code) === index; });
     if (unavailableCodes.length) {
       groups.push(['unavailable', '部分字段不可比较', '本期没有单股不可比较记录']);
     }
     var lists = groups.map(function (group) {
       var entries = group[0] === 'unavailable'
         ? unavailableCodes.map(function (code) { return { code: code }; })
-        : asArray(changes[group[0]]);
+        : group[0] === 'added' || group[0] === 'removed'
+          ? (memberKnown ? asArray(membership[group[0]]) : asArray(changes[group[0]]))
+          : asArray(changes[group[0]]);
+      var conditionCount = group[0] === 'changed'
+        ? decisionConditionChangeCount(changes) : null;
+      var count = (group[0] === 'added' || group[0] === 'removed') && !memberKnown
+        ? '—' : group[0] === 'changed' && conditionCount === null ? '—' : entries.length;
+      var emptyText = group[0] === 'changed'
+        ? conditionCount === null ? '条件变化未比较'
+          : status === 'available' ? group[2] : '已比较的成员没有登记字段变化'
+        : (group[0] === 'added' || group[0] === 'removed') && !memberKnown
+          ? '成员比较未核验' : group[2];
       return '<section class="decision-change-group" id="decision-change-group-' + escapeHtml(group[0])
         + '" data-change-group="' + group[0] + '">'
         + '<h4><button type="button" class="decision-change-count" data-change-group-toggle="'
         + escapeHtml(group[0]) + '" aria-controls="decision-change-group-' + escapeHtml(group[0]) + '">'
-        + escapeHtml(group[1]) + ' <span>' + entries.length + '</span></button></h4>'
+        + escapeHtml(group[1]) + ' <span>' + count + '</span></button></h4>'
         + (entries.length
           ? '<ul>' + entries.map(function (entry) {
             return decisionChangeEntryText(group[0], entry, projection, changes);
           }).join('') + '</ul>'
-          : '<p>' + escapeHtml(group[2]) + '</p>') + '</section>';
+          : '<p>' + escapeHtml(emptyText) + '</p>') + '</section>';
     }).join('');
     var html = '<section class="decision-changes-panel" aria-label="跨期变化复盘">'
       + '<header><div><h3>变化复盘</h3><p>' + escapeHtml(statusText) + '</p></div>'

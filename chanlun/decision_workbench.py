@@ -882,9 +882,119 @@ def _identity_groups(contract):
     return groups
 
 
+def _previous_member_summaries(previous):
+    def source_views(row):
+        values = []
+        for source in _seq(row.get('sources')):
+            view = source.get('view') if isinstance(source, dict) else source
+            if isinstance(view, str) and view in VIEW_ORDER and view not in values:
+                values.append(view)
+        return values
+
+    def source_refs(row):
+        values = []
+        for source in _seq(row.get('source_refs')):
+            if not isinstance(source, dict) or source.get('view') not in VIEW_ORDER:
+                continue
+            clean = {'view': source['view']}
+            raw_ref = source.get('ref')
+            if isinstance(raw_ref, dict):
+                ref = {}
+                for key in ('pool', 'source_pool'):
+                    value = raw_ref.get(key)
+                    if isinstance(value, str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}', value):
+                        ref[key] = value
+                code = raw_ref.get('code')
+                if isinstance(code, str) and re.fullmatch(r'\d{6}', code):
+                    ref['code'] = code
+                index = raw_ref.get('index')
+                if type(index) is int and index >= 0:
+                    ref['index'] = index
+                if ref:
+                    clean['ref'] = ref
+            values.append(clean)
+        return values
+
+    summaries = {}
+    for row in _seq(previous.get('items')):
+        if not isinstance(row, dict) or not isinstance(row.get('code'), str) \
+                or not re.fullmatch(r'\d{6}', row['code']):
+            continue
+        code = row['code']
+        if code in summaries:
+            continue
+        summaries[code] = {
+            'code': code, 'name': row.get('name') if isinstance(row.get('name'), str) else None,
+            'sources': source_views(row),
+            'source_refs': source_refs(row),
+            'strategy_results': [{
+                'strategy_id': strategy.get('strategy_id'), 'role': strategy.get('role'),
+            } for strategy in _seq(row.get('strategy_results'))
+                if isinstance(strategy, dict)
+                and strategy.get('strategy_id') in VIEW_ORDER
+                and isinstance(strategy.get('role'), str)
+                and re.fullmatch(r'[a-z][a-z0-9_]{0,31}', strategy['role'])],
+            'report_date': previous.get('report_date'), 'phase': previous.get('phase'),
+            'snapshot_id': previous.get('snapshot_id') if isinstance(previous.get('snapshot_id'), str)
+                and re.fullmatch(r'[A-Za-z0-9:._-]{1,128}', previous['snapshot_id']) else None,
+        }
+    return summaries
+
+
+def _membership_changes(current, previous):
+    """Compare full display membership independently of strategy and price."""
+    unknown = {'status': 'unavailable', 'added': None, 'removed': None,
+               'shared': None, 'previous_items': _previous_member_summaries(previous),
+               'previous_report_date': previous.get('report_date'),
+               'previous_phase': previous.get('phase'),
+               'previous_snapshot_id': previous.get('snapshot_id'),
+               'source': previous.get('comparison_source'),
+               'skipped': previous.get('comparison_skipped', [])}
+    if not previous:
+        return dict(unknown, reason='no_previous_report')
+    if previous.get('membership_status') != 'available':
+        return dict(unknown, reason=previous.get('membership_reason') or 'previous_membership_unverified')
+    if (not _text(current.get('phase')) or not _text(previous.get('phase'))
+            or current.get('phase') != previous.get('phase')
+            or current.get('report_date') <= _text(previous.get('report_date'))):
+        return dict(unknown, reason='phase_or_date_mismatch')
+    from chanlun.report_comparison import _review_identity
+    snapshots = []
+    for projection in (previous, current):
+        rows = projection.get('items')
+        if not isinstance(rows, list):
+            return dict(unknown, reason='member_list_missing')
+        by_id = {}
+        for row in rows:
+            if not isinstance(row, dict) or not _text(row.get('instrument_id')) or not _text(row.get('code')):
+                return dict(unknown, reason='member_identity_unverified')
+            identity = row['instrument_id']
+            canonical, status = _review_identity(row['code'], identity)
+            if status != 'verified' or canonical != identity:
+                return dict(unknown, reason='member_identity_unverified')
+            if identity in by_id:
+                return dict(unknown, reason='member_identity_conflict')
+            by_id[identity] = row
+        snapshots.append(by_id)
+    before, after = snapshots
+    return {
+        'status': 'available',
+        'added': [after[key]['code'] for key in sorted(after.keys() - before.keys())],
+        'removed': [before[key]['code'] for key in sorted(before.keys() - after.keys())],
+        'shared': [after[key]['code'] for key in sorted(after.keys() & before.keys())],
+        'previous_items': unknown['previous_items'],
+        'previous_report_date': previous.get('report_date'),
+        'previous_phase': previous.get('phase'),
+        'previous_snapshot_id': previous.get('snapshot_id'),
+        'source': previous.get('comparison_source'),
+        'skipped': previous.get('comparison_skipped', []),
+    }
+
+
 def _changes(current, previous):
     previous = _map(previous)
-    unavailable = {'status': 'comparison_unavailable'}
+    membership = _membership_changes(current, previous)
+    unavailable = {'status': 'comparison_unavailable', 'membership': membership}
     if not previous:
         return unavailable
     if current['phase'] != previous.get('phase') or current['report_date'] < _text(previous.get('report_date')):
@@ -1010,11 +1120,22 @@ def _changes(current, previous):
             if basis_compatible:
                 changed.append(after[key]['code'])
     result = {'status': 'partial' if unavailable_codes or health_unavailable or unavailable_strategies or changed_identity_groups or value_unavailable or contract.get('price_basis_invalid') or old_contract.get('price_basis_invalid') else 'available',
+            'membership': membership,
             'previous_report_date': previous.get('report_date'),
             'previous_phase': previous.get('phase'),
             'added': [after[k]['code'] for k in sorted(after.keys() - before.keys())],
             'removed': [before[k]['code'] for k in sorted(before.keys() - after.keys())],
             'changed': changed}
+    compared_count = len(before.keys() & after.keys())
+    condition_status = (
+        'available' if result['status'] == 'available' else
+        'partial' if compared_count and not health_unavailable else 'unavailable'
+    )
+    result['condition_comparison'] = {
+        'status': condition_status,
+        'compared_count': compared_count,
+        'changed_count': len(changed) if condition_status != 'unavailable' else None,
+    }
     if unavailable_codes:
         result['unavailable_codes'] = unavailable_codes
         result['unavailable_reasons'] = {
