@@ -806,3 +806,11 @@ https://github.com/breakaway4here-arch/ChanlunStrategy/blob/608457b2b1f676d541be
 - 主进程最终相关回归、独立审查结果及实际合并/上线回读按本次发布回执记录；合并之前不称已上线。计划中历史“本地交付/未发布”均为当时记录，现授权仅替代本批发布等待，不迁移其他任务的旧授权或完整清单。
 
 - 最终冻结版主进程35模块706项全部通过，日志 /private/tmp/chanlun-ui-release-20261010-final-verified-tests.log；实际producer→JS六组再次通过，core/前端/产物独立复审无剩余本批阻断，允许按最新授权创建MR并合main发布。实际线上结果由发布回执单独核验。
+
+
+### 2026-10-10 正式页面回读与当前详情入口补丁
+
+- 首批[PR #16](https://github.com/breakaway4here-arch/ChanlunStrategy/pull/16)已 squash 合 main d3e0d749，Pages run38017149880成功，26个线上文件与该提交逐字节一致。实际运行检出持共享锁快进，保留两份删除HTML和compare当时原字节；100项原JSON/业务账本/数据库哈希未变，原根产品脏改动与并行研究成果保留。没有手工重跑、写库、补数或通知。
+- 真实默认页面发现桌面当前详情入口受空主推隐藏：requestedView为空时仍留decision_formal，列表刷新清选中并保持is-unified-empty。此前浏览器先切全部视图，未覆盖该默认路径；不能以旧脚本通过代替真实入口验收。隔离树从最新main创建codex/ui-current-detail-20261010，沿用已授权配置做最短导航修复。
+- 所有目标视图先解析实际导航别名并核存在目标，用最终selection中的绑定对象打开。仅清除挡住该明确目标的阅读筛选并同步板块反馈，扩可见limit到目标位置；不改集合、原顺序、正式角色、策略或取图价基。空码拒绝，raw main不能因别名转formal空而错读；合法来源视图保留同一ref。
+- 新反例默认空正式池先失败、修后通过；前20外、查询/板块/状态、别名和raw来源的真实列表/active/detail绑定均覆盖，独立code review无本批阻断。源和docs JS一致，18HTML仅query更新，所有WB/原始JSON不改；资源42a4995bb7db。最终相关回归及默认桌面/手机实际效果按补丁发布回执确认。

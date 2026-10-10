@@ -3798,23 +3798,51 @@
 
   function openCurrentCandidateDetail(code, requestedView) {
     var targetCode = toCodeKey(code);
-    var candidate = findCurrentCandidateForCode(targetCode, requestedView);
-    if (!candidate) return false;
+    if (!targetCode) return false;
     var views = getCandidateViews().views || {};
-    var destination = normalizeString(requestedView).trim();
-    if (!destination || !views[destination]
-        || !asArray(views[destination]).some(function (item) {
-          return toCodeKey(item && item.code) === targetCode;
-        })) {
-      destination = state.currentView;
-    }
-    if (destination && destination !== state.currentView && views[destination]) {
+    var requested = resolvePrimaryNavigationState(requestedView).viewKey;
+    var current = resolvePrimaryNavigationState(state.currentView).viewKey;
+    var order = [requested, current, 'decision_all'].concat(Object.keys(views).map(function (key) {
+      return resolvePrimaryNavigationState(key).viewKey;
+    }));
+    var destination = order.find(function (key) {
+      return key && asArray(views[key]).some(function (item) {
+        return toCodeKey(item && item.code) === targetCode;
+      });
+    });
+    if (!destination) return false;
+    var originalQuery = state.candidateQuery;
+    if (destination !== state.currentView) {
       activateWorkspaceView(destination, false);
-      candidate = findCurrentCandidateForCode(targetCode, destination) || candidate;
+      state.candidateQuery = originalQuery;
+      if (nodes.candidateSearch) nodes.candidateSearch.value = originalQuery;
     }
-    state.candidateQuery = '';
-    state.candidateLimit = Math.max(Number(state.candidateLimit) || 20, 20);
-    if (nodes.candidateSearch) nodes.candidateSearch.value = '';
+    var matchesTarget = function (item) {
+      return toCodeKey(item && item.code) === targetCode;
+    };
+    var selection = getCandidateSelection(destination);
+    if (!selection.statusItems.some(matchesTarget) && selection.statusFilter) {
+      state.decisionStatusFilter = '';
+      renderViewDescription();
+      selection = getCandidateSelection(destination);
+    }
+    if (!selection.sectorItems.some(matchesTarget)
+        && (state.sectorFilter || state.sectorFilterCode || asArray(state.sectorFilterRefs).length)) {
+      state.sectorFilter = '';
+      state.sectorFilterCode = '';
+      state.sectorFilterRefs = [];
+      renderFundingMainlineStrip();
+      selection = getCandidateSelection(destination);
+    }
+    if (!selection.items.some(matchesTarget) && state.candidateQuery) {
+      state.candidateQuery = '';
+      if (nodes.candidateSearch) nodes.candidateSearch.value = '';
+      selection = getCandidateSelection(destination);
+    }
+    var index = selection.items.findIndex(matchesTarget);
+    if (index < 0) return false;
+    var candidate = selection.items[index];
+    state.candidateLimit = Math.max(Number(state.candidateLimit) || 20, index + 1);
     beginCandidateSelection(candidate);
     refreshCandidateWorkspace();
     renderCandidateDetail(candidate);

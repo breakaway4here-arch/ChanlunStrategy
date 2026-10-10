@@ -148,6 +148,125 @@ class B2ProducerTests(PublishedMembershipComparisonTests):
 
 
 class B2FrontendTests(unittest.TestCase):
+    def test_current_detail_opens_bound_target_from_empty_formal_and_blocked_reading_filters(self):
+        _assert_node_contract(self,
+            "({ open:openCurrentCandidateDetail, setup:normalizeWorkspace, state:state, nodes:nodes, "
+            "selection:getCandidateSelection, withViews:function(views,action) { "
+            "var original=getCandidateViews; getCandidateViews=function(){return {views:views,meta:{}};}; "
+            "try { return action(); } finally { getCandidateViews=original; } } })", r'''
+function element() {
+  const classes = new Set();
+  const node = { children: [], attrs: {}, hidden: false, textContent: '',
+    setAttribute: function(k,v) { this.attrs[k]=String(v); },
+    getAttribute: function(k) { return this.attrs[k] || null; },
+    appendChild: function(x) { this.children.push(x); return x; },
+    querySelector: function() { return null; }, querySelectorAll: function() { return []; },
+    addEventListener: function() {}, focus: function() {},
+    classList: { add: function(k) { classes.add(k); },
+      remove: function(k) { classes.delete(k); },
+      toggle: function(k,v) { if(v) classes.add(k); else classes.delete(k); },
+      contains: function(k) { return classes.has(k); } }
+  };
+  let html='';
+  Object.defineProperty(node,'innerHTML',{get:function(){return html;},
+    set:function(v){html=String(v||''); if(!html) this.children=[];}});
+  return node;
+}
+document.createElement=element; document.body=element();
+const t=globalThis.__auxTest;
+function record(index) {
+  const code=String(600000+index), name=index===25?'目标研究股':'股票'+index;
+  return { id:'row:'+code, instrument_id:'SH'+code, code:code, name:name,
+    sector:index===25?'目标板块':'其他板块', page_status:'watch_only',
+    status_label:'研究观察', formal_action:null, is_executable:false,
+    candidate:{code:code,name:name,sector:index===25?'目标板块':'其他板块',
+      ref:{pool:'baseline',code:code},action_semantics:'watch_only'},
+    strategy_results:[{strategy_id:'baseline',role:'research',
+      action_semantics:'watch_only',page_status:'watch_only'}]};
+}
+const rows=Array.from({length:25},function(_,index){return record(index+1);});
+const data={date:'2026-10-09',workspace:{default_view:'decision_formal',
+  views:{baseline:rows.map(function(row){return row.candidate;})},
+  view_meta:{baseline:{role:'research',action_semantics:'watch_only',
+    availability:{state:'available'}}}}};
+window.CHANLUN_BOOTSTRAP={pageDate:'2026-10-09',decisionWorkbench:{
+  schema_version:'decision-workbench-v1',report_date:'2026-10-09',phase:'formal',
+  items:rows,featured_ids:[]}};
+t.state.data=data; t.setup(data); t.state.currentView='decision_formal';
+t.state.candidateQuery=''; t.state.candidateLimit=20;
+t.state.sectorFilter='';t.state.sectorFilterCode='';t.state.sectorFilterRefs=[];
+t.state.decisionStatusFilter='';t.state.activeItem=null;t.state.activeCandidateKey='';
+t.state.detailCandidateKey='';t.state.detailTarget=null;t.state.chartInstance=null;
+t.state.chartMount=null;t.state.isMobile=false;
+t.nodes.tabs=null;t.nodes.description=null;t.nodes.sectorStrip=null;
+t.nodes.candidateList=element();t.nodes.detailPanel=element();
+t.nodes.workspaceBody=element();t.nodes.candidateTools=null;
+t.nodes.candidateCount=element();t.nodes.candidateMore=element();
+t.nodes.candidateSearch=element();t.nodes.candidateSearch.value='';
+t.nodes.candidateEvidenceComparison=null;t.nodes.candidateQuickComparison=null;
+t.nodes.drawerContent=null;
+
+assert(t.selection('decision_formal').items.length===0,'fixture formal must be empty');
+assert(t.open('600025',''), 'default current detail did not open');
+let selection=t.selection(t.state.currentView);
+assert(t.state.currentView==='decision_all','empty formal view kept current target hidden');
+assert(selection.visibleItems.some(function(row){return row.code==='600025';}),
+  'target beyond first 20 was not made visible');
+assert(t.state.activeItem.workbench_item===selection.items.find(function(row){return row.code==='600025';}).workbench_item,
+  'active target is not the selected view row');
+assert(!t.nodes.workspaceBody.classList.contains('is-unified-empty'),
+  'current detail remains hidden by empty view CSS');
+assert(t.nodes.detailPanel.innerHTML.includes('目标研究股'),
+  'current target detail was not rendered');
+assert(!t.state.activeItem.workbench_item ||
+  t.state.activeItem.workbench_item.strategy_results[0].role==='research',
+  'research role was promoted to formal');
+
+t.state.currentView='decision_all';t.state.candidateLimit=20;
+t.state.candidateQuery='600001';t.nodes.candidateSearch.value='600001';
+t.state.sectorFilter='其他板块';t.state.sectorFilterCode='';t.state.sectorFilterRefs=[];
+assert(t.open('600025','main'),'resolved main alias kept a target-free formal view');
+selection=t.selection(t.state.currentView);
+assert(t.state.currentView==='decision_all' && t.state.candidateQuery==='' &&
+  t.state.sectorFilter==='' && t.nodes.candidateSearch.value==='',
+  'blocking reading filters were not cleared for explicit target');
+assert(selection.visibleItems.some(function(row){return row.code==='600025';}) &&
+  t.state.activeItem.workbench_item===selection.items.find(function(row){return row.code==='600025';}).workbench_item &&
+  t.nodes.detailPanel.innerHTML.includes('目标研究股'),
+  'filtered current target was replaced by first row or hidden');
+
+t.state.candidateQuery='目标研究股';t.nodes.candidateSearch.value='目标研究股';
+t.state.sectorFilter='目标板块';
+assert(t.open('600025','decision_all') && t.state.candidateQuery==='目标研究股'
+  && t.state.sectorFilter==='目标板块',
+  'matching reading filters were cleared unnecessarily');
+
+rows[0].page_status='formal_ready';rows[0].formal_action='可上车';
+rows[0].strategy_results[0].role='formal';
+t.state.currentView='decision_formal';t.state.decisionStatusFilter='formal_incomplete';
+t.state.candidateQuery='';t.state.sectorFilter='';
+assert(t.open('600001','main') && t.state.currentView==='decision_formal'
+  && t.state.decisionStatusFilter==='' && t.state.activeItem.code==='600001'
+  && t.nodes.detailPanel.innerHTML.includes('股票1'),
+  'status filter hid an explicit formal target');
+
+const rawOnly=record(26).candidate;
+t.state.currentView='decision_formal';
+const aliasOnly={main:[rawOnly],decision_formal:[],decision_all:[],baseline:[]};
+t.withViews(aliasOnly,function(){
+  assert(!t.open('600026','') && t.state.currentView==='decision_formal',
+    'raw main alias bypassed its target-free resolved formal view');
+});
+const sourceFallback={main:[rawOnly],decision_formal:[],decision_all:[],baseline:[rawOnly]};
+t.withViews(sourceFallback,function(){
+  assert(t.open('600026','') && t.state.currentView==='baseline'
+    && t.selection('baseline').visibleItems.some(function(row){return row.code==='600026';})
+    && t.state.activeItem.ref.pool==='baseline',
+    'valid source view was not selected after rejecting raw main alias');
+});
+assert(!t.open('',''), 'empty target code must not open a row');
+''')
+
     def test_structured_price_record_has_separate_count_and_no_condition_claim(self):
         _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
 const t=globalThis.__auxTest,day='2026-10-09';
