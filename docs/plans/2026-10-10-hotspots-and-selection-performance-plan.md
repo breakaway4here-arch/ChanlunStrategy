@@ -863,3 +863,13 @@ PYTHONDONTWRITEBYTECODE=1 /usr/bin/python3 scripts/build_selection_performance.p
 - 全功能浏览器资源f426ca3db5f2后只有PSY一句接入增量，最终906f3c7c7493在三视口复验默认可见7/12、58.3%，各仅一次；合成缺失显示不足，不补零。未授权根/归档均0次派生JSON请求、无表现指标；档案保留原访问错误，原根页显示行为未扩大修改。所有运行pageerror=0、非GET写请求=0、监听端口=0，各次Chrome PID子树经finally关闭后ps复查退出。
 - 截图及逐项记录目录为 `/private/tmp/chanlun-readability-acceptance-20261010/` 下 `final-real-v2`、`final-synthetic-v2`、`final-mobile-chart`、`unauthorized-root`、`unauthorized-archive`、`psy-final-real`、`psy-final-synthetic`。本地验收不冒充上线或下一次自然盘后构建已观察。
 - 回滚仅限本批源码、四项资源、HTML资源引用及新表现派生文件，保留之后新增报告、行情、登记和用户数据；不得整体还原docs/或数据库。
+
+### 2026-10-10 合并前复审与授权追加
+
+用户追加“做好 code review 然后合并到 main”，授权本批经审查的代码、静态资源与隔离派生结果通过PR合入远端main，替代上文该范围“尚未授权合并”的等待状态；不扩展到联网补240只、生产运行同步、部署命令、正式库写入、重跑或通知。目标main已重新拉取，仍为d411129f，产品提交为3ebb2f15，PR为[#18](https://github.com/breakaway4here-arch/ChanlunStrategy/pull/18)。原脏主工作区保持原状。
+
+两路独立只读复审覆盖后端发布名单/价基/题材截止/派生失败回退及前端集合/过滤/授权/资源；均判定现存启用范围可合并。主进程在最新目标分支同步后重跑754项（744通过、10项周末跳过、0失败/错误）及13项Node行为测试，复核四资源对应、18HTML业务内容及已保存的桌面/手机验收。GitHub此PR当时没有自动checks/statuses，不将其写成CI通过；合并仍按平台实际条件与精确head SHA执行并回查。
+
+保留条件性P2：`selection_performance.py`以任一来源的`incident_excluded`排除同股整笔观察；合成绑定收据中“正式来源被事故排除、研究来源有效”的证券，会连研究分组也被排除。主进程独立复现真实loader→evaluate→aggregate链，研究ready=0/excluded=1；现存312笔excluded_reason均为空，当前结果不受影响。按集合口径review第7条记录为后续风险，不扩大本批合并范围；引入相关事故历史或启用分来源有效收益前，必须按来源隔离排除并补前后端同集合回归。旧正式事故排除保护不因此弱化。
+
+以上是合并前审查与授权记录；实际合并是否成功、精确main SHA以PR和远端回查为准，不把授权或创建PR冒充已合并/上线。
