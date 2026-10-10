@@ -1,0 +1,335 @@
+{
+  "fixture_purpose": "B2 wording and price-basis comparison only; cropped, never publish as report",
+  "source_commit": "608457b2b1f676d541becb22efb8e4bc217246c6",
+  "snapshots": {
+    "2026-09-24": {
+      "report_date": "2026-09-24",
+      "phase": "formal",
+      "snapshot_id": "formal:2026-09-24:352fdc77656acbd2",
+      "membership_status": "available",
+      "health": {
+        "status": "verified",
+        "fact_blocking_reasons": []
+      },
+      "comparison_contract": {
+        "price_basis": null,
+        "price_basis_invalid": false,
+        "price_basis_status": "missing",
+        "price_basis_scope": null,
+        "strategy_version": {
+          "daily_fusion": "daily-fusion-close-v2",
+          "daily_pure": "daily-pure-close-v2",
+          "h4_t3": "h4_t3_k30_tail_safe_v1",
+          "luojie_pool": "luojie-15m-research-v2",
+          "next_day_boom": "next-day-boom-close-v1",
+          "observation_gate": "observation-gate-close-v1"
+        },
+        "strategy_run_status": {
+          "daily_pure": "ran",
+          "daily_fusion": "ran",
+          "observation_gate": "ran",
+          "next_day_boom": "disabled",
+          "luojie_pool": "partial",
+          "h4_t3": "verified_empty"
+        },
+        "strategy_identities": [
+          {
+            "strategy_id": "daily_fusion",
+            "strategy_version": "daily-fusion-close-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "picks_fusion",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "daily_pure",
+            "strategy_version": "daily-pure-close-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "picks_pure",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "h4_t3",
+            "strategy_version": "h4_t3_k30_tail_safe_v1",
+            "policy_version": "decision-v2",
+            "source_pool": "h4_t3_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "luojie_pool",
+            "strategy_version": "luojie-15m-research-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "luojie_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "next_day_boom",
+            "strategy_version": "next-day-boom-close-v1",
+            "policy_version": "decision-v2",
+            "source_pool": "next_day_boom",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 1,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "observation_gate",
+            "strategy_version": "observation-gate-close-v1",
+            "policy_version": "decision-v2",
+            "source_pool": "observation_watchlist",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          }
+        ]
+      },
+      "items": [
+        {
+          "instrument_id": "SH605366",
+          "code": "605366",
+          "name": "宏柏新材",
+          "page_status": "watch_only",
+          "formal_action": null,
+          "action_reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；突破20日平台；涨幅5.4%",
+          "primary_reason": "处于60日低位区间；放量2.4倍；站上MA5/MA10；突破20日平台；涨幅5.4%",
+          "next_confirmation": [],
+          "invalidation": [],
+          "watch_anchor": {
+            "status": "missing",
+            "value": null,
+            "source": "",
+            "reference_date": "",
+            "price_basis": null,
+            "purpose": "",
+            "missing_fields": [
+              "value",
+              "source",
+              "reference_date",
+              "price_basis",
+              "purpose"
+            ],
+            "reason": "缺少可验证观察锚点"
+          },
+          "reference_price": null,
+          "contracts": {},
+          "source_refs": [
+            {
+              "view": "highlights",
+              "ref": {
+                "pool": "picks_fusion",
+                "code": "605366"
+              }
+            },
+            {
+              "view": "baseline",
+              "ref": {
+                "pool": "picks_pure",
+                "code": "605366"
+              }
+            }
+          ],
+          "strategy_results": [
+            {
+              "strategy_id": "highlights",
+              "role": "research",
+              "candidate": {
+                "price_basis": null
+              }
+            },
+            {
+              "strategy_id": "baseline",
+              "role": "research",
+              "candidate": {
+                "price_basis": null
+              }
+            }
+          ]
+        }
+      ],
+      "source": {
+        "html_path": "docs/2026-09-24/index.html",
+        "html_sha256": "fc55bffb93a2dd639d053e6241a9e4f3fabfd78d68831a250b5ca779c8ee5777",
+        "html_size": 3183272,
+        "raw_path": "docs/data/2026-09-24.json",
+        "raw_sha256": "f21dff8b213c209b9e44390cf77288107d13aba86e3aa83417b30a0bb47c94e0",
+        "raw_size": 2056029,
+        "extraction": "sole executable inline CHANLUN_BOOTSTRAP.decisionWorkbench; 605366 and comparison contract/health only; candidate and Kline omitted",
+        "cropped": true
+      }
+    },
+    "2026-09-28": {
+      "report_date": "2026-09-28",
+      "phase": "formal",
+      "snapshot_id": "formal:2026-09-28:77e4b4d96513511c",
+      "membership_status": "available",
+      "health": {
+        "status": "verified",
+        "fact_blocking_reasons": []
+      },
+      "comparison_contract": {
+        "price_basis": null,
+        "price_basis_invalid": false,
+        "price_basis_status": "missing",
+        "price_basis_scope": null,
+        "strategy_version": {
+          "daily_fusion": "daily-fusion-close-v2",
+          "daily_pure": "daily-pure-close-v2",
+          "h4_t3": "h4_t3_k30_tail_safe_v1",
+          "luojie_pool": "luojie-15m-research-v2",
+          "next_day_boom": "next-day-boom-close-v1",
+          "observation_gate": "observation-gate-close-v1"
+        },
+        "strategy_run_status": {
+          "daily_pure": "ran",
+          "daily_fusion": "verified_empty",
+          "observation_gate": "ran",
+          "next_day_boom": "disabled",
+          "luojie_pool": "partial",
+          "h4_t3": "verified_empty"
+        },
+        "strategy_identities": [
+          {
+            "strategy_id": "daily_fusion",
+            "strategy_version": "daily-fusion-close-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "picks_fusion",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "daily_pure",
+            "strategy_version": "daily-pure-close-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "picks_pure",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "h4_t3",
+            "strategy_version": "h4_t3_k30_tail_safe_v1",
+            "policy_version": "decision-v2",
+            "source_pool": "h4_t3_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 3,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "luojie_pool",
+            "strategy_version": "luojie-15m-research-v2",
+            "policy_version": "decision-v2",
+            "source_pool": "luojie_pool",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "next_day_boom",
+            "strategy_version": "next-day-boom-close-v1",
+            "policy_version": "decision-v2",
+            "source_pool": "next_day_boom",
+            "entry_mode": "immediate_close",
+            "intended_horizon": 1,
+            "research_tier": null
+          },
+          {
+            "strategy_id": "observation_gate",
+            "strategy_version": "observation-gate-close-v1",
+            "policy_version": "decision-v2",
+            "source_pool": "observation_watchlist",
+            "entry_mode": "immediate_close",
+            "intended_horizon": null,
+            "research_tier": null
+          }
+        ]
+      },
+      "items": [
+        {
+          "instrument_id": "SH605366",
+          "code": "605366",
+          "name": "宏柏新材",
+          "page_status": "watch_only",
+          "formal_action": null,
+          "action_reason": "涨停当日不追，等待次日回踩确认",
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "watch_anchor": {
+            "status": "missing",
+            "value": null,
+            "source": "",
+            "reference_date": "",
+            "price_basis": null,
+            "purpose": "",
+            "missing_fields": [
+              "value",
+              "source",
+              "reference_date",
+              "price_basis",
+              "purpose"
+            ],
+            "reason": "缺少可验证观察锚点"
+          },
+          "reference_price": null,
+          "contracts": {},
+          "source_refs": [
+            {
+              "view": "confirming",
+              "ref": {
+                "pool": "startup_watchlist",
+                "code": "605366"
+              }
+            },
+            {
+              "view": "highlights",
+              "ref": {
+                "pool": "startup_watchlist",
+                "code": "605366"
+              }
+            }
+          ],
+          "strategy_results": [
+            {
+              "strategy_id": "confirming",
+              "role": "research",
+              "candidate": {
+                "price_basis": null
+              }
+            },
+            {
+              "strategy_id": "highlights",
+              "role": "research",
+              "candidate": {
+                "price_basis": null
+              }
+            }
+          ]
+        }
+      ],
+      "source": {
+        "html_path": "docs/2026-09-28/index.html",
+        "html_sha256": "468c7eea3888d6f8e81052d682ada2d4d304ee2778c7e6bea2914c5e0018965f",
+        "html_size": 2535524,
+        "raw_path": "docs/data/2026-09-28.json",
+        "raw_sha256": "124b2b184bcabeae99afb592528d8935bfa9eabcffcd30919c2837e3a9ed60c0",
+        "raw_size": 1844344,
+        "extraction": "sole executable inline CHANLUN_BOOTSTRAP.decisionWorkbench; 605366 and comparison contract/health only; candidate and Kline omitted",
+        "cropped": true
+      }
+    }
+  }
+}

@@ -1,0 +1,2046 @@
+{
+  "fixture_purpose": "A2 membership comparison only; cropped, never publish as report",
+  "snapshots": {
+    "2026-09-30": {
+      "cropped": true,
+      "extraction": "sole executable inline CHANLUN_BOOTSTRAP.decisionWorkbench; selected membership/name/source fields only",
+      "items": [
+        {
+          "code": "600577",
+          "instrument_id": "SH600577",
+          "name": "精达股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600577",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "000999",
+          "instrument_id": "SZ000999",
+          "name": "华润三九",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "000999",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "300890",
+          "instrument_id": "SZ300890",
+          "name": "翔丰华",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300890",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "300893",
+          "instrument_id": "SZ300893",
+          "name": "松原安全",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300893",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "300893",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            },
+            {
+              "ref": {
+                "code": "300893",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "observation_top5",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "000692",
+          "instrument_id": "SZ000692",
+          "name": "惠天热电",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "000692",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "000692",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            },
+            {
+              "ref": {
+                "code": "000692",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "observation_top5",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "300073",
+          "instrument_id": "SZ300073",
+          "name": "当升科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300073",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "300369",
+          "instrument_id": "SZ300369",
+          "name": "绿盟科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300369",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "603501",
+          "instrument_id": "SH603501",
+          "name": "豪威集团",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603501",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            },
+            {
+              "ref": {
+                "code": "603501",
+                "pool": "luojie_pool"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "luojie",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "002176",
+          "instrument_id": "SZ002176",
+          "name": "江特电机",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002176",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "002419",
+          "instrument_id": "SZ002419",
+          "name": "天虹股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002419",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "002419",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "601816",
+          "instrument_id": "SH601816",
+          "name": "京沪高铁",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601816",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002866",
+          "instrument_id": "SZ002866",
+          "name": "传艺科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002866",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "002866",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "601919",
+          "instrument_id": "SH601919",
+          "name": "中远海控",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601919",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002317",
+          "instrument_id": "SZ002317",
+          "name": "众生药业",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002317",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "002962",
+          "instrument_id": "SZ002962",
+          "name": "五方光电",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002962",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "002962",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "600072",
+          "instrument_id": "SH600072",
+          "name": "中船科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600072",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "600072",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "600406",
+          "instrument_id": "SH600406",
+          "name": "国电南瑞",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600406",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "600081",
+          "instrument_id": "SH600081",
+          "name": "东风科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600081",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "600081",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "601728",
+          "instrument_id": "SH601728",
+          "name": "中国电信",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601728",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "600592",
+          "instrument_id": "SH600592",
+          "name": "龙溪股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600592",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "600592",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "688099",
+          "instrument_id": "SH688099",
+          "name": "晶晨股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "688099",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "600663",
+          "instrument_id": "SH600663",
+          "name": "陆家嘴",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600663",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "600663",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "688225",
+          "instrument_id": "SH688225",
+          "name": "亚信安全",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "688225",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "603200",
+          "instrument_id": "SH603200",
+          "name": "上海洗霸",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603200",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "603590",
+          "instrument_id": "SH603590",
+          "name": "康辰药业",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603590",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "002454",
+          "instrument_id": "SZ002454",
+          "name": "松芝股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002454",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600131",
+          "instrument_id": "SH600131",
+          "name": "国网信通",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600131",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "603906",
+          "instrument_id": "SH603906",
+          "name": "龙蟠科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603906",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "603127",
+          "instrument_id": "SH603127",
+          "name": "昭衍新药",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603127",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "605288",
+          "instrument_id": "SH605288",
+          "name": "凯迪股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "605288",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        }
+      ],
+      "phase": "formal",
+      "report_date": "2026-09-30",
+      "snapshot_id": "formal:2026-09-30:706ca48d2e51b336",
+      "source_bytes": 4957132,
+      "source_path": "docs/2026-09-30/index.html",
+      "source_sha256": "4b6d28a59559ff4ddfbc49cfed5b5b72ae6b1773100f885fd3048aa83f4d51bd"
+    },
+    "2026-10-08": {
+      "cropped": true,
+      "extraction": "sole executable inline CHANLUN_BOOTSTRAP.decisionWorkbench; selected membership/name/source fields only",
+      "items": [
+        {
+          "code": "002352",
+          "instrument_id": "SZ002352",
+          "name": "顺丰控股",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002352",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            },
+            {
+              "ref": {
+                "code": "002352",
+                "pool": "luojie_pool"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "luojie",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "300530",
+          "instrument_id": "SZ300530",
+          "name": "领湃科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300530",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "300530",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            },
+            {
+              "ref": {
+                "code": "300530",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "observation_top5",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "301168",
+          "instrument_id": "SZ301168",
+          "name": "通灵股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "301168",
+                "pool": "picks_fusion"
+              },
+              "view": "highlights"
+            },
+            {
+              "ref": {
+                "code": "301168",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "highlights",
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            },
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "600977",
+          "instrument_id": "SH600977",
+          "name": "XD中国电",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600977",
+                "pool": "picks_fusion"
+              },
+              "view": "highlights"
+            },
+            {
+              "ref": {
+                "code": "600977",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "highlights",
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            },
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "601728",
+          "instrument_id": "SH601728",
+          "name": "中国电信",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601728",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002866",
+          "instrument_id": "SZ002866",
+          "name": "传艺科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002866",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "002866",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            },
+            {
+              "ref": {
+                "code": "002866",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "observation_top5",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "300045",
+          "instrument_id": "SZ300045",
+          "name": "华力创通",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300045",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "601816",
+          "instrument_id": "SH601816",
+          "name": "京沪高铁",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601816",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "603026",
+          "instrument_id": "SH603026",
+          "name": "石大胜华",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603026",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "603200",
+          "instrument_id": "SH603200",
+          "name": "上海洗霸",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603200",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "603200",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "300164",
+          "instrument_id": "SZ300164",
+          "name": "通源石油",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300164",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "601872",
+          "instrument_id": "SH601872",
+          "name": "招商轮船",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601872",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "603906",
+          "instrument_id": "SH603906",
+          "name": "龙蟠科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603906",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "603906",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "002415",
+          "instrument_id": "SZ002415",
+          "name": "海康威视",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002415",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "600026",
+          "instrument_id": "SH600026",
+          "name": "中远海能",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600026",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "000869",
+          "instrument_id": "SZ000869",
+          "name": "张  裕Ａ",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "000869",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "000869",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "002563",
+          "instrument_id": "SZ002563",
+          "name": "森马服饰",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002563",
+                "pool": "picks_pure"
+              },
+              "view": "baseline"
+            }
+          ],
+          "sources": [
+            "baseline"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "baseline"
+            }
+          ]
+        },
+        {
+          "code": "300890",
+          "instrument_id": "SZ300890",
+          "name": "翔丰华",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "300890",
+                "pool": "observation_watchlist"
+              },
+              "view": "observation_top5"
+            }
+          ],
+          "sources": [
+            "observation_top5"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "observation_top5"
+            }
+          ]
+        },
+        {
+          "code": "601919",
+          "instrument_id": "SH601919",
+          "name": "中远海控",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601919",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002058",
+          "instrument_id": "SZ002058",
+          "name": "威尔泰",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002058",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            },
+            {
+              "ref": {
+                "code": "002058",
+                "pool": "startup_watchlist"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "confirming",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "603606",
+          "instrument_id": "SH603606",
+          "name": "东方电缆",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603606",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002805",
+          "instrument_id": "SZ002805",
+          "name": "丰元股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002805",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600312",
+          "instrument_id": "SH600312",
+          "name": "平高电气",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600312",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "600513",
+          "instrument_id": "SH600513",
+          "name": "联环药业",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600513",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600617",
+          "instrument_id": "SH600617",
+          "name": "国新能源",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600617",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "601006",
+          "instrument_id": "SH601006",
+          "name": "大秦铁路",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601006",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "600812",
+          "instrument_id": "SH600812",
+          "name": "华北制药",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600812",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "688018",
+          "instrument_id": "SH688018",
+          "name": "乐鑫科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "688018",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "000400",
+          "instrument_id": "SZ000400",
+          "name": "许继电气",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "000400",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "001336",
+          "instrument_id": "SZ001336",
+          "name": "楚环科技",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "001336",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600089",
+          "instrument_id": "SH600089",
+          "name": "特变电工",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600089",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            },
+            {
+              "ref": {
+                "code": "600089",
+                "pool": "luojie_pool"
+              },
+              "view": "highlights"
+            }
+          ],
+          "sources": [
+            "luojie",
+            "highlights"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            },
+            {
+              "role": "research",
+              "strategy_id": "highlights"
+            }
+          ]
+        },
+        {
+          "code": "002490",
+          "instrument_id": "SZ002490",
+          "name": "山东墨龙",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002490",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600406",
+          "instrument_id": "SH600406",
+          "name": "国电南瑞",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600406",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002565",
+          "instrument_id": "SZ002565",
+          "name": "顺灏股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002565",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "600577",
+          "instrument_id": "SH600577",
+          "name": "精达股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "600577",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "603863",
+          "instrument_id": "SH603863",
+          "name": "松炀资源",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "603863",
+                "pool": "startup_watchlist"
+              },
+              "view": "confirming"
+            }
+          ],
+          "sources": [
+            "confirming"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "confirming"
+            }
+          ]
+        },
+        {
+          "code": "605196",
+          "instrument_id": "SH605196",
+          "name": "华通线缆",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "605196",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "688099",
+          "instrument_id": "SH688099",
+          "name": "晶晨股份",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "688099",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "001317",
+          "instrument_id": "SZ001317",
+          "name": "三羊马",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "001317",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "601975",
+          "instrument_id": "SH601975",
+          "name": "招商南油",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "601975",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "002882",
+          "instrument_id": "SZ002882",
+          "name": "金龙羽",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "002882",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        },
+        {
+          "code": "000503",
+          "instrument_id": "SZ000503",
+          "name": "国新健康",
+          "page_status": "watch_only",
+          "source_refs": [
+            {
+              "ref": {
+                "code": "000503",
+                "pool": "luojie_pool"
+              },
+              "view": "luojie"
+            }
+          ],
+          "sources": [
+            "luojie"
+          ],
+          "strategy_results": [
+            {
+              "role": "research",
+              "strategy_id": "luojie"
+            }
+          ]
+        }
+      ],
+      "phase": "formal",
+      "report_date": "2026-10-08",
+      "snapshot_id": "formal:2026-10-08:d662ae9d9803bc18",
+      "source_bytes": 6160038,
+      "source_path": "docs/2026-10-08/index.html",
+      "source_sha256": "3a6551a327424edf37add1e5cce2818936b2ad240bd6b8e844090bf7e638338a"
+    }
+  },
+  "source_commit": "608457b2b1f676d541becb22efb8e4bc217246c6"
+}

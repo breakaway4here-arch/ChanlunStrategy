@@ -1,17 +1,19 @@
 """Frontend contracts for the narrow historical Luojie source-view recovery."""
 
+import gzip
+import hashlib
+import json
 import unittest
+from pathlib import Path
 
 from tests.test_auxiliary_frontend import _assert_node_contract
 
 
 FIXTURE = r"""
 function archivedBootstrap() {
-  const html = fs.readFileSync('docs/2026-09-14/index.html', 'utf8');
-  const bootstrapMarker = 'window.CHANLUN_BOOTSTRAP = ';
-  const start = html.indexOf(bootstrapMarker) + bootstrapMarker.length;
-  const end = html.indexOf(';\n  window.CHANLUN_BOOTSTRAP.dataBasePrefix', start);
-  return JSON.parse(html.slice(start, end));
+  const zlib = require('zlib');
+  const packed = fs.readFileSync('tests/fixtures/luojie_source_view_20260914.json.gz');
+  return JSON.parse(zlib.gunzipSync(packed).toString('utf8'));
 }
 class Element {
   constructor() {
@@ -38,6 +40,21 @@ global.document.createElement = function () { return new Element(); };
 
 
 class TestLuojieSourceViewFrontend(unittest.TestCase):
+    def test_cropped_archive_fixture_has_frozen_source_provenance(self):
+        fixture = Path(__file__).parent / "fixtures" / "luojie_source_view_20260914.json.gz"
+        meta = json.loads(fixture.with_name("luojie_source_view_20260914.meta.json").read_text())
+        packed = fixture.read_bytes()
+        content = gzip.decompress(packed)
+        self.assertEqual(meta["source_blob"], "9aba16269a82bd1c838a9e640b8ae5d6966661c0")
+        self.assertEqual(meta["source_sha256"],
+                         "d85e07c78c0d89d08f00c0c771b29e2d040b9a3b86220be3e311603eebcb9911")
+        self.assertTrue(meta["cropped"])
+        self.assertEqual(hashlib.sha256(packed).hexdigest(), meta["gzip_sha256"])
+        self.assertEqual(hashlib.sha256(content).hexdigest(), meta["fixture_sha256"])
+        self.assertEqual((len(packed), len(content)), (meta["gzip_bytes"], meta["fixture_bytes"]))
+        self.assertEqual((meta["raw_candidates"], meta["source_items"], meta["evidence_rows"]),
+                         (30, 30, 30))
+
     def _assert_contract(self, body):
         _assert_node_contract(
             self,

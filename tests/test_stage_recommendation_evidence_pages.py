@@ -15,6 +15,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from unittest import mock
 
 from chanlun.recommendation_evidence import (
     build_recommendation_evidence_projection,
@@ -24,7 +25,10 @@ from chanlun.psy12_shadow_history import load_daily_report_envelopes
 from chanlun.report_generator import build_aggregate_day_projection
 from scripts.stage_recommendation_evidence_pages import (
     stage_recommendation_evidence_pages,
+    _read_bootstrap_info,
+    StageRecommendationEvidenceError,
 )
+import scripts.stage_recommendation_evidence_pages as stage_module
 from tests.test_report_psy12_evidence import _report as _psy12_report
 
 
@@ -193,6 +197,127 @@ class TestStageRecommendationEvidencePages(unittest.TestCase):
             source_assets_dir=fixture.source_assets,
             protected_paths=fixture.protected,
         )
+
+    def test_staging_keeps_bound_published_members_and_only_refreshes_changes(self):
+        tmp, fixture = self._fixture()
+        try:
+            published = {
+                "schema_version": "decision-workbench-v1", "report_date": REPORT_DATE,
+                "phase": "formal", "snapshot_id": "published-28", "items": [
+                    {"instrument_id": "SZ300890", "code": "300890", "name": "翔丰华",
+                     "page_status": "watch_only", "strategy_results": []},
+                ], "comparison_contract": {}, "changes": {"status": "comparison_unavailable"},
+                "payload_hash": "frozen-published-facts",
+            }
+            for path in (fixture.docs / "index.html", fixture.docs / REPORT_DATE / "index.html"):
+                html = path.read_text(encoding="utf-8")
+                info = _read_bootstrap_info(html, path)
+                payload = info["payload"]
+                payload["decisionWorkbench"] = published
+                html = (html[:info["json_start"]]
+                        + json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+                        + html[info["json_end"]:])
+                path.write_text(html, encoding="utf-8")
+            subprocess.run(["git", "add", "-A"], cwd=fixture.root, check=True)
+            subprocess.run(["git", "commit", "-qm", "published snapshot"], cwd=fixture.root, check=True)
+            result = self._stage(fixture)
+            staged = _bootstrap_from_html((Path(result["stage_dir"]) / "index.html").read_text(encoding="utf-8"))["decisionWorkbench"]
+            self.assertEqual(staged["items"], published["items"])
+            self.assertEqual(staged["payload_hash"], "frozen-published-facts")
+            self.assertIn("membership", staged["changes"])
+        finally:
+            tmp.cleanup()
+
+    def test_selected_previous_html_change_during_stage_is_rejected(self):
+        tmp, fixture = self._fixture()
+        try:
+            previous_day = "2026-08-27"
+            prior = dict(fixture.data, date=previous_day)
+            (fixture.docs / "data" / (previous_day + ".json")).write_text(
+                json.dumps(prior, ensure_ascii=False), encoding="utf-8")
+            prior_html = fixture.docs / previous_day / "index.html"
+            prior_html.parent.mkdir()
+            prior_html.write_text('<script>window.CHANLUN_BOOTSTRAP = '
+                + json.dumps({"pageDate": previous_day, "inlineReportData": prior,
+                    "decisionWorkbench": {"schema_version": "decision-workbench-v1",
+                        "report_date": previous_day, "phase": "formal",
+                        "snapshot_id": "prior-bound", "items": [],
+                        "comparison_contract": {}}}) + ';</script>', encoding="utf-8")
+            original = stage_module._inject_evidence
+            changed = False
+            def mutate_previous(*args, **kwargs):
+                nonlocal changed
+                if not changed:
+                    changed = True
+                    prior_html.write_text(prior_html.read_text() + "<!-- concurrent edit -->", encoding="utf-8")
+                return original(*args, **kwargs)
+            with mock.patch.object(stage_module, "_inject_evidence", side_effect=mutate_previous):
+                with self.assertRaisesRegex(StageRecommendationEvidenceError, "input changed during staging"):
+                    self._stage(fixture)
+            self.assertFalse((fixture.root / "stage").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_previous_html_changed_inside_loader_is_rejected(self):
+        tmp, fixture = self._fixture()
+        try:
+            previous_day = "2026-08-27"
+            prior = dict(fixture.data, date=previous_day)
+            (fixture.docs / "data" / (previous_day + ".json")).write_text(
+                json.dumps(prior, ensure_ascii=False), encoding="utf-8")
+            prior_html = fixture.docs / previous_day / "index.html"
+            prior_html.parent.mkdir()
+            prior_html.write_text('<script>window.CHANLUN_BOOTSTRAP = '
+                + json.dumps({"pageDate": previous_day, "inlineReportData": prior,
+                    "decisionWorkbench": {"schema_version": "decision-workbench-v1",
+                        "report_date": previous_day, "phase": "formal",
+                        "snapshot_id": "prior-bound", "items": [{
+                            "code": "300001", "instrument_id": "SZ300001", "name": "旧成员",
+                            "page_status": "watch_only", "strategy_results": []}],
+                        "comparison_contract": {}}}) + ';</script>', encoding="utf-8")
+            original = stage_module._load_previous_full_projection
+            def mutate_inside_loader(*args, **kwargs):
+                projection = original(*args, **kwargs)
+                prior_html.write_text(prior_html.read_text().replace("300001", "300002"),
+                                      encoding="utf-8")
+                return projection
+            with mock.patch.object(stage_module, "_load_previous_full_projection",
+                                   side_effect=mutate_inside_loader):
+                with self.assertRaisesRegex(StageRecommendationEvidenceError, "input changed during staging"):
+                    self._stage(fixture)
+            self.assertFalse((fixture.root / "stage").exists())
+        finally:
+            tmp.cleanup()
+
+    def test_selected_previous_receipt_change_during_stage_is_rejected(self):
+        from chanlun.report_comparison import _published_member_receipt
+        tmp, fixture = self._fixture()
+        try:
+            previous_day = "2026-08-27"
+            prior = dict(fixture.data, date=previous_day)
+            (fixture.docs / "data" / (previous_day + ".json")).write_text(
+                json.dumps(prior, ensure_ascii=False), encoding="utf-8")
+            workbench = {"schema_version": "decision-workbench-v1",
+                         "report_date": previous_day, "phase": "formal",
+                         "snapshot_id": "receipt-bound", "items": [],
+                         "comparison_contract": {}}
+            receipt = _published_member_receipt(prior, previous_day, workbench,
+                                                "published_html_bootstrap", [])
+            index = fixture.docs / "data" / "comparison-index.json"
+            index.write_text(json.dumps({"review_registry": {
+                "published_member_snapshots": {previous_day: receipt}}}), encoding="utf-8")
+            original = stage_module._load_previous_full_projection
+            def mutate_receipt_inside_loader(*args, **kwargs):
+                projection = original(*args, **kwargs)
+                index.write_text(index.read_text() + "\n", encoding="utf-8")
+                return projection
+            with mock.patch.object(stage_module, "_load_previous_full_projection",
+                                   side_effect=mutate_receipt_inside_loader):
+                with self.assertRaisesRegex(StageRecommendationEvidenceError, "input changed during staging"):
+                    self._stage(fixture)
+            self.assertFalse((fixture.root / "stage").exists())
+        finally:
+            tmp.cleanup()
 
     def test_stages_evidence_and_only_whitelisted_page_changes(self):
         tmp, fixture = self._fixture()

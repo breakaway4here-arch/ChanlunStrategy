@@ -882,9 +882,124 @@ def _identity_groups(contract):
     return groups
 
 
+def _previous_member_summaries(previous):
+    def source_views(row):
+        values = []
+        for source in _seq(row.get('sources')):
+            view = source.get('view') if isinstance(source, dict) else source
+            if isinstance(view, str) and view in VIEW_ORDER and view not in values:
+                values.append(view)
+        return values
+
+    def source_refs(row):
+        values = []
+        for source in _seq(row.get('source_refs')):
+            if not isinstance(source, dict) or source.get('view') not in VIEW_ORDER:
+                continue
+            clean = {'view': source['view']}
+            raw_ref = source.get('ref')
+            if isinstance(raw_ref, dict):
+                ref = {}
+                for key in ('pool', 'source_pool'):
+                    value = raw_ref.get(key)
+                    if isinstance(value, str) and re.fullmatch(r'[a-z][a-z0-9_]{0,63}', value):
+                        ref[key] = value
+                code = raw_ref.get('code')
+                if isinstance(code, str) and re.fullmatch(r'\d{6}', code):
+                    ref['code'] = code
+                index = raw_ref.get('index')
+                if type(index) is int and index >= 0:
+                    ref['index'] = index
+                if ref:
+                    clean['ref'] = ref
+            values.append(clean)
+        return values
+
+    summaries = {}
+    for row in _seq(previous.get('items')):
+        if not isinstance(row, dict) or not isinstance(row.get('code'), str) \
+                or not re.fullmatch(r'\d{6}', row['code']):
+            continue
+        code = row['code']
+        if code in summaries:
+            continue
+        summaries[code] = {
+            'code': code, 'name': row.get('name') if isinstance(row.get('name'), str) else None,
+            'sources': source_views(row),
+            'source_refs': source_refs(row),
+            'strategy_results': [{
+                'strategy_id': strategy.get('strategy_id'), 'role': strategy.get('role'),
+            } for strategy in _seq(row.get('strategy_results'))
+                if isinstance(strategy, dict)
+                and strategy.get('strategy_id') in VIEW_ORDER
+                and isinstance(strategy.get('role'), str)
+                and re.fullmatch(r'[a-z][a-z0-9_]{0,31}', strategy['role'])],
+            'report_date': previous.get('report_date'), 'phase': previous.get('phase'),
+            'snapshot_id': previous.get('snapshot_id') if isinstance(previous.get('snapshot_id'), str)
+                and re.fullmatch(r'[A-Za-z0-9:._-]{1,128}', previous['snapshot_id']) else None,
+        }
+    return summaries
+
+
+def _membership_changes(current, previous):
+    """Compare full display membership independently of strategy and price."""
+    raw_digest = previous.get('comparison_raw_report_bytes_sha256')
+    if not isinstance(raw_digest, str) or not re.fullmatch(r'[0-9a-f]{64}', raw_digest):
+        raw_digest = None
+    unknown = {'status': 'unavailable', 'added': None, 'removed': None,
+               'shared': None, 'previous_items': _previous_member_summaries(previous),
+               'previous_report_date': previous.get('report_date'),
+               'previous_phase': previous.get('phase'),
+               'previous_snapshot_id': previous.get('snapshot_id'),
+               'previous_raw_report_bytes_sha256': raw_digest,
+               'source': previous.get('comparison_source'),
+               'skipped': previous.get('comparison_skipped', [])}
+    if not previous:
+        return dict(unknown, reason='no_previous_report')
+    if previous.get('membership_status') != 'available':
+        return dict(unknown, reason=previous.get('membership_reason') or 'previous_membership_unverified')
+    if (not _text(current.get('phase')) or not _text(previous.get('phase'))
+            or current.get('phase') != previous.get('phase')
+            or current.get('report_date') <= _text(previous.get('report_date'))):
+        return dict(unknown, reason='phase_or_date_mismatch')
+    from chanlun.report_comparison import _review_identity
+    snapshots = []
+    for projection in (previous, current):
+        rows = projection.get('items')
+        if not isinstance(rows, list):
+            return dict(unknown, reason='member_list_missing')
+        by_id = {}
+        for row in rows:
+            if not isinstance(row, dict) or not _text(row.get('instrument_id')) or not _text(row.get('code')):
+                return dict(unknown, reason='member_identity_unverified')
+            identity = row['instrument_id']
+            canonical, status = _review_identity(row['code'], identity)
+            if status != 'verified' or canonical != identity:
+                return dict(unknown, reason='member_identity_unverified')
+            if identity in by_id:
+                return dict(unknown, reason='member_identity_conflict')
+            by_id[identity] = row
+        snapshots.append(by_id)
+    before, after = snapshots
+    return {
+        'status': 'available',
+        'added': [after[key]['code'] for key in sorted(after.keys() - before.keys())],
+        'removed': [before[key]['code'] for key in sorted(before.keys() - after.keys())],
+        'shared': [after[key]['code'] for key in sorted(after.keys() & before.keys())],
+        'previous_items': unknown['previous_items'],
+        'previous_report_date': previous.get('report_date'),
+        'previous_phase': previous.get('phase'),
+        'previous_snapshot_id': previous.get('snapshot_id'),
+        'previous_raw_report_bytes_sha256': raw_digest,
+        'source': previous.get('comparison_source'),
+        'skipped': previous.get('comparison_skipped', []),
+    }
+
+
 def _changes(current, previous):
     previous = _map(previous)
-    unavailable = {'status': 'comparison_unavailable'}
+    membership = _membership_changes(current, previous)
+    unavailable = {'status': 'comparison_unavailable', 'membership': membership}
     if not previous:
         return unavailable
     if current['phase'] != previous.get('phase') or current['report_date'] < _text(previous.get('report_date')):
@@ -973,6 +1088,16 @@ def _changes(current, previous):
             x.get('primary_reason'), x.get('next_confirmation'),
             x.get('invalidation'),
         )
+    def semantic_text(field, value):
+        if value is None:
+            return None, 'not_recorded'
+        if field in ('next_confirmation', 'invalidation'):
+            if isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
+                return list(value), 'recorded' if value else 'not_recorded'
+            return None, 'unreadable'
+        if isinstance(value, str):
+            return value, 'recorded' if value else 'not_recorded'
+        return None, 'unreadable'
     def price_semantic(x):
         anchor = _map(x.get('watch_anchor'))
         return (
@@ -981,6 +1106,9 @@ def _changes(current, previous):
             anchor.get('value'),
         )
     changed = []
+    semantic_changed = []
+    value_changed = []
+    change_details = {}
     value_unavailable = []
     value_unavailable_reasons = {}
     for key in sorted(after.keys() & before.keys()):
@@ -1004,17 +1132,55 @@ def _changes(current, previous):
                 value_unavailable_reasons[after[key]['code']] = 'price_basis_changed'
             else:
                 value_unavailable_reasons[after[key]['code']] = 'price_basis_missing'
-        if semantic(after[key]) != semantic(before[key]):
+        semantic_differs = semantic(after[key]) != semantic(before[key])
+        value_differs = price_semantic(after[key]) != price_semantic(before[key])
+        if semantic_differs:
             changed.append(after[key]['code'])
-        elif price_semantic(after[key]) != price_semantic(before[key]):
+            semantic_changed.append(after[key]['code'])
+            rows = []
+            for field in ('formal_action', 'page_status', 'action_reason',
+                          'primary_reason', 'next_confirmation', 'invalidation'):
+                old_value, new_value = before[key].get(field), after[key].get(field)
+                if old_value == new_value:
+                    continue
+                old_text, old_readability = semantic_text(field, old_value)
+                new_text, new_readability = semantic_text(field, new_value)
+                rows.append({
+                    'field': field, 'before': old_text, 'after': new_text,
+                    'before_readability': old_readability,
+                    'after_readability': new_readability,
+                    'status': 'unreadable' if 'unreadable' in (old_readability, new_readability)
+                    else 'newly_recorded' if old_readability == 'not_recorded'
+                    else 'no_current_record' if new_readability == 'not_recorded' else 'updated',
+                })
+            if rows:
+                change_details[after[key]['code']] = rows
+        elif value_differs:
             if basis_compatible:
                 changed.append(after[key]['code'])
+        if value_differs and basis_compatible:
+            value_changed.append(after[key]['code'])
     result = {'status': 'partial' if unavailable_codes or health_unavailable or unavailable_strategies or changed_identity_groups or value_unavailable or contract.get('price_basis_invalid') or old_contract.get('price_basis_invalid') else 'available',
+            'membership': membership,
             'previous_report_date': previous.get('report_date'),
             'previous_phase': previous.get('phase'),
             'added': [after[k]['code'] for k in sorted(after.keys() - before.keys())],
             'removed': [before[k]['code'] for k in sorted(before.keys() - after.keys())],
-            'changed': changed}
+            'changed': changed,
+            'semantic_changed': semantic_changed,
+            'value_changed': value_changed}
+    compared_count = len(before.keys() & after.keys())
+    condition_status = (
+        'available' if result['status'] == 'available' else
+        'partial' if compared_count and not health_unavailable else 'unavailable'
+    )
+    result['condition_comparison'] = {
+        'status': condition_status,
+        'compared_count': compared_count,
+        'changed_count': len(semantic_changed) if condition_status != 'unavailable' else None,
+    }
+    if change_details:
+        result['change_details'] = change_details
     if unavailable_codes:
         result['unavailable_codes'] = unavailable_codes
         result['unavailable_reasons'] = {

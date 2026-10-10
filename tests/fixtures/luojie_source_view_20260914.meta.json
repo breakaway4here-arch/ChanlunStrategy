@@ -1,0 +1,17 @@
+{
+  "fixture_purpose": "Luojie source-view regression only; cropped, never publish as report",
+  "source_commit": "027185bc",
+  "source_blob": "9aba16269a82bd1c838a9e640b8ae5d6966661c0",
+  "source_path": "docs/2026-09-14/index.html",
+  "source_sha256": "d85e07c78c0d89d08f00c0c771b29e2d040b9a3b86220be3e311603eebcb9911",
+  "source_bytes": 3566668,
+  "extraction": "sole executable CHANLUN_BOOTSTRAP; pageDate; inline date/data_quality/selection_input_health/luojie_pool/workspace luojie views+view_meta; decisionWorkbench metadata and 30 source-only luojie strategy items; recommendationEvidence metadata and 30 luojie views",
+  "cropped": true,
+  "fixture_sha256": "9e9af614636ab45a138ed89e3a4b2ff814ad87cd9ce8254097de1349f593dbbe",
+  "fixture_bytes": 1338607,
+  "gzip_sha256": "3ba7d69ffc2d0de90837d023d1583abbcaee4fc9b33e0e6ae2cb98391f6201d8",
+  "gzip_bytes": 68878,
+  "raw_candidates": 30,
+  "source_items": 30,
+  "evidence_rows": 30
+}

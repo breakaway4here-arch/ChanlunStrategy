@@ -3,6 +3,8 @@ import json
 import pathlib
 import unittest
 
+from tests.css_test_helpers import media_rule_blocks
+
 from chanlun.decision_workbench import (
     _instrument,
     build_decision_workbench,
@@ -794,8 +796,7 @@ class ProjectAuditUiContracts(unittest.TestCase):
         root = pathlib.Path(__file__).resolve().parents[1]
         css = (root / "chanlun/report_assets/report-v2.css").read_text(encoding="utf-8")
         js = (root / "chanlun/report_assets/report-v2.js").read_text(encoding="utf-8")
-        mobile_start = css.rfind("@media (max-width: 760px)")
-        mobile = css[mobile_start:]
+        mobile = "\n".join(media_rule_blocks(css, "@media (max-width: 680px)"))
         self.assertIn(".mobile-decision-summary", mobile)
         self.assertIn("display: block", mobile)
         self.assertIn("mobile-decision-summary-copy", css)

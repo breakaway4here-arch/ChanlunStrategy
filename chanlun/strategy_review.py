@@ -1986,14 +1986,17 @@ def build_strategy_scorecards(
         if role == "diagnostic":
             # Gate diagnostics are intentionally not passed through the return
             # evaluator.  The absence of return keys is part of their contract.
-            if card["all_rows"]:
-                gate_status = "running"
-            elif card["latest_run_status"] == "disabled":
-                gate_status = "disabled"
-            elif card["latest_run_status"] == "unavailable":
-                gate_status = "data_unavailable"
-            else:
-                gate_status = "normal_empty"
+            # Ledger rows are cumulative; only a matching run manifest can
+            # establish the status of the run represented by this card.
+            gate_status = "unrecorded"
+            if card["latest_report_date"]:
+                gate_status = {
+                    "ran": "running",
+                    "verified_empty": "normal_empty",
+                    "disabled": "disabled",
+                    "unavailable": "data_unavailable",
+                    "partial": "data_unavailable",
+                }.get(card["latest_run_status"], "unrecorded")
             base.update({
                 "evaluation_status": gate_status,
                 "gate_status": gate_status,

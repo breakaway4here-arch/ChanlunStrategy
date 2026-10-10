@@ -2147,7 +2147,8 @@ class TestAccessControl(unittest.TestCase):
         self.assertIn("return pools.next_day_boom;", self.asset_js)
         self.assertIn("function hasChartData(item)", self.asset_js)
         self.assertIn("function mergeChartCandidate(primary, chartSource)", self.asset_js)
-        self.assertIn("findChartCandidate(targetCode, found)", self.asset_js)
+        self.assertNotIn("findChartCandidate(targetCode, found)", self.asset_js)
+        self.assertIn("return primary || null;", self.asset_js)
         self.assertIn("opens[i],\n        closes[i],\n        lows[i],\n        highs[i]", self.asset_js)
 
     def test_v2_asset_has_mobile_and_long_pool_interaction_guards(self):
@@ -3083,7 +3084,8 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
             self.assertIn(helper, self.asset_js)
 
     def test_auxiliary_center_modules(self):
-        module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险', '策略收益回看（记分牌）', '数据诊断']
+        module_names = ['市场情绪', '今日方向', '我的重点观察', '涨停生态', '持仓风险',
+                        '策略验证进度', '研究实验', '数据与运行诊断']
         for name in module_names:
             self.assertIn("title: '" + name + "'", self.asset_js)
         self.assertNotIn("title: '卖出提醒'", self.asset_js)
@@ -3108,7 +3110,7 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn("正式推荐收益", self.asset_js)
         self.assertIn("基础候选基线", self.asset_js)
         self.assertIn("研究策略回看", self.asset_js)
-        self.assertIn("门控运行诊断", self.asset_js)
+        self.assertIn("观察筛选运行情况", self.asset_js)
         self.assertIn("benchmark_status", self.asset_js)
         self.assertIn("超额收益显示 --", self.asset_js)
         self.assertIn("未声明单一主周期", self.asset_js)

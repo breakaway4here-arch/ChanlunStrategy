@@ -10,6 +10,210 @@ from tests.test_auxiliary_frontend import _assert_node_contract
 
 
 class UIReviewToolsBehavior(unittest.TestCase):
+    def test_a2_condition_change_count_requires_comparison_coverage(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+const changes={status:'partial',changed:[],semantic_changed:[],value_changed:[],unavailable_codes:['300890'],
+ membership:{status:'available',added:[],removed:[],shared:['300890']},
+ condition_comparison:{status:'unavailable',compared_count:0,changed_count:null}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[],changes:changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;
+function check(expected,emptyText){
+ const summary=t.summary(changes,false);t.render();t.state.decisionChangeFilter='changed';const html=t.render();
+ if(summary.indexOf('条件变化 '+expected)<0)throw Error('wrong condition summary: '+summary);
+ const groupLabel=expected==='—'?'登记字段差异待核验':'条件更新';
+ if(html.indexOf(groupLabel+' <span>'+expected+'</span>')<0)
+  throw Error('wrong condition group count');
+ if(emptyText && html.indexOf(emptyText)<0)throw Error('wrong empty state');
+}
+check('—','条件变化未比较');
+delete changes.condition_comparison;check('—','条件变化未比较');
+changes.condition_comparison={status:'partial',compared_count:1,changed_count:0};
+check('0','已比较的成员没有登记字段变化');
+changes.status='available';changes.condition_comparison={status:'available',compared_count:0,changed_count:0};
+check('0','本期没有已登记的状态或条件变化');
+changes.status='partial';changes.condition_comparison={status:'partial',compared_count:1,changed_count:1};
+changes.changed=['300890'];changes.semantic_changed=['300890'];
+check('1','');
+''')
+
+    def test_a2_old_only_unavailable_uses_bound_previous_name_source_and_date(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+// 000400 was in the bound 2026-10-08 published workbench and absent on 10/09.
+const t=globalThis.__auxTest;const day='2026-10-09';
+const changes={status:'partial',unavailable_codes:['000400'],
+ unavailable_reasons:{'000400':'candidate_strategy_unavailable'},
+ membership:{status:'available',added:[],removed:['000400'],shared:[],
+  previous_report_date:'2026-10-08',previous_phase:'formal',previous_items:{
+   '000400':{code:'000400',name:'许继电气',sources:['luojie'],
+    source_refs:[{view:'luojie',ref:{pool:'luojie_pool',code:'000400'}}],
+    report_date:'2026-10-08',phase:'formal'}}}};
+const workbench={schema_version:'decision-workbench-v1',report_date:day,phase:'formal',
+ items:[{code:'600001',name:'本期其他股'}],changes:changes};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:workbench};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;let html=t.render();
+let entryAt=html.indexOf('data-change-row="000400"');
+let row=html.slice(html.lastIndexOf('<li ',entryAt),html.indexOf('</li>',entryAt)+5);
+if(row.indexOf('许继电气')<0 || row.indexOf('罗姐池')<0
+ || row.indexOf('上份 2026-10-08')<0 || row.indexOf('当前 2026-10-09')>=0)
+ throw Error('old-only unavailable borrowed current context or lost bound previous context: '+row);
+workbench.items=[{code:'000400',name:'本期同码名称',sources:['observation_top5'],
+ strategy_results:[{strategy_id:'observation_top5',role:'research'}]}];
+changes.membership.removed=[];changes.membership.shared=['000400'];
+html=t.render();entryAt=html.indexOf('data-change-row="000400"');
+row=html.slice(html.lastIndexOf('<li ',entryAt),html.indexOf('</li>',entryAt)+5);
+if(row.indexOf('本期同码名称')<0 || row.indexOf('观察 Top5收录')<0
+ || row.indexOf('当前 2026-10-09')<0 || row.indexOf('许继电气')>=0)
+ throw Error('current member failed to keep current snapshot precedence');
+''')
+
+    def test_a2_removed_without_bound_prior_item_never_borrows_current_name_or_source(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+const changes={status:'comparison_unavailable',reason:'previous_comparison_contract_unavailable',
+ membership:{status:'available',added:[],removed:['600072'],shared:[],
+  previous_report_date:'2026-09-30',previous_phase:'formal',previous_items:{}}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600072',name:'当前错误名称',
+ strategy_results:[{strategy_id:'observation_top5',role:'research'}],sources:['observation_top5']}],
+ changes:changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render();
+if(html.indexOf('当前错误名称')>=0 || html.indexOf('观察 Top5')>=0)
+ throw Error('removed item borrowed current snapshot name/source');
+if(html.indexOf('名称未记录')<0 || html.indexOf('来源策略未单独记录')<0)
+ throw Error('missing previous metadata was not shown honestly');
+changes.membership.removed=[{code:'600072',name:'条目明确旧名称',source_strategy:'main'}];
+const withOldEntry=t.render();
+if(withOldEntry.indexOf('条目明确旧名称')<0 || withOldEntry.indexOf('正式主推')<0
+ || withOldEntry.indexOf('当前错误名称')>=0 || withOldEntry.indexOf('观察 Top5')>=0)
+ throw Error('explicit previous entry was replaced by current snapshot metadata');
+''')
+
+    def test_a2_unavailable_strategy_still_reports_verified_membership_summary(self):
+        _assert_node_contract(self, "{ summary:renderDecisionChangesSummary }", r'''
+const changes={status:'comparison_unavailable',reason:'previous_comparison_contract_unavailable',
+ membership:{status:'available',added:['300001'],removed:['600072'],shared:[]}};
+const t=globalThis.__auxTest;
+for(const compact of [false,true]){
+ const text=t.summary(changes,compact);
+ if(text.indexOf('新增 1')<0 || text.indexOf('移出 1')<0)
+  throw Error('verified membership was swallowed by global unavailable status');
+ if(text.indexOf('未比较')<0 || text.indexOf('策略')<0)
+  throw Error('strategy comparison limitation disappeared');
+}
+''')
+
+    def test_a2_unknown_phase_does_not_claim_recent_verified_formal_report(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[],changes:{status:'comparison_unavailable',
+ membership:{status:'unavailable',reason:'phase_or_date_mismatch',source:'published_html_bootstrap',
+  added:null,removed:null,previous_report_date:'2026-09-30',previous_phase:null,
+  skipped:[{report_date:'2026-09-30',reason:'published_phase_unverified'}]}}}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render();
+if(html.indexOf('使用最近可核验报告')>=0)
+ throw Error('unknown phase was presented as verified formal basis');
+if(html.indexOf('2026-09-30 阶段未核验')<0 || html.indexOf('未找到可比收盘依据')<0)
+ throw Error('actual skipped date and formal comparison gap were hidden');
+''')
+
+    def test_a2_unavailable_union_keeps_both_reasons_and_changed_overlap(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const day='2026-10-08';const strategy=Array.from({length:23},(_,i)=>String(600100+i));
+const price=['300001','300002','300003'];
+const changes={status:'partial',previous_report_date:'2026-09-30',
+  membership:{status:'available',added:[],removed:[],shared:[]},
+  changed:['600100'],unavailable_codes:strategy,
+  unavailable_reasons:{'600100':'candidate_strategy_unavailable'},
+  value_unavailable_codes:price,value_unavailable_reasons:{'300001':'price_basis_missing'}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[],changes:changes}};
+const target={innerHTML:'',querySelectorAll(){return [];}};const t=globalThis.__auxTest;
+t.state.data={date:day};t.nodes.decisionChanges=target;t.render();
+t.state.decisionChangeFilter='unavailable';t.state.decisionChangeShowAll=true;
+const html=t.render();
+if(!/data-change-group-toggle="unavailable"[\s\S]*?<span>26<\/span>/.test(html))throw Error('23+3 union was lost');
+if(html.indexOf('data-change-code="600100"')<0 || html.indexOf('策略&#47;条件不可比')<0)
+ throw Error('changed overlap lost strategy reason');
+if(html.indexOf('data-change-code="300001"')<0 || html.indexOf('价格不可比')<0)
+ throw Error('price reason lost');
+''')
+
+    def test_a2_unknown_membership_is_dash_and_removed_identity_is_previous(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes,summary:renderDecisionChangesSummary }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+const base={schema_version:'decision-workbench-v1',report_date:day,phase:'formal',items:[
+ {code:'300890',name:'当前翔丰华',sources:['observation_top5'],
+  strategy_results:[{strategy_id:'observation_top5',role:'research'}]}]};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:Object.assign({},base,{changes:{
+ status:'comparison_unavailable',reason:'previous_comparison_contract_unavailable',
+ membership:{status:'unavailable',added:null,removed:null},added:[],removed:[]}})};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;let html=t.render();
+if(html.indexOf('加入当前集合 <span>0</span>')>=0 || html.indexOf('移出当前集合 <span>0</span>')>=0)
+ throw Error('unknown membership shown as zero');
+if(html.indexOf('本期没有新增记录')>=0)throw Error('unknown membership shown as no additions');
+if(t.summary({status:'comparison_unavailable',membership:{status:'unavailable',reason:'no_previous_report'}},false)
+  .indexOf('暂无可核验的上份报告')<0)throw Error('missing previous report was not explained');
+window.CHANLUN_BOOTSTRAP.decisionWorkbench.changes={status:'partial',added:[],removed:['600072'],
+ membership:{status:'unavailable',source:'legacy_json_view',added:null,removed:null,
+  previous_items:{'600072':{code:'600072',name:'旧视图中船科技',sources:['main']}}}};
+html=t.render();
+if(html.indexOf('旧视图中船科技')<0 || html.indexOf('旧数据视图')<0
+ || html.indexOf('移出当前集合 <span>—</span>')<0)
+ throw Error('partial previous name/source was hidden or claimed complete');
+window.CHANLUN_BOOTSTRAP.decisionWorkbench.changes={status:'partial',
+ membership:{status:'available',added:['300890'],removed:['600072'],shared:[],
+  previous_report_date:'2026-09-30',previous_phase:'formal',previous_items:{
+   '600072':{code:'600072',name:'中船科技',sources:['main'],report_date:'2026-09-30',phase:'formal'}}}};
+html=t.render();
+if(html.indexOf('中船科技')<0 || html.indexOf('当前翔丰华')<0)
+ throw Error('names were not read from respective snapshots');
+if(html.indexOf('正式推荐')>=0 || html.indexOf('收盘报告')<0)
+ throw Error('report phase was confused with recommendation identity');
+''')
+
+    def test_a2_same_changed_security_keeps_both_unavailable_reasons_once(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+const changes={status:'partial',membership:{status:'available',added:[],removed:[],shared:['600001']},
+ changed:['600001'],unavailable_codes:['600001'],
+ unavailable_reasons:{'600001':'candidate_evidence_unavailable'},
+ value_unavailable_codes:['600001'],value_unavailable_reasons:{'600001':'price_basis_changed'}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'当前名',page_status:'watch_only',
+ strategy_results:[{strategy_id:'observation_top5',role:'research'}]}],changes:changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render();
+if(!/data-change-group-toggle="unavailable"[\s\S]*?<span>1<\/span>/.test(html))
+ throw Error('overlap counted more than once');
+if(html.indexOf('策略&#47;条件不可比')<0 || html.indexOf('价格不可比')<0
+  || html.indexOf('条件更新')<0)throw Error('known change or unavailable reason lost');
+if(html.indexOf('观察 Top5收录')<0 || html.indexOf('研究观察')<0)
+ throw Error('research source identity lost');
+''')
+
+    def test_a2_previous_name_and_unknown_reason_are_safe_text(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest;const day='2026-10-08';
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[],changes:{status:'partial',
+ membership:{status:'available',added:[],removed:['600072'],shared:[],
+  previous_report_date:'2026-09-30',previous_phase:'formal',previous_items:{
+   '600072':{code:'600072',name:'<img src=x onerror=alert(1)>',sources:['main']}}},
+ unavailable_codes:['600072'],unavailable_reasons:{'600072':'<script>bad</script>'}}}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render();
+if(html.indexOf('<img')>=0 || html.indexOf('<script>bad')>=0)throw Error('untrusted text injected');
+if(html.indexOf('&lt;img')<0 || html.indexOf('原因未记录')<0)throw Error('safe fallback lost');
+''')
+
     def test_u11_changes_panel_drills_real_changes_and_keeps_comparison_identity(self):
         _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
 function el(){return {innerHTML:'',textContent:'',attrs:{},setAttribute(k,v){this.attrs[k]=String(v);},
@@ -30,9 +234,10 @@ if(html.indexOf('600001')<0 || html.indexOf('600002')<0 || html.indexOf('600003'
   throw Error('existing added/removed/changed lists were not rendered');
 if(html.indexOf('600004')<0 || html.indexOf('价基缺失')<0)
   throw Error('single-stock incomparable reason was not drilled');
-if(html.indexOf('data-change-kind="changed"')<0 || html.indexOf('data-change-code="600003"')<0)
-  throw Error('change entry did not expose a drill-down target');
-if(html.indexOf('移出本期集合（不等于破位）')<0 || html.indexOf('价基')<0)
+if(html.indexOf('data-change-kind="legacy"')<0 || html.indexOf('data-change-code="600003"')<0
+  || html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0)
+  throw Error('old changed entry was dropped or misclassified');
+if(html.indexOf('旧视图比较记录（完整成员未核验）')<0 || html.indexOf('价基')<0)
   throw Error('membership and price comparability boundaries were missing');
 ''')
 
@@ -70,7 +275,7 @@ if(html.indexOf('参考价 10')<0 || html.indexOf('参考价 9.5')<0 || html.ind
 if(html.indexOf('最早')>=0 || html.indexOf('首次出现')>=0)throw Error('history renderer invented first appearance');
 ''')
 
-    def test_u11_history_button_reads_previous_snapshot_only_when_opened(self):
+    def test_u11_unbound_history_does_not_read_same_code_raw_file(self):
         _assert_node_contract(self, "{ load:loadDecisionChangeHistory,state:state }", r'''
 const day='2026-09-12';let requested='';
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
@@ -90,12 +295,14 @@ window.fetch=function(url){
 };
 t.load('600001',target);
 setTimeout(function(){
-  if(requested!=='data/2026-09-11.json')throw Error('previous snapshot was not read on demand');
-  if(history.innerHTML.indexOf('上一期动作')<0)throw Error('loaded previous snapshot was not rendered');
+  if(requested)throw Error('unbound same-code history was fetched');
+  if(history.innerHTML.indexOf('上一期动作')>=0)throw Error('unbound raw action was rendered');
+  if(history.innerHTML.indexOf('上份清单未提供该证券的已绑定概览')<0)
+    throw Error('missing bound overview was not explained');
 },10);
 ''')
 
-    def test_u11_nested_previous_identity_drives_on_demand_request(self):
+    def test_u11_nested_previous_identity_alone_cannot_fetch_raw(self):
         _assert_node_contract(self, "{ load:loadDecisionChangeHistory,state:state }", r'''
 const day='2026-09-12';let requested='';
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
@@ -105,7 +312,8 @@ const t=globalThis.__auxTest;t.state.data={date:day,workspace:{views:{}}};
 const history={innerHTML:'',querySelector(){return history;}};const target={querySelector(){return history;}};
 window.fetch=function(url){requested=url;return Promise.resolve({ok:true,json(){return Promise.resolve({date:'2026-09-11',workspace:{views:{main:[]}}});}});};
 t.load('600001',target);
-setTimeout(function(){if(requested!=='data/2026-09-11.json')throw Error('nested previous identity was ignored');},10);
+setTimeout(function(){if(requested || history.innerHTML.indexOf('上份清单未提供该证券的已绑定概览')<0)
+ throw Error('nested date without bound refs or bytes digest opened raw history');},10);
 ''')
 
     def test_u11_history_identity_validation_rejects_wrong_date_and_phase_and_marks_missing_contract(self):
@@ -170,7 +378,7 @@ const day='2026-09-12';window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:
 const t=globalThis.__auxTest;t.state.data={date:day};t.nodes.decisionChanges=target;t.render();
 if(target.innerHTML.indexOf('data-change-group-toggle="changed"')<0)throw Error('change count was not actionable');
 toggle.handlers.click({currentTarget:toggle});
-if(!focused || !scrolled)throw Error('change count did not focus its existing group');
+if(t.state.decisionChangeFilter!=='changed' || !scrolled)throw Error('change count did not filter and show its group');
 ''')
 
     def test_u13_quick_comparison_caps_three_preserves_sources_and_keeps_filtered_selection(self):
