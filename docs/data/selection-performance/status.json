@@ -1,1 +1,1 @@
-{"attempted_report_as_of":"2026-10-09","last_success":{"dataset_id":"1ca1e75a7702580fd48664b246cfdbc8c4ce2d6dc2526791a2478c6124bc899b","evaluation_as_of":"2026-10-09T15:20:11+08:00"},"status":"ready"}
+{"attempted_report_as_of":"2026-10-09","evidence_fill":{"elapsed_ms":0,"instrument_id":null,"requests":0,"status":"deferred"},"last_success":{"dataset_id":"f1f3a4a9fb2aa7d1b731d1f0e293d5b690b36ab7f33a6f69a5c9920c62cc1ef6","evaluation_as_of":"2026-10-09T15:20:11+08:00","evidence_as_of":"2026-10-10T17:58:49.351451+08:00"},"status":"ready"}

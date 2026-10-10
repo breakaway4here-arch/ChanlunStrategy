@@ -51,6 +51,7 @@ _BOOTSTRAP_ASSIGNMENT_RE = re.compile(
     r"window\s*\.\s*CHANLUN_BOOTSTRAP\s*="
 )
 _REVIEW_RECEIPT_SCHEMA = "published-review-members-v1"
+_THEME_CONTEXT_SCHEMA = "published-theme-context-v1"
 _CONFIRMED_SNAPSHOT_KINDS = {
     "current_generation_bootstrap", "published_html_bootstrap",
 }
@@ -500,6 +501,132 @@ def _canonical_sha256(value):
     return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
 
 
+def _zoned_asof(value, report_date):
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    local = parsed.astimezone(timezone(timedelta(hours=8))) if parsed.tzinfo else None
+    return parsed if local and local.date().isoformat() == report_date else None
+
+
+def _theme_refs(report, publication_asof, code):
+    """Only the same report's Kaipanla membership known at its selected as-of."""
+    context = report.get("kaipanla_context") if isinstance(report, dict) else None
+    if not isinstance(context, dict) or context.get("status") not in {"available", "partial"}:
+        return []
+    if context.get("source") != "kaipanla" or context.get("data_date") != report.get("date"):
+        return []
+    published = _zoned_asof(publication_asof, report["date"])
+    try:
+        fetched = datetime.fromisoformat(str(context.get("fetched_at")).replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return []
+    if not published or not fetched.tzinfo or fetched > published:
+        return []
+    refs = []
+    groups = context.get("groups")
+    for group in groups if isinstance(groups, list) else []:
+        if not isinstance(group, dict):
+            continue
+        theme_code = group.get("code") if isinstance(group.get("code"), str) else ""
+        name = group.get("name") if isinstance(group.get("name"), str) else ""
+        theme_code, name = theme_code.strip(), name.strip()
+        if not name or group.get("stock_list_status") == "unavailable":
+            continue
+        stocks = group.get("stocks")
+        if not isinstance(stocks, list) or not any(
+            isinstance(item, dict) and item.get("code") == code for item in stocks
+        ):
+            continue
+        theme_id = ("kaipanla:" + theme_code if theme_code else
+                    "kaipanla:name:" + _canonical_sha256(name)[:16])
+        refs.append({
+            "theme_id": theme_id, "name": name, "source": "kaipanla",
+            "source_date": context["data_date"],
+            "identity_status": "source_code" if theme_code else "name_only",
+            "naming_scope": "source_exact_name" if not theme_code else None,
+        })
+    return refs
+
+
+def _published_theme_context(report, report_date, workbench, member_receipt):
+    """Optional theme facts bound to the independently validated member receipt."""
+    if not isinstance(member_receipt, dict):
+        return None
+    asof = workbench.get("as_of") if isinstance(workbench, dict) else None
+    if not _zoned_asof(asof, report_date):
+        return None
+    binding = member_receipt["binding"]
+    if binding.get("publication_asof") != asof:
+        return None
+    refs = {}
+    for member in member_receipt["members"]:
+        if member["identity_status"] != "verified":
+            continue
+        identity = member["instrument_id"]
+        if identity in refs:
+            return None
+        refs[identity] = _theme_refs(report, asof, member["code"])
+    context = {
+        "schema_version": _THEME_CONTEXT_SCHEMA,
+        "binding": {
+            "report_date": report_date,
+            "raw_report_sha256": binding["raw_report_sha256"],
+            "snapshot_id": binding["snapshot_id"],
+            "member_receipt_sha256": member_receipt["content_sha256"],
+            "publication_asof": asof,
+        },
+        "theme_refs_by_instrument": refs,
+    }
+    context["content_sha256"] = _canonical_sha256(context)
+    return context
+
+
+def _bound_published_theme_context(context, report, report_date, member_receipt):
+    """Bad optional context degrades themes only; membership stays available."""
+    if not isinstance(context, dict) or set(context) != {
+        "schema_version", "binding", "theme_refs_by_instrument", "content_sha256"
+    } or context.get("schema_version") != _THEME_CONTEXT_SCHEMA:
+        return None
+    unsigned = {key: value for key, value in context.items() if key != "content_sha256"}
+    digest = context["content_sha256"]
+    if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest) \
+            or digest != _canonical_sha256(unsigned):
+        return None
+    binding = context["binding"]
+    if not isinstance(binding, dict) or set(binding) != {
+        "report_date", "raw_report_sha256", "snapshot_id",
+        "member_receipt_sha256", "publication_asof",
+    } or not isinstance(member_receipt, dict):
+        return None
+    member_binding = member_receipt.get("binding")
+    if not isinstance(member_binding, dict) or any((
+        binding["report_date"] != report_date,
+        binding["raw_report_sha256"] != _canonical_sha256(report),
+        binding["raw_report_sha256"] != member_binding.get("raw_report_sha256"),
+        binding["snapshot_id"] != member_binding.get("snapshot_id"),
+        binding["member_receipt_sha256"] != member_receipt.get("content_sha256"),
+        binding["publication_asof"] != member_binding.get("publication_asof"),
+        not _zoned_asof(binding["publication_asof"], report_date),
+    )):
+        return None
+    refs = context["theme_refs_by_instrument"]
+    if not isinstance(refs, dict):
+        return None
+    expected = {}
+    for member in member_receipt.get("members") or []:
+        if not isinstance(member, dict):
+            return None
+        if member.get("identity_status") == "verified":
+            identity = member.get("instrument_id")
+            if identity in expected:
+                return None
+            expected[identity] = _theme_refs(report, binding["publication_asof"],
+                                             member.get("code"))
+    return context if refs == expected else None
+
+
 def _receipt_comparison_contract(workbench):
     """Keep declared comparison identities, excluding price/basis payloads."""
     contract = workbench.get("comparison_contract")
@@ -553,6 +680,9 @@ def _published_member_receipt(report, report_date, workbench, snapshot_kind, ent
     }
     if isinstance(workbench.get("phase"), str) and workbench["phase"].strip():
         receipt["binding"]["phase"] = workbench["phase"].strip()
+    asof = workbench.get("as_of")
+    if _zoned_asof(asof, report_date):
+        receipt["binding"]["publication_asof"] = asof
     receipt["content_sha256"] = _canonical_sha256(receipt)
     return receipt if receipt["content_sha256"] is not None else None
 
@@ -568,17 +698,17 @@ def _bound_receipt_entries(receipt, report, report_date):
     if digest is None or receipt["content_sha256"] != digest:
         return None
     binding = receipt["binding"]
+    required_binding = {
+        "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
+        "comparison_contract",
+    }
     if (
         receipt["schema_version"] != _REVIEW_RECEIPT_SCHEMA
         or not isinstance(receipt["snapshot_kind"], str)
         or receipt["snapshot_kind"] not in _CONFIRMED_SNAPSHOT_KINDS
-        or not isinstance(binding, dict) or set(binding) not in ({
-            "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
-            "comparison_contract",
-        }, {
-            "report_date", "raw_report_sha256", "workbench_schema", "snapshot_id",
-            "comparison_contract", "phase",
-        })
+        or not isinstance(binding, dict)
+        or not required_binding.issubset(binding)
+        or set(binding) - required_binding - {"phase", "publication_asof"}
         or report.get("date") != report_date
         or binding["report_date"] != report_date
         or binding["raw_report_sha256"] != _canonical_sha256(report)
@@ -728,6 +858,7 @@ def load_published_comparison_snapshot(data_dir, report_date, report):
         "membership_status": "available", "source": source,
         "report_date": report_date, "phase": phase, "snapshot_id": snapshot_id,
         "members": members, "workbench": workbench,
+        "member_receipt": receipt if source == "published_receipt" else None,
     }
 
 
@@ -1164,11 +1295,14 @@ def _build_review_registry(
     current = _CURRENT_REVIEW_SNAPSHOTS.get()
     entries = []
     published = {}
+    published_themes = {}
     old_registry = existing_index.get("review_registry") \
         if isinstance(existing_index, dict) else {}
     old_registry = old_registry if isinstance(old_registry, dict) else {}
     old_published = old_registry.get("published_member_snapshots")
     old_published = old_published if isinstance(old_published, dict) else {}
+    old_themes = old_registry.get("published_theme_contexts")
+    old_themes = old_themes if isinstance(old_themes, dict) else {}
     for report_date in dates:
         report = reports[report_date]
         workbench = current.get(report_date) if isinstance(current, dict) else None
@@ -1183,6 +1317,9 @@ def _build_review_registry(
             )
             if receipt is not None:
                 published[report_date] = receipt
+                context = _published_theme_context(report, report_date, workbench, receipt)
+                if context is not None:
+                    published_themes[report_date] = context
             continue
         archived = _read_archived_workbench(data_dir, report_date, report)
         if isinstance(archived, dict) and isinstance(archived.get("workbench"), dict):
@@ -1208,6 +1345,10 @@ def _build_review_registry(
                 )
                 if receipt is not None:
                     published[report_date] = receipt
+                    context = _published_theme_context(
+                        report, report_date, archived["workbench"], receipt)
+                    if context is not None:
+                        published_themes[report_date] = context
         else:
             # Only an absent archive permits reuse. An existing invalid/conflicting
             # archive revokes its previous receipt when this index is persisted.
@@ -1216,6 +1357,10 @@ def _build_review_registry(
             if restored is not None:
                 entries.extend(restored)
                 published[report_date] = receipt
+                context = _bound_published_theme_context(
+                    old_themes.get(report_date), report, report_date, receipt)
+                if context is not None:
+                    published_themes[report_date] = context
             else:
                 entries.extend(_legacy_review_entries(report, report_date))
     entries = _deduplicate_review_entries(entries)
@@ -1254,6 +1399,7 @@ def _build_review_registry(
         "price_data_cutoff": data_cutoff or None,
         "horizon_summary": horizon_summary,
         "published_member_snapshots": published,
+        "published_theme_contexts": published_themes,
         "entries": entries,
     }
 

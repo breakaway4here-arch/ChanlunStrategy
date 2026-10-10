@@ -14,6 +14,7 @@ import re
 import shutil
 import copy
 import tempfile
+import time
 from collections.abc import Mapping
 from html.parser import HTMLParser
 from html import escape
@@ -2401,7 +2402,9 @@ def _write_derived_json_atomically(path, value):
 
 
 def refresh_selection_performance_after_publish(output_dir, market_db_path,
-                                                report_date, evaluation_as_of):
+                                                report_date, evaluation_as_of,
+                                                *, evidence_dir=None,
+                                                evidence_target_id=None):
     """Optionally derive a dated performance file after real publication exists.
 
     The market database and published facts are read-only. A failed calculation
@@ -2411,6 +2414,8 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
 
     output = Path(output_dir)
     data = output / "data"
+    evidence_root = (Path(evidence_dir) if evidence_dir is not None else
+                     Path(market_db_path).resolve().parent / "selection-price-evidence")
     prerequisites = (
         data / (report_date + ".json"),
         data / "comparison-index.json",
@@ -2430,11 +2435,126 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
         index = {"schema_version": "selection-performance-index-v1", "datasets": {}}
     last_dates = sorted(day for day in index["datasets"] if day <= report_date)
     last_success = index["datasets"][last_dates[-1]] if last_dates else None
+    proof_read_as_of = datetime.now(timezone(timedelta(hours=8))).isoformat()
     old_dated = dated_path.read_bytes() if dated_path.is_file() else None
     old_index = index_path.read_bytes() if index_path.is_file() else None
+    fill = {"status": "not_needed", "instrument_id": None,
+            "requests": 0, "elapsed_ms": 0}
     try:
         dataset = build_selection_performance(data, market_db_path,
-                                              report_date, evaluation_as_of)
+                                              report_date, evaluation_as_of,
+                                              price_evidence_dir=evidence_root,
+                                              price_evidence_as_of=proof_read_as_of)
+        from chanlun.selection_price_evidence import (
+            load_verified_price_series, record_fill_attempt,
+            select_due_fill_candidate,
+        )
+        candidate = select_due_fill_candidate(
+            dataset, evidence_root, preferred_identity=evidence_target_id,
+        )
+        if candidate is None and any(
+                isinstance(outcome, dict)
+                and outcome.get("status") == "price_basis_unverified"
+                for row in dataset.get("observations") or []
+                for outcome in (row.get("outcomes") or {}).values()):
+            fill["status"] = "deferred"
+        if candidate is not None:
+            from chanlun.data_fetcher import (
+                _fetch_daily_kline_eastmoney_remote,
+                _fetch_selection_qfq_tencent_remote,
+            )
+            from chanlun.identity import InstrumentIdentity
+            from chanlun.kline_repository import DailyRepairBudget
+
+            identity, start_date = candidate
+            fill["instrument_id"] = identity
+            fill["status"] = "evidence_missing"
+            started = time.monotonic()
+            budget = DailyRepairBudget(max_stocks=1, max_requests=2, seconds=20)
+            try:
+                record_fill_attempt(evidence_root, identity, report_date)
+                before_series, before_hash = load_verified_price_series(
+                    evidence_root, [identity],
+                    evaluation_as_of=evaluation_as_of,
+                    evidence_as_of=proof_read_as_of,
+                )
+                known_proofs = {
+                    (series["source_response"]["provider"],
+                     series["source_response"]["raw_sha256"])
+                    for series in before_series.get(identity, [])
+                }
+                instrument = InstrumentIdentity("stock", identity[:2], identity[2:])
+                trading_dates = dataset.get("trading_dates") or []
+                window_dates = [day for day in trading_dates
+                                if start_date <= day <= report_date]
+                request_count = min(100, max(2, len(window_dates))) if window_dates else 100
+                usable_proof = False
+                post_fetch_as_of = proof_read_as_of
+                for provider, fetcher in (
+                        ("eastmoney", _fetch_daily_kline_eastmoney_remote),
+                        ("tencent", _fetch_selection_qfq_tencent_remote)):
+                    if budget.remaining() <= 0:
+                        break
+                    fill["requests"] += 1
+                    try:
+                        payload = fetcher(
+                            instrument, count=request_count, request_budget=budget,
+                            start_date=start_date.replace("-", ""),
+                            end_date=report_date.replace("-", ""),
+                            evidence_dir=evidence_root,
+                        )
+                    except Exception as exc:
+                        payload = None
+                        fill["failure_type"] = type(exc).__name__
+                    post_fetch_as_of = datetime.now(timezone(timedelta(hours=8))).isoformat()
+                    available, after_hash = load_verified_price_series(
+                        evidence_root, [identity], evaluation_as_of=evaluation_as_of,
+                        evidence_as_of=post_fetch_as_of,
+                    )
+                    covers_due = False
+                    for series in available.get(identity, []):
+                        response = series["source_response"]
+                        proof_id = (response["provider"], response["raw_sha256"])
+                        if response["provider"] != provider or proof_id in known_proofs:
+                            continue
+                        bars = {bar["date"]: bar for bar in series["bars"]}
+                        for row in dataset.get("observations") or []:
+                            if row.get("instrument_id") != identity:
+                                continue
+                            for outcome in (row.get("outcomes") or {}).values():
+                                if not isinstance(outcome, dict) or \
+                                        outcome.get("status") != "price_basis_unverified":
+                                    continue
+                                start_bar = bars.get(row.get("report_date")) or {}
+                                target_bar = bars.get(outcome.get("target_date")) or {}
+                                if (start_bar.get("is_final") is True
+                                        and target_bar.get("is_final") is True
+                                        and start_bar.get("close", 0) > 0
+                                        and target_bar.get("close", 0) > 0
+                                        and start_bar.get("volume", 0) > 0
+                                        and target_bar.get("volume", 0) > 0):
+                                    covers_due = True
+                                    break
+                            if covers_due:
+                                break
+                        if covers_due:
+                            break
+                    if payload is not None and after_hash != before_hash and covers_due:
+                        usable_proof = True
+                        fill["provider"] = provider
+                        break
+                if usable_proof:
+                    dataset = build_selection_performance(
+                        data, market_db_path, report_date, evaluation_as_of,
+                        price_evidence_dir=evidence_root,
+                        price_evidence_as_of=post_fetch_as_of,
+                    )
+                    fill["status"] = "captured"
+            except Exception as exc:
+                fill["status"] = "fetch_failed"
+                fill["failure_type"] = type(exc).__name__
+            finally:
+                fill["elapsed_ms"] = int((time.monotonic() - started) * 1000)
         if (dataset.get("schema_version") != "selection-performance-v1"
                 or dataset.get("report_as_of") != report_date
                 or dataset.get("evaluation_as_of") != evaluation_as_of):
@@ -2443,14 +2563,18 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
         index["datasets"][report_date] = {
             "dataset_id": dataset["dataset_id"],
             "evaluation_as_of": dataset["evaluation_as_of"],
+            "evidence_as_of": dataset.get("evidence_as_of"),
         }
         index["dates"] = sorted(index["datasets"])
         _write_derived_json_atomically(index_path, index)
         _write_derived_json_atomically(status_path, {
             "status": "ready", "attempted_report_as_of": report_date,
             "last_success": index["datasets"][report_date],
+            "evidence_fill": fill,
         })
-        return {"status": "ready", "dataset_id": dataset["dataset_id"]}
+        return {"status": "ready", "dataset_id": dataset["dataset_id"],
+                "evaluation_as_of": dataset["evaluation_as_of"],
+                "evidence_fill": fill}
     except Exception:
         # A staged file must never replace a previously usable dated result.
         if old_dated is None:
@@ -2466,6 +2590,7 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
         _write_derived_json_atomically(status_path, {
             "status": "update_failed", "attempted_report_as_of": report_date,
             "last_success": last_success,
+            "evidence_fill": fill,
         })
         return {"status": "update_failed", "last_success": last_success}
 

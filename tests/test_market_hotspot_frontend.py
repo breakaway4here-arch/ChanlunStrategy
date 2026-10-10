@@ -341,6 +341,119 @@ t.withRows(rows,function(){
 });
 """)
 
+    def test_system_hit_button_navigates_canonical_all_and_clears_reading_filters(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, bind: bindMarketHotspotControls, "
+            "selection: getCandidateSelection, views: getCandidateViews, "
+            "setup: normalizeWorkspace, state: state, nodes: nodes })",
+            VALID_PROJECTION + r"""
+const t=globalThis.__hotspotTest;
+const rows=Array.from({length:25},function(_,index){
+  const code=String(600001+index);
+  return {id:'row:'+code,instrument_id:'SH'+code,code:code,name:'股票'+code,
+    page_status:'watch_only',evidence_view:'baseline',
+    sources:index===24?['main','confirming','luojie_pool']:['baseline'],
+    candidate:{code:code,name:'股票'+code,sector:'测试',action_semantics:'watch_only'},
+    strategy_results:[{strategy_id:'baseline',role:'research',action_semantics:'watch_only'}]};
+});
+install(rows);
+const data={date:'2026-09-16',workspace:{default_view:'main',views:{
+  main:[],baseline:[{code:'600001',name:'另一来源'}],
+  confirming:[{code:'600025',name:'目标'}],luojie:[{code:'600025',name:'目标'}]
+},view_meta:{}},kaipanla_context:{status:'available',data_date:'2026-09-16',groups:[
+  {code:'A',name:'主题',stocks:[{code:'600025',name:'目标'},{code:'600025',name:'重复目标'}]}
+]}};
+t.state.data=data;t.setup(data);
+const model=t.build(data),group=model.groups[0];
+assert(group.systemHitCount===1 && group.items.filter(i=>i.membership==='in').length===1,
+  'same code across sources or repeated KPL rows inflated the declared hit count');
+let click,scrolled=false;
+const button={getAttribute:function(){return group.key;},addEventListener:function(name,handler){
+  if(name==='click')click=handler;
+}};
+t.nodes.marketHotspot={querySelectorAll:function(selector){
+  return selector==='[data-hotspot-system-theme]'?[button]:[];
+},querySelector:function(){return null;}};
+t.nodes.candidateSearch={value:'old query'};
+t.nodes.sectorStrip={innerHTML:'',setAttribute:function(){},querySelectorAll:function(){return [];}};
+document.getElementById=function(id){return id==='candidateWorkspace'
+  ? {scrollIntoView:function(){scrolled=true;}}:null;};
+t.state.hotspot.model=model;t.bind();
+const before=t.views().views.decision_all.map(i=>i.code);
+assert(before.length===25 && t.views().views.decision_formal.length===0,
+  'fixture must have an empty primary and a full 25-row canonical view');
+const cases=[
+  {view:'decision_formal',query:'',sector:''},
+  {view:'baseline',query:'',sector:''},
+  {view:'decision_all',query:'600001',sector:''},
+  {view:'decision_all',query:'',sector:'其他行业'},
+  {view:'decision_all',query:'',sector:''}
+];
+cases.forEach(function(input){
+  t.state.currentView=input.view;t.state.candidateQuery=input.query;
+  t.state.sectorFilter=input.sector;t.state.sectorFilterCode=input.sector?'other':'';
+  t.state.sectorFilterRefs=input.sector?['600001']:[];
+  t.state.decisionStatusFilter='';t.state.hotspotCandidateCodes=null;
+  t.state.candidateLimit=20;t.nodes.candidateSearch.value=input.query;
+  click();
+  const selected=t.selection();
+  assert(t.state.currentView==='decision_all' && selected.poolItems.length===25,
+    'button did not navigate to the complete canonical view');
+  assert(selected.items.map(i=>i.code).join(',')==='600025'
+    && selected.visibleItems.map(i=>i.code).join(',')==='600025',
+    'declared target was hidden by an old view, filter, or first-20 pagination');
+  assert(t.state.candidateQuery==='' && t.nodes.candidateSearch.value===''
+    && t.state.sectorFilter==='' && t.state.sectorFilterCode===''
+    && t.state.sectorFilterRefs.length===0,
+    'old query or industry filter remained active after explicit group navigation');
+  assert(t.state.activeItem && t.state.activeItem.code==='600025',
+    'same-view navigation did not refresh the selected candidate lifecycle');
+  assert(t.nodes.sectorStrip.innerHTML.includes('未选择板块'),
+    'industry strip still showed the cleared filter');
+});
+assert(scrolled,'group navigation did not scroll to the candidate workspace');
+assert(t.views().views.decision_formal.length===0,'market theme injected a formal row');
+t.state.hotspotCandidateCodes=null;
+assert(t.selection('decision_all').items.map(i=>i.code).join(',')===before.join(','),
+  'clearing reading filter did not restore original canonical membership and order');
+""")
+
+    def test_system_hit_button_clears_stale_formal_status_filter(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, bind: bindMarketHotspotControls, "
+            "selection: getCandidateSelection, setup: normalizeWorkspace, "
+            "state: state, nodes: nodes })",
+            VALID_PROJECTION + r"""
+const row={id:'target',instrument_id:'SH600025',code:'600025',name:'目标',
+  page_status:'formal_ready',evidence_view:'main',
+  candidate:{code:'600025',name:'目标',action_semantics:'formal'},
+  strategy_results:[{strategy_id:'main',role:'formal',action_semantics:'formal'}]};
+install([row]);
+window.CHANLUN_BOOTSTRAP.decisionWorkbench.health={status:'verified',
+  blocking_reasons:[],fact_blocking_reasons:[]};
+const data={date:'2026-09-16',workspace:{default_view:'decision_wait',
+  views:{main:[{code:'600025',name:'目标'}]},view_meta:{}},
+  kaipanla_context:{status:'available',data_date:'2026-09-16',groups:[
+    {code:'A',name:'主题',stocks:[{code:'600025',name:'目标'}]}
+  ]}};
+const t=globalThis.__hotspotTest;t.state.data=data;t.setup(data);
+t.state.candidateQuery='';t.state.sectorFilter='';t.state.sectorFilterCode='';
+t.state.sectorFilterRefs=[];t.state.candidateLimit=20;
+const model=t.build(data);t.state.hotspot.model=model;
+assert(model.groups[0].systemHitCount===1 && t.selection().statusItems.length===0,
+  'fixture must expose a known hit hidden by formal-incomplete status');
+let click;
+const button={getAttribute:function(){return model.groups[0].key;},
+  addEventListener:function(name,handler){if(name==='click')click=handler;}};
+t.nodes.marketHotspot={querySelectorAll:function(selector){
+  return selector==='[data-hotspot-system-theme]'?[button]:[];
+},querySelector:function(){return null;}};
+t.bind();click();
+assert(t.state.currentView==='decision_all' && t.state.decisionStatusFilter===''
+  && t.selection().items.map(i=>i.code).join(',')==='600025',
+  'status filter still hid a known system hit after explicit group navigation');
+""")
+
     def test_old_html_without_summary_mount_gets_shared_model_mount(self):
         _assert_node_contract(self,
             "({ mount: ensureMarketHotspotSummaryMount })",

@@ -23,6 +23,8 @@ from chanlun.market_history_store import MarketHistoryStore
 from chanlun.preclose_schedule import _SSE_2026_CLOSED
 from chanlun.report_comparison import (
     _STRATEGY_ID_BY_VIEW,
+    _bound_published_theme_context,
+    _theme_refs,
     _workbench_review_entries,
     load_published_comparison_snapshot,
 )
@@ -30,7 +32,7 @@ from chanlun.report_comparison import (
 
 HORIZONS = (1, 3, 5, 10, 20, 30)
 SCHEMA_VERSION = "selection-performance-v1"
-CALC_VERSION = "published-close-six-horizons-v1"
+CALC_VERSION = "published-close-six-horizons-v2"
 STATUSES = (
     "ready", "waiting", "missing_price", "price_basis_unverified",
     "calendar_unknown", "excluded",
@@ -144,6 +146,41 @@ def _empty_outcome(report_date, target_date, status, reason=None, series_ref=Non
     }
 
 
+def _prepared_series(series):
+    candidates = series if isinstance(series, list) else [series]
+    return [(*_series_bars(item), item) for item in candidates
+            if isinstance(item, dict)]
+
+
+def _series_for_endpoints(prepared, identity, start_date, target_date):
+    """Choose one proved response for both closes; reject conflicting proofs."""
+    complete = []
+    for bars, verified, series in prepared:
+        start = bars.get(start_date)
+        end = bars.get(target_date)
+        if not verified or series.get("instrument_id") != identity or not start or not end:
+            continue
+        start_price, end_price = _positive(start.get("close")), _positive(end.get("close"))
+        if not start_price or not end_price or start.get("is_final") is not True \
+                or end.get("is_final") is not True:
+            continue
+        if any("volume" in bar and _positive(bar.get("volume")) is None
+               for bar in (start, end)):
+            continue
+        complete.append((start_price, end_price, bars, series))
+    if len({(item[0], item[1]) for item in complete}) > 1:
+        return ({}, False, {}), True
+    if complete:
+        chosen = min(complete, key=lambda item: item[3]["series_ref"])
+        return (chosen[2], True, chosen[3]), False
+    # The canonical DB candidate is appended last to a set of raw responses.
+    # It may show closes, but cannot attest to a comparable price basis.
+    if prepared:
+        bars, verified, series = prepared[-1]
+        return (bars, verified, series), False
+    return ({}, False, {}), False
+
+
 def evaluate_observations(observations, trading_calendar, series_by_id,
                           evaluation_as_of):
     """Calculate six fixed trading-day endpoints for already selected members.
@@ -156,18 +193,29 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
     if calendar != sorted(set(calendar)) or any(not _valid_date(d) for d in calendar):
         raise ValueError("trading_calendar must be sorted, unique ISO dates")
     positions = {day: index for index, day in enumerate(calendar)}
-    loaded = {}
-    for identity, series in (series_by_id or {}).items():
-        bars, verified = _series_bars(series)
-        loaded[identity] = (bars, verified, series)
+    loaded = {identity: _prepared_series(series)
+              for identity, series in (series_by_id or {}).items()}
     results = []
     for original in observations:
         observation = copy.deepcopy(original)
         report_date = observation.get("report_date")
         identity = observation.get("instrument_id")
         position = positions.get(report_date)
-        bars, verified, series = loaded.get(identity, ({}, False, {}))
-        series_ref = series.get("series_ref") if verified else None
+        prepared = loaded.get(identity, [])
+        refs_by_key = {}
+        for ref in observation.get("strategy_refs") or []:
+            if isinstance(ref, dict) and isinstance(ref.get("strategy_key"), str):
+                refs_by_key.setdefault(ref["strategy_key"], []).append(ref)
+        source_excluded = {key: all(
+            ref.get("formal_performance_status") == "incident_excluded"
+            for ref in refs) for key, refs in refs_by_key.items()}
+        explicit_exclusion = observation.get("excluded_reason")
+        if explicit_exclusion == "registered_incident" and refs_by_key \
+                and not all(source_excluded.values()):
+            explicit_exclusion = None
+        if not explicit_exclusion and refs_by_key and all(source_excluded.values()):
+            explicit_exclusion = "registered_incident"
+        observation["excluded_reason"] = explicit_exclusion
         outcomes = {}
         for horizon in HORIZONS:
             key = "t{}".format(horizon)
@@ -176,9 +224,9 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
                 if position is not None and position + horizon < len(calendar)
                 else None
             )
-            if observation.get("excluded_reason"):
+            if explicit_exclusion:
                 result = _empty_outcome(report_date, target_date, "excluded",
-                                        observation["excluded_reason"])
+                                        explicit_exclusion)
             elif target_date is None:
                 result = _empty_outcome(report_date, None, "calendar_unknown")
             elif target_date > cutoff_date or (
@@ -186,6 +234,9 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
                 result = _empty_outcome(report_date, target_date, "waiting",
                                         "target_not_closed")
             else:
+                (bars, verified, series), conflict = _series_for_endpoints(
+                    prepared, identity, report_date, target_date)
+                series_ref = series.get("series_ref") if verified else None
                 start = bars.get(report_date)
                 end = bars.get(target_date)
                 start_price = _positive(start.get("close")) if start else None
@@ -198,7 +249,11 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
                 end_traded = bool(end and (
                     "volume" not in end or _positive(end.get("volume")) is not None
                 ))
-                if end and not end_final:
+                if conflict:
+                    result = _empty_outcome(report_date, target_date,
+                                            "price_basis_unverified",
+                                            "conflicting_verified_series")
+                elif end and not end_final:
                     status = "waiting" if target_date == cutoff_date else "missing_price"
                     result = _empty_outcome(report_date, target_date, status,
                                             "target_close_unconfirmed")
@@ -221,10 +276,29 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
                     result["return_pct"] = (
                         (end_price - start_price) / start_price * 100.0
                     )
+                    response = series.get("source_response")
+                    response = response if isinstance(response, dict) else {}
+                    raw_hash = response.get("raw_sha256")
+                    fetched_at = response.get("fetched_at")
+                    if (isinstance(raw_hash, str)
+                            and re.fullmatch(r"[0-9a-f]{64}", raw_hash)
+                            and _asof_datetime(fetched_at)):
+                        result["price_evidence"] = {
+                            "raw_sha256": raw_hash, "fetched_at": fetched_at,
+                        }
                 result["start_close"] = start_price
                 result["end_close"] = end_price
             outcomes[key] = result
         observation["outcomes"] = outcomes
+        observation["source_outcomes"] = {
+            strategy_key: {
+                horizon: (_empty_outcome(report_date, outcome["target_date"],
+                                         "excluded", "registered_incident")
+                          if is_excluded else copy.deepcopy(outcome))
+                for horizon, outcome in outcomes.items()
+            }
+            for strategy_key, is_excluded in source_excluded.items()
+        }
         results.append(observation)
     return results
 
@@ -247,8 +321,11 @@ def _matched(observation, *, report_start=None, report_end=None,
             or recommendation_scope is not None) and not any(
         (strategy_key is None or row.get("strategy_key") == strategy_key)
         and (role is None or row.get("role") == role)
+        and (role != "formal" or row.get("recommendation_scope") == "formal_recommendation")
         and (recommendation_scope is None or
              row.get("recommendation_scope") == recommendation_scope)
+        and ((role != "formal" and recommendation_scope != "formal_recommendation")
+             or row.get("formal_performance_status") != "incident_excluded")
         for row in observation.get("strategy_refs") or [] if isinstance(row, dict)
     ):
         return False
@@ -273,6 +350,32 @@ def aggregate_selection_performance(dataset, *, horizon, report_start=None,
     ready = []
     for observation in selected:
         outcome = (observation.get("outcomes") or {}).get(key) or {}
+        if strategy_key and "source_outcomes" in observation:
+            all_source_outcomes = observation["source_outcomes"]
+            source_outcomes = (all_source_outcomes.get(strategy_key)
+                               if isinstance(all_source_outcomes, dict) else None)
+            if not isinstance(source_outcomes, dict) or key not in source_outcomes:
+                raise ValueError("source outcome missing for selected strategy")
+            outcome = source_outcomes[key]
+            if not isinstance(outcome, dict):
+                raise ValueError("invalid source outcome for selected strategy")
+        elif strategy_key:
+            selected_refs = [ref for ref in observation.get("strategy_refs") or []
+                             if isinstance(ref, dict)
+                             and ref.get("strategy_key") == strategy_key]
+            if selected_refs and all(
+                ref.get("formal_performance_status") == "incident_excluded"
+                for ref in selected_refs
+            ):
+                outcome = _empty_outcome(observation.get("report_date"),
+                                         outcome.get("target_date"), "excluded",
+                                         "registered_incident")
+            elif outcome.get("status") == "ready" and any(
+                isinstance(ref, dict)
+                and ref.get("formal_performance_status") == "incident_excluded"
+                for ref in observation.get("strategy_refs") or []
+            ):
+                raise ValueError("legacy mixed-incident outcome has no source proof")
         status = outcome.get("status")
         if status not in counts:
             raise ValueError("unrecognized outcome status")
@@ -332,47 +435,6 @@ def _asof_datetime(value):
     except (TypeError, ValueError):
         return None
     return parsed if parsed.tzinfo is not None else None
-
-
-def _theme_refs(report, publication_asof, code):
-    """Use only topic membership known within the selected publication."""
-    context = report.get("kaipanla_context")
-    if not isinstance(context, dict) or context.get("status") not in {"available", "partial"}:
-        return []
-    if context.get("source") != "kaipanla":
-        return []
-    if context.get("data_date") != report.get("date"):
-        return []
-    fetched = _asof_datetime(context.get("fetched_at"))
-    published = _asof_datetime(publication_asof)
-    if not fetched or not published or fetched > published:
-        return []
-    refs = []
-    groups = context.get("groups")
-    for group in groups if isinstance(groups, list) else []:
-        if not isinstance(group, dict):
-            continue
-        theme_code = group.get("code") if isinstance(group.get("code"), str) else ""
-        name = group.get("name") if isinstance(group.get("name"), str) else ""
-        theme_code = theme_code.strip()
-        name = name.strip()
-        if not name or group.get("stock_list_status") == "unavailable":
-            continue
-        stocks = group.get("stocks")
-        if not isinstance(stocks, list):
-            continue
-        if any(isinstance(item, dict) and item.get("code") == code
-               for item in stocks):
-            theme_id = ("kaipanla:" + theme_code if theme_code else
-                        "kaipanla:name:" + _digest(name)[:16])
-            refs.append({
-                "theme_id": theme_id,
-                "name": name, "source": "kaipanla",
-                "source_date": context["data_date"],
-                "identity_status": "source_code" if theme_code else "name_only",
-                "naming_scope": "source_exact_name" if not theme_code else None,
-            })
-    return refs
 
 
 def _strategy_refs(sources, contract, report_date, snapshot_id):
@@ -493,6 +555,7 @@ def load_published_observations(data_dir, report_as_of):
             continue
         published += 1
         workbench = snapshot.get("workbench")
+        theme_context = None
         if isinstance(workbench, dict):
             rows = _workbench_review_entries(
                 report, report_date, workbench, snapshot["source"],
@@ -505,11 +568,13 @@ def load_published_observations(data_dir, report_as_of):
         else:
             rows = list(snapshot["members"].values())
             registry = json.loads((root / "comparison-index.json").read_text(encoding="utf-8"))
-            receipt = (((registry.get("review_registry") or {})
-                        .get("published_member_snapshots") or {})
-                       .get(report_date) or {})
+            receipt = snapshot["member_receipt"]
             contract = (receipt.get("binding") or {}).get("comparison_contract") or {}
-            publication_asof = None
+            theme_context = _bound_published_theme_context(
+                (((registry.get("review_registry") or {})
+                  .get("published_theme_contexts") or {}).get(report_date)),
+                report, report_date, receipt,
+            )
             version_hash = receipt.get("content_sha256")
         report_hash = _digest(report)
         publication_ref = {
@@ -518,6 +583,8 @@ def load_published_observations(data_dir, report_as_of):
             "source": snapshot["source"],
             "report_sha256": report_hash,
             "publication_sha256": version_hash,
+            "theme_context_sha256": (theme_context.get("content_sha256")
+                                     if theme_context else None),
         }
         sources.append(publication_ref)
         unique = set()
@@ -531,8 +598,13 @@ def load_published_observations(data_dir, report_as_of):
             strategies = _strategy_refs(row.get("sources") or [], contract,
                                         report_date, snapshot["snapshot_id"])
             roles = sorted(set(ref["role"] for ref in strategies))
-            excluded = any(ref.get("formal_performance_status") == "incident_excluded"
-                           for ref in strategies)
+            excluded = bool(strategies) and all(
+                ref.get("formal_performance_status") == "incident_excluded"
+                for ref in strategies)
+            themes = (_theme_refs(report, publication_asof, code)
+                      if isinstance(workbench, dict) else
+                      (theme_context["theme_refs_by_instrument"].get(identity, [])
+                       if theme_context else []))
             observations.append({
                 "observation_id": "{}:{}:{}".format(
                     report_date, snapshot["snapshot_id"], identity),
@@ -544,7 +616,7 @@ def load_published_observations(data_dir, report_as_of):
                 "recommendation_role": roles[0] if len(roles) == 1 else "mixed" if roles else "unknown",
                 "source_views": sorted(set(ref.get("view") for ref in strategies if ref.get("view"))),
                 "strategy_refs": strategies,
-                "theme_refs": _theme_refs(report, publication_asof, code),
+                "theme_refs": themes,
                 "excluded_reason": "registered_incident" if excluded else None,
             })
     observations.sort(key=lambda row: (row["report_date"], row["instrument_id"]))
@@ -740,7 +812,8 @@ def _group_summaries(dataset):
 
 
 def build_selection_performance(data_dir, db_path, report_as_of,
-                                evaluation_as_of, *, price_series_file=None):
+                                evaluation_as_of, *, price_series_file=None,
+                                price_evidence_dir=None, price_evidence_as_of=None):
     """Build an isolated derived dataset from local saved facts and read-only DB."""
     if not _valid_date(report_as_of):
         raise ValueError("report_as_of must be an ISO date")
@@ -760,9 +833,39 @@ def build_selection_performance(data_dir, db_path, report_as_of,
     supplied_series, supplied_hash = _load_verified_series(price_series_file)
     combined_series = dict(db_series)
     combined_series.update(supplied_series)
+    evidence_hash = None
+    evidence_series = {}
+    proof_refs = []
+    if price_evidence_dir is not None:
+        from chanlun.selection_price_evidence import load_verified_price_series
+        identities = sorted({row["instrument_id"] for row in observations})
+        evidence_series, evidence_hash = load_verified_price_series(
+            price_evidence_dir, identities, evaluation_as_of=evaluation_as_of,
+            evidence_as_of=(price_evidence_as_of if price_evidence_as_of is not None
+                            else evaluation_as_of))
+        for identity, candidates in evidence_series.items():
+            candidates = candidates if isinstance(candidates, list) else [candidates]
+            for candidate in candidates:
+                response = candidate.get("source_response") if isinstance(candidate, dict) else None
+                response = response if isinstance(response, dict) else {}
+                proof_refs.append({
+                    "instrument_id": identity,
+                    "raw_sha256": response.get("raw_sha256"),
+                    "fetched_at": response.get("fetched_at"),
+                })
+            combined_series[identity] = (
+                list(candidates)
+                + ([supplied_series[identity]] if identity in supplied_series else [])
+                + ([db_series[identity]] if identity in db_series else [])
+            )
     outcomes = evaluate_observations(
         observations, calendar, combined_series, evaluation_as_of,
     )
+    proof_refs.sort(key=lambda row: (row["instrument_id"], row["raw_sha256"] or "",
+                                     row["fetched_at"] or ""))
+    proof_times = [(_asof_datetime(row["fetched_at"]), row["fetched_at"])
+                   for row in proof_refs if _asof_datetime(row["fetched_at"])]
+    evidence_as_of = max(proof_times)[1] if proof_times else None
     exclusion_path = Path(__file__).resolve().parents[1] / "config" / "strategy_sample_exclusions.json"
     exclusion_hash = (hashlib.sha256(exclusion_path.read_bytes()).hexdigest()
                       if exclusion_path.is_file() else None)
@@ -785,6 +888,13 @@ def build_selection_performance(data_dir, db_path, report_as_of,
         "exclusion_registry_sha256": exclusion_hash,
         "candidate_bars_sha256": _digest(db_series),
         "verified_series_file_sha256": supplied_hash,
+        "verified_evidence_sha256": evidence_hash,
+        "price_evidence_decoder_source_sha256": (
+            hashlib.sha256(Path(__file__).with_name("selection_price_evidence.py")
+                           .read_bytes()).hexdigest()
+            if price_evidence_dir is not None else None
+        ),
+        "accepted_price_proofs": proof_refs,
     }
     dataset = {
         "schema_version": SCHEMA_VERSION,
@@ -792,6 +902,8 @@ def build_selection_performance(data_dir, db_path, report_as_of,
         "generated_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "report_as_of": report_as_of,
         "evaluation_as_of": evaluation_as_of,
+        "evidence_as_of": evidence_as_of,
+        "price_proofs": proof_refs,
         "measurement": "published_close_to_close",
         "cohort_policy": "report_date_instrument_dedup",
         "horizons": list(HORIZONS),
@@ -800,7 +912,7 @@ def build_selection_performance(data_dir, db_path, report_as_of,
         "calendar_last": calendar[-1] if calendar else None,
         "trading_dates": [day for day in calendar if day <= report_as_of],
         "coverage": dict(loaded["coverage"], market=db_coverage,
-                         verified_series_count=len(supplied_series)),
+                         verified_series_count=len(supplied_series) + len(evidence_series)),
         "observations": outcomes,
     }
     dataset["summary"] = {
