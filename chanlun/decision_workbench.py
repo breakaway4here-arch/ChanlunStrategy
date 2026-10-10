@@ -1106,6 +1106,8 @@ def _changes(current, previous):
             anchor.get('value'),
         )
     changed = []
+    semantic_changed = []
+    value_changed = []
     change_details = {}
     value_unavailable = []
     value_unavailable_reasons = {}
@@ -1130,8 +1132,11 @@ def _changes(current, previous):
                 value_unavailable_reasons[after[key]['code']] = 'price_basis_changed'
             else:
                 value_unavailable_reasons[after[key]['code']] = 'price_basis_missing'
-        if semantic(after[key]) != semantic(before[key]):
+        semantic_differs = semantic(after[key]) != semantic(before[key])
+        value_differs = price_semantic(after[key]) != price_semantic(before[key])
+        if semantic_differs:
             changed.append(after[key]['code'])
+            semantic_changed.append(after[key]['code'])
             rows = []
             for field in ('formal_action', 'page_status', 'action_reason',
                           'primary_reason', 'next_confirmation', 'invalidation'):
@@ -1150,16 +1155,20 @@ def _changes(current, previous):
                 })
             if rows:
                 change_details[after[key]['code']] = rows
-        elif price_semantic(after[key]) != price_semantic(before[key]):
+        elif value_differs:
             if basis_compatible:
                 changed.append(after[key]['code'])
+        if value_differs and basis_compatible:
+            value_changed.append(after[key]['code'])
     result = {'status': 'partial' if unavailable_codes or health_unavailable or unavailable_strategies or changed_identity_groups or value_unavailable or contract.get('price_basis_invalid') or old_contract.get('price_basis_invalid') else 'available',
             'membership': membership,
             'previous_report_date': previous.get('report_date'),
             'previous_phase': previous.get('phase'),
             'added': [after[k]['code'] for k in sorted(after.keys() - before.keys())],
             'removed': [before[k]['code'] for k in sorted(before.keys() - after.keys())],
-            'changed': changed}
+            'changed': changed,
+            'semantic_changed': semantic_changed,
+            'value_changed': value_changed}
     compared_count = len(before.keys() & after.keys())
     condition_status = (
         'available' if result['status'] == 'available' else
@@ -1168,7 +1177,7 @@ def _changes(current, previous):
     result['condition_comparison'] = {
         'status': condition_status,
         'compared_count': compared_count,
-        'changed_count': len(changed) if condition_status != 'unavailable' else None,
+        'changed_count': len(semantic_changed) if condition_status != 'unavailable' else None,
     }
     if change_details:
         result['change_details'] = change_details

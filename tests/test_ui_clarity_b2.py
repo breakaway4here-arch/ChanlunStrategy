@@ -12,6 +12,59 @@ from tests.test_auxiliary_frontend import _assert_node_contract
 
 
 class B2ProducerTests(PublishedMembershipComparisonTests):
+    def test_price_only_record_change_keeps_legacy_changed_but_not_condition(self):
+        basis = {"adjustment": "raw", "factor_vs_raw": 1}
+        contract = {"strategy_identities": [{"strategy_id": "main", "strategy_version": "v1"}],
+                    "strategy_version": {"main": "v1"}}
+        row = {"instrument_id": "SH600001", "code": "600001", "page_status": "watch_only",
+               "strategy_results": [{"strategy_id": "main", "candidate": {"price_basis": basis}}],
+               "reference_price": 10, "formal_action": "仅观察", "action_reason": "等待确认"}
+        previous = {"phase": "formal", "report_date": "2026-10-08", "items": [row],
+                    "comparison_contract": contract, "membership_status": "available"}
+        current = {"phase": "formal", "report_date": "2026-10-09",
+                   "items": [dict(row, reference_price=11)], "comparison_contract": contract}
+        result = _changes(current, previous)
+        self.assertEqual(result["changed"], ["600001"])
+        self.assertEqual(result["semantic_changed"], [])
+        self.assertEqual(result["value_changed"], ["600001"])
+        self.assertEqual(result["condition_comparison"]["changed_count"], 0)
+        self.assertNotIn("change_details", result)
+        self.assertNotIn("value_unavailable_codes", result)
+
+    def test_semantic_and_verified_price_change_overlap_without_double_counting(self):
+        basis = {"adjustment": "raw", "factor_vs_raw": 1}
+        contract = {"strategy_identities": [{"strategy_id": "main", "strategy_version": "v1"}],
+                    "strategy_version": {"main": "v1"}}
+        old = {"instrument_id": "SH600001", "code": "600001", "page_status": "watch_only",
+               "strategy_results": [{"strategy_id": "main", "candidate": {"price_basis": basis}}],
+               "reference_price": 10, "action_reason": "等待确认"}
+        new = dict(old, reference_price=11, action_reason="观察说明更新")
+        previous = {"phase": "formal", "report_date": "2026-10-08", "items": [old],
+                    "comparison_contract": contract, "membership_status": "available"}
+        current = {"phase": "formal", "report_date": "2026-10-09", "items": [new],
+                   "comparison_contract": contract}
+        result = _changes(current, previous)
+        self.assertEqual(result["changed"], ["600001"])
+        self.assertEqual(result["semantic_changed"], ["600001"])
+        self.assertEqual(result["value_changed"], ["600001"])
+        self.assertEqual(result["condition_comparison"]["changed_count"], 1)
+        self.assertEqual(result["change_details"]["600001"][0]["field"], "action_reason")
+
+    def test_missing_price_basis_never_promotes_numeric_record_change(self):
+        contract = {"strategy_identities": [{"strategy_id": "main", "strategy_version": "v1"}],
+                    "strategy_version": {"main": "v1"}}
+        old = {"instrument_id": "SH600001", "code": "600001", "page_status": "watch_only",
+               "strategy_results": [{"strategy_id": "main"}], "reference_price": 10}
+        previous = {"phase": "formal", "report_date": "2026-10-08", "items": [old],
+                    "comparison_contract": contract, "membership_status": "available"}
+        current = {"phase": "formal", "report_date": "2026-10-09",
+                   "items": [dict(old, reference_price=11)], "comparison_contract": contract}
+        result = _changes(current, previous)
+        self.assertEqual(result["changed"], [])
+        self.assertEqual(result["semantic_changed"], [])
+        self.assertEqual(result["value_changed"], [])
+        self.assertIn("600001", result["value_unavailable_codes"])
+
     def test_previous_projection_exposes_exact_raw_file_bytes_hash(self):
         html = self.root / self.day / "index.html"
         source = html.read_text()
@@ -95,6 +148,98 @@ class B2ProducerTests(PublishedMembershipComparisonTests):
 
 
 class B2FrontendTests(unittest.TestCase):
+    def test_structured_price_record_has_separate_count_and_no_condition_claim(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest,day='2026-10-09';
+const changes={status:'available',changed:['600001'],semantic_changed:[],value_changed:['600001'],
+ condition_comparison:{status:'available',compared_count:1,changed_count:0},
+ membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-10-08',
+ previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲',sources:['main']}}}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'甲',page_status:'watch_only'}],changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
+if(html.indexOf('条件更新 <span>0</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0)
+ throw Error('price-only record was counted as condition');
+if(html.indexOf('data-change-kind="value"')<0||html.indexOf('状态或条件变化')>=0)
+ throw Error('price-only row was labeled as a verified condition');
+if(summary.indexOf('条件变化 0')<0||summary.indexOf('价格相关记录变化 1')<0)
+ throw Error('summary mixed condition and price record counts');
+''')
+
+    def test_semantic_and_price_overlap_stays_one_all_row_with_both_tags(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest,day='2026-10-09';
+const changes={status:'available',changed:['600001'],semantic_changed:['600001'],value_changed:['600001'],
+ condition_comparison:{status:'available',compared_count:1,changed_count:1},
+ membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-10-08',
+ previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲',sources:['main']}}}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render();
+if(html.indexOf('条件更新 <span>1</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0
+ || html.indexOf('全部 <span>1</span>')<0||(html.match(/data-change-row=/g)||[]).length!==1)
+ throw Error('overlap was double counted or lost');
+if(html.indexOf('条件更新 · 价格记录')<0)throw Error('overlap lost a distinct price tag');
+''')
+
+    def test_legacy_changed_without_structured_arrays_is_visible_but_uncategorized(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest,day='2026-10-09';
+const changes={status:'partial',changed:['600001'],
+ membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-10-08',
+ previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲',sources:['main']}}}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
+if(html.indexOf('条件更新 <span>—</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
+ || html.indexOf('data-change-kind="legacy"')<0||html.indexOf('600001')<0)
+ throw Error('legacy changed was dropped or mislabeled as a condition');
+if(summary.indexOf('条件变化 —')<0||summary.indexOf('旧口径变化 1（类别未核验）')<0)
+ throw Error('legacy comparison summary invented a categorized count');
+''')
+
+    def test_partially_structured_changed_keeps_uncovered_legacy_member(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest,day='2026-10-09';
+const changes={status:'partial',changed:['600001','600002'],semantic_changed:['600001'],value_changed:[],
+ condition_comparison:{status:'partial',compared_count:2,changed_count:1},
+ membership:{status:'available',added:[],removed:[],shared:['600001','600002'],
+ previous_report_date:'2026-10-08',previous_phase:'formal',previous_items:{}},
+ change_details:{'600002':[{field:'action_reason',before:'上份说明',after:'本期说明',status:'updated'}]}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'甲'},{code:'600002',name:'乙'}],changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
+if(html.indexOf('条件更新 <span>1</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
+ || html.indexOf('data-change-row="600002"')<0||html.indexOf('全部 <span>2</span>')<0)
+ throw Error('uncovered old changed entry was dropped');
+if(summary.indexOf('旧口径变化 1（类别未核验）')<0)throw Error('summary hid uncovered old entry');
+const legacy=html.slice(html.indexOf('data-change-row="600002"'),html.indexOf('id="decision-change-history-600002"'));
+if(legacy.indexOf('登记文字差异 1 项，比较依据待核验')<0||legacy.indexOf('已核验文字变化')>=0)
+ throw Error('legacy row borrowed verified condition status from another security');
+''')
+
+    def test_unavailable_condition_coverage_keeps_semantic_text_without_verified_count(self):
+        _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
+const t=globalThis.__auxTest,day='2026-10-09';
+const changes={status:'partial',changed:['600001'],semantic_changed:['600001'],value_changed:[],
+ condition_comparison:{status:'unavailable',compared_count:0,changed_count:null},
+ membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-10-08',
+ previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲',sources:['main']}}},
+ change_details:{'600001':[{field:'action_reason',before:'旧说明',after:'新说明',status:'updated'}]}};
+window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
+ report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
+t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
+t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
+if(html.indexOf('登记字段差异待核验 <span>—</span>')<0||html.indexOf('新说明')<0
+ || html.indexOf('已核验登记条件变化')>=0||html.indexOf('已核验文字变化')>=0
+ || html.indexOf('登记文字差异 1 项，比较依据待核验')<0||summary.indexOf('条件变化 —')<0)
+ throw Error('unavailable coverage presented a verified condition count');
+''')
+
     def test_raw_history_requires_same_response_byte_digest(self):
         _assert_node_contract(self, "{ decode:decodeBoundDecisionHistoryBytes }", r'''
 const t=globalThis.__auxTest;window.crypto=require('crypto').webcrypto;
@@ -136,7 +281,7 @@ const unavailable=['600011','600014'];
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:added.map(code=>({code,name:code})),changes:{status:'partial',
  membership:{status:'available',added,removed,shared:[],previous_report_date:'2026-09-30',
-  previous_phase:'formal',previous_items:{}},changed,
+  previous_phase:'formal',previous_items:{}},changed,semantic_changed:changed,value_changed:[],
  condition_comparison:{status:'partial',compared_count:3,changed_count:3},
  unavailable_codes:unavailable}}};
 t.state.data={date:day};
@@ -174,6 +319,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  membership:{status:'available',added:[],removed:[],shared:['605366'],previous_report_date:'2026-09-24',
  previous_phase:'formal',previous_items:{'605366':{code:'605366',name:'宏柏新材',sources:['highlights']}}},
  condition_comparison:{status:'partial',compared_count:1,changed_count:1},changed:['605366'],
+ semantic_changed:['605366'],value_changed:[],
  value_unavailable_codes:['605366'],value_unavailable_reasons:{'605366':'price_basis_missing'},
  change_details:{'605366':[{field:'action_reason',before:'<img src=x onerror=alert(1)>',
  after:'涨停当日不追，等待次日回踩确认',status:'updated'},
@@ -193,7 +339,8 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes:{status:'partial',
  membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-09-24',
  previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲'}}},
- changed:['600001'],condition_comparison:{status:'partial',compared_count:1,changed_count:1},
+ changed:['600001'],semantic_changed:['600001'],value_changed:[],
+ condition_comparison:{status:'partial',compared_count:1,changed_count:1},
  change_details:{'600001':[{field:'action_reason',before:null,before_readability:'unreadable',
  after:'本期文字',after_readability:'recorded',status:'unreadable'}]}}}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
@@ -202,13 +349,14 @@ if(html.indexOf('已核验文字变化 1 项')>=0||html.indexOf('原文不可读
  || html.indexOf('登记字段变化')<0)throw Error('unreadable old field called verified wording');
 ''')
 
-    def test_duplicate_legacy_codes_count_once_per_group_and_in_summary(self):
+    def test_duplicate_structured_codes_count_once_per_group_and_in_summary(self):
         _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
 const t=globalThis.__auxTest,day='2026-10-08';
 const changes={status:'partial',membership:{status:'available',added:['600001','600001'],
  removed:['600002','600002'],shared:[],previous_report_date:'2026-09-30',previous_phase:'formal',
  previous_items:{'600002':{code:'600002',name:'旧股'}}},
- changed:['600001','600001'],unavailable_codes:['600002','600002'],
+ changed:['600001','600001'],semantic_changed:['600001','600001'],value_changed:[],
+ unavailable_codes:['600002','600002'],
  condition_comparison:{status:'partial',compared_count:1,changed_count:1}};
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:[{code:'600001',name:'新股'}],changes}};

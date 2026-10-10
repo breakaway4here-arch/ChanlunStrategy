@@ -3574,16 +3574,11 @@
 
   function decisionConditionChangeCount(changes) {
     var value = changes && typeof changes === 'object' ? changes : {};
-    if (!Array.isArray(value.changed)) return null;
-    if (value.changed.length) {
-      var valid = decisionChangeUniqueEntries(value.changed).length;
-      return valid || null;
-    }
+    if (!Array.isArray(value.semantic_changed) || !Array.isArray(value.value_changed)) return null;
     var coverage = value.condition_comparison && typeof value.condition_comparison === 'object'
       ? value.condition_comparison : {};
-    if ((coverage.status === 'available' || coverage.status === 'partial')
-        && coverage.changed_count === 0) return 0;
-    return value.status === 'available' ? 0 : null;
+    if (coverage.status !== 'available' && coverage.status !== 'partial') return null;
+    return decisionChangeUniqueEntries(value.semantic_changed).length;
   }
 
   function decisionChangeUniqueEntries(entries) {
@@ -3596,6 +3591,17 @@
     });
   }
 
+  function decisionUnclassifiedChanges(changes) {
+    var value = changes && typeof changes === 'object' ? changes : {};
+    var old = decisionChangeUniqueEntries(value.changed);
+    if (!Array.isArray(value.semantic_changed) || !Array.isArray(value.value_changed)) return old;
+    var covered = Object.create(null);
+    decisionChangeUniqueEntries(value.semantic_changed.concat(value.value_changed)).forEach(function (entry) {
+      covered[decisionChangeCode(entry)] = true;
+    });
+    return old.filter(function (entry) { return !covered[decisionChangeCode(entry)]; });
+  }
+
   function renderDecisionChangesSummary(changes, compact) {
     var value = changes && typeof changes === 'object' ? changes : {};
     var status = normalizeString(value.status).trim();
@@ -3606,6 +3612,14 @@
     var counts = '新增 ' + (membersKnown ? decisionChangeUniqueEntries(membership.added).length : '—') + ' · 移出 '
       + (membersKnown ? decisionChangeUniqueEntries(membership.removed).length : '—') + ' · 条件变化 '
       + (conditionCount === null ? '—' : conditionCount);
+    if (Array.isArray(value.semantic_changed) && Array.isArray(value.value_changed)) {
+      var priceRecords = decisionChangeUniqueEntries(value.value_changed).length;
+      if (priceRecords) counts += ' · 价格相关记录变化 ' + priceRecords;
+    }
+    var legacyCount = decisionUnclassifiedChanges(value).length;
+    if (legacyCount) {
+      counts += ' · 旧口径变化 ' + legacyCount + '（类别未核验）';
+    }
     if (!membersKnown) return (membership.reason === 'no_previous_report'
       ? '暂无可核验的上份报告：' : '成员比较未核验：') + counts;
     if (status === 'available') return '较前期：' + counts;
@@ -3822,7 +3836,7 @@
     return openCurrentCandidateDetail(code, requestedView);
   }
 
-  function decisionChangeFieldDiffs(changes, code) {
+  function decisionChangeFieldDiffs(changes, code, conditionVerified) {
     var details = changes && changes.change_details && changes.change_details[code];
     if (!Array.isArray(details)) return '';
     var labels = { formal_action: '正式动作', page_status: '页面状态',
@@ -3846,10 +3860,14 @@
         + escapeHtml(display(row.before, row.before_readability)) + '</span><span>本期原文：'
         + escapeHtml(display(row.after, row.after_readability)) + '</span></li>';
     });
-    var label = unreadableCount
-      ? (rows.length > unreadableCount ? '可读原文变化 ' + (rows.length - unreadableCount) + ' 项 · ' : '')
-        + '登记字段变化 ' + unreadableCount + ' 项原文不可读，展开记录'
-      : '已核验文字变化 ' + rows.length + ' 项，展开原文';
+    var label = !conditionVerified
+      ? unreadableCount ? '登记字段差异 ' + rows.length + ' 项，比较依据待核验；'
+          + unreadableCount + ' 项原文不可读，展开记录'
+        : '登记文字差异 ' + rows.length + ' 项，比较依据待核验，展开原文'
+      : unreadableCount
+        ? (rows.length > unreadableCount ? '可读原文变化 ' + (rows.length - unreadableCount) + ' 项 · ' : '')
+          + '登记字段变化 ' + unreadableCount + ' 项原文不可读，展开记录'
+        : '已核验文字变化 ' + rows.length + ' 项，展开原文';
     return rows.length ? '<details class="decision-change-field-diffs"><summary>'
       + label + '</summary><ul>' + rows.join('') + '</ul></details>' : '';
   }
@@ -3870,11 +3888,15 @@
     var reason = decisionChangeReason(entry, changes, code);
     var memberKnown = changes && changes.membership
       && changes.membership.status === 'available';
+    var conditionVerified = decisionConditionChangeCount(changes) !== null;
     var label = (kind === 'added' || kind === 'removed') && !memberKnown
       ? '旧视图比较记录（完整成员未核验）'
       : kind === 'added' ? '本期加入当前集合'
       : (kind === 'removed' ? '移出本期集合（不等于破位）'
-        : (kind === 'unavailable' ? '部分字段不可比较' : '状态或条件变化'));
+        : (kind === 'unavailable' ? '部分字段不可比较'
+          : kind === 'value' ? '价格相关记录变化（价基已核验）'
+            : kind === 'legacy' ? '旧口径变化（类别未核验）'
+              : conditionVerified ? '已核验登记条件变化' : '登记字段差异待核验'));
     var previousDate = kind === 'removed' && previousIdentity.date
       ? '上一有效快照 ' + previousIdentity.date : '';
     var details = [source, date ? (usesPrevious ? '上份 ' : '当前 ') + date : '', previousDate,
@@ -3884,22 +3906,25 @@
     var currentAction = currentCandidate
       ? '<button type="button" class="decision-change-current-button" data-change-current="'
         + escapeHtml(code) + '" data-change-current-view="' + escapeHtml(view)
-        + '">看当前条件</button>' : '';
+        + '">' + (kind === 'value' || kind === 'legacy' ? '看本期记录' : '看当前条件')
+        + '</button>' : '';
     var historyPanelId = 'decision-change-history-' + code;
     var historyControl = 'data-change-history="' + escapeHtml(code)
       + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId) + '"';
     var historyAction = previous ? '<button type="button" class="decision-change-history-button" data-change-history="'
       + escapeHtml(code) + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId)
-      + '">' + (kind === 'changed' ? '比较两期' : '看上次记录')
+      + '">' + (kind === 'changed' && conditionVerified ? '比较两期'
+        : kind === 'value' || kind === 'legacy' || kind === 'changed' ? '并列两期记录' : '看上次记录')
       + '</button>' : '';
-    var primaryHistory = kind === 'removed' || (kind === 'changed' && !!previous)
+    var primaryHistory = kind === 'removed' || ((kind === 'changed' || kind === 'value' || kind === 'legacy') && !!previous)
       || (!currentCandidate && !!previous);
     var primary = primaryHistory ? historyControl
       : currentCandidate ? 'data-change-current="' + escapeHtml(code)
         + '" data-change-current-view="' + escapeHtml(view) + '"'
         : historyControl;
     var tagText = asArray(tags).map(function (tag) {
-      return { added: '加入', removed: '移出', changed: '条件更新', unavailable: '部分不可比' }[tag] || '';
+      return { added: '加入', removed: '移出', changed: conditionVerified ? '条件更新' : '登记字段待核验',
+        value: '价格记录', legacy: '旧口径待核验', unavailable: '部分不可比' }[tag] || '';
     }).filter(Boolean).join(' · ');
     var actions = primaryHistory ? (currentAction + historyAction) : historyAction;
     return '<li data-change-row="' + escapeHtml(code) + '"><div class="decision-change-entry"><button type="button" class="decision-change-item" '
@@ -3908,7 +3933,8 @@
       + '" data-change-view="' + escapeHtml(view) + '"><strong>'
       + escapeHtml(name) + '</strong><span>' + escapeHtml(code) + '</span><small>'
       + escapeHtml(label + (tagText ? ' · ' + tagText : '') + (details ? ' · ' + details : ''))
-      + '</small></button>' + actions + decisionChangeFieldDiffs(changes, code)
+      + '</small></button>' + actions + decisionChangeFieldDiffs(changes, code,
+        conditionVerified && asArray(tags).indexOf('changed') >= 0)
       + '</div><div class="decision-change-history" id="' + escapeHtml(historyPanelId)
       + '" hidden></div></li>';
   }
@@ -4595,11 +4621,20 @@
     var membership = changes.membership && typeof changes.membership === 'object' ? changes.membership : {};
     var memberKnown = membership.status === 'available'
       && Array.isArray(membership.added) && Array.isArray(membership.removed);
+    var structuredChanges = Array.isArray(changes.semantic_changed)
+      && Array.isArray(changes.value_changed);
+    var semanticRows = structuredChanges ? changes.semantic_changed : [];
+    var valueRows = structuredChanges ? changes.value_changed : [];
+    var legacyRows = decisionUnclassifiedChanges(changes);
+    var conditionCount = decisionConditionChangeCount(changes);
     var groups = [
-      ['changed', '条件更新', '本期没有已登记的状态或条件变化'],
+      ['changed', structuredChanges && conditionCount === null
+        ? '登记字段差异待核验' : '条件更新', '本期没有已登记的状态或条件变化'],
       ['added', '加入当前集合', '本期没有新增记录'],
       ['removed', '移出当前集合', '本期没有移出记录'],
     ];
+    if (valueRows.length) groups.push(['value', '价格相关记录变化', '本期没有已核验的价格记录变化']);
+    if (legacyRows.length) groups.push(['legacy', '旧口径变化（类别未核验）', '旧口径变化类别未核验']);
     var unavailableCodes = asArray(changes.unavailable_codes)
       .concat(asArray(changes.value_unavailable_codes)).map(decisionChangeCode)
       .filter(function (code, index, all) { return code && all.indexOf(code) === index; });
@@ -4620,12 +4655,12 @@
         ? unavailableCodes.map(function (code) { return { code: code }; })
         : group[0] === 'added' || group[0] === 'removed'
           ? (memberKnown ? asArray(membership[group[0]]) : asArray(changes[group[0]]))
-          : asArray(changes[group[0]]);
+          : group[0] === 'changed' ? semanticRows
+            : group[0] === 'value' ? valueRows : legacyRows;
       entries = decisionChangeUniqueEntries(entries);
-      var conditionCount = group[0] === 'changed'
-        ? decisionConditionChangeCount(changes) : null;
       var count = (group[0] === 'added' || group[0] === 'removed') && !memberKnown
-        ? '—' : group[0] === 'changed' && conditionCount === null ? '—' : entries.length;
+        ? '—' : group[0] === 'changed' && conditionCount === null
+          ? '—' : entries.length;
       var emptyText = group[0] === 'changed'
         ? conditionCount === null ? '条件变化未比较'
           : status === 'available' ? group[2] : '已比较的成员没有登记字段变化'
@@ -4661,7 +4696,7 @@
       return decisionChangeEntryText(row.kind, row.entry, projection, changes, row.tags);
     }).join('') + '</ul>' : '<p class="decision-change-empty">' + escapeHtml(empty) + '</p>';
     var shortStatus = !memberKnown ? '上份完整名单未核验；加入与移出未比较。'
-      : decisionConditionChangeCount(changes) === null ? '名单成员已核验；条件变化未比较。'
+      : conditionCount === null ? '名单成员已核验；条件变化未比较。'
         : status === 'partial' ? '名单成员已核验；部分字段不可比。'
           : '名单成员与已登记条件已分别核对。';
     var html = '<section class="decision-changes-panel" aria-label="名单变化">'

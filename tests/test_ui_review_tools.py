@@ -13,7 +13,7 @@ class UIReviewToolsBehavior(unittest.TestCase):
     def test_a2_condition_change_count_requires_comparison_coverage(self):
         _assert_node_contract(self, "{ render:renderDecisionChangesPanel,summary:renderDecisionChangesSummary,state:state,nodes:nodes }", r'''
 const t=globalThis.__auxTest;const day='2026-10-08';
-const changes={status:'partial',changed:[],unavailable_codes:['300890'],
+const changes={status:'partial',changed:[],semantic_changed:[],value_changed:[],unavailable_codes:['300890'],
  membership:{status:'available',added:[],removed:[],shared:['300890']},
  condition_comparison:{status:'unavailable',compared_count:0,changed_count:null}};
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
@@ -23,7 +23,8 @@ t.nodes.decisionChanges=target;
 function check(expected,emptyText){
  const summary=t.summary(changes,false);t.render();t.state.decisionChangeFilter='changed';const html=t.render();
  if(summary.indexOf('条件变化 '+expected)<0)throw Error('wrong condition summary: '+summary);
- if(html.indexOf('条件更新 <span>'+expected+'</span>')<0)
+ const groupLabel=expected==='—'?'登记字段差异待核验':'条件更新';
+ if(html.indexOf(groupLabel+' <span>'+expected+'</span>')<0)
   throw Error('wrong condition group count');
  if(emptyText && html.indexOf(emptyText)<0)throw Error('wrong empty state');
 }
@@ -33,7 +34,8 @@ changes.condition_comparison={status:'partial',compared_count:1,changed_count:0}
 check('0','已比较的成员没有登记字段变化');
 changes.status='available';changes.condition_comparison={status:'available',compared_count:0,changed_count:0};
 check('0','本期没有已登记的状态或条件变化');
-changes.status='partial';delete changes.condition_comparison;changes.changed=['300890'];
+changes.status='partial';changes.condition_comparison={status:'partial',compared_count:1,changed_count:1};
+changes.changed=['300890'];changes.semantic_changed=['300890'];
 check('1','');
 ''')
 
@@ -232,8 +234,9 @@ if(html.indexOf('600001')<0 || html.indexOf('600002')<0 || html.indexOf('600003'
   throw Error('existing added/removed/changed lists were not rendered');
 if(html.indexOf('600004')<0 || html.indexOf('价基缺失')<0)
   throw Error('single-stock incomparable reason was not drilled');
-if(html.indexOf('data-change-kind="changed"')<0 || html.indexOf('data-change-code="600003"')<0)
-  throw Error('change entry did not expose a drill-down target');
+if(html.indexOf('data-change-kind="legacy"')<0 || html.indexOf('data-change-code="600003"')<0
+  || html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0)
+  throw Error('old changed entry was dropped or misclassified');
 if(html.indexOf('旧视图比较记录（完整成员未核验）')<0 || html.indexOf('价基')<0)
   throw Error('membership and price comparability boundaries were missing');
 ''')
