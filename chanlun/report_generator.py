@@ -13,10 +13,11 @@ import os
 import re
 import shutil
 import copy
+import tempfile
 from collections.abc import Mapping
 from html.parser import HTMLParser
 from html import escape
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -38,6 +39,7 @@ from chanlun.psy12_shadow_audit import (
     normalize_historical_reports,
 )
 from chanlun.psy12_shadow_history import load_daily_report_envelopes
+from chanlun.selection_performance import build_selection_performance
 
 from config import (
     OUTPUT_DIR, HISTORY_DAYS,
@@ -69,7 +71,10 @@ class NpEncoder(json.JSONEncoder):
 CHART_MAX_BARS = 50  # 图表展示默认K线根数（动态窗口会扩展）
 CHART_MIN_BARS = 50
 CHART_MAX_EXTENDED = 120
-REPORT_V2_ASSETS = ("report-v2.css", "report-v2.js")
+REPORT_V2_ASSETS = (
+    "report-v2.css", "report-v2.js",
+    "selection-performance.css", "selection-performance.js",
+)
 DEFAULT_TOP10_API_BASE = "https://top10-worker.breakaway4here.workers.dev"
 DEFAULT_PRECLOSE_API_BASE = (
     "https://chanlun-preclose-worker.breakaway4here.workers.dev"
@@ -2147,76 +2152,112 @@ class _ReportAssetTagParser(HTMLParser):
         "xmp",
     }
 
-    def __init__(self, html, asset_version):
+    def __init__(self, html, asset_version, include_selection_assets=False):
         super().__init__(convert_charrefs=False)
         self.asset_version = asset_version
+        self.include_selection_assets = include_selection_assets
         self.replacements = []
         self.opaque_tag = None
+        self.asset_seen = set()
+        self.report_asset_anchors = {}
         self.line_offsets = [0]
         for match in re.finditer(r"\n", html):
             self.line_offsets.append(match.end())
 
-    def _record_start_tag(self, tag):
+    def _record_start_tag(self, tag, attrs):
         tag_text = self.get_starttag_text()
         if not tag_text:
             return
         if tag.lower() == "link":
-            updated = _replace_start_tag_asset(
-                tag_text,
-                "href",
-                "report-v2.css",
-                self.asset_version,
-            )
+            updated = tag_text
+            for asset in ("report-v2.css", "selection-performance.css"):
+                updated = _replace_start_tag_asset(
+                    updated, "href", asset, self.asset_version,
+                )
         elif tag.lower() == "script":
-            updated = _replace_start_tag_asset(
-                tag_text,
-                "src",
-                "report-v2.js",
-                self.asset_version,
-            )
+            updated = tag_text
+            for asset in ("report-v2.js", "selection-performance.js"):
+                updated = _replace_start_tag_asset(
+                    updated, "src", asset, self.asset_version,
+                )
         else:
-            return
-        if updated == tag_text:
             return
         line, column = self.getpos()
         start = self.line_offsets[line - 1] + column
-        self.replacements.append((start, start + len(tag_text), updated))
+        attribute = "href" if tag.lower() == "link" else "src"
+        value = dict(attrs).get(attribute)
+        if isinstance(value, str):
+            for asset in REPORT_V2_ASSETS:
+                match = re.fullmatch(
+                    rf"(?P<prefix>(?:\.\./)?)assets/{re.escape(asset)}"
+                    r"(?:\?v=[^\"'&<>\s]+)?", value,
+                )
+                if match:
+                    self.asset_seen.add(asset)
+                    if asset in ("report-v2.css", "report-v2.js"):
+                        self.report_asset_anchors[asset] = (
+                            start, start + len(tag_text), match.group("prefix"),
+                        )
+        if updated != tag_text:
+            self.replacements.append((start, start + len(tag_text), updated))
+
+    def finish_asset_insertions(self):
+        if not self.include_selection_assets:
+            return
+        for old_asset, new_asset, template, after in (
+            ("report-v2.css", "selection-performance.css",
+             '<link rel="stylesheet" href="{path}">', True),
+            ("report-v2.js", "selection-performance.js",
+             '<script src="{path}" defer></script>', False),
+        ):
+            if new_asset in self.asset_seen or old_asset not in self.report_asset_anchors:
+                continue
+            start, end, prefix = self.report_asset_anchors[old_asset]
+            path = prefix + "assets/" + new_asset + "?v=" + self.asset_version
+            insertion = ("\n" + template.format(path=path)) if after else (
+                template.format(path=path) + "\n")
+            position = end if after else start
+            self.replacements.append((position, position, insertion))
 
     def handle_starttag(self, tag, attrs):
-        del attrs
         tag = tag.lower()
         if self.opaque_tag is not None:
             return
         if tag == "script":
-            self._record_start_tag(tag)
+            self._record_start_tag(tag, attrs)
             self.opaque_tag = tag
             return
         if tag in self.OPAQUE_TEXT_TAGS:
             self.opaque_tag = tag
             return
-        self._record_start_tag(tag)
+        self._record_start_tag(tag, attrs)
 
     def handle_startendtag(self, tag, attrs):
-        del attrs
         if self.opaque_tag is not None:
             return
-        self._record_start_tag(tag)
+        self._record_start_tag(tag, attrs)
 
     def handle_endtag(self, tag):
         if self.opaque_tag == tag.lower():
             self.opaque_tag = None
 
 
-def replace_report_asset_versions(html, asset_version):
+def replace_report_asset_versions(html, asset_version,
+                                  include_selection_assets=False):
     """Replace only real report-v2 link/script attributes in an HTML document."""
     if not re.fullmatch(r"[0-9a-f]{12}", str(asset_version or "")):
         raise ValueError("asset_version must be a 12-character lowercase hex digest")
 
-    parser = _ReportAssetTagParser(html, asset_version)
+    parser = _ReportAssetTagParser(
+        html, asset_version, include_selection_assets=include_selection_assets,
+    )
     parser.feed(html)
     parser.close()
+    parser.finish_asset_insertions()
     updated = html
-    for start, end, replacement in reversed(parser.replacements):
+    for start, end, replacement in sorted(
+        parser.replacements, key=lambda item: (item[0], item[1]), reverse=True,
+    ):
         updated = updated[:start] + replacement + updated[end:]
     return updated
 
@@ -2239,7 +2280,9 @@ def refresh_report_asset_versions(output_dir, asset_version):
             continue
         with open(html_path, "r", encoding="utf-8") as handle:
             original = handle.read()
-        updated = replace_report_asset_versions(original, asset_version)
+        updated = replace_report_asset_versions(
+            original, asset_version, include_selection_assets=True,
+        )
         if updated == original:
             continue
         with open(html_path, "w", encoding="utf-8") as handle:
@@ -2282,20 +2325,14 @@ def write_comparison_page(output_dir, top10_api_base, asset_version=None):
 
 
 def _render_kaipanla_context(context):
-    """Independent public-source supplement; no JS/data request dependency."""
-    if not isinstance(context, dict) or context.get('status') not in ('available', 'previous_day') or not context.get('groups'):
-        return ''
-    pieces=['<details class="decision-card" id="kaipanla-context" style="width:calc(100% - 32px);max-width:1440px;margin:16px auto;box-sizing:border-box;overflow-wrap:anywhere">',
-            '<summary><strong>开盘啦题材补充</strong> · 资料日期 '+escape(str(context.get('data_date') or '未记录'))+' · 点击展开</summary>',
-            '<p>来源：开盘啦；独立题材资料，不替代东财行业分类。已返回样本，不代表完整涨停池；不参与正式评分或 L1 排序。</p>']
-    if context.get('status')=='previous_day':
-        pieces.append('<p>往期资料，不是今日盘面。</p>')
-    for group in context['groups']:
-        pieces.append('<details><summary>'+escape(str(group.get('name') or '未命名题材'))+' · '+str(len(group.get('stocks') or []))+'只</summary>')
-        for stock in group.get('stocks') or []:
-            pieces.append('<p><strong>'+escape(str(stock.get('name') or ''))+' '+escape(str(stock.get('code') or ''))+'</strong><br>'+escape(str(stock.get('reason') or '未提供原因'))+'</p>')
-        pieces.append('</details>')
-    return ''.join(pieces)+'</details>'
+    """Safe date fallback; the report-bound JS model fills the shared summary."""
+    valid = isinstance(context, dict) and context.get('status') in ('available', 'partial', 'previous_day') and context.get('groups')
+    date_text = ('资料日期 ' + escape(str(context.get('data_date') or '未记录'))) if valid else '热点信息正在整理'
+    if valid and context.get('status') == 'previous_day':
+        date_text = '上一期参考 · ' + date_text
+    return ('<details class="decision-card" id="kaipanla-context" '
+            'style="width:calc(100% - 32px);max-width:1440px;margin:16px auto;box-sizing:border-box;overflow-wrap:anywhere">'
+            '<summary><strong>今日热点</strong> · ' + date_text + '</summary></details>')
 
 
 def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
@@ -2303,9 +2340,9 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
     asset_query = f"?v={asset_version}" if asset_version else ""
     try:
         context = json.loads(bootstrap_json).get('inlineReportData', {}).get('kaipanla_context', {})
-        kaipanla_html = _render_kaipanla_context(context)
     except (TypeError, ValueError, AttributeError):
-        kaipanla_html = ''
+        context = {}
+    kaipanla_html = _render_kaipanla_context(context)
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2315,6 +2352,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 <link rel="icon" type="image/svg+xml" href='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="%230b0f14"/><path d="M7 22h18M7 16h12M7 10h18" stroke="%2300e676" stroke-width="2.4" stroke-linecap="round"/></svg>'>
 <script defer src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
 <link rel="stylesheet" href="{asset_prefix}assets/report-v2.css{asset_query}">
+<link rel="stylesheet" href="{asset_prefix}assets/selection-performance.css{asset_query}">
 </head>
 <body>
 {kaipanla_html}
@@ -2329,9 +2367,107 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
   window.CHANLUN_BOOTSTRAP.isFileProtocol = (window.location.protocol === 'file:');
 }})();
 </script>
+<script src="{asset_prefix}assets/selection-performance.js{asset_query}" defer></script>
 <script src="{asset_prefix}assets/report-v2.js{asset_query}" defer></script>
 </body>
 </html>"""
+
+
+def _write_derived_bytes_atomically(path, encoded):
+    """Write a derived file without exposing partial content."""
+    path = os.fspath(path)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix=".selection-performance-", suffix=".tmp",
+            dir=os.path.dirname(path), delete=False,
+        ) as handle:
+            temporary = handle.name
+            handle.write(encoded)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def _write_derived_json_atomically(path, value):
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True,
+                         separators=(",", ":"), allow_nan=False).encode("utf-8")
+    _write_derived_bytes_atomically(path, encoded)
+
+
+def refresh_selection_performance_after_publish(output_dir, market_db_path,
+                                                report_date, evaluation_as_of):
+    """Optionally derive a dated performance file after real publication exists.
+
+    The market database and published facts are read-only. A failed calculation
+    keeps the last dated result and records only a safe status code.
+    """
+    from pathlib import Path
+
+    output = Path(output_dir)
+    data = output / "data"
+    prerequisites = (
+        data / (report_date + ".json"),
+        data / "comparison-index.json",
+        output / report_date / "index.html",
+    )
+    if not all(path.is_file() for path in prerequisites):
+        raise ValueError("published report files are required")
+    derived = data / "selection-performance"
+    index_path = derived / "index.json"
+    dated_path = derived / (report_date + ".json")
+    status_path = derived / "status.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+        if not isinstance(index, dict) or not isinstance(index.get("datasets"), dict):
+            index = {"schema_version": "selection-performance-index-v1", "datasets": {}}
+    except (OSError, ValueError, UnicodeError):
+        index = {"schema_version": "selection-performance-index-v1", "datasets": {}}
+    last_dates = sorted(day for day in index["datasets"] if day <= report_date)
+    last_success = index["datasets"][last_dates[-1]] if last_dates else None
+    old_dated = dated_path.read_bytes() if dated_path.is_file() else None
+    old_index = index_path.read_bytes() if index_path.is_file() else None
+    try:
+        dataset = build_selection_performance(data, market_db_path,
+                                              report_date, evaluation_as_of)
+        if (dataset.get("schema_version") != "selection-performance-v1"
+                or dataset.get("report_as_of") != report_date
+                or dataset.get("evaluation_as_of") != evaluation_as_of):
+            raise ValueError("derived dataset identity mismatch")
+        _write_derived_json_atomically(dated_path, dataset)
+        index["datasets"][report_date] = {
+            "dataset_id": dataset["dataset_id"],
+            "evaluation_as_of": dataset["evaluation_as_of"],
+        }
+        index["dates"] = sorted(index["datasets"])
+        _write_derived_json_atomically(index_path, index)
+        _write_derived_json_atomically(status_path, {
+            "status": "ready", "attempted_report_as_of": report_date,
+            "last_success": index["datasets"][report_date],
+        })
+        return {"status": "ready", "dataset_id": dataset["dataset_id"]}
+    except Exception:
+        # A staged file must never replace a previously usable dated result.
+        if old_dated is None:
+            if dated_path.is_file():
+                dated_path.unlink()
+        elif not dated_path.is_file() or dated_path.read_bytes() != old_dated:
+            _write_derived_bytes_atomically(dated_path, old_dated)
+        if old_index is None:
+            if index_path.is_file():
+                index_path.unlink()
+        elif not index_path.is_file() or index_path.read_bytes() != old_index:
+            _write_derived_bytes_atomically(index_path, old_index)
+        _write_derived_json_atomically(status_path, {
+            "status": "update_failed", "attempted_report_as_of": report_date,
+            "last_success": last_success,
+        })
+        return {"status": "update_failed", "last_success": last_success}
 
 
 # ============================================================
@@ -2952,6 +3088,27 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
         ))
 
     refresh_report_asset_versions(output_dir, asset_version)
+
+    quality = daily_data.get("data_quality") or {}
+    evaluation_as_of = quality.get("as_of")
+    try:
+        cutoff = datetime.fromisoformat(str(evaluation_as_of).replace("Z", "+00:00"))
+        local_cutoff = cutoff.astimezone(timezone(timedelta(hours=8))) if cutoff.tzinfo else None
+    except (TypeError, ValueError):
+        local_cutoff = None
+    if (comparison_db_path and quality.get("is_official") is True
+            and quality.get("bar_state") == "closed"
+            and quality.get("is_trading_day") is not False
+            and local_cutoff is not None
+            and local_cutoff.date().isoformat() == date_str
+            and (local_cutoff.hour, local_cutoff.minute) >= (15, 0)):
+        try:
+            derived_status = refresh_selection_performance_after_publish(
+                output_dir, comparison_db_path, date_str, evaluation_as_of,
+            )
+            print("  选股表现派生: {}".format(derived_status["status"]))
+        except Exception as exc:
+            print("  选股表现派生暂不可用，主报告保留: {}".format(type(exc).__name__))
 
     print(f"  日报已生成: {index_path}")
     print(f"  数据已写入: {data_dir}")

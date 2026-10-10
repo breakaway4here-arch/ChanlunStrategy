@@ -549,9 +549,10 @@ globalThis.__auxTest.build();
 assert(globalThis.__auxTest.state.primaryMode === 'today', 'today decision is not the default primary view');
 assert(app.innerHTML.includes('class="primary-mode-tabs"'), 'primary mode navigation missing');
 assert(app.innerHTML.includes('data-primary-mode="today"'), 'today decision entry missing');
-assert(app.innerHTML.includes('data-primary-mode="research"'), 'research validation entry missing');
+assert(app.innerHTML.includes('data-primary-mode="performance"'), 'selection performance entry missing');
+assert(!app.innerHTML.includes('data-primary-mode="research"'), 'research still occupies a primary tab');
 assert(app.innerHTML.includes('id="todayDecisionView"'), 'today decision view missing');
-assert(app.innerHTML.includes('id="researchValidationView"'), 'research validation view missing');
+assert(app.innerHTML.includes('id="researchValidationView"'), 'folded research validation view missing');
 assert(app.innerHTML.includes('id="sectorStrip"'), 'sector strip missing from the first screen');
 assert(app.innerHTML.includes('id="precloseAdvisory"'), 'pre-close advisory missing from today decision');
 assert(app.innerHTML.includes('id="precloseReconciliation"'), 'post-close reconciliation missing from same advisory block');
@@ -560,22 +561,22 @@ assert(!app.innerHTML.includes('id="top10Widget"'), 'temporary Top10 widget stil
 """,
         )
 
-    def test_primary_mode_switch_resizes_chart_after_hidden_research_view_is_revealed(self):
+    def test_primary_mode_switch_resizes_chart_after_performance_view_is_revealed(self):
         _assert_node_contract(
             self,
             "{ render: renderPrimaryMode, state: state, nodes: nodes }",
             r"""
 let sentimentResizeCalls = 0;
 let todayHidden = false;
-let researchHidden = true;
+let performanceHidden = true;
 global.window.requestAnimationFrame = function (callback) { callback(); };
 globalThis.__auxTest.nodes.todayDecisionView = {
   classList: { toggle: function (_name, hidden) { todayHidden = hidden; } }
 };
-globalThis.__auxTest.nodes.researchValidationView = {
-  classList: { toggle: function (_name, hidden) { researchHidden = hidden; } }
+globalThis.__auxTest.nodes.selectionPerformanceView = {
+  classList: { toggle: function (_name, hidden) { performanceHidden = hidden; } }
 };
-const buttons = ['today', 'research'].map(function (mode) {
+const buttons = ['today', 'performance'].map(function (mode) {
   return {
     getAttribute: function () { return mode; },
     classList: { toggle: function () {} },
@@ -585,14 +586,14 @@ const buttons = ['today', 'research'].map(function (mode) {
 globalThis.__auxTest.nodes.primaryTabs = {
   querySelectorAll: function () { return buttons; }
 };
-globalThis.__auxTest.state.primaryMode = 'research';
+globalThis.__auxTest.state.primaryMode = 'performance';
 globalThis.__auxTest.state.sentimentChartInstance = {
   resize: function () { sentimentResizeCalls += 1; }
 };
 globalThis.__auxTest.render();
 assert(todayHidden === true, 'today view stayed visible');
-assert(researchHidden === false, 'research view stayed hidden');
-assert(sentimentResizeCalls === 1, 'research chart was not resized after reveal');
+assert(performanceHidden === false, 'performance view stayed hidden');
+assert(sentimentResizeCalls === 1, 'chart was not resized after reveal');
 """,
         )
 
@@ -1768,8 +1769,8 @@ assert(!html.includes('资金流入与流出方向 · 层级已去重'), 'mixed 
             r"""
 const missing = globalThis.__auxTest.model({});
 const missingHtml = globalThis.__auxTest.render(missing, '');
-assert(missing.title === '资金主线', 'P0 sector title changed to an unsupported hot-sector claim');
-assert(missingHtml.includes('资金主线'), 'funding mainline title missing');
+assert(missing.title === '行业资金流', 'P0 sector title changed to an unsupported hot-sector claim');
+assert(missingHtml.includes('行业资金流'), 'funding source title missing');
 assert(!missingHtml.includes('今日无热点'), 'missing facts were presented as a verified no-hotspot result');
 const model = globalThis.__auxTest.model({
   sector_flow: [{ name: ' 工业金属 ', flow: 12 }],
@@ -1787,7 +1788,7 @@ const model = globalThis.__auxTest.model({
   },
   data_quality: { sector_source: 'eastmoney' }
 });
-assert(model.title === '热门板块', 'verified sector heat did not upgrade the title');
+assert(model.title === '行业涨跌', 'verified sector heat did not identify its own data');
 assert(model.items.length === 1 && model.items[0].name === 'AI算力', 'sector heat was not authoritative');
 assert(model.items[0].sectorCode === 'BK0099' && model.items[0].sectorRefs.join(',') === '600001,600002', 'exact sector mapping was dropped');
 const html = globalThis.__auxTest.render(model, '');
@@ -1801,7 +1802,7 @@ const partial = globalThis.__auxTest.model({
   sector_heat: { status: 'verified_partial', items: [{ sector_name: 'AI算力' }] },
   data_quality: { sector_source: 'eastmoney' }
 });
-assert(partial.title === '资金主线', 'partial breadth masqueraded as verified hot sectors');
+assert(partial.title === '行业资金流', 'partial breadth masqueraded as verified hot sectors');
 assert(partial.items[0].name === '工业金属', 'funding fallback disappeared for partial heat');
 """,
         )

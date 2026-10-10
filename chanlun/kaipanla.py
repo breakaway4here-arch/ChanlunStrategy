@@ -104,22 +104,37 @@ def parse_themes(raw, report_date):
         if actual>target:
             return empty
         groups=[]
-        for group in raw.get('list') or []:
+        for source_order, group in enumerate(raw.get('list') or []):
             if not isinstance(group,dict):
                 continue
+            code=str(group.get('ZSCode') or '').strip()
+            name=str(group.get('ZSName') or '').strip()
+            if not (code or name):
+                continue
             stocks=[]
-            for item in group.get('StockList') or []:
+            seen=set()
+            invalid_stocks=False
+            raw_stocks=group.get('StockList')
+            for item in raw_stocks if isinstance(raw_stocks,list) else []:
                 if not isinstance(item,list) or len(item)<18:
+                    invalid_stocks=True
                     continue
                 try:
                     identity=normalize_identity(str(item[0]),asset_type='stock')
                 except ValueError:
+                    invalid_stocks=True
                     continue
+                if identity.code in seen:
+                    continue
+                seen.add(identity.code)
                 stocks.append({'code':identity.code,'name':str(item[1]),'reason':str(item[17] or '')[:2000]})
-            if stocks:
-                groups.append({'code':str(group.get('ZSCode') or ''),
-                               'name':str(group.get('ZSName') or ''),'stocks':stocks})
-        return dict(empty,status=('available' if actual==target else 'previous_day') if groups else 'unavailable',
+            stocks_status=('unavailable' if not isinstance(raw_stocks,list) else
+                           ('partial' if invalid_stocks else 'available'))
+            groups.append({'code':code,'name':name,'source_order':source_order,
+                           'stocks':stocks,
+                           'stock_list_status':stocks_status})
+        same_day_status='partial' if any(g['stock_list_status']!='available' for g in groups) else 'available'
+        return dict(empty,status=(same_day_status if actual==target else 'previous_day') if groups else 'unavailable',
                     data_date=actual.isoformat(),report_date=report_date,groups=groups,
                     coverage='returned_sample',fetched_at=raw.get('_fetched_at'))
     except (TypeError,ValueError):

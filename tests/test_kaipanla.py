@@ -131,6 +131,33 @@ class KaipanlaTests(unittest.TestCase):
         for raw in [{}, {'errcode':1016,'errmsg':'未登录'}, {'errcode':'0','date':'bad','list':[]}]:
             self.assertEqual(k.parse_themes(raw,'2026-09-29')['status'],'unavailable')
 
+    def test_theme_keeps_valid_empty_groups_source_order_and_dedupes_stocks(self):
+        first=['600000','甲']+['']*15+['原因']
+        second=['000001','乙']+['']*15+['另一原因']
+        result=k.parse_themes({'errcode':'0','date':'2026-09-29','list':[
+            {'ZSCode':'A','ZSName':'AI 应用','StockList':[first,first,['bad','错']+['']*16]},
+            {'ZSCode':'B','ZSName':'电池','StockList':[]},
+            {'ZSCode':'C','ZSName':'通信','StockList':[first,second]},
+        ]},'2026-09-29')
+        self.assertEqual(result['status'],'partial')
+        self.assertEqual([(g['name'],g['source_order']) for g in result['groups']],
+                         [('AI 应用',0),('电池',1),('通信',2)])
+        self.assertEqual([s['code'] for s in result['groups'][0]['stocks']],['600000'])
+        self.assertEqual([s['code'] for s in result['groups'][2]['stocks']],['600000','000001'])
+        self.assertEqual(result['groups'][1]['stocks'],[])
+
+    def test_bad_stock_list_is_local_partial_and_does_not_erase_prior_theme(self):
+        stock=['600001','甲']+['']*15+['原因']
+        result=k.parse_themes({'errcode':'0','date':'2026-09-29','list':[
+            {'ZSCode':'A','ZSName':'AI 应用','StockList':[stock]},
+            {'ZSCode':'B','ZSName':'坏明细题材','StockList':3},
+            {'ZSCode':'C','ZSName':'确证空题材','StockList':[]},
+        ]},'2026-09-29')
+        self.assertEqual(result['status'],'partial')
+        self.assertEqual([(g['name'],g['stock_list_status'],len(g['stocks'])) for g in result['groups']],
+                         [('AI 应用','available',1),('坏明细题材','unavailable',0),
+                          ('确证空题材','available',0)])
+
     def test_kline_qfq_hands_and_intraday_bar_exclusion(self):
         raw={'StockID':'600000','errcode':'0','x':['20260928','20260929'],
              'y':[[10,11,12,9],[11,11.2,11.3,10.9]],'vol':[100,20],'bal':[110000,22300]}
@@ -166,13 +193,14 @@ class KaipanlaTests(unittest.TestCase):
 
     def test_display_escapes_provider_text_and_hides_failure(self):
         from chanlun.report_generator import _render_kaipanla_context
-        self.assertEqual(_render_kaipanla_context({}), '')
-        self.assertEqual(_render_kaipanla_context({'status':'unavailable','groups':[{}]}), '')
+        self.assertEqual(_render_kaipanla_context({}),
+                         _render_kaipanla_context({'status':'unavailable','groups':[{}]}))
         html=_render_kaipanla_context({'status':'previous_day','data_date':'2026-09-28',
             'groups':[{'name':'<script>x</script>','stocks':[{'code':'600000','name':'A','reason':'<img src=x onerror=bad>'}]}]})
-        self.assertIn('2026-09-28',html);self.assertIn('往期资料',html)
+        self.assertIn('id="kaipanla-context"',html)
         self.assertNotIn('<script>',html);self.assertNotIn('<img',html)
-        self.assertIn('不参与正式评分或 L1 排序',html)
+        self.assertIn('2026-09-28',html)
+        self.assertIn('上一期参考',html)
 
     def test_normal_sources_do_not_request_new_source(self):
         from chanlun import data_fetcher as f
@@ -216,10 +244,11 @@ class KaipanlaTests(unittest.TestCase):
         context={'status':'previous_day','data_date':'2026-09-28','groups':[{'name':'题材','stocks':[{'code':'600000','name':'样例','reason':'原因'}]}]}
         html=_build_report_v2_html('2026-09-29',json.dumps({'inlineReportData':{'kaipanla_context':context}}))
         self.assertIn('id="kaipanla-context"',html)
-        self.assertIn('往期资料',html)
+        self.assertIn('上一期参考',html)
         self.assertIn('<div id="app"></div>',html)
         bad=_build_report_v2_html('2026-09-29',json.dumps({'inlineReportData':{'kaipanla_context':{'status':'unavailable'}}}))
-        self.assertNotIn('id="kaipanla-context"',bad)
+        self.assertIn('id="kaipanla-context"',bad)
+        self.assertIn('热点信息正在整理',bad)
         self.assertIn('<div id="app"></div>',bad)
 
     def test_theme_exceptions_return_optional_unavailable(self):

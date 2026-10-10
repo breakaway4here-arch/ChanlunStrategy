@@ -24,7 +24,7 @@ function makeButton(mode) {
     focus: function () { this.focused = true; }
   };
 }
-const buttons = [makeButton('today'), makeButton('research')];
+const buttons = [makeButton('today'), makeButton('performance')];
 const tabs = {
   addEventListener: function (name, handler) { listeners[name] = handler; },
   querySelectorAll: function () { return buttons; }
@@ -37,12 +37,13 @@ global.document.getElementById = function (id) { return id === 'app' ? app : nul
 globalThis.__auxTest.build();
 assert(app.innerHTML.includes('id="primary-mode-tab-today"'), 'today tab lacks a stable accessible id');
 assert(app.innerHTML.includes('role="tabpanel" aria-labelledby="primary-mode-tab-today"'), 'today panel lacks its tab relationship');
-assert(app.innerHTML.includes('role="tabpanel" aria-labelledby="primary-mode-tab-research"'), 'research panel lacks its tab relationship');
+assert(app.innerHTML.includes('role="tabpanel" aria-labelledby="primary-mode-tab-performance"'), 'performance panel lacks its tab relationship');
+assert(app.innerHTML.includes('id="advancedResearchDetails"'), 'old research detail is missing');
 assert(typeof listeners.keydown === 'function', 'primary tabs lack keyboard navigation');
 let prevented = false;
 listeners.keydown({ key: 'End', target: buttons[0], preventDefault: function () { prevented = true; } });
 assert(prevented, 'handled primary-tab key did not prevent page scrolling');
-assert(globalThis.__auxTest.state.primaryMode === 'research', 'End did not activate the last primary tab');
+assert(globalThis.__auxTest.state.primaryMode === 'performance', 'End did not activate the last primary tab');
 assert(buttons[1].focused, 'roving focus did not move to the activated primary tab');
 listeners.keydown({ key: 'ArrowRight', target: buttons[1], preventDefault: function () {} });
 assert(globalThis.__auxTest.state.primaryMode === 'today', 'ArrowRight did not wrap primary-tab focus');

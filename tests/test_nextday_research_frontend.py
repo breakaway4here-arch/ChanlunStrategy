@@ -367,7 +367,7 @@ assert(!mount.innerHTML.includes('过期日报标的'), 'stale response replaced
 """,
         )
 
-    def test_hash_opens_research_tab_and_mobile_rules_keep_list_single_column(self):
+    def test_hash_opens_performance_advanced_details_and_mobile_list_stays_single_column(self):
         _run_node_contract(
             self,
             "({ openFromHash: openNextdayResearchFromHash, state: state, nodes: nodes })",
@@ -375,7 +375,9 @@ assert(!mount.innerHTML.includes('过期日报标的'), 'stale response replaced
 let scrolled = 0;
 function viewNode() { return { classList: { toggle: function () {} } }; }
 __nextdayTest.nodes.todayDecisionView = viewNode();
+__nextdayTest.nodes.selectionPerformanceView = viewNode();
 __nextdayTest.nodes.researchValidationView = viewNode();
+__nextdayTest.nodes.advancedResearchDetails = {open: false};
 __nextdayTest.nodes.primaryTabs = { querySelectorAll: function () { return []; } };
 __nextdayTest.nodes.nextdayResearchSection = {
   scrollIntoView: function () { scrolled += 1; }, focus: function () {}
@@ -383,7 +385,8 @@ __nextdayTest.nodes.nextdayResearchSection = {
 window.requestAnimationFrame = function (callback) { callback(); };
 window.location.hash = '#nextday-research';
 assert(__nextdayTest.openFromHash(), 'research deep link was not recognized');
-assert(__nextdayTest.state.primaryMode === 'research', 'deep link did not open research mode');
+assert(__nextdayTest.state.primaryMode === 'performance', 'deep link did not open performance mode');
+assert(__nextdayTest.nodes.advancedResearchDetails.open === true, 'deep link did not expand research details');
 assert(scrolled > 0, 'deep link did not scroll the research list into view');
 """,
         )
