@@ -23,7 +23,7 @@ t.nodes.decisionChanges=target;
 function check(expected,emptyText){
  const summary=t.summary(changes,false);t.render();t.state.decisionChangeFilter='changed';const html=t.render();
  if(summary.indexOf('条件变化 '+expected)<0)throw Error('wrong condition summary: '+summary);
- const groupLabel=expected==='—'?'登记字段差异待核验':'条件更新';
+ const groupLabel='待确认条件更新';
  if(html.indexOf(groupLabel+' <span>'+expected+'</span>')<0)
   throw Error('wrong condition group count');
  if(emptyText && html.indexOf(emptyText)<0)throw Error('wrong empty state');
@@ -31,11 +31,12 @@ function check(expected,emptyText){
 check('—','条件变化未比较');
 delete changes.condition_comparison;check('—','条件变化未比较');
 changes.condition_comparison={status:'partial',compared_count:1,changed_count:0};
-check('0','已比较的成员没有登记字段变化');
+check('0','已比较的成员没有已核验的条件更新');
 changes.status='available';changes.condition_comparison={status:'available',compared_count:0,changed_count:0};
-check('0','本期没有已登记的状态或条件变化');
+check('0','本期没有已核验的条件更新');
 changes.status='partial';changes.condition_comparison={status:'partial',compared_count:1,changed_count:1};
 changes.changed=['300890'];changes.semantic_changed=['300890'];
+changes.change_details={'300890':[{field:'next_confirmation',before:['旧条件'],after:['新条件'],status:'updated'}]};
 check('1','');
 ''')
 
@@ -156,9 +157,9 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:Object.assign({},base,{
  membership:{status:'unavailable',added:null,removed:null},added:[],removed:[]}})};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;let html=t.render();
-if(html.indexOf('加入当前集合 <span>0</span>')>=0 || html.indexOf('移出当前集合 <span>0</span>')>=0)
+if(html.indexOf('本期新出现 <span>0</span>')>=0 || html.indexOf('上期有、本期未出现 <span>0</span>')>=0)
  throw Error('unknown membership shown as zero');
-if(html.indexOf('本期没有新增记录')>=0)throw Error('unknown membership shown as no additions');
+if(html.indexOf('本期没有新出现的股票')>=0)throw Error('unknown membership shown as no additions');
 if(t.summary({status:'comparison_unavailable',membership:{status:'unavailable',reason:'no_previous_report'}},false)
   .indexOf('暂无可核验的上份报告')<0)throw Error('missing previous report was not explained');
 window.CHANLUN_BOOTSTRAP.decisionWorkbench.changes={status:'partial',added:[],removed:['600072'],
@@ -166,7 +167,7 @@ window.CHANLUN_BOOTSTRAP.decisionWorkbench.changes={status:'partial',added:[],re
   previous_items:{'600072':{code:'600072',name:'旧视图中船科技',sources:['main']}}}};
 html=t.render();
 if(html.indexOf('旧视图中船科技')<0 || html.indexOf('旧数据视图')<0
- || html.indexOf('移出当前集合 <span>—</span>')<0)
+ || html.indexOf('上期有、本期未出现 <span>—</span>')<0)
  throw Error('partial previous name/source was hidden or claimed complete');
 window.CHANLUN_BOOTSTRAP.decisionWorkbench.changes={status:'partial',
  membership:{status:'available',added:['300890'],removed:['600072'],shared:[],
@@ -194,7 +195,7 @@ t.nodes.decisionChanges=target;const html=t.render();
 if(!/data-change-group-toggle="unavailable"[\s\S]*?<span>1<\/span>/.test(html))
  throw Error('overlap counted more than once');
 if(html.indexOf('策略&#47;条件不可比')<0 || html.indexOf('价格不可比')<0
-  || html.indexOf('条件更新')<0)throw Error('known change or unavailable reason lost');
+  || html.indexOf('旧口径变化')<0)throw Error('known change or unavailable reason lost');
 if(html.indexOf('观察 Top5收录')<0 || html.indexOf('研究观察')<0)
  throw Error('research source identity lost');
 ''')

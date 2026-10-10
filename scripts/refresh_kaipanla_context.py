@@ -243,7 +243,7 @@ def _read_baseline(docs_dir, report_date):
 def _validate_context(context, report_date):
     if not isinstance(context, dict):
         return False
-    if (context.get('status') != 'available' or context.get('source') != 'kaipanla'
+    if (context.get('status') not in ('available', 'partial') or context.get('source') != 'kaipanla'
             or context.get('affects_formal') is not False
             or context.get('data_date') != report_date or context.get('report_date') != report_date
             or context.get('coverage') != 'returned_sample'):
@@ -261,8 +261,16 @@ def _validate_context(context, report_date):
         for group in groups:
             if not isinstance(group, dict) or not isinstance(group.get('name'), str):
                 return False
+            if not (group['name'].strip() or str(group.get('code') or '').strip()):
+                return False
             stocks = group.get('stocks')
-            if not isinstance(stocks, list) or not stocks:
+            stock_list_status = group.get('stock_list_status')
+            if (not isinstance(stocks, list)
+                    or stock_list_status not in (None, 'available', 'partial', 'unavailable')
+                    or (not stocks and stock_list_status is None)
+                    or (stocks and stock_list_status == 'unavailable')
+                    or (context['status'] == 'available'
+                        and stock_list_status in ('partial', 'unavailable'))):
                 return False
             for stock in stocks:
                 if not isinstance(stock, dict):
@@ -275,6 +283,42 @@ def _validate_context(context, report_date):
         return True
     except (ValueError, TypeError, AttributeError):
         return False
+
+
+def _would_discard_verified_theme_details(previous, incoming, report_date):
+    """Keep an attested same-day sample when a later partial response loses it."""
+    if incoming.get('status') != 'partial' or not _validate_context(previous, report_date):
+        return False
+
+    def group_key(group):
+        code = str(group.get('code') or '').strip()
+        return ('code', code) if code else ('name', group['name'].strip())
+
+    new_groups = {}
+    for group in incoming['groups']:
+        new_groups.setdefault(group_key(group), []).append(group)
+    for old_group in previous['groups']:
+        old_stocks = old_group.get('stocks') or []
+        matches = new_groups.get(group_key(old_group), [])
+        if not matches and (old_stocks or old_group['name'].strip()):
+            return True
+        if old_group['name'].strip() and not any(group['name'].strip() for group in matches):
+            return True
+        if not old_stocks:
+            continue
+        # An explicit complete group may legitimately replace its old sample,
+        # including a confirmed empty list. Unknown/partial detail may not.
+        if any(group.get('stock_list_status') == 'available' for group in matches):
+            continue
+        new_stocks = {stock['code']: stock for group in matches
+                      for stock in group['stocks']}
+        for old_stock in old_stocks:
+            new_stock = new_stocks.get(old_stock['code'])
+            if (new_stock is None
+                    or (old_stock['name'] and not new_stock['name'])
+                    or (old_stock['reason'] and not new_stock['reason'])):
+                return True
+    return False
 
 
 def _same_content(left, right):
@@ -398,6 +442,10 @@ def refresh_context(docs_dir, report_date, *, context=None, input_path=None,
         context = fetch_themes(report_date,cache_dir=cache_dir,force_refresh=True)
     if not _validate_context(context,report_date):
         return {'status':'skipped','report_date':report_date,'reason':'today_context_not_ready'}
+    previous = planes['data/'+report_date+'.json'].get(CONTEXT_KEY)
+    if _would_discard_verified_theme_details(previous, context, report_date):
+        return {'status':'skipped','report_date':report_date,
+                'reason':'would_discard_verified_theme_details'}
     context = copy.deepcopy(context)
     if all(_same_content(payload.get(CONTEXT_KEY),context) for payload in planes.values()):
         # Retain the first attested collection timestamp for identical content.

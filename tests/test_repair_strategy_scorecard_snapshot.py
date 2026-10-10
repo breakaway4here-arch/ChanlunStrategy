@@ -85,7 +85,9 @@ class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
                     asset_version=repair._report_asset_version(),
                 )
                 (docs / relative).write_bytes(html.encode("utf-8"))
-                self.assertIn(b"\r\n", (docs / relative).read_bytes(), name)
+                self.assertIn(b"\\r\\n", (docs / relative).read_bytes(), name)
+                self.assertIn(('资料日期 '+report_date).encode('utf-8'),
+                              (docs / relative).read_bytes(), name)
 
             names = ("daily", "aggregate", "inline", "archive")
             planes = repair._validate_staged_artifacts(
@@ -104,7 +106,7 @@ class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
             archive.write_bytes(archive.read_bytes().replace(
                 "涨停原因第二行".encode("utf-8"), "伪造原因第二行".encode("utf-8"), 1,
             ))
-            with self.assertRaisesRegex(RuntimeError, "HTML mismatch: archive"):
+            with self.assertRaisesRegex(RuntimeError, "protected report drift in archive"):
                 repair._validate_staged_artifacts(
                     docs, report_date,
                     {name: repair.protected_report_digest(report) for name in names},

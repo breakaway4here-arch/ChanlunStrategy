@@ -70,6 +70,302 @@ function install(rows) {
 
 
 class TestMarketHotspotFrontend(unittest.TestCase):
+    def test_real_initial_hotspot_state_defaults_to_kpl_source_and_fallback_count(self):
+        _assert_node_contract(self,
+            "({ state: state, build: buildMarketHotspotModel, render: renderMarketHotspotSection, clear: clearMarketHotspotFilters })",
+            VALID_PROJECTION + r"""
+install([]);
+const t=globalThis.__hotspotTest;
+const initial=t.state.hotspot;
+assert(initial && initial.mode==='map', 'test did not use the actual initialized hotspot state');
+const kpl=t.build({date:'2026-09-16',kaipanla_context:{status:'available',data_date:'2026-09-16',groups:[
+  {code:'A',name:'AI 应用',stocks:[{code:'600001',name:'甲'}]},
+  {code:'B',name:'电池',stocks:[{code:'000001',name:'乙'},{code:'000002',name:'丙'}]}
+]}});
+let html=t.render(kpl,initial);
+assert(html.includes('#01 AI 应用') && html.indexOf('#01 AI 应用')<html.indexOf('#02 电池'),
+  'real first KPL render sorted by sample count instead of source order');
+initial.query='电池';initial.theme='电池';
+t.clear(initial);
+html=t.render(kpl,initial);
+assert(initial.query==='' && initial.theme==='' && html.includes('#01 AI 应用'),
+  'clearing reading filters did not restore the KPL source order');
+const fallback=t.build({date:'2026-09-16',limit_up_snapshot:{status:'verified_complete',
+  date:'2026-09-16',items:[
+    {code:'600001',name:'甲',change_pct:10},{code:'000001',name:'乙',change_pct:10},
+    {code:'000002',name:'丙',change_pct:10}],theme_groups:[
+    {name:'少数组',codes:['600001']},{name:'多数组',codes:['000001','000002']}]}});
+html=t.render(fallback,initial);
+assert(html.includes('#01 多数组') && html.indexOf('#01 多数组')<html.indexOf('#02 少数组'),
+  'fallback default no longer follows the existing limit-up count ordering');
+""")
+
+    def test_mixed_parser_output_reaches_top_quick_map_and_theme_search(self):
+        from chanlun.kaipanla import parse_themes
+        stock = ['600001', '甲'] + [''] * 15 + ['原文']
+        context = parse_themes({'errcode': '0', 'date': '2026-09-16', 'list': [
+            {'ZSCode': 'A', 'ZSName': 'AI 应用', 'StockList': [stock]},
+            {'ZSCode': 'B', 'ZSName': '坏明细题材', 'StockList': 3},
+            {'ZSCode': 'C', 'ZSName': '确证空题材', 'StockList': []},
+        ]}, '2026-09-16')
+        self.assertEqual(context['status'], 'partial')
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, summary: renderMarketHotspotSummary, quick: renderDirectionQuickSummary, render: renderMarketHotspotSection, filter: filterMarketHotspotItems, nodes: nodes })",
+            VALID_PROJECTION + "\nconst context = " + json.dumps(context, ensure_ascii=False) + r""";
+window.CHANLUN_BOOTSTRAP={pageDate:'2026-09-16'};
+const model=globalThis.__hotspotTest.build({date:'2026-09-16',kaipanla_context:context});
+const mount={innerHTML:'',querySelector:function(){return null;}};
+globalThis.__hotspotTest.nodes.directionQuick=mount;
+globalThis.__hotspotTest.quick({},model);
+const top=globalThis.__hotspotTest.summary(model);
+const map=globalThis.__hotspotTest.render(model,{});
+const searched=globalThis.__hotspotTest.filter(model,{query:'坏明细题材'});
+assert(model.source==='kaipanla' && model.groups.map(g=>g.name).join(',')
+  === 'AI 应用,坏明细题材,确证空题材', 'parser output lost a valid theme');
+assert(top.includes('AI 应用') && mount.innerHTML.includes('坏明细题材')
+  && map.includes('确证空题材') && searched.groups.length===1,
+  'top, quick, map or search diverged from parsed KPL groups');
+assert(!top.includes('null 只') && !mount.innerHTML.includes('null 只')
+  && !map.includes('null 只') && map.includes('股票明细暂缺')
+  && map.includes('股票列表为空'), 'known empty and unavailable detail were confused');
+""")
+
+    def test_kpl_source_order_drives_summary_map_and_reading_filters(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, render: renderMarketHotspotSection, summary: renderMarketHotspotSummary, filter: filterMarketHotspotItems, readonly: renderMarketHotspotReadOnlyDetail })",
+            VALID_PROJECTION + r"""
+install([]);
+const data = { date: '2026-09-16',
+  kaipanla_context: { status: 'available', source: 'kaipanla', data_date: '2026-09-16',
+    fetched_at: '2026-09-16T17:30:00+08:00', groups: [
+      { code: 'A', name: 'AI 应用', source_order: 0, stocks: [
+        { code: '600001', name: '甲', reason: '开盘啦原因 <b>x</b>' },
+        { code: '600001', name: '甲', reason: '重复' },
+        { code: 'bad600003', name: '非法身份', reason: '不能关联' },
+        { code: '999999', name: '未知交易所', reason: '不能关联' }] },
+      { code: 'B', name: '电池', source_order: 1, stocks: [
+        { code: '600001', name: '甲', reason: '跨题材' },
+        { code: '000002', name: '乙', reason: '乙原因' }] },
+      { code: 'C', name: '合法空题材', source_order: 2, stocks: [] }
+    ] },
+  limit_up_snapshot: { status: 'verified_complete', date: '2026-09-16',
+    as_of: '2026-09-16T15:20:00+08:00', items: [
+      { code: '000002', name: '乙', sector: '电池', change_pct: 10, price: 8 }
+    ], theme_groups: [{ name: '电池', codes: ['000002'] }] }
+};
+const frozen = JSON.stringify(data);
+const model = globalThis.__hotspotTest.build(data);
+assert(model.source === 'kaipanla' && model.groups.map(g => g.name).join(',')
+  === 'AI 应用,电池,合法空题材', 'KPL source order or valid empty theme was lost');
+assert(model.totalSecurityCount === 2 && model.totalAppearanceCount === 3,
+  'same-theme and cross-theme dedupe counts are wrong');
+assert(model.groups[0].totalCount === 1 && model.groups[0].systemHitCount === 0,
+  'missing quote or zero system hits erased a market theme');
+assert(model.items.find(i => i.code === '600001').changePct === null,
+  'missing price was filled from a different stock');
+assert(model.items.find(i => i.code === '000002').changePct === 10,
+  'same-day verified quote did not supplement its own security');
+const top = globalThis.__hotspotTest.summary(model);
+const map = globalThis.__hotspotTest.render(model, {});
+assert(top.includes('AI 应用') && !top.includes('电池'),
+  'top summary did not use KPL source order');
+assert(map.indexOf('AI 应用') < map.indexOf('电池') && map.includes('股票列表为空'),
+  'map used a different ranking or dropped empty theme');
+assert(map.includes('开盘啦题材 · 来源顺序') && !map.includes('<b>x</b>'),
+  'rank label or provider text escaping is wrong');
+const detail = globalThis.__hotspotTest.readonly(model.items[0]);
+assert(detail.includes('开盘啦个股原因') && detail.includes('开盘啦原因')
+  && !detail.includes('<b>x</b>'), 'KPL source reason was not safely visible in detail');
+const filtered = globalThis.__hotspotTest.filter(model, { theme: '电池' });
+assert(filtered.items.map(i => i.code).join(',') === '600001,000002',
+  'theme reading filter changed underlying stock order');
+const emptySearch = globalThis.__hotspotTest.filter(model, { query: '合法空题材' });
+assert(emptySearch.groups.length === 1 && emptySearch.groups[0].name === '合法空题材',
+  'search erased a legal theme with temporarily missing stock details');
+assert(model.items.map(i => i.code).join(',') === '600001,000002'
+  && JSON.stringify(data) === frozen, 'filter mutated the source collection');
+""")
+
+    def test_kpl_previous_future_fallback_and_unknown_association(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, render: renderMarketHotspotSection })",
+            VALID_PROJECTION + r"""
+install([]);
+const group = [{ code: 'A', name: 'AI 应用', stocks: [{ code: '600001', name: '甲', reason: '原文' }] }];
+const old = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: { status: 'previous_day', data_date: '2026-09-15', groups: group } });
+assert(old.status === 'previous_day' && old.snapshotDate === '2026-09-15'
+  && globalThis.__hotspotTest.render(old, {}).includes('上一期参考')
+  && !globalThis.__hotspotTest.render(old, {}).includes('本期系统选中 0 只'),
+  'previous day theme was presented as current');
+const future = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: { status: 'available', data_date: '2026-09-17', groups: group } });
+assert(future.groups.length === 0 && future.status !== 'available',
+  'future theme leaked into older report');
+const fallback = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: { status: 'unavailable', groups: [] },
+  limit_up_snapshot: { status: 'verified_complete', date: '2026-09-16', items: [
+    { code: '600001', name: '甲', change_pct: 10 }
+  ] } });
+assert(fallback.source !== 'kaipanla'
+  && globalThis.__hotspotTest.render(fallback, {}).includes('备用：涨停分布'),
+  'same-day fallback was mislabeled as KPL');
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-16' };
+const unknown = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: { status: 'available', data_date: '2026-09-16', groups: group } });
+assert(unknown.systemUnknownCount === 1 && unknown.systemHitCount === 0
+  && globalThis.__hotspotTest.render(unknown, {}).includes('待核验'),
+  'unknown association was rendered as certain zero');
+""")
+
+    def test_kpl_direction_quick_uses_same_model_as_map(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, quick: renderDirectionQuickSummary, nodes: nodes })",
+            VALID_PROJECTION + r"""
+install([]);
+const data = { date: '2026-09-16', decision_brief: { theses: [
+  { theme: '旧方向', direction: 'positive' }
+] }, kaipanla_context: { status: 'available', data_date: '2026-09-16', groups: [
+  { name: 'AI 应用', code: 'A', stocks: [] }, { name: '电池', code: 'B', stocks: [] }
+] } };
+const model = globalThis.__hotspotTest.build(data);
+const mount = { innerHTML: '', querySelector: function () { return null; } };
+globalThis.__hotspotTest.nodes.directionQuick = mount;
+globalThis.__hotspotTest.quick(data, model);
+assert(mount.innerHTML.includes('AI 应用') && mount.innerHTML.includes('电池')
+  && !mount.innerHTML.includes('旧方向'),
+  'direction quick did not use shared KPL model');
+""")
+
+    def test_kpl_report_binding_fetch_time_and_explicit_sort(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, render: renderMarketHotspotSection, filter: filterMarketHotspotItems })",
+            VALID_PROJECTION + r"""
+install([]);
+const groups = [
+  { name: 'AI 应用', code: 'A', stocks: [{ code: '600001', name: '甲' }] },
+  { name: '电池', code: 'B', stocks: [
+    { code: '000001', name: '乙' }, { code: '000002', name: '丙' }] }
+];
+function makeContext(extra) {
+  return Object.assign({ status: 'available', data_date: '2026-09-16',
+    report_date: '2026-09-16', fetched_at: '2026-09-17T17:30:00+08:00', groups }, extra);
+}
+const valid = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: makeContext() });
+assert(valid.source === 'kaipanla' && valid.groups[0].name === 'AI 应用',
+  'later retrieval of same-day source data was rejected');
+assert(globalThis.__hotspotTest.render(valid, {}).includes('资料获取'),
+  'later retrieval was presented as market snapshot time');
+const wrongReport = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: makeContext({ report_date: '2026-09-17' }) });
+assert(wrongReport.source !== 'kaipanla', 'report binding mismatch was accepted');
+const impossibleFetch = globalThis.__hotspotTest.build({ date: '2026-09-16',
+  kaipanla_context: makeContext({ fetched_at: '2026-09-15T17:30:00+08:00' }) });
+assert(impossibleFetch.source !== 'kaipanla', 'source date after fetch time was accepted');
+const byCount = globalThis.__hotspotTest.filter(valid, { sortMode: 'count' }).groups;
+assert(byCount[0].name === '电池' && valid.groups[0].name === 'AI 应用',
+  'explicit auxiliary sort changed source model order');
+assert(globalThis.__hotspotTest.render(valid, { sortMode: 'count' }).includes('样本只数')
+  && !globalThis.__hotspotTest.render(valid, { sortMode: 'count' }).includes('涨停家数'),
+  'KPL sample count was mislabeled as verified limit-up count');
+""")
+
+    def test_kpl_system_reading_filter_preserves_candidate_pool_order(self):
+        _assert_node_contract(self,
+            "({ reading: filterCandidatesByHotspotCodes })",
+            r"""
+const rows = [{ code: '600003' }, { code: '600001' }, { code: '600002' }];
+const frozen = JSON.stringify(rows);
+const selected = globalThis.__hotspotTest.reading(rows, ['600002', '600003']);
+assert(selected.map(row => row.code).join(',') === '600003,600002',
+  'hotspot reading filter reordered the original candidate pool');
+assert(globalThis.__hotspotTest.reading(rows, null).map(row => row.code).join(',')
+  === '600003,600001,600002' && JSON.stringify(rows) === frozen,
+  'clearing hotspot filter did not restore the untouched candidate pool');
+""")
+
+    def test_kpl_empty_and_unknown_groups_keep_counts_distinct_across_consumers(self):
+        _assert_node_contract(self,
+            "({ build: buildMarketHotspotModel, render: renderMarketHotspotSection, summary: renderMarketHotspotSummary, quick: renderDirectionQuickSummary, nodes: nodes })",
+            VALID_PROJECTION + r"""
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-16' };
+const model = globalThis.__hotspotTest.build({date:'2026-09-16',
+  kaipanla_context:{status:'partial',data_date:'2026-09-16',groups:[
+    {code:'A',name:'确证空题材',stock_list_status:'available',stocks:[]},
+    {code:'B',name:'明细未取得',stock_list_status:'unavailable',stocks:[]},
+    {code:'C',name:'有效题材',stock_list_status:'available',stocks:[
+      {code:'600001',name:'甲'}]}
+  ]}});
+assert(model.groups.map(g => g.totalCount).join(',') === '0,,1'
+  && model.groups[1].totalCount === null,
+  'confirmed empty and unavailable detail were collapsed');
+const mount={innerHTML:'',querySelector:function(){return null;}};
+globalThis.__hotspotTest.nodes.directionQuick=mount;
+globalThis.__hotspotTest.quick({},model);
+const top=globalThis.__hotspotTest.summary(model);
+const map=globalThis.__hotspotTest.render(model,{});
+for (const html of [top,mount.innerHTML,map]) {
+  assert(!html.includes('null 只') && !html.includes('本期系统选中 0 只'),
+    'unknown source or association was presented as a certain zero');
+}
+assert(top.includes('开盘啦收录 0 只') && map.includes('开盘啦收录 0 只'),
+  'confirmed empty source list lost true zero');
+assert(mount.innerHTML.includes('明细未取得') && mount.innerHTML.includes('待核验')
+  && map.includes('明细未取得') && map.includes('股票明细暂缺'),
+  'valid unknown-detail group was erased or mislabeled');
+""")
+
+    def test_kpl_cross_theme_candidate_navigation_clears_only_reading_filter(self):
+        _assert_node_contract(self,
+            "({ open: openMarketHotspotDetail, selection: getCandidateSelection, state: state, withRows: function(rows, action) { var a=getCandidateViews, b=beginCandidateSelection, c=refreshCandidateWorkspace, d=renderCandidateDetail; getCandidateViews=function(){return {views:{decision_all:rows},meta:{}};}; beginCandidateSelection=function(item){state.activeItem=item;}; refreshCandidateWorkspace=function(){}; renderCandidateDetail=function(){}; try{return action();}finally{getCandidateViews=a;beginCandidateSelection=b;refreshCandidateWorkspace=c;renderCandidateDetail=d;} } })",
+            r"""
+const t=globalThis.__hotspotTest;
+const rows=[{code:'600001',name:'甲'},{code:'600002',name:'乙'}];
+t.state.currentView='decision_all';t.state.data={};t.state.candidateQuery='';
+t.state.sectorFilter='';t.state.sectorFilterCode='';t.state.sectorFilterRefs=[];
+t.state.decisionStatusFilter='';t.state.candidateLimit=20;t.state.isMobile=false;
+t.state.hotspotCandidateCodes=['600001'];
+let readonly=false;
+t.withRows(rows,function(){
+  assert(t.selection('decision_all').items.map(i=>i.code).join(',')==='600001',
+    'fixture hotspot filter did not hide the second candidate');
+  const target={code:'600002',membership:'in',workbenchItem:{evidence_view:'decision_all'}};
+  const route=t.open(target,{openReadonly:function(){readonly=true;}});
+  assert(route==='candidate' && !readonly && t.state.activeItem.code==='600002',
+    'cross-theme target fell back to readonly despite a current candidate');
+  assert(t.state.hotspotCandidateCodes===null,
+    'explicit target did not clear the blocking hotspot reading filter');
+  assert(t.selection('decision_all').items.map(i=>i.code).join(',')==='600001,600002',
+    'clearing hotspot reading filter changed original candidate order');
+});
+""")
+
+    def test_old_html_without_summary_mount_gets_shared_model_mount(self):
+        _assert_node_contract(self,
+            "({ mount: ensureMarketHotspotSummaryMount })",
+            r"""
+let created = null;
+const app = { parentNode: { insertBefore: function (node, before) {
+  assert(before === app, 'summary mount was inserted away from the report app');
+  created = node;
+} } };
+document.getElementById = function (id) { return id === 'app' ? app : null; };
+document.createElement = function (tag) { return { tagName: tag, style: {} }; };
+const mount = globalThis.__hotspotTest.mount();
+assert(mount === created && mount.tagName === 'details'
+  && mount.id === 'kaipanla-context',
+  'old published HTML without the mount retained a separate legacy header');
+""")
+
+    def test_adjacent_sector_strip_names_its_own_source(self):
+        _assert_node_contract(self,
+            "({ funding: buildFundingMainlineModel })",
+            r"""
+const flow = globalThis.__hotspotTest.funding({ sector_flow: [{ name: '电池', flow: 1 }] });
+assert(flow.title === '行业资金流', 'independent sector flow claimed to be the main hotspot');
+""")
+
     def test_h01_grouping_dedupes_within_theme_and_counts_unique_across_themes(self):
         _assert_node_contract(
             self,

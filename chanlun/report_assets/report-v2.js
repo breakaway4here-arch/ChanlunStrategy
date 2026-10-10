@@ -82,7 +82,7 @@
     hotspot: {
       model: null,
       mode: 'map',
-      sortMode: 'count',
+      sortMode: 'auto',
       query: '',
       theme: '',
       onlySystem: false,
@@ -2551,18 +2551,21 @@
     return Number(left.sourceOrder || 0) - Number(right.sourceOrder || 0);
   }
 
-  function marketHotspotGroupWithStats(group) {
+  function marketHotspotGroupWithStats(group, preserveSourceOrder) {
     var value = group && typeof group === 'object' ? group : {};
-    var items = asArray(value.items).slice().sort(compareMarketHotspotItems);
+    var items = asArray(value.items).slice();
+    if (!preserveSourceOrder) items.sort(compareMarketHotspotItems);
     var valid = items.filter(function (item) {
-      return item.isDeterminedSecurity && item.quoteStatus === 'available';
+      return item.isDeterminedSecurity
+        && (preserveSourceOrder || item.quoteStatus === 'available');
     });
     var heights = valid.map(function (item) { return item.lianban; }).filter(function (height) {
       return typeof height === 'number' && Number.isFinite(height);
     });
     return Object.assign({}, value, {
       items: items,
-      totalCount: valid.length ? valid.length : null,
+      totalCount: valid.length ? valid.length
+        : (preserveSourceOrder && value.stockListStatus === 'available' ? 0 : null),
       totalItemCount: items.length,
       maxLianban: heights.length ? Math.max.apply(Math, heights) : null,
       systemHitCount: valid.filter(function (item) {
@@ -2582,13 +2585,37 @@
     return '系统命中待核验 · 待关联' + unknown + '只';
   }
 
+  function kaipanlaSystemCountText(hitCount, unknownCount, previousDay) {
+    if (previousDay) return '上一期题材不关联本期清单';
+    var hits = Number(hitCount) || 0;
+    return Number(unknownCount) > 0
+      ? '已知选中 ' + hits + ' 只／关联待核验'
+      : '本期系统选中 ' + hits + ' 只';
+  }
+
+  function kaipanlaGroupSystemCountText(group, model) {
+    if (model.status === 'previous_day') return '上一期题材不关联本期清单';
+    if (group.totalCount === null || (group.totalCount === 0 && !model.systemListComplete)) {
+      return '系统关联待核验';
+    }
+    return kaipanlaSystemCountText(group.systemHitCount, group.systemUnknownCount);
+  }
+
+  function kaipanlaGroupSampleText(group) {
+    return group.totalCount === null
+      ? '股票明细暂缺' : '开盘啦收录 ' + group.totalCount + ' 只';
+  }
+
   function marketHotspotSortMode(value) {
-    return ['count', 'height', 'system'].indexOf(normalizeString(value).trim()) !== -1
-      ? normalizeString(value).trim() : 'count';
+    return ['auto', 'source', 'count', 'height', 'system'].indexOf(normalizeString(value).trim()) !== -1
+      ? normalizeString(value).trim() : 'auto';
   }
 
   function compareMarketHotspotGroups(left, right, mode) {
     var selected = marketHotspotSortMode(mode);
+    if (selected === 'source') {
+      return Number(left.sourceOrder || 0) - Number(right.sourceOrder || 0);
+    }
     var order = 0;
     if (selected === 'height') {
       order = compareMarketHotspotNullableDesc(left.maxLianban, right.maxLianban)
@@ -2610,6 +2637,151 @@
     }).map(function (group, index) {
       return Object.assign({}, group, { rank: index + 1 });
     });
+  }
+
+  function buildKaipanlaHotspotModel(source, base, context, reportDate) {
+    if (!context || ['available', 'partial', 'previous_day'].indexOf(context.status) === -1
+        || !Array.isArray(context.groups)) return false;
+    var dataDate = normalizeString(context.data_date).trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dataDate) || !reportDate || dataDate > reportDate) {
+      return false;
+    }
+    var boundReportDate = normalizeString(context.report_date).trim();
+    var fetchedAt = normalizeString(context.fetched_at).trim();
+    var fetchedDate = fetchedAt ? hotspotIsoDate(fetchedAt) : '';
+    if ((boundReportDate && boundReportDate !== reportDate)
+        || (fetchedAt && (!fetchedDate || fetchedDate < dataDate))) return false;
+    var snapshot = source.limit_up_snapshot && typeof source.limit_up_snapshot === 'object'
+      ? source.limit_up_snapshot : {};
+    var snapshotDate = normalizeString(snapshot.date || snapshot.report_date).trim();
+    var snapshotAsOf = normalizeString(snapshot.as_of || snapshot.generated_at).trim();
+    var quoteRows = Object.create(null);
+    var quoteRowsSeen = Object.create(null);
+    if (dataDate === reportDate && snapshotDate === reportDate
+        && (!snapshotAsOf || hotspotIsoDate(snapshotAsOf) === reportDate)
+        && ['verified_complete', 'partial'].indexOf(snapshot.status) !== -1) {
+      asArray(snapshot.items).forEach(function (row) {
+        var identity = hotspotSecurityIdentity(row);
+        if (!identity.identity || identity.conflict) return;
+        if (quoteRowsSeen[identity.identity]) {
+          quoteRows[identity.identity] = null;
+          return;
+        }
+        quoteRowsSeen[identity.identity] = true;
+        quoteRows[identity.identity] = row;
+      });
+    }
+    var workbench = getMarketHotspotWorkbenchContract(
+      reportDate, marketHotspotScopeContract(source, snapshot)
+    );
+    var items = [];
+    var itemByIdentity = Object.create(null);
+    var groups = [];
+    asArray(context.groups).forEach(function (rawGroup, index) {
+      if (!rawGroup || typeof rawGroup !== 'object') return;
+      var name = normalizeString(rawGroup.name).trim();
+      var code = normalizeString(rawGroup.code).trim();
+      if (!name && !code) return;
+      var group = {
+        key: 'kpl-' + index, code: code, name: name || code,
+        sourceOrder: index, colorIndex: index % 8, items: [],
+        stockListStatus: normalizeString(rawGroup.stock_list_status).trim()
+          || (Array.isArray(rawGroup.stocks) ? 'available' : 'unavailable'),
+      };
+      var seen = Object.create(null);
+      asArray(rawGroup.stocks).forEach(function (stock) {
+        if (!stock || !/^\d{6}$/.test(normalizeString(stock.code).trim())
+            || !hotspotExchange(normalizeString(stock.code).trim())) return;
+        var identity = hotspotSecurityIdentity(stock);
+        if (!identity.identity || identity.conflict || seen[identity.identity]) return;
+        seen[identity.identity] = true;
+        var item = itemByIdentity[identity.identity];
+        if (!item) {
+          var quote = quoteRows[identity.identity];
+          var quoteContract = quote
+            ? hotspotQuoteDateContract(quote, reportDate, snapshotDate, snapshotAsOf)
+            : { status: 'missing', date: '' };
+          var quoteValid = quoteContract.status === 'available';
+          var changePct = quoteValid ? hotspotFiniteNumber(quote.change_pct) : null;
+          var price = quoteValid ? hotspotFiniteNumber(quote.price) : null;
+          if (price !== null && price <= 0) price = null;
+          var lianban = quoteValid ? hotspotFiniteNumber(quote.lianban) : null;
+          item = {
+            key: identity.identity, identity: identity.identity, code: identity.code,
+            name: normalizeString(stock.name).trim() || identity.code,
+            sector: group.name, isDeterminedSecurity: true, identityConflict: false,
+            associationScopeConflict: false, price: price, changePct: changePct,
+            quoteTone: hotspotQuoteTone(changePct), quoteStatus: quoteContract.status,
+            quoteDate: quoteContract.date, lianban: lianban !== null && lianban >= 1 ? Math.floor(lianban) : null,
+            firstTime: quoteValid ? normalizeString(quote.first_time).trim() : '',
+            fund: quoteValid ? hotspotFiniteNumber(quote.fund) : null,
+            zhaban: quoteValid ? hotspotFiniteNumber(quote.zhaban) : null,
+            reportDate: reportDate, asOf: normalizeString(context.fetched_at).trim(),
+            quoteSource: quoteValid ? normalizeString(snapshot.source).trim() : '',
+            themes: [], membership: 'unknown', membershipReason: '', workbenchItem: null,
+            poolSummary: emptyHotspotPoolSummary(), events: [], modelSummaries: [],
+            reason: '', reasonsByTheme: [], raw: stock, sourceOrder: items.length,
+          };
+          itemByIdentity[identity.identity] = item;
+          items.push(item);
+        }
+        var reason = normalizeString(stock.reason).trim();
+        if (!item.reason) item.reason = reason;
+        if (reason) item.reasonsByTheme.push({ theme: group.name, text: reason });
+        if (item.themes.indexOf(group.name) === -1) item.themes.push(group.name);
+        group.items.push(item);
+      });
+      groups.push(marketHotspotGroupWithStats(group, true));
+    });
+    if (!groups.length) return false;
+    items.forEach(function (item) {
+      if (workbench.scopeValid && dataDate === reportDate) {
+        if (workbench.quarantined[item.identity]) {
+          item.membershipReason = '系统清单证券身份或范围冲突';
+        } else if (workbench.records[item.identity]) {
+          item.membership = 'in';
+          item.workbenchItem = workbench.records[item.identity];
+          item.poolSummary = workbench.summaries[item.identity]
+            || getPoolHitSummary(item.workbenchItem);
+        } else if (workbench.complete) {
+          item.membership = 'out';
+          item.membershipReason = '完整同日报告系统清单未收录';
+        } else {
+          item.membershipReason = '系统清单覆盖不完整，关联待核验';
+        }
+      } else {
+        item.membershipReason = dataDate !== reportDate
+          ? '上一期题材不关联本期系统清单' : '系统清单关联待核验';
+      }
+      if (dataDate === reportDate) {
+        var evidence = marketHotspotEvidence(source, item.code);
+        item.events = evidence.events;
+        item.modelSummaries = evidence.modelSummaries;
+      }
+    });
+    groups = groups.map(function (group) {
+      return marketHotspotGroupWithStats(group, true);
+    });
+    base.source = 'kaipanla';
+    base.snapshotDate = dataDate;
+    base.asOf = fetchedAt;
+    base.snapshotStatus = normalizeString(context.status).trim();
+    base.status = dataDate === reportDate
+      ? (context.status === 'partial' || groups.some(function (group) {
+        return group.stockListStatus !== 'available' && group.stockListStatus !== '';
+      }) ? 'partial' : 'available')
+      : 'previous_day';
+    base.items = items;
+    base.groups = sortMarketHotspotGroups(groups, 'source');
+    base.totalSecurityCount = items.length;
+    base.totalAppearanceCount = groups.reduce(function (sum, group) { return sum + group.items.length; }, 0);
+    base.quoteCount = items.filter(function (item) { return item.changePct !== null; }).length;
+    base.systemHitCount = items.filter(function (item) { return item.membership === 'in'; }).length;
+    base.systemOutCount = items.filter(function (item) { return item.membership === 'out'; }).length;
+    base.systemUnknownCount = items.filter(function (item) { return item.membership === 'unknown'; }).length;
+    base.systemListComplete = workbench.complete && dataDate === reportDate;
+    base.countsKnown = true;
+    return true;
   }
 
   function buildMarketHotspotModel(data) {
@@ -2637,6 +2809,9 @@
       sectorOverview: sectorOverview,
     };
     try {
+      if (buildKaipanlaHotspotModel(source, base, source.kaipanla_context, reportDate)) {
+        return base;
+      }
       var snapshot = source.limit_up_snapshot && typeof source.limit_up_snapshot === 'object'
         ? source.limit_up_snapshot : {};
       var snapshotStatus = normalizeString(snapshot.status || 'missing').trim();
@@ -2647,7 +2822,7 @@
       var snapshotDate = declaredSnapshotDate || asOfDate;
       base.snapshotDate = snapshotDate;
       base.asOf = snapshotAsOf;
-      base.source = normalizeString(snapshot.source).trim();
+      base.source = '';
       base.snapshotStatus = snapshotStatus;
       if ((declaredSnapshotDate && asOfDate && declaredSnapshotDate !== asOfDate)
           || (snapshotDate && reportDate && snapshotDate !== reportDate)) {
@@ -2661,6 +2836,7 @@
         return base;
       }
       if (snapshotStatus === 'verified_empty') {
+        base.source = normalizeString(snapshot.source).trim() || 'limit_up_snapshot';
         base.status = 'empty';
         base.countsKnown = true;
         return base;
@@ -2671,6 +2847,8 @@
           ? 'hotspot_snapshot_error' : 'hotspot_snapshot_missing';
         return base;
       }
+
+      base.source = normalizeString(snapshot.source).trim() || 'limit_up_snapshot';
 
       if (!Array.isArray(snapshot.items)) {
         base.status = 'unavailable';
@@ -2828,7 +3006,7 @@
       base.items = items;
       base.groups = sortMarketHotspotGroups(groups.filter(function (group) {
         return group.items.length;
-      }).map(marketHotspotGroupWithStats), 'count');
+      }).map(function (group) { return marketHotspotGroupWithStats(group, false); }), 'count');
       base.totalSecurityCount = items.filter(function (item) {
         return item.isDeterminedSecurity;
       }).length;
@@ -2876,7 +3054,10 @@
         items: matched,
         matchedCount: matched.length,
       });
-    }).filter(function (group) { return group.items.length; });
+    }).filter(function (group) {
+      return group.items.length || (value.source === 'kaipanla' && !onlySystem
+        && (!query || normalizeString(group.name).toLowerCase().indexOf(query) !== -1));
+    });
     var seen = Object.create(null);
     var items = [];
     groups.forEach(function (group) {
@@ -2887,6 +3068,19 @@
       });
     });
     return { items: items, groups: groups, matchedSecurityCount: items.length };
+  }
+
+  function filterCandidatesByHotspotCodes(items, codes) {
+    var rows = asArray(items);
+    if (!Array.isArray(codes)) return rows.slice();
+    var selected = Object.create(null);
+    codes.forEach(function (code) {
+      var normalized = hotspotCode(code);
+      if (normalized) selected[normalized] = true;
+    });
+    return rows.filter(function (item) {
+      return Boolean(selected[hotspotCode(item && item.code)]);
+    });
   }
 
   function safeMarketHotspotUrl(value) {
@@ -2934,8 +3128,10 @@
   }
 
   function renderMarketHotspotListRow(item) {
-    var eventText = item.events.length
-      ? item.events[0].title + '（关联事件，非已证实涨停原因）' : '原因未补';
+    var eventText = item.reason
+      ? '开盘啦个股原因：' + item.reason
+      : (item.events.length
+        ? item.events[0].title + '（关联事件，非已证实涨停原因）' : '原因未补');
     return '<button type="button" class="hotspot-list-row" data-hotspot-open="'
       + escapeHtml(item.key) + '" data-hotspot-code="'
       + escapeHtml(item.isDeterminedSecurity ? item.code : '') + '">'
@@ -2962,7 +3158,9 @@
     var value = model && typeof model === 'object' ? model : buildMarketHotspotModel({});
     var options = uiState && typeof uiState === 'object' ? uiState : {};
     var mode = options.mode === 'list' ? 'list' : 'map';
-    var sortMode = marketHotspotSortMode(options.sortMode);
+    var requestedSort = marketHotspotSortMode(options.sortMode);
+    var sortMode = requestedSort === 'auto'
+      ? (value.source === 'kaipanla' ? 'source' : 'count') : requestedSort;
     var visibleLimit = Math.max(1, Number(options.visibleLimit) || 30);
     var filtered = filterMarketHotspotItems(value, Object.assign({}, options, {
       sortMode: sortMode,
@@ -2985,7 +3183,9 @@
         + (normalizeString(options.theme) === group.name ? ' selected' : '') + '>'
         + escapeHtml(group.name) + '</option>';
     }).join('');
-    var statusCopy = value.status === 'partial'
+    var statusCopy = value.status === 'previous_day'
+      ? '上一期参考 · 资料日期 ' + (value.snapshotDate || '待核验') + '，不是本期热点。'
+      : value.status === 'partial'
       ? '当前为部分有效样本，未取得部分不解释为没有热点。'
       : (value.status === 'date_mismatch'
         ? '热点快照日期与报告日不一致，个股行情已隔离。'
@@ -3001,7 +3201,7 @@
               ? '热点是市场背景，不是新的推荐池。' : '热点个股数据尚未生成。'))))));
     var content = '';
     var showing = 0;
-    if (filtered.items.length && mode === 'map') {
+    if ((filtered.items.length || (value.source === 'kaipanla' && filtered.groups.length)) && mode === 'map') {
       var mapGroups = options.showAllGroups === true
         ? filtered.groups : filtered.groups.slice(0, 6);
       var mapSeen = Object.create(null);
@@ -3011,7 +3211,9 @@
         var expanded = expandedGroups[group.key] === true;
         var groupItems = expanded ? group.items : group.items.slice(0, 6);
         groupItems.forEach(function (item) { mapSeen[item.key] = true; });
-        var totalText = group.totalCount === null
+        var totalText = value.source === 'kaipanla'
+          ? kaipanlaGroupSampleText(group)
+          : group.totalCount === null
           ? '涨停家数待核验'
           : (value.status === 'partial'
             ? '已取得涨停' + group.totalCount + '家' : '涨停' + group.totalCount + '家');
@@ -3023,9 +3225,10 @@
             + '只</small>' : '';
         var rank = Number(group.rank || 0);
         var rankText = '#' + (rank > 0 && rank < 10 ? '0' : '') + (rank || '—');
-        var systemText = group.totalCount === null
-          ? '系统关联待核验'
-          : marketHotspotSystemCountText(group.systemHitCount, group.systemUnknownCount);
+        var systemText = value.source === 'kaipanla'
+          ? kaipanlaGroupSystemCountText(group, value)
+          : (group.totalCount === null ? '系统关联待核验'
+            : marketHotspotSystemCountText(group.systemHitCount, group.systemUnknownCount));
         return '<article class="hotspot-group is-theme-' + escapeHtml(group.colorIndex)
           + '"><header><span></span><div class="hotspot-group-heading"><strong>'
           + escapeHtml(rankText + ' ' + group.name) + '</strong><small class="hotspot-group-stats">'
@@ -3034,6 +3237,11 @@
           + escapeHtml(totalText) + '</small></header>'
           + '<div class="hotspot-stock-grid">' + groupItems.map(renderMarketHotspotCard).join('')
           + '</div>'
+          + (value.source === 'kaipanla' && group.systemHitCount > 0
+            ? '<button type="button" class="hotspot-more hotspot-group-system" data-hotspot-system-theme="'
+              + escapeHtml(group.key) + '">查看本系统相关股票</button>' : '')
+          + (!group.items.length ? '<p class="hotspot-empty">'
+            + (group.totalCount === 0 ? '股票列表为空' : '股票明细暂缺') + '</p>' : '')
           + (!expanded && group.items.length > groupItems.length
             ? '<button type="button" class="hotspot-more hotspot-group-more" data-hotspot-group-more="'
               + escapeHtml(group.key) + '">查看本组全部' + escapeHtml(String(group.items.length)) + '只</button>'
@@ -3058,12 +3266,18 @@
     var groupCountText = countsKnown ? String(value.groups.length) : '暂不可用';
     var quoteCountText = countsKnown ? String(value.quoteCount) : '暂不可用';
     var systemUnknownCount = countsKnown ? Number(value.systemUnknownCount) || 0 : 0;
+    var groupAssociationUnknown = value.source === 'kaipanla' && asArray(value.groups).some(function (group) {
+      return group.totalCount === null || (group.totalCount === 0 && !value.systemListComplete);
+    });
     var hitCountText = countsKnown
-      ? (systemUnknownCount && !value.systemHitCount ? '待核验' : String(value.systemHitCount))
+      ? ((systemUnknownCount || groupAssociationUnknown) && !value.systemHitCount
+        ? '待核验' : String(value.systemHitCount))
       : '暂不可用';
     var hitCountLabel = !countsKnown
       ? '系统命中只数（证券去重）'
-      : (systemUnknownCount
+      : (groupAssociationUnknown && !systemUnknownCount
+        ? '系统关联待核验'
+        : systemUnknownCount
         ? (value.systemHitCount
           ? '已知系统命中 · 另有' + systemUnknownCount + '只待关联'
           : '系统命中待核验 · ' + systemUnknownCount + '只待关联')
@@ -3073,9 +3287,14 @@
         + escapeHtml(String(showing)) + '只'
       : '匹配/显示 暂不可用';
     var totalCountText = countsKnown
-      ? '行业总数 ' + String(value.groups.length) + '组 · 全量证券 '
+      ? (value.source === 'kaipanla' ? '开盘啦题材 ' : '行业总数 ') + String(value.groups.length) + '组 · 去重证券 '
         + String(value.totalSecurityCount) + '只 · '
-        + marketHotspotSystemCountText(value.systemHitCount, systemUnknownCount)
+        + (value.source === 'kaipanla'
+          ? (groupAssociationUnknown && value.status !== 'previous_day'
+            ? '已知选中 ' + value.systemHitCount + ' 只／关联待核验'
+            : kaipanlaSystemCountText(value.systemHitCount, systemUnknownCount,
+              value.status === 'previous_day'))
+          : marketHotspotSystemCountText(value.systemHitCount, systemUnknownCount))
         + (systemUnknownCount
           ? '；系统命中排序按已知命中只数，不累加每股池数'
           : '，按不同证券计，不累加每股池数')
@@ -3084,8 +3303,12 @@
       + '<header class="hotspot-heading"><div><span class="hotspot-eyebrow">市场背景</span><h2 id="marketHotspotTitle">今日热点地图</h2><p>'
       + escapeHtml(statusCopy) + '</p></div><div class="hotspot-snapshot"><strong>'
       + escapeHtml(value.reportDate || '日期待补') + '</strong><small>'
-      + escapeHtml(value.asOf ? '快照 ' + value.asOf : '快照时间待补') + '</small><small>'
-      + escapeHtml(value.source ? '来源 ' + value.source : '来源待补') + '</small></div></header>'
+      + escapeHtml(value.asOf
+        ? (value.source === 'kaipanla' ? '资料获取 ' : '快照 ') + value.asOf
+        : (value.source === 'kaipanla' ? '资料获取时间待补' : '快照时间待补')) + '</small><small>'
+      + escapeHtml(value.source === 'kaipanla'
+        ? '开盘啦题材 · ' + (sortMode === 'source' ? '来源顺序' : '按' + ({ count: '样本只数', height: '连板高度', system: '系统命中' }[sortMode] || '来源顺序') + '辅助排序')
+        : (value.source ? '备用：涨停分布 · ' + value.source : '来源待补')) + '</small></div></header>'
       + '<div class="hotspot-metrics"><span><strong>' + escapeHtml(sampleCountText)
       + '</strong><small>已取得样本</small></span><span><strong>'
       + escapeHtml(groupCountText) + '</strong><small>已取得题材/行业</small></span><span><strong>'
@@ -3094,8 +3317,10 @@
       + '<div class="hotspot-tools"><div class="hotspot-mode" role="group" aria-label="热点阅读模式">'
       + '<button type="button" data-hotspot-mode="map" aria-pressed="' + (mode === 'map') + '">主题地图</button>'
       + '<button type="button" data-hotspot-mode="list" aria-pressed="' + (mode === 'list') + '">详细清单</button></div>'
-      + '<label class="hotspot-sort"><span>板块排序</span><select data-hotspot-sort>'
-      + '<option value="count"' + (sortMode === 'count' ? ' selected' : '') + '>涨停家数</option>'
+      + '<label class="hotspot-sort"><span>题材排序</span><select data-hotspot-sort>'
+      + '<option value="source"' + (sortMode === 'source' ? ' selected' : '') + '>来源顺序</option>'
+      + '<option value="count"' + (sortMode === 'count' ? ' selected' : '') + '>'
+      + (value.source === 'kaipanla' ? '样本只数' : '涨停家数') + '</option>'
       + '<option value="height"' + (sortMode === 'height' ? ' selected' : '') + '>连板高度</option>'
       + '<option value="system"' + (sortMode === 'system' ? ' selected' : '') + '>系统命中</option>'
       + '</select></label>'
@@ -3113,8 +3338,41 @@
       + content
       + (mode === 'list' && filtered.items.length > showing
         ? '<button type="button" class="hotspot-more" data-hotspot-more>加载更多</button>' : '')
-      + '<p class="hotspot-boundary">按来源池计数，含上游基础池；榜单重复收录不叠加。行情取自本热点快照，不用候选报价替换。</p>'
+      + '<p class="hotspot-boundary">' + escapeHtml(value.source === 'kaipanla'
+        ? '开盘啦只提供已返回股票样本，不代表板块全部成分；个股原因是来源原文。行情仅取同日同证券涨停快照，缺价保留。'
+        : '备用涨停分布按来源池计数，含上游基础池；榜单重复收录不叠加。行情取自本热点快照，不用候选报价替换。') + '</p>'
       + '</section>';
+  }
+
+  function renderMarketHotspotSummary(model) {
+    var value = model && typeof model === 'object' ? model : {};
+    var first = asArray(value.groups)[0];
+    var label = value.source === 'kaipanla' ? '开盘啦题材 · 来源顺序'
+      : (value.source ? '备用：涨停分布' : '热点暂不可用');
+    var dateText = value.status === 'previous_day'
+      ? '上一期参考 · ' + value.snapshotDate : (value.snapshotDate || value.reportDate || '日期待核验');
+    return '<summary><strong>' + escapeHtml(label) + '</strong> · '
+      + escapeHtml(dateText) + (first ? ' · 第一项 ' + escapeHtml(first.name) : '')
+      + '</summary><p>' + escapeHtml(first
+        ? (value.source === 'kaipanla'
+          ? kaipanlaGroupSampleText(first) + ' · '
+            + kaipanlaGroupSystemCountText(first, value)
+          : '涨停样本 ' + (first.totalCount === null ? '待核验' : first.totalCount + ' 只'))
+        : '当前无可核验题材') + '</p>';
+  }
+
+  function ensureMarketHotspotSummaryMount() {
+    if (typeof document === 'undefined') return null;
+    var mount = document.getElementById('kaipanla-context');
+    if (mount) return mount;
+    var app = document.getElementById('app');
+    if (!app || !app.parentNode || typeof document.createElement !== 'function') return null;
+    mount = document.createElement('details');
+    mount.id = 'kaipanla-context';
+    mount.className = 'decision-card';
+    mount.style.cssText = 'width:calc(100% - 32px);max-width:1440px;margin:16px auto;box-sizing:border-box;overflow-wrap:anywhere';
+    app.parentNode.insertBefore(mount, app);
+    return mount;
   }
 
   function renderMarketHotspotReadOnlyDetail(item) {
@@ -3130,6 +3388,10 @@
     }).join('');
     var summaryHtml = asArray(value.modelSummaries).map(function (summary) {
       return '<li>' + escapeHtml(summary && summary.text) + '</li>';
+    }).join('');
+    var kaipanlaReasonHtml = asArray(value.reasonsByTheme).map(function (entry) {
+      return '<li><strong>' + escapeHtml(entry && entry.theme) + '</strong>：'
+        + escapeHtml(entry && entry.text) + '</li>';
     }).join('');
     var quoteEvidence = value.quoteStatus === 'date_conflict'
       ? '行情日期冲突，报价已隔离'
@@ -3149,6 +3411,8 @@
       + escapeHtml(quoteEvidence) + ' · ' + escapeHtml(value.quoteSource || '来源待补')
       + '</p></section><section><h3>系统关系</h3><p>' + escapeHtml(membership)
       + '</p><p>未入池热点保持只读，不加入主推、全部或观察。</p></section>'
+      + (kaipanlaReasonHtml
+        ? '<section><h3>开盘啦个股原因（来源原文）</h3><ul>' + kaipanlaReasonHtml + '</ul></section>' : '')
       + '<section><h3>关联事件，不代表已证实涨停原因</h3>'
       + (eventHtml ? '<ul>' + eventHtml + '</ul>' : '<p>原因未补</p>') + '</section>'
       + (summaryHtml ? '<section><h3>模型归纳</h3><ul>' + summaryHtml + '</ul></section>' : '')
@@ -3184,7 +3448,7 @@
 
   function marketHotspotState() {
     if (!state.hotspot || typeof state.hotspot !== 'object') {
-      state.hotspot = { model: null, mode: 'map', sortMode: 'count', query: '', theme: '',
+      state.hotspot = { model: null, mode: 'map', sortMode: 'auto', query: '', theme: '',
         onlySystem: false, visibleLimit: 30, showAllGroups: false,
         expandedGroups: {}, returnFocus: null };
     }
@@ -3249,7 +3513,24 @@
     var clear = nodes.marketHotspot.querySelector('[data-hotspot-clear]');
     if (clear) clear.addEventListener('click', function () {
       clearMarketHotspotFilters(store);
+      state.hotspotCandidateCodes = null;
+      refreshCandidateWorkspace();
       renderMarketHotspot();
+    });
+    Array.prototype.forEach.call(nodes.marketHotspot.querySelectorAll('[data-hotspot-system-theme]'), function (button) {
+      button.addEventListener('click', function () {
+        var key = button.getAttribute('data-hotspot-system-theme');
+        var group = asArray(store.model && store.model.groups).find(function (entry) {
+          return entry.key === key;
+        });
+        if (!group) return;
+        state.hotspotCandidateCodes = group.items.filter(function (item) {
+          return item.membership === 'in';
+        }).map(function (item) { return item.code; });
+        refreshCandidateWorkspace();
+        var target = document.getElementById('candidateWorkspace');
+        if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
     });
     var moreGroups = nodes.marketHotspot.querySelector('[data-hotspot-more-groups]');
     if (moreGroups) moreGroups.addEventListener('click', function () {
@@ -3285,6 +3566,9 @@
     var store = marketHotspotState();
     try {
       store.model = buildMarketHotspotModel(state.data || {});
+      renderDirectionQuickSummary(state.data || {}, store.model);
+      var summary = ensureMarketHotspotSummaryMount();
+      if (summary) summary.innerHTML = renderMarketHotspotSummary(store.model);
       nodes.marketHotspot.outerHTML = renderMarketHotspotSection(store.model, store);
       nodes.marketHotspot = document.getElementById('marketHotspotSection');
       bindMarketHotspotControls();
@@ -3591,6 +3875,60 @@
     });
   }
 
+  function decisionMembershipRows(membership) {
+    var added = decisionChangeUniqueEntries(membership && membership.added);
+    var removed = decisionChangeUniqueEntries(membership && membership.removed);
+    var removedCodes = Object.create(null);
+    removed.forEach(function (entry) { removedCodes[decisionChangeCode(entry)] = true; });
+    var conflict = added.filter(function (entry) { return removedCodes[decisionChangeCode(entry)]; });
+    var conflicts = Object.create(null);
+    conflict.forEach(function (entry) { conflicts[decisionChangeCode(entry)] = true; });
+    return {
+      added: added.filter(function (entry) { return !conflicts[decisionChangeCode(entry)]; }),
+      removed: removed.filter(function (entry) { return !conflicts[decisionChangeCode(entry)]; }),
+      conflict: conflict,
+    };
+  }
+
+  function decisionSemanticClasses(changes) {
+    var details = changes && changes.change_details || {};
+    var result = { condition: [], reason: [], state: [], supplement: [], unverified: [] };
+    var coverage = decisionConditionChangeCount(changes);
+    decisionChangeUniqueEntries(changes && changes.semantic_changed).forEach(function (entry) {
+      if (coverage === null) {
+        result.unverified.push(entry);
+        return;
+      }
+      var code = decisionChangeCode(entry);
+      var classified = false;
+      var unknown = false;
+      var rows = asArray(details[code]);
+      rows.forEach(function (row) {
+        if (!row || typeof row !== 'object') { unknown = true; return; }
+        var updated = row.status === 'updated'
+          && row.before_readability !== 'unreadable'
+          && row.after_readability !== 'unreadable'
+          && row.before !== null && row.before !== undefined
+          && row.after !== null && row.after !== undefined
+          && JSON.stringify(row.before) !== JSON.stringify(row.after);
+        var kind = updated ? ({ next_confirmation: 'condition', invalidation: 'condition',
+          action_reason: 'reason', primary_reason: 'reason',
+          formal_action: 'state', page_status: 'state' }[row.field] || '') : '';
+        if (kind) {
+          if (result[kind].indexOf(entry) < 0) result[kind].push(entry);
+          classified = true;
+        } else if (row.status === 'newly_recorded') {
+          if (result.supplement.indexOf(entry) < 0) result.supplement.push(entry);
+          classified = true;
+        } else {
+          unknown = true;
+        }
+      });
+      if (!classified || unknown) result.unverified.push(entry);
+    });
+    return result;
+  }
+
   function decisionUnclassifiedChanges(changes) {
     var value = changes && typeof changes === 'object' ? changes : {};
     var old = decisionChangeUniqueEntries(value.changed);
@@ -3609,9 +3947,16 @@
     var membersKnown = membership.status === 'available'
       && Array.isArray(membership.added) && Array.isArray(membership.removed);
     var conditionCount = decisionConditionChangeCount(value);
-    var counts = '新增 ' + (membersKnown ? decisionChangeUniqueEntries(membership.added).length : '—') + ' · 移出 '
-      + (membersKnown ? decisionChangeUniqueEntries(membership.removed).length : '—') + ' · 条件变化 '
-      + (conditionCount === null ? '—' : conditionCount);
+    var semantic = decisionSemanticClasses(value);
+    var memberRows = decisionMembershipRows(membership);
+    var counts = '新增 ' + (membersKnown ? memberRows.added.length : '—') + ' · 移出 '
+      + (membersKnown ? memberRows.removed.length : '—') + ' · 条件变化 '
+      + (conditionCount === null ? '—' : semantic.condition.length);
+    if (semantic.reason.length) counts += ' · 理由变化 ' + semantic.reason.length;
+    if (semantic.state.length) counts += ' · 状态或动作变化 ' + semantic.state.length;
+    if (semantic.supplement.length) counts += ' · 本期补充字段 ' + semantic.supplement.length;
+    if (semantic.unverified.length) counts += ' · 登记字段待核验 ' + semantic.unverified.length;
+    if (membersKnown && memberRows.conflict.length) counts += ' · 成员记录冲突 ' + memberRows.conflict.length;
     if (Array.isArray(value.semantic_changed) && Array.isArray(value.value_changed)) {
       var priceRecords = decisionChangeUniqueEntries(value.value_changed).length;
       if (priceRecords) counts += ' · 价格相关记录变化 ' + priceRecords;
@@ -3827,6 +4172,11 @@
       selection = getCandidateSelection(destination);
     }
     if (!selection.sectorItems.some(matchesTarget)
+        && Array.isArray(state.hotspotCandidateCodes)) {
+      state.hotspotCandidateCodes = null;
+      selection = getCandidateSelection(destination);
+    }
+    if (!selection.sectorItems.some(matchesTarget)
         && (state.sectorFilter || state.sectorFilterCode || asArray(state.sectorFilterRefs).length)) {
       state.sectorFilter = '';
       state.sectorFilterCode = '';
@@ -3883,7 +4233,7 @@
       return row.before_readability === 'unreadable' || row.after_readability === 'unreadable';
     }).length;
     var rows = known.map(function (row) {
-      var prefix = row.status === 'newly_recorded' ? '本期新记录该字段 · ' : '';
+      var prefix = row.status === 'newly_recorded' ? '本期补充了该字段 · ' : '';
       return '<li><strong>' + escapeHtml(prefix + labels[row.field]) + '</strong><span>上份原文：'
         + escapeHtml(display(row.before, row.before_readability)) + '</span><span>本期原文：'
         + escapeHtml(display(row.after, row.after_readability)) + '</span></li>';
@@ -3898,6 +4248,76 @@
         : '已核验文字变化 ' + rows.length + ' 项，展开原文';
     return rows.length ? '<details class="decision-change-field-diffs"><summary>'
       + label + '</summary><ul>' + rows.join('') + '</ul></details>' : '';
+  }
+
+  function decisionChangeShortText(value, limit) {
+    var text = normalizeString(value).trim();
+    return text.length > limit ? text.slice(0, limit - 1) + '…' : text;
+  }
+
+  function decisionChangeSources(item) {
+    var value = item && typeof item === 'object' ? item : {};
+    return asArray(value.sources).map(function (row) {
+      return normalizeString(row && typeof row === 'object' ? row.view : row).trim();
+    }).filter(Boolean).filter(function (source, index, all) { return all.indexOf(source) === index; }).sort();
+  }
+
+  function decisionChangeSourceUpdates(projection, membership) {
+    if (!membership || membership.status !== 'available') return [];
+    var previous = membership.previous_items && typeof membership.previous_items === 'object'
+      ? membership.previous_items : {};
+    return decisionChangeUniqueEntries(membership.shared).filter(function (entry) {
+      var code = decisionChangeCode(entry);
+      var current = asArray(projection && projection.items).find(function (item) {
+        return decisionChangeCode(item) === code;
+      });
+      var before = decisionChangeSources(previous[code]);
+      var after = decisionChangeSources(current);
+      return current && before.length && after.length && before.join('|') !== after.join('|');
+    });
+  }
+
+  function decisionChangeReadableDetails(kind, entry, projection, changes) {
+    var code = decisionChangeCode(entry);
+    var current = kind === 'removed' ? null : asArray(projection && projection.items).find(function (item) {
+      return decisionChangeCode(item) === code;
+    });
+    var reason = current && (current.action_reason || current.primary_reason || current.summary_explanation);
+    var reasonText = reason ? '本期理由：' + decisionChangeShortText(reason, 88)
+      : kind === 'removed' ? '本期清单未收录，未记录具体原因'
+        : '本期理由未记录';
+    var next = asArray(current && current.next_confirmation).map(normalizeString).map(function (part) {
+      return part.trim();
+    }).filter(Boolean).slice(0, 2);
+    var nextText = next.length ? '接下来核对：' + next.map(function (part) {
+      return decisionChangeShortText(part, 48);
+    }).join('；') : (kind === 'removed' ? '' : '待确认条件未记录');
+    var details = asArray(changes && changes.change_details && changes.change_details[code]);
+    var relevantFields = { changed: ['next_confirmation', 'invalidation'],
+      reason: ['action_reason', 'primary_reason'], state: ['formal_action', 'page_status'] }[kind] || [];
+    var trueChange = details.find(function (row) {
+      return row && row.status === 'updated' && row.before_readability !== 'unreadable'
+        && row.after_readability !== 'unreadable' && relevantFields.indexOf(row.field) >= 0;
+    });
+    var fieldText = '';
+    if (trueChange) {
+      function original(value) {
+        return Array.isArray(value) ? value.map(normalizeString).join('、') : normalizeString(value);
+      }
+      fieldText = '<span class="decision-change-inline-diff">上期：'
+        + escapeHtml(decisionChangeShortText(original(trueChange.before), 68))
+        + '；本期：' + escapeHtml(decisionChangeShortText(original(trueChange.after), 68)) + '</span>';
+    }
+    var previous = decisionChangePreviousItem(entry, changes);
+    if (kind === 'source' && previous && current) {
+      fieldText = '<span class="decision-change-inline-diff">上期来源：'
+        + escapeHtml(decisionChangeSources(previous).map(comparisonStrategyLabel).join('、'))
+        + '；本期来源：' + escapeHtml(decisionChangeSources(current).map(comparisonStrategyLabel).join('、'))
+        + '</span>';
+    }
+    return '<p class="decision-change-reason">' + escapeHtml(reasonText) + '</p>'
+      + (nextText ? '<p class="decision-change-next">' + escapeHtml(nextText) + '</p>' : '')
+      + fieldText;
   }
 
   function decisionChangeEntryText(kind, entry, projection, changes, tags) {
@@ -3916,53 +4336,54 @@
     var reason = decisionChangeReason(entry, changes, code);
     var memberKnown = changes && changes.membership
       && changes.membership.status === 'available';
-    var conditionVerified = decisionConditionChangeCount(changes) !== null;
+    var semanticVerified = decisionConditionChangeCount(changes) !== null;
+    var labels = { added: '本期新出现', removed: '上期有、本期未出现',
+      unavailable: '部分字段不可比较', source: '来源记录更新',
+      reason: '理由更新', state: '状态或动作更新',
+      supplement: '本期补充了登记字段', unverified: '登记字段差异待核验',
+      conflict: '成员进出记录冲突，未判定变化',
+      value: '价格相关记录变化（价基已核验）', legacy: '旧口径变化（类别未核验）' };
     var label = (kind === 'added' || kind === 'removed') && !memberKnown
       ? '旧视图比较记录（完整成员未核验）'
-      : kind === 'added' ? '本期加入当前集合'
-      : (kind === 'removed' ? '移出本期集合（不等于破位）'
-        : (kind === 'unavailable' ? '部分字段不可比较'
-          : kind === 'value' ? '价格相关记录变化（价基已核验）'
-            : kind === 'legacy' ? '旧口径变化（类别未核验）'
-              : conditionVerified ? '已核验登记条件变化' : '登记字段差异待核验'));
+      : kind === 'changed' ? '待确认条件更新'
+        : labels[kind] || '变化记录待核验';
     var previousDate = kind === 'removed' && previousIdentity.date
       ? '上一有效快照 ' + previousIdentity.date : '';
     var details = [source, date ? (usesPrevious ? '上份 ' : '当前 ') + date : '', previousDate,
       phase ? '阶段 ' + (phase === 'formal' ? '收盘报告' : phase) : '', reason].filter(Boolean).join(' · ');
     var view = normalizeString(value.view || value.source_strategy || value.strategy_id).trim();
     var currentCandidate = findCurrentCandidateForCode(code, view);
-    var currentAction = currentCandidate
+    var currentInScope = kind !== 'removed' && kind !== 'conflict'
+      && asArray(projection && projection.items).some(function (item) {
+        return decisionChangeCode(item) === code;
+      });
+    var currentAction = currentCandidate && currentInScope
       ? '<button type="button" class="decision-change-current-button" data-change-current="'
         + escapeHtml(code) + '" data-change-current-view="' + escapeHtml(view)
-        + '">' + (kind === 'value' || kind === 'legacy' ? '看本期记录' : '看当前条件')
+        + '">查看个股'
         + '</button>' : '';
     var historyPanelId = 'decision-change-history-' + code;
-    var historyControl = 'data-change-history="' + escapeHtml(code)
-      + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId) + '"';
     var historyAction = previous ? '<button type="button" class="decision-change-history-button" data-change-history="'
       + escapeHtml(code) + '" aria-expanded="false" aria-controls="' + escapeHtml(historyPanelId)
-      + '">' + (kind === 'changed' && conditionVerified ? '比较两期'
-        : kind === 'value' || kind === 'legacy' || kind === 'changed' ? '并列两期记录' : '看上次记录')
+      + '">看上期记录'
       + '</button>' : '';
-    var primaryHistory = kind === 'removed' || ((kind === 'changed' || kind === 'value' || kind === 'legacy') && !!previous)
-      || (!currentCandidate && !!previous);
-    var primary = primaryHistory ? historyControl
-      : currentCandidate ? 'data-change-current="' + escapeHtml(code)
-        + '" data-change-current-view="' + escapeHtml(view) + '"'
-        : historyControl;
     var tagText = asArray(tags).map(function (tag) {
-      return { added: '加入', removed: '移出', changed: conditionVerified ? '条件更新' : '登记字段待核验',
+      return { added: '本期新出现', removed: '上期有、本期未出现', changed: '条件更新',
+        reason: '理由更新', state: '状态或动作更新', source: '来源记录更新',
+        supplement: '本期补充字段', unverified: '登记字段待核验', conflict: '成员记录冲突',
         value: '价格记录', legacy: '旧口径待核验', unavailable: '部分不可比' }[tag] || '';
     }).filter(Boolean).join(' · ');
-    var actions = primaryHistory ? (currentAction + historyAction) : historyAction;
-    return '<li data-change-row="' + escapeHtml(code) + '"><div class="decision-change-entry"><button type="button" class="decision-change-item" '
-      + primary + ' data-change-kind="' + escapeHtml(kind)
+    return '<li data-change-row="' + escapeHtml(code) + '"><div class="decision-change-entry"><div class="decision-change-item" data-change-kind="' + escapeHtml(kind)
       + '" data-change-code="' + escapeHtml(code)
       + '" data-change-view="' + escapeHtml(view) + '"><strong>'
       + escapeHtml(name) + '</strong><span>' + escapeHtml(code) + '</span><small>'
       + escapeHtml(label + (tagText ? ' · ' + tagText : '') + (details ? ' · ' + details : ''))
-      + '</small></button>' + actions + decisionChangeFieldDiffs(changes, code,
-        conditionVerified && asArray(tags).indexOf('changed') >= 0)
+      + '</small></div>' + decisionChangeReadableDetails(kind, entry, projection, changes)
+      + '<div class="decision-change-actions">' + currentAction + historyAction + '</div>'
+      + decisionChangeFieldDiffs(changes, code,
+        semanticVerified && asArray(tags).some(function (tag) {
+          return tag === 'changed' || tag === 'reason' || tag === 'state';
+        }))
       + '</div><div class="decision-change-history" id="' + escapeHtml(historyPanelId)
       + '" hidden></div></li>';
   }
@@ -4394,10 +4815,43 @@
         ? value.previousOverview + '；完整原始条件暂不可用。'
         : '上一有效交易快照未找到该股票记录；这是已有历史缺口，不等于破位或失效。',
       value.previous && value.previous.validation);
+    function reason(entries) {
+      var texts = asArray(entries).map(function (entry) {
+        var record = entry && entry.record && typeof entry.record === 'object' ? entry.record : {};
+        var workbench = record.workbench_item && typeof record.workbench_item === 'object'
+          ? record.workbench_item : record;
+        return normalizeString(workbench.action_reason || workbench.primary_reason
+          || record.action_reason || record.primary_reason).trim();
+      }).filter(Boolean);
+      return texts.length ? decisionChangeShortText(texts.filter(function (text, index) {
+        return texts.indexOf(text) === index;
+      }).slice(0, 2).join('；'), 180) : '未记录可读取的理由';
+    }
+    var comparable = asArray(value.changeDetails).filter(function (row) {
+      return row && row.status === 'updated' && row.before_readability !== 'unreadable'
+        && row.after_readability !== 'unreadable';
+    });
+    var changeSummary = comparable.length
+      ? comparable.slice(0, 2).map(function (row) {
+        function original(item) {
+          return Array.isArray(item) ? item.map(normalizeString).join('、') : normalizeString(item);
+        }
+        return '上期“' + decisionChangeShortText(original(row.before), 64)
+          + '”→本期“' + decisionChangeShortText(original(row.after), 64) + '”';
+      }).join('；') : '未记录可核验的条件原文差异';
+    var limit = !asArray(previousEntries).length && value.previousOverview
+      ? '上期只有已绑定清单概览，完整理由暂不可用。'
+      : '仅对照这两份报告；未推断更早状态。';
     return '<section class="decision-history-timeline" data-history-code="' + escapeHtml(code)
-      + '"><header><h3 tabindex="-1">' + escapeHtml(code) + ' · 已有快照复盘</h3><p>仅读取当前与上一有效交易快照；跨期计算暂不可用，仅并列原记录，不输出未变化或数值变化结论。</p>'
-      + (value.previousOverview ? '<p>上份名单：' + escapeHtml(value.previousOverview) + '</p>' : '') + '</header>'
-      + currentText + previousText + renderDecisionHistoryValidationNote(value.previous && value.previous.validation) + '</section>';
+      + '"><header><h3 tabindex="-1">' + escapeHtml(code) + ' · 两期记录</h3></header>'
+      + '<div class="decision-history-summary"><p><strong>上期理由：</strong>' + escapeHtml(reason(previousEntries))
+      + '</p><p><strong>本期理由：</strong>' + escapeHtml(reason(currentEntries))
+      + '</p><p><strong>真正变化：</strong>' + escapeHtml(changeSummary)
+      + '</p><p><strong>必要限制：</strong>' + escapeHtml(limit) + '</p></div>'
+      + '<details class="decision-history-raw"><summary>原始记录与依据</summary>'
+      + (value.previousOverview ? '<p>上份名单：' + escapeHtml(value.previousOverview) + '</p>' : '')
+      + currentText + previousText + renderDecisionHistoryValidationNote(value.previous && value.previous.validation)
+      + '</details></section>';
   }
 
   function loadDecisionChangeHistory(code, target, trigger) {
@@ -4421,6 +4875,7 @@
         version: projection && projection.version,
         snapshot: projection && (projection.snapshot_id || projection.payload_hash) },
       previous: previousIdentity,
+      changeDetails: changes.change_details && changes.change_details[code],
       previousOverview: previousItem ? [normalizeString(previousItem.name).trim() || code,
         asArray(previousItem.sources).map(comparisonStrategyLabel).join('、'),
         previousDate].filter(Boolean).join(' · ') : '',
@@ -4586,7 +5041,7 @@
     var projection = getDecisionWorkbench();
     if (!projection) {
       var legacyHtml = '<section class="decision-changes-panel is-unavailable">'
-        + '<h3>变化复盘</h3><p>本期没有统一清单，已有历史变化记录未提供。</p></section>';
+        + '<h3>本期值得重看的变化</h3><p>本期可核验变化不足；当前个股仍可在上方清单查看。</p></section>';
       target.innerHTML = legacyHtml;
       return legacyHtml;
     }
@@ -4649,18 +5104,25 @@
     var membership = changes.membership && typeof changes.membership === 'object' ? changes.membership : {};
     var memberKnown = membership.status === 'available'
       && Array.isArray(membership.added) && Array.isArray(membership.removed);
+    var memberRows = decisionMembershipRows(membership);
     var structuredChanges = Array.isArray(changes.semantic_changed)
       && Array.isArray(changes.value_changed);
-    var semanticRows = structuredChanges ? changes.semantic_changed : [];
+    var conditionCount = decisionConditionChangeCount(changes);
+    var semantic = decisionSemanticClasses(changes);
+    var sourceRows = decisionChangeSourceUpdates(projection, membership);
     var valueRows = structuredChanges ? changes.value_changed : [];
     var legacyRows = decisionUnclassifiedChanges(changes);
-    var conditionCount = decisionConditionChangeCount(changes);
     var groups = [
-      ['changed', structuredChanges && conditionCount === null
-        ? '登记字段差异待核验' : '条件更新', '本期没有已登记的状态或条件变化'],
-      ['added', '加入当前集合', '本期没有新增记录'],
-      ['removed', '移出当前集合', '本期没有移出记录'],
+      ['changed', '待确认条件更新', '本期没有已核验的条件更新'],
+      ['reason', '理由更新', '本期没有已核验的理由更新'],
+      ['state', '状态或动作更新', '本期没有已核验的状态或动作更新'],
+      ['added', '本期新出现', '本期没有新出现的股票'],
+      ['removed', '上期有、本期未出现', '本期没有已核验的未再出现记录'],
     ];
+    if (sourceRows.length) groups.push(['source', '来源记录更新', '本期没有来源记录更新']);
+    if (semantic.supplement.length) groups.push(['supplement', '本期补充登记字段', '本期没有登记字段补充']);
+    if (semantic.unverified.length) groups.push(['unverified', '登记字段差异待核验', '登记字段差异缺可核验原文']);
+    if (memberRows.conflict.length) groups.push(['conflict', '成员进出记录冲突', '本期没有成员冲突']);
     if (valueRows.length) groups.push(['value', '价格相关记录变化', '本期没有已核验的价格记录变化']);
     if (legacyRows.length) groups.push(['legacy', '旧口径变化（类别未核验）', '旧口径变化类别未核验']);
     var unavailableCodes = asArray(changes.unavailable_codes)
@@ -4681,17 +5143,22 @@
     var grouped = groups.map(function (group) {
       var entries = group[0] === 'unavailable'
         ? unavailableCodes.map(function (code) { return { code: code }; })
+        : group[0] === 'conflict' ? memberRows.conflict
+          : group[0] === 'source' ? sourceRows
+            : group[0] === 'supplement' ? semantic.supplement
+              : group[0] === 'unverified' ? semantic.unverified
         : group[0] === 'added' || group[0] === 'removed'
-          ? (memberKnown ? asArray(membership[group[0]]) : asArray(changes[group[0]]))
-          : group[0] === 'changed' ? semanticRows
+          ? (memberKnown ? memberRows[group[0]] : asArray(changes[group[0]]))
+          : group[0] === 'changed' ? semantic.condition
+            : group[0] === 'reason' ? semantic.reason
+              : group[0] === 'state' ? semantic.state
             : group[0] === 'value' ? valueRows : legacyRows;
       entries = decisionChangeUniqueEntries(entries);
       var count = (group[0] === 'added' || group[0] === 'removed') && !memberKnown
-        ? '—' : group[0] === 'changed' && conditionCount === null
-          ? '—' : entries.length;
+        ? '—' : group[0] === 'changed' && conditionCount === null ? '—' : entries.length;
       var emptyText = group[0] === 'changed'
         ? conditionCount === null ? '条件变化未比较'
-          : status === 'available' ? group[2] : '已比较的成员没有登记字段变化'
+          : status === 'available' ? group[2] : '已比较的成员没有已核验的条件更新'
         : (group[0] === 'added' || group[0] === 'removed') && !memberKnown
           ? '成员比较未核验' : group[2];
       entries.forEach(function (entry) {
@@ -4709,12 +5176,21 @@
     if (selected !== 'all' && !grouped.some(function (group) { return group.kind === selected; })) {
       selected = 'all';
     }
-    var matching = selected === 'all' ? ordered : ordered.filter(function (row) {
+    var matching = selected === 'all' ? ordered.filter(function (row) {
+      return row.tags.indexOf('changed') >= 0
+        || row.tags.indexOf('reason') >= 0 || row.tags.indexOf('state') >= 0
+        || (memberKnown && row.tags.indexOf('added') >= 0);
+    }) : ordered.filter(function (row) {
       return row.tags.indexOf(selected) >= 0;
     });
     var visible = state.decisionChangeShowAll ? matching : matching.slice(0, 5);
+    var secondaryRows = selected === 'all' ? ordered.filter(function (row) {
+      return matching.indexOf(row) < 0;
+    }) : [];
     var currentGroup = grouped.find(function (group) { return group.kind === selected; });
-    var empty = currentGroup ? currentGroup.empty : '本期没有可展示的已核验变化';
+    var focusComparable = memberKnown && conditionCount !== null && !semantic.unverified.length;
+    var empty = currentGroup ? currentGroup.empty : focusComparable
+      ? '本期没有已核验的新出现或条件更新' : '本期可核验变化不足；当前个股仍可在上方清单查看。';
     var counters = grouped.map(function (group) {
       return '<button type="button" class="decision-change-count" data-change-group-toggle="'
         + escapeHtml(group.kind) + '" aria-pressed="' + (selected === group.kind ? 'true' : 'false')
@@ -4724,23 +5200,31 @@
       return decisionChangeEntryText(row.kind, row.entry, projection, changes, row.tags);
     }).join('') + '</ul>' : '<p class="decision-change-empty">' + escapeHtml(empty) + '</p>';
     var shortStatus = !memberKnown ? '上份完整名单未核验；加入与移出未比较。'
-      : conditionCount === null ? '名单成员已核验；条件变化未比较。'
+      : conditionCount === null ? '名单成员已核验；登记字段未比较。'
         : status === 'partial' ? '名单成员已核验；部分字段不可比。'
-          : '名单成员与已登记条件已分别核对。';
-    var html = '<section class="decision-changes-panel" aria-label="名单变化">'
-      + '<header><div><h3>名单变化</h3><p>'
-      + escapeHtml(previousDate ? previousDate + ' → ' + (projection.report_date || '') : '上份报告未核验')
+          : '名单成员与已登记内容已分别核对。';
+    var scope = memberKnown ? '全部已发布候选' : '所选清单范围未核验';
+    var html = '<section class="decision-changes-panel" aria-label="本期值得重看的变化">'
+      + '<header><div><h3>本期值得重看的变化</h3><p>'
+      + escapeHtml(previousDate ? '对比 ' + previousDate + ' 与 ' + (projection.report_date || '本期日期未记录')
+        + ' 两份报告中的「' + scope + '」' : '上份报告未核验；' + scope)
       + '</p><p>' + escapeHtml(shortStatus) + '</p></div></header>'
-      + '<div class="decision-change-groups"><button type="button" class="decision-change-count" data-change-group-toggle="all" aria-pressed="'
-      + (selected === 'all' ? 'true' : 'false') + '">全部 <span>' + ordered.length + '</span></button>'
-      + counters + '</div>'
       + '<div class="decision-change-results" data-change-group="' + escapeHtml(selected) + '">'
       + rows + '<div class="decision-change-list-footer"><span>显示 ' + visible.length + ' / ' + matching.length
-      + ' 只证券；分组可重叠，数量不可相加。</span>'
+      + ' 只证券。</span>'
       + (matching.length > 5 ? '<button type="button" data-change-show-all aria-expanded="'
         + (state.decisionChangeShowAll ? 'true' : 'false') + '">'
         + (state.decisionChangeShowAll ? '收起' : '查看全部') + '</button>' : '')
       + '</div></div>'
+      + '<details class="decision-change-secondary"' + (selected !== 'all' ? ' open' : '')
+      + '><summary>查看其他变化与完整数量（共 ' + ordered.length + ' 只）</summary>'
+      + '<div class="decision-change-groups"><button type="button" class="decision-change-count" data-change-group-toggle="all" aria-pressed="'
+      + (selected === 'all' ? 'true' : 'false') + '">本期重点 <span>' + matching.length + '</span></button>'
+      + counters + '</div><p>分组可重叠，数量不可相加；已退出记录按需查看。</p>'
+      + (secondaryRows.length ? '<ul class="decision-change-list decision-change-secondary-list">'
+        + secondaryRows.map(function (row) {
+          return decisionChangeEntryText(row.kind, row.entry, projection, changes, row.tags);
+        }).join('') + '</ul>' : '') + '</details>'
       + '<p class="decision-changes-boundary">名单进出不等于买入或卖出信号。价格不可比时仅展示可核验的文字条件。</p>'
       + '<details class="decision-change-basis"><summary>比较依据</summary><p>'
       + escapeHtml(identity) + '</p><p>' + escapeHtml(statusText) + '</p></details></section>';
@@ -5223,7 +5707,10 @@
     var sectorName = opts.sectorName === undefined ? state.sectorFilter : opts.sectorName;
     var sectorCode = opts.sectorCode === undefined ? state.sectorFilterCode : opts.sectorCode;
     var sectorRefs = opts.sectorRefs === undefined ? state.sectorFilterRefs : opts.sectorRefs;
-    var sectorItems = filterCandidatesBySector(statusItems, sectorName, sectorCode, sectorRefs);
+    var sectorItems = filterCandidatesByHotspotCodes(
+      filterCandidatesBySector(statusItems, sectorName, sectorCode, sectorRefs),
+      opts.hotspotCodes === undefined ? state.hotspotCandidateCodes : opts.hotspotCodes
+    );
     var query = opts.query === undefined ? state.candidateQuery : opts.query;
     query = normalizeString(query).trim().toLowerCase();
     var items = sectorItems.filter(function (item) {
@@ -5562,7 +6049,7 @@
       + '  </header>'
       + '  <nav class="primary-mode-tabs" role="tablist" aria-label="工作台层级">'
       + '    <button type="button" id="primary-mode-tab-today" data-primary-mode="today" role="tab" aria-controls="todayDecisionView" aria-selected="true" tabindex="0">今日决策</button>'
-      + '    <button type="button" id="primary-mode-tab-research" data-primary-mode="research" role="tab" aria-controls="researchValidationView" aria-selected="false" tabindex="-1">研究验证</button>'
+      + '    <button type="button" id="primary-mode-tab-performance" data-primary-mode="performance" role="tab" aria-controls="selectionPerformanceView" aria-selected="false" tabindex="-1">选股表现</button>'
       + '  </nav>'
       + '  <section class="primary-view today-decision-view" id="todayDecisionView" role="tabpanel" aria-labelledby="primary-mode-tab-today">'
       + '    <section class="historical-reconstruction hidden" id="historicalReconstruction" aria-live="polite"></section>'
@@ -5576,7 +6063,7 @@
       + '        <div class="market-evidence" id="marketEvidence"></div>'
       + '      </section>'
       + '      <!-- id="directionQuickSummary" is mounted after 我的关注 with the other supplemental facts. -->'
-      + '      <section class="sector-strip" id="sectorStrip" aria-label="资金主线"><strong>资金主线</strong><span>正在整理板块证据…</span></section>'
+      + '      <section class="sector-strip" id="sectorStrip" aria-label="行业资金流"><strong>行业资金流</strong><span>正在整理板块证据…</span></section>'
       + '      <section class="candidate-workspace" id="candidateWorkspace" aria-label="候选工作台">'
       + '        <div class="workspace-tabs" id="workspaceTabs" role="group" aria-label="候选视图"></div>'
       + '        <div class="workspace-body">'
@@ -5615,7 +6102,10 @@
       + '    <section class="supporting-decisions-stack" id="supportingDecisionsStack" aria-label="今日补充事实"></section>'
       + '    <section class="report-changes-placeholder" id="reportChanges" aria-label="本期变化及复盘入口"><div id="decisionChanges"></div></section>'
       + '  </section>'
-      + '  <section class="primary-view research-validation-view hidden" id="researchValidationView" role="tabpanel" aria-labelledby="primary-mode-tab-research">'
+      + '  <section class="primary-view selection-performance-view hidden" id="selectionPerformanceView" role="tabpanel" aria-labelledby="primary-mode-tab-performance">'
+      + '    <div id="selectionPerformanceMount"></div>'
+      + '    <details class="advanced-research-details" id="advancedResearchDetails"><summary>实验与运行详情</summary>'
+      + '    <section class="research-validation-view" id="researchValidationView" aria-label="研究验证及运行详情">'
       + '    <section class="l1-nextday-research" id="nextday-research" aria-labelledby="nextdayResearchTitle" tabindex="-1">'
       + '      <header class="l1-nextday-header"><div><h2 id="nextdayResearchTitle">L1 次日强势研究候选</h2><p>按当日报告生成的研究名单与次日价格路径记录。</p></div><span class="l1-nextday-research-badge">研究观察 · 不构成正式推荐</span></header>'
       + '      <div class="l1-nextday-content" id="nextdayResearchContent" role="status" aria-live="polite" aria-atomic="true">等待日报数据…</div>'
@@ -5628,6 +6118,8 @@
       + '        <div class="research-validation-stack aux-grid decision-grid" id="auxGrid"></div>'
       + '      </details>'
       + '    </section>'
+      + '    </section>'
+      + '    </details>'
       + '  </section>'
       + '  <div class="mobile-drawer" id="mobileDrawer" role="dialog" aria-modal="true" aria-hidden="true" aria-labelledby="mobileDrawerTitle">'
       + '    <div class="mobile-drawer-backdrop" id="mobileDrawerBackdrop"></div>'
@@ -5652,7 +6144,10 @@
     nodes.headerMetrics = app.querySelector('.header-metrics');
     nodes.primaryTabs = app.querySelector('.primary-mode-tabs');
     nodes.todayDecisionView = app.querySelector('#todayDecisionView');
+    nodes.selectionPerformanceView = app.querySelector('#selectionPerformanceView');
+    nodes.selectionPerformanceMount = app.querySelector('#selectionPerformanceMount');
     nodes.researchValidationView = app.querySelector('#researchValidationView');
+    nodes.advancedResearchDetails = app.querySelector('#advancedResearchDetails');
     nodes.nextdayResearchSection = app.querySelector('#nextday-research');
     nodes.nextdayResearch = app.querySelector('#nextdayResearchContent');
     nodes.marketEvidence = app.querySelector('#marketEvidence');
@@ -5703,13 +6198,18 @@
         loadNextdayResearch();
       });
     }
+    if (nodes.advancedResearchDetails) {
+      nodes.advancedResearchDetails.addEventListener('toggle', function () {
+        if (nodes.advancedResearchDetails.open) schedulePrimaryChartResize();
+      });
+    }
     if (nodes.primaryTabs) {
       nodes.primaryTabs.addEventListener('click', function (event) {
         var button = event.target && event.target.closest
           ? event.target.closest('[data-primary-mode]')
           : null;
         if (!button) return;
-        state.primaryMode = button.getAttribute('data-primary-mode') === 'research' ? 'research' : 'today';
+        state.primaryMode = button.getAttribute('data-primary-mode');
         renderPrimaryMode();
       });
       nodes.primaryTabs.addEventListener('keydown', function (event) {
@@ -5728,7 +6228,7 @@
             ? buttons.length - 1
             : (current + (event.key === 'ArrowRight' ? 1 : -1) + buttons.length) % buttons.length);
         var next = buttons[nextIndex];
-        state.primaryMode = next.getAttribute('data-primary-mode') === 'research' ? 'research' : 'today';
+        state.primaryMode = next.getAttribute('data-primary-mode');
         renderPrimaryMode();
         if (next.focus) next.focus();
       });
@@ -5781,10 +6281,11 @@
   }
 
   function renderPrimaryMode() {
-    var mode = state.primaryMode === 'research' ? 'research' : 'today';
+    var mode = state.primaryMode === 'performance' || state.primaryMode === 'research'
+      ? 'performance' : 'today';
     state.primaryMode = mode;
     if (nodes.todayDecisionView) nodes.todayDecisionView.classList.toggle('hidden', mode !== 'today');
-    if (nodes.researchValidationView) nodes.researchValidationView.classList.toggle('hidden', mode !== 'research');
+    if (nodes.selectionPerformanceView) nodes.selectionPerformanceView.classList.toggle('hidden', mode !== 'performance');
     if (nodes.primaryTabs) {
       var buttons = nodes.primaryTabs.querySelectorAll('[data-primary-mode]');
       for (var i = 0; i < buttons.length; i += 1) {
@@ -5794,6 +6295,10 @@
         buttons[i].setAttribute('tabindex', active ? '0' : '-1');
       }
     }
+    schedulePrimaryChartResize();
+  }
+
+  function schedulePrimaryChartResize() {
     var resizeCharts = function () {
       if (state.chartInstance) state.chartInstance.resize();
       if (state.sentimentChartInstance) state.sentimentChartInstance.resize();
@@ -5805,6 +6310,22 @@
     } else {
       setTimeout(resizeCharts, 0);
     }
+  }
+
+  function initSelectionPerformance() {
+    if (!nodes.selectionPerformanceMount) return;
+    var bootstrap = getBootstrap();
+    var pageDate = normalizeString(bootstrap.pageDate).trim();
+    var performance = window.ChanlunSelectionPerformance;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(pageDate)
+      || !performance || typeof performance.mount !== 'function') {
+      nodes.selectionPerformanceMount.innerHTML = '<p class="sp-empty">本期表现数据暂不可用，已发布清单仍可查看。</p>';
+      return;
+    }
+    performance.mount(nodes.selectionPerformanceMount, {
+      pageDate: pageDate,
+      dataBasePrefix: normalizeString(bootstrap.dataBasePrefix),
+    });
   }
 
   function getReportDataStatus(data) {
@@ -5908,7 +6429,8 @@
       + '<strong>' + escapeHtml(timeMatch ? timeMatch[1] : '--:--') + '</strong>'
       + '<small>' + escapeHtml(
         versionText + ' · ' + marketStatus + (degraded ? ' · 数据降级' : '')
-      ) + '</small></div>';
+      ) + '</small></div>'
+      + renderPsy12BaseSentence(source);
   }
 
   function renderDecisionMarketBar(data) {
@@ -6134,8 +6656,33 @@
     return '来源未登记';
   }
 
-  function renderDirectionQuickSummary(data) {
+  function renderDirectionQuickSummary(data, hotspotModel) {
     if (!nodes.directionQuick) return;
+    if (hotspotModel) {
+      var quickGroups = asArray(hotspotModel.groups).slice(0, 3);
+      var isKaipanla = hotspotModel.source === 'kaipanla';
+      nodes.directionQuick.innerHTML = '<div><strong>'
+        + (isKaipanla ? '开盘啦题材'
+          : (hotspotModel.source ? '备用：涨停分布' : '热点暂不可用')) + '</strong><small>'
+        + escapeHtml(hotspotModel.status === 'previous_day'
+          ? '上一期参考 · ' + hotspotModel.snapshotDate
+          : (isKaipanla ? '来源顺序 · ' : '报告日期 · ') + hotspotModel.snapshotDate)
+        + '</small></div><div class="direction-quick-list">'
+        + quickGroups.map(function (group) {
+          return '<span><b>' + escapeHtml(group.name) + '</b><em>'
+            + escapeHtml(isKaipanla
+              ? kaipanlaGroupSampleText(group) + ' · '
+                + kaipanlaGroupSystemCountText(group, hotspotModel)
+              : '涨停样本 ' + (group.totalCount === null ? '待核验' : group.totalCount + ' 只'))
+            + '</em></span>';
+        }).join('') + '</div><button type="button" id="directionQuickMore">查看热点地图</button>';
+      var hotspotMore = nodes.directionQuick.querySelector('#directionQuickMore');
+      if (hotspotMore) hotspotMore.addEventListener('click', function () {
+        var target = document.getElementById('marketHotspotSection');
+        if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+      return;
+    }
     var brief = (data || {}).decision_brief || {};
     var theses = asArray(brief.theses).slice(0, 3);
     if (!theses.length) {
@@ -8419,7 +8966,8 @@
     var query = selection.query;
     var unifiedMainEmpty = isDecisionView(state.currentView)
       ? items.length === 0
-      : state.currentView === 'main' && !query && !state.sectorFilter && items.length === 0;
+      : state.currentView === 'main' && !query && !state.sectorFilter
+        && !Array.isArray(state.hotspotCandidateCodes) && items.length === 0;
     if (nodes.workspaceBody && nodes.workspaceBody.classList) {
       nodes.workspaceBody.classList.toggle('is-unified-empty', unifiedMainEmpty);
     }
@@ -8432,7 +8980,8 @@
     });
     if (visibleItems.length && !activeVisible) {
       beginCandidateSelection(visibleItems[0]);
-    } else if (!visibleItems.length && !query && !state.sectorFilter) {
+    } else if (!visibleItems.length && !query && !state.sectorFilter
+        && !Array.isArray(state.hotspotCandidateCodes)) {
       beginCandidateSelection(null);
     }
     if (visibleItems.length) {
@@ -8444,6 +8993,7 @@
     if (nodes.candidateCount) {
       nodes.candidateCount.textContent = '显示 ' + visibleItems.length + ' / ' + items.length
         + (query || state.sectorFilter || selection.statusFilter
+          || Array.isArray(state.hotspotCandidateCodes)
           ? '（原池 ' + poolItems.length + '）' : '');
     }
     if (nodes.candidateMore) {
@@ -8456,11 +9006,13 @@
       }
       var viewMeta = (getCandidateViews().meta || {})[state.currentView] || {};
       var rawAvailability = viewMeta.availability || {};
-      var filteredEmpty = Boolean(query || state.sectorFilter);
+      var filteredEmpty = Boolean(query || state.sectorFilter
+        || Array.isArray(state.hotspotCandidateCodes));
       var traceSuppressed = filteredEmpty || Boolean(selection.statusFilter);
       nodes.candidateList.innerHTML = buildCandidateEmptyState(state.currentView, rawAvailability, {
         filtered: filteredEmpty,
-        filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
+        filterLabel: state.sectorFilter || (Array.isArray(state.hotspotCandidateCodes) ? '热点题材' : '')
+          || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
       }) + (traceSuppressed ? '' : renderLegacyRawConditionTrace(state.currentView));
       var openAll = nodes.candidateList.querySelector('[data-workbench-open-all]');
       if (openAll) openAll.addEventListener('click', function () { activateWorkspaceView('decision_all', true); });
@@ -8476,7 +9028,8 @@
         ? ''
         : buildCandidateEmptyState(state.currentView, rawAvailability, {
           filtered: filteredEmpty,
-          filterLabel: state.sectorFilter || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
+          filterLabel: state.sectorFilter || (Array.isArray(state.hotspotCandidateCodes) ? '热点题材' : '')
+            || normalizeString(nodes.candidateSearch && nodes.candidateSearch.value),
         });
       return;
     }
@@ -11715,7 +12268,8 @@
       + '    <div id="marketSentimentChart" class="market-sentiment-chart" role="img" aria-label="最近20个交易日市场情绪折线图"></div>'
       + '  </div>'
       + '</div>'
-      + renderPsy12ShadowSubpanel(data || {});
+      + '<details class="psy12-market-advanced"><summary>实验与运行详情</summary>'
+      + renderPsy12ShadowSubpanel(data || {}) + '</details>';
     return renderDecisionCard({
       title: '市场情绪',
       subtitle: '全A宽度、涨跌停生态、成交与趋势结构',
@@ -11734,6 +12288,22 @@
     if (reason === 'unordered_dates') return 'PSY12 数据异常：交易日顺序不可验证。';
     if (reason === 'unverifiable_index_evidence') return 'PSY12 数据异常：指数涨跌证据不可验证。';
     return 'PSY12 数据不足，暂不生成影子分。';
+  }
+
+  function renderPsy12BaseSentence(data) {
+    var psy12 = data && data.psy12 && typeof data.psy12 === 'object' ? data.psy12 : {};
+    var upDays = Number(psy12.up_days);
+    var baseAvailable = psy12.status === 'available' && psy12.valid_days === 12
+      && isRecommendationEvidenceFiniteNumber(psy12.up_days)
+      && Number.isInteger(upDays) && upDays >= 0 && upDays <= 12
+      && isRecommendationEvidenceFiniteNumber(psy12.score)
+      && Math.abs(Number(psy12.score) - upDays / 12 * 100) < 0.6;
+    var text = baseAvailable
+      ? '最近12个有效观察日中，有' + upDays + '天指数平均上涨（上涨日占比'
+        + (Math.round(upDays / 12 * 1000) / 10) + '%）。'
+      : '有效观察记录不足，暂不统计。';
+    return '<p class="psy12-basic-sentence"><strong>近期上涨持续性</strong><span>'
+      + escapeHtml(text) + '</span></p>';
   }
 
   function getPsy12ShadowAudit(data) {
@@ -11893,12 +12463,12 @@
           ? '影子验证已有结果；展开查看完整分数、差值与审计。'
           : '影子综合分暂缺：' + shadowReason));
     function renderPsy12Panel(badge, detailHtml) {
-      var bodyHtml = baseHtml;
+      var bodyHtml = compact ? '' : baseHtml;
       if (compact) {
         bodyHtml += '<div class="psy12-shadow-notice' + (!contractValid || !psy12WeightValid ? ' is-error' : '')
           + '">' + escapeHtml(compactWarning) + '</div>'
           + '<details class="psy12-research-audit"><summary>查看影子分与审计</summary>'
-          + detailHtml + '</details>';
+          + baseHtml + detailHtml + '</details>';
       } else {
         bodyHtml += detailHtml;
       }
@@ -12146,7 +12716,7 @@
       });
     if (verifiedHeat) {
       return {
-        title: '热门板块',
+        title: '行业涨跌',
         status: { label: '收盘核验', tone: 'positive', detail: '' },
         items: heatItems.slice(0, 5).map(function (item) {
           var changePct = safeNumber(item.change_pct, null);
@@ -12177,14 +12747,14 @@
     append(sectorIn, 'in');
     append(sectorOut, 'out');
     return {
-      title: '资金主线',
+      title: '行业资金流',
       status: status,
       items: items,
     };
   }
 
   function renderFundingMainline(model, activeSector, activeSectorCode, activeSectorRefs, counts) {
-    var rec = model || { title: '资金主线', status: {}, items: [] };
+    var rec = model || { title: '行业资金流', status: {}, items: [] };
     var active = normalizeSectorName(activeSector);
     var activeCode = normalizeString(activeSectorCode).trim();
     var activeRefs = asArray(activeSectorRefs).map(normalizeString).filter(Boolean);
@@ -12222,7 +12792,7 @@
         + '</strong> · 原池 ' + escapeHtml(String(metrics.originalCount === undefined ? '--' : metrics.originalCount))
         + ' · 匹配 ' + escapeHtml(String(metrics.matchedCount === undefined ? '--' : metrics.matchedCount)) + ' 只</div>'
       : '<div class="funding-mainline-feedback" aria-live="polite">未选择板块 · 原池 ' + escapeHtml(String(metrics.originalCount === undefined ? '--' : metrics.originalCount)) + ' 只</div>';
-    return '<div class="funding-mainline-heading"><strong>' + escapeHtml(rec.title || '资金主线') + '</strong>'
+    return '<div class="funding-mainline-heading"><strong>' + escapeHtml(rec.title || '行业资金流') + '</strong>'
       + '<small>' + escapeHtml(status.label || '状态待确认') + '</small></div>'
       + feedback
       + '<div class="funding-mainline-tags">' + body
@@ -12233,7 +12803,7 @@
   function renderFundingMainlineStrip() {
     if (!nodes.sectorStrip) return;
     var model = buildFundingMainlineModel(state.data || {});
-    nodes.sectorStrip.setAttribute('aria-label', model.title || '资金主线');
+    nodes.sectorStrip.setAttribute('aria-label', model.title || '行业资金流');
     var poolItems = getCurrentViewItems();
     var matchedItems = filterCandidatesBySector(
       poolItems, state.sectorFilter, state.sectorFilterCode, state.sectorFilterRefs
@@ -15128,8 +15698,9 @@
 
   function openNextdayResearchFromHash() {
     if (!window.location || normalizeString(window.location.hash) !== '#nextday-research') return false;
-    state.primaryMode = 'research';
+    state.primaryMode = 'performance';
     renderPrimaryMode();
+    if (nodes.advancedResearchDetails) nodes.advancedResearchDetails.open = true;
     var focusSection = function () {
       if (!nodes.nextdayResearchSection) return;
       if (nodes.nextdayResearchSection.scrollIntoView) {
@@ -15458,7 +16029,6 @@
       renderDecisionOverview();
       renderReviewToolPanels();
       renderFundingMainlineStrip();
-      renderDirectionQuickSummary(state.data);
       renderMarketHotspot();
       renderHistoricalReconstruction(state.data);
       renderWorkspaceTabs();
@@ -15472,6 +16042,7 @@
         clearCandidateDetailLifecycle(nodes.detailPanel);
         nodes.detailPanel.innerHTML = '<div class="detail-empty">选择后查看详情</div>';
       }
+      if (state.granted === true) initSelectionPerformance();
     }).catch(function (error) {
       renderGlobalError(error && error.message ? error.message : '加载失败');
       loadNextdayResearch();

@@ -4,6 +4,7 @@ import re
 import unittest
 
 from tests.test_auxiliary_frontend import CSS, JS, _assert_node_contract
+from tests.css_test_helpers import media_rule_blocks
 
 
 class TestChartCenteredDecisionWorkbench(unittest.TestCase):
@@ -723,9 +724,10 @@ assert(incident.includes('事故复盘评分不生效')
         )
 
     def test_390_stacks_market_chart_brief_and_disables_sticky_overlay(self):
-        mobile_start = CSS.rfind("@media (max-width: 390px)")
-        self.assertGreaterEqual(mobile_start, 0)
-        mobile = CSS[mobile_start:]
+        # Relevant rules live in several 390px blocks; the last block alone is unrelated L1 CSS.
+        mobile_blocks = media_rule_blocks(CSS, "@media (max-width: 390px)")
+        self.assertTrue(mobile_blocks)
+        mobile = "\n".join(mobile_blocks)
         self.assertRegex(
             mobile,
             re.compile(
@@ -887,9 +889,9 @@ assert(hiddenDesktop.innerHTML === '', 'hidden desktop switcher was targeted by 
     def test_mobile_chart_controls_wrap_into_touch_sized_rows_without_locking_page_scroll(self):
         self.assertIn(".chart-layer-status", CSS)
         self.assertIn("touch-action: pan-y", CSS)
-        mobile_start = CSS.rfind("@media (max-width: 390px)")
-        self.assertGreaterEqual(mobile_start, 0)
-        mobile = CSS[mobile_start:]
+        mobile_blocks = media_rule_blocks(CSS, "@media (max-width: 390px)")
+        self.assertTrue(mobile_blocks)
+        mobile = "\n".join(mobile_blocks)
         self.assertRegex(mobile, r"\.chart-layer-switcher[^}]*flex-wrap:\s*wrap\s*;")
         self.assertRegex(mobile, r"\.chart-layer-switcher button[^}]*min-height:\s*44px\s*;")
         self.assertRegex(mobile, r"\.chart-window-tools[^}]*border-top:")

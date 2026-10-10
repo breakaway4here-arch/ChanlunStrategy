@@ -92,7 +92,119 @@ class RefreshContextTests(unittest.TestCase):
             self.assertIn('old-query', (self.docs/relative).read_text())
             self.assertIn('unrelated-widget', (self.docs/relative).read_text())
             self.assertEqual(atomic._read_bootstrap_envelope(self.docs/relative)['futureEnvelope'], {'retain': True})
+            self.assertIn('id="kaipanla-context"', (self.docs/relative).read_text())
             self.assertIn('资料日期 '+DAY, (self.docs/relative).read_text())
+
+    def test_parser_partial_and_confirmed_empty_groups_refresh_all_four_planes(self):
+        from chanlun.kaipanla import parse_themes
+        stock = ['600001', '甲'] + [''] * 15 + ['开盘啦原文']
+        raw = {'errcode': '0', 'date': DAY, '_fetched_at': DAY+'T17:20:00+08:00',
+               'list': [
+                   {'ZSCode': 'A', 'ZSName': 'AI 应用', 'StockList': [stock]},
+                   {'ZSCode': 'B', 'ZSName': '股票明细未取得', 'StockList': 3},
+                   {'ZSCode': 'C', 'ZSName': '确证空题材', 'StockList': []},
+               ]}
+        parsed = parse_themes(raw, DAY)
+        self.assertEqual(parsed['status'], 'partial')
+        invalid = copy.deepcopy(parsed)
+        invalid['groups'][0]['stocks'][0]['code'] = '200001'
+        self.assertEqual(self.run_refresh(invalid)['status'], 'skipped')
+        stale_raw = dict(raw, date='2026-10-07')
+        previous = parse_themes(stale_raw, DAY)
+        self.assertEqual(previous['status'], 'previous_day')
+        self.assertEqual(self.run_refresh(previous)['status'], 'skipped')
+        self.assertEqual(self.bytes(), self.before)
+        self.assertEqual(self.run_refresh(parsed)['status'], 'updated')
+        after = self.bytes()
+        self.assertEqual({p for p in after if after[p] != self.before[p]},
+                         set(refresh.public_targets(DAY)))
+        for relative in refresh.public_targets(DAY):
+            self.assertEqual(refresh.protected_bytes(self.before[relative], relative, DAY),
+                             refresh.protected_bytes(after[relative], relative, DAY))
+        planes = atomic._load_public_planes(self.docs, DAY)
+        for payload in planes.values():
+            self.assertEqual(payload['kaipanla_context'], parsed)
+        self.assertEqual([(g['name'], g['stock_list_status']) for g in parsed['groups']],
+                         [('AI 应用', 'available'), ('股票明细未取得', 'unavailable'),
+                          ('确证空题材', 'available')])
+        raw['list'] = [{'ZSCode': 'C', 'ZSName': '确证空题材', 'StockList': []}]
+        empty = parse_themes(raw, DAY)
+        self.assertEqual(empty['status'], 'available')
+        self.assertEqual(self.run_refresh(empty)['status'], 'updated')
+        for payload in atomic._load_public_planes(self.docs, DAY).values():
+            self.assertEqual(payload['kaipanla_context'], empty)
+
+    def test_later_partial_missing_details_keeps_earlier_verified_source_version(self):
+        from chanlun.kaipanla import parse_themes
+        stock = ['600001', '甲'] + [''] * 15 + ['17:30 题材原因']
+        raw = {'errcode': '0', 'date': DAY, '_fetched_at': DAY+'T17:30:00+08:00',
+               'list': [{'ZSCode': 'A', 'ZSName': 'AI 应用', 'StockList': [stock]}]}
+        complete = parse_themes(raw, DAY)
+        self.assertEqual(self.run_refresh(complete)['status'], 'updated')
+        prior = self.bytes()
+        raw['_fetched_at'] = DAY+'T18:00:00+08:00'
+        raw['list'][0]['StockList'] = 3
+        partial = parse_themes(raw, DAY)
+        self.assertEqual(partial['status'], 'partial')
+        self.assertEqual(partial['groups'][0]['stocks'], [])
+        result = self.run_refresh(partial)
+        self.assertEqual(result, {'status': 'skipped', 'report_date': DAY,
+                                  'reason': 'would_discard_verified_theme_details'})
+        self.assertEqual(self.bytes(), prior)
+        for payload in atomic._load_public_planes(self.docs, DAY).values():
+            self.assertEqual(payload['kaipanla_context'], complete)
+            self.assertEqual(payload['kaipanla_context']['fetched_at'],
+                             DAY+'T17:30:00+08:00')
+        raw['list'][0]['StockList'] = []
+        confirmed_empty = parse_themes(raw, DAY)
+        self.assertEqual(confirmed_empty['status'], 'available')
+        self.assertEqual(self.run_refresh(confirmed_empty)['status'], 'updated')
+        for payload in atomic._load_public_planes(self.docs, DAY).values():
+            self.assertEqual(payload['kaipanla_context'], confirmed_empty)
+        raw['_fetched_at'] = DAY+'T18:30:00+08:00'
+        raw['list'][0]['StockList'] = [stock]
+        complete_new = parse_themes(raw, DAY)
+        self.assertEqual(self.run_refresh(complete_new)['status'], 'updated')
+        for payload in atomic._load_public_planes(self.docs, DAY).values():
+            self.assertEqual(payload['kaipanla_context'], complete_new)
+
+    def test_partial_omitting_existing_verified_group_is_skipped(self):
+        from chanlun.kaipanla import parse_themes
+        stock = ['600001', '甲'] + [''] * 15 + ['原文']
+        raw = {'errcode': '0', 'date': DAY, '_fetched_at': DAY+'T17:30:00+08:00',
+               'list': [{'ZSCode': 'A', 'ZSName': 'AI 应用', 'StockList': [stock]}]}
+        self.assertEqual(self.run_refresh(parse_themes(raw, DAY))['status'], 'updated')
+        prior = self.bytes()
+        raw['_fetched_at'] = DAY+'T18:00:00+08:00'
+        raw['list'] = [{'ZSCode': 'B', 'ZSName': '未知组', 'StockList': 3}]
+        incoming = parse_themes(raw, DAY)
+        self.assertEqual(incoming['status'], 'partial')
+        self.assertEqual(self.run_refresh(incoming)['reason'],
+                         'would_discard_verified_theme_details')
+        self.assertEqual(self.bytes(), prior)
+
+    def test_partial_blank_theme_name_keeps_earlier_verified_name(self):
+        from chanlun.kaipanla import parse_themes
+        stock = ['600001', '甲'] + [''] * 15 + ['原文']
+        raw = {'errcode': '0', 'date': DAY, '_fetched_at': DAY+'T17:30:00+08:00',
+               'list': [{'ZSCode': 'A', 'ZSName': 'AI 应用', 'StockList': [stock]}]}
+        original = parse_themes(raw, DAY)
+        self.assertEqual(self.run_refresh(original)['status'], 'updated')
+        prior = self.bytes()
+        raw['_fetched_at'] = DAY+'T18:00:00+08:00'
+        raw['list'][0]['ZSName'] = ''
+        raw['list'].append({'ZSCode': 'B', 'ZSName': '坏明细', 'StockList': 3})
+        partial = parse_themes(raw, DAY)
+        self.assertEqual(partial['status'], 'partial')
+        self.assertEqual(partial['groups'][0]['name'], '')
+        self.assertEqual([s['code'] for s in partial['groups'][0]['stocks']], ['600001'])
+        self.assertEqual(self.run_refresh(partial),
+                         {'status': 'skipped', 'report_date': DAY,
+                          'reason': 'would_discard_verified_theme_details'})
+        self.assertEqual(self.bytes(), prior)
+        for payload in atomic._load_public_planes(self.docs, DAY).values():
+            self.assertEqual(payload['kaipanla_context'], original)
+
 
     def test_baseline_context_and_html_report_mismatch_are_rejected(self):
         for relative in ['data.json','index.html']:

@@ -278,7 +278,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲',page_status:'watch_only'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
-if(html.indexOf('条件更新 <span>0</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0)
+if(html.indexOf('待确认条件更新 <span>0</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0)
  throw Error('price-only record was counted as condition');
 if(html.indexOf('data-change-kind="value"')<0||html.indexOf('状态或条件变化')>=0)
  throw Error('price-only row was labeled as a verified condition');
@@ -291,14 +291,15 @@ if(summary.indexOf('条件变化 0')<0||summary.indexOf('价格相关记录变�
 const t=globalThis.__auxTest,day='2026-10-09';
 const changes={status:'available',changed:['600001'],semantic_changed:['600001'],value_changed:['600001'],
  condition_comparison:{status:'available',compared_count:1,changed_count:1},
+ change_details:{'600001':[{field:'next_confirmation',before:['旧条件'],after:['新条件'],status:'updated'}]},
  membership:{status:'available',added:[],removed:[],shared:['600001'],previous_report_date:'2026-10-08',
  previous_phase:'formal',previous_items:{'600001':{code:'600001',name:'甲',sources:['main']}}}};
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render();
-if(html.indexOf('条件更新 <span>1</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0
- || html.indexOf('全部 <span>1</span>')<0||(html.match(/data-change-row=/g)||[]).length!==1)
+if(html.indexOf('待确认条件更新 <span>1</span>')<0||html.indexOf('价格相关记录变化 <span>1</span>')<0
+ || html.indexOf('本期重点 <span>1</span>')<0||(html.match(/data-change-row=/g)||[]).length!==1)
  throw Error('overlap was double counted or lost');
 if(html.indexOf('条件更新 · 价格记录')<0)throw Error('overlap lost a distinct price tag');
 ''')
@@ -313,7 +314,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
-if(html.indexOf('条件更新 <span>—</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
+if(html.indexOf('待确认条件更新 <span>—</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
  || html.indexOf('data-change-kind="legacy"')<0||html.indexOf('600001')<0)
  throw Error('legacy changed was dropped or mislabeled as a condition');
 if(summary.indexOf('条件变化 —')<0||summary.indexOf('旧口径变化 1（类别未核验）')<0)
@@ -327,13 +328,14 @@ const changes={status:'partial',changed:['600001','600002'],semantic_changed:['6
  condition_comparison:{status:'partial',compared_count:2,changed_count:1},
  membership:{status:'available',added:[],removed:[],shared:['600001','600002'],
  previous_report_date:'2026-10-08',previous_phase:'formal',previous_items:{}},
- change_details:{'600002':[{field:'action_reason',before:'上份说明',after:'本期说明',status:'updated'}]}};
+ change_details:{'600001':[{field:'action_reason',before:'旧说明',after:'新说明',status:'updated'}],
+  '600002':[{field:'action_reason',before:'上份说明',after:'本期说明',status:'updated'}]}};
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲'},{code:'600002',name:'乙'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
-if(html.indexOf('条件更新 <span>1</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
- || html.indexOf('data-change-row="600002"')<0||html.indexOf('全部 <span>2</span>')<0)
+if(html.indexOf('理由更新 <span>1</span>')<0||html.indexOf('旧口径变化（类别未核验） <span>1</span>')<0
+ || html.indexOf('data-change-row="600002"')<0||html.indexOf('共 2 只')<0)
  throw Error('uncovered old changed entry was dropped');
 if(summary.indexOf('旧口径变化 1（类别未核验）')<0)throw Error('summary hid uncovered old entry');
 const legacy=html.slice(html.indexOf('data-change-row="600002"'),html.indexOf('id="decision-change-history-600002"'));
@@ -353,7 +355,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
  report_date:day,phase:'formal',items:[{code:'600001',name:'甲'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
-if(html.indexOf('登记字段差异待核验 <span>—</span>')<0||html.indexOf('新说明')<0
+if(html.indexOf('待确认条件更新 <span>—</span>')<0||html.indexOf('登记字段差异待核验 <span>1</span>')<0||html.indexOf('新说明')<0
  || html.indexOf('已核验登记条件变化')>=0||html.indexOf('已核验文字变化')>=0
  || html.indexOf('登记文字差异 1 项，比较依据待核验')<0||summary.indexOf('条件变化 —')<0)
  throw Error('unavailable coverage presented a verified condition count');
@@ -395,22 +397,25 @@ if(result.status==='available'||result.entries.length)throw Error('missing refs 
 const t=globalThis.__auxTest,day='2026-10-08';
 const added=['600001','600002','600003','600004','600005','600006'];
 const removed=['600011','600012','600013'];
-const changed=['600003','600004','600011'];
+const changed=['600003','600004'];
 const unavailable=['600011','600014'];
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:added.map(code=>({code,name:code})),changes:{status:'partial',
  membership:{status:'available',added,removed,shared:[],previous_report_date:'2026-09-30',
   previous_phase:'formal',previous_items:{}},changed,semantic_changed:changed,value_changed:[],
- condition_comparison:{status:'partial',compared_count:3,changed_count:3},
+ condition_comparison:{status:'partial',compared_count:2,changed_count:2},
+ change_details:{'600003':[{field:'action_reason',before:'旧三',after:'新三',status:'updated'}],
+  '600004':[{field:'action_reason',before:'旧四',after:'新四',status:'updated'}]},
  unavailable_codes:unavailable}}};
 t.state.data={date:day};
 const buttons={};function button(group){return {handlers:{},getAttribute(k){return k==='data-change-group-toggle'?group:'';},addEventListener(k,f){this.handlers[k]=f;}};}
 ['all','changed','added','removed','unavailable'].forEach(k=>buttons[k]=button(k));
 const target={innerHTML:'',querySelectorAll(sel){return sel==='[data-change-group-toggle]'?Object.values(buttons):[];},querySelector(){return null;}};
 t.nodes.decisionChanges=target;let html=t.render();
-const count=()=>((target.innerHTML.match(/class="decision-change-entry"/g))||[]).length;
+const count=()=>((target.innerHTML.split('<div class="decision-change-list-footer">')[0]
+  .match(/class="decision-change-entry"/g))||[]).length;
 if(count()>5)throw Error('default whole module exceeds five securities');
-if(html.indexOf('条件更新 <span>3</span>')<0 || html.indexOf('加入')<0 || html.indexOf('移出')<0)throw Error('complete counts lost');
+if(html.indexOf('理由更新 <span>2</span>')<0 || html.indexOf('本期新出现')<0 || html.indexOf('上期有、本期未出现')<0)throw Error('complete counts lost');
 buttons.removed.handlers.click({currentTarget:buttons.removed});
 if(count()>5 || target.innerHTML.indexOf('600012')<0 || target.innerHTML.indexOf('600001')>=0)throw Error('removed filter did not filter actual entries');
 ''')
@@ -426,7 +431,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render();
 if(html.indexOf('<img')>=0||html.indexOf('&lt;img')<0)throw Error('untrusted name not escaped');
-if(html.indexOf('加入当前集合 <span>1</span>')<0||html.indexOf('data-change-row="__proto__"')>=0)
+if(html.indexOf('本期新出现 <span>1</span>')<0||html.indexOf('data-change-row="__proto__"')>=0)
  throw Error('malformed code counted or rendered');
 ''')
 
@@ -446,8 +451,8 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render();
 if(html.indexOf('<img')>=0||html.indexOf('&lt;img')<0)throw Error('wording HTML injected');
-if(html.indexOf('本期新记录该字段')<0||html.indexOf('价基缺失')<0
- || html.indexOf('比较两期')<0||html.indexOf('<details class="decision-change-field-diffs"')<0)
+if(html.indexOf('本期补充了该字段')<0||html.indexOf('价基缺失')<0
+ || html.indexOf('看上期记录')<0||html.indexOf('<details class="decision-change-field-diffs"')<0)
  throw Error('known textual difference or price limit was hidden');
 ''')
 
@@ -465,7 +470,7 @@ window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decisi
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render();
 if(html.indexOf('已核验文字变化 1 项')>=0||html.indexOf('原文不可读')<0
- || html.indexOf('登记字段变化')<0)throw Error('unreadable old field called verified wording');
+ || html.indexOf('登记字段差异')<0)throw Error('unreadable old field called verified wording');
 ''')
 
     def test_duplicate_structured_codes_count_once_per_group_and_in_summary(self):
@@ -476,15 +481,17 @@ const changes={status:'partial',membership:{status:'available',added:['600001','
  previous_items:{'600002':{code:'600002',name:'旧股'}}},
  changed:['600001','600001'],semantic_changed:['600001','600001'],value_changed:[],
  unavailable_codes:['600002','600002'],
+ change_details:{'600001':[{field:'action_reason',before:'旧理由',after:'新理由',status:'updated'}]},
  condition_comparison:{status:'partial',compared_count:1,changed_count:1}};
 window.CHANLUN_BOOTSTRAP={pageDate:day,decisionWorkbench:{schema_version:'decision-workbench-v1',
  report_date:day,phase:'formal',items:[{code:'600001',name:'新股'}],changes}};
 t.state.data={date:day};const target={innerHTML:'',querySelectorAll(){return [];}};
 t.nodes.decisionChanges=target;const html=t.render(),summary=t.summary(changes,false);
-for(const label of ['条件更新','加入当前集合','移出当前集合','部分字段不可比较']){
+for(const label of ['理由更新','本期新出现','上期有、本期未出现','部分字段不可比较']){
  if(html.indexOf(label+' <span>1</span>')<0)throw Error('duplicate group count: '+label);
 }
-if(summary.indexOf('新增 1')<0||summary.indexOf('移出 1')<0||summary.indexOf('条件变化 1')<0)
+if(summary.indexOf('新增 1')<0||summary.indexOf('移出 1')<0
+ || summary.indexOf('条件变化 0')<0||summary.indexOf('理由变化 1')<0)
  throw Error('summary still counted duplicate source rows');
 if((html.match(/data-change-row=/g)||[]).length!==2)throw Error('duplicate visible securities');
 ''')
@@ -515,7 +522,7 @@ t.state.data={date:day};const button={handlers:{},addEventListener(k,f){this.han
 const target={innerHTML:'',querySelectorAll(sel){return sel==='[data-change-show-all]'?[button]:[];},querySelector(){return null;}};
 t.nodes.decisionChanges=target;
 const count=()=>((target.innerHTML.match(/class="decision-change-entry"/g))||[]).length;
-t.render();if(count()!==5||target.innerHTML.indexOf('加入当前集合 <span>7</span>')<0)throw Error('default count wrong');
+t.render();if(count()!==5||target.innerHTML.indexOf('本期新出现 <span>7</span>')<0)throw Error('default count wrong');
 button.handlers.click();if(count()!==7||target.innerHTML.indexOf('收起')<0)throw Error('show all did not expand');
 button.handlers.click();if(count()!==5||target.innerHTML.indexOf('查看全部')<0)throw Error('collapse did not restore five');
 ''')

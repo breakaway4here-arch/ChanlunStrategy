@@ -3020,15 +3020,31 @@ class TestReportV2AuxiliaryHeader(unittest.TestCase):
         self.assertIn('class="compact-header', self.asset_js)
         self.assertIn('class="primary-mode-tabs"', self.asset_js)
         self.assertIn('data-primary-mode="today"', self.asset_js)
-        self.assertIn('data-primary-mode="research"', self.asset_js)
+        self.assertIn('data-primary-mode="performance"', self.asset_js)
         self.assertIn('id="sectorStrip"', self.asset_js)
         self.assertIn('id="todayDecisionView"', self.asset_js)
+        self.assertIn('id="selectionPerformanceView"', self.asset_js)
+        self.assertIn('id="selectionPerformanceMount"', self.asset_js)
         self.assertIn('id="researchValidationView"', self.asset_js)
         shell_start = self.asset_js.find("function buildAppShell()")
         shell_end = self.asset_js.find("function getReportDataStatus", shell_start)
         self.assertGreater(shell_start, -1)
         self.assertGreater(shell_end, shell_start)
         shell = self.asset_js[shell_start:shell_end]
+        self.assertEqual(shell.count('id="primary-mode-tab-'), 2)
+        self.assertNotIn('data-primary-mode="research"', shell)
+        self.assertIn('<details class="advanced-research-details" id="advancedResearchDetails"><summary>实验与运行详情</summary>', shell)
+        self.assertLess(shell.index('id="selectionPerformanceView"'),
+                        shell.index('id="selectionPerformanceMount"'))
+        self.assertLess(shell.index('id="selectionPerformanceMount"'),
+                        shell.index('id="advancedResearchDetails"'))
+        self.assertLess(shell.index('id="advancedResearchDetails"'),
+                        shell.index('id="researchValidationView"'))
+        self.assertIn('id="nextday-research"', shell)
+        self.assertIn('id="auxGrid"', shell)
+        self.assertIn('id="candidateList"', shell)
+        self.assertIn('id="candidateQuickComparison"', shell)
+        self.assertIn('id="decisionChanges"', shell)
         self.assertNotIn('id="top10Widget"', shell)
 
     def test_candidate_navigation_uses_primary_groups_and_unified_main_empty_state(self):
