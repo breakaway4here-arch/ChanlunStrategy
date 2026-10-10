@@ -3524,10 +3524,27 @@
           return entry.key === key;
         });
         if (!group) return;
-        state.hotspotCandidateCodes = group.items.filter(function (item) {
+        var codes = group.items.filter(function (item) {
           return item.membership === 'in';
         }).map(function (item) { return item.code; });
-        refreshCandidateWorkspace();
+        if (!codes.length) return;
+        var alreadyAll = state.currentView === 'decision_all';
+        state.hotspotCandidateCodes = codes;
+        state.candidateQuery = '';
+        state.decisionStatusFilter = '';
+        state.sectorFilter = '';
+        state.sectorFilterCode = '';
+        state.sectorFilterRefs = [];
+        state.candidateLimit = 20;
+        if (nodes.candidateSearch) nodes.candidateSearch.value = '';
+        activateWorkspaceView('decision_all', true);
+        if (alreadyAll) {
+          renderCurrentCandidateSelection();
+          var activeTab = nodes.tabs && nodes.tabs.querySelector
+            ? nodes.tabs.querySelector('[data-view="decision_all"]') : null;
+          if (activeTab && activeTab.focus) activeTab.focus();
+        }
+        renderFundingMainlineStrip();
         var target = document.getElementById('candidateWorkspace');
         if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       });

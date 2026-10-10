@@ -66,6 +66,108 @@ test('formal selection requires an eligible actionable ref of the same strategy'
   assert.deepEqual(view.groups.strategies.map((group) => group.id), ['a']);
 });
 
+test('mixed source incident keeps research result but excludes its formal strategy result', () => {
+  const formal = {strategy_key: 'formal-v1', strategy_id: 'main', role: 'formal',
+    recommendation_scope: 'published_observation', formal_performance_status: 'incident_excluded'};
+  const research = {strategy_key: 'research-v1', strategy_id: 'research', role: 'research',
+    recommendation_scope: 'published_observation'};
+  const row = observation('600001', '2026-09-01', 10, {themes: [{theme_id: 'ai', name: 'AI'}],
+    strategies: [formal, research]});
+  row.source_outcomes = {
+    'formal-v1': Object.fromEntries([1, 3, 5, 10, 20, 30].map((n) => [
+      `t${n}`, {status: 'excluded', reason_code: 'registered_incident', return_pct: null}
+    ])),
+    'research-v1': structuredClone(row.outcomes),
+  };
+  const data = fixture([row]);
+  const all = ui.computeView(data, {horizon: 1});
+  assert.equal(all.summary.counts.ready, 1);
+  assert.equal(all.groups.themes[0].summary.counts.ready, 1);
+  assert.equal(all.groups.strategies.find((g) => g.id === 'formal-v1').summary.counts.excluded, 1);
+  assert.equal(all.groups.strategies.find((g) => g.id === 'formal-v1').summary.counts.ready, 0);
+  assert.equal(all.groups.strategies.find((g) => g.id === 'research-v1').summary.counts.ready, 1);
+  const formalView = ui.computeView(data, {horizon: 1, strategyKey: 'formal-v1'});
+  assert.equal(formalView.summary.counts.excluded, 1);
+  assert.equal(formalView.summary.counts.ready, 0);
+  assert.equal(formalView.groups.themes[0].summary.counts.excluded, 1);
+  assert.equal(formalView.groups.themes[0].summary.counts.ready, 0);
+  assert.deepEqual(formalView.summary.best_observations, []);
+  assert.match(ui.renderHtml(formalView), /已有结果 0 笔（0 只）/);
+  assert.match(ui.renderHtml(formalView), /id="sp-observation-600001"[\s\S]*?<span>—<\/span>/);
+  const researchView = ui.computeView(data, {horizon: 1, strategyKey: 'research-v1'});
+  assert.equal(researchView.summary.counts.ready, 1);
+  assert.equal(researchView.summary.best_observations[0].return_pct, 10);
+  assert.match(ui.renderHtml(researchView), /id="sp-observation-600001"[\s\S]*?<span>\+10\.00%<\/span>/);
+  assert.equal(ui.computeView(data, {horizon: 1, role: 'formal'}).summary.total_observations, 0);
+});
+
+test('strategy result and detail pages use one source outcome cohort beyond page one', () => {
+  const rows = Array.from({length: 21}, (_, i) => {
+    const row = observation(String(600001 + i), '2026-09-01', i + 1,
+      {strategies: [{strategy_key: 'formal-v1', strategy_id: 'main', role: 'formal',
+        recommendation_scope: 'published_observation', formal_performance_status: 'incident_excluded'}]});
+    row.source_outcomes = {'formal-v1': {t1: {status: 'excluded',
+      reason_code: 'registered_incident', return_pct: null}}};
+    return row;
+  });
+  const data = fixture(rows);
+  const view = ui.computeView(data, {horizon: 1, strategyKey: 'formal-v1',
+    page: 2, pageSize: 10});
+  assert.equal(view.summary.total_observations, 21);
+  assert.equal(view.summary.counts.excluded, 21);
+  assert.equal(view.summary.counts.ready, 0);
+  assert.equal(view.groups.strategies[0].summary.counts.excluded, 21);
+  assert.equal(view.details.length, 1);
+  assert.equal(view.details[0].code, '600021');
+  assert.match(ui.renderHtml(view), /已有结果 0 笔（0 只）/);
+  assert.match(ui.renderHtml(view), /第 3 页／共 3 页/);
+  assert.match(ui.renderHtml(view), /id="sp-observation-600021"[\s\S]*?<span>—<\/span>/);
+});
+
+test('missing source outcomes fail closed for incident rows while legacy clean rows remain readable', () => {
+  const formal = {strategy_key: 'formal-v1', strategy_id: 'main', role: 'formal',
+    recommendation_scope: 'formal_recommendation', formal_performance_status: 'incident_excluded'};
+  const research = {strategy_key: 'research-v1', strategy_id: 'research', role: 'research',
+    recommendation_scope: 'published_observation'};
+  const incident = observation('600001', '2026-09-01', 10, {strategies: [formal, research]});
+  const clean = observation('600002', '2026-09-01', 5, {strategies: [research]});
+  const data = fixture([incident, clean]);
+  const formalView = ui.computeView(data, {horizon: 1, strategyKey: 'formal-v1'});
+  assert.equal(formalView.summary.counts.ready, 0);
+  assert.equal(formalView.summary.counts.excluded, 1);
+  assert.equal(ui.computeView(data, {horizon: 1, role: 'formal'}).summary.total_observations, 0);
+  const researchView = ui.computeView(data, {horizon: 1, strategyKey: 'research-v1'});
+  assert.equal(researchView.summary.counts.ready, 1);
+  assert.equal(researchView.summary.counts.result_unavailable, 1);
+  assert.equal(researchView.summary.best_observations[0].code, '600002');
+  incident.source_outcomes = {'research-v1': structuredClone(incident.outcomes)};
+  const missingKey = ui.computeView(data, {horizon: 1, strategyKey: 'formal-v1'});
+  assert.equal(missingKey.summary.counts.ready, 0);
+});
+
+test('formal scope and strategy filters match the same non-incident source ref', () => {
+  const badFormal = {strategy_key: 'bad-formal', strategy_id: 'main', role: 'formal',
+    recommendation_scope: 'formal_recommendation', formal_performance_status: 'incident_excluded'};
+  const goodResearch = {strategy_key: 'good-research', strategy_id: 'research', role: 'research',
+    recommendation_scope: 'published_observation'};
+  const goodFormal = {strategy_key: 'good-formal', strategy_id: 'h4_t3', role: 'formal',
+    recommendation_scope: 'formal_recommendation', formal_performance_status: 'formal_eligible'};
+  const bad = observation('600001', '2026-09-01', 10, {strategies: [badFormal, goodResearch]});
+  bad.source_outcomes = {'bad-formal': {t1: {status: 'excluded', return_pct: null}},
+    'good-research': {t1: {status: 'ready', return_pct: 10}}};
+  const good = observation('600002', '2026-09-01', -2, {strategies: [goodFormal]});
+  good.source_outcomes = {'good-formal': {t1: {status: 'ready', return_pct: -2}}};
+  const data = fixture([bad, good]);
+  const scoped = ui.computeView(data, {horizon: 1, recommendationScope: 'formal_recommendation'});
+  assert.equal(scoped.summary.total_observations, 1);
+  assert.deepEqual(scoped.groups.strategies.map((g) => g.id), ['good-formal']);
+  assert.equal(scoped.summary.best_observations[0].code, '600002');
+  assert.equal(ui.computeView(data, {horizon: 1, role: 'formal', strategyKey: 'bad-formal'})
+    .summary.total_observations, 0);
+  assert.equal(ui.computeView(data, {horizon: 1, role: 'formal', strategyKey: 'good-formal'})
+    .summary.counts.ready, 1);
+});
+
 test('empty, negative, tied, and one-result cohorts preserve truthful extrema', () => {
   const data = fixture([
     observation('600001', '2026-09-01', -2),

@@ -27,13 +27,19 @@
     return Math.abs(a - b) <= Math.max(TIE_ABS_TOLERANCE,
       1e-12 * Math.max(Math.abs(a), Math.abs(b)));
   }
+  function matchesStrategyRef(ref, filters) {
+    return ref && typeof ref === 'object'
+      && (!filters.strategyKey || ref.strategy_key === filters.strategyKey)
+      && (filters.role !== 'formal' || (ref.role === 'formal'
+        && ref.recommendation_scope === 'formal_recommendation'
+        && ref.formal_performance_status !== 'incident_excluded'))
+      && (!filters.recommendationScope || (ref.recommendation_scope === filters.recommendationScope
+        && (filters.recommendationScope !== 'formal_recommendation'
+          || ref.formal_performance_status !== 'incident_excluded')));
+  }
   function matchesRef(row, filters) {
     return list(row.strategy_refs).some(function (ref) {
-      return ref && typeof ref === 'object'
-        && (!filters.strategyKey || ref.strategy_key === filters.strategyKey)
-        && (filters.role !== 'formal' ||
-          (ref.role === 'formal' && ref.recommendation_scope === 'formal_recommendation'))
-        && (!filters.recommendationScope || ref.recommendation_scope === filters.recommendationScope);
+      return matchesStrategyRef(ref, filters);
     });
   }
   function matches(row, filters) {
@@ -50,7 +56,29 @@
     }
     return true;
   }
-  function outcomeFor(row, horizon) { return (row.outcomes || {})['t' + horizon] || {}; }
+  function outcomeFor(row, horizon, strategyKey) {
+    var cycle = 't' + horizon;
+    var overall = (row.outcomes || {})[cycle] || {};
+    if (!strategyKey) return overall;
+    var sourceOutcomes = row.source_outcomes;
+    if (sourceOutcomes && typeof sourceOutcomes === 'object'
+        && !Array.isArray(sourceOutcomes)
+        && Object.prototype.hasOwnProperty.call(sourceOutcomes, strategyKey)) {
+      return (sourceOutcomes[strategyKey] || {})[cycle] || {};
+    }
+    var refs = list(row.strategy_refs);
+    var selected = refs.filter(function (ref) {
+      return ref && ref.strategy_key === strategyKey;
+    });
+    if (selected.length && selected.every(function (ref) {
+      return ref.formal_performance_status === 'incident_excluded';
+    })) return {status: 'excluded', reason_code: 'registered_incident', return_pct: null};
+    if (sourceOutcomes && typeof sourceOutcomes === 'object') return {};
+    if (refs.some(function (ref) {
+      return ref && ref.formal_performance_status === 'incident_excluded';
+    })) return overall.status === 'excluded' ? overall : {};
+    return overall;
+  }
   function outcomeStatus(outcome) {
     if (!STATUSES.includes(outcome.status)) return UI_UNAVAILABLE;
     if (outcome.status === 'ready' && (typeof outcome.return_pct !== 'number'
@@ -69,12 +97,12 @@
       end_close: outcome.end_close, return_pct: outcome.return_pct,
       publication_ref: row.publication_ref, price_series_ref: outcome.price_series_ref};
   }
-  function aggregate(rows, horizon) {
+  function aggregate(rows, horizon, strategyKey) {
     var counts = Object.fromEntries(STATUSES.map(function (status) { return [status, 0]; }));
     var unavailable = 0;
     var ready = [];
     rows.forEach(function (row) {
-      var outcome = outcomeFor(row, horizon);
+      var outcome = outcomeFor(row, horizon, strategyKey);
       var status = outcomeStatus(outcome);
       if (status === UI_UNAVAILABLE) unavailable += 1;
       else counts[status] += 1;
@@ -127,12 +155,7 @@
       var seen = new Set();
       refs.forEach(function (ref) {
         if (!ref || typeof ref !== 'object') return;
-        if (kind === 'strategies' && (
-          (filters.strategyKey && ref.strategy_key !== filters.strategyKey)
-          || (filters.role === 'formal' && (ref.role !== 'formal'
-            || ref.recommendation_scope !== 'formal_recommendation'))
-          || (filters.recommendationScope
-            && ref.recommendation_scope !== filters.recommendationScope))) return;
+        if (kind === 'strategies' && !matchesStrategyRef(ref, filters)) return;
         var id = kind === 'themes' ? ref.theme_id : ref.strategy_key;
         if (!id || seen.has(id)) return;
         seen.add(id);
@@ -145,7 +168,8 @@
     });
     return Array.from(groups.values()).map(function (group) {
       return {id: group.id, label: group.label, identity: group.identity,
-        summary: aggregate(group.rows, horizon)};
+        summary: aggregate(group.rows, horizon,
+          kind === 'strategies' ? group.id : filters.strategyKey)};
     }).sort(function (a, b) {
       var av = a.summary.mean_return_pct;
       var bv = b.summary.mean_return_pct;
@@ -182,7 +206,7 @@
       role: options.role === 'formal' ? 'formal' : 'all',
       recommendationScope: options.recommendationScope || null};
     var selected = list(dataset.observations).filter(function (row) { return matches(row, filters); });
-    var summary = aggregate(selected, horizon);
+    var summary = aggregate(selected, horizon, filters.strategyKey);
     var groupBase = selected;
     var scoreInfo = scoreSortInfo(selected, filters.strategyKey);
     var allDetails = selected.slice().sort(function (a, b) {
@@ -247,8 +271,8 @@
       + (!best ? '<small>' + escapeHtml(emptyReason(summary)) + '</small>' : '')
       + '</button>';
   }
-  function detailHtml(row, horizon) {
-    var outcome = outcomeFor(row, horizon);
+  function detailHtml(row, horizon, strategyKey) {
+    var outcome = outcomeFor(row, horizon, strategyKey);
     var status = outcomeStatus(outcome);
     var sources = list(row.strategy_refs).filter(function (ref) {
       return ref && typeof ref === 'object';
@@ -277,7 +301,7 @@
     var summary = view.summary;
     var filters = view.filters;
     var readyStocks = new Set(view.allDetails.filter(function (row) {
-      return outcomeStatus(outcomeFor(row, filters.horizon)) === 'ready';
+      return outcomeStatus(outcomeFor(row, filters.horizon, filters.strategyKey)) === 'ready';
     }).map(function (row) { return row.instrument_id; }).filter(Boolean)).size;
     var groups = view.activeView === 'strategies' ? view.groups.strategies : view.groups.themes;
     var groupKind = view.activeView === 'strategies' ? 'strategy' : 'theme';
@@ -344,7 +368,7 @@
         + (view.sortByScore ? 'true' : 'false') + '">按当时策略分排序（'
         + escapeHtml(view.scoreSort.name) + '）</button>' : '')
       + '<div class="sp-details"><h3>逐股明细</h3>' + view.details.map(function (row) {
-        return detailHtml(row, filters.horizon);
+        return detailHtml(row, filters.horizon, filters.strategyKey);
       }).join('') + '</div>'
       + (view.allDetails.length > view.pageSize ? '<div class="sp-pages"><button type="button" data-sp-page="prev">上一页</button>'
         + '<span>第 ' + (view.page + 1) + ' 页／共 ' + Math.ceil(view.allDetails.length / view.pageSize)

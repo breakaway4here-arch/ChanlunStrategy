@@ -35,7 +35,12 @@ class SelectionPerformancePublishTests(unittest.TestCase):
                 result = report_generator.refresh_selection_performance_after_publish(
                     root, "read-only-market.sqlite", day, asof)
             self.assertEqual(result["status"], "ready")
-            build.assert_called_once_with(root / "data", "read-only-market.sqlite", day, asof)
+            build.assert_called_once_with(
+                root / "data", "read-only-market.sqlite", day, asof,
+                price_evidence_dir=(Path("read-only-market.sqlite").resolve().parent /
+                                    "selection-price-evidence"),
+                price_evidence_as_of=mock.ANY,
+            )
             derived = root / "data" / "selection-performance"
             self.assertEqual(json.loads((derived / f"{day}.json").read_text())["dataset_id"], "one")
             self.assertEqual(json.loads((derived / "index.json").read_text())["dates"], [day])

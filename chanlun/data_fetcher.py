@@ -16,6 +16,7 @@ import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -49,6 +50,7 @@ from .kline_cache import (
 from .kline_repository import KLineRepository
 from .price_basis import adjustment_factor
 from .minute_sources import clean_minutes, closed_window, decode_response
+from . import selection_price_evidence
 from .identity import (
     InstrumentIdentity,
     normalize_identity,
@@ -1147,9 +1149,62 @@ def _fetch_daily_kline_remote(code, count=DAY_LOOKBACK, *, timeout=15, request_b
         if request_budget is not None:
             result.update(asset_type=identity.asset_type, exchange=identity.exchange,
                           code=identity.code, source='tencent', adjustment='qfq')
+        qfq_lines = stock_data.get("qfqday")
+        raw_response = getattr(resp, "content", None)
+        if (identity.asset_type == "stock" and isinstance(qfq_lines, list)
+                and len(qfq_lines) >= 31 and isinstance(raw_response, bytes)):
+            try:
+                selection_price_evidence.capture_tencent_historical_response(
+                    Path(MARKET_HISTORY_DB_PATH).parent / "selection-price-evidence",
+                    identity.exchange + identity.code,
+                    {"symbol": tc, "period": "day", "adjustment": "qfq",
+                     "start": "", "end": "", "count": str(count),
+                     "param": "{},day,,,{:d},qfq".format(tc, int(count))},
+                    raw_response,
+                )
+            except (OSError, ValueError, TypeError, UnicodeError):
+                pass
         return result
     except Exception as e:
         print(f"[ERROR] 获取日线失败 {code}: {e}")
+        return None
+
+
+def _fetch_selection_qfq_tencent_remote(code, count, *, start_date, end_date,
+                                        request_budget, evidence_dir):
+    """One bounded proof request; never writes to the canonical market database."""
+    if request_budget is None:
+        raise ValueError("selection proof request requires a budget")
+    identity = _normalize_identity(code)
+    if identity.asset_type != "stock" or not 1 <= int(count) <= 100:
+        raise ValueError("invalid selection proof identity or count")
+    start = datetime.strptime(str(start_date), "%Y%m%d").date()
+    end = datetime.strptime(str(end_date), "%Y%m%d").date()
+    if start > end:
+        raise ValueError("invalid selection proof window")
+    symbol = _tencent_code(identity)
+    param = "{},day,{},{},{},qfq".format(
+        symbol, start.isoformat(), end.isoformat(), int(count),
+    )
+    url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=" + param
+    try:
+        response = SESSION.get(
+            url, timeout=request_budget.take_request(), allow_redirects=False,
+        )
+        if not 200 <= response.status_code < 300:
+            return None
+        raw = getattr(response, "content", None)
+        if not isinstance(raw, bytes):
+            return None
+        selection_price_evidence.capture_tencent_historical_response(
+            evidence_dir, identity.exchange + identity.code,
+            {"symbol": symbol, "period": "day", "adjustment": "qfq",
+             "start": start.isoformat(), "end": end.isoformat(),
+             "count": str(int(count)), "param": param},
+            raw,
+        )
+        return {"captured": True}
+    except (OSError, ValueError, TypeError, UnicodeError, requests.RequestException):
         return None
 
 
@@ -1173,7 +1228,9 @@ def _fetch_daily_kline_tencent_plain_remote(code, count=DAY_LOOKBACK):
         return None
 
 
-def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK, *, timeout=15, request_budget=None):
+def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK, *, timeout=15,
+                                       request_budget=None, start_date=None,
+                                       end_date=None, evidence_dir=None):
     """获取日线K线。东方财富历史K线 API。"""
     identity = _normalize_identity(code)
     params = {
@@ -1183,9 +1240,11 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK, *, timeout=15,
         "fields2": "f51,f52,f53,f54,f55,f56,f57,f58,f59,f60,f61",
         "klt": "101",
         "fqt": "1",
-        "end": "20500101",
+        "end": str(end_date or "20500101"),
         "lmt": str(count),
     }
+    if start_date is not None:
+        params["beg"] = str(start_date)
     url = "https://push2his.eastmoney.com/api/qt/stock/kline/get"
     try:
         request_kwargs = {'timeout': timeout}
@@ -1233,6 +1292,18 @@ def _fetch_daily_kline_eastmoney_remote(code, count=DAY_LOOKBACK, *, timeout=15,
         if request_budget is not None:
             kline.update(asset_type=identity.asset_type, exchange=identity.exchange,
                          code=identity.code, source='eastmoney', adjustment='qfq')
+        raw_response = getattr(resp, "content", None)
+        if (identity.asset_type == "stock" and isinstance(raw_response, bytes)
+                and (start_date is not None or len(klines) >= 31)):
+            try:
+                selection_price_evidence.capture_eastmoney_historical_response(
+                    (Path(evidence_dir) if evidence_dir is not None else
+                     Path(MARKET_HISTORY_DB_PATH).parent / "selection-price-evidence"),
+                    identity.exchange + identity.code, params, raw_response,
+                )
+            except (OSError, ValueError, TypeError, UnicodeError):
+                # Price-evidence storage is optional to ordinary market acquisition.
+                pass
         return kline
     except Exception as e:
         print(f"[ERROR] 东方财富日线失败 {code}: {e}")
