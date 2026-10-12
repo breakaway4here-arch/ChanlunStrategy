@@ -254,6 +254,80 @@ class RawEvidenceTests(unittest.TestCase):
                              captured)
             self.assertEqual(len(fingerprint), 64)
 
+    def test_identical_raw_is_final_only_after_genuine_second_capture(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            early = "2026-09-17T14:00:00+08:00"
+            confirmed = "2026-09-17T15:20:00+08:00"
+            raw = _response()
+            first = selection_price_evidence.capture_eastmoney_historical_response(
+                root, "SH600460", PARAMS, raw, fetched_at=early)
+            before, _ = selection_price_evidence.load_verified_price_series(
+                root, ["SH600460"], evaluation_as_of=confirmed,
+                evidence_as_of="2026-09-17T14:30:00+08:00")
+            self.assertFalse(before["SH600460"][0]["bars"][-1]["is_final"])
+            second = selection_price_evidence.capture_eastmoney_historical_response(
+                root, "SH600460", PARAMS, raw, fetched_at=confirmed)
+            self.assertEqual(first, second)
+            record = json.loads(first.read_text())
+            self.assertEqual(record["fetched_at"], early)
+            self.assertEqual(record.get("confirmed_at"), confirmed)
+            self.assertEqual(record["raw_response"].encode(), raw)
+            still_early, _ = selection_price_evidence.load_verified_price_series(
+                root, ["SH600460"], evaluation_as_of=confirmed,
+                evidence_as_of="2026-09-17T14:30:00+08:00")
+            self.assertFalse(still_early["SH600460"][0]["bars"][-1]["is_final"])
+            later, _ = selection_price_evidence.load_verified_price_series(
+                root, ["SH600460"], evaluation_as_of=confirmed,
+                evidence_as_of="2026-09-17T15:30:00+08:00")
+            self.assertTrue(later["SH600460"][0]["bars"][-1]["is_final"])
+            self.assertEqual(later["SH600460"][0]["source_response"]["fetched_at"],
+                             confirmed)
+            selection_price_evidence.capture_eastmoney_historical_response(
+                root, "SH600460", PARAMS, raw,
+                fetched_at="2026-09-17T16:00:00+08:00")
+            self.assertEqual(json.loads(first.read_text()).get("confirmed_at"), confirmed)
+
+    def test_corrupt_same_hash_record_is_preserved_while_valid_refetch_recovers(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            raw = _response()
+            folder = root / "SH600460"
+            folder.mkdir()
+            target = folder / (hashlib.sha256(raw).hexdigest() + ".json")
+            target.write_bytes(b"{bad json")
+            saved = selection_price_evidence.capture_eastmoney_historical_response(
+                root, "SH600460", PARAMS, raw, fetched_at=AS_OF)
+            self.assertEqual(saved, target)
+            self.assertEqual(json.loads(target.read_text())["raw_response"].encode(),
+                             raw)
+            quarantined = list((root / "quarantine").rglob(target.name))
+            self.assertEqual(len(quarantined), 1)
+            self.assertEqual(quarantined[0].read_bytes(), b"{bad json")
+            loaded, _ = selection_price_evidence.load_verified_price_series(
+                root, ["SH600460"], evaluation_as_of=AS_OF)
+            self.assertTrue(loaded["SH600460"][0]["bars"][-1]["is_final"])
+
+    def test_valid_same_hash_provider_conflict_is_not_quarantined_or_replaced(self):
+        dual = {"code": 0, "data": {
+            "code": "600460", "market": 1,
+            "klines": json.loads(_response())["data"]["klines"],
+            "sh600460": {"qfqday": json.loads(_tencent_response())
+                         ["data"]["sh600460"]["qfqday"]},
+        }}
+        raw = json.dumps(dual, separators=(",", ":")).encode()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            original = selection_price_evidence.capture_tencent_historical_response(
+                root, "SH600460", TENCENT_REQUEST, raw, fetched_at=AS_OF)
+            saved = original.read_bytes()
+            with self.assertRaisesRegex(ValueError,
+                                        "existing response identity mismatch"):
+                selection_price_evidence.capture_eastmoney_historical_response(
+                    root, "SH600460", PARAMS, raw, fetched_at=AS_OF)
+            self.assertEqual(original.read_bytes(), saved)
+            self.assertFalse((root / "quarantine").exists())
+
     def test_explicit_evidence_cutoff_never_expands_price_window(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -438,7 +512,8 @@ class RawEvidenceTests(unittest.TestCase):
             self.assertEqual(fetch.call_count, 1, (first, second, fetch_args))
             self.assertEqual(fetch_args[0][:4],
                              ("SH600460", 12, "20260916", "20261009"))
-            self.assertEqual(fetch_args[0][4], evidence_dir.resolve())
+            self.assertEqual(fetch_args[0][4].parent, evidence_dir.resolve())
+            self.assertTrue(fetch_args[0][4].name.startswith(".pending-price-"))
             self.assertEqual(build_calls, [evidence_dir.resolve()] * 3)
             published = json.loads((root / "data" / "selection-performance" /
                                     (day + ".json")).read_text())
@@ -495,7 +570,8 @@ class RawEvidenceTests(unittest.TestCase):
                       price_evidence_as_of=None):
                 return self._dataset(day, evaluation, [
                     {"instrument_id": "SH600460", "report_date": "2026-09-16",
-                     "outcomes": {"t1": {"status": "price_basis_unverified"}}},
+                     "outcomes": {"t1": {"status": "price_basis_unverified",
+                                         "target_date": "2026-09-17"}}},
                 ])
 
             with mock.patch.object(report_generator, "build_selection_performance",
@@ -739,6 +815,11 @@ class RawEvidenceTests(unittest.TestCase):
             "dataset_id": "test-evidence-dataset",
             "report_as_of": day,
             "evaluation_as_of": evaluation,
+            "trading_dates": [
+                "2026-09-16", "2026-09-17", "2026-09-18", "2026-09-21",
+                "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-28",
+                "2026-09-29", "2026-09-30", "2026-10-08", "2026-10-09",
+            ],
             "observations": observations,
         }
 

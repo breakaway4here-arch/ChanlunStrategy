@@ -188,14 +188,40 @@ def _persist_response(evidence_dir, identity, request, raw_response, captured, p
     if target.is_file():
         try:
             _load_record(target, identity, None, None)
-            return target
         except (OSError, ValueError, TypeError, KeyError, UnicodeError):
-            pass
+            quarantine_root = folder.parent / "quarantine" / "invalid-record" / identity
+            quarantine_root.mkdir(parents=True, exist_ok=True, mode=0o700)
+            quarantine = Path(tempfile.mkdtemp(prefix="capture-",
+                                               dir=quarantine_root))
+            os.replace(target, quarantine / target.name)
+        else:
+            existing = json.loads(target.read_text(encoding="utf-8"))
+            if existing["provider"] != provider or \
+                    existing["raw_response"].encode("utf-8") != raw_response:
+                raise ValueError("existing response identity mismatch")
+            original = _timestamp(existing["fetched_at"])
+            old_bars = (_decode_eastmoney if provider == "eastmoney" else
+                        _decode_tencent)(identity, existing["request"], raw_response,
+                                         original.isoformat())
+            new_bars = (_decode_eastmoney if provider == "eastmoney" else
+                        _decode_tencent)(identity, request, raw_response,
+                                         captured.isoformat())
+            if not old_bars[-1]["is_final"] and new_bars[-1]["is_final"]:
+                prior = existing.get("confirmed_at")
+                if prior is None or captured < _timestamp(prior):
+                    existing["confirmed_at"] = captured.isoformat()
+                    _write_record_atomically(target, existing)
+            return target
+    _write_record_atomically(target, record)
+    return target
+
+
+def _write_record_atomically(target, record):
     encoded = json.dumps(record, ensure_ascii=False, sort_keys=True,
                          separators=(",", ":")).encode("utf-8")
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(dir=folder, prefix=".evidence-",
+        with tempfile.NamedTemporaryFile(dir=target.parent, prefix=".evidence-",
                                          suffix=".tmp", delete=False) as handle:
             temporary = Path(handle.name)
             handle.write(encoded)
@@ -205,7 +231,6 @@ def _persist_response(evidence_dir, identity, request, raw_response, captured, p
     finally:
         if temporary is not None:
             temporary.unlink(missing_ok=True)
-    return target
 
 
 def capture_eastmoney_historical_response(evidence_dir, identity, request_params,
@@ -260,11 +285,29 @@ def _load_record(path, identity, price_cutoff_at, evidence_cutoff_at):
         raise ValueError("historical raw response hash mismatch")
     provider = record["provider"]
     decode = _decode_eastmoney if provider == "eastmoney" else _decode_tencent
-    bars = decode(identity, record.get("request"), raw.encode("utf-8"),
-                  record.get("fetched_at"))
-    if evidence_cutoff_at is not None \
-            and _timestamp(record.get("fetched_at")) > evidence_cutoff_at:
+    first_at = _timestamp(record.get("fetched_at"))
+    if evidence_cutoff_at is not None and first_at > evidence_cutoff_at:
         raise ValueError("response was captured after evaluation cutoff")
+    fetched_at = first_at
+    confirmed = record.get("confirmed_at")
+    if confirmed is not None:
+        confirmed_at = _timestamp(confirmed)
+        if confirmed_at <= first_at:
+            raise ValueError("invalid later capture confirmation")
+        initial_bars = decode(identity, record.get("request"), raw.encode("utf-8"),
+                              first_at.isoformat())
+        confirmed_bars = decode(identity, record.get("request"), raw.encode("utf-8"),
+                                confirmed_at.isoformat())
+        if initial_bars[-1]["is_final"] or not confirmed_bars[-1]["is_final"]:
+            raise ValueError("later capture did not confirm the close")
+        if evidence_cutoff_at is None or confirmed_at <= evidence_cutoff_at:
+            fetched_at = confirmed_at
+            bars = confirmed_bars
+        else:
+            bars = initial_bars
+    else:
+        bars = decode(identity, record.get("request"), raw.encode("utf-8"),
+                      first_at.isoformat())
     if price_cutoff_at is not None \
             and bars[-1]["date"] > price_cutoff_at.date().isoformat():
         raise ValueError("response extends beyond evaluation cutoff")
@@ -272,7 +315,7 @@ def _load_record(path, identity, price_cutoff_at, evidence_cutoff_at):
         "instrument_id": identity, "adjustment": "qfq",
         "provider": provider, "bars": bars,
         "raw_sha256": digest,
-        "fetched_at": record["fetched_at"],
+        "fetched_at": fetched_at.isoformat(),
         "request": record["request"],
     }
     series = {
@@ -353,6 +396,48 @@ def _attempt_ledger(evidence_dir):
     return result
 
 
+def price_gap_recovery_state(dataset, row, horizon, outcome):
+    """Return due, deferred, or None for a published price gap."""
+    if not isinstance(row, dict) or not isinstance(outcome, dict):
+        return None
+    status = outcome.get("status")
+    if status not in ("missing_price", "price_basis_unverified"):
+        return None
+    if row.get("excluded_reason") or outcome.get("reason_code") in (
+            "start_no_traded_close", "target_no_traded_close"):
+        return "deferred"
+    identity = row.get("instrument_id")
+    if not isinstance(identity, str) or not _IDENTITY.fullmatch(identity) \
+            or row.get("code", identity[2:]) != identity[2:]:
+        return "deferred"
+    report_date = row.get("report_date")
+    target_date = outcome.get("target_date")
+    calendar = dataset.get("trading_dates") or []
+    if not isinstance(report_date, str) or not isinstance(target_date, str) \
+            or not isinstance(calendar, list):
+        return "deferred"
+    try:
+        offset = int(horizon[1:]) if horizon.startswith("t") else -1
+        position = calendar.index(report_date)
+        if offset not in (1, 3, 5, 10, 20, 30) \
+                or calendar[position + offset] != target_date:
+            return "deferred"
+        if outcome.get("start_date", report_date) != report_date:
+            return "deferred"
+        from chanlun.selection_performance import _evaluation_cutoff
+        cutoff_date, cutoff_closed = _evaluation_cutoff(
+            dataset.get("evaluation_as_of"))
+    except (AttributeError, IndexError, TypeError, ValueError):
+        return "deferred"
+    return ("due" if target_date < cutoff_date or (
+        target_date == cutoff_date and cutoff_closed) else "deferred")
+
+
+def is_due_price_gap(dataset, row, horizon, outcome):
+    """Recognize a published observation's recoverable, located price gap."""
+    return price_gap_recovery_state(dataset, row, horizon, outcome) == "due"
+
+
 def select_due_fill_candidate(dataset, evidence_dir, *, preferred_identity=None):
     """Choose one published, matured missing proof; rotate past failed attempts."""
     due = {}
@@ -364,9 +449,8 @@ def select_due_fill_candidate(dataset, evidence_dir, *, preferred_identity=None)
                 or not isinstance(report_date, str):
             continue
         published.add(identity)
-        if any(isinstance(outcome, dict)
-               and outcome.get("status") == "price_basis_unverified"
-               for outcome in (row.get("outcomes") or {}).values()):
+        if any(is_due_price_gap(dataset, row, horizon, outcome)
+               for horizon, outcome in (row.get("outcomes") or {}).items()):
             due[identity] = min(due.get(identity, report_date), report_date)
     if preferred_identity is not None and preferred_identity not in published:
         raise ValueError("requested evidence target is not a published member")

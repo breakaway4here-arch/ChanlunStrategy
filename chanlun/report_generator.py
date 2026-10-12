@@ -2446,17 +2446,35 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
                                               price_evidence_dir=evidence_root,
                                               price_evidence_as_of=proof_read_as_of)
         from chanlun.selection_price_evidence import (
-            load_verified_price_series, record_fill_attempt,
-            select_due_fill_candidate,
+            is_due_price_gap, load_verified_price_series, record_fill_attempt,
+            price_gap_recovery_state, select_due_fill_candidate,
         )
-        candidate = select_due_fill_candidate(
-            dataset, evidence_root, preferred_identity=evidence_target_id,
-        )
-        if candidate is None and any(
+        from chanlun.selection_performance import _evaluation_cutoff
+        cutoff_date, _cutoff_closed = _evaluation_cutoff(evaluation_as_of)
+        trading_dates = dataset.get("trading_dates") or []
+        if any(
                 isinstance(outcome, dict)
-                and outcome.get("status") == "price_basis_unverified"
+                and outcome.get("status") in (
+                    "missing_price", "price_basis_unverified")
+                and isinstance(outcome.get("target_date"), str)
+                and (not trading_dates or outcome["target_date"] > trading_dates[-1])
                 for row in dataset.get("observations") or []
                 for outcome in (row.get("outcomes") or {}).values()):
+            from chanlun.selection_performance import _trading_calendar
+            first_date = min((row["report_date"] for row in dataset["observations"]),
+                             default=report_date)
+            trading_dates = _trading_calendar(market_db_path, first_date,
+                                              report_date)
+        qualification_dataset = dict(dataset, trading_dates=trading_dates)
+        candidate = select_due_fill_candidate(
+            qualification_dataset, evidence_root,
+            preferred_identity=evidence_target_id,
+        )
+        if candidate is None and any(
+                price_gap_recovery_state(qualification_dataset, row, horizon,
+                                         outcome) is not None
+                for row in dataset.get("observations") or []
+                for horizon, outcome in (row.get("outcomes") or {}).items()):
             fill["status"] = "deferred"
         if candidate is not None:
             from chanlun.data_fetcher import (
@@ -2473,20 +2491,18 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
             budget = DailyRepairBudget(max_stocks=1, max_requests=2, seconds=20)
             try:
                 record_fill_attempt(evidence_root, identity, report_date)
-                before_series, before_hash = load_verified_price_series(
+                before_series, _ = load_verified_price_series(
                     evidence_root, [identity],
                     evaluation_as_of=evaluation_as_of,
                     evidence_as_of=proof_read_as_of,
                 )
-                known_proofs = {
-                    (series["source_response"]["provider"],
-                     series["source_response"]["raw_sha256"])
-                    for series in before_series.get(identity, [])
-                }
                 instrument = InstrumentIdentity("stock", identity[:2], identity[2:])
-                trading_dates = dataset.get("trading_dates") or []
+                selected_rows = [
+                    row for row in dataset.get("observations") or []
+                    if row.get("instrument_id") == identity
+                ]
                 window_dates = [day for day in trading_dates
-                                if start_date <= day <= report_date]
+                                if start_date <= day <= cutoff_date]
                 request_count = min(100, max(2, len(window_dates))) if window_dates else 100
                 usable_proof = False
                 post_fetch_as_of = proof_read_as_of
@@ -2495,53 +2511,105 @@ def refresh_selection_performance_after_publish(output_dir, market_db_path,
                         ("tencent", _fetch_selection_qfq_tencent_remote)):
                     if budget.remaining() <= 0:
                         break
+                    staged_root = Path(tempfile.mkdtemp(
+                        prefix=".pending-price-", dir=evidence_root))
                     fill["requests"] += 1
                     try:
                         payload = fetcher(
                             instrument, count=request_count, request_budget=budget,
                             start_date=start_date.replace("-", ""),
-                            end_date=report_date.replace("-", ""),
-                            evidence_dir=evidence_root,
+                            end_date=cutoff_date.replace("-", ""),
+                            evidence_dir=staged_root,
                         )
                     except Exception as exc:
                         payload = None
                         fill["failure_type"] = type(exc).__name__
-                    post_fetch_as_of = datetime.now(timezone(timedelta(hours=8))).isoformat()
-                    available, after_hash = load_verified_price_series(
-                        evidence_root, [identity], evaluation_as_of=evaluation_as_of,
-                        evidence_as_of=post_fetch_as_of,
-                    )
-                    covers_due = False
-                    for series in available.get(identity, []):
-                        response = series["source_response"]
-                        proof_id = (response["provider"], response["raw_sha256"])
-                        if response["provider"] != provider or proof_id in known_proofs:
-                            continue
-                        bars = {bar["date"]: bar for bar in series["bars"]}
-                        for row in dataset.get("observations") or []:
-                            if row.get("instrument_id") != identity:
-                                continue
-                            for outcome in (row.get("outcomes") or {}).values():
-                                if not isinstance(outcome, dict) or \
-                                        outcome.get("status") != "price_basis_unverified":
-                                    continue
-                                start_bar = bars.get(row.get("report_date")) or {}
-                                target_bar = bars.get(outcome.get("target_date")) or {}
-                                if (start_bar.get("is_final") is True
-                                        and target_bar.get("is_final") is True
-                                        and start_bar.get("close", 0) > 0
-                                        and target_bar.get("close", 0) > 0
-                                        and start_bar.get("volume", 0) > 0
-                                        and target_bar.get("volume", 0) > 0):
-                                    covers_due = True
-                                    break
-                            if covers_due:
-                                break
-                        if covers_due:
-                            break
-                    if payload is not None and after_hash != before_hash and covers_due:
-                        usable_proof = True
-                        fill["provider"] = provider
+                    try:
+                        post_fetch_as_of = datetime.now(
+                            timezone(timedelta(hours=8))).isoformat()
+                        staged_series, _ = load_verified_price_series(
+                            staged_root, [identity],
+                            evaluation_as_of=evaluation_as_of,
+                            evidence_as_of=post_fetch_as_of)
+                        new_series = [
+                            series for series in staged_series.get(identity, [])
+                            if series["source_response"]["provider"] == provider
+                        ]
+                        if payload is not None and new_series:
+                            from chanlun.selection_performance import evaluate_observations
+                            combined = {identity: before_series.get(identity, []) + new_series}
+                            newly_evaluated = evaluate_observations(
+                                selected_rows, trading_dates, {identity: new_series},
+                                evaluation_as_of)
+                            fully_evaluated = evaluate_observations(
+                                selected_rows, trading_dates, combined,
+                                evaluation_as_of)
+                            covers_due = any(
+                                is_due_price_gap(qualification_dataset, original,
+                                                 horizon, outcome)
+                                and new["outcomes"][horizon]["status"] == "ready"
+                                and all_rows["outcomes"][horizon]["status"] == "ready"
+                                for original, new, all_rows in zip(
+                                    selected_rows, newly_evaluated, fully_evaluated)
+                                for horizon, outcome in (original.get("outcomes") or {}).items()
+                            )
+                            preserved = all(
+                                current["outcomes"][horizon]["status"] == "ready"
+                                and all(current["outcomes"][horizon].get(field)
+                                        == outcome.get(field) for field in (
+                                            "start_close", "end_close", "return_pct"))
+                                for original, current in zip(
+                                    selected_rows, fully_evaluated)
+                                for horizon, outcome in (original.get("outcomes") or {}).items()
+                                if outcome.get("status") == "ready"
+                            ) and all(
+                                (current.get("source_outcomes") or {})
+                                .get(strategy_key, {}).get(horizon, {}).get("status")
+                                == "ready"
+                                and all(
+                                    (current.get("source_outcomes") or {})
+                                    .get(strategy_key, {}).get(horizon, {}).get(field)
+                                    == outcome.get(field)
+                                    for field in ("start_close", "end_close",
+                                                  "return_pct"))
+                                for original, current in zip(
+                                    selected_rows, fully_evaluated)
+                                for strategy_key, source in (
+                                    original.get("source_outcomes") or {}).items()
+                                for horizon, outcome in source.items()
+                                if outcome.get("status") == "ready"
+                            )
+                            if covers_due and preserved:
+                                from chanlun.selection_price_evidence import (
+                                    capture_eastmoney_historical_response,
+                                    capture_tencent_historical_response,
+                                )
+                                capture = (capture_eastmoney_historical_response
+                                           if provider == "eastmoney" else
+                                           capture_tencent_historical_response)
+                                for proof in new_series:
+                                    response = proof["source_response"]
+                                    path = staged_root / identity / (
+                                        response["raw_sha256"] + ".json")
+                                    record = json.loads(path.read_text(encoding="utf-8"))
+                                    capture(evidence_root, identity,
+                                            record["request"],
+                                            record["raw_response"].encode("utf-8"),
+                                            fetched_at=record["fetched_at"])
+                                usable_proof = True
+                                fill["provider"] = provider
+                    finally:
+                        if staged_root.is_dir():
+                            if any(staged_root.rglob("*.json")) and not usable_proof:
+                                quarantine = evidence_root / "quarantine"
+                                quarantine.mkdir(parents=True, exist_ok=True,
+                                                 mode=0o700)
+                                os.replace(staged_root,
+                                           quarantine / staged_root.name[1:])
+                            else:
+                                import shutil
+                                shutil.rmtree(staged_root)
+                    if usable_proof:
                         break
                 if usable_proof:
                     dataset = build_selection_performance(

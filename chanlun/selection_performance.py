@@ -257,6 +257,12 @@ def evaluate_observations(observations, trading_calendar, series_by_id,
                     status = "waiting" if target_date == cutoff_date else "missing_price"
                     result = _empty_outcome(report_date, target_date, status,
                                             "target_close_unconfirmed")
+                elif end and end_final and not end_traded:
+                    result = _empty_outcome(report_date, target_date,
+                                            "missing_price", "target_no_traded_close")
+                elif start and start_final and not start_traded:
+                    result = _empty_outcome(report_date, target_date,
+                                            "missing_price", "start_no_traded_close")
                 elif not start or not end or start_price is None or end_price is None \
                         or not start_final:
                     result = _empty_outcome(report_date, target_date,
