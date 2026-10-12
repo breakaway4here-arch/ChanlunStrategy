@@ -31,6 +31,9 @@ def formal_publish_targets(trade_date):
         f"docs/{trade_date}/index.html",
         "docs/assets/report-v2.css",
         "docs/assets/report-v2.js",
+        f"docs/data/selection-performance/{trade_date}.json",
+        "docs/data/selection-performance/index.json",
+        "docs/data/selection-performance/status.json",
     )
 
 

@@ -930,3 +930,7 @@ PR18 已合入远端 main，精确合并提交为 `4dfb9174b3fec0bf99744a354eaae
 四源码/发布资源逐字对应，asset_version `7d9983e4600c`；18 HTML 只更新资源引用，业务内联内容不改。新结果仅更新 `docs/data/selection-performance/` 的日期文件/索引/状态，原发布名单、顺序、策略与账本保持。原脏树和生产运行树未同步，正式数据库未写、生产任务未重跑、未额外通知或执行部署命令；浏览器全部自有进程与监听端口清理后复查。最终提交/PR/main 状态以远端回查为准。
 
 证据保存在 `/private/tmp/chanlun-pr18-review-20261010/`：`real-normal-eastmoney-failed-receipt.json`、`real-normal-verified-fetch-receipt.json`、`real-normal-final-cached-receipt.json`、`final-regression-921.log`、`browser-agent/out/acceptance-summary.json`。这些是本机隔离证据路径，不是生产任务或线上部署回执。
+
+### 2026-10-12 PR19 复核后续
+
+用户授权“做这个版本的代码修复，上线为目标”，本批允许审查合并及实际运行代码同步，不手工重跑生产、写正式行情库或发送额外通知。按[PR19复核](2026-10-10-pr19-postmerge-review.md)修复26份显示窗口同时裁剪长期凭据的问题，并补齐自动日报的表现文件发布连接；保留此前R1/R2/R3与来源事故保护。具体红绿验证、范围、版本和上线边界追加于[10/12执行记录](2026-10-12-pr19-retention-release.md)。原临时行情证据目录已清理，本批在原单股预算内重新获取并核验实际原响应，迁入正常独立证据缓存；不把旧临时目录当现存凭据。

@@ -130,6 +130,18 @@ class TestDailyRunScript(unittest.TestCase):
         )
         self.assertLess(validator, optional_add)
 
+    def test_verified_optional_performance_is_staged_before_report_commit(self):
+        start = self.script.index("commit_today_report_if_changed() {")
+        end = self.script.index("\n}\n", start)
+        body = self.script[start:end]
+        self.assertIn("scripts/stage_selection_performance.py", body)
+        self.assertIn('--trade-date "$TODAY"', body)
+        self.assertIn('--journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"', body)
+        self.assertLess(
+            body.index("scripts/stage_selection_performance.py"),
+            body.index('git commit -m "chore: 自动更新'),
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
