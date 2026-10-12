@@ -16,8 +16,8 @@ PRODUCTION_ROOT = (
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
-    # Verified at 3678e770: the previous literal predated unrelated daily changes.
-    "77dc136adba7c5fe28bc0a88db8c5d0b9b8da756a9088a82a677985cd0948f60"
+    # Verified at 053b9b94: b09a5f0e added the independent performance staging hook.
+    "e098670d9adad33adfd4165be72be11c07c2cc243e9e20c65be9e5662856d5f7"
 )
 RUNBOOK_PATH = ROOT / "docs" / "runbooks" / "chanlun-preclose-runbook.md"
 

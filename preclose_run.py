@@ -12,6 +12,7 @@ import os
 import signal
 import subprocess
 import sys
+import traceback
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +31,8 @@ from chanlun.preclose_notify import (
     load_preclose_env,
     publish_preclose_and_notify,
 )
-from chanlun.preclose_runtime import build_scheduled_preclose_input
+from chanlun.preclose_runtime import PrecloseInputError, build_scheduled_preclose_input
+from chanlun.quote_sources import QuoteAcquisitionDeadline
 from chanlun.preclose_schedule import (
     DELIVERY_RESERVE_SECONDS, MAX_PRE_CLOSE_RUNTIME_SECONDS,
     PRE_CLOSE_START_TIME, PRE_CLOSE_CUTOFF_TIME, PRE_CLOSE_TIMEZONE,
@@ -368,6 +370,29 @@ def _record_finished_run(
             pass
 
 
+def _local_acquisition_failure(exc):
+    """Bounded local evidence; never include exception text, locals or full paths."""
+    result = {
+        "stage": "input_acquisition", "error_type": type(exc).__name__,
+        "reason": exc.reason if isinstance(exc, PrecloseInputError) else "unexpected_exception",
+        "frames": [{"file": Path(frame.filename).name[:80],
+                    "function": frame.name[:80], "line": frame.lineno}
+                   for frame in traceback.extract_tb(exc.__traceback__)[-8:]],
+    }
+    if isinstance(exc, PrecloseInputError):
+        diagnostic = exc.quote_snapshot
+        result["quote_snapshot"] = {
+            key: diagnostic[key] for key in ("complete", "requested", "unique", "valid_quotes",
+                                            "started_at", "as_of", "fetched_at") if key in diagnostic}
+        result["quote_snapshot"]["attempts"] = [
+            {key: attempt[key] for key in ("source", "complete", "received", "requested", "valid", "error")
+             if key in attempt} for attempt in diagnostic.get("attempts", [])[-12:]]
+        result["daily_splice"] = {
+            key: exc.daily_splice[key] for key in ("requested_count", "available_count", "coverage",
+                "minimum_coverage", "excluded_by_reason") if key in exc.daily_splice}
+    return result
+
+
 def _current_source_sha():
     return subprocess.check_output(
         ["git", "rev-parse", "HEAD"],
@@ -647,8 +672,9 @@ def run_scheduled_preclose(
     paths = PrecloseDataPaths(root=root, formal_market_db=formal_market_db)
     day_root = root / trade_date
     snapshot_path = day_root / "snapshot.json"
-    as_of = current.isoformat(timespec="seconds")
-    run_id = "{}-{}".format(as_of, uuid.uuid4().hex[:12])
+    run_started_at = current.isoformat(timespec="seconds")
+    as_of = run_started_at
+    run_id = "{}-{}".format(run_started_at, uuid.uuid4().hex[:12])
     started_at = float(monotonic())
     if not math.isfinite(float(deadline_seconds)) or not 0 < float(deadline_seconds) <= MAX_PRE_CLOSE_RUNTIME_SECONDS:
         raise ValueError("deadline_seconds must be finite and in (0, 660]")
@@ -727,6 +753,7 @@ def run_scheduled_preclose(
 
         market_inputs = None
         acquisition_error = None
+        acquisition_evidence_error = None
         acquisition_status = None
         compute_budget = max(0.0, min(
             initial_budget - max(0.0, float(monotonic()) - started_at),
@@ -751,33 +778,52 @@ def run_scheduled_preclose(
                     parameters = inspect.signature(signature_target).parameters
                     if 'repair_budget_remaining' in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
                         runtime_kwargs['repair_budget_remaining'] = repair_remaining
+                    for name, value in (('clock', now), ('monotonic', monotonic)):
+                        if name in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
+                            runtime_kwargs[name] = value
                     market_inputs = runtime_builder(
                         trade_date,
                         as_of,
                         **runtime_kwargs,
                     )
+                    if not snapshot_write_allowed() or repair_remaining() <= 0:
+                        raise PrecloseExecutionDeadline('input_acquisition')
+                    input_as_of = normalize_preclose_datetime(datetime.fromisoformat(
+                        str(market_inputs.get('as_of') or as_of).replace('Z', '+00:00')))
+                    if input_as_of.date().isoformat() != trade_date or input_as_of > now():
+                        raise PrecloseInputError('invalid_input_fact_time')
+                    as_of = input_as_of.isoformat(timespec='seconds')
                     frozen_input_path = write_preclose_input_snapshot(
-                        paths, market_inputs
+                        paths, market_inputs, write_guard=snapshot_write_allowed
                     )
                     market_inputs = json.loads(
                         frozen_input_path.read_text(encoding="utf-8")
                     )
-        except PrecloseExecutionDeadline:
+        except (PrecloseExecutionDeadline, QuoteAcquisitionDeadline):
             acquisition_status = "deadline_exceeded"
             acquisition_error = "PrecloseExecutionDeadline"
         except Exception as exc:
             acquisition_status = "failed"
             acquisition_error = type(exc).__name__
+            try:
+                _durable_json(day_root / "acquisition-failure.json", _local_acquisition_failure(exc))
+            except OSError as evidence_exc:
+                acquisition_evidence_error = type(evidence_exc).__name__
         finally:
             phase_seconds["input_acquisition"] = round(max(
                 0.0, float(monotonic()) - acquisition_started
             ), 6)
 
         generated = now()
+        if generated < normalize_preclose_datetime(datetime.fromisoformat(as_of)):
+            acquisition_status = "failed"
+            acquisition_error = "InputFactTimeAfterGeneration"
+            as_of = generated.isoformat(timespec="seconds")
         if generated.date().isoformat() != trade_date:
             acquisition_status = "deadline_exceeded"
             acquisition_error = "TradeDateChanged"
             generated = current
+            as_of = run_started_at
         elapsed = max(0.0, float(monotonic()) - started_at)
         strategy_remaining = min(
             initial_budget - elapsed - DELIVERY_RESERVE_SECONDS,
@@ -921,7 +967,7 @@ def run_scheduled_preclose(
             failure_path=failure_path,
             source_sha=source_sha,
             run_id=run_id,
-            started_at_iso=as_of,
+            started_at_iso=run_started_at,
             now=now,
             monotonic=monotonic,
             monotonic_started=started_at,
@@ -942,6 +988,8 @@ def run_scheduled_preclose(
             started_at=started_at,
             budget_seconds=initial_budget,
         )
+        if acquisition_evidence_error:
+            final_result['acquisition_evidence_error'] = acquisition_evidence_error
         phase_seconds["delivery"] = round(max(
             0.0, float(monotonic()) - delivery_started
         ), 6)
@@ -951,7 +999,7 @@ def run_scheduled_preclose(
             "trade_date": trade_date,
             "run_id": run_id,
             "source_sha": source_sha,
-            "started_at": as_of,
+            "started_at": run_started_at,
             "finished_at": timing_finished.isoformat(timespec="seconds"),
             "status": (
                 final_result.get("run_status")
@@ -970,7 +1018,7 @@ def run_scheduled_preclose(
             prepared_path=prepared_path,
             source_sha=source_sha,
             run_id=run_id,
-            started_at_iso=as_of,
+            started_at_iso=run_started_at,
             now=now,
             monotonic=monotonic,
             monotonic_started=started_at,

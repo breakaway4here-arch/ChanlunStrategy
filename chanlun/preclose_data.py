@@ -589,13 +589,18 @@ def build_preclose_market_inputs(
     }
 
 
-def write_preclose_input_snapshot(paths, snapshot):
+def write_preclose_input_snapshot(paths, snapshot, *, write_guard=None):
     """Atomically write one JSON input under ``<root>/<date>/input.json``."""
 
     if not isinstance(paths, PrecloseDataPaths):
         raise TypeError("paths must be PrecloseDataPaths")
     if not isinstance(snapshot, dict):
         raise TypeError("snapshot must be a mapping")
+    def check_write():
+        if write_guard is not None and not write_guard():
+            from .quote_sources import QuoteAcquisitionDeadline
+            raise QuoteAcquisitionDeadline('input snapshot deadline')
+    check_write()
     target = paths.input_path(snapshot.get("trade_date"))
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_name(".input.json.tmp")
@@ -606,6 +611,11 @@ def write_preclose_input_snapshot(paths, snapshot):
         separators=(",", ":"),
         allow_nan=False,
     ) + "\n"
-    temporary.write_text(encoded, encoding="utf-8")
-    os.replace(str(temporary), str(target))
+    try:
+        temporary.write_text(encoded, encoding="utf-8")
+        check_write()
+        os.replace(str(temporary), str(target))
+    finally:
+        if temporary.exists():
+            temporary.unlink()
     return target

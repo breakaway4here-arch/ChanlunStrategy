@@ -544,7 +544,8 @@ def _quote_timestamp(value):
         return None
 
 
-def fetch_full_market_quotes(return_diagnostics=False, *, now=None, db_path=None, cache_dir=None):
+def fetch_full_market_quotes(return_diagnostics=False, *, now=None, clock=None, monotonic=None,
+                             budget_remaining=None, db_path=None, cache_dir=None):
     """Multi-source quotes; metadata-only callers keep fetch_all_a_stocks."""
     from pathlib import Path
     from .quote_sources import fetch_quotes
@@ -553,6 +554,7 @@ def fetch_full_market_quotes(return_diagnostics=False, *, now=None, db_path=None
     with requests.Session() as session:
         session.trust_env = False
         rows, diagnostics = fetch_quotes(fetch_all_a_stocks, session=session, now=now,
+                                         clock=clock, monotonic=monotonic, budget_remaining=budget_remaining,
                                          db_path=selected_db, cache_dir=selected_cache)
     return (rows, diagnostics) if return_diagnostics else rows
 

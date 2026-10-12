@@ -27,6 +27,8 @@ from .kline_repository import DailyRepairBudget, KLineRepository
 from .identity import normalize_index_identity
 from .preclose_data import MARKET_INDICES, fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
+from .preclose_schedule import normalize_preclose_datetime
+from .quote_sources import QuoteAcquisitionDeadline
 from .price_basis import adjustment_factor, scale_price
 from .right_side_startup import (
     resolve_right_side_startup_mode,
@@ -684,6 +686,16 @@ def _average_tail(values, count):
     return sum(selected) / len(selected) if selected else None
 
 
+class PrecloseInputError(RuntimeError):
+    """Known input failure, with structured local evidence and no raw secrets."""
+
+    def __init__(self, reason, quote_snapshot=None, daily_splice=None):
+        super().__init__(reason.replace('_', ' '))
+        self.reason = reason
+        self.quote_snapshot = quote_snapshot or {}
+        self.daily_splice = daily_splice or {}
+
+
 def build_scheduled_preclose_input(
     trade_date,
     as_of,
@@ -696,6 +708,8 @@ def build_scheduled_preclose_input(
     min30_fetcher=None,
     turnover_loader=None,
     repair_budget_remaining=None,
+    clock=None,
+    monotonic=None,
 ):
     """Build one complete input using only batch quotes and read-only history."""
 
@@ -707,7 +721,8 @@ def build_scheduled_preclose_input(
         from .data_fetcher import fetch_full_market_quotes
         quote_fetcher = lambda: fetch_full_market_quotes(
             return_diagnostics=True, db_path=formal_market_db,
-            now=datetime.fromisoformat(str(as_of).replace('Z', '+00:00')),
+            now=(datetime.fromisoformat(str(as_of).replace('Z', '+00:00')) if clock is None else None),
+            clock=clock, monotonic=monotonic, budget_remaining=repair_budget_remaining,
         )
     index_fetcher = index_fetcher or fetch_preclose_indices
     target_selector = target_selector or select_preclose_30m_targets
@@ -730,6 +745,15 @@ def build_scheduled_preclose_input(
     quote_diagnostics = (
         quote_diagnostics if isinstance(quote_diagnostics, dict) else {}
     )
+    if repair_budget_remaining and repair_budget_remaining() <= 0:
+        raise QuoteAcquisitionDeadline('quote acquisition deadline')
+    if clock is not None:
+        collected = normalize_preclose_datetime(clock())
+        fact_as_of = normalize_preclose_datetime(datetime.fromisoformat(
+            str(quote_diagnostics.get('as_of') or collected.isoformat()).replace('Z', '+00:00')))
+        if fact_as_of.date().isoformat() != str(trade_date) or fact_as_of > collected:
+            raise PrecloseInputError('invalid_quote_fact_time', quote_diagnostics)
+        as_of = fact_as_of.isoformat(timespec='seconds')
     requested = int(quote_diagnostics.get("requested") or 0)
     unique = int(quote_diagnostics.get("unique") or len(quotes))
     if (
@@ -738,7 +762,7 @@ def build_scheduled_preclose_input(
         or unique != requested
         or len(quotes) != unique
     ):
-        raise RuntimeError("full-market intraday quote snapshot incomplete")
+        raise PrecloseInputError("full_market_intraday_quote_snapshot_incomplete", quote_diagnostics)
     quotes_by_code = {
         str(row.get("code") or ""): row
         for row in quotes
@@ -791,13 +815,9 @@ def build_scheduled_preclose_input(
         daily_splice_diagnostics["business_available_count"] = len(daily)
         daily_splice_diagnostics["risk_exclusions"] = risk_exclusions
     if not daily and not risk_excluded:
-        raise RuntimeError("no eligible intraday daily rows")
+        raise PrecloseInputError("no_eligible_intraday_daily_rows", quote_diagnostics, daily_splice_diagnostics)
     if daily_coverage < MINIMUM_DAILY_SPLICE_COVERAGE:
-        raise RuntimeError(
-            "daily splice coverage below minimum: {:.2%} < {:.2%}".format(
-                daily_coverage, MINIMUM_DAILY_SPLICE_COVERAGE
-            )
-        )
+        raise PrecloseInputError("daily_splice_coverage_below_minimum", quote_diagnostics, daily_splice_diagnostics)
 
     targets = list(target_selector(daily) or [])
     target_codes = [str(row.get("code") or "") for row in targets]
