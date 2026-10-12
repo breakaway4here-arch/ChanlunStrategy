@@ -288,6 +288,13 @@ commit_today_report_if_changed() {
     else
         echo "复盘索引本期未生成，仅提交已校验的正式日报产物"
     fi
+    if ! /usr/bin/python3 scripts/stage_selection_performance.py \
+        --repo-root "$SCRIPT_DIR" \
+        --trade-date "$TODAY" \
+        --journal-path "$FORMAL_PUBLISH_JOURNAL_PATH"; then
+        echo "选股表现暂存出现异常，停止提交以保护已暂存产物"
+        return 1
+    fi
     if ! git diff --cached --quiet; then
         git commit -m "chore: 自动更新 ${TODAY} 日报数据"
     else

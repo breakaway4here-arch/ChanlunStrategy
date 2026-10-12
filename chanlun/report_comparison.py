@@ -1363,6 +1363,62 @@ def _build_review_registry(
                     published_themes[report_date] = context
             else:
                 entries.extend(_legacy_review_entries(report, report_date))
+    # The comparison page shows only ``dates``, but published observations can
+    # mature after that window. Keep older light receipts only while their
+    # original report and publication evidence still validate.
+    if old_published:
+        for report_date in sorted(old_published):
+            if (not isinstance(report_date, str)
+                    or not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", report_date)
+                    or (dates and report_date >= dates[0])):
+                continue
+            try:
+                if datetime.strptime(report_date, "%Y-%m-%d").strftime("%Y-%m-%d") != report_date:
+                    continue
+            except ValueError:
+                continue
+            try:
+                with open(os.path.join(data_dir, report_date + ".json"),
+                          "r", encoding="utf-8") as handle:
+                    report = json.load(handle)
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                continue
+            if not isinstance(report, dict) or report.get("date") != report_date:
+                continue
+            try:
+                archived = _read_archived_workbench(data_dir, report_date, report)
+                if archived is None:
+                    receipt = old_published[report_date]
+                    if _bound_receipt_entries(receipt, report, report_date) is None:
+                        continue
+                elif (isinstance(archived, dict)
+                      and archived.get("identity_matches") is True
+                      and isinstance(archived.get("workbench"), dict)):
+                    workbench = archived["workbench"]
+                    archive_entries = _workbench_review_entries(
+                        report, report_date, workbench,
+                        "published_html_bootstrap", "confirmed_display_snapshot")
+                    receipt = _published_member_receipt(
+                        report, report_date, workbench,
+                        "published_html_bootstrap", archive_entries)
+                    if _bound_receipt_entries(receipt, report, report_date) is None:
+                        continue
+                else:
+                    continue
+            except (OverflowError, TypeError, ValueError, KeyError, AttributeError):
+                # A damaged historical archive cannot invalidate the current
+                # window or unrelated published receipts.
+                continue
+            published[report_date] = receipt
+            try:
+                context = (_bound_published_theme_context(
+                    old_themes.get(report_date), report, report_date, receipt)
+                    if archived is None else _published_theme_context(
+                        report, report_date, workbench, receipt))
+            except (OverflowError, TypeError, ValueError, KeyError, AttributeError):
+                context = None
+            if context is not None:
+                published_themes[report_date] = context
     entries = _deduplicate_review_entries(entries)
     occurrences = {}
     totals = {}

@@ -141,6 +141,35 @@ class TestFormalPublishGuard(unittest.TestCase):
                 second,
             )
 
+    def test_optional_performance_files_are_protected_across_retry(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            self._build_repo(root)
+            journal = root / ".cache" / "formal-publish-targets.json"
+            optional = root / "docs/data/selection-performance"
+            optional.mkdir(parents=True)
+            dated = optional / f"{TRADE_DATE}.json"
+            index = optional / "index.json"
+            status = optional / "status.json"
+
+            dated.write_text("user-owned\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "preexisting user change"):
+                prepare_formal_publish(root, TRADE_DATE, journal)
+
+            dated.unlink()
+            prepare_formal_publish(root, TRADE_DATE, journal)
+            for path in (dated, index, status):
+                path.write_text("generated\n", encoding="utf-8")
+            recorded = record_formal_publish_targets(root, TRADE_DATE, journal)
+            for path in (dated, index, status):
+                self.assertIn(path.relative_to(root).as_posix(), recorded["generated_targets"])
+            self.assertEqual(preflight_formal_publish(root, TRADE_DATE, journal), recorded)
+
+            status.write_text("user-modified\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "does not match generated journal"):
+                preflight_formal_publish(root, TRADE_DATE, journal)
+
+
 
 if __name__ == "__main__":
     unittest.main()
