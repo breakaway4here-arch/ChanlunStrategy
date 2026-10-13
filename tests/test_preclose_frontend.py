@@ -46,6 +46,24 @@ run().catch(function (error) { console.error(error.stack || error); process.exit
 
 
 class PrecloseFrontendTests(unittest.TestCase):
+    def test_unavailable_reconciliation_keeps_formal_results_and_requires_exact_identity(self):
+        _assert_node_contract(self, "({ build: buildPrecloseReconciliationHtml })", r"""
+const snapshot = {trade_date:'2026-10-08', snapshot_id:'preclose:2026-10-08:abc',
+  content_hash:'a'.repeat(64), status:'expired', result_status:'failed'};
+const result = {trade_date:snapshot.trade_date, snapshot_id:snapshot.snapshot_id,
+  preclose_content_hash:snapshot.content_hash, status:'preclose_unavailable',
+  pools:{main:{formal:[{code:'600000',name:'正式股'}]}}};
+const html = globalThis.__precloseTest.build(result,snapshot);
+assert(html.includes('预跑结果不可用，无法与正式结果比较'), 'unavailable message missing');
+assert(html.includes('正式股'), 'formal results lost');
+['一致','有变化','正式新增','预跑有、正式无'].forEach(term=>assert(!html.includes(term),'unsafe inference '+term));
+for (const key of ['trade_date','snapshot_id','preclose_content_hash']) {
+  assert(globalThis.__precloseTest.build({...result,[key]:'mismatch'},snapshot)==='', 'cross-snapshot '+key);
+}
+const pending = globalThis.__precloseTest.build({...result,status:'formal_pending'},snapshot);
+assert(pending.includes('今日正式结果尚未生成'), 'formal pending masked');
+""")
+
     def test_archive_report_fallback_uses_path_date_without_bootstrap(self):
         _assert_node_contract(
             self,
@@ -224,8 +242,9 @@ assert(!advisory.includes('reason') && !advisory.includes('校验'), 'failure le
             self,
             "({ build: buildPrecloseReconciliationHtml })",
             r"""
-const snapshot = { snapshot_id: 'preclose:2026-08-27:abc', content_hash: 'a'.repeat(64) };
+const snapshot = { trade_date: '2026-08-27', snapshot_id: 'preclose:2026-08-27:abc', content_hash: 'a'.repeat(64) };
 const changed = {
+  trade_date: snapshot.trade_date, snapshot_id: snapshot.snapshot_id,
   status: 'changed', preclose_content_hash: 'a'.repeat(64), formal_content_hash: 'b'.repeat(64),
   pools: {
     main: { retained: [{ code: '300998', name: '宁波方正' }], added_after_close: [{ code: '002328', name: '新朋股份' }], removed_after_close: [{ code: '600001', name: 'A股' }] },
@@ -240,6 +259,7 @@ assert(html.includes('预跑有、正式无 A股'), 'removed details missing');
 assert(html.includes('H4 T+3：无变化'), 'unchanged pool missing');
 
 const unchanged = globalThis.__precloseTest.build({
+  trade_date: snapshot.trade_date, snapshot_id: snapshot.snapshot_id,
   status: 'unchanged', preclose_content_hash: 'a'.repeat(64), formal_content_hash: 'c'.repeat(64),
   pools: { main: { retained: [{ code: '1' }, { code: '2' }] }, h4_t3: { retained: [{ code: '3' }] }, acceleration: { retained: [{ code: '4' }] } }
 }, snapshot);

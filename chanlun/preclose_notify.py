@@ -63,9 +63,25 @@ def format_reconciliation_message(reconciliation, *, decision_projection=None):
 
     source = reconciliation if isinstance(reconciliation, dict) else {}
     status = source.get("status")
-    if (status != 'formal_pending' and isinstance(decision_projection, dict)
+    formal_projection = (isinstance(decision_projection, dict)
             and decision_projection.get('phase') == 'formal'
-            and decision_projection.get('report_date') == source.get('trade_date')):
+            and decision_projection.get('report_date') == source.get('trade_date'))
+    if status == "preclose_unavailable":
+        message = "【盘后复核】\n预跑结果不可用，无法与正式结果比较；请以盘后正式结果为准。"
+        if formal_projection:
+            return message + "\n\n" + format_decision_notification(decision_projection)
+        pools = source.get("pools") if isinstance(source.get("pools"), dict) else {}
+        lines = [message]
+        for key, label in POOL_LABELS:
+            pool = pools.get(key) if isinstance(pools.get(key), dict) else {}
+            rows = pool.get("formal")
+            if not isinstance(rows, list):
+                continue
+            names = [str(row.get("name") or row.get("code") or "").strip()
+                     for row in rows[:3] if isinstance(row, dict)]
+            lines.append("正式{}：{}".format(label, "、".join(filter(None, names)) or "本期未选出推荐票"))
+        return "\n".join(lines)
+    if status != 'formal_pending' and formal_projection:
         return format_decision_notification(decision_projection)
     if status == "formal_pending":
         return "【盘后复核】\n今日正式结果尚未生成，暂不继续参考预跑清单"
@@ -390,6 +406,8 @@ def _reconciliation_signature_hash(reconciliation, *, decision_projection=None):
         signature["pools"][pool_name] = {}
         for field in ("retained", "added_after_close", "removed_after_close"):
             signature["pools"][pool_name][field] = _normalize_pool_rows(pool.get(field))
+        if reconciliation.get("status") == "preclose_unavailable":
+            signature["pools"][pool_name]["formal"] = _normalize_pool_rows(pool.get("formal"))
     material = json.dumps(
         signature,
         ensure_ascii=False,

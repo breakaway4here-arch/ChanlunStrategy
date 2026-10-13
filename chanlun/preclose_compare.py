@@ -234,6 +234,14 @@ def reconciliation_content_hash(reconciliation):
     return _canonical_hash(projection)
 
 
+def _preclose_comparable(source, pools):
+    # Public history wraps the original result in `expired`; expiry alone does
+    # not invalidate a successful frozen result for post-close comparison.
+    status = source.get("result_status") if source.get("status") == "expired" else source.get("status")
+    has_rows = any(pools[key] for key in POOL_KEYS)
+    return (status == "available" and has_rows) or (status == "empty" and not has_rows)
+
+
 def build_reconciliation(
     preclose_snapshot,
     formal_workspace_views,
@@ -249,7 +257,18 @@ def build_reconciliation(
         raise ValueError("pre-close snapshot identity missing")
     pools = {}
     changed = False
+    comparable = _preclose_comparable(source, preclose)
     for key in POOL_KEYS:
+        if not comparable:
+            pools[key] = {
+                "retained": [],
+                "added_after_close": [],
+                "removed_after_close": [],
+                "unchanged": False,
+                "formal": formal[key],
+                "details": {"status": "preclose_unavailable"},
+            }
+            continue
         pool_diff = diff_pool(preclose[key], formal[key])
         pool_diff["details"] = _pool_details(preclose[key], formal[key])
         pools[key] = pool_diff
@@ -260,7 +279,7 @@ def build_reconciliation(
         "snapshot_id": snapshot_id,
         "preclose_content_hash": preclose_hash,
         "formal_content_hash": _formal_content_hash(formal),
-        "status": "changed" if changed else "unchanged",
+        "status": ("changed" if changed else "unchanged") if comparable else "preclose_unavailable",
         "pools": pools,
     }
     if generated_at:

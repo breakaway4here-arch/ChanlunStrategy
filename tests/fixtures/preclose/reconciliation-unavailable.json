@@ -1,0 +1,91 @@
+{
+  "purpose": "Synthetic Python producer / Worker reader contract; not real recommendations.",
+  "snapshot": {
+    "schema_version": "preclose-selection-v1",
+    "mode": "preclose_advisory",
+    "strategy_version": "preclose-1445-v3",
+    "trade_date": "2026-10-08",
+    "as_of": "2026-10-08T14:45:00+08:00",
+    "generated_at": "2026-10-08T14:46:00+08:00",
+    "expires_at": "2026-10-08T14:56:30+08:00",
+    "status": "failed",
+    "is_final": false,
+    "affects_formal": false,
+    "source_sha": "synthetic-contract-fixture",
+    "pools": {
+      "main": [],
+      "h4_t3": [],
+      "acceleration": []
+    },
+    "diagnostics": {},
+    "content_hash": "26262bcab1b0faeff55bf1137fa06c2d441055cad31d9c2461fae55d40c7e19e",
+    "snapshot_id": "preclose:2026-10-08:26262bcab1b0faef"
+  },
+  "formal": {
+    "main": [
+      {
+        "code": "600002",
+        "name": "缺参考价正式股"
+      },
+      {
+        "code": "600001",
+        "name": "带参考价正式股",
+        "reference_price": 10.25
+      }
+    ],
+    "h4_t3": [],
+    "acceleration": []
+  },
+  "reconciliation": {
+    "schema_version": "preclose-reconciliation-v1",
+    "trade_date": "2026-10-08",
+    "snapshot_id": "preclose:2026-10-08:26262bcab1b0faef",
+    "preclose_content_hash": "26262bcab1b0faeff55bf1137fa06c2d441055cad31d9c2461fae55d40c7e19e",
+    "formal_content_hash": "7e4d413ef5cc2919cf5a89aaa03f0aadfd0994dcce65ab51252560a62590b9a7",
+    "status": "preclose_unavailable",
+    "pools": {
+      "main": {
+        "retained": [],
+        "added_after_close": [],
+        "removed_after_close": [],
+        "unchanged": false,
+        "formal": [
+          {
+            "code": "600002",
+            "name": "缺参考价正式股"
+          },
+          {
+            "code": "600001",
+            "name": "带参考价正式股",
+            "reference_price": 10.25
+          }
+        ],
+        "details": {
+          "status": "preclose_unavailable"
+        }
+      },
+      "h4_t3": {
+        "retained": [],
+        "added_after_close": [],
+        "removed_after_close": [],
+        "unchanged": false,
+        "formal": [],
+        "details": {
+          "status": "preclose_unavailable"
+        }
+      },
+      "acceleration": {
+        "retained": [],
+        "added_after_close": [],
+        "removed_after_close": [],
+        "unchanged": false,
+        "formal": [],
+        "details": {
+          "status": "preclose_unavailable"
+        }
+      }
+    },
+    "generated_at": "2026-10-08T15:22:00+08:00",
+    "content_hash": "9462207135e1a65743c9ac96b179e8081492864c31fad67581b57a1527d762d4"
+  }
+}

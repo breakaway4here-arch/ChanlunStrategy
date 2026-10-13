@@ -1,0 +1,3093 @@
+{
+  "origin": "Published 2026-10-12 HTML baseline evidence; independent minutes absent from daily JSON",
+  "report_date": "2026-10-12",
+  "rows": [
+    {
+      "view": "baseline",
+      "code": "300444",
+      "summary": {
+        "status": "available",
+        "source": "workspace.views.baseline",
+        "as_of": "2026-10-12",
+        "code": "300444",
+        "name": "双杰电气",
+        "sector": "电网设备",
+        "formal_action": null,
+        "formal_action_reason": null,
+        "decision_code": "observe",
+        "pool_identity": "picks_pure",
+        "view_identity": "baseline",
+        "view_rank": 1,
+        "signal_type": "强势启动候选",
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "applicable_horizon": null,
+        "applicable_horizon_status": "missing",
+        "applicable_horizon_source": null,
+        "applicable_horizon_text": "策略未声明统一周期",
+        "data_latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "data_health": "verified",
+        "data_is_final": true,
+        "data_stale": false,
+        "audit_reasons": {}
+      },
+      "decision_score": {
+        "status": "available",
+        "source": "picks_pure.decision_engine_v1",
+        "score": 54,
+        "decision_code": "observe",
+        "components": {
+          "structure": {
+            "score": 10,
+            "reasons": [
+              "未形成中枢/尚无趋势结构",
+              "回踩确认"
+            ],
+            "reasons_truncated": false
+          },
+          "position": {
+            "score": 35,
+            "reasons": [
+              "120日收盘分位低位"
+            ],
+            "reasons_truncated": false
+          },
+          "sentiment": {
+            "score": 9,
+            "reasons": [
+              "放量启动",
+              "震荡市",
+              "趋势健康度偏弱",
+              "动能积极"
+            ],
+            "reasons_truncated": false
+          }
+        }
+      },
+      "rank_evidence": {
+        "status": "available",
+        "source": "workspace.views.baseline.rank_evidence",
+        "view_rank": 1,
+        "opportunity_score": 33,
+        "rank_trace": {
+          "base_source": "baseline",
+          "source_count": 1,
+          "signal_score": 2.82,
+          "entry_score": 16.0,
+          "momentum_score": 8.04,
+          "market_score": 6.0,
+          "risk_penalty": 0.0,
+          "data_penalty": 4.0,
+          "alpha_bonus": 4.15,
+          "pool_quality_bonus": 0.0,
+          "pool_quality_score": 30.504,
+          "alpha_multiplier": 1.0052,
+          "base_opportunity_score": 29,
+          "opportunity_score": 33,
+          "distance_from_reference_pct": 0.0,
+          "change_pct": 5.36,
+          "selected_reason": "基准池单源入榜"
+        },
+        "scope": "current_view_order_only",
+        "note": "仅用于当前池内排序"
+      },
+      "price_evidence": {
+        "status": "partial",
+        "source": "workspace.formal_decision_contract + candidate prices",
+        "as_of": "2026-10-12",
+        "current_price": 9.28838193791157,
+        "current_price_source": "workspace.current_price",
+        "reference_price": null,
+        "reference_price_source": null,
+        "pressure_price": null,
+        "pressure_price_source": null,
+        "invalidation_price": null,
+        "invalidation_price_source": null,
+        "trailing_targets": [],
+        "trailing_targets_contract": {
+          "max_visible": 5,
+          "input_count": 0,
+          "valid_count": 0,
+          "visible_count": 0,
+          "omitted_count": 0,
+          "truncated": false,
+          "reason": null
+        },
+        "pivot_zg": null,
+        "pivot_zg_source": null,
+        "pivot_zd": null,
+        "pivot_zd_source": null,
+        "platform_high": null,
+        "platform_high_source": null,
+        "buy_point_price": 9.28838193791157,
+        "buy_point_price_source": "serialized.best_buy_point.price",
+        "missing_fields": [
+          "reference_price",
+          "pressure_price",
+          "invalidation_price",
+          "trailing_targets"
+        ],
+        "structure_missing_fields": [
+          "pivot_zg",
+          "pivot_zd",
+          "platform_high"
+        ],
+        "audit_reasons": {}
+      },
+      "daily_structure": {
+        "status": "available",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
+        "as_of": "2026-10-12",
+        "trend": "无中枢",
+        "stage": "强启动",
+        "signal": "强势启动候选",
+        "summary": "处于60日低位区间；放量5.6倍；涨幅5.4%",
+        "signal_reason": "处于60日低位区间；放量5.6倍；涨幅5.4%",
+        "buy_point_price": 9.28838193791157,
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "signal_freshness_status": "available",
+        "health": "verified",
+        "latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "is_final": true,
+        "stale": false,
+        "freshness_status": "current",
+        "startup_grade": "strong",
+        "startup_label": "强启动",
+        "startup_warning": null,
+        "startup_signals": [
+          "涨幅≥4.0%",
+          "实体阳线≥3%"
+        ],
+        "ma5": null,
+        "ma10": null,
+        "ma20": 9.1319,
+        "ma50": 9.9032,
+        "ma100": 11.3057,
+        "ma200": null,
+        "ma_bullish": false,
+        "macd": null,
+        "pivots": null,
+        "audit_reasons": {},
+        "missing_evidence": [
+          "MA5、MA10 当前值未提供",
+          "中枢 ZG 未提供",
+          "中枢 ZD 未提供",
+          "MACD 当前状态未提供"
+        ]
+      },
+      "sublevel_30m": {
+        "status": "available",
+        "source": "30m strategy_input_evidence + confirmation_evidence",
+        "as_of": "2026-10-12 15:00:00",
+        "interval": "30m",
+        "input_status": "verified",
+        "latest_date": "2026-10-12",
+        "latest_ts": "2026-10-12 15:00:00",
+        "bars": 80,
+        "stale": false,
+        "is_final": true,
+        "latest_bar_at": "2026-10-12 15:00:00",
+        "confirmed": true,
+        "confirmation_status": "confirmed",
+        "confirmation_schema_status": "available",
+        "confirmation_schema_version": 1,
+        "sufficient_bars": true,
+        "confirmation_date_status": "current",
+        "source_conflicts": [],
+        "audit_reasons": {},
+        "grade": "A",
+        "label": "A级确认",
+        "reason": "日线强启动+30分钟最新两阳结构",
+        "confirm_date": "2026-10-12",
+        "confirm_age_days": 0,
+        "confirmations": [
+          "30min两阳夹两阴确认"
+        ],
+        "confirmed_by": "30min确认",
+        "classification_signals": [],
+        "classification_confirmed": false,
+        "ema_alignment": "EMA5 > EMA10",
+        "ema5": 9.274095565404718,
+        "ema10": 9.187587725175092,
+        "ema5_direction": "上行",
+        "ema10_direction": "上行",
+        "close": 9.28838193791157,
+        "close_above_ema5": true,
+        "close_above_ema10": true,
+        "ema5_rising_bars": 12,
+        "ema5_reclaim": false,
+        "stop_fall": false,
+        "macd_state": "weakening",
+        "macd_dif": 0.16112640805633127,
+        "macd_dea": 0.1141657675760988,
+        "breakout_holds": null,
+        "pullback_volume_state": null,
+        "recent_peak_drawdown_pct": 4.131356,
+        "buy_point": null,
+        "fresh_yang_pattern": "two_yang_two_yin",
+        "recovery_bundle_match": false,
+        "missing_evidence": [
+          "突破位保持状态未提供",
+          "回踩量能状态未提供"
+        ]
+      },
+      "volume_and_capital": {
+        "status": "partial",
+        "source": "candidate volume + explicit turnover/fund sources",
+        "as_of": "2026-10-12",
+        "summary": "量能可验证；个股资金证据不足",
+        "volume": {
+          "status": "available",
+          "source": "candidate.volumes",
+          "source_plane": "formal_report",
+          "as_of": "2026-10-12",
+          "current": 683189.27,
+          "average_5": 234401.5,
+          "average_20": 206005.675
+        },
+        "current_volume": 683189.27,
+        "current_amount": null,
+        "current_amount_text": null,
+        "current_amount_status": "missing",
+        "current_amount_as_of": "2026-10-12",
+        "current_amount_source": null,
+        "current_amount_source_label": null,
+        "current_amount_source_plane": null,
+        "current_amount_provider": null,
+        "average_volume_5": 234401.5,
+        "volume20": 206005.675,
+        "volume_ratio": null,
+        "volume_ratio_source": null,
+        "volume_ratio_source_plane": null,
+        "ratio20": null,
+        "turnover_rate": null,
+        "volume_labels": [],
+        "turnover": {
+          "status": "missing",
+          "source": "workspace.pool_quality.money20",
+          "as_of": "2026-10-12",
+          "average_20": null,
+          "liquidity_source": "missing",
+          "kind": "average_turnover_amount",
+          "reason": "verified_turnover_source_not_provided"
+        },
+        "money20": null,
+        "money20_text": null,
+        "money20_kind": "average_turnover_amount",
+        "money20_source": "missing",
+        "stock_capital_flow": {
+          "status": "missing",
+          "source": "verified individual-stock fund source",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "consecutive_inflow_days": null,
+          "reason": "individual_stock_fund_source_not_provided"
+        },
+        "stock_money_flow": "个股资金证据不足",
+        "stock_net_flow": null,
+        "stock_net_inflow_days": null,
+        "sector_capital_flow": {
+          "status": "missing",
+          "source": "candidate.sector_flow",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "rank": null,
+          "label": null,
+          "scope": "sector_only",
+          "reason": "sector_fund_source_not_provided"
+        },
+        "sector_money_flow": null,
+        "sector_money_flow_text": null,
+        "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": "个股或板块资金证据不足",
+        "missing_evidence": [
+          "换手率未提供",
+          "当日成交额未提供",
+          "量价标签未提供",
+          "个股大单净流入未提供",
+          "个股连续净流入天数未提供",
+          "板块净流入未提供"
+        ]
+      },
+      "market_and_sector": {
+        "status": "partial",
+        "source": "daily.market_sentiment + daily.sector_heat",
+        "as_of": "2026-10-12",
+        "summary": "正式市场偏冷；板块方向未知",
+        "formal_market_sentiment": {
+          "status": "available",
+          "source": "daily.market_sentiment",
+          "as_of": "2026-10-12",
+          "score": 30,
+          "label": "偏冷",
+          "version": "v2",
+          "coverage": 0.85,
+          "direction_state": null,
+          "components": {
+            "breadth": 23.76,
+            "limit_ecology": 38.64,
+            "index": 24.93,
+            "turnover": null,
+            "trend": 30.34
+          },
+          "evidence": {
+            "breadth": {
+              "available": true,
+              "valid_count": 5485,
+              "advance_count": 1161,
+              "decline_count": 4255,
+              "flat_count": 69,
+              "advance_ratio": 21.17,
+              "median_change_pct": -1.681,
+              "rise_over_3_count": 231,
+              "fall_over_3_count": 1475,
+              "score": 23.76
+            },
+            "limit_ecology": {
+              "available": true,
+              "valid_count": 5485,
+              "excluded_count": 0,
+              "limit_up_count": 46,
+              "limit_down_count": 19,
+              "limit_ratio": 2.35,
+              "log_limit_ratio": 0.854415,
+              "ratio_score": 9.3,
+              "limit_up_ratio": 0.008387,
+              "limit_down_ratio": 0.003464,
+              "limit_up_score": 41.93,
+              "limit_down_score": 82.68,
+              "improvement_score": 37.64,
+              "score": 38.64,
+              "source": "eastmoney_limit_pools"
+            },
+            "index": {
+              "available": true,
+              "valid_count": 6,
+              "average_change_pct": -1.672,
+              "score": 24.93
+            },
+            "turnover": {
+              "available": false,
+              "ratio_to_ma5": null,
+              "ratio_to_ma20": null,
+              "score": null
+            },
+            "trend": {
+              "available": true,
+              "above_ma20_ratio": 0.3034,
+              "score": 30.34
+            }
+          }
+        },
+        "market": "30 / 100 · 偏冷",
+        "market_label": "偏冷",
+        "market_sentiment_score": 30,
+        "sector_evidence": {
+          "status": "missing",
+          "source": "daily.sector_heat",
+          "as_of": "2026-10-12",
+          "sector": "电网设备",
+          "direction": "unknown",
+          "display_completeness": "missing",
+          "display_missing_fields": [],
+          "net_flow": null,
+          "supporting_evidence": [],
+          "opposing_evidence": [],
+          "reason": "verified_sector_item_not_provided"
+        },
+        "sector": "电网设备",
+        "sector_state": "方向未知",
+        "sector_layer_state": "未知",
+        "sector_support": null,
+        "sector_risk": null,
+        "sector_change_pct": null,
+        "sector_up_count": null,
+        "sector_total_count": null,
+        "sector_limit_up_count": null,
+        "sector_net_flow": null,
+        "sector_market_rank": null,
+        "sector_hierarchy_dedup_status": null,
+        "stock_relative_strength": null,
+        "stock_relative_status": "missing",
+        "stock_relative_source": null,
+        "stock_relative_as_of": "2026-10-12",
+        "market_state": "未知",
+        "stock_state": "未知",
+        "missing_evidence": [
+          "板块涨跌幅未提供",
+          "板块上涨家数未提供",
+          "板块总家数未提供",
+          "板块涨停家数未提供",
+          "板块资金净流入未提供",
+          "板块市场排名未提供",
+          "个股板块内相对强弱未提供"
+        ]
+      },
+      "main_rise_clue": {
+        "status": "invalidated",
+        "source": "existing candidate strategy signals",
+        "as_of": "2026-10-12",
+        "clue_type": "invalidated",
+        "label": "主升线索失效",
+        "supporting_evidence": [
+          "强势启动候选",
+          "日线强势启动",
+          "强启动",
+          "baseline",
+          "基础候选",
+          "处于60日低位区间；放量5.6倍；涨幅5.4%",
+          "涨幅≥4.0%",
+          "close_above_ma5"
+        ],
+        "opposing_evidence": [
+          "结构破坏",
+          "broken"
+        ],
+        "evidence_guards": [],
+        "note": "只翻译现有证据，不生成策略、分数或正式动作"
+      },
+      "risk_and_next": {
+        "status": "missing",
+        "source": "workspace risk flags + declared candidate conditions",
+        "as_of": "2026-10-12",
+        "risk_labels": [],
+        "event_risks": [],
+        "event_risk_status": "missing",
+        "event_risk_source": null,
+        "event_risk_as_of": null,
+        "invalidation_price": null,
+        "missing_evidence": [
+          "当前风险标签未提供",
+          "下一确认条件未提供",
+          "继续保持条件未提供",
+          "等待回踩条件未提供",
+          "取消或降级条件未提供",
+          "结构失效条件未提供",
+          "结构失效价格未提供",
+          "公告或事件风险未提供"
+        ],
+        "next_confirmation": {
+          "status": "missing",
+          "source": "candidate.upgrade/next_day/confirmation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明下一确认条件"
+        },
+        "keep_conditions": {
+          "status": "missing",
+          "source": "candidate.keep_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明继续保持条件"
+        },
+        "retest_conditions": {
+          "status": "missing",
+          "source": "candidate.retest_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明等待回踩条件"
+        },
+        "cancel_conditions": {
+          "status": "missing",
+          "source": "candidate.cancel_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明取消或降级条件"
+        },
+        "invalidation_conditions": {
+          "status": "missing",
+          "source": "candidate.invalidation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明结构失效条件"
+        },
+        "reason": "strategy_risk_and_conditions_not_declared"
+      },
+      "historical_validation": {
+        "status": "missing",
+        "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+        "as_of": "2026-10-12",
+        "comparison_identity": null,
+        "declared_horizon": null,
+        "progress_by_horizon": {
+          "t1": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t3": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t5": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          }
+        },
+        "metrics_by_horizon": {
+          "t1": {},
+          "t3": {},
+          "t5": {}
+        },
+        "simulation_tracking": {
+          "status": "missing",
+          "label": "暂无同合同历史跟踪记录",
+          "entry_price": null,
+          "entry_price_source": null
+        },
+        "reason": "same_contract_ledger_record_not_found",
+        "summary": "策略未声明统一周期；暂无同合同历史验证记录"
+      },
+      "display_derived": {
+        "status": "missing",
+        "source": "display calculation from price_evidence",
+        "distance_from_reference_pct": null,
+        "distance_state": null,
+        "distance_state_source": null,
+        "upside_to_pressure_pct": null,
+        "downside_to_invalidation_pct": null,
+        "risk_reward_ratio": null,
+        "chart_evidence": {
+          "status": "partial",
+          "source": "serialized/formal chart evidence metadata",
+          "as_of": "2026-10-12",
+          "macd": {
+            "status": "available",
+            "source": "serialized.macd_hist",
+            "as_of": "2026-10-12",
+            "value_count": 28,
+            "reason": ""
+          },
+          "prices": {
+            "status": "partial",
+            "source": "price_evidence",
+            "as_of": "2026-10-12",
+            "available": [
+              "current_price"
+            ],
+            "field_sources": {
+              "current_price": "workspace.current_price"
+            }
+          },
+          "pivots": {
+            "status": "missing",
+            "source": "price_evidence conflict-checked pivot fields",
+            "as_of": "2026-10-12",
+            "available": [],
+            "ZG": null,
+            "ZD": null,
+            "field_sources": {},
+            "conflicts": [],
+            "reason": "pivot_lines_not_provided"
+          },
+          "annotations": {
+            "status": "available",
+            "source": "serialized.chart_annotations",
+            "as_of": "2026-10-12",
+            "mark_lines": 2,
+            "mark_points": 2,
+            "labels": 1,
+            "reason": ""
+          }
+        },
+        "reason": "real_price_boundaries_incomplete"
+      },
+      "source_identity": {
+        "status": "available",
+        "source": "workspace ref + serialized/formal pool code",
+        "reason": null
+      },
+      "payload_contract": {
+        "status": "available",
+        "max_text_length": 512,
+        "truncated_text_count": 0
+      }
+    },
+    {
+      "view": "baseline",
+      "code": "603556",
+      "summary": {
+        "status": "available",
+        "source": "workspace.views.baseline",
+        "as_of": "2026-10-12",
+        "code": "603556",
+        "name": "海兴电力",
+        "sector": "电网设备",
+        "formal_action": null,
+        "formal_action_reason": null,
+        "decision_code": "observe",
+        "pool_identity": "picks_pure",
+        "view_identity": "baseline",
+        "view_rank": 2,
+        "signal_type": "强势启动候选",
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "applicable_horizon": null,
+        "applicable_horizon_status": "missing",
+        "applicable_horizon_source": null,
+        "applicable_horizon_text": "策略未声明统一周期",
+        "data_latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "data_health": "verified",
+        "data_is_final": true,
+        "data_stale": false,
+        "audit_reasons": {}
+      },
+      "decision_score": {
+        "status": "available",
+        "source": "picks_pure.decision_engine_v1",
+        "score": 34,
+        "decision_code": "observe",
+        "components": {
+          "structure": {
+            "score": 10,
+            "reasons": [
+              "未形成中枢/尚无趋势结构",
+              "回踩确认"
+            ],
+            "reasons_truncated": false
+          },
+          "position": {
+            "score": 15,
+            "reasons": [
+              "120日收盘分位中位"
+            ],
+            "reasons_truncated": false
+          },
+          "sentiment": {
+            "score": 9,
+            "reasons": [
+              "放量启动",
+              "震荡市",
+              "趋势健康度偏弱",
+              "动能积极"
+            ],
+            "reasons_truncated": false
+          }
+        }
+      },
+      "rank_evidence": {
+        "status": "available",
+        "source": "workspace.views.baseline.rank_evidence",
+        "view_rank": 2,
+        "opportunity_score": 29,
+        "rank_trace": {
+          "base_source": "baseline",
+          "source_count": 1,
+          "signal_score": 2.82,
+          "entry_score": 16.0,
+          "momentum_score": 4.98,
+          "market_score": 6.0,
+          "risk_penalty": 0.0,
+          "data_penalty": 4.0,
+          "alpha_bonus": 2.8,
+          "pool_quality_bonus": 0.0,
+          "pool_quality_score": 0.0,
+          "alpha_multiplier": 1.0035,
+          "base_opportunity_score": 26,
+          "opportunity_score": 29,
+          "distance_from_reference_pct": 0.0,
+          "change_pct": 3.32,
+          "selected_reason": "基准池单源入榜"
+        },
+        "scope": "current_view_order_only",
+        "note": "仅用于当前池内排序"
+      },
+      "price_evidence": {
+        "status": "partial",
+        "source": "workspace.formal_decision_contract + candidate prices",
+        "as_of": "2026-10-12",
+        "current_price": 23.0,
+        "current_price_source": "workspace.current_price",
+        "reference_price": null,
+        "reference_price_source": null,
+        "pressure_price": null,
+        "pressure_price_source": null,
+        "invalidation_price": null,
+        "invalidation_price_source": null,
+        "trailing_targets": [],
+        "trailing_targets_contract": {
+          "max_visible": 5,
+          "input_count": 0,
+          "valid_count": 0,
+          "visible_count": 0,
+          "omitted_count": 0,
+          "truncated": false,
+          "reason": null
+        },
+        "pivot_zg": null,
+        "pivot_zg_source": null,
+        "pivot_zd": null,
+        "pivot_zd_source": null,
+        "platform_high": null,
+        "platform_high_source": null,
+        "buy_point_price": 23.0,
+        "buy_point_price_source": "serialized.best_buy_point.price",
+        "missing_fields": [
+          "reference_price",
+          "pressure_price",
+          "invalidation_price",
+          "trailing_targets"
+        ],
+        "structure_missing_fields": [
+          "pivot_zg",
+          "pivot_zd",
+          "platform_high"
+        ],
+        "audit_reasons": {}
+      },
+      "daily_structure": {
+        "status": "available",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
+        "as_of": "2026-10-12",
+        "trend": "无中枢",
+        "stage": "弱启动确认",
+        "signal": "强势启动候选",
+        "summary": "处于60日低位区间；放量2.5倍",
+        "signal_reason": "处于60日低位区间；放量2.5倍",
+        "buy_point_price": 23.0,
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "signal_freshness_status": "available",
+        "health": "verified",
+        "latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "is_final": true,
+        "stale": false,
+        "freshness_status": "current",
+        "startup_grade": "weak",
+        "startup_label": "弱启动确认",
+        "startup_warning": "涨幅较小，属于观察型启动，不是追涨启动",
+        "startup_signals": [
+          "实体阳线≥3%"
+        ],
+        "ma5": null,
+        "ma10": null,
+        "ma20": 23.089,
+        "ma50": 24.5146,
+        "ma100": 24.0596,
+        "ma200": null,
+        "ma_bullish": false,
+        "macd": null,
+        "pivots": null,
+        "audit_reasons": {},
+        "missing_evidence": [
+          "MA5、MA10 当前值未提供",
+          "中枢 ZG 未提供",
+          "中枢 ZD 未提供",
+          "MACD 当前状态未提供"
+        ]
+      },
+      "sublevel_30m": {
+        "status": "available",
+        "source": "30m strategy_input_evidence + confirmation_evidence",
+        "as_of": "2026-10-12 15:00:00",
+        "interval": "30m",
+        "input_status": "verified",
+        "latest_date": "2026-10-12",
+        "latest_ts": "2026-10-12 15:00:00",
+        "bars": 80,
+        "stale": false,
+        "is_final": true,
+        "latest_bar_at": "2026-10-12 15:00:00",
+        "confirmed": true,
+        "confirmation_status": "confirmed",
+        "confirmation_schema_status": "available",
+        "confirmation_schema_version": 1,
+        "sufficient_bars": true,
+        "confirmation_date_status": "current",
+        "source_conflicts": [],
+        "audit_reasons": {},
+        "grade": "B",
+        "label": "B级确认",
+        "reason": "30分钟结构确认: 30min两阳夹一阴确认",
+        "confirm_date": "2026-10-12",
+        "confirm_age_days": 0,
+        "confirmations": [
+          "30min两阳夹一阴确认"
+        ],
+        "confirmed_by": "30min确认",
+        "classification_signals": [],
+        "classification_confirmed": false,
+        "ema_alignment": "EMA5 > EMA10",
+        "ema5": 22.910008303296653,
+        "ema10": 22.80382314040032,
+        "ema5_direction": "上行",
+        "ema10_direction": "上行",
+        "close": 23.0,
+        "close_above_ema5": true,
+        "close_above_ema10": true,
+        "ema5_rising_bars": 1,
+        "ema5_reclaim": true,
+        "stop_fall": false,
+        "macd_state": "weakening",
+        "macd_dif": 0.14780842678387884,
+        "macd_dea": 0.0805257199256078,
+        "breakout_holds": null,
+        "pullback_volume_state": null,
+        "recent_peak_drawdown_pct": 1.414488,
+        "buy_point": null,
+        "fresh_yang_pattern": "two_yang_one_yin",
+        "recovery_bundle_match": false,
+        "missing_evidence": [
+          "突破位保持状态未提供",
+          "回踩量能状态未提供"
+        ]
+      },
+      "volume_and_capital": {
+        "status": "partial",
+        "source": "candidate volume + explicit turnover/fund sources",
+        "as_of": "2026-10-12",
+        "summary": "量能可验证；个股资金证据不足",
+        "volume": {
+          "status": "available",
+          "source": "candidate.volumes",
+          "source_plane": "formal_report",
+          "as_of": "2026-10-12",
+          "current": 53903.8,
+          "average_5": 27533.482,
+          "average_20": 34657.8705
+        },
+        "current_volume": 53903.8,
+        "current_amount": null,
+        "current_amount_text": null,
+        "current_amount_status": "missing",
+        "current_amount_as_of": "2026-10-12",
+        "current_amount_source": null,
+        "current_amount_source_label": null,
+        "current_amount_source_plane": null,
+        "current_amount_provider": null,
+        "average_volume_5": 27533.482,
+        "volume20": 34657.8705,
+        "volume_ratio": null,
+        "volume_ratio_source": null,
+        "volume_ratio_source_plane": null,
+        "ratio20": null,
+        "turnover_rate": null,
+        "volume_labels": [],
+        "turnover": {
+          "status": "missing",
+          "source": "workspace.pool_quality.money20",
+          "as_of": "2026-10-12",
+          "average_20": null,
+          "liquidity_source": "missing",
+          "kind": "average_turnover_amount",
+          "reason": "verified_turnover_source_not_provided"
+        },
+        "money20": null,
+        "money20_text": null,
+        "money20_kind": "average_turnover_amount",
+        "money20_source": "missing",
+        "stock_capital_flow": {
+          "status": "missing",
+          "source": "verified individual-stock fund source",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "consecutive_inflow_days": null,
+          "reason": "individual_stock_fund_source_not_provided"
+        },
+        "stock_money_flow": "个股资金证据不足",
+        "stock_net_flow": null,
+        "stock_net_inflow_days": null,
+        "sector_capital_flow": {
+          "status": "missing",
+          "source": "candidate.sector_flow",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "rank": null,
+          "label": null,
+          "scope": "sector_only",
+          "reason": "sector_fund_source_not_provided"
+        },
+        "sector_money_flow": null,
+        "sector_money_flow_text": null,
+        "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": "个股或板块资金证据不足",
+        "missing_evidence": [
+          "换手率未提供",
+          "当日成交额未提供",
+          "量价标签未提供",
+          "个股大单净流入未提供",
+          "个股连续净流入天数未提供",
+          "板块净流入未提供"
+        ]
+      },
+      "market_and_sector": {
+        "status": "partial",
+        "source": "daily.market_sentiment + daily.sector_heat",
+        "as_of": "2026-10-12",
+        "summary": "正式市场偏冷；板块方向未知",
+        "formal_market_sentiment": {
+          "status": "available",
+          "source": "daily.market_sentiment",
+          "as_of": "2026-10-12",
+          "score": 30,
+          "label": "偏冷",
+          "version": "v2",
+          "coverage": 0.85,
+          "direction_state": null,
+          "components": {
+            "breadth": 23.76,
+            "limit_ecology": 38.64,
+            "index": 24.93,
+            "turnover": null,
+            "trend": 30.34
+          },
+          "evidence": {
+            "breadth": {
+              "available": true,
+              "valid_count": 5485,
+              "advance_count": 1161,
+              "decline_count": 4255,
+              "flat_count": 69,
+              "advance_ratio": 21.17,
+              "median_change_pct": -1.681,
+              "rise_over_3_count": 231,
+              "fall_over_3_count": 1475,
+              "score": 23.76
+            },
+            "limit_ecology": {
+              "available": true,
+              "valid_count": 5485,
+              "excluded_count": 0,
+              "limit_up_count": 46,
+              "limit_down_count": 19,
+              "limit_ratio": 2.35,
+              "log_limit_ratio": 0.854415,
+              "ratio_score": 9.3,
+              "limit_up_ratio": 0.008387,
+              "limit_down_ratio": 0.003464,
+              "limit_up_score": 41.93,
+              "limit_down_score": 82.68,
+              "improvement_score": 37.64,
+              "score": 38.64,
+              "source": "eastmoney_limit_pools"
+            },
+            "index": {
+              "available": true,
+              "valid_count": 6,
+              "average_change_pct": -1.672,
+              "score": 24.93
+            },
+            "turnover": {
+              "available": false,
+              "ratio_to_ma5": null,
+              "ratio_to_ma20": null,
+              "score": null
+            },
+            "trend": {
+              "available": true,
+              "above_ma20_ratio": 0.3034,
+              "score": 30.34
+            }
+          }
+        },
+        "market": "30 / 100 · 偏冷",
+        "market_label": "偏冷",
+        "market_sentiment_score": 30,
+        "sector_evidence": {
+          "status": "missing",
+          "source": "daily.sector_heat",
+          "as_of": "2026-10-12",
+          "sector": "电网设备",
+          "direction": "unknown",
+          "display_completeness": "missing",
+          "display_missing_fields": [],
+          "net_flow": null,
+          "supporting_evidence": [],
+          "opposing_evidence": [],
+          "reason": "verified_sector_item_not_provided"
+        },
+        "sector": "电网设备",
+        "sector_state": "方向未知",
+        "sector_layer_state": "未知",
+        "sector_support": null,
+        "sector_risk": null,
+        "sector_change_pct": null,
+        "sector_up_count": null,
+        "sector_total_count": null,
+        "sector_limit_up_count": null,
+        "sector_net_flow": null,
+        "sector_market_rank": null,
+        "sector_hierarchy_dedup_status": null,
+        "stock_relative_strength": null,
+        "stock_relative_status": "missing",
+        "stock_relative_source": null,
+        "stock_relative_as_of": "2026-10-12",
+        "market_state": "未知",
+        "stock_state": "未知",
+        "missing_evidence": [
+          "板块涨跌幅未提供",
+          "板块上涨家数未提供",
+          "板块总家数未提供",
+          "板块涨停家数未提供",
+          "板块资金净流入未提供",
+          "板块市场排名未提供",
+          "个股板块内相对强弱未提供"
+        ]
+      },
+      "main_rise_clue": {
+        "status": "invalidated",
+        "source": "existing candidate strategy signals",
+        "as_of": "2026-10-12",
+        "clue_type": "invalidated",
+        "label": "主升线索失效",
+        "supporting_evidence": [
+          "强势启动候选",
+          "日线强势启动",
+          "弱启动确认",
+          "baseline",
+          "基础候选",
+          "处于60日低位区间；放量2.5倍",
+          "close_above_ma5",
+          "close_above_ma10"
+        ],
+        "opposing_evidence": [
+          "结构破坏",
+          "broken"
+        ],
+        "evidence_guards": [],
+        "note": "只翻译现有证据，不生成策略、分数或正式动作"
+      },
+      "risk_and_next": {
+        "status": "missing",
+        "source": "workspace risk flags + declared candidate conditions",
+        "as_of": "2026-10-12",
+        "risk_labels": [],
+        "event_risks": [],
+        "event_risk_status": "missing",
+        "event_risk_source": null,
+        "event_risk_as_of": null,
+        "invalidation_price": null,
+        "missing_evidence": [
+          "当前风险标签未提供",
+          "下一确认条件未提供",
+          "继续保持条件未提供",
+          "等待回踩条件未提供",
+          "取消或降级条件未提供",
+          "结构失效条件未提供",
+          "结构失效价格未提供",
+          "公告或事件风险未提供"
+        ],
+        "next_confirmation": {
+          "status": "missing",
+          "source": "candidate.upgrade/next_day/confirmation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明下一确认条件"
+        },
+        "keep_conditions": {
+          "status": "missing",
+          "source": "candidate.keep_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明继续保持条件"
+        },
+        "retest_conditions": {
+          "status": "missing",
+          "source": "candidate.retest_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明等待回踩条件"
+        },
+        "cancel_conditions": {
+          "status": "missing",
+          "source": "candidate.cancel_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明取消或降级条件"
+        },
+        "invalidation_conditions": {
+          "status": "missing",
+          "source": "candidate.invalidation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明结构失效条件"
+        },
+        "reason": "strategy_risk_and_conditions_not_declared"
+      },
+      "historical_validation": {
+        "status": "missing",
+        "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+        "as_of": "2026-10-12",
+        "comparison_identity": null,
+        "declared_horizon": null,
+        "progress_by_horizon": {
+          "t1": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t3": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t5": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          }
+        },
+        "metrics_by_horizon": {
+          "t1": {},
+          "t3": {},
+          "t5": {}
+        },
+        "simulation_tracking": {
+          "status": "missing",
+          "label": "暂无同合同历史跟踪记录",
+          "entry_price": null,
+          "entry_price_source": null
+        },
+        "reason": "same_contract_ledger_record_not_found",
+        "summary": "策略未声明统一周期；暂无同合同历史验证记录"
+      },
+      "display_derived": {
+        "status": "missing",
+        "source": "display calculation from price_evidence",
+        "distance_from_reference_pct": null,
+        "distance_state": null,
+        "distance_state_source": null,
+        "upside_to_pressure_pct": null,
+        "downside_to_invalidation_pct": null,
+        "risk_reward_ratio": null,
+        "chart_evidence": {
+          "status": "partial",
+          "source": "serialized/formal chart evidence metadata",
+          "as_of": "2026-10-12",
+          "macd": {
+            "status": "available",
+            "source": "serialized.macd_hist",
+            "as_of": "2026-10-12",
+            "value_count": 48,
+            "reason": ""
+          },
+          "prices": {
+            "status": "partial",
+            "source": "price_evidence",
+            "as_of": "2026-10-12",
+            "available": [
+              "current_price"
+            ],
+            "field_sources": {
+              "current_price": "workspace.current_price"
+            }
+          },
+          "pivots": {
+            "status": "missing",
+            "source": "price_evidence conflict-checked pivot fields",
+            "as_of": "2026-10-12",
+            "available": [],
+            "ZG": null,
+            "ZD": null,
+            "field_sources": {},
+            "conflicts": [],
+            "reason": "pivot_lines_not_provided"
+          },
+          "annotations": {
+            "status": "available",
+            "source": "serialized.chart_annotations",
+            "as_of": "2026-10-12",
+            "mark_lines": 2,
+            "mark_points": 2,
+            "labels": 1,
+            "reason": ""
+          }
+        },
+        "reason": "real_price_boundaries_incomplete"
+      },
+      "source_identity": {
+        "status": "available",
+        "source": "workspace ref + serialized/formal pool code",
+        "reason": null
+      },
+      "payload_contract": {
+        "status": "available",
+        "max_text_length": 512,
+        "truncated_text_count": 0
+      }
+    },
+    {
+      "view": "baseline",
+      "code": "000425",
+      "summary": {
+        "status": "available",
+        "source": "workspace.views.baseline",
+        "as_of": "2026-10-12",
+        "code": "000425",
+        "name": "徐工机械",
+        "sector": "工程机械",
+        "formal_action": null,
+        "formal_action_reason": null,
+        "decision_code": "observe",
+        "pool_identity": "picks_pure",
+        "view_identity": "baseline",
+        "view_rank": 3,
+        "signal_type": "强势启动候选",
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "applicable_horizon": null,
+        "applicable_horizon_status": "missing",
+        "applicable_horizon_source": null,
+        "applicable_horizon_text": "策略未声明统一周期",
+        "data_latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "data_health": "verified",
+        "data_is_final": true,
+        "data_stale": false,
+        "audit_reasons": {}
+      },
+      "decision_score": {
+        "status": "available",
+        "source": "picks_pure.decision_engine_v1",
+        "score": 54,
+        "decision_code": "observe",
+        "components": {
+          "structure": {
+            "score": 10,
+            "reasons": [
+              "未形成中枢/尚无趋势结构",
+              "回踩确认"
+            ],
+            "reasons_truncated": false
+          },
+          "position": {
+            "score": 35,
+            "reasons": [
+              "120日收盘分位低位"
+            ],
+            "reasons_truncated": false
+          },
+          "sentiment": {
+            "score": 9,
+            "reasons": [
+              "放量启动",
+              "震荡市",
+              "趋势健康度偏弱",
+              "动能积极"
+            ],
+            "reasons_truncated": false
+          }
+        }
+      },
+      "rank_evidence": {
+        "status": "available",
+        "source": "workspace.views.baseline.rank_evidence",
+        "view_rank": 3,
+        "opportunity_score": 28,
+        "rank_trace": {
+          "base_source": "baseline",
+          "source_count": 1,
+          "signal_score": 2.82,
+          "entry_score": 16.0,
+          "momentum_score": 4.62,
+          "market_score": 6.0,
+          "risk_penalty": 0.0,
+          "data_penalty": 4.0,
+          "alpha_bonus": 2.6699,
+          "pool_quality_bonus": 0.0,
+          "pool_quality_score": 0.0,
+          "alpha_multiplier": 1.0033,
+          "base_opportunity_score": 25,
+          "opportunity_score": 28,
+          "distance_from_reference_pct": 0.0,
+          "change_pct": 3.08,
+          "selected_reason": "基准池单源入榜"
+        },
+        "scope": "current_view_order_only",
+        "note": "仅用于当前池内排序"
+      },
+      "price_evidence": {
+        "status": "partial",
+        "source": "workspace.formal_decision_contract + candidate prices",
+        "as_of": "2026-10-12",
+        "current_price": 7.37,
+        "current_price_source": "workspace.current_price",
+        "reference_price": null,
+        "reference_price_source": null,
+        "pressure_price": null,
+        "pressure_price_source": null,
+        "invalidation_price": null,
+        "invalidation_price_source": null,
+        "trailing_targets": [],
+        "trailing_targets_contract": {
+          "max_visible": 5,
+          "input_count": 0,
+          "valid_count": 0,
+          "visible_count": 0,
+          "omitted_count": 0,
+          "truncated": false,
+          "reason": null
+        },
+        "pivot_zg": null,
+        "pivot_zg_source": null,
+        "pivot_zd": null,
+        "pivot_zd_source": null,
+        "platform_high": null,
+        "platform_high_source": null,
+        "buy_point_price": 7.37,
+        "buy_point_price_source": "serialized.best_buy_point.price",
+        "missing_fields": [
+          "reference_price",
+          "pressure_price",
+          "invalidation_price",
+          "trailing_targets"
+        ],
+        "structure_missing_fields": [
+          "pivot_zg",
+          "pivot_zd",
+          "platform_high"
+        ],
+        "audit_reasons": {}
+      },
+      "daily_structure": {
+        "status": "available",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
+        "as_of": "2026-10-12",
+        "trend": "无中枢",
+        "stage": "弱启动确认",
+        "signal": "强势启动候选",
+        "summary": "处于60日低位区间；放量1.6倍",
+        "signal_reason": "处于60日低位区间；放量1.6倍",
+        "buy_point_price": 7.37,
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "signal_freshness_status": "available",
+        "health": "verified",
+        "latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "is_final": true,
+        "stale": false,
+        "freshness_status": "current",
+        "startup_grade": "weak",
+        "startup_label": "弱启动确认",
+        "startup_warning": "涨幅较小，属于观察型启动，不是追涨启动",
+        "startup_signals": [],
+        "ma5": null,
+        "ma10": null,
+        "ma20": 7.595,
+        "ma50": 7.9994,
+        "ma100": 8.4289,
+        "ma200": null,
+        "ma_bullish": false,
+        "macd": null,
+        "pivots": null,
+        "audit_reasons": {},
+        "missing_evidence": [
+          "MA5、MA10 当前值未提供",
+          "中枢 ZG 未提供",
+          "中枢 ZD 未提供",
+          "MACD 当前状态未提供"
+        ]
+      },
+      "sublevel_30m": {
+        "status": "available",
+        "source": "30m strategy_input_evidence + confirmation_evidence",
+        "as_of": "2026-10-12 15:00:00",
+        "interval": "30m",
+        "input_status": "verified",
+        "latest_date": "2026-10-12",
+        "latest_ts": "2026-10-12 15:00:00",
+        "bars": 80,
+        "stale": false,
+        "is_final": true,
+        "latest_bar_at": "2026-10-12 15:00:00",
+        "confirmed": true,
+        "confirmation_status": "confirmed",
+        "confirmation_schema_status": "available",
+        "confirmation_schema_version": 1,
+        "sufficient_bars": true,
+        "confirmation_date_status": "current",
+        "source_conflicts": [],
+        "audit_reasons": {},
+        "grade": "B",
+        "label": "B级确认",
+        "reason": "30分钟结构确认: 30min两阳夹一阴确认",
+        "confirm_date": "2026-10-12",
+        "confirm_age_days": 0,
+        "confirmations": [
+          "30min两阳夹一阴确认"
+        ],
+        "confirmed_by": "30min确认",
+        "classification_signals": [],
+        "classification_confirmed": false,
+        "ema_alignment": "EMA5 > EMA10",
+        "ema5": 7.343080836287088,
+        "ema10": 7.306679366203129,
+        "ema5_direction": "上行",
+        "ema10_direction": "上行",
+        "close": 7.37,
+        "close_above_ema5": true,
+        "close_above_ema10": true,
+        "ema5_rising_bars": 8,
+        "ema5_reclaim": false,
+        "stop_fall": false,
+        "macd_state": "weakening",
+        "macd_dif": 0.05699741759371957,
+        "macd_dea": 0.0413022579801956,
+        "breakout_holds": null,
+        "pullback_volume_state": null,
+        "recent_peak_drawdown_pct": 0.135501,
+        "buy_point": null,
+        "fresh_yang_pattern": "two_yang_one_yin",
+        "recovery_bundle_match": false,
+        "missing_evidence": [
+          "突破位保持状态未提供",
+          "回踩量能状态未提供"
+        ]
+      },
+      "volume_and_capital": {
+        "status": "partial",
+        "source": "candidate volume + explicit turnover/fund sources",
+        "as_of": "2026-10-12",
+        "summary": "量能可验证；个股资金证据不足",
+        "volume": {
+          "status": "available",
+          "source": "candidate.volumes",
+          "source_plane": "formal_report",
+          "as_of": "2026-10-12",
+          "current": 1399375.22,
+          "average_5": 998171.638,
+          "average_20": 1088421.0595
+        },
+        "current_volume": 1399375.22,
+        "current_amount": null,
+        "current_amount_text": null,
+        "current_amount_status": "missing",
+        "current_amount_as_of": "2026-10-12",
+        "current_amount_source": null,
+        "current_amount_source_label": null,
+        "current_amount_source_plane": null,
+        "current_amount_provider": null,
+        "average_volume_5": 998171.638,
+        "volume20": 1088421.0595,
+        "volume_ratio": null,
+        "volume_ratio_source": null,
+        "volume_ratio_source_plane": null,
+        "ratio20": null,
+        "turnover_rate": null,
+        "volume_labels": [],
+        "turnover": {
+          "status": "missing",
+          "source": "workspace.pool_quality.money20",
+          "as_of": "2026-10-12",
+          "average_20": null,
+          "liquidity_source": "missing",
+          "kind": "average_turnover_amount",
+          "reason": "verified_turnover_source_not_provided"
+        },
+        "money20": null,
+        "money20_text": null,
+        "money20_kind": "average_turnover_amount",
+        "money20_source": "missing",
+        "stock_capital_flow": {
+          "status": "missing",
+          "source": "verified individual-stock fund source",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "consecutive_inflow_days": null,
+          "reason": "individual_stock_fund_source_not_provided"
+        },
+        "stock_money_flow": "个股资金证据不足",
+        "stock_net_flow": null,
+        "stock_net_inflow_days": null,
+        "sector_capital_flow": {
+          "status": "missing",
+          "source": "candidate.sector_flow",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "rank": null,
+          "label": null,
+          "scope": "sector_only",
+          "reason": "sector_fund_source_not_provided"
+        },
+        "sector_money_flow": null,
+        "sector_money_flow_text": null,
+        "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": "个股或板块资金证据不足",
+        "missing_evidence": [
+          "换手率未提供",
+          "当日成交额未提供",
+          "量价标签未提供",
+          "个股大单净流入未提供",
+          "个股连续净流入天数未提供",
+          "板块净流入未提供"
+        ]
+      },
+      "market_and_sector": {
+        "status": "partial",
+        "source": "daily.market_sentiment + daily.sector_heat",
+        "as_of": "2026-10-12",
+        "summary": "正式市场偏冷；板块方向未知",
+        "formal_market_sentiment": {
+          "status": "available",
+          "source": "daily.market_sentiment",
+          "as_of": "2026-10-12",
+          "score": 30,
+          "label": "偏冷",
+          "version": "v2",
+          "coverage": 0.85,
+          "direction_state": null,
+          "components": {
+            "breadth": 23.76,
+            "limit_ecology": 38.64,
+            "index": 24.93,
+            "turnover": null,
+            "trend": 30.34
+          },
+          "evidence": {
+            "breadth": {
+              "available": true,
+              "valid_count": 5485,
+              "advance_count": 1161,
+              "decline_count": 4255,
+              "flat_count": 69,
+              "advance_ratio": 21.17,
+              "median_change_pct": -1.681,
+              "rise_over_3_count": 231,
+              "fall_over_3_count": 1475,
+              "score": 23.76
+            },
+            "limit_ecology": {
+              "available": true,
+              "valid_count": 5485,
+              "excluded_count": 0,
+              "limit_up_count": 46,
+              "limit_down_count": 19,
+              "limit_ratio": 2.35,
+              "log_limit_ratio": 0.854415,
+              "ratio_score": 9.3,
+              "limit_up_ratio": 0.008387,
+              "limit_down_ratio": 0.003464,
+              "limit_up_score": 41.93,
+              "limit_down_score": 82.68,
+              "improvement_score": 37.64,
+              "score": 38.64,
+              "source": "eastmoney_limit_pools"
+            },
+            "index": {
+              "available": true,
+              "valid_count": 6,
+              "average_change_pct": -1.672,
+              "score": 24.93
+            },
+            "turnover": {
+              "available": false,
+              "ratio_to_ma5": null,
+              "ratio_to_ma20": null,
+              "score": null
+            },
+            "trend": {
+              "available": true,
+              "above_ma20_ratio": 0.3034,
+              "score": 30.34
+            }
+          }
+        },
+        "market": "30 / 100 · 偏冷",
+        "market_label": "偏冷",
+        "market_sentiment_score": 30,
+        "sector_evidence": {
+          "status": "missing",
+          "source": "daily.sector_heat",
+          "as_of": "2026-10-12",
+          "sector": "工程机械",
+          "direction": "unknown",
+          "display_completeness": "missing",
+          "display_missing_fields": [],
+          "net_flow": null,
+          "supporting_evidence": [],
+          "opposing_evidence": [],
+          "reason": "verified_sector_item_not_provided"
+        },
+        "sector": "工程机械",
+        "sector_state": "方向未知",
+        "sector_layer_state": "未知",
+        "sector_support": null,
+        "sector_risk": null,
+        "sector_change_pct": null,
+        "sector_up_count": null,
+        "sector_total_count": null,
+        "sector_limit_up_count": null,
+        "sector_net_flow": null,
+        "sector_market_rank": null,
+        "sector_hierarchy_dedup_status": null,
+        "stock_relative_strength": null,
+        "stock_relative_status": "missing",
+        "stock_relative_source": null,
+        "stock_relative_as_of": "2026-10-12",
+        "market_state": "未知",
+        "stock_state": "未知",
+        "missing_evidence": [
+          "板块涨跌幅未提供",
+          "板块上涨家数未提供",
+          "板块总家数未提供",
+          "板块涨停家数未提供",
+          "板块资金净流入未提供",
+          "板块市场排名未提供",
+          "个股板块内相对强弱未提供"
+        ]
+      },
+      "main_rise_clue": {
+        "status": "invalidated",
+        "source": "existing candidate strategy signals",
+        "as_of": "2026-10-12",
+        "clue_type": "invalidated",
+        "label": "主升线索失效",
+        "supporting_evidence": [
+          "强势启动候选",
+          "日线强势启动",
+          "弱启动确认",
+          "baseline",
+          "基础候选",
+          "处于60日低位区间；放量1.6倍",
+          "close_above_ma5",
+          "close_above_ma10"
+        ],
+        "opposing_evidence": [
+          "结构破坏",
+          "broken"
+        ],
+        "evidence_guards": [],
+        "note": "只翻译现有证据，不生成策略、分数或正式动作"
+      },
+      "risk_and_next": {
+        "status": "missing",
+        "source": "workspace risk flags + declared candidate conditions",
+        "as_of": "2026-10-12",
+        "risk_labels": [],
+        "event_risks": [],
+        "event_risk_status": "missing",
+        "event_risk_source": null,
+        "event_risk_as_of": null,
+        "invalidation_price": null,
+        "missing_evidence": [
+          "当前风险标签未提供",
+          "下一确认条件未提供",
+          "继续保持条件未提供",
+          "等待回踩条件未提供",
+          "取消或降级条件未提供",
+          "结构失效条件未提供",
+          "结构失效价格未提供",
+          "公告或事件风险未提供"
+        ],
+        "next_confirmation": {
+          "status": "missing",
+          "source": "candidate.upgrade/next_day/confirmation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明下一确认条件"
+        },
+        "keep_conditions": {
+          "status": "missing",
+          "source": "candidate.keep_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明继续保持条件"
+        },
+        "retest_conditions": {
+          "status": "missing",
+          "source": "candidate.retest_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明等待回踩条件"
+        },
+        "cancel_conditions": {
+          "status": "missing",
+          "source": "candidate.cancel_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明取消或降级条件"
+        },
+        "invalidation_conditions": {
+          "status": "missing",
+          "source": "candidate.invalidation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明结构失效条件"
+        },
+        "reason": "strategy_risk_and_conditions_not_declared"
+      },
+      "historical_validation": {
+        "status": "missing",
+        "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+        "as_of": "2026-10-12",
+        "comparison_identity": null,
+        "declared_horizon": null,
+        "progress_by_horizon": {
+          "t1": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t3": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t5": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          }
+        },
+        "metrics_by_horizon": {
+          "t1": {},
+          "t3": {},
+          "t5": {}
+        },
+        "simulation_tracking": {
+          "status": "missing",
+          "label": "暂无同合同历史跟踪记录",
+          "entry_price": null,
+          "entry_price_source": null
+        },
+        "reason": "same_contract_ledger_record_not_found",
+        "summary": "策略未声明统一周期；暂无同合同历史验证记录"
+      },
+      "display_derived": {
+        "status": "missing",
+        "source": "display calculation from price_evidence",
+        "distance_from_reference_pct": null,
+        "distance_state": null,
+        "distance_state_source": null,
+        "upside_to_pressure_pct": null,
+        "downside_to_invalidation_pct": null,
+        "risk_reward_ratio": null,
+        "chart_evidence": {
+          "status": "partial",
+          "source": "serialized/formal chart evidence metadata",
+          "as_of": "2026-10-12",
+          "macd": {
+            "status": "available",
+            "source": "serialized.macd_hist",
+            "as_of": "2026-10-12",
+            "value_count": 34,
+            "reason": ""
+          },
+          "prices": {
+            "status": "partial",
+            "source": "price_evidence",
+            "as_of": "2026-10-12",
+            "available": [
+              "current_price"
+            ],
+            "field_sources": {
+              "current_price": "workspace.current_price"
+            }
+          },
+          "pivots": {
+            "status": "missing",
+            "source": "price_evidence conflict-checked pivot fields",
+            "as_of": "2026-10-12",
+            "available": [],
+            "ZG": null,
+            "ZD": null,
+            "field_sources": {},
+            "conflicts": [],
+            "reason": "pivot_lines_not_provided"
+          },
+          "annotations": {
+            "status": "available",
+            "source": "serialized.chart_annotations",
+            "as_of": "2026-10-12",
+            "mark_lines": 2,
+            "mark_points": 2,
+            "labels": 1,
+            "reason": ""
+          }
+        },
+        "reason": "real_price_boundaries_incomplete"
+      },
+      "source_identity": {
+        "status": "available",
+        "source": "workspace ref + serialized/formal pool code",
+        "reason": null
+      },
+      "payload_contract": {
+        "status": "available",
+        "max_text_length": 512,
+        "truncated_text_count": 0
+      }
+    },
+    {
+      "view": "baseline",
+      "code": "002739",
+      "summary": {
+        "status": "available",
+        "source": "workspace.views.baseline",
+        "as_of": "2026-10-12",
+        "code": "002739",
+        "name": "儒意电影",
+        "sector": "影视院线",
+        "formal_action": null,
+        "formal_action_reason": null,
+        "decision_code": "observe",
+        "pool_identity": "picks_pure",
+        "view_identity": "baseline",
+        "view_rank": 4,
+        "signal_type": "强势启动候选",
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "applicable_horizon": null,
+        "applicable_horizon_status": "missing",
+        "applicable_horizon_source": null,
+        "applicable_horizon_text": "策略未声明统一周期",
+        "data_latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "data_health": "verified",
+        "data_is_final": true,
+        "data_stale": false,
+        "audit_reasons": {}
+      },
+      "decision_score": {
+        "status": "available",
+        "source": "picks_pure.decision_engine_v1",
+        "score": 53,
+        "decision_code": "observe",
+        "components": {
+          "structure": {
+            "score": 10,
+            "reasons": [
+              "未形成中枢/尚无趋势结构",
+              "回踩确认"
+            ],
+            "reasons_truncated": false
+          },
+          "position": {
+            "score": 35,
+            "reasons": [
+              "120日收盘分位低位"
+            ],
+            "reasons_truncated": false
+          },
+          "sentiment": {
+            "score": 8,
+            "reasons": [
+              "放量启动",
+              "震荡市",
+              "趋势健康度偏弱",
+              "动能积极"
+            ],
+            "reasons_truncated": false
+          }
+        }
+      },
+      "rank_evidence": {
+        "status": "available",
+        "source": "workspace.views.baseline.rank_evidence",
+        "view_rank": 4,
+        "opportunity_score": 27,
+        "rank_trace": {
+          "base_source": "baseline",
+          "source_count": 1,
+          "signal_score": 2.82,
+          "entry_score": 16.0,
+          "momentum_score": 3.62,
+          "market_score": 6.0,
+          "risk_penalty": 0.0,
+          "data_penalty": 4.0,
+          "alpha_bonus": 3.1606,
+          "pool_quality_bonus": 0.0,
+          "pool_quality_score": 24.592,
+          "alpha_multiplier": 1.004,
+          "base_opportunity_score": 24,
+          "opportunity_score": 27,
+          "distance_from_reference_pct": 0.0,
+          "change_pct": 2.41,
+          "selected_reason": "基准池单源入榜"
+        },
+        "scope": "current_view_order_only",
+        "note": "仅用于当前池内排序"
+      },
+      "price_evidence": {
+        "status": "partial",
+        "source": "workspace.formal_decision_contract + candidate prices",
+        "as_of": "2026-10-12",
+        "current_price": 8.45251396648045,
+        "current_price_source": "workspace.current_price",
+        "reference_price": null,
+        "reference_price_source": null,
+        "pressure_price": null,
+        "pressure_price_source": null,
+        "invalidation_price": null,
+        "invalidation_price_source": null,
+        "trailing_targets": [],
+        "trailing_targets_contract": {
+          "max_visible": 5,
+          "input_count": 0,
+          "valid_count": 0,
+          "visible_count": 0,
+          "omitted_count": 0,
+          "truncated": false,
+          "reason": null
+        },
+        "pivot_zg": null,
+        "pivot_zg_source": null,
+        "pivot_zd": null,
+        "pivot_zd_source": null,
+        "platform_high": null,
+        "platform_high_source": null,
+        "buy_point_price": 8.45251396648045,
+        "buy_point_price_source": "serialized.best_buy_point.price",
+        "missing_fields": [
+          "reference_price",
+          "pressure_price",
+          "invalidation_price",
+          "trailing_targets"
+        ],
+        "structure_missing_fields": [
+          "pivot_zg",
+          "pivot_zd",
+          "platform_high"
+        ],
+        "audit_reasons": {}
+      },
+      "daily_structure": {
+        "status": "available",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
+        "as_of": "2026-10-12",
+        "trend": "无中枢",
+        "stage": "弱启动确认",
+        "signal": "强势启动候选",
+        "summary": "处于60日低位区间；放量1.6倍",
+        "signal_reason": "处于60日低位区间；放量1.6倍",
+        "buy_point_price": 8.45251396648045,
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "signal_freshness_status": "available",
+        "health": "verified",
+        "latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "is_final": true,
+        "stale": false,
+        "freshness_status": "current",
+        "startup_grade": "weak",
+        "startup_label": "弱启动确认",
+        "startup_warning": "涨幅较小，属于观察型启动，不是追涨启动",
+        "startup_signals": [],
+        "ma5": null,
+        "ma10": null,
+        "ma20": 8.4779,
+        "ma50": 8.6789,
+        "ma100": 8.8887,
+        "ma200": null,
+        "ma_bullish": false,
+        "macd": null,
+        "pivots": null,
+        "audit_reasons": {},
+        "missing_evidence": [
+          "MA5、MA10 当前值未提供",
+          "中枢 ZG 未提供",
+          "中枢 ZD 未提供",
+          "MACD 当前状态未提供"
+        ]
+      },
+      "sublevel_30m": {
+        "status": "available",
+        "source": "30m strategy_input_evidence + confirmation_evidence",
+        "as_of": "2026-10-12 15:00:00",
+        "interval": "30m",
+        "input_status": "verified",
+        "latest_date": "2026-10-12",
+        "latest_ts": "2026-10-12 15:00:00",
+        "bars": 80,
+        "stale": false,
+        "is_final": true,
+        "latest_bar_at": "2026-10-12 15:00:00",
+        "confirmed": true,
+        "confirmation_status": "confirmed",
+        "confirmation_schema_status": "available",
+        "confirmation_schema_version": 1,
+        "sufficient_bars": true,
+        "confirmation_date_status": "current",
+        "source_conflicts": [],
+        "audit_reasons": {},
+        "grade": "B",
+        "label": "B级确认",
+        "reason": "30分钟结构确认: 30min两阳夹一阴确认",
+        "confirm_date": "2026-10-12",
+        "confirm_age_days": 0,
+        "confirmations": [
+          "30min两阳夹一阴确认"
+        ],
+        "confirmed_by": "30min确认",
+        "classification_signals": [],
+        "classification_confirmed": false,
+        "ema_alignment": "EMA5 > EMA10",
+        "ema5": 8.437464252751141,
+        "ema10": 8.378515057484353,
+        "ema5_direction": "上行",
+        "ema10_direction": "上行",
+        "close": 8.45251396648045,
+        "close_above_ema5": true,
+        "close_above_ema10": true,
+        "ema5_rising_bars": 16,
+        "ema5_reclaim": false,
+        "stop_fall": false,
+        "macd_state": "weakening",
+        "macd_dif": 0.08971672891090599,
+        "macd_dea": 0.053015955176397817,
+        "breakout_holds": null,
+        "pullback_volume_state": null,
+        "recent_peak_drawdown_pct": 0.932401,
+        "buy_point": null,
+        "fresh_yang_pattern": "two_yang_one_yin",
+        "recovery_bundle_match": false,
+        "missing_evidence": [
+          "突破位保持状态未提供",
+          "回踩量能状态未提供"
+        ]
+      },
+      "volume_and_capital": {
+        "status": "partial",
+        "source": "candidate volume + explicit turnover/fund sources",
+        "as_of": "2026-10-12",
+        "summary": "量能可验证；个股资金证据不足",
+        "volume": {
+          "status": "available",
+          "source": "candidate.volumes",
+          "source_plane": "formal_report",
+          "as_of": "2026-10-12",
+          "current": 661407.96,
+          "average_5": 466459.17,
+          "average_20": 455962.2925
+        },
+        "current_volume": 661407.96,
+        "current_amount": null,
+        "current_amount_text": null,
+        "current_amount_status": "missing",
+        "current_amount_as_of": "2026-10-12",
+        "current_amount_source": null,
+        "current_amount_source_label": null,
+        "current_amount_source_plane": null,
+        "current_amount_provider": null,
+        "average_volume_5": 466459.17,
+        "volume20": 455962.2925,
+        "volume_ratio": null,
+        "volume_ratio_source": null,
+        "volume_ratio_source_plane": null,
+        "ratio20": null,
+        "turnover_rate": null,
+        "volume_labels": [],
+        "turnover": {
+          "status": "missing",
+          "source": "workspace.pool_quality.money20",
+          "as_of": "2026-10-12",
+          "average_20": null,
+          "liquidity_source": "missing",
+          "kind": "average_turnover_amount",
+          "reason": "verified_turnover_source_not_provided"
+        },
+        "money20": null,
+        "money20_text": null,
+        "money20_kind": "average_turnover_amount",
+        "money20_source": "missing",
+        "stock_capital_flow": {
+          "status": "missing",
+          "source": "verified individual-stock fund source",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "consecutive_inflow_days": null,
+          "reason": "individual_stock_fund_source_not_provided"
+        },
+        "stock_money_flow": "个股资金证据不足",
+        "stock_net_flow": null,
+        "stock_net_inflow_days": null,
+        "sector_capital_flow": {
+          "status": "missing",
+          "source": "candidate.sector_flow",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "rank": null,
+          "label": null,
+          "scope": "sector_only",
+          "reason": "sector_fund_source_not_provided"
+        },
+        "sector_money_flow": null,
+        "sector_money_flow_text": null,
+        "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": "个股或板块资金证据不足",
+        "missing_evidence": [
+          "换手率未提供",
+          "当日成交额未提供",
+          "量价标签未提供",
+          "个股大单净流入未提供",
+          "个股连续净流入天数未提供",
+          "板块净流入未提供"
+        ]
+      },
+      "market_and_sector": {
+        "status": "partial",
+        "source": "daily.market_sentiment + daily.sector_heat",
+        "as_of": "2026-10-12",
+        "summary": "正式市场偏冷；板块方向未知",
+        "formal_market_sentiment": {
+          "status": "available",
+          "source": "daily.market_sentiment",
+          "as_of": "2026-10-12",
+          "score": 30,
+          "label": "偏冷",
+          "version": "v2",
+          "coverage": 0.85,
+          "direction_state": null,
+          "components": {
+            "breadth": 23.76,
+            "limit_ecology": 38.64,
+            "index": 24.93,
+            "turnover": null,
+            "trend": 30.34
+          },
+          "evidence": {
+            "breadth": {
+              "available": true,
+              "valid_count": 5485,
+              "advance_count": 1161,
+              "decline_count": 4255,
+              "flat_count": 69,
+              "advance_ratio": 21.17,
+              "median_change_pct": -1.681,
+              "rise_over_3_count": 231,
+              "fall_over_3_count": 1475,
+              "score": 23.76
+            },
+            "limit_ecology": {
+              "available": true,
+              "valid_count": 5485,
+              "excluded_count": 0,
+              "limit_up_count": 46,
+              "limit_down_count": 19,
+              "limit_ratio": 2.35,
+              "log_limit_ratio": 0.854415,
+              "ratio_score": 9.3,
+              "limit_up_ratio": 0.008387,
+              "limit_down_ratio": 0.003464,
+              "limit_up_score": 41.93,
+              "limit_down_score": 82.68,
+              "improvement_score": 37.64,
+              "score": 38.64,
+              "source": "eastmoney_limit_pools"
+            },
+            "index": {
+              "available": true,
+              "valid_count": 6,
+              "average_change_pct": -1.672,
+              "score": 24.93
+            },
+            "turnover": {
+              "available": false,
+              "ratio_to_ma5": null,
+              "ratio_to_ma20": null,
+              "score": null
+            },
+            "trend": {
+              "available": true,
+              "above_ma20_ratio": 0.3034,
+              "score": 30.34
+            }
+          }
+        },
+        "market": "30 / 100 · 偏冷",
+        "market_label": "偏冷",
+        "market_sentiment_score": 30,
+        "sector_evidence": {
+          "status": "missing",
+          "source": "daily.sector_heat",
+          "as_of": "2026-10-12",
+          "sector": "影视院线",
+          "direction": "unknown",
+          "display_completeness": "missing",
+          "display_missing_fields": [],
+          "net_flow": null,
+          "supporting_evidence": [],
+          "opposing_evidence": [],
+          "reason": "verified_sector_item_not_provided"
+        },
+        "sector": "影视院线",
+        "sector_state": "方向未知",
+        "sector_layer_state": "未知",
+        "sector_support": null,
+        "sector_risk": null,
+        "sector_change_pct": null,
+        "sector_up_count": null,
+        "sector_total_count": null,
+        "sector_limit_up_count": null,
+        "sector_net_flow": null,
+        "sector_market_rank": null,
+        "sector_hierarchy_dedup_status": null,
+        "stock_relative_strength": null,
+        "stock_relative_status": "missing",
+        "stock_relative_source": null,
+        "stock_relative_as_of": "2026-10-12",
+        "market_state": "未知",
+        "stock_state": "未知",
+        "missing_evidence": [
+          "板块涨跌幅未提供",
+          "板块上涨家数未提供",
+          "板块总家数未提供",
+          "板块涨停家数未提供",
+          "板块资金净流入未提供",
+          "板块市场排名未提供",
+          "个股板块内相对强弱未提供"
+        ]
+      },
+      "main_rise_clue": {
+        "status": "invalidated",
+        "source": "existing candidate strategy signals",
+        "as_of": "2026-10-12",
+        "clue_type": "invalidated",
+        "label": "主升线索失效",
+        "supporting_evidence": [
+          "强势启动候选",
+          "日线强势启动",
+          "弱启动确认",
+          "baseline",
+          "基础候选",
+          "处于60日低位区间；放量1.6倍",
+          "close_above_ma5",
+          "close_above_ma10"
+        ],
+        "opposing_evidence": [
+          "结构破坏",
+          "broken"
+        ],
+        "evidence_guards": [],
+        "note": "只翻译现有证据，不生成策略、分数或正式动作"
+      },
+      "risk_and_next": {
+        "status": "missing",
+        "source": "workspace risk flags + declared candidate conditions",
+        "as_of": "2026-10-12",
+        "risk_labels": [],
+        "event_risks": [],
+        "event_risk_status": "missing",
+        "event_risk_source": null,
+        "event_risk_as_of": null,
+        "invalidation_price": null,
+        "missing_evidence": [
+          "当前风险标签未提供",
+          "下一确认条件未提供",
+          "继续保持条件未提供",
+          "等待回踩条件未提供",
+          "取消或降级条件未提供",
+          "结构失效条件未提供",
+          "结构失效价格未提供",
+          "公告或事件风险未提供"
+        ],
+        "next_confirmation": {
+          "status": "missing",
+          "source": "candidate.upgrade/next_day/confirmation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明下一确认条件"
+        },
+        "keep_conditions": {
+          "status": "missing",
+          "source": "candidate.keep_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明继续保持条件"
+        },
+        "retest_conditions": {
+          "status": "missing",
+          "source": "candidate.retest_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明等待回踩条件"
+        },
+        "cancel_conditions": {
+          "status": "missing",
+          "source": "candidate.cancel_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明取消或降级条件"
+        },
+        "invalidation_conditions": {
+          "status": "missing",
+          "source": "candidate.invalidation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明结构失效条件"
+        },
+        "reason": "strategy_risk_and_conditions_not_declared"
+      },
+      "historical_validation": {
+        "status": "missing",
+        "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+        "as_of": "2026-10-12",
+        "comparison_identity": null,
+        "declared_horizon": null,
+        "progress_by_horizon": {
+          "t1": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t3": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t5": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          }
+        },
+        "metrics_by_horizon": {
+          "t1": {},
+          "t3": {},
+          "t5": {}
+        },
+        "simulation_tracking": {
+          "status": "missing",
+          "label": "暂无同合同历史跟踪记录",
+          "entry_price": null,
+          "entry_price_source": null
+        },
+        "reason": "same_contract_ledger_record_not_found",
+        "summary": "策略未声明统一周期；暂无同合同历史验证记录"
+      },
+      "display_derived": {
+        "status": "missing",
+        "source": "display calculation from price_evidence",
+        "distance_from_reference_pct": null,
+        "distance_state": null,
+        "distance_state_source": null,
+        "upside_to_pressure_pct": null,
+        "downside_to_invalidation_pct": null,
+        "risk_reward_ratio": null,
+        "chart_evidence": {
+          "status": "partial",
+          "source": "serialized/formal chart evidence metadata",
+          "as_of": "2026-10-12",
+          "macd": {
+            "status": "available",
+            "source": "serialized.macd_hist",
+            "as_of": "2026-10-12",
+            "value_count": 29,
+            "reason": ""
+          },
+          "prices": {
+            "status": "partial",
+            "source": "price_evidence",
+            "as_of": "2026-10-12",
+            "available": [
+              "current_price"
+            ],
+            "field_sources": {
+              "current_price": "workspace.current_price"
+            }
+          },
+          "pivots": {
+            "status": "missing",
+            "source": "price_evidence conflict-checked pivot fields",
+            "as_of": "2026-10-12",
+            "available": [],
+            "ZG": null,
+            "ZD": null,
+            "field_sources": {},
+            "conflicts": [],
+            "reason": "pivot_lines_not_provided"
+          },
+          "annotations": {
+            "status": "available",
+            "source": "serialized.chart_annotations",
+            "as_of": "2026-10-12",
+            "mark_lines": 2,
+            "mark_points": 2,
+            "labels": 1,
+            "reason": ""
+          }
+        },
+        "reason": "real_price_boundaries_incomplete"
+      },
+      "source_identity": {
+        "status": "available",
+        "source": "workspace ref + serialized/formal pool code",
+        "reason": null
+      },
+      "payload_contract": {
+        "status": "available",
+        "max_text_length": 512,
+        "truncated_text_count": 0
+      }
+    },
+    {
+      "view": "baseline",
+      "code": "600285",
+      "summary": {
+        "status": "available",
+        "source": "workspace.views.baseline",
+        "as_of": "2026-10-12",
+        "code": "600285",
+        "name": "羚锐制药",
+        "sector": "中药Ⅱ",
+        "formal_action": null,
+        "formal_action_reason": null,
+        "decision_code": "observe",
+        "pool_identity": "picks_pure",
+        "view_identity": "baseline",
+        "view_rank": 5,
+        "signal_type": "强势启动候选",
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "applicable_horizon": null,
+        "applicable_horizon_status": "missing",
+        "applicable_horizon_source": null,
+        "applicable_horizon_text": "策略未声明统一周期",
+        "data_latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "data_health": "verified",
+        "data_is_final": true,
+        "data_stale": false,
+        "audit_reasons": {}
+      },
+      "decision_score": {
+        "status": "available",
+        "source": "picks_pure.decision_engine_v1",
+        "score": 33,
+        "decision_code": "observe",
+        "components": {
+          "structure": {
+            "score": 10,
+            "reasons": [
+              "未形成中枢/尚无趋势结构",
+              "回踩确认"
+            ],
+            "reasons_truncated": false
+          },
+          "position": {
+            "score": 15,
+            "reasons": [
+              "120日收盘分位中位"
+            ],
+            "reasons_truncated": false
+          },
+          "sentiment": {
+            "score": 8,
+            "reasons": [
+              "放量启动",
+              "震荡市",
+              "趋势健康度偏弱",
+              "动能积极"
+            ],
+            "reasons_truncated": false
+          }
+        }
+      },
+      "rank_evidence": {
+        "status": "available",
+        "source": "workspace.views.baseline.rank_evidence",
+        "view_rank": 5,
+        "opportunity_score": 27,
+        "rank_trace": {
+          "base_source": "baseline",
+          "source_count": 1,
+          "signal_score": 2.82,
+          "entry_score": 16.0,
+          "momentum_score": 2.52,
+          "market_score": 6.0,
+          "risk_penalty": 0.0,
+          "data_penalty": 4.0,
+          "alpha_bonus": 4.0836,
+          "pool_quality_bonus": 0.0,
+          "pool_quality_score": 0.0,
+          "alpha_multiplier": 1.0051,
+          "base_opportunity_score": 23,
+          "opportunity_score": 27,
+          "distance_from_reference_pct": 0.0,
+          "change_pct": 1.68,
+          "selected_reason": "基准池单源入榜"
+        },
+        "scope": "current_view_order_only",
+        "note": "仅用于当前池内排序"
+      },
+      "price_evidence": {
+        "status": "partial",
+        "source": "workspace.formal_decision_contract + candidate prices",
+        "as_of": "2026-10-12",
+        "current_price": 19.99,
+        "current_price_source": "workspace.current_price",
+        "reference_price": null,
+        "reference_price_source": null,
+        "pressure_price": null,
+        "pressure_price_source": null,
+        "invalidation_price": null,
+        "invalidation_price_source": null,
+        "trailing_targets": [],
+        "trailing_targets_contract": {
+          "max_visible": 5,
+          "input_count": 0,
+          "valid_count": 0,
+          "visible_count": 0,
+          "omitted_count": 0,
+          "truncated": false,
+          "reason": null
+        },
+        "pivot_zg": null,
+        "pivot_zg_source": null,
+        "pivot_zd": null,
+        "pivot_zd_source": null,
+        "platform_high": null,
+        "platform_high_source": null,
+        "buy_point_price": 19.99,
+        "buy_point_price_source": "serialized.best_buy_point.price",
+        "missing_fields": [
+          "reference_price",
+          "pressure_price",
+          "invalidation_price",
+          "trailing_targets"
+        ],
+        "structure_missing_fields": [
+          "pivot_zg",
+          "pivot_zd",
+          "platform_high"
+        ],
+        "audit_reasons": {}
+      },
+      "daily_structure": {
+        "status": "available",
+        "source": "conflict-checked serialized/formal/workspace daily fields",
+        "as_of": "2026-10-12",
+        "trend": "无中枢",
+        "stage": "强启动",
+        "signal": "强势启动候选",
+        "summary": "处于60日低位区间；放量1.8倍；突破20日平台",
+        "signal_reason": "处于60日低位区间；放量1.8倍；突破20日平台",
+        "buy_point_price": 19.99,
+        "signal_date": "2026-10-12",
+        "signal_age_days": 0,
+        "signal_freshness_status": "available",
+        "health": "verified",
+        "latest_date": "2026-10-12",
+        "data_source": "market_history_db",
+        "is_final": true,
+        "stale": false,
+        "freshness_status": "current",
+        "startup_grade": "strong",
+        "startup_label": "强启动",
+        "startup_warning": null,
+        "startup_signals": [
+          "break_20d_high"
+        ],
+        "ma5": null,
+        "ma10": null,
+        "ma20": 19.19,
+        "ma50": 20.2302,
+        "ma100": 20.7981,
+        "ma200": null,
+        "ma_bullish": false,
+        "macd": null,
+        "pivots": null,
+        "audit_reasons": {},
+        "missing_evidence": [
+          "MA5、MA10 当前值未提供",
+          "中枢 ZG 未提供",
+          "中枢 ZD 未提供",
+          "MACD 当前状态未提供"
+        ]
+      },
+      "sublevel_30m": {
+        "status": "available",
+        "source": "30m strategy_input_evidence + confirmation_evidence",
+        "as_of": "2026-10-12 15:00:00",
+        "interval": "30m",
+        "input_status": "verified",
+        "latest_date": "2026-10-12",
+        "latest_ts": "2026-10-12 15:00:00",
+        "bars": 80,
+        "stale": false,
+        "is_final": true,
+        "latest_bar_at": "2026-10-12 15:00:00",
+        "confirmed": true,
+        "confirmation_status": "confirmed",
+        "confirmation_schema_status": "available",
+        "confirmation_schema_version": 1,
+        "sufficient_bars": true,
+        "confirmation_date_status": "current",
+        "source_conflicts": [],
+        "audit_reasons": {},
+        "grade": "A",
+        "label": "A级确认",
+        "reason": "日线强启动+30分钟最新两阳结构",
+        "confirm_date": "2026-10-12",
+        "confirm_age_days": 0,
+        "confirmations": [
+          "30min两阳夹一阴确认"
+        ],
+        "confirmed_by": "30min确认",
+        "classification_signals": [],
+        "classification_confirmed": false,
+        "ema_alignment": "EMA5 > EMA10",
+        "ema5": 19.919890584454105,
+        "ema10": 19.83575647040569,
+        "ema5_direction": "上行",
+        "ema10_direction": "上行",
+        "close": 19.99,
+        "close_above_ema5": true,
+        "close_above_ema10": true,
+        "ema5_rising_bars": 17,
+        "ema5_reclaim": false,
+        "stop_fall": false,
+        "macd_state": "weakening",
+        "macd_dif": 0.25078328538428707,
+        "macd_dea": 0.23765416943814227,
+        "breakout_holds": null,
+        "pullback_volume_state": null,
+        "recent_peak_drawdown_pct": 0.348953,
+        "buy_point": null,
+        "fresh_yang_pattern": "two_yang_one_yin",
+        "recovery_bundle_match": false,
+        "missing_evidence": [
+          "突破位保持状态未提供",
+          "回踩量能状态未提供"
+        ]
+      },
+      "volume_and_capital": {
+        "status": "partial",
+        "source": "candidate volume + explicit turnover/fund sources",
+        "as_of": "2026-10-12",
+        "summary": "量能可验证；个股资金证据不足",
+        "volume": {
+          "status": "available",
+          "source": "candidate.volumes",
+          "source_plane": "formal_report",
+          "as_of": "2026-10-12",
+          "current": 111109.1,
+          "average_5": 73393.506,
+          "average_20": 55055.9265
+        },
+        "current_volume": 111109.1,
+        "current_amount": null,
+        "current_amount_text": null,
+        "current_amount_status": "missing",
+        "current_amount_as_of": "2026-10-12",
+        "current_amount_source": null,
+        "current_amount_source_label": null,
+        "current_amount_source_plane": null,
+        "current_amount_provider": null,
+        "average_volume_5": 73393.506,
+        "volume20": 55055.9265,
+        "volume_ratio": null,
+        "volume_ratio_source": null,
+        "volume_ratio_source_plane": null,
+        "ratio20": null,
+        "turnover_rate": null,
+        "volume_labels": [],
+        "turnover": {
+          "status": "missing",
+          "source": "workspace.pool_quality.money20",
+          "as_of": "2026-10-12",
+          "average_20": null,
+          "liquidity_source": "missing",
+          "kind": "average_turnover_amount",
+          "reason": "verified_turnover_source_not_provided"
+        },
+        "money20": null,
+        "money20_text": null,
+        "money20_kind": "average_turnover_amount",
+        "money20_source": "missing",
+        "stock_capital_flow": {
+          "status": "missing",
+          "source": "verified individual-stock fund source",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "consecutive_inflow_days": null,
+          "reason": "individual_stock_fund_source_not_provided"
+        },
+        "stock_money_flow": "个股资金证据不足",
+        "stock_net_flow": null,
+        "stock_net_inflow_days": null,
+        "sector_capital_flow": {
+          "status": "missing",
+          "source": "candidate.sector_flow",
+          "as_of": "2026-10-12",
+          "net_flow": null,
+          "rank": null,
+          "label": null,
+          "scope": "sector_only",
+          "reason": "sector_fund_source_not_provided"
+        },
+        "sector_money_flow": null,
+        "sector_money_flow_text": null,
+        "capital_state": "个股与板块资金严格分离",
+        "capital_alignment_state": "个股或板块资金证据不足",
+        "missing_evidence": [
+          "换手率未提供",
+          "当日成交额未提供",
+          "量价标签未提供",
+          "个股大单净流入未提供",
+          "个股连续净流入天数未提供",
+          "板块净流入未提供"
+        ]
+      },
+      "market_and_sector": {
+        "status": "partial",
+        "source": "daily.market_sentiment + daily.sector_heat",
+        "as_of": "2026-10-12",
+        "summary": "正式市场偏冷；板块方向未知",
+        "formal_market_sentiment": {
+          "status": "available",
+          "source": "daily.market_sentiment",
+          "as_of": "2026-10-12",
+          "score": 30,
+          "label": "偏冷",
+          "version": "v2",
+          "coverage": 0.85,
+          "direction_state": null,
+          "components": {
+            "breadth": 23.76,
+            "limit_ecology": 38.64,
+            "index": 24.93,
+            "turnover": null,
+            "trend": 30.34
+          },
+          "evidence": {
+            "breadth": {
+              "available": true,
+              "valid_count": 5485,
+              "advance_count": 1161,
+              "decline_count": 4255,
+              "flat_count": 69,
+              "advance_ratio": 21.17,
+              "median_change_pct": -1.681,
+              "rise_over_3_count": 231,
+              "fall_over_3_count": 1475,
+              "score": 23.76
+            },
+            "limit_ecology": {
+              "available": true,
+              "valid_count": 5485,
+              "excluded_count": 0,
+              "limit_up_count": 46,
+              "limit_down_count": 19,
+              "limit_ratio": 2.35,
+              "log_limit_ratio": 0.854415,
+              "ratio_score": 9.3,
+              "limit_up_ratio": 0.008387,
+              "limit_down_ratio": 0.003464,
+              "limit_up_score": 41.93,
+              "limit_down_score": 82.68,
+              "improvement_score": 37.64,
+              "score": 38.64,
+              "source": "eastmoney_limit_pools"
+            },
+            "index": {
+              "available": true,
+              "valid_count": 6,
+              "average_change_pct": -1.672,
+              "score": 24.93
+            },
+            "turnover": {
+              "available": false,
+              "ratio_to_ma5": null,
+              "ratio_to_ma20": null,
+              "score": null
+            },
+            "trend": {
+              "available": true,
+              "above_ma20_ratio": 0.3034,
+              "score": 30.34
+            }
+          }
+        },
+        "market": "30 / 100 · 偏冷",
+        "market_label": "偏冷",
+        "market_sentiment_score": 30,
+        "sector_evidence": {
+          "status": "missing",
+          "source": "daily.sector_heat",
+          "as_of": "2026-10-12",
+          "sector": "中药Ⅱ",
+          "direction": "unknown",
+          "display_completeness": "missing",
+          "display_missing_fields": [],
+          "net_flow": null,
+          "supporting_evidence": [],
+          "opposing_evidence": [],
+          "reason": "verified_sector_item_not_provided"
+        },
+        "sector": "中药Ⅱ",
+        "sector_state": "方向未知",
+        "sector_layer_state": "未知",
+        "sector_support": null,
+        "sector_risk": null,
+        "sector_change_pct": null,
+        "sector_up_count": null,
+        "sector_total_count": null,
+        "sector_limit_up_count": null,
+        "sector_net_flow": null,
+        "sector_market_rank": null,
+        "sector_hierarchy_dedup_status": null,
+        "stock_relative_strength": null,
+        "stock_relative_status": "missing",
+        "stock_relative_source": null,
+        "stock_relative_as_of": "2026-10-12",
+        "market_state": "未知",
+        "stock_state": "未知",
+        "missing_evidence": [
+          "板块涨跌幅未提供",
+          "板块上涨家数未提供",
+          "板块总家数未提供",
+          "板块涨停家数未提供",
+          "板块资金净流入未提供",
+          "板块市场排名未提供",
+          "个股板块内相对强弱未提供"
+        ]
+      },
+      "main_rise_clue": {
+        "status": "invalidated",
+        "source": "existing candidate strategy signals",
+        "as_of": "2026-10-12",
+        "clue_type": "invalidated",
+        "label": "主升线索失效",
+        "supporting_evidence": [
+          "强势启动候选",
+          "日线强势启动",
+          "强启动",
+          "baseline",
+          "基础候选",
+          "处于60日低位区间；放量1.8倍；突破20日平台",
+          "close_above_ma5",
+          "close_above_ma10"
+        ],
+        "opposing_evidence": [
+          "结构破坏",
+          "broken"
+        ],
+        "evidence_guards": [],
+        "note": "只翻译现有证据，不生成策略、分数或正式动作"
+      },
+      "risk_and_next": {
+        "status": "missing",
+        "source": "workspace risk flags + declared candidate conditions",
+        "as_of": "2026-10-12",
+        "risk_labels": [],
+        "event_risks": [],
+        "event_risk_status": "missing",
+        "event_risk_source": null,
+        "event_risk_as_of": null,
+        "invalidation_price": null,
+        "missing_evidence": [
+          "当前风险标签未提供",
+          "下一确认条件未提供",
+          "继续保持条件未提供",
+          "等待回踩条件未提供",
+          "取消或降级条件未提供",
+          "结构失效条件未提供",
+          "结构失效价格未提供",
+          "公告或事件风险未提供"
+        ],
+        "next_confirmation": {
+          "status": "missing",
+          "source": "candidate.upgrade/next_day/confirmation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明下一确认条件"
+        },
+        "keep_conditions": {
+          "status": "missing",
+          "source": "candidate.keep_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明继续保持条件"
+        },
+        "retest_conditions": {
+          "status": "missing",
+          "source": "candidate.retest_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明等待回踩条件"
+        },
+        "cancel_conditions": {
+          "status": "missing",
+          "source": "candidate.cancel_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明取消或降级条件"
+        },
+        "invalidation_conditions": {
+          "status": "missing",
+          "source": "candidate.invalidation_conditions",
+          "items": [],
+          "empty_text": "当前策略未声明结构失效条件"
+        },
+        "reason": "strategy_risk_and_conditions_not_declared"
+      },
+      "historical_validation": {
+        "status": "missing",
+        "source": "daily.strategy_scorecards + daily.recommendation_ledger",
+        "as_of": "2026-10-12",
+        "comparison_identity": null,
+        "declared_horizon": null,
+        "progress_by_horizon": {
+          "t1": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t3": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          },
+          "t5": {
+            "status": "contract_missing",
+            "mature_samples": null,
+            "waiting_samples": null,
+            "unavailable_samples": null,
+            "required_mature_samples": 100,
+            "required_active_dates": 20,
+            "required_calendar_months": 2,
+            "active_dates": null,
+            "active_months": null
+          }
+        },
+        "metrics_by_horizon": {
+          "t1": {},
+          "t3": {},
+          "t5": {}
+        },
+        "simulation_tracking": {
+          "status": "missing",
+          "label": "暂无同合同历史跟踪记录",
+          "entry_price": null,
+          "entry_price_source": null
+        },
+        "reason": "same_contract_ledger_record_not_found",
+        "summary": "策略未声明统一周期；暂无同合同历史验证记录"
+      },
+      "display_derived": {
+        "status": "missing",
+        "source": "display calculation from price_evidence",
+        "distance_from_reference_pct": null,
+        "distance_state": null,
+        "distance_state_source": null,
+        "upside_to_pressure_pct": null,
+        "downside_to_invalidation_pct": null,
+        "risk_reward_ratio": null,
+        "chart_evidence": {
+          "status": "partial",
+          "source": "serialized/formal chart evidence metadata",
+          "as_of": "2026-10-12",
+          "macd": {
+            "status": "available",
+            "source": "serialized.macd_hist",
+            "as_of": "2026-10-12",
+            "value_count": 75,
+            "reason": ""
+          },
+          "prices": {
+            "status": "partial",
+            "source": "price_evidence",
+            "as_of": "2026-10-12",
+            "available": [
+              "current_price"
+            ],
+            "field_sources": {
+              "current_price": "workspace.current_price"
+            }
+          },
+          "pivots": {
+            "status": "missing",
+            "source": "price_evidence conflict-checked pivot fields",
+            "as_of": "2026-10-12",
+            "available": [],
+            "ZG": null,
+            "ZD": null,
+            "field_sources": {},
+            "conflicts": [],
+            "reason": "pivot_lines_not_provided"
+          },
+          "annotations": {
+            "status": "available",
+            "source": "serialized.chart_annotations",
+            "as_of": "2026-10-12",
+            "mark_lines": 2,
+            "mark_points": 2,
+            "labels": 1,
+            "reason": ""
+          }
+        },
+        "reason": "real_price_boundaries_incomplete"
+      },
+      "source_identity": {
+        "status": "available",
+        "source": "workspace ref + serialized/formal pool code",
+        "reason": null
+      },
+      "payload_contract": {
+        "status": "available",
+        "max_text_length": 512,
+        "truncated_text_count": 0
+      }
+    }
+  ]
+}

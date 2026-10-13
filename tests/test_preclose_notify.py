@@ -58,6 +58,46 @@ class FakeResponse:
 
 
 class PrecloseNotifyTests(unittest.TestCase):
+    def test_unavailable_notifications_dedupe_and_track_formal_result_changes(self):
+        reconciliation = {
+            "trade_date": "2026-10-08", "status": "preclose_unavailable",
+            "formal_content_hash": "f" * 64,
+            "pools": {"main": {"formal": [{"code": "600000", "name": "正式股"}]}},
+        }
+        calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            outbox = NotificationOutbox(Path(temp_dir) / "outbox.jsonl")
+            def send(value):
+                return send_reconciliation_notifications(value, outbox=outbox,
+                    wxpusher_app_token="fixture", wxpusher_uid="fixture",
+                    post=lambda *args, **kwargs: (calls.append(kwargs) or FakeResponse(
+                        payload={"success": True, "code": 1000})))
+            send(reconciliation)
+            repeated = send(reconciliation)
+            self.assertEqual(repeated["wxpusher"]["status"], "already_sent")
+            changed = dict(reconciliation, pools={"main": {"formal": [{"code": "600001", "name": "另一正式股"}]}})
+            send(changed)
+            send(changed)
+        self.assertEqual(len(calls), 2)
+        self.assertIn("预跑结果不可用", calls[0]["json"]["content"])
+        self.assertIn("另一正式股", calls[1]["json"]["content"])
+
+    def test_unavailable_reconciliation_keeps_warning_and_formal_decision(self):
+        reconciliation = {
+            "trade_date": "2026-10-08", "status": "preclose_unavailable",
+            "pools": {"main": {"formal": [{"code": "600000", "name": "正式股"}]}},
+        }
+        message = format_reconciliation_message(reconciliation)
+        self.assertIn("预跑结果不可用，无法与正式结果比较", message)
+        self.assertIn("正式股", message)
+        projection = {"phase": "formal", "report_date": "2026-10-08",
+                      "summary": {"title": "正式结果仍可阅读"}}
+        message = format_reconciliation_message(reconciliation, decision_projection=projection)
+        self.assertIn("预跑结果不可用，无法与正式结果比较", message)
+        self.assertIn("正式结果仍可阅读", message)
+        for phrase in ("一致", "有变化", "正式新增", "预跑有、正式无"):
+            self.assertNotIn(phrase, message)
+
     def test_simple_message_contract_and_three_total_cap(self):
         message = format_preclose_message(_snapshot())
 

@@ -70,6 +70,46 @@ def _fingerprint(path):
 
 
 class PrecloseEndToEndTests(unittest.TestCase):
+    def test_failed_snapshot_reconciles_to_unavailable_through_formal_projection_and_publish(self):
+        worker = MemoryPrecloseWorker()
+        calls = []
+        def publisher(value, **kwargs):
+            return publish_reconciliation_and_notify(value,
+                **{key: kwargs[key] for key in ("api_base", "write_token", "wxpusher_app_token",
+                    "wxpusher_uid", "wecom_webhook", "outbox", "notify", "decision_projection")},
+                put=worker.put, get=worker.get,
+                post=lambda *args, **kw: (calls.append(kw["json"]) or FakeResponse({"success": True, "code": 1000})))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            base = Path(temp_dir)
+            docs = base / "docs"
+            report = docs / "data" / (TRADE_DATE + ".json")
+            report.parent.mkdir(parents=True)
+            report.write_text(json.dumps(_formal_report()), encoding="utf-8")
+            root = base / "preclose"
+            day = root / TRADE_DATE
+            day.mkdir(parents=True)
+            snapshot_path = day / "snapshot.json"
+            snapshot_path.write_text(json.dumps(dict(_preclose_snapshot(), status="failed",
+                pools={"main": [], "h4_t3": [], "acceleration": []})), encoding="utf-8")
+            before = [_fingerprint(path) for path in (report, snapshot_path)]
+            config = base / "preclose.env"
+            config.write_text("PRECLOSE_API_BASE=https://preclose.test\nPRECLOSE_WRITE_TOKEN=fixture\n"
+                              "WXPUSHER_APP_TOKEN=fixture\nWXPUSHER_UID=fixture\n", encoding="utf-8")
+            config.chmod(0o600)
+            for attempt in range(2):
+                result = run_reconciliation_once(TRADE_DATE, root=root, docs_dir=docs,
+                    env_file=config, notify=True, validator=lambda *_args: True, publisher=publisher)
+                self.assertEqual(result["status"], "preclose_unavailable")
+                self.assertEqual(result["exit_code"], 0)
+                self.assertEqual(worker.reconciliation["content_hash"], result["content_hash"])
+                self.assertFalse((day / "reconcile.lock").exists())
+            self.assertEqual(before, [_fingerprint(path) for path in (report, snapshot_path)])
+        self.assertEqual(len(calls), 1)
+        self.assertIn("预跑结果不可用，无法与正式结果比较", calls[0]["content"])
+        self.assertIn("盘后快照供后续核验", calls[0]["content"])
+        self.assertEqual(worker.reconciliation["pools"]["main"]["formal"][0]["code"], "600002")
+        self.assertEqual(worker.reconciliation["pools"]["main"]["added_after_close"], [])
+
     def test_reconciliation_formal_pending_publish_no_notification(self):
         worker = MemoryPrecloseWorker()
         post_calls = []
