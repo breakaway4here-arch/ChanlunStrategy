@@ -15,6 +15,7 @@ import shutil
 import sys
 import uuid
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 
 
@@ -27,11 +28,20 @@ from chanlun.pool_contract import resolve_nested_strategy_pool  # noqa: E402
 from chanlun.identity import normalize_identity  # noqa: E402
 from chanlun.report_generator import (  # noqa: E402
     _build_report_v2_html,
+    _build_report_bootstrap,
     _escape_inline_json,
+    _load_previous_full_projection,
+    _load_psy12_shadow_history,
     _report_asset_version,
+    build_aggregate_day_projection,
     copy_report_assets,
 )
 from chanlun.report_view_model import build_workspace  # noqa: E402
+from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
+from chanlun.recommendation_evidence import (  # noqa: E402
+    _find_original_candidate,
+    _find_serialized_candidate,
+)
 from chanlun.report_comparison import write_comparison_index  # noqa: E402
 from chanlun.shadow_evaluation import production_digest  # noqa: E402
 from chanlun.strategy_review import (  # noqa: E402
@@ -1180,6 +1190,346 @@ def _write_json(path, payload):
         json.dump(payload, handle, ensure_ascii=False, indent=2)
 
 
+def _report_generated_at(report, report_date, name):
+    if not isinstance(report, dict):
+        raise ValueError("{} report is not an object".format(name))
+    quality = report.get("data_quality") or {}
+    if not isinstance(quality, dict):
+        raise ValueError("{} report data_quality is not an object".format(name))
+    if (report.get("date", report_date) != report_date
+            or quality.get("report_date") != report_date):
+        raise ValueError("{} report date mismatch".format(name))
+    try:
+        generated = datetime.fromisoformat(str(quality.get("generated_at", "")).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError("{} report generation is unknown".format(name)) from exc
+    if generated.utcoffset() is None:
+        raise ValueError("{} report generation timezone is unknown".format(name))
+    return generated
+
+
+def _aggregate_projection(source, original):
+    """Keep independent supplements; replace report fields from the full source."""
+    projected = copy.deepcopy(original)
+    report_fields = build_aggregate_day_projection(
+        source, include_right_side_shadow="right_side_startup" in source,
+    )
+    projected.update(report_fields)
+    # Optional pools can disappear on a later run. Never retain their old data.
+    for key in ("picks_pure", "picks_fusion", "next_day_boom", "luojie_pool",
+                "selection_input_health", "strategy_run_manifest", "right_side_startup",
+                "psy12", "psy12_shadow"):
+        if key not in source:
+            projected.pop(key, None)
+    for key in set(original).intersection(source):
+        if key not in report_fields:
+            projected[key] = copy.deepcopy(source[key])
+    return projected
+
+
+def _aggregate_matches_source(aggregate, source):
+    if aggregate == source:
+        return True
+    expected = _aggregate_projection(source, aggregate)
+    # Legacy light entries were built before chart-window truncation. Their
+    # point indexes use the original window, and contextual prices may be
+    # absent. These representation differences do not change selection facts.
+    for pool in ("picks_pure", "picks_fusion"):
+        actual_rows = aggregate.get(pool) or []
+        expected_rows = expected.get(pool) or []
+        if not isinstance(actual_rows, list) or not isinstance(expected_rows, list):
+            return False
+        source_rows = source.get(pool) or []
+        for old, new, full in zip(actual_rows, expected_rows, source_rows):
+            if not isinstance(old, dict) or not isinstance(new, dict) or old.get("code") != new.get("code"):
+                continue
+            old_best = old.get("best_buy_point") or {}
+            full_best = full.get("best_buy_point") or {}
+            dates = full.get("dates") or []
+            offset = None
+            full_index = full_best.get("index")
+            original_index = full_best.get("startup_index")
+            signal_date = full_best.get("signal_date")
+            if (type(full_index) is int and type(original_index) is int
+                    and 0 <= full_index < len(dates) and original_index >= full_index
+                    and signal_date and dates[full_index] == signal_date
+                    and full_best.get("startup_date") == signal_date
+                    and old_best.get("signal_date") == signal_date
+                    and old_best.get("index") == original_index):
+                offset = original_index - full_index
+            pairs = [(old.get("best_buy_point"), new.get("best_buy_point"))]
+            for field in ("buy_points", "reference_buy_points", "blocked_buy_points"):
+                pairs.extend(zip(old.get(field) or [], new.get(field) or []))
+            for old_point, new_point in pairs:
+                if not isinstance(old_point, dict) or not isinstance(new_point, dict):
+                    continue
+                if (offset is not None and type(new_point.get("index")) is int
+                        and old_point.get("index") == new_point["index"] + offset):
+                    new_point["index"] = old_point["index"]
+                for field in ("reference_price", "current_price", "distance_from_reference_pct"):
+                    if old_point.get(field) is None:
+                        new_point[field] = old_point.get(field)
+    return _publication_facts_digest(aggregate) == _publication_facts_digest(expected)
+
+
+def _publication_facts_digest(report):
+    projected = _without_review_surfaces(report)
+    health = copy.deepcopy(report.get("selection_input_health"))
+    if isinstance(health, dict):
+        # This repair has always derived per-view incident visibility. Formal
+        # and strategy health are source facts and must still agree.
+        health.pop("by_view", None)
+    projected["selection_input_health"] = health
+    return production_digest(projected)
+
+
+def _load_latest_public_inputs(docs_dir, report_date):
+    """Select one verified daily source; never use file mtimes as precedence."""
+    from scripts.validate_today_report import validate_report_contract, validate_runtime_cutover
+
+    source = atomic._read_json(docs_dir / "data" / (report_date + ".json"))
+    generated = _report_generated_at(source, report_date, "daily")
+    if source.get("date") != report_date:
+        raise ValueError("daily report date mismatch")
+    errors = validate_report_contract(source, require_official=True) + validate_runtime_cutover(source)
+    if errors:
+        raise ValueError("daily source is invalid: " + "; ".join(errors))
+    try:
+        aggregate = atomic._read_json(docs_dir / "data.json")
+    except (OSError, ValueError) as exc:
+        raise ValueError("aggregate history is unreadable; restore its trusted copy before publishing") from exc
+    if (not isinstance(aggregate, dict) or not isinstance(aggregate.get("reports"), dict)
+            or not isinstance(aggregate.get("dates"), list)):
+        raise ValueError("aggregate history structure is invalid; restore its trusted copy before publishing")
+    original_day = aggregate["reports"].get(report_date)
+    if not isinstance(original_day, dict):
+        raise ValueError("aggregate history has no matching report date; restore its trusted copy before publishing")
+
+    bootstraps = {}
+    for name, relative in (("inline", "index.html"), ("archive", report_date + "/index.html")):
+        try:
+            envelope = atomic._read_bootstrap_envelope(docs_dir / relative)
+        except (OSError, ValueError):
+            continue
+        if envelope.get("pageDate") != report_date:
+            raise ValueError("{} page date mismatch".format(name))
+        if not isinstance(envelope.get("inlineReportData"), dict):
+            raise ValueError("{} inline report is missing".format(name))
+        bootstraps[name] = envelope
+    if not bootstraps:
+        raise ValueError("report shell configuration is unavailable; restore a trusted same-date page before publishing")
+    for name in ("inline", "archive"):
+        if name not in bootstraps:
+            bootstraps[name] = copy.deepcopy(next(iter(bootstraps.values())))
+
+    previous = {"aggregate": original_day,
+                **{name: envelope["inlineReportData"] for name, envelope in bootstraps.items()}}
+    for name, report in previous.items():
+        previous_generation = _report_generated_at(report, report_date, name)
+        if previous_generation > generated:
+            raise ValueError("{} report is newer than the daily source".format(name))
+        if previous_generation == generated:
+            matches = (_aggregate_matches_source(report, source) if name == "aggregate"
+                       else _publication_facts_digest(report) == _publication_facts_digest(source))
+            if not matches:
+                raise ValueError("{} conflicts with daily source at the same generation".format(name))
+    day = _aggregate_projection(source, original_day)
+    # Preserve the original light representation on an already-consistent run.
+    if _report_generated_at(original_day, report_date, "aggregate") == generated and _aggregate_matches_source(original_day, source):
+        day = copy.deepcopy(original_day)
+    return {"daily": source, "aggregate": day,
+            "inline": copy.deepcopy(source), "archive": copy.deepcopy(source)}, aggregate, bootstraps
+
+
+def _bootstrap_receipt(source, evidence, workbench):
+    # The independent KPL updater changes only this supplement and its card.
+    # Evidence/workbench do not consume it; full four-plane alignment still
+    # checks it, but refreshing it must not invalidate unchanged evidence.
+    evidence_source = {key: value for key, value in source.items()
+                       if key != "kaipanla_context"}
+    return {
+        "schema_version": 1, "report_date": source.get("date"),
+        "source_sha256": _publication_facts_digest(evidence_source),
+        "workspace_sha256": production_digest(source.get("workspace")),
+        "evidence_sha256": production_digest(evidence),
+        "workbench_sha256": production_digest(workbench),
+    }
+
+
+def _bound_published_evidence(envelope, source, *, project_hidden=False):
+    """Replay published identities before retaining HTML-only minute evidence.
+
+    This follows the existing bounded MA migration's published-workspace replay;
+    it does not recreate independent minute facts from the serialized daily file.
+    """
+    old_source = envelope.get("inlineReportData") or {}
+    evidence = envelope.get("recommendationEvidence")
+    workbench = envelope.get("decisionWorkbench")
+    workspace = source.get("workspace") or {}
+    report_date = source.get("date")
+    if not (isinstance(evidence, dict) and evidence.get("schema_version") == 1
+            and evidence.get("report_date") == report_date
+            and isinstance(evidence.get("views"), dict)
+            and isinstance(evidence.get("market_sentiment"), dict)
+            and list(evidence["views"]) == workspace.get("view_order")
+            and isinstance(workbench, dict) and workbench.get("phase") == "formal"
+            and workbench.get("report_date") == report_date
+            and isinstance(workbench.get("items"), list)):
+        raise ValueError("published bootstrap evidence identity mismatch")
+    receipt = envelope.get("reportPublication")
+    if receipt is not None and receipt != _bootstrap_receipt(old_source, evidence, workbench):
+        raise ValueError("published bootstrap receipt mismatch")
+    published = {view: [] for view in evidence["views"]}
+    seen = set()
+    for item in workbench["items"]:
+        if not isinstance(item, dict) or not isinstance(item.get("strategy_results"), list):
+            raise ValueError("published workbench item is invalid")
+        for result in item["strategy_results"]:
+            if not isinstance(result, dict):
+                raise ValueError("published strategy source is invalid")
+            view, row = result.get("strategy_id"), result.get("candidate")
+            if view not in published or not isinstance(row, dict):
+                raise ValueError("published strategy view/ref mismatch")
+            rank, code = row.get("view_rank"), row.get("code")
+            ref = row.get("ref") or {}
+            rows = evidence["views"][view]
+            identity = (view, code, rank)
+            if not (isinstance(ref, dict) and isinstance(rows, list) and type(rank) is int and 1 <= rank <= len(rows)
+                    and identity not in seen and item.get("code") == code
+                    and result.get("view_rank") == rank and ref.get("code") == code):
+                raise ValueError("published strategy source identity mismatch")
+            old = rows[rank - 1]
+            if not isinstance(old, dict):
+                raise ValueError("published evidence row is invalid")
+            summary, declared = old.get("summary") or {}, old.get("source_identity") or {}
+            if not isinstance(summary, dict) or not isinstance(declared, dict):
+                raise ValueError("published evidence source declaration is invalid")
+            raw, pool, diagnostic = _find_serialized_candidate(source, row)
+            original_raw, original_diagnostic = _find_original_candidate(old_source, row)
+            if not (old.get("view") == view and old.get("code") == code
+                    and summary.get("code") == code
+                    and summary.get("as_of") == report_date
+                    and summary.get("pool_identity") == pool
+                    and summary.get("view_identity") == view and summary.get("view_rank") == rank
+                    and declared.get("status") == "available" and not declared.get("reason")
+                    and isinstance(raw, dict) and isinstance(original_raw, dict)
+                    and not diagnostic and not original_diagnostic
+                    and result.get("evidence") == old):
+                raise ValueError("published evidence source binding mismatch")
+            seen.add(identity)
+            published[view].append(row)
+    for view, rows in published.items():
+        rows.sort(key=lambda row: row["view_rank"])
+        old_rows = evidence["views"][view]
+        if not isinstance(old_rows, list) or len(rows) != len(old_rows):
+            raise ValueError("published evidence/workbench member sets differ")
+    recovered = copy.deepcopy(old_source.get("workspace") or {})
+    recovered.update(views=published, counts={view: len(rows) for view, rows in published.items()},
+                     view_order=list(published))
+    replayed = build_decision_workbench(old_source, recovered, evidence, phase="formal",
+                                       snapshot_id=workbench.get("snapshot_id", ""))
+    if ({key: value for key, value in replayed.items() if key != "changes"}
+            != {key: value for key, value in workbench.items() if key != "changes"}):
+        raise ValueError("published evidence cannot replay its workbench")
+
+    selected = copy.deepcopy(evidence)
+    for view, old_rows in published.items():
+        current = (workspace.get("views") or {}).get(view)
+        if not isinstance(current, list):
+            raise ValueError("current workspace view is invalid")
+        if old_rows and not current:
+            meta = ((workspace.get("view_meta") or {}).get(view) or {}).get("upstream_contract") or {}
+            health = ((source.get("selection_input_health") or {}).get("by_view") or {}).get(view) or {}
+            if not (project_hidden and meta.get("output_hidden") is True
+                    and health.get("output_hidden") is True):
+                raise ValueError("published evidence includes a closed or stale view")
+            selected["views"][view] = []
+            continue
+        expected = [(row.get("code"), row.get("view_rank"), row.get("ref")) for row in current]
+        actual = [(row.get("code"), row.get("view_rank"), row.get("ref")) for row in old_rows]
+        if actual != expected:
+            raise ValueError("published evidence view/ref membership mismatch")
+    return selected
+
+
+def _same_report_generation(envelope, source, report_date):
+    old = envelope.get("inlineReportData") or {}
+    return (_report_generated_at(old, report_date, "inline") == _report_generated_at(source, report_date, "daily")
+            and _publication_facts_digest(old) == _publication_facts_digest(source))
+
+
+def _refresh_report_bootstrap(envelope, source, docs_dir, report_date):
+    rebuilt = copy.deepcopy(envelope)
+    if _same_report_generation(envelope, source, report_date):
+        evidence = _bound_published_evidence(envelope, source, project_hidden=True)
+        history = _load_psy12_shadow_history(docs_dir, as_of_date=report_date)
+        workbench = build_decision_workbench(
+            source, source.get("workspace", {}), evidence, phase="formal",
+            snapshot_id=source.get("snapshot_id", ""),
+            previous=_load_previous_full_projection(os.fspath(docs_dir), history, report_date),
+        )
+        refreshed = {"pageDate": report_date, "inlineReportData": source,
+                     "recommendationEvidence": evidence, "decisionWorkbench": workbench}
+    else:
+        refreshed = _build_report_bootstrap(
+            source, source, envelope.get("top10ApiBase", ""),
+            envelope.get("precloseApiBase", ""), envelope.get("decisionWatchlistUrl", ""),
+            envelope.get("accessKeyHash", ""),
+            historical_reports=_load_psy12_shadow_history(docs_dir, as_of_date=report_date),
+            output_dir=os.fspath(docs_dir),
+        )
+    for key in ("pageDate", "inlineReportData", "recommendationEvidence", "decisionWorkbench"):
+        rebuilt[key] = refreshed[key]
+    rebuilt["reportPublication"] = _bootstrap_receipt(
+        source, rebuilt["recommendationEvidence"], rebuilt["decisionWorkbench"])
+    return rebuilt
+
+
+def reconcile_report_bootstraps(envelopes, source, docs_dir, report_date):
+    """Choose same-source evidence once and retain each page's shell settings."""
+    current = []
+    for envelope in envelopes.values():
+        if envelope.get("pageDate") != report_date:
+            raise ValueError("bootstrap page date mismatch")
+        if _same_report_generation(envelope, source, report_date):
+            current.append(_refresh_report_bootstrap(envelope, source, docs_dir, report_date))
+    if not current:
+        current.append(_refresh_report_bootstrap(next(iter(envelopes.values())), source, docs_dir, report_date))
+    selected = current[0]
+    keys = ("pageDate", "inlineReportData", "recommendationEvidence", "decisionWorkbench", "reportPublication")
+    for candidate in current[1:]:
+        if any(candidate[key] != selected[key] for key in keys):
+            raise ValueError("published pages have conflicting same-generation evidence")
+    result = {}
+    for name, envelope in envelopes.items():
+        result[name] = copy.deepcopy(envelope)
+        for key in keys:
+            result[name][key] = copy.deepcopy(selected[key])
+    return result
+
+
+def validate_public_report_alignment(docs_dir, report_date):
+    docs_dir = Path(docs_dir)
+    planes = atomic._load_public_planes(docs_dir, report_date)
+    source = planes["daily"]
+    _report_generated_at(source, report_date, "daily")
+    for name in ("inline", "archive"):
+        if planes[name] != source:
+            raise ValueError("{} report differs from the daily source".format(name))
+    if not _aggregate_matches_source(planes["aggregate"], source):
+        raise ValueError("aggregate report differs from the daily source")
+    evidence_digests = set()
+    for name, relative in (("inline", "index.html"), ("archive", report_date + "/index.html")):
+        envelope = atomic._read_bootstrap_envelope(docs_dir / relative)
+        if envelope.get("pageDate") != report_date:
+            raise ValueError("{} page date mismatch".format(name))
+        selected = _bound_published_evidence(envelope, source)
+        evidence_digests.add(production_digest(selected))
+    if len(evidence_digests) != 1:
+        raise ValueError("published pages have conflicting same-generation evidence")
+    return planes
+
+
 def _rebuild_staged_artifacts(
     staged_docs,
     report_date,
@@ -1201,23 +1551,27 @@ def _rebuild_staged_artifacts(
 
     copy_report_assets(os.fspath(staged_docs))
     asset_version = _report_asset_version()
+    bootstraps = reconcile_report_bootstraps(
+        original_bootstraps, rebuilt_planes["daily"], staged_docs, report_date,
+    )
     for name, relative, prefix in (
         ("inline", "index.html", ""),
         ("archive", "{}/index.html".format(report_date), "../"),
     ):
-        envelope = copy.deepcopy(original_bootstraps[name])
-        envelope["inlineReportData"] = rebuilt_planes[name]
+        envelope = bootstraps[name]
         html = _build_report_v2_html(
             report_date,
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
         )
+        (staged_docs / relative).parent.mkdir(parents=True, exist_ok=True)
         with open(staged_docs / relative, "w", encoding="utf-8") as handle:
             handle.write(html)
     write_comparison_index(
         os.fspath(staged_docs / "data"), market_db_path, window_size=26
     )
+    return bootstraps
 
 
 def _validate_staged_artifacts(
@@ -1342,8 +1696,9 @@ def publish_strategy_scorecard_snapshot(
             docs_dir,
             report_date,
             extra_targets=(comparison_target,),
+            allow_missing=True,
         )
-        original_planes = atomic._load_public_planes(docs_dir, report_date)
+        original_planes, original_aggregate, original_bootstraps = _load_latest_public_inputs(docs_dir, report_date)
         (
             scorecards,
             review_diagnostics,
@@ -1393,13 +1748,6 @@ def publish_strategy_scorecard_snapshot(
         original_manifest = atomic._read_json(
             docs_dir / "data" / "index.json"
         )
-        original_aggregate = atomic._read_json(docs_dir / "data.json")
-        original_bootstraps = {
-            "inline": atomic._read_bootstrap_envelope(docs_dir / "index.html"),
-            "archive": atomic._read_bootstrap_envelope(
-                docs_dir / report_date / "index.html"
-            ),
-        }
         transaction_id = uuid.uuid4().hex
         stage_root = atomic._create_controlled_stage_root(
             docs_dir, transaction_id
@@ -1407,7 +1755,7 @@ def publish_strategy_scorecard_snapshot(
         try:
             staged_docs = stage_root / "docs"
             shutil.copytree(docs_dir, staged_docs)
-            _rebuild_staged_artifacts(
+            expected_bootstraps = _rebuild_staged_artifacts(
                 staged_docs,
                 report_date,
                 rebuilt_planes,
@@ -1426,6 +1774,10 @@ def publish_strategy_scorecard_snapshot(
                 ledger_finalization,
                 original_manifest,
             )
+            validate_public_report_alignment(staged_docs, report_date)
+            for name, relative in (("inline", "index.html"), ("archive", report_date + "/index.html")):
+                if atomic._read_bootstrap_envelope(staged_docs / relative) != expected_bootstraps[name]:
+                    raise RuntimeError("staged bootstrap differs from the selected source evidence")
             updated_files = atomic._atomic_replace_targets(
                 staged_docs,
                 docs_dir,
@@ -1433,6 +1785,7 @@ def publish_strategy_scorecard_snapshot(
                 expected_original_hashes=initial_hashes,
                 transaction_id=transaction_id,
                 extra_targets=(comparison_target,),
+                allow_missing=True,
             )
         finally:
             if stage_root.exists():

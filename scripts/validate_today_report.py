@@ -1547,6 +1547,7 @@ def main(argv=None):
     )
     parser.add_argument("--needs-sublevel-retry", action="store_true")
     parser.add_argument("--comparison-artifact-only", action="store_true")
+    parser.add_argument("--public-planes-only", action="store_true")
     parser.add_argument(
         "--docs-dir", default=str(ROOT / "docs")
     )
@@ -1560,7 +1561,27 @@ def main(argv=None):
         print(f"missing report data: {path}", file=sys.stderr)
         return 1
 
-    report = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        report = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        print("daily report unreadable: {}".format(type(exc).__name__), file=sys.stderr)
+        return 1
+    if not isinstance(report, Mapping):
+        print("daily report must be an object", file=sys.stderr)
+        return 1
+    if args.public_planes_only:
+        from scripts.repair_strategy_scorecard_snapshot import validate_public_report_alignment
+
+        try:
+            errors = validate_report_contract(report, require_official=True) + validate_runtime_cutover(report)
+            if errors:
+                raise ValueError("invalid daily source: " + "; ".join(errors))
+            validate_public_report_alignment(docs_dir, report_date)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print("public report mismatch: {}".format(exc), file=sys.stderr)
+            return 1
+        print("public report planes validated for {}".format(report_date))
+        return 0
     if args.comparison_artifact_only:
         comparison_path = docs_dir / "data" / "comparison-index.json"
         if not comparison_path.exists():

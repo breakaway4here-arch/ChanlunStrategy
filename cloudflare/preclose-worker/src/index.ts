@@ -245,6 +245,48 @@ function normalizeDiffList(value: unknown): unknown[] {
   }).filter(Boolean);
 }
 
+function precloseComparable(snapshot: PrecloseSnapshotBody): boolean {
+  const status = snapshot.status === "expired" ? snapshot.result_status : snapshot.status;
+  if (!isObject(snapshot.pools) || POOL_KEYS.some((key) => !Array.isArray(snapshot.pools[key]))) return false;
+  const hasRows = POOL_KEYS.some((key) => snapshot.pools[key].length > 0);
+  return (status === "available" && hasRows) || (status === "empty" && !hasRows);
+}
+
+function publicFormalRows(value: unknown): unknown[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 100).map((row) => {
+    if (!isObject(row) || !CODE_PATTERN.test(String(row.code ?? ""))) return null;
+    const candidate = normalizeCandidate(row);
+    // A missing reference price does not erase a valid formal result's name.
+    return candidate ?? { code: row.code, name: String(row.name || row.code).slice(0, 80) };
+  }).filter(Boolean);
+}
+
+function unavailablePools(value: Record<string, unknown>) {
+  const pools: Record<string, unknown> = {};
+  for (const key of POOL_KEYS) {
+    const source = isObject(value.pools) && isObject(value.pools[key]) ? value.pools[key] : {};
+    const formal = [
+      ...(Array.isArray(source.retained) ? source.retained : []),
+      ...(Array.isArray(source.added_after_close) ? source.added_after_close : []),
+    ];
+    const details = isObject(source.details) ? source.details : {};
+    if (Array.isArray(details.formal_order)) {
+      const order = details.formal_order;
+      formal.sort((left, right) => {
+        const leftIndex = order.indexOf(isObject(left) ? left.code : left);
+        const rightIndex = order.indexOf(isObject(right) ? right.code : right);
+        return (leftIndex < 0 ? order.length : leftIndex) - (rightIndex < 0 ? order.length : rightIndex);
+      });
+    }
+    pools[key] = {
+      retained: [], added_after_close: [], removed_after_close: [], unchanged: false,
+      formal, details: {status: "preclose_unavailable"},
+    };
+  }
+  return pools;
+}
+
 function publicReconciliation(value: unknown, revision: number) {
   if (!isObject(value)) return null;
   const pools: Record<string, unknown> = {};
@@ -256,6 +298,7 @@ function publicReconciliation(value: unknown, revision: number) {
         added_after_close: normalizeDiffList(source.added_after_close),
         removed_after_close: normalizeDiffList(source.removed_after_close),
         unchanged: source.unchanged === true,
+        ...(value.status === "preclose_unavailable" ? {formal: publicFormalRows(source.formal)} : {}),
       };
     }
   }
@@ -388,7 +431,7 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
       || !HASH_PATTERN.test(input.content_hash)
       || typeof input.formal_content_hash !== "string"
       || !HASH_PATTERN.test(input.formal_content_hash)
-      || !new Set(["changed", "unchanged", "formal_pending"]).has(String(input.status))
+      || !new Set(["changed", "unchanged", "formal_pending", "preclose_unavailable"]).has(String(input.status))
     ) {
       throw new Error("invalid reconciliation contract");
     }
@@ -401,6 +444,21 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
       || snapshotRow.content_hash.toLowerCase() !== input.preclose_content_hash.toLowerCase()
     ) {
       throw new Error("reconciliation does not match stored snapshot");
+    }
+    if (input.status !== "formal_pending") {
+      const unavailable = input.status === "preclose_unavailable";
+      if (unavailable === precloseComparable(storedSnapshot)) {
+        throw new Error("reconciliation status does not match pre-close availability");
+      }
+      if (unavailable && (!isObject(input.pools) || POOL_KEYS.some((key) => {
+        const pool = isObject(input.pools) ? input.pools[key] : null;
+        return !isObject(pool) || pool.unchanged !== false || !Array.isArray(pool.formal)
+          || ["retained", "added_after_close", "removed_after_close"].some((field) => (
+            !Array.isArray(pool[field]) || pool[field].length !== 0
+          ));
+      }))) {
+        throw new Error("unavailable reconciliation cannot infer membership changes");
+      }
     }
     const fingerprint = input.content_hash.toLowerCase();
     const current = this.row("reconciliations");
@@ -427,14 +485,24 @@ export class PrecloseSnapshot extends DurableObject<WorkerEnv> {
     if (!current) return null;
     const snapshotRow = this.row("snapshots");
     if (!snapshotRow) return null;
-    const reconciliation = JSON.parse(current.body) as Record<string, unknown>;
+    let reconciliation = JSON.parse(current.body) as Record<string, unknown>;
     const snapshot = JSON.parse(snapshotRow.body) as PrecloseSnapshotBody;
     if (
       reconciliation.trade_date !== snapshot.trade_date
       || reconciliation.snapshot_id !== snapshot.snapshot_id
       || String(reconciliation.preclose_content_hash).toLowerCase() !== snapshotRow.content_hash.toLowerCase()
+      || String(snapshot.content_hash).toLowerCase() !== snapshotRow.content_hash.toLowerCase()
     ) {
       return null;
+    }
+    // Correct old failed/empty comparisons only on the public read projection.
+    // Keep the sealed snapshot, revisions and audit rows untouched. New producer
+    // payloads already use this contract and retain their PUT/GET content hash.
+    if (["changed", "unchanged"].includes(String(reconciliation.status)) && !precloseComparable(snapshot)) {
+      reconciliation = {
+        ...reconciliation, status: "preclose_unavailable", pools: unavailablePools(reconciliation),
+      };
+      reconciliation.content_hash = await sha256Text(stableJson(reconciliationContentProjection(reconciliation)));
     }
     return {
       revision: current.revision,

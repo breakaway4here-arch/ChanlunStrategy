@@ -843,7 +843,11 @@
     var source = reconciliation && typeof reconciliation === 'object' ? reconciliation : {};
     var frozen = snapshot && typeof snapshot === 'object' ? snapshot : {};
     if (!normalizeString(frozen.content_hash)
-      || normalizeString(source.preclose_content_hash) !== normalizeString(frozen.content_hash)) {
+      || normalizeString(source.preclose_content_hash) !== normalizeString(frozen.content_hash)
+      || !normalizeString(frozen.trade_date)
+      || normalizeString(source.trade_date) !== normalizeString(frozen.trade_date)
+      || !normalizeString(frozen.snapshot_id)
+      || normalizeString(source.snapshot_id) !== normalizeString(frozen.snapshot_id)) {
       return '';
     }
     var status = normalizeString(source.status);
@@ -855,6 +859,19 @@
         + '</details>';
     }
     var pools = source.pools && typeof source.pools === 'object' ? source.pools : {};
+    if (status === 'preclose_unavailable') {
+      var formalLines = [['main', '主推'], ['h4_t3', 'H4 T+3'], ['acceleration', '加速']].map(function (entry) {
+        var rows = (pools[entry[0]] || {}).formal;
+        if (!Array.isArray(rows)) return '';
+        var names = precloseDiffNames(rows);
+        return '<p>正式' + escapeHtml(entry[1]) + '：'
+          + escapeHtml(names.length ? names.join('、') : '本期未选出推荐票') + '</p>';
+      }).join('');
+      return '<details class="preclose-reconciliation-card" open>'
+        + '<summary>盘后复核 · 预跑不可比</summary>'
+        + '<p>预跑结果不可用，无法与正式结果比较；请以盘后正式结果为准。</p>'
+        + formalLines + '</details>';
+    }
     if (status === 'unchanged') {
       var mainCount = precloseDiffNames((pools.main || {}).retained).length;
       var h4Count = precloseDiffNames((pools.h4_t3 || {}).retained).length;

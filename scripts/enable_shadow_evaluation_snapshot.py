@@ -745,11 +745,14 @@ def _cleanup_stale_publication_artifacts(docs_dir, report_date):
         )
 
 
-def _public_target_hashes(docs_dir, report_date, extra_targets=()):
+def _public_target_hashes(docs_dir, report_date, extra_targets=(), allow_missing=False):
     hashes = {}
     for relative in _relative_public_targets(report_date, extra_targets):
         target = Path(docs_dir) / relative
         if not target.is_file():
+            if allow_missing and not target.exists() and not target.is_symlink():
+                hashes[relative] = None
+                continue
             raise FileNotFoundError(
                 "public artifact is missing: {}".format(relative)
             )
@@ -847,6 +850,8 @@ def _validate_journal_artifact_paths(items, docs_dir, transaction_id):
             ("backup", ".shadow-backup"),
             ("next", ".shadow-next"),
         ):
+            if key == "backup" and item.get("original_sha256") is None and item.get(key) is None:
+                continue
             artifact = _resolve_journal_artifact(
                 docs_dir, item.get(key), suffix=suffix
             )
@@ -903,7 +908,7 @@ def _recover_incomplete_transaction(docs_dir):
         for item in reversed(items):
             try:
                 target = _resolve_journal_artifact(docs_dir, item["target"])
-                current_sha = _sha256_file(target)
+                current_sha = _sha256_file(target) if target.is_file() else None
                 original_sha = item.get("original_sha256")
                 staged_sha = item.get("staged_sha256")
                 if current_sha == original_sha:
@@ -914,6 +919,10 @@ def _recover_incomplete_transaction(docs_dir):
                             item["target"]
                         )
                     )
+                if original_sha is None:
+                    target.unlink()
+                    _fsync_directory(target.parent)
+                    continue
                 backup = _resolve_journal_artifact(
                     docs_dir, item["backup"], suffix=".shadow-backup"
                 )
@@ -934,6 +943,7 @@ def _recover_incomplete_transaction(docs_dir):
                     docs_dir,
                     report_date,
                     extra_targets=extra_targets,
+                    allow_missing=True,
                 )
                 expected = {
                     item["target"]: item["original_sha256"] for item in items
@@ -990,6 +1000,7 @@ def _atomic_replace_targets(
     expected_original_hashes=None,
     transaction_id=None,
     extra_targets=(),
+    allow_missing=False,
 ):
     docs_dir = Path(docs_dir).resolve()
     staged_docs = Path(staged_docs).resolve()
@@ -1001,6 +1012,7 @@ def _atomic_replace_targets(
         docs_dir,
         report_date,
         extra_targets=extra_targets,
+        allow_missing=allow_missing,
     )
     if expected_original_hashes is None:
         expected_original_hashes = actual_original_hashes
@@ -1026,13 +1038,15 @@ def _atomic_replace_targets(
                 "original_sha256": expected_original_hashes[relative],
                 "staged_sha256": _sha256_file(source),
             }
-            backup = _copy_fsynced_temporary(
-                target,
-                target,
-                ".shadow-backup",
-                transaction_id,
-            )
-            item["backup"] = os.fspath(backup.relative_to(docs_dir))
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if item["original_sha256"] is not None:
+                backup = _copy_fsynced_temporary(
+                    target,
+                    target,
+                    ".shadow-backup",
+                    transaction_id,
+                )
+                item["backup"] = os.fspath(backup.relative_to(docs_dir))
             prepared.append(item)
             next_path = _copy_fsynced_temporary(
                 source,

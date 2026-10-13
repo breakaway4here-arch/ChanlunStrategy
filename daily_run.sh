@@ -34,18 +34,9 @@ GIT_UPSTREAM="${CHANLUN_GIT_UPSTREAM:-origin/main}"
 FORMAL_PUBLISH_JOURNAL_PATH="${CHANLUN_FORMAL_PUBLISH_JOURNAL_PATH:-${SCRIPT_DIR}/.cache/chanlun/formal-publish-targets.json}"
 
 is_today_output_ready() {
-    if [ ! -f "$TODAY_DATA_PATH" ]; then
-        return 1
-    fi
-
-    if [ ! -f "$INDEX_PATH" ]; then
-        return 1
-    fi
-
-    data_mtime=$(stat -f '%Sm' -t '%Y-%m-%d' "$TODAY_DATA_PATH" 2>/dev/null || true)
-    index_mtime=$(stat -f '%Sm' -t '%Y-%m-%d' "$INDEX_PATH" 2>/dev/null || true)
-
-    [ "$data_mtime" = "$TODAY" ] && [ "$index_mtime" = "$TODAY" ]
+    # This is only source readiness. Validation and the locked snapshot repair
+    # below decide publication readiness, including interrupted derived files.
+    [ -f "$TODAY_DATA_PATH" ]
 }
 
 push_with_proxy_fallback() {
@@ -261,6 +252,11 @@ main() {
 commit_today_report_if_changed() {
     if ! git diff --cached --quiet; then
         echo "索引已有未提交改动，拒绝自动提交"
+        return 1
+    fi
+    if ! /usr/bin/python3 scripts/validate_today_report.py \
+        --public-planes-only "$TODAY"; then
+        echo "日报公开文件与最新有效数据不一致，停止暂存和发布"
         return 1
     fi
     if ! /usr/bin/python3 scripts/stage_report_asset_version_updates.py \

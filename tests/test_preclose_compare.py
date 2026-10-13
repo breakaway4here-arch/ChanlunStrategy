@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from chanlun.preclose_compare import (
+    build_formal_pending_reconciliation,
     build_reconciliation,
     diff_pool,
     normalize_formal_workspace_views,
@@ -91,6 +92,7 @@ def _formal_report():
 
 def _preclose_snapshot():
     return {
+        "status": "available",
         "trade_date": TRADE_DATE,
         "snapshot_id": "preclose:2026-08-27:abc",
         "content_hash": "a" * 64,
@@ -106,6 +108,54 @@ def _preclose_snapshot():
 
 
 class PrecloseCompareTests(unittest.TestCase):
+    def test_python_producer_matches_shared_worker_contract_fixture(self):
+        path = Path(__file__).parent / "fixtures" / "preclose" / "reconciliation-unavailable.json"
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+        result = build_reconciliation(fixture["snapshot"], fixture["formal"],
+                                      generated_at=fixture["reconciliation"]["generated_at"])
+        self.assertEqual(result, fixture["reconciliation"])
+        self.assertEqual(result["status"], "preclose_unavailable")
+
+    def test_failed_empty_pools_are_not_a_normal_empty_result(self):
+        empty = {key: [] for key in ("main", "h4_t3", "acceleration")}
+        for status in ("failed", "deadline_exceeded", "not_run", None, "expired"):
+            with self.subTest(status=status):
+                snapshot = dict(_preclose_snapshot(), status=status, pools=empty)
+                result = build_reconciliation(snapshot, empty)
+                self.assertEqual(result["status"], "preclose_unavailable")
+                for pool in result["pools"].values():
+                    self.assertFalse(pool["unchanged"])
+                    self.assertEqual(pool["retained"], [])
+                    self.assertEqual(pool["added_after_close"], [])
+                    self.assertEqual(pool["removed_after_close"], [])
+                self.assertEqual(result["content_hash"], reconciliation_content_hash(result))
+
+    def test_unavailable_comparison_keeps_formal_results_without_calling_them_added(self):
+        snapshot = dict(_preclose_snapshot(), status="failed")
+        formal = normalize_formal_workspace_views(build_workspace(_formal_report()))
+        result = build_reconciliation(snapshot, formal)
+        self.assertEqual(result["status"], "preclose_unavailable")
+        self.assertEqual(result["pools"]["main"]["formal"], formal["main"])
+        self.assertEqual(result["pools"]["main"]["added_after_close"], [])
+        pending = build_formal_pending_reconciliation(snapshot)
+        self.assertEqual(pending["status"], "formal_pending")
+
+    def test_normal_empty_and_expired_result_status_remain_comparable(self):
+        empty = {key: [] for key in ("main", "h4_t3", "acceleration")}
+        normal = build_reconciliation(dict(_preclose_snapshot(), status="empty", pools=empty), empty)
+        self.assertEqual(normal["status"], "unchanged")
+        for original in ("available", "empty", "failed"):
+            with self.subTest(original=original):
+                snapshot = dict(_preclose_snapshot(), status="expired", result_status=original)
+                if original != "available":
+                    snapshot["pools"] = empty
+                result = build_reconciliation(snapshot, empty)
+                self.assertEqual(result["status"], {
+                    "available": "changed", "empty": "unchanged", "failed": "preclose_unavailable"
+                }[original])
+        abnormal = build_reconciliation(dict(_preclose_snapshot(), pools=empty), empty)
+        self.assertEqual(abnormal["status"], "preclose_unavailable")
+
     def test_diff_pool_has_stable_membership_semantics(self):
         self.assertEqual(diff_pool(["A", "B"], ["B", "C"]), {
             "retained": ["B"],
