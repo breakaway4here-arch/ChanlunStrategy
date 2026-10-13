@@ -272,6 +272,73 @@ def test_frozen_oct12_light_projection_accepts_only_representation_differences(m
     assert repair._aggregate_matches_source(aggregate, source) is (mutation is None)
 
 
+def reordered_window_projections():
+    """Use recorded, differently truncated windows with a source order change."""
+    frozen_docs = Path(__file__).resolve().parents[1] / "docs"
+    source = atomic._read_json(frozen_docs / "data" / (DAY + ".json"))
+    source["picks_pure"] = source["picks_pure"][:2]
+    source["picks_fusion"] = []
+    aggregate = build_aggregate_day_projection(copy.deepcopy(source))
+    by_code = {row["code"]: row for row in source["picks_pure"]}
+    source["picks_pure"] = [
+        by_code[row["code"]] for row in reversed(aggregate["picks_pure"])
+    ]
+    for row in aggregate["picks_pure"]:
+        point = row["best_buy_point"]
+        offset = point["startup_index"] - point["index"]
+        for candidate_point in [point] + row["buy_points"]:
+            candidate_point["index"] += offset
+        for field in ("reference_price", "current_price", "distance_from_reference_pct"):
+            point[field] = None
+    return source, aggregate
+
+
+def test_light_window_offsets_bind_source_by_identity_after_projection_reorders():
+    source, aggregate = reordered_window_projections()
+    assert [row["code"] for row in source["picks_pure"]] != [
+        row["code"] for row in aggregate["picks_pure"]
+    ]
+    assert len({row["best_buy_point"]["index"] for row in source["picks_pure"]}) == 2
+    before = copy.deepcopy((source, aggregate))
+    assert repair._aggregate_matches_source(aggregate, source)
+    assert (source, aggregate) == before
+
+
+@pytest.mark.parametrize("mutation", [
+    "price", "score", "code", "order", "index", "signal_date", "removed",
+])
+def test_reordered_light_projection_still_rejects_changed_facts(mutation):
+    source, aggregate = reordered_window_projections()
+    rows = aggregate["picks_pure"]
+    if mutation == "price":
+        rows[0]["best_buy_point"]["price"] += 1
+    elif mutation == "score":
+        rows[0]["score"] += 1
+    elif mutation == "code":
+        rows[0]["code"] = "999999"
+    elif mutation == "order":
+        rows.reverse()
+    elif mutation == "index":
+        rows[0]["best_buy_point"]["index"] += 1
+    elif mutation == "signal_date":
+        rows[0]["best_buy_point"]["signal_date"] = "2026-10-09"
+    elif mutation == "removed":
+        rows.pop()
+    assert not repair._aggregate_matches_source(aggregate, source)
+
+
+@pytest.mark.parametrize("plane", ["source", "aggregate", "identical"])
+@pytest.mark.parametrize("invalid", ["empty", "duplicate"])
+def test_light_projection_rejects_ambiguous_pool_identities(plane, invalid):
+    source, aggregate = reordered_window_projections()
+    target = aggregate if plane == "aggregate" else source
+    rows = target["picks_pure"]
+    rows[0]["code"] = "" if invalid == "empty" else rows[1]["code"]
+    if plane == "identical":
+        aggregate = copy.deepcopy(source)
+    assert not repair._aggregate_matches_source(aggregate, source)
+
+
 @pytest.fixture
 def real_docs(tmp_path):
     root = Path(__file__).resolve().parents[1]
