@@ -1228,6 +1228,22 @@ def _aggregate_projection(source, original):
 
 
 def _aggregate_matches_source(aggregate, source):
+    source_pools = {}
+    for pool in ("picks_pure", "picks_fusion"):
+        for report in (aggregate, source):
+            rows = report.get(pool) or []
+            if not isinstance(rows, list):
+                return False
+            by_code = {}
+            for row in rows:
+                if not isinstance(row, dict):
+                    return False
+                code = row.get("code")
+                if not isinstance(code, str) or not code.strip() or code in by_code:
+                    return False
+                by_code[code] = row
+            if report is source:
+                source_pools[pool] = by_code
     if aggregate == source:
         return True
     expected = _aggregate_projection(source, aggregate)
@@ -1239,10 +1255,15 @@ def _aggregate_matches_source(aggregate, source):
         expected_rows = expected.get(pool) or []
         if not isinstance(actual_rows, list) or not isinstance(expected_rows, list):
             return False
-        source_rows = source.get(pool) or []
-        for old, new, full in zip(actual_rows, expected_rows, source_rows):
+        for old, new in zip(actual_rows, expected_rows):
             if not isinstance(old, dict) or not isinstance(new, dict) or old.get("code") != new.get("code"):
                 continue
+            # Light projection can reorder rows during workspace score
+            # backfill. Bind chart-window evidence to the same stock while
+            # keeping actual/expected order protected by the final digest.
+            full = source_pools[pool].get(new.get("code"))
+            if full is None:
+                return False
             old_best = old.get("best_buy_point") or {}
             full_best = full.get("best_buy_point") or {}
             dates = full.get("dates") or []
