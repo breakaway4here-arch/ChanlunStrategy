@@ -13,7 +13,7 @@ from collections.abc import Mapping
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from run import fetch_market_indices  # noqa: E402
+from run import fetch_market_indices, _verified_sector_quote_gap  # noqa: E402
 from chanlun.data_fetcher import _TRUSTED_STOCK_KLINE_SOURCES  # noqa: E402
 from chanlun.industry_metadata import _is_a_share_identity  # noqa: E402
 from chanlun.identity import normalize_identity  # noqa: E402
@@ -1048,7 +1048,10 @@ def _verified_active_sector_degradation(report, quality):
         and {row["code"] for row in sector_flow}.issubset(
             {item["sector_code"] for item in component_diagnostics}
         )
-        and any(item["complete"] is False for item in component_diagnostics)
+        and (
+            any(item["complete"] is False for item in component_diagnostics)
+            or _verified_sector_quote_gap(component_diagnostics, report_date)
+        )
     )
     if not (
         quality.get("report_date") == report_date

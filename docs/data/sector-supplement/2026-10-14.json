@@ -1,0 +1,541 @@
+{
+  "schema_version": 1,
+  "report_date": "2026-10-14",
+  "observed_at": "2026-10-14T15:39:31+08:00",
+  "fetched_at": "2026-10-14T17:38:50.171353+08:00",
+  "source": "eastmoney_dataapi",
+  "status": "verified",
+  "selection_usage": "not_used",
+  "component_scope": "流入前20板块成分",
+  "sector_flow": [
+    {
+      "code": "BK0486",
+      "name": "传媒",
+      "flow": 2346116608,
+      "flow_str": "23.46亿",
+      "change_pct": 1.65,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1340",
+      "name": "印制电路板",
+      "flow": 1723489280,
+      "flow_str": "17.23亿",
+      "change_pct": 0.63,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0459",
+      "name": "元件",
+      "flow": 1276923904,
+      "flow_str": "12.77亿",
+      "change_pct": 0.07,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0464",
+      "name": "石油石化",
+      "flow": 1059033536,
+      "flow_str": "10.59亿",
+      "change_pct": 0.33,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0427",
+      "name": "公用事业",
+      "flow": 831853248,
+      "flow_str": "8.32亿",
+      "change_pct": 0.38,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0437",
+      "name": "煤炭",
+      "flow": 770154240,
+      "flow_str": "7.70亿",
+      "change_pct": 1.23,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1250",
+      "name": "煤炭开采",
+      "flow": 730033552,
+      "flow_str": "7.30亿",
+      "change_pct": 0.96,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1493",
+      "name": "动力煤",
+      "flow": 728447152,
+      "flow_str": "7.28亿",
+      "change_pct": 1.69,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1221",
+      "name": "数字媒体",
+      "flow": 717498416,
+      "flow_str": "7.17亿",
+      "change_pct": 1.62,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0428",
+      "name": "电力",
+      "flow": 695691552,
+      "flow_str": "6.96亿",
+      "change_pct": 0.19,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1274",
+      "name": "炼化及贸易",
+      "flow": 617726992,
+      "flow_str": "6.18亿",
+      "change_pct": -1.01,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1301",
+      "name": "游戏Ⅲ",
+      "flow": 606874576,
+      "flow_str": "6.07亿",
+      "change_pct": 2.66,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1046",
+      "name": "游戏Ⅱ",
+      "flow": 606874576,
+      "flow_str": "6.07亿",
+      "change_pct": 2.66,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1569",
+      "name": "炼油化工",
+      "flow": 596953984,
+      "flow_str": "5.97亿",
+      "change_pct": -0.13,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1380",
+      "name": "水力发电",
+      "flow": 549105728,
+      "flow_str": "5.49亿",
+      "change_pct": 2.49,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1298",
+      "name": "文字媒体",
+      "flow": 396761040,
+      "flow_str": "3.97亿",
+      "change_pct": 6.73,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1218",
+      "name": "出版",
+      "flow": 347815376,
+      "flow_str": "3.48亿",
+      "change_pct": 2.69,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0454",
+      "name": "塑料",
+      "flow": 345067264,
+      "flow_str": "3.45亿",
+      "change_pct": -2.23,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1293",
+      "name": "营销代理",
+      "flow": 343083040,
+      "flow_str": "3.43亿",
+      "change_pct": 0.44,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1220",
+      "name": "广告营销",
+      "flow": 304054784,
+      "flow_str": "3.04亿",
+      "change_pct": 0.43,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    }
+  ],
+  "sector_outflow": [
+    {
+      "code": "BK1201",
+      "name": "电子",
+      "flow": -10468924672,
+      "flow_str": "-104.69亿",
+      "change_pct": -2.29,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1036",
+      "name": "半导体",
+      "flow": -7334158336,
+      "flow_str": "-73.34亿",
+      "change_pct": -2.95,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK0448",
+      "name": "通信设备",
+      "flow": -6238115840,
+      "flow_str": "-62.38亿",
+      "change_pct": -2.68,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1200",
+      "name": "电力设备",
+      "flow": -6222184192,
+      "flow_str": "-62.22亿",
+      "change_pct": -3.13,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    },
+    {
+      "code": "BK1215",
+      "name": "通信",
+      "flow": -6219326208,
+      "flow_str": "-62.19亿",
+      "change_pct": -2.31,
+      "source": "eastmoney_dataapi",
+      "as_of": "2026-10-14T15:39:31+08:00"
+    }
+  ],
+  "component_diagnostics": [
+    {
+      "sector_code": "BK0486",
+      "requested": 128,
+      "raw_valid_unique": 128,
+      "filtered_unique": 128,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1340",
+      "requested": 48,
+      "raw_valid_unique": 48,
+      "filtered_unique": 48,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0459",
+      "requested": 67,
+      "raw_valid_unique": 67,
+      "filtered_unique": 67,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0464",
+      "requested": 49,
+      "raw_valid_unique": 49,
+      "filtered_unique": 49,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0427",
+      "requested": 143,
+      "raw_valid_unique": 143,
+      "filtered_unique": 139,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0437",
+      "requested": 34,
+      "raw_valid_unique": 34,
+      "filtered_unique": 33,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1250",
+      "requested": 27,
+      "raw_valid_unique": 27,
+      "filtered_unique": 26,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1493",
+      "requested": 17,
+      "raw_valid_unique": 17,
+      "filtered_unique": 16,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1221",
+      "requested": 15,
+      "raw_valid_unique": 15,
+      "filtered_unique": 15,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0428",
+      "requested": 112,
+      "raw_valid_unique": 112,
+      "filtered_unique": 109,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1274",
+      "requested": 30,
+      "raw_valid_unique": 30,
+      "filtered_unique": 30,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1301",
+      "requested": 24,
+      "raw_valid_unique": 24,
+      "filtered_unique": 24,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1046",
+      "requested": 24,
+      "raw_valid_unique": 24,
+      "filtered_unique": 24,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1569",
+      "requested": 10,
+      "raw_valid_unique": 10,
+      "filtered_unique": 10,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1380",
+      "requested": 11,
+      "raw_valid_unique": 11,
+      "filtered_unique": 11,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1298",
+      "requested": 2,
+      "raw_valid_unique": 2,
+      "filtered_unique": 2,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1218",
+      "requested": 28,
+      "raw_valid_unique": 28,
+      "filtered_unique": 28,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK0454",
+      "requested": 78,
+      "raw_valid_unique": 78,
+      "filtered_unique": 78,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1293",
+      "requested": 27,
+      "raw_valid_unique": 27,
+      "filtered_unique": 27,
+      "complete": true,
+      "error": ""
+    },
+    {
+      "sector_code": "BK1220",
+      "requested": 30,
+      "raw_valid_unique": 30,
+      "filtered_unique": 30,
+      "complete": true,
+      "error": ""
+    }
+  ],
+  "source_evidence": [
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=m%3A90%2Bt%3A2",
+      "sha256": "89578574b06a2903bf35bcd1251a952cd8f7e7839aca78aeb08f26b697919513",
+      "requested_at": "2026-10-14T09:38:20.884669+00:00",
+      "received_at": "2026-10-14T09:38:21.069478+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f124&code=m%3A90%2Bt%3A2",
+      "sha256": "0bef325f886837189f4ff55569d0694c818b13c4470dbf31d457e127ff4fd98c",
+      "requested_at": "2026-10-14T09:37:31.609583+00:00",
+      "received_at": "2026-10-14T09:37:31.893273+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f3&code=m%3A90%2Bt%3A2",
+      "sha256": "6f392560a01e1e002678f3c24b3de250a0831da7ea129416c1a0b948cffefeb3",
+      "requested_at": "2026-10-14T09:37:31.610147+00:00",
+      "received_at": "2026-10-14T09:37:31.748784+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0486",
+      "sha256": "bd01a5946afea64884d90c43d4d26cf6744171747169a4d1451da8b34532cb1e",
+      "requested_at": "2026-10-14T09:38:44.139364+00:00",
+      "received_at": "2026-10-14T09:38:44.279591+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1340",
+      "sha256": "d9c2c380558df9c8736a6c4dd9e8fa4dbe4e80831182f0d587b368f8e856763a",
+      "requested_at": "2026-10-14T09:38:44.404455+00:00",
+      "received_at": "2026-10-14T09:38:44.534331+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0459",
+      "sha256": "df3490a44830d210d21a48bcfa4570b843e1418708c4f773a44b2db80e4c5004",
+      "requested_at": "2026-10-14T09:38:44.659903+00:00",
+      "received_at": "2026-10-14T09:38:44.790258+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0464",
+      "sha256": "75b9ad457a4c56f8270f9d78d5830a1630382a4c809f586a218e90f925cba681",
+      "requested_at": "2026-10-14T09:38:44.915935+00:00",
+      "received_at": "2026-10-14T09:38:45.051971+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0427",
+      "sha256": "31d069e246241e20cd988e7fb1ea8a045f84778e87983353a2adb9b0666104bf",
+      "requested_at": "2026-10-14T09:38:45.177520+00:00",
+      "received_at": "2026-10-14T09:38:45.347142+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0437",
+      "sha256": "e390cc912fbf115b0cab81b24f33ff67b5299223687528910c1b08ffabf42d0a",
+      "requested_at": "2026-10-14T09:38:45.468663+00:00",
+      "received_at": "2026-10-14T09:38:45.600476+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1250",
+      "sha256": "f5a77bbadd2b6fce66e71f24517d6e8a203a7539b3eb2b4e091fc3f51e9b51d5",
+      "requested_at": "2026-10-14T09:38:45.722266+00:00",
+      "received_at": "2026-10-14T09:38:45.906299+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1493",
+      "sha256": "ca42d0dd09301a8a8f390f3df4fc8d14ac55616654c4892f0c82eab742260784",
+      "requested_at": "2026-10-14T09:38:46.028556+00:00",
+      "received_at": "2026-10-14T09:38:46.135662+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1221",
+      "sha256": "684988436cd12d8c1edfd2bc05235833cf29f5c56ebd34b0296d08680d69c30b",
+      "requested_at": "2026-10-14T09:38:46.261074+00:00",
+      "received_at": "2026-10-14T09:38:46.378761+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0428",
+      "sha256": "b8f83a033c9dca857698937f61476033ef2af50e2c2f837832a89efd40176a22",
+      "requested_at": "2026-10-14T09:38:46.502688+00:00",
+      "received_at": "2026-10-14T09:38:46.802142+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1274",
+      "sha256": "250255f25163534088720a5f2692dba61ad506bf19f94175f53271709136a803",
+      "requested_at": "2026-10-14T09:38:46.924053+00:00",
+      "received_at": "2026-10-14T09:38:47.056287+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1301",
+      "sha256": "f651b235b5c1397da6635e905cc1e1902e2364afc3ebcf0a4a386e3f1f5231de",
+      "requested_at": "2026-10-14T09:38:47.181763+00:00",
+      "received_at": "2026-10-14T09:38:47.357641+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1046",
+      "sha256": "a6c65177e12a63089d4b6263cda0463942f80e6ebcaaeeab442359fec39666c2",
+      "requested_at": "2026-10-14T09:38:47.481390+00:00",
+      "received_at": "2026-10-14T09:38:47.613074+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1569",
+      "sha256": "ec7afeaa95c866ea872313744aaca264ee3e640a78133ff5404d2bbfcf895987",
+      "requested_at": "2026-10-14T09:38:47.738573+00:00",
+      "received_at": "2026-10-14T09:38:47.859719+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1380",
+      "sha256": "4b117fd0f75e147eda58fad25043e143eb03d93e94ff78d7987a306bd2f1fe9b",
+      "requested_at": "2026-10-14T09:38:47.985100+00:00",
+      "received_at": "2026-10-14T09:38:48.747588+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1298",
+      "sha256": "128f9a83548f8e98195a960b228e339322cb688566bfe713d767dc8422b065e3",
+      "requested_at": "2026-10-14T09:38:48.872937+00:00",
+      "received_at": "2026-10-14T09:38:49.081291+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1218",
+      "sha256": "426a5784122495f78094d96ab8422417fa15e464ea71a965c3e787afd5b8d86a",
+      "requested_at": "2026-10-14T09:38:49.203364+00:00",
+      "received_at": "2026-10-14T09:38:49.344879+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK0454",
+      "sha256": "74ac79c8a1db72fed4b8f3f74436b065844046a1da236963a5fa34622b5bdf8a",
+      "requested_at": "2026-10-14T09:38:49.470299+00:00",
+      "received_at": "2026-10-14T09:38:49.645534+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1293",
+      "sha256": "1ba47d59dbf70b2c41b3f6eae30648297c40582fcce7013aec3c8eaa34833f7b",
+      "requested_at": "2026-10-14T09:38:49.771273+00:00",
+      "received_at": "2026-10-14T09:38:49.899288+00:00"
+    },
+    {
+      "url": "https://data.eastmoney.com/dataapi/bkzj/getbkzj?key=f62&code=b%3ABK1220",
+      "sha256": "bf19acc35c0fb6ff948aa2acb2c094a359251e2b54891e83ea2d1b2f7f26840d",
+      "requested_at": "2026-10-14T09:38:50.024717+00:00",
+      "received_at": "2026-10-14T09:38:50.171353+00:00"
+    }
+  ]
+}

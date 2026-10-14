@@ -41,6 +41,7 @@
 
   var state = {
     data: null,
+    sectorSupplement: null,
     workspace: null,
     primaryMode: 'today',
     currentView: 'main',
@@ -3801,7 +3802,7 @@
     }) || '';
   }
 
-  function decisionOverviewGaps(summary) {
+  function decisionOverviewGaps(summary, report, sectorSupplement) {
     var value = summary && typeof summary === 'object' ? summary : {};
     var coverage = value.coverage && typeof value.coverage === 'object' ? value.coverage : {};
     var gaps = [];
@@ -3816,11 +3817,24 @@
     if (safeNumber(minute.missing, 0) > 0 || normalizeString(minute.status) === 'partial') {
       gaps.push('短周期确认有缺口');
     }
-    var quality = (state.data || {}).data_quality || {};
+    var source = report || state.data || {};
+    var quality = source.data_quality || {};
+    var supplement = sectorSupplement === undefined ? state.sectorSupplement : sectorSupplement;
+    var verifiedSupplement = validateSectorSupplement(source, supplement);
+    var originalSectorGap = false;
     asArray(quality.warnings).slice(0, 2).forEach(function (warning) {
       var text = normalizeString(warning).trim();
+      if (verifiedSupplement && text.indexOf('板块') !== -1) {
+        originalSectorGap = true;
+        return;
+      }
       if (text && gaps.indexOf(text) === -1) gaps.push(text);
     });
+    if (originalSectorGap) {
+      gaps.push(verifiedSupplement.status === 'verified'
+        ? '板块原采集缺口；盘后已补充'
+        : '板块原采集缺口；盘后部分补充');
+    }
     return gaps.slice(0, 3);
   }
 
@@ -12834,6 +12848,13 @@
       + '</div>';
   }
 
+  function sectorSupplementStripNotice(report, supplement) {
+    var verified = validateSectorSupplement(report, supplement);
+    if (!verified) return '';
+    return '<p class="funding-mainline-feedback">原采集缺口；盘后资金已补充，见下方'
+      + '<a href="#supportingDecisionsStack">板块资金</a>。盘后数据未参与本期筛选。</p>';
+  }
+
   function renderFundingMainlineStrip() {
     if (!nodes.sectorStrip) return;
     var model = buildFundingMainlineModel(state.data || {});
@@ -12848,7 +12869,7 @@
       state.sectorFilterCode,
       state.sectorFilterRefs,
       { originalCount: poolItems.length, matchedCount: matchedItems.length }
-    );
+    ) + sectorSupplementStripNotice(state.data, state.sectorSupplement);
     var buttons = nodes.sectorStrip.querySelectorAll('[data-sector-filter]');
     for (var i = 0; i < buttons.length; i += 1) {
       buttons[i].addEventListener('click', function (event) {
@@ -12899,7 +12920,116 @@
     return { label: '数据可用', tone: 'positive', detail: '' };
   }
 
-  function renderSectorFlowCard(data) {
+  function sectorSupplementMoneyText(value) {
+    var magnitude = Math.abs(value);
+    if (magnitude >= 100000000) return (value / 100000000).toFixed(2) + '亿';
+    if (magnitude >= 10000) return (value / 10000).toFixed(2) + '万';
+    return value.toFixed(2) + '元';
+  }
+
+  function validateSectorSupplement(report, payload) {
+    var source = report || {};
+    var value = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : null;
+    var date = normalizeString(source.date).trim();
+    if (!value || !isCanonicalIsoDate(date) || value.schema_version !== 1
+        || value.report_date !== date || value.source !== 'eastmoney_dataapi'
+        || value.selection_usage !== 'not_used'
+        || ['verified', 'partial'].indexOf(value.status) === -1) return null;
+    var observed = normalizeString(value.observed_at).trim();
+    var fetched = normalizeString(value.fetched_at).trim();
+    var timed = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?[+-]\d{2}:\d{2}$/;
+    if (!timed.test(observed) || !timed.test(fetched)
+        || !Number.isFinite(Date.parse(observed)) || !Number.isFinite(Date.parse(fetched))
+        || new Date(Date.parse(observed) + 8 * 3600000).toISOString().slice(0, 10) !== date
+        || Date.parse(fetched) < Date.parse(observed)) return null;
+    var inflow = value.sector_flow;
+    var outflow = value.sector_outflow;
+    var components = value.component_diagnostics;
+    var receipts = value.source_evidence;
+    if (!Array.isArray(inflow) || !inflow.length || inflow.length > 20
+        || !Array.isArray(outflow) || !outflow.length || outflow.length > 5
+        || !Array.isArray(components) || !Array.isArray(receipts) || !receipts.length
+        || value.component_scope !== '流入前' + inflow.length + '板块成分') return null;
+    var seen = Object.create(null);
+    function validFlowRows(rows, direction) {
+      var previous = null;
+      return rows.every(function (row) {
+        if (!row || typeof row !== 'object' || !/^BK\d{4}$/.test(normalizeString(row.code))
+            || !normalizeString(row.name).trim() || seen[row.code]
+            || typeof row.flow !== 'number' || !Number.isFinite(row.flow)
+            || (direction === 'in' ? row.flow <= 0 : row.flow >= 0)
+            || !(row.change_pct === null || (typeof row.change_pct === 'number' && Number.isFinite(row.change_pct)))
+            || row.source !== 'eastmoney_dataapi' || row.as_of !== observed) return false;
+        if (previous !== null && (direction === 'in' ? row.flow > previous : row.flow < previous)) return false;
+        seen[row.code] = true;
+        previous = row.flow;
+        return true;
+      });
+    }
+    if (!validFlowRows(inflow, 'in') || !validFlowRows(outflow, 'out')) return null;
+    var componentByCode = Object.create(null);
+    if (!components.every(function (row) {
+      if (!row || typeof row !== 'object' || !/^BK\d{4}$/.test(normalizeString(row.sector_code))
+          || componentByCode[row.sector_code] || typeof row.complete !== 'boolean'
+          || !Number.isInteger(row.raw_valid_unique) || row.raw_valid_unique < 0
+          || !Number.isInteger(row.filtered_unique) || row.filtered_unique < 0
+          || row.filtered_unique > row.raw_valid_unique
+          || !(row.requested === null || (Number.isInteger(row.requested) && row.requested >= row.raw_valid_unique))
+          || typeof row.error !== 'string'
+          || (row.complete && (row.requested === null || row.requested !== row.raw_valid_unique || row.error))) return false;
+      componentByCode[row.sector_code] = true;
+      return true;
+    })) return null;
+    if (components.length !== inflow.length || !inflow.every(function (row) { return componentByCode[row.code]; })
+        || (value.status === 'verified' && !components.every(function (row) { return row.complete; }))) return null;
+    if (!receipts.every(function (row) {
+      return row && typeof row === 'object' && normalizeString(row.url).trim()
+        && /^[0-9a-f]{64}$/.test(normalizeString(row.sha256))
+        && Number.isFinite(Date.parse(row.requested_at))
+        && Number.isFinite(Date.parse(row.received_at))
+        && Date.parse(row.requested_at) <= Date.parse(row.received_at)
+        && Date.parse(row.received_at) <= Date.parse(fetched);
+    })) return null;
+    return value;
+  }
+
+  function sectorSupplementUrl(reportDate) {
+    var date = normalizeString(reportDate).trim();
+    var bootstrap = getBootstrap();
+    var pageDate = normalizeString(bootstrap.pageDate).trim();
+    if (!isCanonicalIsoDate(date) || (pageDate && pageDate !== date)) return '';
+    var prefix = normalizeString(bootstrap.dataBasePrefix).trim();
+    if (prefix && prefix !== './' && !/^(\.\.\/){1,2}$/.test(prefix)) return '';
+    var path = normalizeString(window.location && window.location.pathname).replace(/\/+$/, '');
+    // Archived pages can have an empty legacy dataBasePrefix in their shell.
+    if (/\/\d{4}-\d{2}-\d{2}(?:\/index\.html)?$/.test(path)) prefix = '../';
+    return prefix + 'data/sector-supplement/' + date + '.json';
+  }
+
+  function fetchSectorSupplement(report) {
+    var date = normalizeString(report && report.date).trim();
+    var url = sectorSupplementUrl(date);
+    if (!url || !window.fetch) return Promise.resolve(null);
+    return window.fetch(url, { cache: 'no-store' }).then(function (response) {
+      if (!response || !response.ok) return null;
+      return response.json();
+    }).then(function (payload) {
+      return validateSectorSupplement(report, payload);
+    }).catch(function () { return null; });
+  }
+
+  function sectorSupplementBeijingTime(value) {
+    var shifted = new Date(Date.parse(value) + 8 * 3600000);
+    function two(number) { return String(number).padStart(2, '0'); }
+    return shifted.getUTCFullYear() + '年' + two(shifted.getUTCMonth() + 1) + '月'
+      + two(shifted.getUTCDate()) + '日 ' + two(shifted.getUTCHours()) + ':'
+      + two(shifted.getUTCMinutes());
+  }
+
+  function renderSectorFlowCard(data, sectorSupplement) {
+    var supplement = validateSectorSupplement(
+      data, sectorSupplement === undefined ? state.sectorSupplement : sectorSupplement
+    );
     var sectorIn = asArray((data || {}).sector_flow).slice(0, 5);
     var sectorOut = asArray((data || {}).sector_outflow).slice(0, 5);
     var allRows = sectorIn.concat(sectorOut);
@@ -12923,17 +13053,46 @@
     var emptyText = flowStatus.detail || '已验证为空';
     var inHtml = sectorIn.length ? sectorIn.map(function (item) { return renderFlowRow('流入', item); }).join('') : '<div class="decision-empty">' + escapeHtml(emptyText) + '</div>';
     var outHtml = sectorOut.length ? sectorOut.map(function (item) { return renderFlowRow('流出', item); }).join('') : '<div class="decision-empty">' + escapeHtml(emptyText) + '</div>';
-    var body = ''
-      + '<div class="flow-columns">'
-      + '  <div><div class="mini-section-title">流入 Top5</div>' + inHtml + '</div>'
-      + '  <div><div class="mini-section-title">流出 Top5</div>' + outHtml + '</div>'
-      + '</div>';
+    var body = '';
+    if (!supplement || allRows.length) {
+      body = '<div class="flow-columns">'
+        + '  <div><div class="mini-section-title">流入 Top5</div>' + inHtml + '</div>'
+        + '  <div><div class="mini-section-title">流出 Top5</div>' + outHtml + '</div>'
+        + '</div>';
+    }
+    if (supplement) {
+      var supplementIn = supplement.sector_flow.slice(0, 5).map(function (item) {
+        return renderFlowRow('流入', Object.assign({}, item, {
+          flow_str: sectorSupplementMoneyText(item.flow),
+        }));
+      }).join('');
+      var supplementOut = supplement.sector_outflow.slice(0, 5).map(function (item) {
+        return renderFlowRow('流出', Object.assign({}, item, {
+          flow_str: sectorSupplementMoneyText(item.flow),
+        }));
+      }).join('');
+      var completeCount = supplement.component_diagnostics.filter(function (item) {
+        return item.complete === true;
+      }).length;
+      var scope = supplement.component_scope + ' ' + completeCount + '/' + supplement.component_diagnostics.length + ' 已核验';
+      body += '<div class="sector-supplement" role="note">'
+        + '<p>原采集缺口保留。盘后补齐，未参与本期选股。</p>'
+        + '<p>东方财富 Data API · 板块行情时间 北京时间 ' + escapeHtml(sectorSupplementBeijingTime(supplement.observed_at))
+        + ' · 资金获取 北京时间 ' + escapeHtml(sectorSupplementBeijingTime(supplement.fetched_at)) + '</p>'
+        + '<p>' + escapeHtml(scope) + '；流出榜仅展示资金，未核验其成分。</p>'
+        + '<div class="flow-columns">'
+        + '  <div><div class="mini-section-title">盘后流入 Top5</div>' + supplementIn + '</div>'
+        + '  <div><div class="mini-section-title">盘后流出 Top5</div>' + supplementOut + '</div>'
+        + '</div></div>';
+    }
     return renderDecisionCard({
       title: '板块资金',
-      subtitle: '资金流入与流出方向 · ' + hierarchyText,
+      subtitle: supplement ? '原采集缺口 · 盘后补充仅供查看' : '资金流入与流出方向 · ' + hierarchyText,
       badge: {
-        text: flowStatus.label === '数据可用' ? hierarchyText : flowStatus.label,
-        tone: insufficient || partial || hierarchyUnknown ? 'warning' : flowStatus.tone,
+        text: supplement ? (supplement.status === 'verified' ? '盘后已补充' : '盘后部分补充')
+          : (flowStatus.label === '数据可用' ? hierarchyText : flowStatus.label),
+        tone: supplement ? (supplement.status === 'verified' ? 'positive' : 'warning')
+          : (insufficient || partial || hierarchyUnknown ? 'warning' : flowStatus.tone),
       },
       className: 'sector-flow-card',
       bodyHtml: body,
@@ -16067,6 +16226,7 @@
       return resolveInitialData();
     }).then(function (data) {
       state.data = data || {};
+      state.sectorSupplement = null;
       window.REPORT_DATA = state.data;
       normalizeWorkspace(state.data);
       state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
@@ -16080,6 +16240,13 @@
       renderViewDescription();
       var first = renderCurrentCandidateSelection();
       renderAuxiliaryCenter();
+      fetchSectorSupplement(state.data).then(function (supplement) {
+        if (!supplement || state.data !== data) return;
+        state.sectorSupplement = supplement;
+        renderDecisionOverview();
+        renderFundingMainlineStrip();
+        renderAuxiliaryCenter();
+      });
       loadNextdayResearch();
       initComparisonSummary();
       renderTop10Control();

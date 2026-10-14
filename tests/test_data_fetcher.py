@@ -237,23 +237,23 @@ class TestSectorHierarchyDedup(unittest.TestCase):
         mock_fetch.return_value = {
             "data": {
                 "diff": [
-                    {"f12": "P", "f14": "IT服务II", "f3": 2, "f62": 300},
-                    {"f12": "C", "f14": "IT服务III", "f3": 1, "f62": 200},
-                    {"f12": "O", "f14": "银行", "f3": 1, "f62": 100},
+                    {"f12": "BK0001", "f14": "IT服务II", "f3": 2, "f62": 300},
+                    {"f12": "BK0002", "f14": "IT服务III", "f3": 1, "f62": 200},
+                    {"f12": "BK0003", "f14": "银行", "f3": 1, "f62": 100},
                 ]
             }
         }
         evidence = {
-            "P": _evidence(["1", "2", "3"]),
-            "C": _evidence(["2", "3"]),
-            "O": _evidence(["8", "9"]),
+            "BK0001": _evidence(["1", "2", "3"]),
+            "BK0002": _evidence(["2", "3"]),
+            "BK0003": _evidence(["8", "9"]),
         }
 
         result = data_fetcher.fetch_sector_flow(
             2, component_evidence=evidence
         )
 
-        self.assertEqual([row["code"] for row in result], ["P", "O"])
+        self.assertEqual([row["code"] for row in result], ["BK0001", "BK0003"])
         self.assertEqual(
             result[0]["hierarchy_dedup_status"], "deduped_representative"
         )
@@ -263,23 +263,23 @@ class TestSectorHierarchyDedup(unittest.TestCase):
         mock_fetch.return_value = {
             "data": {
                 "diff": [
-                    {"f12": "P", "f14": "电子", "f3": -2, "f62": -300},
-                    {"f12": "C", "f14": "半导体", "f3": -1, "f62": -200},
-                    {"f12": "O", "f14": "银行", "f3": -1, "f62": -100},
+                    {"f12": "BK0001", "f14": "电子", "f3": -2, "f62": -300},
+                    {"f12": "BK0002", "f14": "半导体", "f3": -1, "f62": -200},
+                    {"f12": "BK0003", "f14": "银行", "f3": -1, "f62": -100},
                 ]
             }
         }
         evidence = {
-            "P": _evidence(["1", "2", "3"]),
-            "C": _evidence(["2", "3"]),
-            "O": _evidence(["8", "9"]),
+            "BK0001": _evidence(["1", "2", "3"]),
+            "BK0002": _evidence(["2", "3"]),
+            "BK0003": _evidence(["8", "9"]),
         }
 
         result = data_fetcher.fetch_sector_outflow(
             2, component_evidence=evidence
         )
 
-        self.assertEqual([row["code"] for row in result], ["P", "O"])
+        self.assertEqual([row["code"] for row in result], ["BK0001", "BK0003"])
         self.assertEqual(
             result[0]["hierarchy_dedup_status"], "deduped_representative"
         )

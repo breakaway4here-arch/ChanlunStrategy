@@ -173,7 +173,69 @@ def eastmoney_flow_component_gap_report():
     return report
 
 
+def eastmoney_verified_quote_gap_report():
+    """Members are complete, but one same-day stock quote is unavailable."""
+    report = eastmoney_flow_component_gap_report()
+    report["data_quality"]["sector_component_diagnostics"] = [
+        {
+            "sector_code": "BK001", "complete": True,
+            "requested": 2, "fetched": 2, "raw_valid_unique": 2,
+            "filtered_unique": 2, "unique": 2,
+            "raw_component_codes": ["600000", "600001"],
+            "component_codes": ["600000", "600001"],
+            "quote_usable_count": 1, "quote_usable_codes": ["600000"],
+            "quote_missing_codes": ["600001"],
+            "quote_evidence_status": "verified", "quote_evidence_date": REPORT_DATE,
+        },
+        {
+            "sector_code": "BK002", "complete": True,
+            "requested": 1, "fetched": 1, "raw_valid_unique": 1,
+            "filtered_unique": 1, "unique": 1,
+            "raw_component_codes": ["600002"], "component_codes": ["600002"],
+            "quote_usable_count": 1, "quote_usable_codes": ["600002"],
+            "quote_missing_codes": [],
+            "quote_evidence_status": "verified", "quote_evidence_date": REPORT_DATE,
+        },
+    ]
+    return report
+
+
 class ActivePublishQualityTests(unittest.TestCase):
+    def test_verified_quote_gap_retains_funds_with_expanded_base_and_zero_overlay(self):
+        report = eastmoney_verified_quote_gap_report()
+        quality = report["data_quality"]
+        run._refresh_active_universe_quality(quality, [selected_stock()], REPORT_DATE)
+        self.assertTrue(quality["is_official"])
+        self.assertEqual(quality["sector_data_status"], "verified")
+        self.assertEqual(validate_report_contract(report, require_official=True), [])
+        self.assertEqual(validate_runtime_cutover(report), [])
+
+    def test_quote_gap_requires_exact_same_day_membership_and_counts(self):
+        changes = {
+            "wrong_date": lambda d: d.update(quote_evidence_date="2026-09-28"),
+            "unknown_snapshot": lambda d: d.update(quote_evidence_status="unavailable"),
+            "bad_total": lambda d: d.update(requested=3),
+            "bad_raw_set": lambda d: d.update(raw_component_codes=["600000"]),
+            "nested_raw_member": lambda d: d.update(raw_component_codes=[{"code": "600000"}, "600001"]),
+            "bad_business_set": lambda d: d.update(component_codes=["600000", "600003"]),
+            "mixed_business_members": lambda d: d.update(component_codes=["600000", ["600001"]]),
+            "bad_usable_count": lambda d: d.update(quote_usable_count=2),
+            "bad_missing_set": lambda d: d.update(quote_missing_codes=["600003"]),
+            "duplicate_missing": lambda d: d.update(quote_missing_codes=["600001", "600001"]),
+            "malformed_code": lambda d: d.update(quote_missing_codes=["bad"]),
+        }
+        for label, mutate in changes.items():
+            with self.subTest(label=label):
+                report = eastmoney_verified_quote_gap_report()
+                quality = report["data_quality"]
+                mutate(quality["sector_component_diagnostics"][0])
+                run._refresh_active_universe_quality(quality, [selected_stock()], REPORT_DATE)
+                self.assertFalse(quality["is_official"], label)
+                quality["sector_data_status"] = "verified"
+                quality["sources_trusted"] = True
+                quality["is_official"] = True
+                self.assertTrue(validate_report_contract(report, require_official=True), label)
+
     def test_component_gap_never_overrides_market_or_identity_safety(self):
         cases = {
             "missing_components": lambda q, s: q.pop("sector_component_diagnostics"),

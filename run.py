@@ -65,6 +65,7 @@ from chanlun.data_fetcher import (
     fetch_full_market_quotes,
     deduplicate_sector_hierarchy,
     _TRUSTED_STOCK_KLINE_SOURCES,
+    _ACTIVE_SECTOR_SESSION,
 )
 from chanlun.chan_engine import analyze, calc_macd
 from chanlun.screener_pure import screen_daily_pure, screen_30min_pure
@@ -2610,6 +2611,54 @@ def _apply_recall_publish_mode(
     return published_pure, published_fusion, diagnostics
 
 
+def _verified_sector_quote_gap(component_diagnostics, report_date):
+    """Prove complete sector membership with a bounded same-day quote shortfall."""
+    if not isinstance(component_diagnostics, list) or not component_diagnostics:
+        return False
+
+    def codes(value):
+        if not isinstance(value, list) or not all(
+            isinstance(code, str)
+            and len(code) == 6 and code.isascii() and code.isdigit()
+            for code in value
+        ):
+            return False
+        return value == sorted(set(value))
+
+    seen_sectors = set()
+    missing_total = 0
+    for item in component_diagnostics:
+        if not isinstance(item, dict) or item.get("complete") is not True:
+            return False
+        sector_code = item.get("sector_code")
+        if not isinstance(sector_code, str) or not sector_code or sector_code in seen_sectors:
+            return False
+        seen_sectors.add(sector_code)
+        if item.get("quote_evidence_status") != "verified" or item.get("quote_evidence_date") != report_date:
+            return False
+        counts = ("requested", "fetched", "raw_valid_unique", "filtered_unique", "unique", "quote_usable_count")
+        if any(type(item.get(field)) is not int or item[field] < 0 for field in counts):
+            return False
+        raw = item.get("raw_component_codes")
+        members = item.get("component_codes")
+        usable = item.get("quote_usable_codes")
+        missing = item.get("quote_missing_codes")
+        if not all(codes(value) for value in (raw, members, usable, missing)):
+            return False
+        raw_set, member_set = set(raw), set(members)
+        if not (
+            item["requested"] == item["fetched"] == item["raw_valid_unique"] == len(raw)
+            and item["filtered_unique"] == item["unique"] == len(members)
+            and item["quote_usable_count"] == len(usable)
+            and member_set.issubset(raw_set)
+            and set(usable).issubset(member_set)
+            and set(missing) == member_set - set(usable)
+        ):
+            return False
+        missing_total += len(missing)
+    return missing_total > 0
+
+
 def _refresh_active_universe_quality(
     data_quality,
     selected_stocks,
@@ -2709,6 +2758,7 @@ def _refresh_active_universe_quality(
     sector_source = data_quality.get("sector_source")
     sector_missing = sector_source == "fallback_static"
     component_diagnostics = data_quality.get("sector_component_diagnostics")
+    quote_gap = _verified_sector_quote_gap(component_diagnostics, report_date)
     component_gap = bool(
         sector_source == "eastmoney"
         and data_quality.get("fallback_used") is True
@@ -2724,7 +2774,7 @@ def _refresh_active_universe_quality(
         )
         and len({item["sector_code"] for item in component_diagnostics})
             == len(component_diagnostics)
-        and any(item["complete"] is False for item in component_diagnostics)
+        and (any(item["complete"] is False for item in component_diagnostics) or quote_gap)
     )
     sector_degradation_safe = bool(
         (
@@ -4390,10 +4440,27 @@ def main(debug=False, preview=False, generated_at=None):
             "note": preview_note,
         },
     }
-    sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+    sector_session = daily_data.get("_sector_source_session")
+    if sector_session is not None:
+        sector_token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+        try:
+            sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+        finally:
+            _ACTIVE_SECTOR_SESSION.reset(sector_token)
+
+        def sector_component_fetcher(code, *, return_diagnostics=False):
+            token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+            try:
+                return fetch_sector_stocks(code, return_diagnostics=return_diagnostics)
+            finally:
+                _ACTIVE_SECTOR_SESSION.reset(token)
+    else:
+        sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+        sector_component_fetcher = fetch_sector_stocks
     sector_component_evidence = _complete_sector_component_evidence(
         list(sectors or []) + list(sector_outflow or []),
         daily_data.get("sector_component_evidence"),
+        fetcher=sector_component_fetcher,
         max_workers=20,
     )
     sectors = deduplicate_sector_hierarchy(

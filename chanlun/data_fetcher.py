@@ -12,6 +12,7 @@ import json
 import os
 import math
 import inspect
+from contextvars import ContextVar
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -56,6 +57,7 @@ from .identity import (
     normalize_identity,
     normalize_index_identity,
 )
+from .sector_sources import RELAY_URL, SectorRelaySession
 
 # ------------------------------------------------------------
 # 路径
@@ -92,6 +94,21 @@ _TRUSTED_STOCK_KLINE_SOURCES = {
     "tencent", "eastmoney", "sina", "market_history_db",
 }
 _KLINE_REPOSITORY = None
+_ACTIVE_SECTOR_SESSION = ContextVar("active_sector_session", default=None)
+
+
+def _fetch_sector_relay_json(field, code):
+    """One bounded request to the official sector page's same-origin endpoint."""
+    response = SESSION.get(RELAY_URL, params={"key": field, "code": code}, timeout=8)
+    response.raise_for_status()
+    return response.json()
+
+
+def _new_sector_session(report_date):
+    cache_path = (Path(MARKET_HISTORY_DB_PATH).parent / "full_market_quotes"
+                  / ("quotes-" + report_date + ".json"))
+    return SectorRelaySession(report_date, _fetch_sector_relay_json, cache_path,
+                              lambda: datetime.now(_TZ_CN))
 
 
 class MarketDataUnavailable(RuntimeError):
@@ -544,6 +561,40 @@ def _quote_timestamp(value):
         return None
 
 
+def _sector_clist_page(data, page_size, *, require_total=False):
+    payload = data.get("data") if isinstance(data, dict) else None
+    items = payload.get("diff") if isinstance(payload, dict) else None
+    if not isinstance(items, list) or not items:
+        raise ValueError("empty_sector_clist_page")
+    total = payload.get("total")
+    if require_total and total is None:
+        raise ValueError("missing_sector_clist_total")
+    if total is not None:
+        if isinstance(total, bool):
+            raise ValueError("invalid_sector_clist_total")
+        try:
+            total = int(total)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("invalid_sector_clist_total") from exc
+        if total < 0 or len(items) != min(total, page_size):
+            raise ValueError("incomplete_sector_clist_page")
+    seen_codes = set()
+    for item in items:
+        code = item.get("f12") if isinstance(item, dict) else None
+        if (not isinstance(item, dict)
+                or not isinstance(item.get("f14"), str)
+                or not item.get("f14").strip()
+                or not isinstance(code, str)
+                or re.fullmatch(r"BK[0-9]{4}", code) is None
+                or code in seen_codes
+                or any(isinstance(item.get(field), bool)
+                       or not isinstance(item.get(field), (int, float))
+                       or not math.isfinite(item[field]) for field in ("f62", "f3"))):
+            raise ValueError("invalid_sector_clist_row")
+        seen_codes.add(code)
+    return items
+
+
 def fetch_full_market_quotes(return_diagnostics=False, *, now=None, clock=None, monotonic=None,
                              budget_remaining=None, db_path=None, cache_dir=None):
     """Multi-source quotes; metadata-only callers keep fetch_all_a_stocks."""
@@ -766,6 +817,7 @@ def fetch_sector_flow(
     top_n=TOP_SECTOR_COUNT,
     *,
     component_evidence=None,
+    source_session=None,
 ):
     """
     获取行业板块资金流向 TOP N。
@@ -780,9 +832,12 @@ def fetch_sector_flow(
         "fs": "m:90+t:2",
         "fields": "f12,f14,f3,f62,f184,f66",
     }
+    source_session = source_session or _ACTIVE_SECTOR_SESSION.get()
     try:
+        if source_session is not None and source_session.clist_failed:
+            raise ConnectionError("clist unavailable in this collection")
         data = _fetch_eastmoney_json(params)
-        items = data.get("data", {}).get("diff", [])
+        items = _sector_clist_page(data, int(params["pz"]), require_total=source_session is not None)
         result = []
         for it in items:
             result.append({
@@ -801,17 +856,40 @@ def fetch_sector_flow(
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流向失败: {e}")
-        return []
+        if source_session is None:
+            return []
+        source_session.clist_failed = True
+        try:
+            result = [{**row, "flow_str": _format_amount(row["flow"])}
+                      for row in source_session.funds()[:max(0, int(top_n) * (3 if component_evidence is not None else 1))]]
+            if component_evidence is not None:
+                return deduplicate_sector_hierarchy(result, component_evidence, top_n=top_n)
+            return result
+        except Exception as relay_error:
+            print(f"[ERROR] 板块资金官网备用入口失败: {relay_error}")
+            return []
 
 
 # ============================================================
 # 板块成分股 — 东方财富
 # ============================================================
-def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
+def fetch_sector_stocks(sector_code, *, return_diagnostics=False, source_session=None):
     """
     获取板块内成分股列表。
     返回: [{"code": "600519", "name": "贵州茅台", "change_pct": 1.5}, ...]
     """
+    source_session = source_session or _ACTIVE_SECTOR_SESSION.get()
+    if source_session is not None and source_session.clist_failed:
+        try:
+            stocks, diagnostics = source_session.members(sector_code)
+            return (stocks, diagnostics) if return_diagnostics else stocks
+        except Exception as exc:
+            print(f"[ERROR] 板块 {sector_code} 官网备用成分失败: {exc}")
+            diagnostics = {"sector_code": sector_code, "requested": None, "fetched": 0,
+                           "raw_valid_unique": 0, "filtered_unique": 0, "unique": 0,
+                           "raw_component_codes": [], "pages": 0, "complete": False,
+                           "error": "relay_failed:{}".format(type(exc).__name__)}
+            return ([], diagnostics) if return_diagnostics else []
     stocks_by_code = {}
     # Pagination uses every well-formed six-digit security code.  The A-share
     # exchange filter below only controls the returned stock rows.
@@ -828,6 +906,7 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
         "complete": False,
         "error": "",
     }
+    relay_attempted = False
     page = 1
     while True:
         if page > SECTOR_COMPONENT_MAX_PAGES:
@@ -913,8 +992,23 @@ def fetch_sector_stocks(sector_code, *, return_diagnostics=False):
         except Exception as e:
             print(f"[ERROR] 获取板块 {sector_code} 成分股失败: {e}")
             diagnostics["error"] = f"request_failed:{type(e).__name__}"
+            if source_session is not None:
+                source_session.clist_failed = True
+                relay_attempted = True
+                try:
+                    stocks, relay_diagnostics = source_session.members(sector_code)
+                    return (stocks, relay_diagnostics) if return_diagnostics else stocks
+                except Exception as relay_error:
+                    print(f"[ERROR] 板块 {sector_code} 官网备用成分失败: {relay_error}")
             break
 
+    if source_session is not None and not diagnostics["complete"] and not relay_attempted:
+        source_session.clist_failed = True
+        try:
+            stocks, relay_diagnostics = source_session.members(sector_code)
+            return (stocks, relay_diagnostics) if return_diagnostics else stocks
+        except Exception as relay_error:
+            print(f"[ERROR] 板块 {sector_code} 官网备用成分失败: {relay_error}")
     stocks = [stocks_by_code[code] for code in sorted(stocks_by_code)]
     diagnostics["raw_valid_unique"] = len(raw_valid_codes)
     diagnostics["filtered_unique"] = len(stocks)
@@ -3304,7 +3398,12 @@ def collect_daily_data(
     used_fallback_sector_source = False
     warnings = []
     fallback_used = False
-    sectors = fetch_sector_flow(TOP_SECTOR_COUNT)
+    sector_session = _new_sector_session(str(required_date or datetime.now(_TZ_CN).date().isoformat()))
+    sector_token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+    try:
+        sectors = fetch_sector_flow(TOP_SECTOR_COUNT)
+    finally:
+        _ACTIVE_SECTOR_SESSION.reset(sector_token)
     component_lookup_sectors = sectors
     if not sectors:
         # Historical sector identifiers can aid component lookup, but have no
@@ -3339,9 +3438,13 @@ def collect_daily_data(
     sector_source = "fallback_static" if used_fallback_sector_source else "eastmoney"
     stock_pool_source = "sector_components"
     for sector_rank, sector in enumerate(component_lookup_sectors, start=1):
-        stocks, component_diagnostics = fetch_sector_stocks(
-            sector["code"], return_diagnostics=True
-        )
+        sector_token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+        try:
+            stocks, component_diagnostics = fetch_sector_stocks(
+                sector["code"], return_diagnostics=True
+            )
+        finally:
+            _ACTIVE_SECTOR_SESSION.reset(sector_token)
         sector_component_diagnostics.append(component_diagnostics)
         component_evidence = {
             "component_codes": [
@@ -3362,6 +3465,11 @@ def collect_daily_data(
             component_evidence
         )
         if not component_diagnostics.get("complete"):
+            stock_pool_incomplete = True
+        if component_diagnostics.get("source") == "eastmoney_relay" and (
+            component_diagnostics.get("quote_evidence_status") != "verified"
+            or component_diagnostics.get("quote_missing_codes")
+        ):
             stock_pool_incomplete = True
         if not stocks and not component_diagnostics.get("complete"):
             consecutive_failures += 1
@@ -3423,6 +3531,15 @@ def collect_daily_data(
                     "amounts": st.get("amounts"),
                 }
     print(f"  共 {len(stock_map)} 只成分股（去重后）")
+    quote_gap_codes = sorted({
+        code for diagnostics in sector_component_diagnostics
+        if diagnostics.get("source") == "eastmoney_relay"
+        for code in diagnostics.get("quote_missing_codes", [])
+    })
+    if quote_gap_codes:
+        warnings.append(
+            f"板块成分身份已取齐，{len(quote_gap_codes)}只A股同日报价不可用；板块叠加检索关闭"
+        )
 
     expected_sector_codes = [
         str(sector.get("code") or "") for sector in component_lookup_sectors
@@ -3605,6 +3722,10 @@ def collect_daily_data(
         "index_latest_date": _latest_date(sh_kline),
         "stock_pool_source": stock_pool_source,
         "sector_source": sector_source,
+        "sector_source_detail": (
+            "eastmoney_relay" if sector_session.used_relay_funds and sectors
+            else "eastmoney_clist" if sectors else "fallback_static"
+        ),
         "stale_stock_count": stale_stock_count,
         "missing_daily_count": missing_daily_count,
         "missing_daily_codes": sorted(code for code in missing_daily_codes if code),
@@ -3631,6 +3752,7 @@ def collect_daily_data(
         "sh_index": sh_kline,
         "stocks": stocks_with_kline,
         "sector_component_evidence": sector_component_evidence,
+        "_sector_source_session": sector_session,
         "index_error": index_error,
         "data_quality": data_quality,
     }
@@ -3731,7 +3853,7 @@ def collect_15min_data(
 # ============================================================
 # 资金流出 — 东方财富
 # ============================================================
-def fetch_sector_outflow(top_n=5, *, component_evidence=None):
+def fetch_sector_outflow(top_n=5, *, component_evidence=None, source_session=None):
     """
     获取行业板块资金流出 TOP N（净流出最大）。
     复用 fetch_sector_flow 相同 API，改为升序排列取负值最大。
@@ -3743,9 +3865,12 @@ def fetch_sector_outflow(top_n=5, *, component_evidence=None):
         "fs": "m:90+t:2",
         "fields": "f12,f14,f3,f62,f184,f66",
     }
+    source_session = source_session or _ACTIVE_SECTOR_SESSION.get()
     try:
+        if source_session is not None and source_session.clist_failed:
+            raise ConnectionError("clist unavailable in this collection")
         data = _fetch_eastmoney_json(params)
-        items = data.get("data", {}).get("diff", [])
+        items = _sector_clist_page(data, int(params["pz"]), require_total=source_session is not None)
         result = []
         for it in items:
             flow = it.get("f62", 0)
@@ -3768,7 +3893,19 @@ def fetch_sector_outflow(top_n=5, *, component_evidence=None):
         return result
     except Exception as e:
         print(f"[ERROR] 获取板块资金流出失败: {e}")
-        return []
+        if source_session is None:
+            return []
+        source_session.clist_failed = True
+        try:
+            result = [{**row, "flow_str": _format_amount(row["flow"])}
+                      for row in sorted(source_session.funds(), key=lambda row: (row["flow"], row["code"]))
+                      if row["flow"] < 0]
+            if component_evidence is not None:
+                return deduplicate_sector_hierarchy(result, component_evidence, top_n=top_n)
+            return result[:max(0, int(top_n))]
+        except Exception as relay_error:
+            print(f"[ERROR] 板块资金流出官网备用入口失败: {relay_error}")
+            return []
 
 
 # ============================================================
