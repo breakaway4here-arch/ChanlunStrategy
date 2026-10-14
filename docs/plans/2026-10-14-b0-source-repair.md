@@ -32,3 +32,11 @@
 7. 板块备源新增 8 次公开请求已停止。官方同花顺行业/概念资金页可访问，但未证明数据交易日以及“净额”与东财主力资金 f62 等价，分类也不同；不接入、不冒充恢复当日资金榜。现有缺口与五连败保护保留。
 
 提交、运行树同步、研究冻结原位 CAS 和真实线上回读状态在发布后追加；截至本条仍未发布。
+
+### 发布完成回执（2026-10-14）
+
+修复与限定当日展示产物已提交 `835a69ed0b67711b28b9622ec81d6ef60013a18f` 并推送 main，实际 production-runtime 已快进到同一提交。同步前再次拉取 main 并确认祖先关系，174 项回归再次通过；复制最终发布文件后，四面/比较产物校验及 12 项固定夹具与更正器测试通过。
+
+在共享发布锁和当日 selection 锁下核对原值后，实际 runs 的 selection/outcomes/shortlist 已应用同一个已验收更正包并逐字节读回。selection 新 SHA256 为 `917a0c7953bce2deaabe7d5b3007ea38e82638516b0554bfef573bd9e4c2ea83`。原冻结及全部写入范围有完整备份；L1 selection/freeze/outcomes 以及行情库、账本哈希未变，运行树仍仅保留原有 `docs/compare/index.html` 改动。临时副本执行正常 process_report 得到 conflict 留证，两个已评估组及更正信息均保持不变，后续普通刷新不会把 B0 改回空。
+
+公开 Pages 初次回读仍旧版，随后真实浏览器 GET 的 9 个目标文件均 HTTP 200 且 SHA256 等于发布清单；桌面 1280px 和手机 390px 实际展示 B0=5、L1=5、看点=9、北京时间更正说明，无横向溢出。截图和可核验回执保留在主项目 `research/b0-source-repair-20261014/`（`release-receipt.json`、`live-browser-resource-check.json`、`protected-readback.json`、`live-mobile.png`、`live-desktop.png`）。此次未启动业务服务、重跑选股或发送消息。板块资金仍为局部不可用，下一次自然日报尚未发生，不写为已验收。
