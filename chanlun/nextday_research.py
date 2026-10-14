@@ -508,6 +508,29 @@ def _archive_candidates(
     return "evaluated", "", result, []
 
 
+def _hidden_highlights_reason(report: Mapping[str, Any]) -> str:
+    """An intentionally closed source view cannot prove an empty B0 pool."""
+    health = report.get("selection_input_health")
+    by_view = health.get("by_view") if isinstance(health, Mapping) else None
+    marker = by_view.get("highlights") if isinstance(by_view, Mapping) else None
+    if (
+        isinstance(marker, Mapping)
+        and marker.get("status") == "unavailable"
+        and marker.get("output_hidden") is True
+    ):
+        return "highlights_source_unavailable"
+    workspace = report.get("workspace")
+    meta = workspace.get("view_meta") if isinstance(workspace, Mapping) else None
+    highlight_meta = meta.get("highlights") if isinstance(meta, Mapping) else None
+    availability = (
+        highlight_meta.get("availability")
+        if isinstance(highlight_meta, Mapping) else None
+    )
+    if isinstance(availability, Mapping) and availability.get("state") == "unavailable":
+        return "highlights_source_unavailable"
+    return ""
+
+
 def _merge_candidate_records(
     sources: Iterable[Dict[str, Any]],
     snapshot_by_identity: Mapping[str, Dict[str, Any]],
@@ -638,6 +661,9 @@ def adapt_report(
     archive_status, archive_reason, archive_rows, archive_errors = _archive_candidates(
         report_date, archived_workbench
     )
+    hidden_reason = _hidden_highlights_reason(report)
+    if hidden_reason and archive_status == "evaluated":
+        archive_status, archive_reason, archive_rows = "not_evaluated", hidden_reason, []
     parsed_sources: List[Dict[str, Any]] = []
     candidate_errors: List[str] = []
     raw_candidate_count = 0

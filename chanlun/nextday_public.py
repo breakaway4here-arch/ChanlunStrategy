@@ -7,7 +7,7 @@ import math
 import os
 import re
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from numbers import Real
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
@@ -251,6 +251,23 @@ def _selection_group(
     freeze = _public_group_freeze(group_record)
     if freeze is not None:
         result.update(freeze)
+    if group_name == "b0" and "correction" in source:
+        correction = source.get("correction")
+        if not isinstance(correction, Mapping) or correction.get("reason") != "upstream_highlights_hidden":
+            raise PublicProjectionError("B0 correction is unavailable")
+        corrected_at = correction.get("corrected_at")
+        if not isinstance(corrected_at, str) or len(corrected_at) > 40:
+            raise PublicProjectionError("B0 correction time is unavailable")
+        try:
+            parsed = datetime.fromisoformat(corrected_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise PublicProjectionError("B0 correction time is unavailable") from exc
+        if parsed.tzinfo is None:
+            raise PublicProjectionError("B0 correction time is unavailable")
+        result["correction"] = {
+            "reason": "upstream_highlights_hidden",
+            "corrected_at": corrected_at,
+        }
     return result
 
 

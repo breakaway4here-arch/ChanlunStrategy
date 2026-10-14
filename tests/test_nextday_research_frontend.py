@@ -203,6 +203,45 @@ assert(!html.includes('source_hash') && !html.includes('selection.json'), 'priva
 """,
         )
 
+    def test_only_valid_b0_correction_is_visible_in_its_subtitle(self):
+        _run_node_contract(
+            self,
+            "({ render: renderNextdayResearchProjection })",
+            r"""
+const expected = '已更正原看点缺失 · 更正时间 2026-10-14 17:05:12（北京时间）';
+const payload = samplePayload();
+payload.b0.correction = {
+  reason: 'upstream_highlights_hidden', corrected_at: '2026-10-14T17:05:12+08:00'
+};
+const html = __nextdayTest.render(payload, '2026-09-17');
+const b0Start = html.indexOf('B0 原看点对照');
+assert(html.slice(b0Start).includes(expected), 'valid B0 correction time was hidden');
+assert(!html.slice(0, b0Start).includes('已更正原看点缺失'), 'B0 correction leaked into L1');
+payload.b0.correction.corrected_at = '2026-10-14T09:05:12Z';
+assert(__nextdayTest.render(payload, '2026-09-17').includes(expected),
+  'UTC correction did not display the equivalent Beijing time');
+assert(payload.b0.correction.corrected_at === '2026-10-14T09:05:12Z',
+  'display conversion changed source correction evidence');
+
+const ordinary = samplePayload();
+assert(!__nextdayTest.render(ordinary, '2026-09-17').includes('已更正原看点缺失'),
+  'ordinary B0 gained a correction label');
+ordinary.l1.correction = payload.b0.correction;
+assert(!__nextdayTest.render(ordinary, '2026-09-17').includes('已更正原看点缺失'),
+  'L1 correction changed the report');
+ordinary.b0.correction = {reason: 'other_reason', corrected_at: '2026-10-14T17:05:12+08:00'};
+assert(!__nextdayTest.render(ordinary, '2026-09-17').includes('已更正原看点缺失'),
+  'unrecognized correction reason was displayed');
+ordinary.b0.correction = {reason: 'upstream_highlights_hidden', corrected_at: '2026-02-30T17:05:12+08:00'};
+assert(!__nextdayTest.render(ordinary, '2026-09-17').includes('已更正原看点缺失'),
+  'impossible correction date was displayed');
+ordinary.b0.correction.corrected_at = '2026-10-14T17:05:12+08:00<script>';
+const escaped = __nextdayTest.render(ordinary, '2026-09-17');
+assert(!escaped.includes('已更正原看点缺失') && !escaped.includes('<script>'),
+  'malformed correction time was displayed as HTML');
+""",
+        )
+
     def test_insufficient_and_evaluated_empty_are_distinct_and_missing_is_not_zero(self):
         _run_node_contract(
             self,

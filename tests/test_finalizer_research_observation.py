@@ -131,15 +131,19 @@ class FinalizerResearchObservationTests(unittest.TestCase):
         self.assertEqual(result['selection_input_health'],expected_health)
         self.assertEqual(result['workspace']['view_meta']['observation_top5']['availability']['state'],'available')
 
-    def test_stored_closed_workspace_restores_only_proven_observation_marker(self):
+    def test_stored_closed_workspace_restores_only_proven_research_markers(self):
         value=self.real_report(False)
         self.assertEqual(value['workspace']['views']['observation_top5'],[])
         expected=copy.deepcopy(value['selection_input_health']);expected['by_view'].pop('observation_top5')
+        # This archived report also has the exact old highlights closure receipt;
+        # verified independent LuoJie rows now restore that mixed view as well.
+        expected['by_view'].pop('highlights')
         result,diagnostics=self.rebuild(value)
         self.assertEqual([r['code'] for r in result['workspace']['views']['observation_top5']],
             ['300890','300893','002176','000692','002317'])
         self.assertEqual(result['selection_input_health'],expected)
         self.assertEqual(diagnostics['restored_observation_views'],['observation_top5'])
+        self.assertEqual(diagnostics['restored_highlights_views'],['highlights'])
         self.assertEqual(protected_report_digest(result),protected_report_digest(value))
 
     def test_other_or_tampered_view_health_is_preserved(self):

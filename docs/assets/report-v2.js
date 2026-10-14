@@ -15559,6 +15559,17 @@
     var subtitle = kind === 'l1'
       ? '排序：行业涨停家数降序 → 连板数降序 → 首封时间升序 → 证券身份；保持源顺序，最多五只，不补位。'
       : '日报原看点顺序对照；仅展示原有数量。';
+    var correction = isNextdayRecord(selection.correction) ? selection.correction : {};
+    var correctedAt = typeof correction.corrected_at === 'string' ? correction.corrected_at : '';
+    var correctedTime = /^(\d{4}-\d{2}-\d{2})T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?(?:Z|[+-](?:0\d|1[0-4]):[0-5]\d)$/.exec(correctedAt);
+    var correctedAtMs = correctedTime ? Date.parse(correctedAt) : NaN;
+    if (kind === 'b0' && correction.reason === 'upstream_highlights_hidden'
+        && correctedTime && isCanonicalIsoDate(correctedTime[1])
+        && isFinite(correctedAtMs)) {
+      var beijingTime = new Date(correctedAtMs + 8 * 60 * 60 * 1000)
+        .toISOString().slice(0, 19).replace('T', ' ');
+      subtitle += ' · 已更正原看点缺失 · 更正时间 ' + beijingTime + '（北京时间）';
+    }
     var registrationStatus = normalizeString(selection.registration_status).trim();
     if (registrationStatus === 'historical' || registrationStatus === 'retrospective') {
       var groupFrozenAt = normalizeString(selection.frozen_at).trim();

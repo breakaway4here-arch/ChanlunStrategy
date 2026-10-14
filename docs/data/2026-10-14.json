@@ -44648,19 +44648,7 @@
       "eligible_coverage": 1.0,
       "reason": "identity_migration_pending"
     },
-    "by_view": {
-      "highlights": {
-        "status": "unavailable",
-        "required_date": "2026-10-14",
-        "blocking_reason": "strategy_upstream_contract_mismatch",
-        "invalid_count": 2,
-        "invalid_codes": [
-          "600570",
-          "688111"
-        ],
-        "output_hidden": true
-      }
-    }
+    "by_view": {}
   },
   "startup_watchlist": [
     {
@@ -71619,8 +71607,8 @@
     },
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "b455d72a2780bac739efd3210726c90457c6aaabf0daf5a8201d6d5881a2b9a7",
-      "after_sha256": "b455d72a2780bac739efd3210726c90457c6aaabf0daf5a8201d6d5881a2b9a7"
+      "before_sha256": "6d56406d33bd55d0c332f13aeac07fb8221022571c1bac217929b35e8c74232c",
+      "after_sha256": "6d56406d33bd55d0c332f13aeac07fb8221022571c1bac217929b35e8c74232c"
     },
     "production_reference": {
       "pool": "picks_fusion",
@@ -71865,19 +71853,8 @@
         "source_pool": "picks_fusion + next_day_boom + luojie_pool + startup_watchlist",
         "action_semantics": "watch_only",
         "availability": {
-          "state": "unavailable",
-          "reason": "历史输出含 2 只不在 picks_pure 共同上游全集；该视图已封闭，保留原始池追溯但不重排。"
-        },
-        "upstream_contract": {
-          "status": "unavailable",
-          "required_date": "2026-10-14",
-          "blocking_reason": "strategy_upstream_contract_mismatch",
-          "invalid_count": 2,
-          "invalid_codes": [
-            "600570",
-            "688111"
-          ],
-          "output_hidden": true
+          "state": "partial",
+          "reason": "部分上游数据不可用：luojie_pool。"
         }
       },
       "observation_top5": {
@@ -81085,7 +81062,2785 @@
         }
       ],
       "h4_t3": [],
-      "highlights": [],
+      "highlights": [
+        {
+          "code": "002404",
+          "name": "嘉欣丝绸",
+          "sector": "服装家纺",
+          "sources": [
+            "main"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "服装家纺"
+            },
+            {
+              "type": "source",
+              "label": "融合候选"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动候选"
+            },
+            {
+              "type": "confirm",
+              "label": "30min B级确认"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "融合候选"
+          ],
+          "resonance_label": "",
+          "view_rank": 1,
+          "watch_score": 41,
+          "opportunity_score": 41,
+          "action": "仅观察",
+          "action_reason": "决策上限（observe）：不得执行上车动作。原动作依据：主推命中，确认与结构条件已满足，偏执行优先。",
+          "pool_quality": {
+            "volume20": null,
+            "volume_ratio20": null,
+            "display_volume_ratio20": null,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "unavailable",
+            "volume_evidence_status": "incomplete",
+            "liquidity_label": "待数量核验",
+            "liquidity_score": 0.0,
+            "code_style_score": 75.0,
+            "growth_board_score": 83.6479,
+            "growth_board_label": "中小成长",
+            "market_cap_score": 100.0,
+            "market_cap_label": "强弹性流通市值",
+            "market_cap_source": "circulating_market_cap",
+            "ret20": 0.3306,
+            "ret20_score": 61.9896,
+            "industry_key": "服装家纺",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "evaluated": false,
+                "status": "missing",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 83.6479,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 100.0,
+                "source": "circulating_market_cap"
+              },
+              {
+                "name": "ret20",
+                "score": 61.9896
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 29.2768,
+            "pool_quality_tags": [
+              "中小成长",
+              "强弹性流通市值"
+            ],
+            "market_cap": 32.315,
+            "circulating_market_cap": 26.2989,
+            "float_market_cap": 26.2989,
+            "liquidity_source": "missing",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "missing",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 1.68,
+          "reference_price": 6.018905723905725,
+          "current_price": 6.018905723905725,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "处于120日低位区间；放量3.5倍；站上MA5/MA10",
+          "risk_flags": [],
+          "watch_anchor": null,
+          "next_confirmation": [],
+          "invalidation": [],
+          "rank_trace": {
+            "base_source": "main",
+            "source_count": 1,
+            "signal_score": 10.75,
+            "entry_score": 16.0,
+            "momentum_score": 2.52,
+            "market_score": 12.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "30min确认",
+                "ma_bullish": true,
+                "confirmations": [
+                  "30min两阳夹两阴确认"
+                ],
+                "startup_signals": [
+                  "close_above_ma5",
+                  "close_above_ma10"
+                ],
+                "distance": 0.0
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": null,
+                "volume_ratio20": null,
+                "display_volume_ratio20": null,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "unavailable",
+                "volume_evidence_status": "incomplete",
+                "liquidity_label": "待数量核验",
+                "liquidity_score": 0.0,
+                "code_style_score": 75.0,
+                "growth_board_score": 83.6479,
+                "growth_board_label": "中小成长",
+                "market_cap_score": 100.0,
+                "market_cap_label": "强弹性流通市值",
+                "market_cap_source": "circulating_market_cap",
+                "ret20": 0.3306,
+                "ret20_score": 61.9896,
+                "industry_key": "服装家纺",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 0.0,
+                    "evaluated": false,
+                    "status": "missing",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 83.6479,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 100.0,
+                    "source": "circulating_market_cap"
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 61.9896
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 29.2768,
+                "pool_quality_tags": [
+                  "中小成长",
+                  "强弹性流通市值"
+                ],
+                "market_cap": 32.315,
+                "circulating_market_cap": 26.2989,
+                "float_market_cap": 26.2989,
+                "liquidity_source": "missing",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "missing",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": true,
+              "confirmed_by": "30min确认",
+              "confirmations": [
+                "30min两阳夹两阴确认"
+              ],
+              "startup_signals": [
+                "close_above_ma5",
+                "close_above_ma10"
+              ]
+            },
+            "alpha_bonus": 3.7968,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 29.2768,
+            "pool_quality_tags": [
+              "中小成长",
+              "强弹性流通市值"
+            ],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 83.6479,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0047,
+            "base_opportunity_score": 37,
+            "risk_flags": [],
+            "opportunity_score": 41,
+            "distance_from_reference_pct": 0.0,
+            "change_pct": 1.68,
+            "source:main": 1,
+            "selected_reason": "主推池单源入榜"
+          },
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "002404",
+            "name": "嘉欣丝绸",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 53,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "未形成中枢/尚无趋势结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 28,
+              "reasons": [
+                "放量启动",
+                "震荡市",
+                "MA 均线多头",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷"
+            ]
+          },
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "",
+          "tier": "candidate",
+          "category": "A",
+          "quality_tier": "",
+          "view": "main",
+          "ref": {
+            "pool": "picks_fusion",
+            "code": "002404"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "决策上限（observe）：不得执行上车动作。原动作依据：主推命中，确认与结构条件已满足，偏执行优先。",
+          "page_action": "仅观察",
+          "page_action_reason": "处于120日低位区间；放量3.5倍；站上MA5/MA10",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {
+            "version": "decision-v2",
+            "code": "002404",
+            "name": "嘉欣丝绸",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 53,
+            "structure": {
+              "score": 10,
+              "reasons": [
+                "未形成中枢/尚无趋势结构",
+                "回踩确认"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 28,
+              "reasons": [
+                "放量启动",
+                "震荡市",
+                "MA 均线多头",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷"
+            ]
+          },
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "600570",
+          "name": "恒生电子",
+          "sector": "软件开发",
+          "sources": [
+            "luojie"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "软件开发"
+            },
+            {
+              "type": "source",
+              "label": "罗姐池"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "罗姐池"
+          ],
+          "resonance_label": "",
+          "view_rank": 2,
+          "watch_score": 17,
+          "opportunity_score": 17,
+          "action": "盯盘",
+          "action_reason": "罗姐池观察信号，先确认方向后考虑进场。",
+          "pool_quality": {
+            "volume20": null,
+            "volume_ratio20": null,
+            "display_volume_ratio20": null,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "unavailable",
+            "volume_evidence_status": "missing",
+            "liquidity_label": "待数量核验",
+            "liquidity_score": 0.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": -7.3728,
+            "ret20_score": 32.8797,
+            "industry_key": "软件开发",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "evaluated": false,
+                "status": "missing",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 32.8797
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 0.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "missing",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 0.2,
+          "reference_price": 19.62,
+          "current_price": 19.85,
+          "price_basis": null,
+          "distance_from_reference_pct": 1.18,
+          "primary_reason": "国家队硬方向: 数字货币/金融IT；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
+          "risk_flags": [],
+          "watch_anchor": null,
+          "next_confirmation": [],
+          "invalidation": [],
+          "rank_trace": {
+            "base_source": "luojie",
+            "source_count": 1,
+            "signal_score": 7.2,
+            "entry_score": 4.0,
+            "momentum_score": 0.3,
+            "market_score": 9.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": null,
+                "volume_ratio20": null,
+                "display_volume_ratio20": null,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "unavailable",
+                "volume_evidence_status": "missing",
+                "liquidity_label": "待数量核验",
+                "liquidity_score": 0.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": -7.3728,
+                "ret20_score": 32.8797,
+                "industry_key": "软件开发",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 0.0,
+                    "evaluated": false,
+                    "status": "missing",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 32.8797
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 0.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "missing",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": []
+            },
+            "alpha_bonus": 0.8906,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 0.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0011,
+            "base_opportunity_score": 16,
+            "risk_flags": [],
+            "opportunity_score": 17,
+            "distance_from_reference_pct": null,
+            "change_pct": 0.2,
+            "source:luojie": 1,
+            "selected_reason": "罗姐池单源入榜"
+          },
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "600570",
+            "name": "恒生电子",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 43,
+            "structure": {
+              "score": -5,
+              "reasons": [
+                "未形成中枢/尚无趋势结构"
+              ]
+            },
+            "position": {
+              "score": 35,
+              "reasons": [
+                "120日收盘分位低位"
+              ]
+            },
+            "sentiment": {
+              "score": 13,
+              "reasons": [
+                "震荡市",
+                "MA 均线多头",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷"
+            ]
+          },
+          "h4_predictions": {},
+          "source_channel": "",
+          "price_limit_state": "",
+          "tier": "生命线观察",
+          "category": "",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "luojie_pool",
+            "code": "600570"
+          },
+          "strategy_action": "盯盘",
+          "strategy_action_reason": "罗姐池观察信号，先确认方向后考虑进场。",
+          "page_action": "仅观察",
+          "page_action_reason": "国家队硬方向: 数字货币/金融IT；生命线观察；13/77多头；13/77金叉保持；踩生命线向上",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {
+            "version": "decision-v2",
+            "code": "600570",
+            "name": "恒生电子",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 43,
+            "structure": {
+              "score": -5,
+              "reasons": [
+                "未形成中枢/尚无趋势结构"
+              ]
+            },
+            "position": {
+              "score": 35,
+              "reasons": [
+                "120日收盘分位低位"
+              ]
+            },
+            "sentiment": {
+              "score": 13,
+              "reasons": [
+                "震荡市",
+                "MA 均线多头",
+                "动能积极"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷"
+            ]
+          },
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "688111",
+          "name": "金山办公",
+          "sector": "软件开发",
+          "sources": [
+            "luojie"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "软件开发"
+            },
+            {
+              "type": "source",
+              "label": "罗姐池"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "罗姐池"
+          ],
+          "resonance_label": "",
+          "view_rank": 3,
+          "watch_score": 16,
+          "opportunity_score": 16,
+          "action": "盯盘",
+          "action_reason": "罗姐池观察信号，先确认方向后考虑进场。",
+          "pool_quality": {
+            "volume20": null,
+            "volume_ratio20": null,
+            "display_volume_ratio20": null,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "unavailable",
+            "volume_evidence_status": "missing",
+            "liquidity_label": "待数量核验",
+            "liquidity_score": 0.0,
+            "code_style_score": 90.0,
+            "growth_board_score": 41.5871,
+            "growth_board_label": "科创弹性",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": -2.5503,
+            "ret20_score": 50.4356,
+            "industry_key": "软件开发",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "evaluated": false,
+                "status": "missing",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 41.5871,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 50.4356
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 14.5555,
+            "pool_quality_tags": [
+              "科创弹性"
+            ],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "missing",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": -1.36,
+          "reference_price": 234.45,
+          "current_price": 239.61,
+          "price_basis": null,
+          "distance_from_reference_pct": 2.2,
+          "primary_reason": "国家队硬方向: 数字货币/金融IT；生命线观察；13/77多头；13/77金叉保持；中枢跌破生命线",
+          "risk_flags": [],
+          "watch_anchor": null,
+          "next_confirmation": [],
+          "invalidation": [],
+          "rank_trace": {
+            "base_source": "luojie",
+            "source_count": 1,
+            "signal_score": 6.9,
+            "entry_score": 4.0,
+            "momentum_score": 0.0,
+            "market_score": 9.0,
+            "risk_penalty": 0.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": null,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": null,
+                "volume_ratio20": null,
+                "display_volume_ratio20": null,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "unavailable",
+                "volume_evidence_status": "missing",
+                "liquidity_label": "待数量核验",
+                "liquidity_score": 0.0,
+                "code_style_score": 90.0,
+                "growth_board_score": 41.5871,
+                "growth_board_label": "科创弹性",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": -2.5503,
+                "ret20_score": 50.4356,
+                "industry_key": "软件开发",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 0.0,
+                    "evaluated": false,
+                    "status": "missing",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 41.5871,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 50.4356
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 14.5555,
+                "pool_quality_tags": [
+                  "科创弹性"
+                ],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "missing",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": []
+            },
+            "alpha_bonus": 0.118,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 14.5555,
+            "pool_quality_tags": [
+              "科创弹性"
+            ],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 41.5871,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0001,
+            "base_opportunity_score": 16,
+            "risk_flags": [],
+            "opportunity_score": 16,
+            "distance_from_reference_pct": null,
+            "change_pct": -1.36,
+            "source:luojie": 1,
+            "selected_reason": "罗姐池单源入榜"
+          },
+          "decision_engine_v1": {
+            "version": "decision-v2",
+            "code": "688111",
+            "name": "金山办公",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 33,
+            "structure": {
+              "score": 5,
+              "reasons": [
+                "震荡结构"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 13,
+              "reasons": [
+                "震荡市",
+                "MA 均线多头"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷",
+              "弱市只观察"
+            ]
+          },
+          "h4_predictions": {},
+          "source_channel": "",
+          "price_limit_state": "",
+          "tier": "生命线观察",
+          "category": "",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "luojie_pool",
+            "code": "688111"
+          },
+          "strategy_action": "盯盘",
+          "strategy_action_reason": "罗姐池观察信号，先确认方向后考虑进场。",
+          "page_action": "仅观察",
+          "page_action_reason": "国家队硬方向: 数字货币/金融IT；生命线观察；13/77多头；13/77金叉保持；中枢跌破生命线",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {
+            "version": "decision-v2",
+            "code": "688111",
+            "name": "金山办公",
+            "decision": "观察",
+            "decision_code": "observe",
+            "total_score": 33,
+            "structure": {
+              "score": 5,
+              "reasons": [
+                "震荡结构"
+              ]
+            },
+            "position": {
+              "score": 15,
+              "reasons": [
+                "120日收盘分位中位"
+              ]
+            },
+            "sentiment": {
+              "score": 13,
+              "reasons": [
+                "震荡市",
+                "MA 均线多头"
+              ]
+            },
+            "risk_reasons": [
+              "市场情绪偏冷",
+              "弱市只观察"
+            ]
+          },
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "601858",
+          "name": "中国科传",
+          "sector": "出版",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "出版"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 4,
+          "watch_score": 28,
+          "opportunity_score": 28,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 132977.454,
+            "volume_ratio20": 2.33,
+            "display_volume_ratio20": 2.7448,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 14.0175,
+            "ret20_score": 99.7857,
+            "industry_key": "出版",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 99.7857
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 9.98,
+          "reference_price": 25.19595129375951,
+          "current_price": 25.19595129375951,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 14.97,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 2.33,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 132977.454,
+                "volume_ratio20": 2.33,
+                "display_volume_ratio20": 2.7448,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 14.0175,
+                "ret20_score": 99.7857,
+                "industry_key": "出版",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 99.7857
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 4.497,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0056,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 28,
+            "distance_from_reference_pct": null,
+            "change_pct": 9.98,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "601858"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "603992",
+          "name": "松霖科技",
+          "sector": "家居用品",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "家居用品"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 5,
+          "watch_score": 28,
+          "opportunity_score": 28,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 46428.5275,
+            "volume_ratio20": 2.83,
+            "display_volume_ratio20": 5.0894,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 22.9271,
+            "ret20_score": 86.9669,
+            "industry_key": "家居用品",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 86.9669
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 10.01,
+          "reference_price": 24.85308480012695,
+          "current_price": 24.85308480012695,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 15.02,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 2.83,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 46428.5275,
+                "volume_ratio20": 2.83,
+                "display_volume_ratio20": 5.0894,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 22.9271,
+                "ret20_score": 86.9669,
+                "industry_key": "家居用品",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 86.9669
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 4.8,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.006,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 28,
+            "distance_from_reference_pct": null,
+            "change_pct": 10.01,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "603992"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "000573",
+          "name": "粤宏远Ａ",
+          "sector": "房地产开发",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "房地产开发"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 6,
+          "watch_score": 27,
+          "opportunity_score": 27,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 150079.8385,
+            "volume_ratio20": 3.06,
+            "display_volume_ratio20": 3.9401,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 11.8863,
+            "ret20_score": 97.8686,
+            "industry_key": "房地产开发",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 97.8686
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 9.9,
+          "reference_price": 4.44994459833795,
+          "current_price": 4.44994459833795,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 14.85,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 3.06,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 150079.8385,
+                "volume_ratio20": 3.06,
+                "display_volume_ratio20": 3.9401,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 11.8863,
+                "ret20_score": 97.8686,
+                "industry_key": "房地产开发",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 97.8686
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 3.9503,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0049,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 27,
+            "distance_from_reference_pct": null,
+            "change_pct": 9.9,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "000573"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "600252",
+          "name": "中恒集团",
+          "sector": "中药Ⅱ",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "中药Ⅱ"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 7,
+          "watch_score": 27,
+          "opportunity_score": 27,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 664059.1055,
+            "volume_ratio20": 2.25,
+            "display_volume_ratio20": 3.2768,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 5.9829,
+            "ret20_score": 83.4699,
+            "industry_key": "中药Ⅱ",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 83.4699
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 10.22,
+          "reference_price": 2.48,
+          "current_price": 2.48,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 15.33,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 2.25,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 664059.1055,
+                "volume_ratio20": 2.25,
+                "display_volume_ratio20": 3.2768,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 5.9829,
+                "ret20_score": 83.4699,
+                "industry_key": "中药Ⅱ",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 83.4699
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 3.647,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0046,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 27,
+            "distance_from_reference_pct": null,
+            "change_pct": 10.22,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "600252"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "603656",
+          "name": "泰禾智能",
+          "sector": "专用设备",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "专用设备"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 8,
+          "watch_score": 27,
+          "opportunity_score": 27,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 19834.641,
+            "volume_ratio20": 5.94,
+            "display_volume_ratio20": 6.4095,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 9.0389,
+            "ret20_score": 92.4071,
+            "industry_key": "专用设备",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 92.4071
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 9.98,
+          "reference_price": 19.06,
+          "current_price": 19.06,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 14.97,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 5.94,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 19834.641,
+                "volume_ratio20": 5.94,
+                "display_volume_ratio20": 6.4095,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 9.0389,
+                "ret20_score": 92.4071,
+                "industry_key": "专用设备",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 92.4071
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 3.931,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0049,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 27,
+            "distance_from_reference_pct": null,
+            "change_pct": 9.98,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "603656"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        },
+        {
+          "code": "000601",
+          "name": "韶能股份",
+          "sector": "电力",
+          "sources": [
+            "confirming"
+          ],
+          "info_tags": [
+            {
+              "type": "sector",
+              "label": "电力"
+            },
+            {
+              "type": "source",
+              "label": "等确认"
+            },
+            {
+              "type": "signal",
+              "label": "强势启动观察"
+            },
+            {
+              "type": "risk",
+              "label": "涨幅过热"
+            }
+          ],
+          "data_badges": [
+            {
+              "type": "quality",
+              "label": "数据已校验"
+            }
+          ],
+          "data_status": {
+            "daily": "verified",
+            "latest_date": "2026-10-14",
+            "source": "market_history_db",
+            "bars": 120,
+            "stale": false,
+            "is_final": true
+          },
+          "source_labels": [
+            "等确认"
+          ],
+          "resonance_label": "",
+          "view_rank": 9,
+          "watch_score": 26,
+          "opportunity_score": 26,
+          "action": "仅观察",
+          "action_reason": "等确认池位置信号受限，当前仅观察。",
+          "pool_quality": {
+            "volume20": 534214.0525,
+            "volume_ratio20": 2.23,
+            "display_volume_ratio20": 3.4437,
+            "display_volume_ratio20_window_bars": 21,
+            "display_volume_ratio20_method": "current_div_previous20_mean",
+            "display_volume_ratio20_status": "available",
+            "volume_evidence_status": "available",
+            "liquidity_label": "量能活跃",
+            "liquidity_score": 25.0,
+            "code_style_score": 0.0,
+            "growth_board_score": 0.0,
+            "growth_board_label": "",
+            "market_cap_score": 0.0,
+            "market_cap_label": "",
+            "market_cap_source": "",
+            "ret20": 10.0,
+            "ret20_score": 94.5959,
+            "industry_key": "电力",
+            "sector_quality_score": 0.0,
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "evaluated": true,
+                "status": "volume_only",
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "market_cap",
+                "score": 0.0,
+                "source": ""
+              },
+              {
+                "name": "ret20",
+                "score": 94.5959
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "market_cap": null,
+            "circulating_market_cap": null,
+            "float_market_cap": null,
+            "liquidity_source": "volume_proxy",
+            "liquidity_window_bars": 0,
+            "liquidity_evidence_status": "volume_only",
+            "money20": null,
+            "quality_evidence_eligible": false,
+            "quality_evidence_status": "insufficient"
+          },
+          "change_pct": 10.0,
+          "reference_price": 6.927863278772988,
+          "current_price": 6.927863278772988,
+          "price_basis": null,
+          "distance_from_reference_pct": 0.0,
+          "primary_reason": "涨停当日不追，等待次日回踩确认",
+          "risk_flags": [
+            "涨幅过热"
+          ],
+          "watch_anchor": null,
+          "next_confirmation": [
+            "回踩不破突破位",
+            "30min二买/三买",
+            "缩量回踩后再放量"
+          ],
+          "invalidation": [
+            "跌破启动参考位",
+            "放量长阴破坏结构"
+          ],
+          "rank_trace": {
+            "base_source": "confirming",
+            "source_count": 1,
+            "signal_score": 10.0,
+            "entry_score": 4.0,
+            "momentum_score": 15.0,
+            "market_score": 8.0,
+            "risk_penalty": 10.0,
+            "data_penalty": 4.0,
+            "alpha_features": {
+              "market_regime_factor": {},
+              "sector_strength_factor": {
+                "sector_flow": null,
+                "sector_rank": null,
+                "sector_strength_factor": null
+              },
+              "momentum_persistence": null,
+              "breakout_quality": {
+                "volume_ratio": 2.23,
+                "confirmed_by": "",
+                "ma_bullish": false,
+                "confirmations": [],
+                "startup_signals": [
+                  "涨幅≥4.0%",
+                  "close_above_ma5",
+                  "close_above_ma10",
+                  "break_20d_high",
+                  "实体阳线≥3%"
+                ],
+                "distance": null
+              },
+              "alpha_multiplier": null,
+              "pool_quality": {
+                "volume20": 534214.0525,
+                "volume_ratio20": 2.23,
+                "display_volume_ratio20": 3.4437,
+                "display_volume_ratio20_window_bars": 21,
+                "display_volume_ratio20_method": "current_div_previous20_mean",
+                "display_volume_ratio20_status": "available",
+                "volume_evidence_status": "available",
+                "liquidity_label": "量能活跃",
+                "liquidity_score": 25.0,
+                "code_style_score": 0.0,
+                "growth_board_score": 0.0,
+                "growth_board_label": "",
+                "market_cap_score": 0.0,
+                "market_cap_label": "",
+                "market_cap_source": "",
+                "ret20": 10.0,
+                "ret20_score": 94.5959,
+                "industry_key": "电力",
+                "sector_quality_score": 0.0,
+                "pool_quality_tier": "none",
+                "pool_quality_components": [
+                  {
+                    "name": "liquidity",
+                    "score": 25.0,
+                    "evaluated": true,
+                    "status": "volume_only",
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "growth",
+                    "score": 0.0,
+                    "threshold_elite": 55.0,
+                    "threshold_strong": 55.0
+                  },
+                  {
+                    "name": "market_cap",
+                    "score": 0.0,
+                    "source": ""
+                  },
+                  {
+                    "name": "ret20",
+                    "score": 94.5959
+                  },
+                  {
+                    "name": "sector",
+                    "score": 0.0,
+                    "threshold_elite": 70.0,
+                    "threshold_strong": 55.0
+                  }
+                ],
+                "pool_quality_score": 10.0,
+                "pool_quality_tags": [],
+                "market_cap": null,
+                "circulating_market_cap": null,
+                "float_market_cap": null,
+                "liquidity_source": "volume_proxy",
+                "liquidity_window_bars": 0,
+                "liquidity_evidence_status": "volume_only",
+                "money20": null,
+                "quality_evidence_eligible": false,
+                "quality_evidence_status": "insufficient"
+              },
+              "ma_bullish": false,
+              "confirmed_by": "",
+              "confirmations": [],
+              "startup_signals": [
+                "涨幅≥4.0%",
+                "close_above_ma5",
+                "close_above_ma10",
+                "break_20d_high",
+                "实体阳线≥3%"
+              ]
+            },
+            "alpha_bonus": 3.3353,
+            "pool_quality_bonus": 0.0,
+            "pool_quality_score": 10.0,
+            "pool_quality_tags": [],
+            "pool_quality_tier": "none",
+            "pool_quality_components": [
+              {
+                "name": "liquidity",
+                "score": 25.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "growth",
+                "score": 0.0,
+                "threshold_elite": 55.0,
+                "threshold_strong": 55.0
+              },
+              {
+                "name": "sector",
+                "score": 0.0,
+                "threshold_elite": 70.0,
+                "threshold_strong": 55.0
+              }
+            ],
+            "alpha_multiplier": 1.0042,
+            "base_opportunity_score": 23,
+            "risk_flags": [
+              "涨幅过热"
+            ],
+            "opportunity_score": 26,
+            "distance_from_reference_pct": null,
+            "change_pct": 10.0,
+            "source:confirming": 1,
+            "selected_reason": "等确认池单源入榜"
+          },
+          "decision_engine_v1": null,
+          "h4_predictions": {},
+          "source_channel": "low_position",
+          "price_limit_state": "limit_up",
+          "tier": "watch",
+          "category": "C",
+          "quality_tier": "",
+          "view": "observation",
+          "ref": {
+            "pool": "startup_watchlist",
+            "code": "000601"
+          },
+          "strategy_action": "仅观察",
+          "strategy_action_reason": "等确认池位置信号受限，当前仅观察。",
+          "page_action": "仅观察",
+          "page_action_reason": "涨停当日不追，等待次日回踩确认",
+          "effective_action": "仅观察",
+          "action_semantics": "watch_only",
+          "scoring_decision": {},
+          "is_formal_recommendation": false
+        }
+      ],
       "growth_quality": [],
       "observation_top5": [
         {
@@ -82950,7 +85705,7 @@
       "confirming": 6,
       "baseline": 4,
       "h4_t3": 0,
-      "highlights": 0,
+      "highlights": 9,
       "growth_quality": 0,
       "observation_top5": 5
     },
@@ -83021,18 +85776,7 @@
         "q10_rejected_count": 0,
         "training_row_count": 421,
         "training_date_count": 46
-      },
-      "upstream_contract_incidents": [
-        {
-          "view": "highlights",
-          "blocking_reason": "strategy_upstream_contract_mismatch",
-          "invalid_count": 2,
-          "invalid_codes": [
-            "600570",
-            "688111"
-          ]
-        }
-      ]
+      }
     }
   }
 }

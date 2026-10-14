@@ -526,7 +526,7 @@ class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
             for row in report["workspace"]["diagnostics"][
                 "upstream_contract_incidents"
             ]
-            if row.get("view") != "luojie"
+            if row.get("view") not in {"luojie", "highlights"}
         ]
         expected_codes = [
             str(row["code"]) for row in report["luojie_pool"]["candidates"]
@@ -550,22 +550,23 @@ class RepairStrategyScorecardSnapshotTests(unittest.TestCase):
         self.assertEqual(rebuilt["workspace"]["views"]["main"], original_main)
         self.assertEqual(rebuilt["workspace"]["views"]["h4_t3"], original_h4)
         self.assertNotIn("luojie", rebuilt["selection_input_health"]["by_view"])
-        self.assertIn("highlights", rebuilt["selection_input_health"]["by_view"])
+        self.assertNotIn("highlights", rebuilt["selection_input_health"]["by_view"])
         self.assertEqual(
             rebuilt["selection_input_health"]["by_strategy"]["luojie_pool"],
             original_luojie_health,
         )
         self.assertEqual(diagnostics["restored_independent_views"], ["luojie"])
         self.assertNotIn("luojie", diagnostics["upstream_contract_blocked_views"])
-        self.assertIn("highlights", diagnostics["upstream_contract_blocked_views"])
+        self.assertNotIn("highlights", diagnostics["upstream_contract_blocked_views"])
+        self.assertEqual(["highlights"], diagnostics["restored_highlights_views"])
         self.assertEqual(
             original_unrelated_incidents,
             [
                 row
-                for row in rebuilt["workspace"]["diagnostics"][
-                    "upstream_contract_incidents"
-                ]
-                if row.get("view") != "luojie"
+                for row in rebuilt["workspace"]["diagnostics"].get(
+                    "upstream_contract_incidents", []
+                )
+                if row.get("view") not in {"luojie", "highlights"}
             ],
         )
 

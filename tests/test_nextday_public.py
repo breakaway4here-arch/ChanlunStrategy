@@ -173,6 +173,24 @@ def outcomes_for(selection, *, as_of_date=REPORT_DATE, l1_rows=None, b0_rows=Non
 
 
 class PublicProjectionTests(unittest.TestCase):
+    def test_b0_correction_projects_only_reason_and_actual_time(self):
+        selection = selection_for()
+        selection["b0"]["correction"] = {
+            "reason": "upstream_highlights_hidden",
+            "corrected_at": "2026-09-17T10:05:00Z",
+            "original_selection_sha256": "private-hash",
+            "backup_path": "/private/source",
+        }
+        public = project_run(selection, None)
+        self.assertEqual(public["b0"]["correction"], {
+            "reason": "upstream_highlights_hidden",
+            "corrected_at": "2026-09-17T10:05:00Z",
+        })
+        self.assertNotIn("correction", public["l1"])
+        selection["b0"]["correction"]["reason"] = "arbitrary"
+        with self.assertRaises(PublicProjectionError):
+            project_run(selection, None)
+
     def test_legacy_research_only_group_without_freeze_fields_stays_unannotated(self):
         selection = selection_for()
         outcomes = outcomes_for(selection)

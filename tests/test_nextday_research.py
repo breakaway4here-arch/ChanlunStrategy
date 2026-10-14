@@ -367,6 +367,26 @@ class NextdayResearchTests(unittest.TestCase):
         conflicting = adapt_report(report, archived_workbench=conflicting_item)
         self.assertEqual(conflicting["b0"]["status"], "not_evaluated")
 
+    def test_b0_hidden_highlights_are_not_a_real_empty_selection(self):
+        report = _report([], _snapshot([]))
+        archive = _archived_workbench([])
+        self.assertEqual(adapt_report(report, archive)["b0"]["status"], "evaluated")
+
+        report["selection_input_health"] = {"by_view": {"highlights": {
+            "status": "unavailable", "output_hidden": True,
+            "blocking_reason": "strategy_upstream_contract_mismatch",
+        }}}
+        hidden = adapt_report(report, archive)
+        self.assertEqual(hidden["b0"]["status"], "not_evaluated")
+        self.assertEqual(hidden["b0"]["selected"], [])
+        self.assertIn("highlights", hidden["b0"]["reason"])
+
+        report.pop("selection_input_health")
+        report["workspace"]["view_meta"] = {"highlights": {
+            "availability": {"state": "unavailable", "reason": "closed"},
+        }}
+        self.assertEqual(adapt_report(report, archive)["b0"]["status"], "not_evaluated")
+
     def test_archive_only_comparator_row_does_not_widen_l1_universe(self):
         report = _report(
             [],

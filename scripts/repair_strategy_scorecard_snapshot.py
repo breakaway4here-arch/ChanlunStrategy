@@ -41,6 +41,7 @@ from chanlun.decision_workbench import build_decision_workbench  # noqa: E402
 from chanlun.recommendation_evidence import (  # noqa: E402
     _find_original_candidate,
     _find_serialized_candidate,
+    build_recommendation_evidence_projection,
 )
 from chanlun.report_comparison import write_comparison_index  # noqa: E402
 from chanlun.shadow_evaluation import production_digest  # noqa: E402
@@ -565,6 +566,39 @@ def _bound_research_observation_is_safe(row, originals):
     return all(row.get(field) == matched[0].get(field) for field in fields)
 
 
+def _bound_independent_luojie_highlight_is_safe(row, contract, canonical_rows):
+    """Accept only the actual watch-only projection of a verified LuoJie row."""
+    if not isinstance(row, dict) or not contract:
+        return False
+    code = row.get("code")
+    if not isinstance(code, str) or code not in contract["candidate_codes"]:
+        return False
+    if not (
+        row.get("sources") == ["luojie"]
+        and row.get("ref") == {"pool": "luojie_pool", "code": code}
+        and row.get("view") == "observation"
+        and row.get("action_semantics") == "watch_only"
+        and row.get("is_formal_recommendation") is False
+        and not row.get("formal_decision_contract")
+    ):
+        return False
+    source = next(
+        (item for item in contract["state"]["candidates"] if item["code"] == code),
+        None,
+    )
+    canonical = next((item for item in canonical_rows if item.get("code") == code), None)
+    if source is None or canonical is None or row != canonical:
+        return False
+    try:
+        identity = normalize_identity({"asset_type": "stock", "code": code})
+        return (
+            normalize_identity(source, asset_type="stock").key == identity.key
+            and normalize_identity(row, asset_type="stock").key == identity.key
+        )
+    except (TypeError, ValueError):
+        return False
+
+
 def _workspace_upstream_contract_violations(report):
     report = report if isinstance(report, dict) else {}
     independent_luojie = _independent_luojie_research_contract(report)
@@ -578,6 +612,10 @@ def _workspace_upstream_contract_violations(report):
     workspace = report.get("workspace")
     views = workspace.get("views") if isinstance(workspace, dict) else {}
     views = views if isinstance(views, dict) else {}
+    canonical_highlights = (
+        build_workspace(report)["views"]["highlights"]
+        if independent_luojie is not None and views.get("highlights") else []
+    )
     violations = {}
     for view_name in COMMON_UPSTREAM_STRATEGY_VIEWS:
         if view_name == "luojie" and independent_luojie is not None:
@@ -605,6 +643,10 @@ def _workspace_upstream_contract_violations(report):
                              for item in [row] + source_rows)
             if view_name == 'observation_top5' and declares_b:
                 return not _bound_research_observation_is_safe(row, observation_originals)
+            if view_name == "highlights" and _bound_independent_luojie_highlight_is_safe(
+                row, independent_luojie, canonical_highlights
+            ):
+                return False
             return str(code) not in pure_codes and not _is_limit_up_observation_exception(row)
 
         invalid_codes = sorted({
@@ -659,6 +701,77 @@ def _has_legacy_observation_upstream_marker(report, report_date, workspace):
         ).format(len(invalid_codes)))
         and observation_incidents == [dict(view='observation_top5',
             blocking_reason=expected['blocking_reason'], invalid_count=len(invalid_codes), invalid_codes=invalid_codes)])
+
+
+def _has_legacy_highlights_upstream_marker(report, report_date, workspace, contract):
+    """Prove that the old guard alone hid a reconstructible mixed view."""
+    if not contract:
+        return False
+    rows = (workspace.get("views") or {}).get("highlights") or []
+    if not rows or "highlights" in _workspace_upstream_contract_violations(
+        dict(report, workspace=workspace)
+    ):
+        return False
+    pure_codes = {
+        str(item.get("code") or "") for item in report.get("picks_pure") or []
+        if isinstance(item, dict)
+    }
+    invalid_codes = sorted({
+        row["code"] for row in rows
+        if row["code"] not in pure_codes
+        and row.get("price_limit_state") != "limit_up"
+        and _bound_independent_luojie_highlight_is_safe(row, contract, rows)
+    })
+    if not invalid_codes:
+        return False
+    marker = ((report.get("selection_input_health") or {}).get("by_view") or {}).get("highlights")
+    expected = {
+        "status": "unavailable",
+        "required_date": report_date,
+        "blocking_reason": "strategy_upstream_contract_mismatch",
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+        "output_hidden": True,
+    }
+    if marker != expected or type(marker.get("invalid_count")) is not int:
+        return False
+    old_workspace = report.get("workspace")
+    if not isinstance(old_workspace, dict):
+        return False
+    old_views = old_workspace.get("views")
+    old_meta = old_workspace.get("view_meta")
+    old_counts = old_workspace.get("counts")
+    old_diagnostics = old_workspace.get("diagnostics")
+    if not all(isinstance(part, dict) for part in (old_views, old_meta, old_counts, old_diagnostics)):
+        return False
+    meta = old_meta.get("highlights")
+    if not (
+        old_views.get("highlights") == []
+        and old_counts.get("highlights") == 0
+        and isinstance(meta, dict)
+        and meta.get("role") == "research"
+        and meta.get("source_pool") == "picks_fusion + next_day_boom + luojie_pool + startup_watchlist"
+        and meta.get("action_semantics") == "watch_only"
+        and meta.get("upstream_contract") == expected
+        and meta.get("availability") == {
+            "state": "unavailable",
+            "reason": (
+                "历史输出含 {} 只不在 picks_pure 共同上游全集；"
+                "该视图已封闭，保留原始池追溯但不重排。"
+            ).format(len(invalid_codes)),
+        }
+    ):
+        return False
+    incidents = old_diagnostics.get("upstream_contract_incidents")
+    if not isinstance(incidents, list):
+        return False
+    highlighted = [item for item in incidents if isinstance(item, dict) and item.get("view") == "highlights"]
+    return highlighted == [{
+        "view": "highlights",
+        "blocking_reason": "strategy_upstream_contract_mismatch",
+        "invalid_count": len(invalid_codes),
+        "invalid_codes": invalid_codes,
+    }]
 
 
 def _apply_workspace_upstream_contract_health(report, report_date):
@@ -1057,6 +1170,9 @@ def rebuild_strategy_scorecard_report(
         independent_luojie,
     )
     rebuilt_observation_workspace = build_workspace(report)
+    restore_highlights = _has_legacy_highlights_upstream_marker(
+        report, report_date, rebuilt_observation_workspace, independent_luojie
+    )
     restore_observation = _has_legacy_observation_upstream_marker(
         report, report_date, rebuilt_observation_workspace)
     restore_empty_observation = (restore_observation and
@@ -1067,6 +1183,8 @@ def rebuild_strategy_scorecard_report(
     rebuilt = _deepcopy_json(report)
     if restore_luojie:
         _remove_legacy_luojie_upstream_marker(rebuilt)
+    if restore_highlights:
+        rebuilt["selection_input_health"]["by_view"].pop("highlights")
     if restore_observation:
         rebuilt['selection_input_health']['by_view'].pop('observation_top5')
     _apply_registered_input_health(rebuilt, report_date)
@@ -1094,6 +1212,8 @@ def rebuild_strategy_scorecard_report(
     ignored_contract_views = original_contract_views | rebuilt_contract_views
     if restore_luojie:
         ignored_contract_views.add("luojie")
+    if restore_highlights:
+        ignored_contract_views.add("highlights")
     if restore_empty_observation:
         ignored_contract_views.add('observation_top5')
     baseline_workspace = workspace_selection_projection(
@@ -1126,6 +1246,7 @@ def rebuild_strategy_scorecard_report(
             rebuilt_contract_views
         ),
         "restored_independent_views": ["luojie"] if restore_luojie else [],
+        "restored_highlights_views": ["highlights"] if restore_highlights else [],
         "restored_observation_views": ['observation_top5'] if restore_observation else [],
     }
 
@@ -1482,7 +1603,39 @@ def _same_report_generation(envelope, source, report_date):
 def _refresh_report_bootstrap(envelope, source, docs_dir, report_date):
     rebuilt = copy.deepcopy(envelope)
     if _same_report_generation(envelope, source, report_date):
-        evidence = _bound_published_evidence(envelope, source, project_hidden=True)
+        old_source = envelope.get("inlineReportData") or {}
+        old_contract = _independent_luojie_research_contract(old_source)
+        restore_highlights = _has_legacy_highlights_upstream_marker(
+            old_source, report_date, build_workspace(old_source), old_contract
+        )
+        if restore_highlights:
+            current_rows = (source.get("workspace") or {}).get("views", {}).get("highlights")
+            expected_rows = build_workspace(source)["views"]["highlights"]
+            current_health = ((source.get("selection_input_health") or {}).get("by_view") or {})
+            if not (
+                current_rows == expected_rows
+                and current_rows
+                and "highlights" not in current_health
+                and "highlights" not in _workspace_upstream_contract_violations(source)
+                and protected_report_digest(old_source) == protected_report_digest(source)
+            ):
+                raise ValueError("restored highlights source binding mismatch")
+            # Replay every previously published row against the new source with
+            # only the old closed highlights view projected back to its receipt.
+            binding_source = copy.deepcopy(source)
+            binding_source["workspace"]["views"]["highlights"] = []
+            binding_source["workspace"]["counts"]["highlights"] = 0
+            binding_source["workspace"]["view_meta"]["highlights"] = copy.deepcopy(
+                old_source["workspace"]["view_meta"]["highlights"]
+            )
+            binding_source["selection_input_health"].setdefault("by_view", {})["highlights"] = copy.deepcopy(
+                old_source["selection_input_health"]["by_view"]["highlights"]
+            )
+            evidence = _bound_published_evidence(envelope, binding_source, project_hidden=True)
+            regenerated = build_recommendation_evidence_projection(source, source)
+            evidence["views"]["highlights"] = regenerated["views"]["highlights"]
+        else:
+            evidence = _bound_published_evidence(envelope, source, project_hidden=True)
         history = _load_psy12_shadow_history(docs_dir, as_of_date=report_date)
         workbench = build_decision_workbench(
             source, source.get("workspace", {}), evidence, phase="formal",
@@ -1735,24 +1888,9 @@ def publish_strategy_scorecard_snapshot(
             name: protected_report_digest(payload)
             for name, payload in original_planes.items()
         }
-        workspace_projections = {
-            name: workspace_selection_projection(
-                payload,
-                ignore_formal=bool(
-                    _registered_input_incidents(report_date)
-                ),
-                ignore_views=set(
-                    _workspace_upstream_contract_violations(payload)
-                ),
-            )
-            for name, payload in original_planes.items()
-        }
-        workspace_ignored_views = {
-            name: set(_workspace_upstream_contract_violations(payload))
-            for name, payload in original_planes.items()
-        }
         rebuilt_planes = {}
         repair_counts = {}
+        restored_views = {}
         for name, payload in original_planes.items():
             rebuilt, diagnostics = rebuild_strategy_scorecard_report(
                 payload,
@@ -1765,6 +1903,25 @@ def publish_strategy_scorecard_snapshot(
             repair_counts[name] = diagnostics[
                 "unproven_zero_changes_removed"
             ]
+            restored_views[name] = set(
+                diagnostics["restored_independent_views"]
+                + diagnostics["restored_observation_views"]
+                + diagnostics["restored_highlights_views"]
+            )
+
+        workspace_ignored_views = {
+            name: set(_workspace_upstream_contract_violations(payload))
+            | restored_views[name]
+            for name, payload in original_planes.items()
+        }
+        workspace_projections = {
+            name: workspace_selection_projection(
+                payload,
+                ignore_formal=bool(_registered_input_incidents(report_date)),
+                ignore_views=workspace_ignored_views[name],
+            )
+            for name, payload in original_planes.items()
+        }
 
         original_manifest = atomic._read_json(
             docs_dir / "data" / "index.json"
