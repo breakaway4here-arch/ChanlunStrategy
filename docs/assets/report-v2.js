@@ -42,6 +42,7 @@
   var state = {
     data: null,
     sectorSupplement: null,
+    icepointSupplement: null,
     workspace: null,
     primaryMode: 'today',
     currentView: 'main',
@@ -6484,11 +6485,11 @@
   function renderDecisionMarketBar(data) {
     var html = buildDecisionMarketSummary(data);
     if (nodes.marketDecisionSummary) nodes.marketDecisionSummary.innerHTML = html;
-    if (nodes.marketIcepoint) nodes.marketIcepoint.innerHTML = buildMarketIcepoint(data);
+    if (nodes.marketIcepoint) nodes.marketIcepoint.innerHTML = renderIcepointObservation(data, state.icepointSupplement);
     return html;
   }
 
-  function buildMarketIcepoint(data) {
+  function buildMarketIcepoint(data, acceptedSupplement) {
     var source = data || {};
     var raw = source.market_icepoint;
     var empty = '<section class="market-icepoint" aria-labelledby="marketIcepointTitle">'
@@ -6525,6 +6526,28 @@
         return validItemTime(value[name]);
       });
     }
+    function providerAmountTime(item) {
+      var actual = item.actual || {};
+      var acquired = item.as_of;
+      var supplementTime = raw.supplemented_at;
+      if (item.source !== 'wencai' || item.scope !== 'all_a_cny'
+          || actual.source_code !== '883957.TI' || actual.amount_unit !== 'CNY'
+          || actual.market_date !== raw.date || acquired !== actual.retrieved_at
+          || !Array.isArray(actual.prior_dates) || actual.prior_dates.length !== 5
+          || !actual.prior_dates.every(function (day, index) {
+            return isCanonicalIsoDate(day) && day < raw.date
+              && (index === 0 || day > actual.prior_dates[index - 1]);
+          })
+          || !icepointTimestamp(acquired) || !icepointTimestamp(supplementTime)
+          || Date.parse(acquired) > Date.parse(supplementTime)) return false;
+      var sameDay = acquired.slice(0, 10) === raw.date
+        && supplementTime.slice(0, 10) === raw.date
+        && /\+08:00$/.test(acquired) && /\+08:00$/.test(supplementTime)
+        && Number(acquired.slice(11, 13)) >= 15;
+      var posthoc = acceptedSupplement
+        && Date.parse(acquired) > Date.parse(raw.date + 'T23:59:59+08:00');
+      return sameDay || posthoc;
+    }
     if (valid) {
       var indexActual = items.six_indices.actual.changes_pct || {};
       var allIndices = indexNames.every(function (name) { return finite(indexActual[name]); });
@@ -6532,7 +6555,8 @@
       valid = keys.every(function (key) {
         var item = items[key];
         if (item.status === 'unavailable') return true;
-        if (!validItemTime(item.as_of)) return false;
+        if (!validItemTime(item.as_of)
+            && !(key === 'volume_drop' && providerAmountTime(item))) return false;
         var actual = item.actual;
         var condition;
         if (key === 'six_indices') condition = allIndices ? indexMatched : null;
@@ -6540,10 +6564,25 @@
           condition = finite(actual.current_cny) && finite(actual.prior_mean_cny)
             && actual.prior_mean_cny > 0 && finite(actual.ratio)
             && Math.abs(actual.current_cny / actual.prior_mean_cny - actual.ratio) <= 0.0002
+            && (item.source !== 'wencai' || providerAmountTime(item)
+              || (!raw.supplemented_at && validItemTime(item.as_of)))
             && allIndices ? actual.current_cny / actual.prior_mean_cny >= 1.2 && indexMatched : null;
         } else if (key === 'breadth') {
           condition = count(actual.advance_count) && count(actual.decline_count)
             && count(actual.flat_count)
+            && (item.source !== 'quote_snapshot+wencai' || (
+              item.scope === 'all_a' && raw.supplemented_at
+              && icepointTimestamp(raw.supplemented_at)
+              && icepointTimestamp(actual.retrieved_at)
+              && Date.parse(actual.retrieved_at) >= Date.parse(item.as_of)
+              && Date.parse(actual.retrieved_at) <= Date.parse(raw.supplemented_at)
+              && count(actual.suspended_count) && count(actual.unknown_count)
+              && actual.unknown_count === 0
+              && count(actual.trading_count) && count(actual.quote_snapshot_count)
+              && actual.trading_count === actual.advance_count + actual.decline_count + actual.flat_count
+              && actual.valid_count === actual.trading_count
+              && actual.denominator === actual.trading_count
+              && actual.quote_snapshot_count === actual.trading_count + actual.suspended_count))
             ? actual.decline_count > 0 && actual.decline_count >= actual.advance_count * 9 : null;
         } else {
           condition = count(actual.limit_up_count) && count(actual.limit_down_count)
@@ -6566,6 +6605,7 @@
     var names = { volume_drop: '放量大跌', six_indices: '六指数同跌',
       breadth: '涨跌家数', sealed_limits: '涨跌停数量' };
     var sourceLabels = { market_history: '历史行情库', eastmoney_limit_pools: '东财涨跌停池',
+      wencai: '同花顺全A（沪深京）', 'quote_snapshot+wencai': '当日报价 + 同花顺全A（沪深京）',
       eastmoney: '东方财富', sina: '新浪', tencent: '腾讯', verified_index_kline: '已核验指数日线' };
     var scopeLabels = { all_a_cny: '全A成交额（元）', six_fixed_indices: '六个指定指数',
       all_a: '全A股票', eastmoney_topic_pools: '东财涨跌停专题池' };
@@ -6575,7 +6615,7 @@
       all_a_breadth_or_coverage_missing: '全A广度或覆盖证据不足',
       same_day_sealed_pool_totals_missing: '当日封板统计未核验' };
     function labelSource(value) { return sourceLabels[value] || normalizeString(value); }
-    function fact(key, actual) {
+    function fact(key, actual, itemSource) {
       if (key === 'volume_drop') return '当日成交额 ' + n(finite(actual.current_cny) ? actual.current_cny / 1e8 : null, 2)
         + ' 亿元 · 前5日均额 ' + n(finite(actual.prior_mean_cny) ? actual.prior_mean_cny / 1e8 : null, 2)
         + ' 亿元 · 比值 ' + n(actual.ratio, 2) + ' 倍';
@@ -6584,7 +6624,11 @@
         return name + ' ' + n(value, 2) + (finite(value) ? '%' : '');
       }).join(' · ');
       if (key === 'breadth') return '上涨 ' + n(actual.advance_count)
-        + ' · 下跌 ' + n(actual.decline_count) + ' · 平盘 ' + n(actual.flat_count);
+        + ' · 下跌 ' + n(actual.decline_count) + ' · 平盘 ' + n(actual.flat_count)
+        + (itemSource === 'quote_snapshot+wencai'
+          && count(actual.suspended_count) && actual.unknown_count === 0
+          && actual.quote_snapshot_count === actual.trading_count + actual.suspended_count
+          ? ' · 停牌 ' + n(actual.suspended_count) + '（单列）' : '');
       return '跌停 ' + n(actual.limit_down_count) + ' · 涨停 ' + n(actual.limit_up_count);
     }
     function sourceText(value) {
@@ -6605,9 +6649,11 @@
       var item = items[key];
       return '<div class="market-icepoint-row"><div><strong>' + escapeHtml(names[key])
         + '</strong><span>' + escapeHtml(labels[item.status]) + '</span></div>'
-        + '<p>' + escapeHtml(fact(key, item.actual)) + '</p>'
+        + '<p>' + escapeHtml(fact(key, item.actual, item.source)) + '</p>'
         + '<small>条件：' + escapeHtml(item.threshold) + ' · 来源：' + escapeHtml(sourceText(item.source))
-        + ' · 截至：' + escapeHtml(timeText(item.as_of))
+        + ' · 截至：' + escapeHtml(raw.supplemented_at && item.actual.retrieved_at
+          ? '原数据日 ' + raw.date + ' 收盘；' + sectorSupplementBeijingTime(item.actual.retrieved_at) + ' 补证'
+          : timeText(item.as_of))
         + ' · 范围：' + escapeHtml(scopeLabels[item.scope] || '范围未核验')
         + (item.status === 'unavailable' && item.reason ? ' · 原因：' + escapeHtml(reasonLabels[item.reason] || '证据不足') : '')
         + '</small></div>';
@@ -6654,6 +6700,151 @@
       + ' 组跌幅低于-4%；至少5组为满足。来源：腾讯 · 截至：'
       + escapeHtml(timeText(etfValid ? etf.as_of : '')) + '</p><small>' + groups + '</small></div>'
       + '</details></section>';
+  }
+
+  function icepointStableJson(value) {
+    if (Array.isArray(value)) return '[' + value.map(icepointStableJson).join(',') + ']';
+    if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(function (key) {
+      return JSON.stringify(key) + ':' + icepointStableJson(value[key]);
+    }).join(',') + '}';
+    return JSON.stringify(value);
+  }
+
+  function icepointTimestamp(value) {
+    return typeof value === 'string'
+      && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
+      && Number.isFinite(Date.parse(value));
+  }
+
+  function validateIcepointSupplement(report, payload) {
+    if (!report || !payload || typeof payload !== 'object'
+        || payload.schema_version !== 1 || payload.report_date !== report.date
+        || !isCanonicalIsoDate(payload.report_date)
+        || payload.source !== 'hithink_iwencai_883957'
+        || payload.selection_usage !== 'not_used'
+        || !report.market_icepoint || typeof report.market_icepoint !== 'object'
+        || icepointStableJson(payload.original_market_icepoint) !== icepointStableJson(report.market_icepoint)) return null;
+    var original = report.market_icepoint;
+    var corrected = payload.supplemented_market_icepoint;
+    if (!corrected || typeof corrected !== 'object' || original.status !== 'insufficient'
+        || corrected.date !== report.date || corrected.status !== 'not_matched'
+        || corrected.verified_count !== 4 || corrected.matched_count !== 0
+        || !corrected.items || !original.items
+        || !corrected.items.volume_drop || !corrected.items.breadth
+        || !original.items.volume_drop || !original.items.breadth
+        || original.items.volume_drop.status !== 'unavailable'
+        || original.items.breadth.status !== 'unavailable'
+        || corrected.items.volume_drop.status !== 'not_matched'
+        || corrected.items.breadth.status !== 'not_matched'
+        || corrected.items.volume_drop.source !== 'wencai'
+        || corrected.items.volume_drop.scope !== 'all_a_cny'
+        || corrected.items.volume_drop.threshold !== original.items.volume_drop.threshold
+        || corrected.items.breadth.source !== 'quote_snapshot+wencai'
+        || corrected.items.breadth.scope !== 'all_a'
+        || corrected.items.breadth.threshold !== original.items.breadth.threshold
+        || icepointStableJson(corrected.items.six_indices) !== icepointStableJson(original.items.six_indices)
+        || icepointStableJson(corrected.items.sealed_limits) !== icepointStableJson(original.items.sealed_limits)
+        || icepointStableJson(corrected.etf) !== icepointStableJson(original.etf)) return null;
+    var fixed = Object.assign({}, corrected);
+    delete fixed.status;
+    delete fixed.verified_count;
+    delete fixed.matched_count;
+    delete fixed.supplemented_at;
+    var frozen = Object.assign({}, original);
+    delete frozen.status;
+    delete frozen.verified_count;
+    delete frozen.matched_count;
+    fixed.items = Object.assign({}, fixed.items);
+    frozen.items = Object.assign({}, frozen.items);
+    delete fixed.items.volume_drop;
+    delete fixed.items.breadth;
+    delete frozen.items.volume_drop;
+    delete frozen.items.breadth;
+    if (icepointStableJson(fixed) !== icepointStableJson(frozen)) return null;
+    var supplemented = Date.parse(payload.supplemented_at);
+    var reportEnd = Date.parse(report.date + 'T23:59:59+08:00');
+    if (!icepointTimestamp(payload.supplemented_at) || supplemented <= reportEnd
+        || corrected.supplemented_at !== payload.supplemented_at) return null;
+    var volume = corrected.items.volume_drop.actual || {};
+    var breadth = corrected.items.breadth.actual || {};
+    var days = payload.turnover_days;
+    if (!Array.isArray(days) || days.length !== 6 || !Array.isArray(volume.prior_dates)
+        || volume.prior_dates.length !== 5 || volume.source_code !== '883957.TI'
+        || volume.amount_unit !== 'CNY' || volume.market_date !== report.date
+        || !icepointTimestamp(volume.retrieved_at)
+        || !icepointTimestamp(breadth.retrieved_at)
+        || Date.parse(volume.retrieved_at) > supplemented
+        || Date.parse(breadth.retrieved_at) > supplemented) return null;
+    var sum = 0;
+    for (var i = 0; i < 6; i++) {
+      var day = days[i];
+      if (!day || day.date !== (i < 5 ? volume.prior_dates[i] : report.date)
+          || !isCanonicalIsoDate(day.date) || (i && day.date <= days[i - 1].date)
+          || typeof day.amount_cny !== 'number' || !Number.isFinite(day.amount_cny)
+          || day.amount_cny <= 0) return null;
+      if (i < 5) sum += day.amount_cny;
+    }
+    if (Math.abs(sum / 5 - volume.prior_mean_cny) > 0.01
+        || days[5].amount_cny !== volume.current_cny
+        || !Number.isInteger(breadth.suspended_count) || breadth.suspended_count < 0
+        || breadth.unknown_count !== 0
+        || breadth.trading_count !== breadth.advance_count + breadth.decline_count + breadth.flat_count
+        || breadth.trading_count !== breadth.valid_count || breadth.trading_count !== breadth.denominator
+        || breadth.quote_snapshot_count !== breadth.trading_count + breadth.suspended_count) return null;
+    var receipts = payload.source_evidence;
+    if (!Array.isArray(receipts) || !receipts.length || !receipts.every(function (row) {
+      var time = row && Date.parse(row.received_at);
+      return row && row.url === 'https://openapi.iwencai.com/v1/query2data'
+        && /^[0-9a-f]{64}$/.test(normalizeString(row.sha256))
+        && icepointTimestamp(row.received_at) && time > reportEnd && time <= supplemented;
+    })) return null;
+    var projected = Object.assign({}, report, { market_icepoint: corrected });
+    if (buildMarketIcepoint(projected, true).indexOf('证据不一致') !== -1) return null;
+    return payload;
+  }
+
+  function icepointSupplementUrl(reportDate) {
+    var date = normalizeString(reportDate).trim();
+    var bootstrap = getBootstrap();
+    var pageDate = normalizeString(bootstrap.pageDate).trim();
+    if (!isCanonicalIsoDate(date) || (pageDate && pageDate !== date)) return '';
+    var prefix = normalizeString(bootstrap.dataBasePrefix).trim();
+    if (prefix && prefix !== './' && !/^(\.\.\/){1,2}$/.test(prefix)) return '';
+    var path = normalizeString(window.location && window.location.pathname).replace(/\/+$/, '');
+    if (/\/\d{4}-\d{2}-\d{2}(?:\/index\.html)?$/.test(path)) prefix = '../';
+    return prefix + 'data/icepoint-supplement/' + date + '.json';
+  }
+
+  function fetchIcepointSupplement(report) {
+    var url = icepointSupplementUrl(normalizeString(report && report.date).trim());
+    if (!url || !window.fetch) return Promise.resolve(null);
+    return window.fetch(url, { cache: 'no-store' }).then(function (response) {
+      return response && response.ok ? response.json() : null;
+    }).then(function (payload) {
+      return validateIcepointSupplement(report, payload);
+    }).catch(function () { return null; });
+  }
+
+  function renderIcepointObservation(report, supplement) {
+    var accepted = validateIcepointSupplement(report, supplement);
+    if (!accepted) return buildMarketIcepoint(report);
+    var corrected = accepted.supplemented_market_icepoint;
+    var html = buildMarketIcepoint(Object.assign({}, report, { market_icepoint: corrected }), true);
+    var days = accepted.turnover_days.map(function (day) {
+      return day.date + ' ' + formatNumber(day.amount_cny / 1e8, 2) + '亿元';
+    }).join(' · ');
+    var supplementTime = sectorSupplementBeijingTime(accepted.supplemented_at).replace(/^\d{4}年/, '');
+    var note = '<p class="market-icepoint-note">' + escapeHtml(
+      corrected.date.slice(5, 7).replace(/^0/, '') + '月' + corrected.date.slice(8, 10).replace(/^0/, '')
+      + '日收盘事实 · ' + supplementTime.replace(' ', '补证（北京时间 ') + '）'
+      + ' · 同花顺全A（沪深京） · 停牌 ' + corrected.items.breadth.actual.suspended_count
+      + ' 只（单列） · 当日/前5日均额 ' + formatNumber(corrected.items.volume_drop.actual.ratio, 4)
+      + ' 倍 · 未参与本期选股'
+    ) + '</p>';
+    var amounts = '<div class="market-icepoint-row"><strong>六日同口径成交额</strong><p>'
+      + escapeHtml(days) + '</p></div>';
+    return html.replace('<details><summary>查看四项依据</summary>', note
+      + '<details><summary>查看四项依据</summary>' + amounts);
   }
 
   function buildExpandedMarketEvidence(data) {
@@ -16227,6 +16418,7 @@
     }).then(function (data) {
       state.data = data || {};
       state.sectorSupplement = null;
+      state.icepointSupplement = null;
       window.REPORT_DATA = state.data;
       normalizeWorkspace(state.data);
       state.currentView = state.workspace && state.workspace.default_view ? state.workspace.default_view : 'main';
@@ -16246,6 +16438,11 @@
         renderDecisionOverview();
         renderFundingMainlineStrip();
         renderAuxiliaryCenter();
+      });
+      fetchIcepointSupplement(state.data).then(function (supplement) {
+        if (!supplement || state.data !== data) return;
+        state.icepointSupplement = supplement;
+        if (nodes.marketIcepoint) nodes.marketIcepoint.innerHTML = renderIcepointObservation(state.data, supplement);
       });
       loadNextdayResearch();
       initComparisonSummary();

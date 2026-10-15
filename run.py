@@ -2827,6 +2827,7 @@ def _refresh_active_universe_quality(
 def _attach_market_icepoint(
     report_data, *, capture, index_observed_at, market_data_status,
     observed_at=None, etf_fetcher=None, allow_etf=True, allow_evidence=True,
+    supplement_fetcher=None,
 ):
     """Append an optional market observation after formal decisions are finished."""
     from chanlun.market_icepoint import (
@@ -2884,6 +2885,66 @@ def _attach_market_icepoint(
         report_data["market_icepoint"] = build_report_icepoint(
             report_date, cutoff, phase
         )
+
+    # The added source is only for an unfinished independent observation.  A
+    # fixed historical observation or replay cannot borrow later evidence;
+    # tests may inject a bounded collector without opening a network path.
+    current_report = datetime.now(_CN_TZ).date().isoformat() == report_date
+    injected = supplement_fetcher is not None
+    live_current_report = observed_at is None and current_report
+    if cutoff[:10] != report_date or not (injected or live_current_report):
+        return
+    original = report_data["market_icepoint"]
+    missing_turnover = original["items"]["volume_drop"]["status"] == "unavailable"
+    missing_breadth = original["items"]["breadth"]["status"] == "unavailable"
+    if not (missing_turnover or missing_breadth):
+        return
+    stock_dates = list((capture.get("stock_window") or {}).get("dates") or [])[-6:]
+    index_dates = list((capture.get("index_window") or {}).get("dates") or [])[-6:]
+    trade_dates = stock_dates if (len(stock_dates) == 6 and stock_dates == index_dates
+                                  and stock_dates[-1] == report_date) else []
+    request_turnover = bool(missing_turnover and trade_dates)
+    if not (request_turnover or missing_breadth):
+        return
+    try:
+        from pathlib import Path
+        from chanlun.market_icepoint import supplement_icepoint
+        from chanlun.market_icepoint_sources import collect_missing_icepoint_evidence
+
+        collector = supplement_fetcher or collect_missing_icepoint_evidence
+        quote_root = Path(MARKET_HISTORY_DB_PATH).parent
+        normalized = collector(
+            report_date, cutoff, trade_dates=trade_dates,
+            quote_cache_path=quote_root / "full_market_quotes" / ("quotes-" + report_date + ".json"),
+            cache_dir=quote_root / "market_icepoint", need_turnover=request_turnover,
+            need_breadth=missing_breadth, allow_historical=False,
+        )
+        if not isinstance(normalized, dict):
+            return
+        # Keep the original observation clock and all previously evaluated
+        # items.  A successful same-day late fact has its own receipt time.
+        upper = datetime.now(_CN_TZ) if observed_at is None else datetime.fromisoformat(cutoff)
+        if upper.date().isoformat() != report_date:
+            return
+        selected = {}
+        for key, needed in (("turnover", missing_turnover), ("breadth", missing_breadth)):
+            value = normalized.get(key)
+            if not needed or not isinstance(value, dict):
+                continue
+            try:
+                receipt = datetime.fromisoformat(str(value.get("retrieved_at") or ""))
+            except (TypeError, ValueError, OverflowError):
+                continue
+            if (receipt.tzinfo is not None and
+                    receipt.astimezone(_CN_TZ).date().isoformat() == report_date and
+                    receipt <= upper):
+                selected[key] = value
+        if selected:
+            report_data["market_icepoint"] = supplement_icepoint(original, selected)
+    except Exception:
+        # New evidence cannot turn an otherwise usable daily report into a
+        # failed run or erase previously verified old-path icepoint facts.
+        return
 
 
 def main(debug=False, preview=False, generated_at=None):

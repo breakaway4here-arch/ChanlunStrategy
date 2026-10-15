@@ -7,6 +7,7 @@ import json
 import os
 import re
 import tempfile
+import copy
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -62,6 +63,100 @@ def _valid_asof(value, report_date, cutoff, *, closed=False):
 def _item(status, actual, threshold, *, source="", as_of="", scope="", reason=""):
     return {"status": status, "actual": actual, "threshold": threshold,
             "source": source, "as_of": as_of, "scope": scope, "reason": reason}
+
+
+def _text(value):
+    return value if isinstance(value, str) else ""
+
+
+def _provider_retrieval(evidence, report_date, cutoff, *, allow_late=False):
+    """Keep fact date and actual retrieval clock separate for dated aggregates."""
+    received = _stamp(evidence.get("retrieved_at"))
+    if received is None or received.date().isoformat() < report_date:
+        return None
+    if received.date().isoformat() == report_date and received.hour < 15:
+        return None
+    if not allow_late and (cutoff is None or received > cutoff
+                           or received.date().isoformat() != report_date):
+        return None
+    return received
+
+
+def _provider_turnover_item(amount, report_date, cutoff, *, index_complete,
+                            index_match, allow_late=False):
+    threshold = "当日全A金额≥前5日同口径均额1.2倍，且六指数同跌"
+    source = _text(amount.get("source"))
+    as_of = str(amount.get("as_of") or "")
+    prior_raw = amount.get("prior")
+    prior = [_number(value, minimum=0) for value in prior_raw] if isinstance(prior_raw, list) else []
+    prior_dates = amount.get("prior_dates")
+    prior_dates_ok = (isinstance(prior_dates, list) and len(prior_dates) == 5
+                      and all(isinstance(day, str) and day < report_date for day in prior_dates)
+                      and prior_dates == sorted(set(prior_dates)))
+    current = _number(amount.get("current"), minimum=0)
+    received = _provider_retrieval(amount, report_date, cutoff, allow_late=allow_late)
+    ready = bool(
+        index_complete and amount.get("evidence_contract") == "provider_aggregate_v1"
+        and source == "wencai" and amount.get("source_code") == "883957.TI"
+        and amount.get("date") == report_date and amount.get("market_date") == report_date
+        and amount.get("market_phase") == "closed" and amount.get("scope") == "all_a_cny"
+        and amount.get("amount_unit") == "CNY" and amount.get("quality") == "comparable"
+        and amount.get("trading_days_verified") is True and amount.get("complete") is True
+        and received is not None and as_of == amount.get("retrieved_at")
+        and prior_dates_ok and current is not None and len(prior) == 5
+        and all(value is not None and value > 0 for value in prior)
+    )
+    baseline = _number(sum(prior) / 5, minimum=0) if ready else None
+    ratio = _number(current / baseline, minimum=0) if baseline and current is not None else None
+    ready = bool(ready and baseline and ratio is not None)
+    actual = {"current_cny": current, "prior_mean_cny": baseline,
+              "ratio": round(ratio, 4) if ratio is not None else None,
+              "prior_dates": prior_dates if prior_dates_ok else None,
+              "covered_counts": None, "denominator": None,
+              "market_date": _text(amount.get("market_date")),
+              "source_code": _text(amount.get("source_code")),
+              "amount_unit": _text(amount.get("amount_unit")),
+              "retrieved_at": _text(amount.get("retrieved_at"))}
+    status = "matched" if ready and ratio >= 1.2 and index_match else (
+        "not_matched" if ready else "unavailable"
+    )
+    return _item(status, actual, threshold, source=source, as_of=as_of,
+                 scope="all_a_cny", reason="" if ready else "comparable_full_market_amount_or_indices_missing")
+
+
+def _provider_breadth_item(market, report_date, cutoff, *, allow_late=False):
+    threshold = "下跌>0且下跌家数≥上涨家数×9"
+    rising, falling, flat = (_count(market.get(key)) for key in
+                             ("advance_count", "decline_count", "flat_count"))
+    valid_count = _count(market.get("valid_count"))
+    denominator = _count(market.get("denominator"))
+    trading = _count(market.get("trading_count"))
+    universe = _count(market.get("quote_snapshot_count"))
+    suspended = _count(market.get("suspended_count"))
+    unknown = _count(market.get("unknown_count"))
+    as_of = str(market.get("as_of") or "")
+    received = _provider_retrieval(market, report_date, cutoff, allow_late=allow_late)
+    ready = bool(
+        market.get("source") == "quote_snapshot+wencai" and market.get("scope") == "all_a"
+        and market.get("date") == report_date
+        and _valid_asof(as_of, report_date, cutoff, closed=True)
+        and received is not None and received >= _stamp(as_of)
+        and market.get("complete") is True
+        and None not in (rising, falling, flat, valid_count, denominator,
+                         trading, universe, suspended, unknown)
+        and valid_count > 0 and valid_count == denominator == trading
+        and rising + falling + flat == trading
+        and universe == trading + suspended + unknown and unknown == 0
+    )
+    actual = {"advance_count": rising, "decline_count": falling, "flat_count": flat,
+              "valid_count": valid_count, "denominator": denominator,
+              "trading_count": trading, "quote_snapshot_count": universe,
+              "suspended_count": suspended, "unknown_count": unknown,
+              "retrieved_at": _text(market.get("retrieved_at"))}
+    status = ("matched" if falling > 0 and falling >= rising * 9 else
+              "not_matched") if ready else "unavailable"
+    return _item(status, actual, threshold, source=_text(market.get("source")),
+                 as_of=as_of, scope="all_a", reason="" if ready else "all_a_breadth_or_coverage_missing")
 
 
 def evaluate_icepoint(report_date, as_of, phase, *, indices=None, turnover=None,
@@ -138,6 +233,10 @@ def evaluate_icepoint(report_date, as_of, phase, *, indices=None, turnover=None,
                         source=amount.get("source") or "", as_of=str(amount.get("as_of") or ""),
                         scope="all_a_cny", reason="" if volume_status != "unavailable" else
                         ("same_time_history_unavailable" if phase == "intraday" else "comparable_full_market_amount_or_indices_missing"))
+    if phase == "closed" and any(key in amount for key in ("evidence_contract", "source_code", "market_date")):
+        volume_item = _provider_turnover_item(
+            amount, report_date, cutoff, index_complete=index_complete, index_match=index_match
+        )
 
     market = breadth if isinstance(breadth, dict) else {}
     rising, falling, flat = (_count(market.get(key)) for key in
@@ -163,6 +262,8 @@ def evaluate_icepoint(report_date, as_of, phase, *, indices=None, turnover=None,
                          "下跌>0且下跌家数≥上涨家数×9",
                          source=str(market.get("source") or ""), as_of=str(market.get("as_of") or ""),
                          scope="all_a", reason="" if breadth_ready else "all_a_breadth_or_coverage_missing")
+    if phase == "closed" and any(key in market for key in ("quote_snapshot_count", "suspended_count", "trading_count")):
+        breadth_item = _provider_breadth_item(market, report_date, cutoff)
 
     pools = limits if isinstance(limits, dict) else {}
     up, down = _count(pools.get("limit_up_count")), _count(pools.get("limit_down_count"))
@@ -233,6 +334,66 @@ def evaluate_icepoint(report_date, as_of, phase, *, indices=None, turnover=None,
             "affects_production": False, "status": status,
             "matched_count": matched, "verified_count": verified,
             "items": items, "etf": etf_item}
+
+
+def supplement_icepoint(original_result, normalized_evidence):
+    """Attach later, independently dated evidence to an unchanged frozen observation."""
+    if not isinstance(original_result, dict) or not isinstance(normalized_evidence, dict):
+        raise ValueError("icepoint supplement requires frozen result and normalized evidence")
+    original = original_result
+    report_date = original.get("date")
+    cutoff = _stamp(original.get("as_of"))
+    items = original.get("items")
+    keys = ("volume_drop", "six_indices", "breadth", "sealed_limits")
+    if (original.get("schema_version") != SCHEMA_VERSION
+            or original.get("rule_version") != RULE_VERSION
+            or original.get("phase") != "closed"
+            or original.get("affects_production") is not False
+            or not isinstance(report_date, str)
+            or cutoff is None or cutoff.date().isoformat() != report_date or cutoff.hour < 15
+            or not isinstance(items, dict) or set(items) != set(keys)
+            or not all(isinstance(items[key], dict)
+                       and items[key].get("status") in ("matched", "not_matched", "unavailable")
+                       for key in keys)):
+        raise ValueError("invalid frozen icepoint result")
+    expected_verified = sum(items[key]["status"] != "unavailable" for key in keys)
+    expected_matched = sum(items[key]["status"] == "matched" for key in keys)
+    expected_status = ("insufficient" if expected_verified < 4 else
+                       "matched" if expected_matched == 4 else "not_matched")
+    if (original.get("verified_count") != expected_verified
+            or original.get("matched_count") != expected_matched
+            or original.get("status") != expected_status):
+        raise ValueError("frozen icepoint counts disagree with its items")
+
+    result = copy.deepcopy(original)
+    accepted_times = []
+    if items["volume_drop"]["status"] == "unavailable":
+        amount = normalized_evidence.get("turnover")
+        if isinstance(amount, dict):
+            index_status = items["six_indices"]["status"]
+            candidate = _provider_turnover_item(
+                amount, report_date, cutoff,
+                index_complete=index_status != "unavailable",
+                index_match=index_status == "matched", allow_late=True,
+            )
+            if candidate["status"] != "unavailable":
+                result["items"]["volume_drop"] = candidate
+                accepted_times.append(amount["retrieved_at"])
+    if items["breadth"]["status"] == "unavailable":
+        market = normalized_evidence.get("breadth")
+        if isinstance(market, dict):
+            candidate = _provider_breadth_item(market, report_date, cutoff, allow_late=True)
+            if candidate["status"] != "unavailable":
+                result["items"]["breadth"] = candidate
+                accepted_times.append(market["retrieved_at"])
+    if not accepted_times:
+        return result
+    result["verified_count"] = sum(item["status"] != "unavailable" for item in result["items"].values())
+    result["matched_count"] = sum(item["status"] == "matched" for item in result["items"].values())
+    result["status"] = ("insufficient" if result["verified_count"] < 4 else
+                        "matched" if result["matched_count"] == 4 else "not_matched")
+    result["supplemented_at"] = max(accepted_times, key=_stamp)
+    return result
 
 
 def build_existing_evidence(report_date, observed_at, *, indices=None,

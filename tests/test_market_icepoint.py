@@ -5,11 +5,13 @@ import json
 import math
 import tempfile
 import unittest
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
 from chanlun.market_icepoint import (ETF_GROUPS, evaluate_icepoint, build_existing_evidence,
-                                     parse_tencent_etf, fetch_etf_quotes, build_report_icepoint)
+                                     parse_tencent_etf, fetch_etf_quotes, build_report_icepoint,
+                                     supplement_icepoint)
 from chanlun.report_generator import build_full_daily_projection, build_aggregate_day_projection
 from chanlun.market_sentiment import build_daily_inputs_from_windows
 from run import _attach_market_icepoint
@@ -56,6 +58,110 @@ def evidence():
 def result(values=None, phase="closed"):
     values = evidence() if values is None else values
     return evaluate_icepoint(DAY, AS_OF, phase, **values)
+
+
+def provider_evidence(*, retrieved_at=AS_OF):
+    return {
+        "turnover": {
+            "date": DAY, "market_date": DAY, "market_phase": "closed",
+            "as_of": retrieved_at, "retrieved_at": retrieved_at,
+            "source": "wencai", "source_code": "883957.TI",
+            "evidence_contract": "provider_aggregate_v1", "scope": "all_a_cny",
+            "amount_unit": "CNY", "current": 120.0, "prior": [100.0] * 5,
+            "prior_dates": ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28"],
+            "quality": "comparable", "trading_days_verified": True, "complete": True,
+        },
+        "breadth": {
+            "date": DAY, "as_of": AS_OF, "retrieved_at": retrieved_at,
+            "source": "quote_snapshot+wencai", "scope": "all_a",
+            "advance_count": 550, "decline_count": 4950, "flat_count": 0,
+            "valid_count": 5500, "denominator": 5500,
+            "trading_count": 5500, "quote_snapshot_count": 5511,
+            "suspended_count": 11, "unknown_count": 0, "complete": True,
+        },
+    }
+
+
+class IcepointProviderEvidence(unittest.TestCase):
+    def test_provider_aggregate_is_independent_of_legacy_per_stock_coverage(self):
+        data = evidence()
+        data["turnover"] = provider_evidence()["turnover"]
+        data["breadth"] = provider_evidence()["breadth"]
+        got = result(data)
+        self.assertEqual(got["status"], "matched")
+        self.assertEqual(got["items"]["volume_drop"]["actual"]["ratio"], 1.2)
+        self.assertIsNone(got["items"]["volume_drop"]["actual"]["covered_counts"])
+        self.assertEqual(got["items"]["breadth"]["actual"]["suspended_count"], 11)
+        self.assertEqual(got["items"]["breadth"]["actual"]["quote_snapshot_count"], 5511)
+
+    def test_provider_bad_contract_or_partition_stays_unavailable(self):
+        for field, value in (("source_code", "000001.SH"), ("amount_unit", "shares"),
+                             ("market_date", "2026-09-28"), ("market_phase", "intraday"),
+                             ("evidence_contract", "unknown"), ("prior_dates", [DAY] * 5)):
+            with self.subTest(field=field):
+                data = evidence(); data["turnover"] = provider_evidence()["turnover"]
+                data["turnover"][field] = value
+                self.assertEqual(result(data)["items"]["volume_drop"]["status"], "unavailable")
+        for field, value in (("suspended_count", 10), ("unknown_count", 1),
+                             ("quote_snapshot_count", 5512), ("trading_count", 5499)):
+            with self.subTest(field=field):
+                data = evidence(); data["breadth"] = provider_evidence()["breadth"]
+                data["breadth"][field] = value
+                self.assertEqual(result(data)["items"]["breadth"]["status"], "unavailable")
+        invalid = evidence()
+        invalid["turnover"] = provider_evidence()["turnover"]
+        invalid["breadth"] = provider_evidence()["breadth"]
+        invalid["turnover"]["source_code"] = math.nan
+        invalid["turnover"]["retrieved_at"] = math.nan
+        invalid["breadth"]["retrieved_at"] = math.nan
+        json.dumps(result(invalid), allow_nan=False)
+
+    def test_live_provider_cannot_borrow_tomorrow_retrieval(self):
+        data = evidence()
+        late = "2026-09-30T08:00:00+08:00"
+        data["turnover"] = provider_evidence(retrieved_at=late)["turnover"]
+        data["breadth"] = provider_evidence(retrieved_at=late)["breadth"]
+        got = result(data)
+        self.assertEqual(got["items"]["volume_drop"]["status"], "unavailable")
+        self.assertEqual(got["items"]["breadth"]["status"], "unavailable")
+        preclose = evidence()
+        preclose["turnover"] = provider_evidence(retrieved_at="2026-09-29T14:59:00+08:00")["turnover"]
+        self.assertEqual(result(preclose)["items"]["volume_drop"]["status"], "unavailable")
+
+    def test_explicit_historical_supplement_only_replaces_missing_items(self):
+        data = evidence()
+        data["indices"]["上证指数"]["change_pct"] = -1.0
+        data["limits"]["limit_up_count"] = 36
+        data["limits"]["limit_down_count"] = 10
+        data["turnover"] = None
+        data["breadth"] = None
+        frozen = result(data)
+        original = copy.deepcopy(frozen)
+        late = "2026-09-30T08:00:00+08:00"
+        supplement = provider_evidence(retrieved_at=late)
+        supplement["breadth"].update(advance_count=1000, decline_count=4500)
+        got = supplement_icepoint(frozen, supplement)
+        self.assertEqual(got["status"], "not_matched")
+        self.assertEqual((got["verified_count"], got["matched_count"]), (4, 0))
+        self.assertEqual(got["as_of"], AS_OF)
+        self.assertEqual(got["supplemented_at"], late)
+        self.assertEqual(got["items"]["six_indices"], frozen["items"]["six_indices"])
+        self.assertEqual(got["items"]["sealed_limits"], frozen["items"]["sealed_limits"])
+        self.assertEqual(got["etf"], frozen["etf"])
+        self.assertEqual(frozen, original)
+
+        already = result()
+        same = supplement_icepoint(already, provider_evidence(retrieved_at=late))
+        self.assertEqual(same, already)
+
+    def test_supplement_rejects_wrong_report_date_and_untrusted_time(self):
+        data = evidence(); data["turnover"] = None; data["breadth"] = None
+        frozen = result(data)
+        wrong = provider_evidence(retrieved_at="2026-09-30T08:00:00+08:00")
+        wrong["turnover"]["market_date"] = "2026-09-30"
+        wrong["breadth"]["quote_snapshot_count"] = 5510
+        got = supplement_icepoint(frozen, wrong)
+        self.assertEqual(got, frozen)
 
 
 class IcepointRules(unittest.TestCase):
@@ -310,6 +416,118 @@ class ETFQuoteTests(unittest.TestCase):
 
 
 class ReportWiringTests(unittest.TestCase):
+    def test_natural_same_day_closed_hook_fetches_without_touching_formal_fields(self):
+        dates = ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", DAY]
+        report = {"date": DAY, "market": evidence()["indices"],
+                  "picks_pure": [{"code": "600000", "score": 10}],
+                  "data_quality": {"bar_state": "closed", "as_of": AS_OF,
+                                   "market_close_snapshot": {}}}
+        formal = copy.deepcopy(report)
+        calls = []
+        class FrozenClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return cls(2026, 9, 29, 15, 20, 0, tzinfo=timezone(timedelta(hours=8)))
+        def collect(day, observed_at, **kwargs):
+            calls.append((day, observed_at, kwargs["allow_historical"]))
+            return provider_evidence()
+        with patch("run.datetime", FrozenClock):
+            _attach_market_icepoint(
+                report, capture={"stock_window": {"dates": dates}, "index_window": {"dates": dates}},
+                index_observed_at=AS_OF, market_data_status="verified",
+                observed_at=None, allow_etf=False, supplement_fetcher=collect,
+            )
+        self.assertEqual(calls, [(DAY, AS_OF, False)])
+        self.assertEqual(report["market_icepoint"]["verified_count"], 3)
+        self.assertEqual({k: v for k, v in report.items() if k != "market_icepoint"}, formal)
+
+    def test_missing_closed_observation_uses_only_bounded_injected_source(self):
+        dates = ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", DAY]
+        report = {"date": DAY, "market": evidence()["indices"],
+                  "picks_pure": [{"code": "600000"}],
+                  "data_quality": {"bar_state": "closed", "as_of": AS_OF,
+                                   "market_close_snapshot": {}}}
+        original = copy.deepcopy(report)
+        calls = []
+
+        def collect(day, observed_at, **kwargs):
+            calls.append((day, observed_at, kwargs))
+            return provider_evidence()
+
+        capture = {"stock_window": {"dates": dates, "rows": []},
+                   "index_window": {"dates": dates}}
+        _attach_market_icepoint(
+            report, capture=capture, index_observed_at=AS_OF,
+            market_data_status="verified", observed_at=AS_OF, allow_etf=False,
+            supplement_fetcher=collect,
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(calls[0][0:2], (DAY, AS_OF))
+        self.assertEqual(calls[0][2]["trade_dates"], dates)
+        self.assertTrue(calls[0][2]["need_turnover"])
+        self.assertTrue(calls[0][2]["need_breadth"])
+        self.assertFalse(calls[0][2]["allow_historical"])
+        self.assertEqual(report["market_icepoint"]["verified_count"], 3)
+        self.assertEqual(report["market_icepoint"]["items"]["breadth"]["status"], "matched")
+        self.assertEqual({key: value for key, value in report.items() if key != "market_icepoint"}, original)
+
+        replay = copy.deepcopy(original)
+        _attach_market_icepoint(
+            replay, capture=capture, index_observed_at=AS_OF,
+            market_data_status="verified", observed_at=AS_OF, allow_etf=False,
+            allow_evidence=False, supplement_fetcher=collect,
+        )
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(replay["market_icepoint"]["verified_count"], 0)
+
+    def test_supplement_source_exception_is_local_to_icepoint(self):
+        report = {"date": DAY, "market": evidence()["indices"],
+                  "data_quality": {"bar_state": "closed", "as_of": AS_OF,
+                                   "market_close_snapshot": {}}}
+        def fail(*args, **kwargs):
+            raise RuntimeError("offline")
+        _attach_market_icepoint(
+            report, capture={}, index_observed_at=AS_OF,
+            market_data_status="verified", observed_at=AS_OF, allow_etf=False,
+            supplement_fetcher=fail,
+        )
+        self.assertEqual(report["market_icepoint"]["items"]["volume_drop"]["status"], "unavailable")
+        self.assertEqual(report["market_icepoint"]["items"]["six_indices"]["status"], "matched")
+
+    def test_missing_six_day_window_does_not_block_independent_breadth(self):
+        report = {"date": DAY, "market": evidence()["indices"],
+                  "data_quality": {"bar_state": "closed", "as_of": AS_OF,
+                                   "market_close_snapshot": {}}}
+        seen = []
+        def collect(day, observed_at, **kwargs):
+            seen.append(kwargs)
+            return {"breadth": provider_evidence()["breadth"]}
+        _attach_market_icepoint(
+            report, capture={}, index_observed_at=AS_OF,
+            market_data_status="verified", observed_at=AS_OF, allow_etf=False,
+            supplement_fetcher=collect,
+        )
+        self.assertEqual(len(seen), 1)
+        self.assertFalse(seen[0]["need_turnover"])
+        self.assertTrue(seen[0]["need_breadth"])
+        self.assertEqual(report["market_icepoint"]["items"]["volume_drop"]["status"], "unavailable")
+        self.assertEqual(report["market_icepoint"]["items"]["breadth"]["status"], "matched")
+
+    def test_invalid_turnover_receipt_cannot_hide_valid_breadth(self):
+        dates = ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", DAY]
+        report = {"date": DAY, "market": evidence()["indices"],
+                  "data_quality": {"bar_state": "closed", "as_of": AS_OF,
+                                   "market_close_snapshot": {}}}
+        mixed = provider_evidence()
+        mixed["turnover"]["retrieved_at"] = "not-a-timestamp"
+        _attach_market_icepoint(
+            report, capture={"stock_window": {"dates": dates}, "index_window": {"dates": dates}},
+            index_observed_at=AS_OF, market_data_status="verified", observed_at=AS_OF,
+            allow_etf=False, supplement_fetcher=lambda *args, **kwargs: mixed,
+        )
+        self.assertEqual(report["market_icepoint"]["items"]["volume_drop"]["status"], "unavailable")
+        self.assertEqual(report["market_icepoint"]["items"]["breadth"]["status"], "matched")
+
     def test_turnover_reset_cannot_rebuild_a_discarded_five_day_baseline(self):
         dates = ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-28", DAY]
         for amounts, expected_ma5, expected_status in (

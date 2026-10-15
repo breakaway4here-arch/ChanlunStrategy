@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "report_date": "2026-10-14",
+  "source": "hithink_iwencai_883957",
+  "selection_usage": "not_used",
+  "supplemented_at": "2026-10-15T10:29:24.180819+08:00",
+  "original_market_icepoint": {
+    "schema_version": 1,
+    "rule_version": "extreme-icepoint-v1",
+    "date": "2026-10-14",
+    "as_of": "2026-10-14T15:23:34+08:00",
+    "phase": "closed",
+    "affects_production": false,
+    "status": "insufficient",
+    "matched_count": 0,
+    "verified_count": 2,
+    "items": {
+      "volume_drop": {
+        "status": "unavailable",
+        "actual": {
+          "current_cny": null,
+          "prior_mean_cny": null,
+          "ratio": null,
+          "prior_dates": null,
+          "covered_counts": null,
+          "denominator": 5913
+        },
+        "threshold": "当日全A金额≥前5日同口径均额1.2倍，且六指数同跌",
+        "source": {
+          "database": "market_history",
+          "amount_by_date": {}
+        },
+        "as_of": "2026-10-14T15:23:34+08:00",
+        "scope": "all_a_cny",
+        "reason": "comparable_full_market_amount_or_indices_missing"
+      },
+      "six_indices": {
+        "status": "not_matched",
+        "actual": {
+          "changes_pct": {
+            "上证指数": -0.88,
+            "深证成指": -1.97,
+            "创业板指": -3.1,
+            "科创50": -3.29,
+            "沪深300": -1.36,
+            "中证500": -1.48
+          }
+        },
+        "threshold": "六指数每项≤-2%",
+        "source": {
+          "上证指数": "tencent",
+          "深证成指": "tencent",
+          "创业板指": "tencent",
+          "科创50": "tencent",
+          "沪深300": "tencent",
+          "中证500": "tencent"
+        },
+        "as_of": {
+          "上证指数": "2026-10-14T15:22:08+08:00",
+          "深证成指": "2026-10-14T15:22:08+08:00",
+          "创业板指": "2026-10-14T15:22:08+08:00",
+          "科创50": "2026-10-14T15:22:08+08:00",
+          "沪深300": "2026-10-14T15:22:08+08:00",
+          "中证500": "2026-10-14T15:22:08+08:00"
+        },
+        "scope": "six_fixed_indices",
+        "reason": ""
+      },
+      "breadth": {
+        "status": "unavailable",
+        "actual": {
+          "advance_count": 970,
+          "decline_count": 4429,
+          "flat_count": 87,
+          "valid_count": 5486,
+          "denominator": 5913
+        },
+        "threshold": "下跌>0且下跌家数≥上涨家数×9",
+        "source": "market_history",
+        "as_of": "2026-10-14T15:23:34+08:00",
+        "scope": "all_a",
+        "reason": "all_a_breadth_or_coverage_missing"
+      },
+      "sealed_limits": {
+        "status": "not_matched",
+        "actual": {
+          "limit_up_count": 36,
+          "limit_down_count": 10
+        },
+        "threshold": "当前封板跌停≥100且涨停≤10",
+        "source": "eastmoney_limit_pools",
+        "as_of": "2026-10-14T15:22:55+08:00",
+        "scope": "eastmoney_topic_pools",
+        "reason": ""
+      }
+    },
+    "etf": {
+      "status": "not_matched",
+      "actual": {
+        "below_minus_four_count": 0,
+        "verified_count": 7,
+        "groups": [
+          {
+            "group": "银行",
+            "symbol": "sh512800",
+            "change_pct": 0.12,
+            "as_of": "2026-10-14T15:23:30+08:00"
+          },
+          {
+            "group": "医疗",
+            "symbol": "sh512170",
+            "change_pct": -0.9,
+            "as_of": "2026-10-14T15:23:16+08:00"
+          },
+          {
+            "group": "半导体",
+            "symbol": "sh512480",
+            "change_pct": -3.16,
+            "as_of": "2026-10-14T15:23:17+08:00"
+          },
+          {
+            "group": "军工",
+            "symbol": "sh512660",
+            "change_pct": -0.74,
+            "as_of": "2026-10-14T15:23:30+08:00"
+          },
+          {
+            "group": "主要消费",
+            "symbol": "sz159928",
+            "change_pct": 0.61,
+            "as_of": "2026-10-14T15:23:15+08:00"
+          },
+          {
+            "group": "有色金属",
+            "symbol": "sh512400",
+            "change_pct": -1.88,
+            "as_of": "2026-10-14T15:23:26+08:00"
+          },
+          {
+            "group": "房地产",
+            "symbol": "sh512200",
+            "change_pct": -1.62,
+            "as_of": "2026-10-14T15:23:22+08:00"
+          }
+        ]
+      },
+      "threshold": "固定7行业ETF中≥5组跌幅<-4%",
+      "source": "tencent",
+      "as_of": "2026-10-14T15:23:30+08:00",
+      "scope": "fixed_seven_etf_sample",
+      "reason": "",
+      "verified_count": 7
+    }
+  },
+  "supplemented_market_icepoint": {
+    "schema_version": 1,
+    "rule_version": "extreme-icepoint-v1",
+    "date": "2026-10-14",
+    "as_of": "2026-10-14T15:23:34+08:00",
+    "phase": "closed",
+    "affects_production": false,
+    "status": "not_matched",
+    "matched_count": 0,
+    "verified_count": 4,
+    "items": {
+      "volume_drop": {
+        "status": "not_matched",
+        "actual": {
+          "current_cny": 1426389200000.0,
+          "prior_mean_cny": 1660128520000.0,
+          "ratio": 0.8592,
+          "prior_dates": [
+            "2026-09-30",
+            "2026-10-08",
+            "2026-10-09",
+            "2026-10-12",
+            "2026-10-13"
+          ],
+          "covered_counts": null,
+          "denominator": null,
+          "market_date": "2026-10-14",
+          "source_code": "883957.TI",
+          "amount_unit": "CNY",
+          "retrieved_at": "2026-10-15T10:25:12.972832+08:00"
+        },
+        "threshold": "当日全A金额≥前5日同口径均额1.2倍，且六指数同跌",
+        "source": "wencai",
+        "as_of": "2026-10-15T10:25:12.972832+08:00",
+        "scope": "all_a_cny",
+        "reason": ""
+      },
+      "six_indices": {
+        "status": "not_matched",
+        "actual": {
+          "changes_pct": {
+            "上证指数": -0.88,
+            "深证成指": -1.97,
+            "创业板指": -3.1,
+            "科创50": -3.29,
+            "沪深300": -1.36,
+            "中证500": -1.48
+          }
+        },
+        "threshold": "六指数每项≤-2%",
+        "source": {
+          "上证指数": "tencent",
+          "深证成指": "tencent",
+          "创业板指": "tencent",
+          "科创50": "tencent",
+          "沪深300": "tencent",
+          "中证500": "tencent"
+        },
+        "as_of": {
+          "上证指数": "2026-10-14T15:22:08+08:00",
+          "深证成指": "2026-10-14T15:22:08+08:00",
+          "创业板指": "2026-10-14T15:22:08+08:00",
+          "科创50": "2026-10-14T15:22:08+08:00",
+          "沪深300": "2026-10-14T15:22:08+08:00",
+          "中证500": "2026-10-14T15:22:08+08:00"
+        },
+        "scope": "six_fixed_indices",
+        "reason": ""
+      },
+      "breadth": {
+        "status": "not_matched",
+        "actual": {
+          "advance_count": 978,
+          "decline_count": 4496,
+          "flat_count": 88,
+          "valid_count": 5562,
+          "denominator": 5562,
+          "trading_count": 5562,
+          "quote_snapshot_count": 5573,
+          "suspended_count": 11,
+          "unknown_count": 0,
+          "retrieved_at": "2026-10-15T10:29:24.180819+08:00"
+        },
+        "threshold": "下跌>0且下跌家数≥上涨家数×9",
+        "source": "quote_snapshot+wencai",
+        "as_of": "2026-10-14T15:20:09+08:00",
+        "scope": "all_a",
+        "reason": ""
+      },
+      "sealed_limits": {
+        "status": "not_matched",
+        "actual": {
+          "limit_up_count": 36,
+          "limit_down_count": 10
+        },
+        "threshold": "当前封板跌停≥100且涨停≤10",
+        "source": "eastmoney_limit_pools",
+        "as_of": "2026-10-14T15:22:55+08:00",
+        "scope": "eastmoney_topic_pools",
+        "reason": ""
+      }
+    },
+    "etf": {
+      "status": "not_matched",
+      "actual": {
+        "below_minus_four_count": 0,
+        "verified_count": 7,
+        "groups": [
+          {
+            "group": "银行",
+            "symbol": "sh512800",
+            "change_pct": 0.12,
+            "as_of": "2026-10-14T15:23:30+08:00"
+          },
+          {
+            "group": "医疗",
+            "symbol": "sh512170",
+            "change_pct": -0.9,
+            "as_of": "2026-10-14T15:23:16+08:00"
+          },
+          {
+            "group": "半导体",
+            "symbol": "sh512480",
+            "change_pct": -3.16,
+            "as_of": "2026-10-14T15:23:17+08:00"
+          },
+          {
+            "group": "军工",
+            "symbol": "sh512660",
+            "change_pct": -0.74,
+            "as_of": "2026-10-14T15:23:30+08:00"
+          },
+          {
+            "group": "主要消费",
+            "symbol": "sz159928",
+            "change_pct": 0.61,
+            "as_of": "2026-10-14T15:23:15+08:00"
+          },
+          {
+            "group": "有色金属",
+            "symbol": "sh512400",
+            "change_pct": -1.88,
+            "as_of": "2026-10-14T15:23:26+08:00"
+          },
+          {
+            "group": "房地产",
+            "symbol": "sh512200",
+            "change_pct": -1.62,
+            "as_of": "2026-10-14T15:23:22+08:00"
+          }
+        ]
+      },
+      "threshold": "固定7行业ETF中≥5组跌幅<-4%",
+      "source": "tencent",
+      "as_of": "2026-10-14T15:23:30+08:00",
+      "scope": "fixed_seven_etf_sample",
+      "reason": "",
+      "verified_count": 7
+    },
+    "supplemented_at": "2026-10-15T10:29:24.180819+08:00"
+  },
+  "turnover_days": [
+    {
+      "date": "2026-09-30",
+      "amount_cny": 1450049400000.0
+    },
+    {
+      "date": "2026-10-08",
+      "amount_cny": 1694272300000.0
+    },
+    {
+      "date": "2026-10-09",
+      "amount_cny": 1916677000000.0
+    },
+    {
+      "date": "2026-10-12",
+      "amount_cny": 1550743500000.0
+    },
+    {
+      "date": "2026-10-13",
+      "amount_cny": 1688900400000.0
+    },
+    {
+      "date": "2026-10-14",
+      "amount_cny": 1426389200000.0
+    }
+  ],
+  "source_evidence": [
+    {
+      "url": "https://openapi.iwencai.com/v1/query2data",
+      "sha256": "b8719f71b03936ad3df74254267c5d0645f469b191573d7f07d03f8c866e1698",
+      "received_at": "2026-10-15T02:25:12.972832+00:00"
+    },
+    {
+      "url": "https://openapi.iwencai.com/v1/query2data",
+      "sha256": "e0d9088c0d075cd32f7ead9f783c86bd727ef2371dcc40038c34c79dfceaf0ab",
+      "received_at": "2026-10-15T02:27:45.879963+00:00"
+    },
+    {
+      "url": "https://openapi.iwencai.com/v1/query2data",
+      "sha256": "13a759e230b01b506856bfaadaf9585f1cec54ba4d4668191b34ece4ee4c9639",
+      "received_at": "2026-10-15T02:29:24.180819+00:00"
+    }
+  ]
+}
