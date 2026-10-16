@@ -2950,7 +2950,9 @@ def _attach_market_icepoint(
 def main(debug=False, preview=False, generated_at=None):
     is_explicit_replay = generated_at is not None
     generated_at = generated_at or datetime.now().astimezone()
+    acquisition_clock = None if is_explicit_replay else lambda: datetime.now(_CN_TZ)
     time_metadata = build_market_time_metadata(generated_at=generated_at)
+    run_started_at = time_metadata["generated_at"]
     today = time_metadata["generated_at"].split("T", 1)[0]
     retry_missing_only = (
         os.environ.get("CHANLUN_DAILY_RETRY_MISSING_ONLY", "0").strip() == "1"
@@ -2983,7 +2985,7 @@ def main(debug=False, preview=False, generated_at=None):
     if debug:
         # 调试模式：拉取真实板块成分股，随机抽取少量股票
         print("[DEBUG] 使用简化数据（随机采样）")
-        from chanlun.data_fetcher import fetch_sector_flow, fetch_sector_stocks
+        from chanlun.data_fetcher import fetch_sector_flow
         sectors = fetch_sector_flow(3)
         sh_kline = fetch_daily_kline("000001")
         if sectors:
@@ -3043,9 +3045,13 @@ def main(debug=False, preview=False, generated_at=None):
                 MARKET_HISTORY_DB_PATH,
                 today,
                 fetch_all_a_stocks=lambda **kwargs: fetch_full_market_quotes(
-                    **kwargs, now=generated_at, db_path=MARKET_HISTORY_DB_PATH
+                    **kwargs,
+                    now=generated_at if is_explicit_replay else None,
+                    clock=acquisition_clock,
+                    db_path=MARKET_HISTORY_DB_PATH,
                 ),
                 generated_at=generated_at,
+                clock=acquisition_clock,
             )
             if not _close_snapshot_allows_daily_run(
                 close_snapshot_diagnostics
@@ -3055,6 +3061,13 @@ def main(debug=False, preview=False, generated_at=None):
                         close_snapshot_diagnostics
                     )
                 )
+            if not is_explicit_replay and close_snapshot_diagnostics.get("acquired_at"):
+                # Publish the actual fact ceiling, preserving startup separately.
+                generated_at = datetime.fromisoformat(close_snapshot_diagnostics["acquired_at"])
+                time_metadata = build_market_time_metadata(
+                    required_date=today, generated_at=generated_at
+                )
+                time_metadata["run_started_at"] = run_started_at
         daily_data = collect_daily_data(
             required_date=today,
             allow_missing_index=preview,
@@ -3063,6 +3076,8 @@ def main(debug=False, preview=False, generated_at=None):
         )
 
     data_quality = daily_data.get("data_quality", {})
+    if "run_started_at" in time_metadata:
+        data_quality["run_started_at"] = time_metadata["run_started_at"]
     data_quality["personal_watchlist_config"] = (
         personal_watchlist_config_diagnostics
     )
