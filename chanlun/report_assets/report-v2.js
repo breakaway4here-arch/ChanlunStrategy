@@ -1,6 +1,9 @@
 (function () {
   'use strict';
 
+  var reportScriptUrl = document.currentScript && document.currentScript.src;
+  var homepageRefreshInstalled = false;
+
   var DEFAULT_VIEW_ORDER = ['main', 'h4_t3', 'highlights', 'observation_top5', 'acceleration', 'luojie', 'confirming', 'growth_quality', 'baseline'];
   var DEFAULT_VIEW_LABELS = {
     highlights: '看点 Top10',
@@ -16359,6 +16362,94 @@
     });
   }
 
+  function homepageHasUnsavedEdits() {
+    var manager = watchlistManagerState();
+    if (manager.dirty || manager.saving) return true;
+    var active = document.activeElement;
+    if (active && active.matches && active.matches('input, textarea, select, [contenteditable="true"]')) return true;
+    var pending = document.querySelectorAll
+      ? document.querySelectorAll('[data-watch-add-code], [data-watch-add-note], [data-watch-password]') : [];
+    return Array.prototype.some.call(pending, function (field) {
+      return normalizeString(field.value).trim() !== '';
+    });
+  }
+
+  function initHomepageLatestRefresh() {
+    var bootstrap = getBootstrap();
+    if (homepageRefreshInstalled || !window.fetch
+        || typeof URL !== 'function' || typeof window.AbortController !== 'function'
+        || !reportScriptUrl || bootstrap.isFileProtocol || isComparisonPage()) return;
+    var current;
+    var homepage;
+    try {
+      current = new URL(window.location.href);
+      var asset = new URL(reportScriptUrl, current);
+      homepage = new URL('../', asset);
+      if (!/^https?:$/.test(current.protocol) || asset.origin !== current.origin
+          || !/\/assets\/report-v2\.js$/.test(asset.pathname)
+          || (current.pathname !== homepage.pathname && current.pathname !== homepage.pathname + 'index.html')
+          || (bootstrap.dataBasePrefix && bootstrap.dataBasePrefix !== './')) return;
+    } catch (err) { return; }
+    var loadedAt = Date.parse(document.lastModified);
+    if (!Number.isFinite(loadedAt) || loadedAt <= 0) return;
+    homepageRefreshInstalled = true;
+    var inFlight = false;
+    var navigating = false;
+    var lastCheck = null;
+
+    function checkLatest() {
+      var now = Date.now();
+      if (inFlight || navigating || document.visibilityState === 'hidden'
+          || homepageHasUnsavedEdits() || (lastCheck !== null && now - lastCheck < 30000)) return;
+      lastCheck = now;
+      inFlight = true;
+      var probe = new URL('index.html', homepage);
+      probe.search = window.location.search || '';
+      probe.searchParams.set('_report_check', String(now));
+      var controller = new window.AbortController();
+      new Promise(function (resolve) {
+        var settled = false;
+        var timeout = window.setTimeout(function () {
+          finish(null);
+          controller.abort();
+        }, 5000);
+        function finish(response) {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timeout);
+          resolve(response);
+        }
+        try {
+          Promise.resolve(window.fetch(probe.href, {
+            method: 'HEAD', cache: 'no-store', redirect: 'error', credentials: 'same-origin', signal: controller.signal,
+          })).then(finish, function () { finish(null); });
+        } catch (err) { finish(null); }
+      }).then(function (response) {
+        if (!response || !response.ok || !response.headers || !response.headers.get
+            || document.visibilityState === 'hidden' || homepageHasUnsavedEdits()) return;
+        var modified = normalizeString(response.headers.get('Last-Modified')).trim();
+        var publishedAt = Date.parse(modified);
+        if (!Number.isFinite(publishedAt) || publishedAt <= loadedAt || publishedAt > Date.now() + 60000
+            || new Date(publishedAt).toUTCString() !== modified) return;
+        var target = new URL(window.location.href);
+        // A CDN may return old HTML or alternate versions; never retry an older attempt.
+        var marker = target.searchParams.get('_report_version');
+        var attemptedAt = Number(marker);
+        if (Number.isSafeInteger(attemptedAt) && String(attemptedAt) === marker
+            && attemptedAt <= Date.now() + 60000 && attemptedAt >= publishedAt) return;
+        target.searchParams.set('_report_version', String(publishedAt));
+        navigating = true;
+        window.location.replace(target.href);
+      }).catch(function () {
+        // Keep the current report if metadata or navigation is unavailable.
+      }).then(function () { inFlight = false; });
+    }
+
+    window.addEventListener('pageshow', checkLatest);
+    document.addEventListener('visibilitychange', checkLatest);
+    checkLatest();
+  }
+
   function normalizeWorkspace(data) {
     var ws = data && data.workspace ? data.workspace : null;
     if (!ws) {
@@ -16414,6 +16505,7 @@
 
     resolveGranted().then(function (granted) {
       state.granted = granted;
+      initHomepageLatestRefresh();
       return resolveInitialData();
     }).then(function (data) {
       state.data = data || {};
