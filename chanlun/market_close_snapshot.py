@@ -120,9 +120,14 @@ def ingest_market_close_snapshot(
     generated_at: Optional[datetime] = None,
     min_coverage: float = 0.90,
     force_remote: bool = False,
+    clock: Optional[Callable[[], datetime]] = None,
 ) -> Dict[str, Any]:
-    """Fetch one full-A quote snapshot and atomically append the final qfq bar."""
-    now = generated_at or datetime.now(_CN_TZ)
+    """Append a final qfq snapshot; explicit replay stays fixed without clock."""
+    acquisition_clock = clock or (
+        (lambda: generated_at) if generated_at is not None
+        else (lambda: datetime.now(_CN_TZ))
+    )
+    now = generated_at or acquisition_clock()
     if now.tzinfo is None:
         now = now.replace(tzinfo=_CN_TZ)
     now_cn = now.astimezone(_CN_TZ)
@@ -306,6 +311,18 @@ def ingest_market_close_snapshot(
 
     diagnostics["remote_calls"] = 1
     result = fetch_all_a_stocks(return_diagnostics=True)
+    # Startup time remains the report audit time.  Validate acquired facts at
+    # our own completion clock, never a provider-supplied future ceiling.
+    finished = acquisition_clock()
+    if finished.tzinfo is None:
+        finished = finished.replace(tzinfo=_CN_TZ)
+    finished_cn = finished.astimezone(_CN_TZ)
+    if (finished_cn.date().isoformat() != str(report_date)
+            or finished_cn < now_cn):
+        diagnostics.update(status="incomplete", reason="invalid_collection_time")
+        return diagnostics
+    now_cn = finished_cn
+    diagnostics["acquired_at"] = now_cn.isoformat()
     if not isinstance(result, tuple) or len(result) != 2:
         diagnostics.update(status="incomplete", reason="missing_fetch_diagnostics")
         return diagnostics
@@ -318,6 +335,18 @@ def ingest_market_close_snapshot(
     unique = int(fetch_diagnostics.get("unique") or len(rows))
     diagnostics.update(requested=requested, unique=unique)
     diagnostics["quote_fetch"] = dict(fetch_diagnostics)
+    for field in ("started_at", "as_of", "fetched_at"):
+        if field not in fetch_diagnostics:
+            continue
+        try:
+            stamp = datetime.fromisoformat(str(fetch_diagnostics[field]))
+            if (stamp.utcoffset() is None
+                    or stamp.astimezone(_CN_TZ).date().isoformat() != str(report_date)
+                    or stamp > now_cn):
+                raise ValueError("out-of-bounds collection time")
+        except (ValueError, TypeError, OverflowError):
+            diagnostics.update(status="incomplete", reason="invalid_fetch_time")
+            return diagnostics
     if (
         not fetch_diagnostics.get("complete")
         or requested <= 0
@@ -382,7 +411,8 @@ def ingest_market_close_snapshot(
             source = row.get("quote_source") or "eastmoney"
             if row.get("quote_source"):
                 from .quote_sources import valid_quote
-                if not valid_quote(row, now_cn):
+                if (not valid_quote(row, now_cn)
+                        or datetime.fromisoformat(row["quote_asof"]) > now_cn):
                     diagnostics["skipped_unquoted"] += 1
                     continue
             quote = _raw_quote(row)

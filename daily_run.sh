@@ -1,6 +1,6 @@
 #!/bin/zsh
 # 缠论选股日报 — 自动运行并推送
-# 由 launchd 每个工作日收盘后触发；第二次触发用于增量补齐缺失行情
+# 由 launchd 工作日 15:05/15:20/15:35/15:50 有限触发，重试缺失数据或待补推提交
 
 set -e
 
@@ -26,6 +26,7 @@ export CHANLUN_STOCK_SELECTION_SHADOW_MODE
 export CHANLUN_LLM_PROVIDER
 export CHANLUN_CODEX_MODEL
 
+export TZ=Asia/Shanghai
 TODAY=$(date '+%Y-%m-%d')
 TODAY_DATA_PATH="docs/data/${TODAY}.json"
 INDEX_PATH="docs/index.html"
@@ -40,41 +41,31 @@ is_today_output_ready() {
 }
 
 push_with_proxy_fallback() {
-    local proxy
-
-    for proxy in 127.0.0.1:17891 127.0.0.1:7897; do
-        echo "尝试推送（GitHub proxy: ${proxy}）..."
-        if git \
-            -c "http.https://github.com.proxy=${proxy}" \
-            -c "https.https://github.com.proxy=${proxy}" \
-            push; then
-            echo "推送成功 $(date '+%H:%M:%S')，使用代理 ${proxy}"
-            return 0
-        fi
-        echo "代理 ${proxy} 推送失败，尝试下一个"
-    done
-
-    echo "推送失败：两条代理路径均未完成推送，请查看上方 Git 错误"
-    return 1
+    /usr/bin/python3 "${SCRIPT_DIR}/scripts/run_daily_git_network.py" push \
+        --retry-delay-seconds "${CHANLUN_DAILY_GIT_RETRY_DELAY_SECONDS:-5}"
 }
 
 fetch_with_proxy_fallback() {
-    local proxy
+    /usr/bin/python3 "${SCRIPT_DIR}/scripts/run_daily_git_network.py" fetch \
+        --retry-delay-seconds "${CHANLUN_DAILY_GIT_RETRY_DELAY_SECONDS:-5}"
+}
 
-    for proxy in 127.0.0.1:17891 127.0.0.1:7897; do
-        echo "尝试同步远端（GitHub proxy: ${proxy}）..."
-        if git \
-            -c "http.https://github.com.proxy=${proxy}" \
-            -c "https.https://github.com.proxy=${proxy}" \
-            fetch origin main; then
-            echo "远端同步成功 $(date '+%H:%M:%S')，使用代理 ${proxy}"
-            return 0
-        fi
-        echo "代理 ${proxy} 同步失败，尝试下一个"
-    done
+is_today_report_published() {
+    local pending_count
+    local docs_status
 
-    echo "远端同步失败：两条代理路径均不可用"
-    return 1
+    # Only skip side effects after validating all required public planes and
+    # proving their bytes are tracked at the freshly fetched remote revision.
+    pending_count=$(git rev-list --count "${GIT_UPSTREAM}..HEAD") || return 1
+    [ "$pending_count" -eq 0 ] || return 1
+    git ls-files --error-unmatch -- \
+        "$INDEX_PATH" "docs/data.json" "docs/data/index.json" \
+        "$TODAY_DATA_PATH" "docs/${TODAY}/index.html" \
+        "docs/assets/report-v2.css" "docs/assets/report-v2.js" >/dev/null 2>&1 || return 1
+    docs_status=$(git status --porcelain=v1 --untracked-files=all -- docs) || return 1
+    [ -z "$docs_status" ] || return 1
+    git diff --quiet "$GIT_UPSTREAM" -- docs || return 1
+    /usr/bin/python3 scripts/validate_today_report.py --public-planes-only "$TODAY"
 }
 
 sync_with_remote() {
@@ -189,8 +180,12 @@ main() {
             if /usr/bin/python3 scripts/validate_today_report.py \
                 --needs-sublevel-retry "$TODAY"; then
                 RETRY_MISSING_ONLY=1
-                echo "正式策略已校验，但分钟级研究输入仍缺失，进入 15:20 增量补跑"
+                echo "正式策略已校验，但分钟级研究输入仍缺失，进入本次收盘后增量补跑"
             else
+                if is_today_report_published; then
+                    echo "今日正式日报已校验并发布，跳过重复生成、固化及可选钩子"
+                    exit 0
+                fi
                 /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
                 if ! finalize_and_record_review_snapshot; then
                     echo "账本已固化，但页面回看/固化状态回写失败，停止发布"

@@ -32,6 +32,8 @@ python3 scripts/run_recall_walkforward.py \
 
 日报推送前，`daily_run.sh` 会调用 `scripts/validate_today_report.py`，要求正式收盘数据、SQLite 模式、候选漏斗成功落库，并验证 active 模式下新策略确实接管正式主池。
 
+正式定时任务由 `launchd/com.chanlun.daily-report.plist` 记录，工作日北京时间 15:05、15:20、15:35、15:50 有限触发；后续触发补缺或补推，已校验并发布的完整日报跳过重复生成和固化。Git 网络操作最多 3 轮、每轮 2 条路径、单次 60 秒超时，失败保留非零退出及本地状态。现有配置的更新候选可用 `/usr/bin/python3 scripts/update_daily_report_launchd.py --output /private/tmp/daily-report.plist` 生成，核验、备份后再安装；生成候选不代表任务已加载。采集时钟、依赖保护、测试与实际部署状态见[自动日报修复记录](docs/plans/2026-10-16-daily-automatic-recovery.md)。
+
 ## 选股优化与后续修改
 
 [2026-09-11 正确性修复验收](docs/plans/2026-09-11-selection-quality-release.md)记录本批共享市场口径、真实确认、预跑时效及分钟失败诊断的修改、11日对照和遗留项；不表示扩大正式召回或证明收益提高。

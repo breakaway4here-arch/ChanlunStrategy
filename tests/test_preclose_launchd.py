@@ -16,9 +16,9 @@ PRODUCTION_ROOT = (
 PRECLOSE_LABEL = "com.breakaway4here.chanlun-preclose"
 RECONCILE_LABEL = "com.breakaway4here.chanlun-preclose-reconcile"
 DAILY_RUN_BASELINE_SHA256 = (
-    # 2026-10-13 authorized report recovery replaces mtime readiness and checks
-    # all public planes before staging; preclose still must not call this script.
-    "86e1ecaa7f57909957ebf5338875ad05e45961ea56a5b858bc8c0916cd48e3c2"
+    # 2026-10-16 authorized daily retry adds bounded network retries and published
+    # no-op checks; preclose must still remain independent of this script.
+    "5cac3c11b604c56996e30a89486ff11d34758160c4b276cc0d57087ec93e58e2"
 )
 RUNBOOK_PATH = ROOT / "docs" / "runbooks" / "chanlun-preclose-runbook.md"
 
