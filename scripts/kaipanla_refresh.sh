@@ -1,5 +1,5 @@
 #!/bin/zsh
-# One late optional supplement refresh; share the report publisher's lock.
+# Finite late optional supplement opportunities; share the publisher's lock.
 set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_DIR="${SCRIPT_DIR:h}"
@@ -27,30 +27,62 @@ git diff --cached --quiet || { print -u2 "已有暂存改动，停止补更"; ex
 [[ -z "$(git status --porcelain=v1 --untracked-files=all -- "${TARGETS[@]}")" ]] || { print -u2 "补更目标已有改动，停止补更"; exit 1; }
 
 network_git() {
-    local proxy
-    for proxy in 127.0.0.1:17891 127.0.0.1:7897; do
-        if /usr/bin/python3 - "$proxy" "$@" <<'PY'
-import os,signal,subprocess,sys
-command=['git','-c','http.https://github.com.proxy='+sys.argv[1],
-         '-c','https.https://github.com.proxy='+sys.argv[1]]+sys.argv[2:]
-process=subprocess.Popen(command,start_new_session=True)
-try:
-    raise SystemExit(process.wait(timeout=30))
-except subprocess.TimeoutExpired:
-    os.killpg(process.pid,signal.SIGTERM)
-    try:
-        process.wait(timeout=3)
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid,signal.SIGKILL)
-        process.wait()
-    print('Git network attempt exceeded 30 seconds',file=sys.stderr)
-    raise SystemExit(1)
-PY
-        then return 0; fi
-    done
-    return 1
+    /usr/bin/python3 "${SCRIPT_DIR}/run_daily_git_network.py" "$@" --timeout-seconds 30
 }
-network_git fetch origin main || exit 1
+PENDING_RECEIPT="${REPO_DIR}/.cache/chanlun/kaipanla/publication-${TODAY}.json"
+validate_pending() {
+    # A receipt proves this exact single supplement commit, never arbitrary ahead work.
+    /usr/bin/python3 - "$PENDING_RECEIPT" "$TODAY" "$REPO_DIR" <<'PY'
+import hashlib,json,re,subprocess,sys
+from pathlib import Path
+path=Path(sys.argv[1]);day=sys.argv[2];root=Path(sys.argv[3]).resolve()
+if path.is_symlink(): raise SystemExit('pending receipt must not be a symlink')
+receipt=json.loads(path.read_bytes())
+def git(*args): return subprocess.check_output(['git',*args]).decode().strip()
+expected={'data/'+day+'.json','data.json','index.html',day+'/index.html'}
+if (subprocess.run(['git','diff','--cached','--quiet']).returncode
+    or git('status','--porcelain=v1','--untracked-files=all','--',*['docs/'+r for r in sorted(expected)])):
+    raise SystemExit('pending supplement index/targets changed')
+commit=receipt.get('commit_sha','');source=receipt.get('source_head','')
+if (receipt.get('status')!='updated' or receipt.get('report_date')!=day
+    or receipt.get('source_branch')!='main' or receipt.get('target_branch')!='origin/main'
+    or receipt.get('repository')!=str(root)
+    or receipt.get('origin_url_sha256')!=hashlib.sha256(git('remote','get-url','origin').encode()).hexdigest()
+    or set(receipt.get('targets',[]))!=expected or set(receipt.get('target_sha256',{}))!=expected
+    or not re.fullmatch('[0-9a-f]{40}',commit) or not re.fullmatch('[0-9a-f]{40}',source)
+    or git('rev-parse','HEAD')!=commit or git('rev-list','--parents','-n','1',commit).split()!=[commit,source]
+    or git('log','-1','--format=%s',commit)!='chore: 补更'+day+'开盘啦题材资料'):
+    raise SystemExit('pending supplement identity/ancestry mismatch')
+changed=set(git('diff-tree','--no-commit-id','--name-only','-r',commit).splitlines())
+if not changed or changed-{'docs/'+relative for relative in expected}:
+    raise SystemExit('pending commit contains non-supplement files')
+for relative,sha in receipt['target_sha256'].items():
+    target=root/'docs'/relative
+    blob=subprocess.check_output(['git','show',commit+':docs/'+relative])
+    if (target.is_symlink() or not re.fullmatch('[0-9a-f]{64}',str(sha))
+        or hashlib.sha256(target.read_bytes()).hexdigest()!=sha or hashlib.sha256(blob).hexdigest()!=sha):
+        raise SystemExit('pending supplement bytes changed: '+relative)
+remote=git('rev-parse','origin/main')
+if subprocess.run(['git','merge-base','--is-ancestor',commit,'origin/main']).returncode==0:
+    print('remote_contains '+commit)
+elif remote==source:
+    print('pending '+commit)
+else:
+    raise SystemExit('remote main changed; pending supplement requires review')
+PY
+}
+network_git fetch || exit 1
+if [[ -e "$PENDING_RECEIPT" ]]; then
+    PENDING_STATE=$(validate_pending) || exit 1
+    PENDING_SHA="${PENDING_STATE##* }"
+    if [[ "$PENDING_STATE" == pending\ * ]]; then
+        # Pin the validated SHA so a concurrent HEAD change cannot publish another commit.
+        network_git push --push-ref "${PENDING_SHA}:refs/heads/main" || exit 1
+    fi
+    /bin/rm -f "$PENDING_RECEIPT"
+    print "开盘啦本批提交已确认发布：${PENDING_SHA}"
+    exit 0
+fi
 if ! git merge-base --is-ancestor origin/main HEAD; then
     git merge-base --is-ancestor HEAD origin/main || { print -u2 "main 存在分歧，停止补更"; exit 1; }
     git merge --ff-only origin/main
@@ -62,6 +94,7 @@ git merge-base --is-ancestor origin/main HEAD
 git diff --cached --quiet
 [[ -z "$(git status --porcelain=v1 --untracked-files=all -- "${TARGETS[@]}")" ]] || exit 1
 SOURCE_HEAD=$(git rev-parse HEAD)
+SOURCE_ORIGIN_URL=$(git remote get-url origin)
 ROLLBACK_ACTIVE=0
 COMMIT_SHA=""
 RESULT=$(/usr/bin/mktemp "${TMPDIR:-/private/tmp}/chanlun-kpl-result.XXXXXXXX")
@@ -71,8 +104,12 @@ finish_refresh() {
     if [[ "$exit_code" -ne 0 && "$ROLLBACK_ACTIVE" == "1" ]]; then
         if [[ -n "$COMMIT_SHA" ]]; then
             retain_receipt=1
-            print -u2 "开盘啦资料已提交但尚未推送：pending SHA ${COMMIT_SHA}；main -> origin/main"
-            print -u2 "补推命令：git -C '${REPO_DIR}' push origin HEAD:main"
+            if [[ -f "$PENDING_RECEIPT" && ! -L "$PENDING_RECEIPT" ]]; then
+                /bin/rm -f "$RESULT"
+                RESULT="$PENDING_RECEIPT"
+            fi
+            print -u2 "开盘啦提交交付尚未确认：pending SHA ${COMMIT_SHA}；main -> origin/main"
+            print -u2 "续推入口：/bin/zsh '${SCRIPT_DIR}/kaipanla_refresh.sh'（重新核验 receipt）"
         elif /usr/bin/python3 "${SCRIPT_DIR}/refresh_kaipanla_context.py" \
                 --docs-dir docs --report-date "$TODAY" --source-head "$SOURCE_HEAD" \
                 --rollback-receipt "$RESULT" >&2; then
@@ -103,7 +140,7 @@ receipt.update(source_head=sys.argv[2],source_branch='main',target_branch='origi
 path.write_text(json.dumps(receipt,ensure_ascii=False))
 PY
 # Synchronize immediately before commit; a newer remote stops this batch safely.
-network_git fetch origin main || exit 1
+network_git fetch || exit 1
 git merge-base --is-ancestor origin/main HEAD || { print -u2 "补更期间远端 main 已更新，保留本批未提交资料供复查"; exit 1; }
 git diff --cached --quiet || { print -u2 "补更期间出现其它暂存内容，停止提交"; exit 1; }
 /usr/bin/python3 - "$RESULT" "$TODAY" <<'PY'
@@ -135,4 +172,21 @@ for relative in staged:
 PY
 git commit -m "chore: 补更${TODAY}开盘啦题材资料"
 COMMIT_SHA=$(git rev-parse HEAD)
-network_git push origin HEAD:main || exit 1
+/usr/bin/python3 - "$RESULT" "$PENDING_RECEIPT" "$COMMIT_SHA" "$REPO_DIR" "$SOURCE_ORIGIN_URL" <<'PY'
+import hashlib,json,os,sys,tempfile
+from pathlib import Path
+receipt=json.loads(Path(sys.argv[1]).read_bytes())
+receipt.update(commit_sha=sys.argv[3],repository=str(Path(sys.argv[4]).resolve()),
+               origin_url_sha256=hashlib.sha256(sys.argv[5].encode()).hexdigest())
+target=Path(sys.argv[2]);target.parent.mkdir(parents=True,exist_ok=True)
+fd,temporary=tempfile.mkstemp(prefix=target.name+'.',dir=str(target.parent))
+try:
+    with os.fdopen(fd,'w') as stream:
+        json.dump(receipt,stream,ensure_ascii=False);stream.flush();os.fsync(stream.fileno())
+    os.replace(temporary,target)
+finally:
+    if os.path.exists(temporary): os.unlink(temporary)
+PY
+validate_pending >/dev/null || exit 1
+network_git push --push-ref "${COMMIT_SHA}:refs/heads/main" || exit 1
+/bin/rm -f "$PENDING_RECEIPT"

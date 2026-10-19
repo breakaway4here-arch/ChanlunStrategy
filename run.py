@@ -2947,13 +2947,26 @@ def _attach_market_icepoint(
         return
 
 
-def main(debug=False, preview=False, generated_at=None):
+def main(debug=False, preview=False, generated_at=None, *, observation_context=None, render=True):
+    observation = observation_context is not None
+    if observation and (debug or preview or render):
+        raise ValueError("observation requires the complete pipeline and render=False")
     is_explicit_replay = generated_at is not None
     generated_at = generated_at or datetime.now().astimezone()
     acquisition_clock = None if is_explicit_replay else lambda: datetime.now(_CN_TZ)
-    time_metadata = build_market_time_metadata(generated_at=generated_at)
+    time_metadata = (
+        observation_context.time_metadata(generated_at) if observation
+        else build_market_time_metadata(generated_at=generated_at)
+    )
     run_started_at = time_metadata["generated_at"]
-    today = time_metadata["generated_at"].split("T", 1)[0]
+    today = time_metadata["as_of" if observation else "generated_at"].split("T", 1)[0]
+    collect_min30 = (
+        lambda targets, **kwargs: observation_context.collect_minutes("30m", targets, **kwargs)
+    ) if observation else collect_30min_data
+    collect_min15 = (
+        lambda targets, **kwargs: observation_context.collect_minutes("15m", targets, **kwargs)
+    ) if observation else collect_15min_data
+    readonly_min30 = collect_min30 if observation else load_30min_data_readonly
     retry_missing_only = (
         os.environ.get("CHANLUN_DAILY_RETRY_MISSING_ONLY", "0").strip() == "1"
     )
@@ -2966,9 +2979,15 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         as_of=today,
     )
-    personal_watchlist_config, personal_watchlist_config_diagnostics = (
-        resolve_personal_watchlist(remote_url="" if debug else None)
-    )
+    if observation:
+        personal_watchlist_config = observation_context.get(
+            "personal_watchlist_config", {"revision": "observation-not-requested", "items": []}
+        )
+        personal_watchlist_config_diagnostics = {"status": "frozen_observation"}
+    else:
+        personal_watchlist_config, personal_watchlist_config_diagnostics = (
+            resolve_personal_watchlist(remote_url="" if debug else None)
+        )
     print(f"缠论选股系统启动 — {today} {time_metadata['generated_at'][11:19]}")
     print(f"调试模式: {debug}")
     print(f"预览模式: {preview}")
@@ -2982,7 +3001,9 @@ def main(debug=False, preview=False, generated_at=None):
     # Phase 1: 数据采集
     # ================================================================
     close_snapshot_diagnostics = None
-    if debug:
+    if observation:
+        daily_data = observation_context.daily_data(generated_at)
+    elif debug:
         # 调试模式：拉取真实板块成分股，随机抽取少量股票
         print("[DEBUG] 使用简化数据（随机采样）")
         from chanlun.data_fetcher import fetch_sector_flow
@@ -3103,7 +3124,8 @@ def main(debug=False, preview=False, generated_at=None):
             )
         )
     data_quality["daily_run_mode"] = (
-        "missing_only" if retry_missing_only else "db_first"
+        "frozen_intraday_observation" if observation
+        else ("missing_only" if retry_missing_only else "db_first")
     )
     if close_snapshot_diagnostics is not None:
         data_quality["market_close_snapshot"] = close_snapshot_diagnostics
@@ -3121,7 +3143,7 @@ def main(debug=False, preview=False, generated_at=None):
         "stock_selection_shadow_mode": STOCK_SELECTION_SHADOW_MODE,
         "decision_semantics": "v2_missing_position_is_observe",
     }
-    if not debug and RECALL_STRATEGY_MODE != "legacy":
+    if not debug and not observation and RECALL_STRATEGY_MODE != "legacy":
         stocks_with_kline = _apply_full_a_universe(
             stocks_with_kline,
             sectors,
@@ -3139,15 +3161,20 @@ def main(debug=False, preview=False, generated_at=None):
                 stocks_with_kline,
                 today,
             )
-    stocks_with_kline, personal_watchlist_acquisition = (
-        ensure_watchlist_stocks(
-            stocks_with_kline,
-            personal_watchlist_config,
-            fetch_daily_kline,
-            today,
-            as_of=time_metadata.get("as_of"),
+    if observation:
+        personal_watchlist_acquisition = observation_context.get(
+            "personal_watchlist_acquisition", {"status": "not_requested", "by_code": {}}
         )
-    )
+    else:
+        stocks_with_kline, personal_watchlist_acquisition = (
+            ensure_watchlist_stocks(
+                stocks_with_kline,
+                personal_watchlist_config,
+                fetch_daily_kline,
+                today,
+                as_of=time_metadata.get("as_of"),
+            )
+        )
     stocks_with_kline, identity_pending_excluded = (
         _exclude_identity_pending_stocks(
             stocks_with_kline, close_snapshot_diagnostics
@@ -3182,10 +3209,9 @@ def main(debug=False, preview=False, generated_at=None):
         for key, value in personal_watchlist_acquisition.items()
         if key != "by_code"
     }
-    data_quality["market_cap_evidence"] = _hydrate_market_cap_evidence(
-        stocks_with_kline,
-        today,
-        max_workers=20,
+    data_quality["market_cap_evidence"] = (
+        observation_context.get("market_cap_evidence", {"status": "frozen_or_unavailable"})
+        if observation else _hydrate_market_cap_evidence(stocks_with_kline, today, max_workers=20)
     )
     active_codes = [stock.get("code") for stock in stocks_with_kline]
     new_active_stocks = [
@@ -3544,7 +3570,7 @@ def main(debug=False, preview=False, generated_at=None):
         print(f"  结构池并集: {len(all_target_codes)} 只 "
               f"(含低位启动: {len(startup_seed_codes)}, "
               f"趋势延续: {len(trend_seed_codes)}), 拉取30分钟数据 ...")
-        formal_min30_data_list = collect_30min_data(
+        formal_min30_data_list = collect_min30(
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
@@ -3555,7 +3581,7 @@ def main(debug=False, preview=False, generated_at=None):
                 {"code": code, "name": ""}
                 for code in sorted(target_partition["readonly_shadow_codes"])
             ]
-            shadow_min30_data_list = load_30min_data_readonly(
+            shadow_min30_data_list = readonly_min30(
                 shadow_targets,
                 required_date=today,
                 as_of=time_metadata.get("as_of"),
@@ -3786,7 +3812,7 @@ def main(debug=False, preview=False, generated_at=None):
         fusion_codes = {s["code"] for s in fusion_pool}
         all_target_codes = pure_codes | fusion_codes
         all_targets = [{"code": c, "name": ""} for c in all_target_codes]
-        formal_min30_data_list = collect_30min_data(
+        formal_min30_data_list = collect_min30(
             all_targets,
             required_date=today,
             as_of=time_metadata.get("as_of"),
@@ -3850,7 +3876,7 @@ def main(debug=False, preview=False, generated_at=None):
     analyzed_min15_rows = []
     min15_failure_evidence = {}
     if selected_luojie_stocks:
-        min15_data_list = collect_15min_data(
+        min15_data_list = collect_min15(
             selected_luojie_stocks,
             required_date=today,
             as_of=time_metadata.get("as_of"),
@@ -4150,14 +4176,18 @@ def main(debug=False, preview=False, generated_at=None):
     market_data_status = "verified"
     verified_review_benchmark = None
     try:
-        market_result = fetch_market_indices(
-            report_date=today,
-            include_review_benchmark=not debug and not preview,
-        )
-        if not debug and not preview:
-            market_indices, verified_review_benchmark = market_result
+        if observation:
+            market_indices = observation_context.get("market_indices", {})
+            market_data_status = "verified" if market_indices and sh_kline else "unverified"
         else:
-            market_indices = market_result
+            market_result = fetch_market_indices(
+                report_date=today,
+                include_review_benchmark=not debug and not preview,
+            )
+            if not debug and not preview:
+                market_indices, verified_review_benchmark = market_result
+            else:
+                market_indices = market_result
     except MarketDataUnavailable as e:
         if not preview:
             raise
@@ -4168,27 +4198,35 @@ def main(debug=False, preview=False, generated_at=None):
             report_date=today,
             reason=index_error,
         )
-    market_index_observed_at = datetime.now(_CN_TZ).isoformat(timespec="seconds")
+    market_index_observed_at = (
+        observation_context.cutoff if observation
+        else datetime.now(_CN_TZ).isoformat(timespec="seconds")
+    )
 
     # 上证缠论结构
     print("  分析上证缠论结构 ...")
     sh_chanlun = analyze_shanghai_chanlun(sh_kline)
 
     # 涨停池提前获取，供事件影响力评分复用
-    limit_up_pool_data, limit_up_pool_diagnostics = fetch_limit_up_pool(
-        today.replace("-", ""),
-        return_diagnostics=True,
-    )
-
-    # 热点事件 — 影响力评分排序后再 LLM 增强
-    raw_events = fetch_cls_news(CLS_NEWS_COUNT)
-    ranked_events = rank_market_impact_events(raw_events, sector_flow=sectors, limit_up_pool=limit_up_pool_data, top_n=EVENT_TOP_N)
-    events = normalize_events(enrich_events(ranked_events))
+    if observation:
+        limit_up_pool_data = observation_context.get("limit_up_pool", [])
+        limit_up_pool_diagnostics = observation_context.get(
+            "limit_up_pool_diagnostics", {"status": "unavailable", "reason": "cutoff_evidence_unavailable"}
+        )
+        events = normalize_events(observation_context.get("events", []))
+    else:
+        limit_up_pool_data, limit_up_pool_diagnostics = fetch_limit_up_pool(
+            today.replace("-", ""), return_diagnostics=True,
+        )
+        # 热点事件 — 影响力评分排序后再 LLM 增强
+        raw_events = fetch_cls_news(CLS_NEWS_COUNT)
+        ranked_events = rank_market_impact_events(raw_events, sector_flow=sectors, limit_up_pool=limit_up_pool_data, top_n=EVENT_TOP_N)
+        events = normalize_events(enrich_events(ranked_events))
 
     # 决策引擎评分（可选字段）。情绪必须在决策前完成，避免风险证据只展示不生效。
     icepoint_capture = {}
     market_sentiment, market_sentiment_history = (
-        _build_market_sentiment_history(
+        observation_context.sentiment() if observation else _build_market_sentiment_history(
             today,
             market_indices=market_indices,
             icepoint_capture=icepoint_capture,
@@ -4391,29 +4429,32 @@ def main(debug=False, preview=False, generated_at=None):
         observation_codes=observation_watchlist,
         decision_by_code=decision_by_code,
     )
-    funnel_persist_status = "saved"
-    try:
-        with MarketHistoryStore(MARKET_HISTORY_DB_PATH) as store:
-            store.save_candidate_funnel(
-                candidate_funnel.run_record(
-                    metadata={
-                        "debug": bool(debug),
-                        "preview": bool(preview),
-                        "generated_at": time_metadata["generated_at"],
-                        "is_official": bool(
-                            data_quality.get("is_official")
-                        ),
-                    }
-                ),
-                candidate_funnel.events,
+    if observation:
+        funnel_persist_status = "observation_only"
+    else:
+        funnel_persist_status = "saved"
+        try:
+            with MarketHistoryStore(MARKET_HISTORY_DB_PATH) as store:
+                store.save_candidate_funnel(
+                    candidate_funnel.run_record(
+                        metadata={
+                            "debug": bool(debug),
+                            "preview": bool(preview),
+                            "generated_at": time_metadata["generated_at"],
+                            "is_official": bool(
+                                data_quality.get("is_official")
+                            ),
+                        }
+                    ),
+                    candidate_funnel.events,
+                )
+        except Exception as exc:
+            funnel_persist_status = "failed"
+            data_quality.setdefault("warnings", []).append(
+                "candidate funnel persistence failed: {}: {}".format(
+                    type(exc).__name__, exc
+                )
             )
-    except Exception as exc:
-        funnel_persist_status = "failed"
-        data_quality.setdefault("warnings", []).append(
-            "candidate funnel persistence failed: {}: {}".format(
-                type(exc).__name__, exc
-            )
-        )
 
     # 构建报告数据
     daily_scan_diag = {
@@ -4516,29 +4557,33 @@ def main(debug=False, preview=False, generated_at=None):
             "note": preview_note,
         },
     }
-    sector_session = daily_data.get("_sector_source_session")
-    if sector_session is not None:
-        sector_token = _ACTIVE_SECTOR_SESSION.set(sector_session)
-        try:
-            sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
-        finally:
-            _ACTIVE_SECTOR_SESSION.reset(sector_token)
-
-        def sector_component_fetcher(code, *, return_diagnostics=False):
-            token = _ACTIVE_SECTOR_SESSION.set(sector_session)
-            try:
-                return fetch_sector_stocks(code, return_diagnostics=return_diagnostics)
-            finally:
-                _ACTIVE_SECTOR_SESSION.reset(token)
+    if observation:
+        sector_outflow = observation_context.get("sector_outflow", [])
+        sector_component_evidence = copy.deepcopy(daily_data.get("sector_component_evidence") or {})
     else:
-        sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
-        sector_component_fetcher = fetch_sector_stocks
-    sector_component_evidence = _complete_sector_component_evidence(
-        list(sectors or []) + list(sector_outflow or []),
-        daily_data.get("sector_component_evidence"),
-        fetcher=sector_component_fetcher,
-        max_workers=20,
-    )
+        sector_session = daily_data.get("_sector_source_session")
+        if sector_session is not None:
+            sector_token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+            try:
+                sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+            finally:
+                _ACTIVE_SECTOR_SESSION.reset(sector_token)
+
+            def sector_component_fetcher(code, *, return_diagnostics=False):
+                token = _ACTIVE_SECTOR_SESSION.set(sector_session)
+                try:
+                    return fetch_sector_stocks(code, return_diagnostics=return_diagnostics)
+                finally:
+                    _ACTIVE_SECTOR_SESSION.reset(token)
+        else:
+            sector_outflow = fetch_sector_outflow(SECTOR_OUTFLOW_COUNT)
+            sector_component_fetcher = fetch_sector_stocks
+        sector_component_evidence = _complete_sector_component_evidence(
+            list(sectors or []) + list(sector_outflow or []),
+            daily_data.get("sector_component_evidence"),
+            fetcher=sector_component_fetcher,
+            max_workers=20,
+        )
     sectors = deduplicate_sector_hierarchy(
         sectors,
         sector_component_evidence,
@@ -4562,8 +4607,9 @@ def main(debug=False, preview=False, generated_at=None):
         stocks_with_kline,
         limit_up_snapshot,
         as_of=time_metadata.get("as_of"),
-        source="{}+verified_daily_close+{}".format(
+        source="{}+{}+{}".format(
             data_quality.get("sector_source") or "unknown_sector_source",
+            "cutoff_daily_observation" if observation else "verified_daily_close",
             limit_up_snapshot.get("source") or "unknown_limit_source",
         ),
     )
@@ -4610,8 +4656,9 @@ def main(debug=False, preview=False, generated_at=None):
         today,
         as_of=time_metadata.get("as_of"),
         generated_at=time_metadata.get("generated_at"),
-        previous_snapshot=load_previous_personal_watchlist(
-            today, os.path.join(output_dir, "data")
+        previous_snapshot=(
+            observation_context.get("previous_personal_watchlist") if observation
+            else load_previous_personal_watchlist(today, os.path.join(output_dir, "data"))
         ),
     )
     decision_brief = build_decision_brief(
@@ -4620,7 +4667,7 @@ def main(debug=False, preview=False, generated_at=None):
         sector_flow=sectors,
         limit_up_snapshot=limit_up_snapshot,
         personal_watchlist=personal_watchlist_snapshot,
-        llm_analyzer=analyze_decision_brief_facts,
+        llm_analyzer=None if observation else analyze_decision_brief_facts,
         generated_at=time_metadata.get("generated_at"),
     )
     position_name_map = {
@@ -4634,9 +4681,9 @@ def main(debug=False, preview=False, generated_at=None):
         else None
     )
     try:
-        position_book = load_position_book(
-            now=position_evaluation_time,
-            name_map=position_name_map,
+        position_book = (
+            {"status": "not_requested", "accounts": [], "positions": []} if observation
+            else load_position_book(now=position_evaluation_time, name_map=position_name_map)
         )
     except (OSError, TypeError, ValueError) as exc:
         position_book = position_book_error_snapshot(exc)
@@ -4757,7 +4804,7 @@ def main(debug=False, preview=False, generated_at=None):
             ),
         },
     ]
-    recommendation_entries = build_recommendation_entries(
+    recommendation_entries = [] if observation else build_recommendation_entries(
         today,
         time_metadata.get("generated_at"),
         strategy_inputs,
@@ -4776,30 +4823,35 @@ def main(debug=False, preview=False, generated_at=None):
             or "unknown"
         ),
     )
-    try:
-        historical_entries, ledger_diagnostics = (
-            prepare_recommendation_history(
-                DEFAULT_LEDGER_PATH,
-                pending_ledger_path(today),
-                recommendation_entries,
-                publication_eligible=bool(
-                    not debug
-                    and not preview
-                    and data_quality.get("is_official") is True
-                    and selection_input_health["formal"][
-                        "formal_actions_allowed"
-                    ]
-                ),
+    if observation:
+        recommendation_entries = []
+        historical_entries = []
+        ledger_diagnostics = {"status": "observation_only", "staged_entries": 0}
+    else:
+        try:
+            historical_entries, ledger_diagnostics = (
+                prepare_recommendation_history(
+                    DEFAULT_LEDGER_PATH,
+                    pending_ledger_path(today),
+                    recommendation_entries,
+                    publication_eligible=bool(
+                        not debug
+                        and not preview
+                        and data_quality.get("is_official") is True
+                        and selection_input_health["formal"][
+                            "formal_actions_allowed"
+                        ]
+                    ),
+                )
             )
-        )
-    except (OSError, TypeError, ValueError) as exc:
-        historical_entries = list(recommendation_entries)
-        ledger_diagnostics = {
-            "status": "error",
-            "today_entries": len(recommendation_entries),
-            "evaluation_entries": len(historical_entries),
-            "error_code": "{}".format(type(exc).__name__),
-        }
+        except (OSError, TypeError, ValueError) as exc:
+            historical_entries = list(recommendation_entries)
+            ledger_diagnostics = {
+                "status": "error",
+                "today_entries": len(recommendation_entries),
+                "evaluation_entries": len(historical_entries),
+                "error_code": "{}".format(type(exc).__name__),
+            }
     benchmark_ingest_diagnostics = {
         "status": "withheld",
         "reason": "unofficial_or_benchmark_missing",
@@ -4822,16 +4874,20 @@ def main(debug=False, preview=False, generated_at=None):
                 "status": "error",
                 "error_code": "{}".format(type(exc).__name__),
             }
-    (
-        review_klines,
-        review_trading_calendar,
-        review_benchmark,
-        strategy_review_diagnostics,
-    ) = load_review_market_context_from_store(
-            MARKET_HISTORY_DB_PATH,
-            historical_entries,
-            as_of=today,
-    )
+    if observation:
+        review_klines, review_trading_calendar, review_benchmark = {}, [], None
+        strategy_review_diagnostics = {"status": "not_run", "reason": "observation_has_no_formal_outcomes"}
+    else:
+        (
+            review_klines,
+            review_trading_calendar,
+            review_benchmark,
+            strategy_review_diagnostics,
+        ) = load_review_market_context_from_store(
+                MARKET_HISTORY_DB_PATH,
+                historical_entries,
+                as_of=today,
+        )
     strategy_run_manifest = build_strategy_run_manifest({
         "date": today,
         "picks_pure": pure_scored,
@@ -4848,7 +4904,7 @@ def main(debug=False, preview=False, generated_at=None):
         "recommendation_entries": recommendation_entries,
         "strategy_inputs": strategy_inputs,
     })
-    strategy_scorecards = build_strategy_scorecards(
+    strategy_scorecards = [] if observation else build_strategy_scorecards(
         historical_entries,
         review_klines,
         trading_calendar=review_trading_calendar,
@@ -4880,7 +4936,10 @@ def main(debug=False, preview=False, generated_at=None):
         "psy12": market_sentiment_shadow_fields["psy12"],
         "psy12_shadow": market_sentiment_shadow_fields["psy12_shadow"],
         "events": events,
-        "forecast": generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events),
+        "forecast": (
+            {"status": "not_run", "reason": "observation_pools_only"} if observation
+            else generate_forecast(market_indices, sh_chanlun, sectors, sh_volumes, events)
+        ),
         "sell_signals": sell_signals,
         "holding_risks": public_holding_risks,
         "recommendation_ledger": recommendation_entries,
@@ -4897,20 +4956,26 @@ def main(debug=False, preview=False, generated_at=None):
         "luojie_pool": luojie_pool,
         "h4_t3_pool": h4_t3_pool,
     }
-    # Independent optional context, never an input to scoring or publish gates.
-    try:
-        from chanlun.kaipanla import fetch_themes
-        report_data["kaipanla_context"] = fetch_themes(today)
-    except Exception:
-        report_data["kaipanla_context"] = {"status": "unavailable", "groups": [], "affects_formal": False}
-    _attach_market_icepoint(
-        report_data,
-        capture=icepoint_capture,
-        index_observed_at=market_index_observed_at,
-        market_data_status=market_data_status,
-        allow_etf=not (debug or preview or is_explicit_replay),
-        allow_evidence=not (debug or preview or is_explicit_replay),
-    )
+    if observation:
+        report_data["kaipanla_context"] = observation_context.get(
+            "kaipanla_context", {"status": "unavailable", "groups": [], "affects_formal": False}
+        )
+        report_data["market_icepoint"] = {"status": "unavailable", "reason": "cutoff_evidence_unavailable"}
+    else:
+        # Independent optional context, never an input to scoring or publish gates.
+        try:
+            from chanlun.kaipanla import fetch_themes
+            report_data["kaipanla_context"] = fetch_themes(today)
+        except Exception:
+            report_data["kaipanla_context"] = {"status": "unavailable", "groups": [], "affects_formal": False}
+        _attach_market_icepoint(
+            report_data,
+            capture=icepoint_capture,
+            index_observed_at=market_index_observed_at,
+            market_data_status=market_data_status,
+            allow_etf=not (debug or preview or is_explicit_replay),
+            allow_evidence=not (debug or preview or is_explicit_replay),
+        )
     report_data["right_side_startup"] = {
         "mode": RIGHT_SIDE_STARTUP_MODE,
         "policy_version": RIGHT_SIDE_STARTUP_POLICY_VERSION,
@@ -4938,25 +5003,35 @@ def main(debug=False, preview=False, generated_at=None):
             "trend_watchlist": len(trend_watchlist),
         }
 
-    report_data["shadow_evaluations"] = build_daily_shadow_evaluations(
-        report_data,
-        mode=STOCK_SELECTION_SHADOW_MODE,
-        generated_at=time_metadata.get("generated_at"),
-        publication_eligible=bool(
-            not debug
-            and not preview
-            and data_quality.get("is_official") is True
-            and daily_fusion_input_health["formal_actions_allowed"]
-        ),
-        db_path=MARKET_HISTORY_DB_PATH,
-    )
+    if observation:
+        report_data["shadow_evaluations"] = {"status": "not_run", "reason": "observation_has_no_formal_outcomes"}
+        report_data["right_side_startup"]["candidates"] = right_side_shadow_candidates
+        report_data["right_side_startup"]["watchlist"] = right_side_shadow_watchlist
+        report_data = observation_context.finalize_report(report_data)
+        report_data["diagnostics"]["candidate_funnel"]["events"] = copy.deepcopy(candidate_funnel.events)
+        report_data["diagnostics"]["candidate_funnel"]["db_path"] = None
+    else:
+        report_data["shadow_evaluations"] = build_daily_shadow_evaluations(
+            report_data,
+            mode=STOCK_SELECTION_SHADOW_MODE,
+            generated_at=time_metadata.get("generated_at"),
+            publication_eligible=bool(
+                not debug
+                and not preview
+                and data_quality.get("is_official") is True
+                and daily_fusion_input_health["formal_actions_allowed"]
+            ),
+            db_path=MARKET_HISTORY_DB_PATH,
+        )
 
     # 生成 HTML（debug/preview 模式输出到独立目录，隔离上线数据）
-    generate_report(report_data, output_dir)
-    update_data_json(report_data, output_dir)
+    if render:
+        generate_report(report_data, output_dir)
+        update_data_json(report_data, output_dir)
 
     if (
         RIGHT_SIDE_STARTUP_MODE == "shadow"
+        and not observation
         and not debug
         and not preview
     ):
@@ -4988,8 +5063,10 @@ def main(debug=False, preview=False, generated_at=None):
     print()
     print("=" * 60)
     print(f"完成! 纯净版 {len(pure_scored)} 只, 融合版 {len(fusion_scored)} 只")
-    print(f"输出: {output_dir}/index.html")
+    if render:
+        print(f"输出: {output_dir}/index.html")
     print("=" * 60)
+    return report_data
 
 
 if __name__ == "__main__":

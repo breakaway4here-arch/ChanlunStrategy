@@ -81,6 +81,13 @@ async function advance(ms=31000) {
   await settle();
 }
 async function show() { document.visibilityState='visible'; document.dispatch('visibilitychange'); await settle(); }
+async function reopen(url) {
+  window.location=Object.assign(new URL(url), {replace(value) {navigation.push(value);}});
+  Object.keys(window.handlers).forEach(name=>delete window.handlers[name]);
+  Object.keys(document.handlers).forEach(name=>delete document.handlers[name]);
+  vm.runInNewContext(source,sandbox,{filename:'report-v2.js'});
+  await start();
+}
 (async function () {
 __BODY__
 })().catch(err => { console.error(err); process.exitCode=1; });
@@ -239,6 +246,74 @@ await advance();
 respond=async()=>({ok:true,headers:{get(){return new NativeDate(newTime+2000).toUTCString();}}});
 window.dispatch('pageshow'); await settle(); assert.equal(navigation.length,1,'newer C is still eligible');
 """, url="https://example.test/ChanlunStrategy/?_report_version=1792141318000")
+
+
+def test_same_version_can_recover_after_repeated_old_html_without_navigation_loop():
+    check(r"""
+await start(); assert.equal(navigation.length,1);
+let target=new URL(navigation[0]);
+assert.equal(target.searchParams.get('_report_attempt'),String(now));
+assert.equal(target.searchParams.get('key'),'kept');
+assert.equal(target.hash,'#market-hotspot');
+await reopen(target.href);
+window.dispatch('pageshow'); await show();
+assert.equal(navigation.length,1,'new document initialization and automatic events must not loop');
+await advance(61000); window.dispatch('pageshow'); await settle();
+assert.equal(navigation.length,2,'returning after cooldown must recover the same version');
+target=new URL(navigation[1]);
+assert.equal(target.searchParams.get('_report_version'),String(newTime));
+assert.equal(target.searchParams.get('_report_attempt'),String(now));
+await reopen(target.href); assert.equal(navigation.length,2);
+await advance(61000); await show();
+assert.equal(navigation.length,3,'two stale CDN navigations must not permanently seal recovery');
+document.lastModified=new NativeDate(newTime).toUTCString();
+await reopen(navigation[2]); await advance(61000); window.dispatch('pageshow'); await settle();
+assert.equal(navigation.length,3,'stop as soon as the loaded document catches up');
+""")
+
+
+@pytest.mark.parametrize("elapsed,expected", [(59999, 0), (60000, 1)])
+def test_same_version_attempt_uses_sixty_second_cooldown_across_navigation(elapsed, expected):
+    check("now += " + str(elapsed) + "; await start(); assert.equal(navigation.length," + str(expected) + ");",
+          url="https://example.test/ChanlunStrategy/?_report_version=1792141317000&_report_attempt=1792144800000")
+
+
+@pytest.mark.parametrize("attempt", [None, "invalid", "1792141317000x", "1.792141317e12",
+                                     "9999999999999", "-1", "0"])
+def test_missing_invalid_or_future_attempt_starts_safe_cooldown_then_allows_return(attempt):
+    query = "&_report_attempt=" + attempt if attempt is not None else ""
+    check(r"""
+await start(); window.dispatch('pageshow'); await show();
+assert.equal(navigation.length,0,'bad or old-format metadata must not permit an initialization loop');
+await advance(61000); window.dispatch('pageshow'); await settle();
+assert.equal(navigation.length,1,'bad metadata must not permanently suppress recovery');
+assert.equal(new URL(navigation[0]).searchParams.get('_report_attempt'),String(now));
+await reopen(navigation[0]); assert.equal(navigation.length,1);
+""", url="https://example.test/ChanlunStrategy/?_report_version=1792141317000" + query)
+
+
+def test_clock_going_backward_does_not_bypass_recovery_cooldown():
+    check(r"""
+await start(); assert.equal(navigation.length,0);
+await advance(-61000); window.dispatch('pageshow'); await settle();
+assert.equal(navigation.length,0,'backward clock must not trigger another navigation');
+await advance(122000); window.dispatch('pageshow'); await settle();
+assert.equal(navigation.length,1);
+""", url="https://example.test/ChanlunStrategy/?_report_version=1792141317000&_report_attempt=1792144800000")
+
+
+def test_same_version_recovery_keeps_metadata_validation_and_edit_guard():
+    check(r"""
+await start(); assert.equal(navigation.length,0);
+await advance(61000); state.watchlistManager.dirty=true;
+window.dispatch('pageshow'); await settle(); assert.equal(navigation.length,0);
+state.watchlistManager.dirty=false;
+respond=async()=>({ok:true,headers:{get(){return '2026-10-16 09:01:57';}}});
+window.dispatch('pageshow'); await settle(); assert.equal(navigation.length,0,'non-HTTP date must remain invalid');
+await advance(31000);
+respond=async()=>({ok:true,headers:{get(){return new NativeDate(newTime).toUTCString();}}});
+window.dispatch('pageshow'); await settle(); assert.equal(navigation.length,1);
+""", url="https://example.test/ChanlunStrategy/?_report_version=1792141317000")
 
 
 @pytest.mark.parametrize("marker", ["invalid", "9999999999999", "1792141317000x", "1.792141317e12"])

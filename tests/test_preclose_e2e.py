@@ -59,6 +59,12 @@ class MemoryPrecloseWorker:
         return FakeResponse({}, status_code=404)
 
 
+def _wx_accepted(uid):
+    return {"success": True, "code": 1000, "data": [
+        {"uid": uid, "topicId": None, "messageContentId": 123,
+         "code": 1000, "status": "创建发送任务成功"}]}
+
+
 def _fingerprint(path):
     path = Path(path)
     stat = path.stat()
@@ -78,7 +84,7 @@ class PrecloseEndToEndTests(unittest.TestCase):
                 **{key: kwargs[key] for key in ("api_base", "write_token", "wxpusher_app_token",
                     "wxpusher_uid", "wecom_webhook", "outbox", "notify", "decision_projection")},
                 put=worker.put, get=worker.get,
-                post=lambda *args, **kw: (calls.append(kw["json"]) or FakeResponse({"success": True, "code": 1000})))
+                post=lambda *args, **kw: (calls.append(kw["json"]) or FakeResponse(_wx_accepted(kw["json"]["uids"][0]))))
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)
             docs = base / "docs"
@@ -117,7 +123,7 @@ class PrecloseEndToEndTests(unittest.TestCase):
         def post(_url, *, json, timeout):
             del timeout
             post_calls.append(dict(json))
-            return FakeResponse({"success": True, "code": 1000})
+            return FakeResponse(_wx_accepted(json["uids"][0]))
 
         def publisher(reconciliation, **kwargs):
             return publish_reconciliation_and_notify(
@@ -183,7 +189,7 @@ class PrecloseEndToEndTests(unittest.TestCase):
         def post(_url, *, json, timeout):
             del timeout
             provider_calls.append(dict(json))
-            return FakeResponse({"success": True, "code": 1000})
+            return FakeResponse(_wx_accepted(json["uids"][0]))
 
         with tempfile.TemporaryDirectory() as temp_dir:
             base = Path(temp_dir)

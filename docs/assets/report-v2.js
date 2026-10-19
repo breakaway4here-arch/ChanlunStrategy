@@ -16043,7 +16043,7 @@
       try { controller = new Controller(); } catch (err) { controller = null; }
     }
     state.nextdayResearch.controller = controller;
-    var fetchOptions = { method: 'GET', credentials: 'same-origin' };
+    var fetchOptions = { method: 'GET', cache: 'no-store', credentials: 'same-origin' };
     if (controller) fetchOptions.signal = controller.signal;
     var timeoutPromise = new Promise(function (resolve, reject) {
       state.nextdayResearch.timeoutTimer = setTimeout(function () {
@@ -16392,6 +16392,11 @@
     } catch (err) { return; }
     var loadedAt = Date.parse(document.lastModified);
     if (!Number.isFinite(loadedAt) || loadedAt <= 0) return;
+    var initializedAt = Date.now();
+    var attemptMarker = current.searchParams.get('_report_attempt');
+    var lastNavigationAt = Number(attemptMarker);
+    if (!Number.isSafeInteger(lastNavigationAt) || String(lastNavigationAt) !== attemptMarker
+        || lastNavigationAt <= 0 || lastNavigationAt > initializedAt) lastNavigationAt = initializedAt;
     homepageRefreshInstalled = true;
     var inFlight = false;
     var navigating = false;
@@ -16432,12 +16437,15 @@
         if (!Number.isFinite(publishedAt) || publishedAt <= loadedAt || publishedAt > Date.now() + 60000
             || new Date(publishedAt).toUTCString() !== modified) return;
         var target = new URL(window.location.href);
-        // A CDN may return old HTML or alternate versions; never retry an older attempt.
+        // Keep the version high-water mark, but let a later visit recover stale CDN HTML.
         var marker = target.searchParams.get('_report_version');
         var attemptedAt = Number(marker);
         if (Number.isSafeInteger(attemptedAt) && String(attemptedAt) === marker
-            && attemptedAt <= Date.now() + 60000 && attemptedAt >= publishedAt) return;
+            && attemptedAt <= Date.now() + 60000 && attemptedAt >= publishedAt) {
+          if (attemptedAt > publishedAt || Date.now() - lastNavigationAt < 60000) return;
+        }
         target.searchParams.set('_report_version', String(publishedAt));
+        target.searchParams.set('_report_attempt', String(Date.now()));
         navigating = true;
         window.location.replace(target.href);
       }).catch(function () {
@@ -16657,6 +16665,18 @@
     var report = index && index.reports && index.reports[date];
     var quality = report && report.quality || {};
     return date + (quality.is_official === false ? ' · 历史质量不足' : '');
+  }
+
+  function comparisonPublishedDates(index) {
+    var reports = index && index.reports || {};
+    var seen = Object.create(null);
+    return asArray(index && index.dates).filter(function (date) {
+      if (typeof date !== 'string' || date !== date.trim() || !isCanonicalIsoDate(date)) return false;
+      var report = reports[date];
+      if (!report || typeof report !== 'object' || Array.isArray(report) || seen[date]) return false;
+      seen[date] = true;
+      return true;
+    }).sort();
   }
 
   function comparisonQualityWarning(index, sourceDate, targetDate) {
@@ -17087,8 +17107,12 @@
   }
 
   function renderComparisonPage(index, root) {
-    var dates = asArray(index && index.dates).slice(-26);
-    var latestDate = normalizeString(index && index.latest_date) || dates[dates.length - 1] || '';
+    var dates = comparisonPublishedDates(index).slice(-26);
+    if (!dates.length) {
+      root.innerHTML = '<div class="comparison-empty">暂无可用的历史报告索引。</div>';
+      return;
+    }
+    var latestDate = dates[dates.length - 1];
     var sourceDate = dates.length > 1 ? dates[dates.length - 2] : latestDate;
     var targetDate = 'current';
     root.innerHTML = ''
@@ -17298,14 +17322,15 @@
       nodes.shell.appendChild(section);
     }
     var body = section.querySelector('.comparison-summary-body');
-    window.fetch(getComparisonIndexUrl()).then(function (resp) {
+    window.fetch(getComparisonIndexUrl(), { cache: 'no-store' }).then(function (resp) {
       if (!resp || !resp.ok) throw new Error('索引加载失败');
       return resp.json();
     }).then(function (index) {
-      var dates = asArray(index && index.dates).slice(-26);
+      var dates = comparisonPublishedDates(index);
       var pageDate = normalizeString(state.data && state.data.date);
-      var pageIndex = dates.indexOf(pageDate);
-      var sourceDate = pageIndex > 0 ? dates[pageIndex - 1] : (dates.length > 1 ? dates[dates.length - 2] : dates[dates.length - 1]);
+      if (!isCanonicalIsoDate(pageDate) || pageDate !== pageDate.trim()) throw new Error('报告日期无效');
+      var previousDates = dates.filter(function (date) { return date < pageDate; });
+      var sourceDate = previousDates[previousDates.length - 1];
       var report = index.reports && index.reports[sourceDate];
       if (!report) throw new Error('缺少昨日报告');
       body.innerHTML = '<div class="comparison-summary-toolbar"><span>源报告日 ' + escapeHtml(comparisonDateLabel(index, sourceDate)) + '</span><button id="comparisonSummaryRefresh" type="button">刷新对比价</button><small>尚未刷新当前行情</small></div><div class="comparison-summary-results"><div class="comparison-summary-wait">点击“刷新对比价”后计算。</div></div>';
@@ -17356,7 +17381,7 @@
     var root = document.getElementById('comparisonApp');
     if (!root) return;
     if (!window.fetch) { root.innerHTML = '<div class="comparison-empty">当前环境不支持加载历史索引。</div>'; return; }
-    window.fetch(getComparisonIndexUrl()).then(function (resp) {
+    window.fetch(getComparisonIndexUrl(), { cache: 'no-store' }).then(function (resp) {
       if (!resp || !resp.ok) throw new Error('索引加载失败');
       return resp.json();
     }).then(function (index) { renderComparisonPage(index || {}, root); }).catch(function () {

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Bounded GitHub transport retries for the finite formal daily job only."""
+"""Bounded GitHub transport retries for finite daily and supplement jobs."""
 import argparse
 import os
 import signal
@@ -64,10 +64,13 @@ def run_attempt(command, timeout_seconds):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("operation", choices=("fetch", "push"))
+    parser.add_argument("--push-ref", help="explicit origin push ref; omitted preserves daily push defaults")
     parser.add_argument("--rounds", type=bounded_number(int, 1, 3), default=3)
     parser.add_argument("--timeout-seconds", type=bounded_number(float, 0.1, 120), default=60)
     parser.add_argument("--retry-delay-seconds", type=bounded_number(float, 0, 30), default=5)
     args = parser.parse_args(argv)
+    if args.push_ref and (args.operation != "push" or args.push_ref.startswith("-")):
+        parser.error("--push-ref requires push and a non-option ref")
     last_status = 1
     for round_index in range(args.rounds):
         for proxy in PROXIES:
@@ -75,7 +78,8 @@ def main(argv=None):
                 args.operation, round_index + 1, args.rounds, proxy), flush=True)
             command = ["git", "-c", "http.https://github.com.proxy=" + proxy,
                        "-c", "https.https://github.com.proxy=" + proxy]
-            command += ["fetch", "origin", "main"] if args.operation == "fetch" else ["push"]
+            command += (["fetch", "origin", "main"] if args.operation == "fetch" else
+                        ["push", "origin", args.push_ref] if args.push_ref else ["push"])
             last_status = run_attempt(command, args.timeout_seconds)
             if last_status == 0:
                 return 0

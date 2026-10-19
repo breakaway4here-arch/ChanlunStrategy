@@ -4,12 +4,30 @@ import subprocess
 import tempfile
 import time
 import unittest
+import importlib.util
+from unittest.mock import patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 class DailyGitNetworkTests(unittest.TestCase):
+    def test_explicit_main_push_preserves_daily_default_and_recovers_third_attempt(self):
+        spec = importlib.util.spec_from_file_location("git_transport", ROOT / "scripts/run_daily_git_network.py")
+        helper = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(helper)
+        commands = []
+        def attempt(command, _timeout):
+            commands.append(command)
+            return 0 if len(commands) == 3 else 1
+        with patch.object(helper, "run_attempt", side_effect=attempt), patch.object(helper.time, "sleep"):
+            self.assertEqual(helper.main(["push", "--push-ref", "a" * 40 + ":refs/heads/main"]), 0)
+        self.assertEqual(len(commands), 3)
+        self.assertEqual(commands[-1][-3:], ["push", "origin", "a" * 40 + ":refs/heads/main"])
+        with patch.object(helper, "run_attempt", return_value=0) as run:
+            self.assertEqual(helper.main(["push"]), 0)
+        self.assertEqual(run.call_args[0][0][-1:], ["push"])
+
     def run_hanging_git(self, interrupt=False):
         with tempfile.TemporaryDirectory() as directory:
             base = Path(directory)

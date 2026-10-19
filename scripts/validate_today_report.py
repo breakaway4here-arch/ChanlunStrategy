@@ -1530,18 +1530,55 @@ def validate_runtime_cutover(report: Mapping[str, Any]) -> list[str]:
     return errors
 
 
+def _budget_only_sublevel_partial(health: Mapping[str, Any], report_date: Any, interval: Any) -> bool:
+    """Recognize a fully verified request set capped only by its fixed budget."""
+    counts = [health.get(key) for key in (
+        "requested_count", "verified_count", "missing_count", "budget", "budget_excluded_count",
+    )]
+    if not all(_is_count(value) for value in counts):
+        return False
+    requested, verified, missing, budget, excluded = counts
+    if requested != verified or requested != budget or missing != 0 or excluded <= 0:
+        return False
+
+    def code_set(raw: Any, count: int) -> Optional[set[str]]:
+        if not isinstance(raw, list) or len(raw) != count:
+            return None
+        if any(not isinstance(code, str) or len(code) != 6
+               or not code.isascii() or not code.isdigit() for code in raw):
+            return None
+        values = set(raw)
+        return values if len(values) == count else None
+
+    verified_codes = code_set(health.get("verified_codes"), verified)
+    excluded_codes = code_set(health.get("budget_excluded_codes"), excluded)
+    return bool(
+        verified_codes is not None and excluded_codes is not None
+        and verified_codes.isdisjoint(excluded_codes)
+        and health.get("missing_codes") == []
+        and health.get("failure_evidence") == {}
+        and health.get("blocks_strategy_output") is False
+        and health.get("budget_error") == ""
+        and _is_date_text(report_date) and health.get("required_date") == report_date
+        and health.get("interval") == interval
+    )
+
+
 def needs_sublevel_retry(report: Mapping[str, Any]) -> bool:
     """Return whether a second close run can still fill research-only inputs."""
     selection = _as_mapping(report.get("selection_input_health"))
     formal = _as_mapping(selection.get("formal"))
     if formal.get("all_formal_actions_allowed", formal.get("formal_actions_allowed")) is not True:
         return False
-    return any(
-        str(_as_mapping(value).get("status") or "") in {
-            "partial", "unavailable",
-        }
-        for value in _as_mapping(selection.get("sublevels")).values()
-    )
+    for interval, value in _as_mapping(selection.get("sublevels")).items():
+        health = _as_mapping(value)
+        status = str(health.get("status") or "")
+        if status == "unavailable" or (
+            status == "partial"
+            and not _budget_only_sublevel_partial(health, report.get("date"), interval)
+        ):
+            return True
+    return False
 
 
 def main(argv=None):
