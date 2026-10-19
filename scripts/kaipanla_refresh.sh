@@ -4,19 +4,39 @@ set -euo pipefail
 SCRIPT_DIR="${0:A:h}"
 REPO_DIR="${SCRIPT_DIR:h}"
 PYTHON="${CHANLUN_KPL_PYTHON:-/usr/bin/python3}"
+RECOVER_ONLY=0
+if [[ "$#" -gt 0 ]]; then
+    [[ "$#" == 1 && "$1" == --recover-pending-only ]] || { print -u2 "未知补更参数"; exit 2; }
+    RECOVER_ONLY=1
+fi
+TODAY=$(TZ=Asia/Shanghai /bin/date '+%Y-%m-%d')
+PENDING_RECEIPT="${REPO_DIR}/.cache/chanlun/kaipanla/publication-${TODAY}.json"
+PENDING_FILES=("${REPO_DIR}/.cache/chanlun/kaipanla"/publication-*.json(N))
+# No receipt means no recovery I/O, including no readiness or network request.
+if [[ "$RECOVER_ONLY" == 1 && "${#PENDING_FILES}" == 0 ]]; then
+    exit 0
+fi
+if [[ "${#PENDING_FILES}" -gt 0 && ( "${#PENDING_FILES}" != 1 || "${PENDING_FILES[1]}" != "$PENDING_RECEIPT" ) ]]; then
+    print -u2 "存在非本日或多个开盘啦 pending receipt，停止并等待复查"
+    exit 1
+fi
 LOCK_PATH=$(/usr/bin/python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "${REPO_DIR}/.cache/chanlun/docs-publish.lock")
-if [[ "${CHANLUN_DOCS_PUBLISH_LOCK_HELD:-0}" != "1" || "${CHANLUN_DOCS_PUBLISH_LOCK_PATH:-}" != "$LOCK_PATH" ]]; then
+if [[ "${CHANLUN_DOCS_PUBLISH_LOCK_HELD:-0}" != "1" || "${CHANLUN_DOCS_PUBLISH_LOCK_PATH:-}" != "$LOCK_PATH" ]] \
+        || ! /usr/bin/python3 "${SCRIPT_DIR}/refresh_kaipanla_context.py" --docs-dir "${REPO_DIR}/docs" --check-lock; then
     export CHANLUN_DOCS_PUBLISH_LOCK_PATH="$LOCK_PATH"
     exec /usr/bin/python3 "${SCRIPT_DIR}/refresh_kaipanla_context.py" \
         --docs-dir "${REPO_DIR}/docs" --lock-timeout 20 \
         --with-lock /bin/zsh "$0" "$@"
 fi
 cd "$REPO_DIR"
-TODAY=$(TZ=Asia/Shanghai /bin/date '+%Y-%m-%d')
 WEEKDAY=$(TZ=Asia/Shanghai /bin/date '+%u')
 [[ "$WEEKDAY" -le 5 ]] || exit 0
 # A holiday/missing/unofficial report never triggers the optional source request.
 if ! "$PYTHON" "${SCRIPT_DIR}/refresh_kaipanla_context.py" --docs-dir docs --report-date "$TODAY" --check-ready; then
+    if [[ "${#PENDING_FILES}" -gt 0 ]]; then
+        print -u2 "pending 补更目标未就绪，禁止继续通用发布"
+        exit 1
+    fi
     print -u2 "今日正式收盘报告未就绪，跳过开盘啦补更"
     exit 0
 fi
@@ -29,7 +49,6 @@ git diff --cached --quiet || { print -u2 "已有暂存改动，停止补更"; ex
 network_git() {
     /usr/bin/python3 "${SCRIPT_DIR}/run_daily_git_network.py" "$@" --timeout-seconds 30
 }
-PENDING_RECEIPT="${REPO_DIR}/.cache/chanlun/kaipanla/publication-${TODAY}.json"
 validate_pending() {
     # A receipt proves this exact single supplement commit, never arbitrary ahead work.
     /usr/bin/python3 - "$PENDING_RECEIPT" "$TODAY" "$REPO_DIR" <<'PY'
@@ -72,7 +91,7 @@ else:
 PY
 }
 network_git fetch || exit 1
-if [[ -e "$PENDING_RECEIPT" ]]; then
+if [[ -e "$PENDING_RECEIPT" || -L "$PENDING_RECEIPT" ]]; then
     PENDING_STATE=$(validate_pending) || exit 1
     PENDING_SHA="${PENDING_STATE##* }"
     if [[ "$PENDING_STATE" == pending\ * ]]; then

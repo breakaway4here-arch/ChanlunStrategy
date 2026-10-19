@@ -12,6 +12,7 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_LOCK_PATH = ROOT_DIR / ".cache" / "chanlun" / "docs-publish.lock"
 LOCK_HELD_ENV = "CHANLUN_DOCS_PUBLISH_LOCK_HELD"
 LOCK_PATH_ENV = "CHANLUN_DOCS_PUBLISH_LOCK_PATH"
+LOCK_FD_ENV = "CHANLUN_DOCS_PUBLISH_LOCK_FD"
 
 
 def main(argv=None):
@@ -38,6 +39,7 @@ def main(argv=None):
     environment = dict(os.environ)
     environment[LOCK_HELD_ENV] = "1"
     environment[LOCK_PATH_ENV] = os.fspath(lock_path)
+    environment[LOCK_FD_ENV] = str(descriptor)
     try:
         os.execvpe(command[0], command, environment)
     finally:

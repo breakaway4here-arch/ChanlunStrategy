@@ -347,18 +347,7 @@ def _prepare_plan(originals, context, report_date):
 @contextmanager
 def _publication_lock(docs_dir, lock_timeout=20):
     lock_path = atomic.docs_publish_lock_path(docs_dir)
-    # The dedicated outer wrapper passes both the exact path and live lock FD.
-    inherited = None
-    if (os.environ.get('CHANLUN_DOCS_PUBLISH_LOCK_HELD') == '1'
-            and os.environ.get(atomic.LOCK_PATH_ENV) == str(lock_path)):
-        try:
-            candidate = int(os.environ['CHANLUN_KPL_PUBLISH_LOCK_FD'])
-            held = os.fstat(candidate)
-            target = lock_path.stat()
-            if (held.st_dev,held.st_ino) == (target.st_dev,target.st_ino):
-                inherited = candidate
-        except (KeyError,ValueError,OSError):
-            pass
+    inherited = _inherited_lock_descriptor(lock_path)
     if inherited is not None:
         yield lock_path, inherited
         return
@@ -378,6 +367,24 @@ def _publication_lock(docs_dir, lock_timeout=20):
         yield lock_path, descriptor
     finally:
         os.close(descriptor)
+
+
+def _inherited_lock_descriptor(lock_path):
+    """Accept only a live descriptor for this lock, with real exclusion."""
+    if (os.environ.get('CHANLUN_DOCS_PUBLISH_LOCK_HELD') == '1'
+            and os.environ.get(atomic.LOCK_PATH_ENV) == str(lock_path)):
+        for name in ('CHANLUN_DOCS_PUBLISH_LOCK_FD','CHANLUN_KPL_PUBLISH_LOCK_FD'):
+            try:
+                candidate = int(os.environ[name])
+                held = os.fstat(candidate)
+                target = lock_path.stat()
+                if (candidate >= 3
+                        and (held.st_dev,held.st_ino) == (target.st_dev,target.st_ino)):
+                    fcntl.flock(candidate,fcntl.LOCK_EX|fcntl.LOCK_NB)
+                    return candidate
+            except (KeyError,ValueError,OSError):
+                pass
+    return None
 
 
 def _recover_state(docs_dir, report_date, dry_run, lock_timeout):
@@ -551,10 +558,14 @@ def main(argv=None):
     parser.add_argument('--cache-dir',type=Path,default=ROOT_DIR/'.cache/chanlun/kaipanla')
     parser.add_argument('--dry-run',action='store_true')
     parser.add_argument('--check-ready',action='store_true')
+    parser.add_argument('--check-lock',action='store_true')
     parser.add_argument('--rollback-receipt',type=Path)
     parser.add_argument('--source-head')
     args = parser.parse_args(argv)
     try:
+        if args.check_lock:
+            lock_path = atomic.docs_publish_lock_path(args.docs_dir.resolve())
+            return 0 if _inherited_lock_descriptor(lock_path) is not None else 1
         if args.with_lock is not None:
             command = list(args.with_lock)
             if command and command[0] == '--': command.pop(0)
