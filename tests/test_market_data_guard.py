@@ -1,5 +1,6 @@
 import os
 import json
+from copy import deepcopy
 import subprocess
 import tempfile
 import unittest
@@ -88,6 +89,21 @@ def _sector_rows(start, count):
         }
         for index in range(start, start + count)
     ]
+
+
+def _budget_only_research_report():
+    """Synthetic complete request evidence with one unrequested budget target."""
+    report = _official_empty_report()
+    report["selection_input_health"]["status"] = "partial"
+    report["selection_input_health"]["sublevels"] = {"15m": {
+        "interval": "15m", "required_date": report["date"], "status": "partial",
+        "requested_count": 2, "verified_count": 2, "missing_count": 0,
+        "verified_codes": ["600000", "600001"], "missing_codes": [],
+        "failure_evidence": {}, "blocks_strategy_output": False,
+        "budget": 2, "budget_error": "", "budget_source": "argument",
+        "budget_excluded_count": 1, "budget_excluded_codes": ["600002"],
+    }}
+    return report
 
 
 def _complete_sector_fetch(rows_by_code):
@@ -2443,6 +2459,9 @@ class TestDailyRunScriptGuard(unittest.TestCase):
         formal_guard = Path(
             "scripts/formal_publish_guard.py"
         ).read_text(encoding="utf-8")
+        git_network = Path(
+            "scripts/run_daily_git_network.py"
+        ).read_text(encoding="utf-8")
         fixed_timestamp = datetime(
             2026, 6, 30, 12, 0, tzinfo=timezone(timedelta(hours=8))
         ).timestamp()
@@ -2463,6 +2482,9 @@ class TestDailyRunScriptGuard(unittest.TestCase):
             )
             (root / "scripts" / "formal_publish_guard.py").write_text(
                 formal_guard, encoding="utf-8"
+            )
+            (root / "scripts" / "run_daily_git_network.py").write_text(
+                git_network, encoding="utf-8"
             )
             (root / "scripts" / "validate_today_report.py").write_text(
                 "import os\n"
@@ -2669,6 +2691,72 @@ class TestReportContractGuard(unittest.TestCase):
         self.assertTrue(needs_sublevel_retry(report))
         report["selection_input_health"]["formal"]["formal_actions_allowed"] = False
         self.assertFalse(needs_sublevel_retry(report))
+
+    def test_sublevel_retry_skips_real_oct16_budget_only_partial_without_mutating_health(self):
+        published = json.loads(Path("docs/data/2026-10-16.json").read_text(encoding="utf-8"))
+        source_health = published["selection_input_health"]
+        report = {"date": published["date"], "selection_input_health": {
+            "formal": {key: source_health["formal"][key] for key in (
+                "formal_actions_allowed", "all_formal_actions_allowed",
+            )},
+            "sublevels": deepcopy(source_health["sublevels"]),
+        }}
+        before = deepcopy(report)
+        health = report["selection_input_health"]["sublevels"]["15m"]
+        self.assertEqual((health["requested_count"], health["verified_count"]), (60, 60))
+        self.assertEqual(health["budget_excluded_count"], 70)
+        self.assertFalse(needs_sublevel_retry(report))
+        self.assertEqual(report, before)
+        self.assertEqual(health["status"], "partial")
+
+    def test_sublevel_retry_skips_only_explicit_budget_only_partial(self):
+        report = _budget_only_research_report()
+        self.assertFalse(needs_sublevel_retry(report))
+        report["selection_input_health"]["sublevels"]["30m"] = {"status": "unavailable"}
+        self.assertTrue(needs_sublevel_retry(report), "another real gap must still retry")
+        report["selection_input_health"]["formal"]["formal_actions_allowed"] = False
+        self.assertFalse(needs_sublevel_retry(report), "formal guard must remain authoritative")
+
+    def test_sublevel_retry_zero_budget_does_not_create_recoverable_request_gap(self):
+        report = _budget_only_research_report()
+        health = report["selection_input_health"]["sublevels"]["15m"]
+        health.update({"budget": 0, "requested_count": 0, "verified_count": 0,
+                       "verified_codes": []})
+        self.assertFalse(needs_sublevel_retry(report))
+        health["status"] = "not_required"  # Actual producer status for zero requests.
+        self.assertFalse(needs_sublevel_retry(report))
+
+    def test_sublevel_retry_keeps_old_or_incomplete_partial_evidence_retryable(self):
+        required = ("requested_count", "verified_count", "missing_count", "verified_codes",
+                    "missing_codes", "failure_evidence", "budget", "budget_error",
+                    "budget_excluded_count", "budget_excluded_codes", "blocks_strategy_output",
+                    "required_date", "interval")
+        for field in required:
+            with self.subTest(field=field):
+                report = _budget_only_research_report()
+                report["selection_input_health"]["sublevels"]["15m"].pop(field)
+                self.assertTrue(needs_sublevel_retry(report))
+
+    def test_sublevel_retry_does_not_hide_contradictory_missing_or_failure_evidence(self):
+        contradictions = (
+            {"verified_count": 1}, {"requested_count": True}, {"requested_count": "2"},
+            {"missing_count": 1}, {"missing_count": False}, {"missing_codes": ["600001"]},
+            {"missing_codes": None}, {"failure_evidence": {"600001": {"reason": "timeout"}}},
+            {"failure_evidence": []}, {"verified_codes": ["600000", "600000"]},
+            {"verified_codes": ["600000"]}, {"verified_codes": ["600000", None]},
+            {"budget_excluded_count": 0}, {"budget_excluded_count": -1},
+            {"budget_excluded_count": True}, {"budget_excluded_codes": []},
+            {"budget_excluded_codes": ["600001"]},
+            {"budget_excluded_count": 2, "budget_excluded_codes": ["600002", "600002"]},
+            {"budget": 3}, {"budget": False}, {"budget_error": "invalid_budget_fallback_to_default"},
+            {"blocks_strategy_output": True}, {"required_date": "2026-06-29"},
+            {"interval": "30m"}, {"status": "unavailable"},
+        )
+        for change in contradictions:
+            with self.subTest(change=change):
+                report = _budget_only_research_report()
+                report["selection_input_health"]["sublevels"]["15m"].update(change)
+                self.assertTrue(needs_sublevel_retry(report))
 
     def test_validate_official_rejects_missing_or_blocked_selection_input_health(self):
         missing = _official_empty_report()

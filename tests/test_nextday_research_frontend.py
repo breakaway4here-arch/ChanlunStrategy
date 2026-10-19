@@ -323,9 +323,10 @@ __nextdayTest.state.granted = false;
 __nextdayTest.state.data = { date: '2026-09-17' };
 window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-17', dataBasePrefix: '../' };
 let calls = 0;
-window.fetch = function (url) {
+window.fetch = function (url, options) {
   calls += 1;
   assert(url === '../research/nextday/2026-09-17.json', 'only public sidecar may be fetched');
+  assert(options.cache === 'no-store', 'same-report research updates must bypass a fresh cached 200');
   return Promise.resolve(response(samplePayload()));
 };
 await __nextdayTest.load();
@@ -335,6 +336,33 @@ assert(__nextdayTest.state.granted === false, 'L1 must not grant general report 
 __nextdayTest.state.data = {};
 await __nextdayTest.load();
 assert(calls === 2 && mount.innerHTML.includes('金杯汽车'), 'public L1 must load from page date when private report is unavailable');
+""",
+        )
+
+    def test_same_report_refresh_reads_new_outcomes_instead_of_cached_success(self):
+        _run_node_contract(
+            self,
+            "({ load: loadNextdayResearch, state: state, nodes: nodes })",
+            r"""
+const mount = { innerHTML: '' };
+__nextdayTest.nodes.nextdayResearch = mount;
+__nextdayTest.state.data = { date: '2026-09-17' };
+window.CHANLUN_BOOTSTRAP = { pageDate: '2026-09-17', dataBasePrefix: '' };
+const cached = samplePayload();
+const published = samplePayload();
+published.outcomes.as_of_date = '2026-09-18';
+published.outcomes.l1.as_of_date = '2026-09-18';
+published.outcomes.b0.as_of_date = '2026-09-18';
+let ready = false;
+window.fetch = function (url, options) {
+  return Promise.resolve(response(ready && options.cache === 'no-store' ? published : cached));
+};
+await __nextdayTest.load();
+assert(mount.innerHTML.includes('截至 2026-09-17'), 'initial published observation is missing');
+ready = true;
+await __nextdayTest.load();
+assert(mount.innerHTML.includes('截至 2026-09-18'), 'same-report updated outcomes stayed in the HTTP cache');
+assert(__nextdayTest.state.data.date === '2026-09-17', 'outcome update changed the report identity');
 """,
         )
 
