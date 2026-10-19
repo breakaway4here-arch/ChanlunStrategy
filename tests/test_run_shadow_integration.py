@@ -406,6 +406,12 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         if callable(patch_overrides):
             patch_values.update(patch_overrides(dict(patch_values)))
         with ExitStack() as stack:
+            # Optional external context is also a fixed test input. Otherwise
+            # this comparison fetches KPL and compares two live receipt clocks.
+            stack.enter_context(mock.patch("chanlun.kaipanla.fetch_themes", return_value={
+                "status": "unavailable", "source": "kaipanla",
+                "affects_formal": False, "groups": [],
+            }))
             for name, value in patch_values.items():
                 stack.enter_context(mock.patch.object(run, name, value))
             stack.enter_context(
@@ -897,7 +903,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
     def test_real_main_requests_report_date_for_all_sublevel_inputs(self):
         source = Path(run.__file__).read_text(encoding="utf-8")
         self.assertIn(
-            "collect_15min_data(\n"
+            "collect_min15(\n"
             "            selected_luojie_stocks,\n"
             "            required_date=today,\n"
             "            as_of=time_metadata.get(\"as_of\"),\n"
@@ -907,7 +913,7 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         )
         self.assertGreaterEqual(
             source.count(
-                "collect_30min_data(\n"
+                "collect_min30(\n"
                 "            all_targets,\n"
                 "            required_date=today,\n"
                 "            as_of=time_metadata.get(\"as_of\"),\n"
@@ -916,6 +922,9 @@ class DailyShadowIntegrationTests(unittest.TestCase):
             ),
             2,
         )
+        self.assertIn(") if observation else collect_15min_data", source)
+        self.assertIn(") if observation else collect_30min_data", source)
+        self.assertIn("readonly_min30 = collect_min30 if observation else load_30min_data_readonly", source)
 
     def test_shadow_integrates_only_h4_all_candidates_and_preserves_formal_snapshot(self):
         report = _formal_report(candidate_count=7)
@@ -1613,8 +1622,8 @@ class DailyShadowIntegrationTests(unittest.TestCase):
         shadow_index = source.index("build_daily_shadow_evaluations(", report_index)
         generate_index = source.index("generate_report(report_data", report_index)
         for formal_token in (
-            "recommendation_entries = build_recommendation_entries(",
-            "strategy_scorecards = build_strategy_scorecards(",
+            "recommendation_entries = [] if observation else build_recommendation_entries(",
+            "strategy_scorecards = [] if observation else build_strategy_scorecards(",
             '"h4_t3_pool": h4_t3_pool',
             '"next_day_boom": next_day_boom',
             '"decision_brief": decision_brief',
