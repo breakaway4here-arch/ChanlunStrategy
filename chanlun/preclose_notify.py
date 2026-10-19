@@ -6,7 +6,10 @@ import hashlib
 import json
 import os
 import stat
+import time
+import uuid
 from datetime import datetime
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 
 import requests
@@ -124,16 +127,19 @@ def format_reconciliation_message(reconciliation, *, decision_projection=None):
     return "\n".join(lines)
 
 
-def _safe_response(response, success, provider):
+def _safe_response(response, success, provider, payload=None):
     result = {
         "success": bool(success),
         "provider": provider,
         "http_status": int(getattr(response, "status_code", 0) or 0),
     }
-    try:
-        payload = response.json()
-    except Exception:
-        payload = {}
+    if success:
+        result.update(provider_accepted=True, delivery_status="provider_accepted")
+    if payload is None:
+        try:
+            payload = response.json()
+        except Exception:
+            payload = {}
     if isinstance(payload, dict):
         if "code" in payload:
             result["business_code"] = payload.get("code")
@@ -141,13 +147,48 @@ def _safe_response(response, success, provider):
             result["business_code"] = payload.get("errcode")
         data = payload.get("data")
         if isinstance(data, list):
-            message_ids = []
-            for item in data:
-                if isinstance(item, dict) and item.get("messageId") is not None:
-                    message_ids.append(item.get("messageId"))
-            if message_ids:
-                result["message_ids"] = message_ids[:10]
+            for source, destination in (("messageId", "message_ids"),
+                                        ("sendRecordId", "send_record_ids"),
+                                        ("messageContentId", "message_content_ids")):
+                values = [item[source] for item in data if isinstance(item, dict) and item.get(source) is not None]
+                if values:
+                    result[destination] = values[:10]
     return result
+
+
+def _wxpusher_target_result(response, payload, uid):
+    """One exact UID task receipt is acceptance; absent/ambiguous receipts stay unknown."""
+    result = _safe_response(response, False, "wxpusher",
+                            {"code": payload.get("code")} if isinstance(payload, dict) else {})
+    result["delivery_status"] = "provider_result_unknown"
+    if not isinstance(payload, dict):
+        return result
+    top_code = payload.get("code")
+    if type(top_code) is int and top_code != 1000 and payload.get("success") is False:
+        result["delivery_status"] = "provider_rejected"
+        return result
+    if type(top_code) is not int or top_code != 1000 or payload.get("success") is not True:
+        return result
+    rows = payload.get("data")
+    if not isinstance(rows, list) or not all(isinstance(row, dict) for row in rows):
+        return result
+    targets = [row for row in rows if row.get("uid") == str(uid)]
+    if len(targets) != 1 or type(targets[0].get("code")) is not int:
+        return result
+    target = targets[0]
+    success = target["code"] == 1000
+    result = _safe_response(response, success, "wxpusher", dict(payload, data=[target]))
+    result.update(target_business_code=target["code"],
+                  delivery_status="provider_accepted" if success else "provider_rejected")
+    return result
+
+
+def _provider_exception_result(exc, provider, response):
+    """Only an explicit HTTP rejection proves an attempted POST was not accepted."""
+    status = int(getattr(response, "status_code", 0) or 0)
+    return {"success": False, "provider": provider, "error": type(exc).__name__,
+            "http_status": status,
+            "delivery_status": "provider_rejected" if 400 <= status < 500 else "provider_result_unknown"}
 
 
 def send_wxpusher_message(
@@ -159,9 +200,10 @@ def send_wxpusher_message(
     timeout=10,
     summary="14:45预跑提醒",
 ):
-    """Return success only when both HTTP and WxPusher business status succeed."""
+    """Require HTTP, top-level success, and the exact recipient task's business code."""
 
     post = post or requests.post
+    response = None
     try:
         response = post(
             WXPUSHER_SEND_URL,
@@ -176,20 +218,16 @@ def send_wxpusher_message(
         )
         response.raise_for_status()
         payload = response.json()
-        success = isinstance(payload, dict) and payload.get("success") is True
-        return _safe_response(response, success, "wxpusher")
+        return _wxpusher_target_result(response, payload, uid)
     except Exception as exc:
-        return {
-            "success": False,
-            "provider": "wxpusher",
-            "error": type(exc).__name__,
-        }
+        return _provider_exception_result(exc, "wxpusher", response)
 
 
 def send_wecom_text(message, *, webhook, post=None, timeout=10):
     """Send an optional WeCom text and require errcode == 0."""
 
     post = post or requests.post
+    response = None
     try:
         response = post(
             str(webhook),
@@ -198,14 +236,14 @@ def send_wecom_text(message, *, webhook, post=None, timeout=10):
         )
         response.raise_for_status()
         payload = response.json()
-        success = isinstance(payload, dict) and payload.get("errcode") == 0
-        return _safe_response(response, success, "wecom")
+        code = payload.get("errcode") if isinstance(payload, dict) else None
+        success = type(code) is int and code == 0
+        result = _safe_response(response, success, "wecom", payload)
+        result["delivery_status"] = ("provider_accepted" if success else
+            "provider_rejected" if type(code) is int else "provider_result_unknown")
+        return result
     except Exception as exc:
-        return {
-            "success": False,
-            "provider": "wecom",
-            "error": type(exc).__name__,
-        }
+        return _provider_exception_result(exc, "wecom", response)
 
 
 def load_preclose_env(path="~/.config/chanlun-strategy/preclose.env"):
@@ -304,6 +342,39 @@ class NotificationOutbox:
                     return True
         return False
 
+    def unconfirmed_result(self, content_hash, channel, idempotency_key=None):
+        """A response lost after sending cannot safely authorize another POST."""
+        legacy_network_errors = {"Timeout", "ReadTimeout", "ConnectTimeout", "TimeoutError",
+                                 "ConnectionError", "SSLError", "ChunkedEncodingError",
+                                 "ContentDecodingError", "JSONDecodeError", "ValueError", "HTTPError"}
+        closed_dispatches = set()
+        for row in reversed(self._rows()):
+            if row.get("content_hash") != content_hash or row.get("channel") != channel:
+                continue
+            if idempotency_key is not None and self._row_idempotency_key(row) not in ("", idempotency_key):
+                continue
+            dispatch_id = row.get("dispatch_id")
+            if row.get("dispatch_state") == "final" and dispatch_id:
+                closed_dispatches.add(dispatch_id)
+            elif row.get("dispatch_state") == "dispatching" and dispatch_id in closed_dispatches:
+                continue
+            response = row.get("response")
+            if not isinstance(response, dict) or row.get("success") is True:
+                continue
+            if (response.get("delivery_status") == "provider_result_unknown"
+                    or (not response.get("delivery_status") and response.get("error") in legacy_network_errors)):
+                return dict(response, success=False, delivery_status="provider_result_unknown")
+        return None
+
+    def begin_dispatch(self, *, content_hash, channel, **context):
+        """Fsync uncertainty before POST, so deadline/exit cannot leave an empty outbox."""
+        dispatch_id = uuid.uuid4().hex
+        self.record(content_hash=content_hash, channel=channel, success=False,
+                    response={"success": False, "provider": channel,
+                              "delivery_status": "provider_result_unknown", "error": "dispatching"},
+                    dispatch_id=dispatch_id, dispatch_state="dispatching", **context)
+        return dispatch_id
+
     def record(
         self,
         *,
@@ -317,6 +388,8 @@ class NotificationOutbox:
         phase=None,
         event_type=None,
         summary_hash=None,
+        dispatch_id=None,
+        dispatch_state=None,
     ):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         record = {
@@ -338,19 +411,32 @@ class NotificationOutbox:
             record["summary_hash"] = str(summary_hash)
         if formal_content_hash is not None:
             record["formal_content_hash"] = str(formal_content_hash)
+        if dispatch_id is not None:
+            record["dispatch_id"] = str(dispatch_id)
+        if dispatch_state is not None:
+            record["dispatch_state"] = str(dispatch_state)
+        # ASCII escaping keeps a failed byte prefix decodable without changing JSON values.
         encoded = json.dumps(
             record,
-            ensure_ascii=False,
+            ensure_ascii=True,
             sort_keys=True,
             separators=(",", ":"),
         ) + "\n"
         descriptor = os.open(
             str(self.path),
-            os.O_CREAT | os.O_APPEND | os.O_WRONLY,
+            os.O_CREAT | os.O_APPEND | os.O_RDWR,
             0o600,
         )
         try:
-            os.write(descriptor, encoded.encode("utf-8"))
+            size = os.fstat(descriptor).st_size
+            # Preserve a failed partial row, but never concatenate the next intent onto it.
+            prefix = b"\n" if size and os.pread(descriptor, 1, size - 1) != b"\n" else b""
+            pending = memoryview(prefix + encoded.encode("ascii"))
+            while pending:
+                written = os.write(descriptor, pending)
+                if written <= 0:
+                    raise OSError("outbox write made no progress")
+                pending = pending[written:]
             os.fsync(descriptor)
         finally:
             os.close(descriptor)
@@ -427,7 +513,7 @@ def publish_preclose_snapshot(
     timeout=10,
     budget_remaining=None,
 ):
-    """PUT the frozen snapshot and require exact public GET identity/hash readback."""
+    """Recover finite transport failures; unknown writes must be read before retry."""
 
     put = put or requests.put
     get = get or requests.get
@@ -435,52 +521,103 @@ def publish_preclose_snapshot(
     token = str(write_token or "").strip()
     if not base or not token:
         return {"success": False, "error": "missing_publish_configuration"}
+    initial_budget = float(budget_remaining()) if budget_remaining is not None else float(timeout) * 6
+    deadline = time.monotonic() + max(0, initial_budget)
+
+    def remaining_budget():
+        remaining = deadline - time.monotonic()
+        if budget_remaining is not None:
+            remaining = min(remaining, float(budget_remaining()))
+        return remaining
+
     def request_timeout():
-        remaining = float(budget_remaining()) if budget_remaining is not None else float(timeout)
+        remaining = remaining_budget()
         if remaining <= 0:
             raise TimeoutError("pre-close delivery deadline")
         return min(float(timeout), remaining)
 
-    try:
-        write_response = put(
-            base + "/api/preclose/snapshot",
-            json=snapshot,
-            headers={"authorization": "Bearer " + token},
-            timeout=request_timeout(),
-        )
-        write_response.raise_for_status()
-        write_payload = write_response.json()
-        read_response = get(
-            base + "/api/preclose/latest",
-            params={"date": snapshot.get("trade_date")},
-            headers={"cache-control": "no-cache"},
-            timeout=request_timeout(),
-        )
-        read_response.raise_for_status()
-        read_payload = read_response.json()
-        request_timeout()
-    except Exception as exc:
-        return _request_result_error(exc)
-    if not isinstance(read_payload, dict):
-        return {"success": False, "error": "invalid_readback"}
-    identity_matches = read_payload.get("snapshot_id") == snapshot.get("snapshot_id")
-    hash_matches = read_payload.get("content_hash") == snapshot.get("content_hash")
-    date_matches = read_payload.get("trade_date") == snapshot.get("trade_date")
-    if not identity_matches or not hash_matches or not date_matches:
+    def transient(exc):
+        status = int(getattr(getattr(exc, "response", None), "status_code", 0) or 0)
+        if 400 <= status <= 499:
+            return status == 429
+        return status == 429 or 500 <= status <= 599 or isinstance(
+            exc, (requests.ConnectionError, requests.Timeout,
+                  requests.exceptions.ChunkedEncodingError, requests.exceptions.ContentDecodingError))
+
+    def retry_after_seconds(exc):
+        headers = getattr(getattr(exc, "response", None), "headers", {}) or {}
+        value = headers.get("Retry-After", "")
+        try:
+            return max(0, float(value))
+        except (TypeError, ValueError):
+            try:
+                return max(0, (parsedate_to_datetime(value) - datetime.now().astimezone()).total_seconds())
+            except (TypeError, ValueError, OverflowError):
+                return 0
+
+    needs_write = True
+    write_payload = {}
+    last_error = {"success": False, "error": "delivery_unconfirmed"}
+    retry_after = 0
+    for attempt in range(3):
+        try:
+            request_timeout()
+            if attempt:
+                delay = max(0.25 * (2 ** (attempt - 1)), retry_after)
+                if delay > 30 or remaining_budget() <= delay:
+                    raise TimeoutError("pre-close delivery deadline")
+                time.sleep(delay)
+                retry_after = 0
+            if needs_write:
+                try:
+                    write_response = put(
+                        base + "/api/preclose/snapshot", json=snapshot,
+                        headers={"authorization": "Bearer " + token}, timeout=request_timeout())
+                    write_response.raise_for_status()
+                    try:
+                        write_payload = write_response.json()
+                    except ValueError:
+                        write_payload = {}  # HTTP succeeded; exact GET still decides publication.
+                except Exception as exc:
+                    if not transient(exc):
+                        return _request_result_error(exc)
+                    last_error = _request_result_error(exc)
+                    retry_after = retry_after_seconds(exc)
+                # Even a failed PUT may have committed. GET is the only next action.
+                needs_write = False
+            try:
+                read_response = get(
+                    base + "/api/preclose/latest", params={"date": snapshot.get("trade_date")},
+                    headers={"cache-control": "no-cache"}, timeout=request_timeout())
+                if int(getattr(read_response, "status_code", 0) or 0) == 404:
+                    # A confirmed absence differs from an unreachable/other snapshot.
+                    needs_write = True
+                    last_error = {"success": False, "error": "readback_not_found"}
+                    continue
+                read_response.raise_for_status()
+                read_payload = read_response.json()
+                request_timeout()
+            except Exception as exc:
+                if not transient(exc):
+                    return _request_result_error(exc)
+                last_error = _request_result_error(exc)
+                retry_after = max(retry_after, retry_after_seconds(exc))
+                continue
+        except Exception as exc:
+            return _request_result_error(exc)
+        if not isinstance(read_payload, dict):
+            return {"success": False, "error": "invalid_readback"}
+        checks = {key + "_matches": bool(snapshot.get(key)) and read_payload.get(key) == snapshot.get(key)
+                  for key in ("snapshot_id", "content_hash", "trade_date")}
+        if not all(checks.values()):
+            return dict(success=False, error="readback_mismatch", **checks)
         return {
-            "success": False,
-            "error": "readback_mismatch",
-            "snapshot_id_matches": identity_matches,
-            "content_hash_matches": hash_matches,
-            "trade_date_matches": date_matches,
+            "success": True, "snapshot_id": read_payload.get("snapshot_id"),
+            "content_hash": read_payload.get("content_hash"),
+            "revision": write_payload.get("revision") if isinstance(write_payload, dict) else None,
+            "write_status": write_payload.get("status") if isinstance(write_payload, dict) else None,
         }
-    return {
-        "success": True,
-        "snapshot_id": read_payload.get("snapshot_id"),
-        "content_hash": read_payload.get("content_hash"),
-        "revision": write_payload.get("revision") if isinstance(write_payload, dict) else None,
-        "write_status": write_payload.get("status") if isinstance(write_payload, dict) else None,
-    }
+    return last_error
 
 
 def publish_preclose_and_notify(
@@ -525,8 +662,20 @@ def publish_preclose_and_notify(
             result["notifications"][channel] = {"success": False, "error": "delivery_deadline"}
             break
         channel_timeout = min(float(timeout), remaining)
-        if outbox.was_successful(content_hash, channel):
+        unconfirmed = outbox.unconfirmed_result(content_hash, channel)
+        already_sent = outbox.was_successful(content_hash, channel)
+        dispatch_id = None
+        if configured and not already_sent and not unconfirmed:
+            dispatch_id = outbox.begin_dispatch(content_hash=content_hash, channel=channel,
+                                                snapshot_id=snapshot.get("snapshot_id"))
+            if budget_remaining is not None:
+                channel_timeout = min(channel_timeout, float(budget_remaining()))
+        if already_sent:
             delivery = {"success": True, "status": "already_sent"}
+        elif unconfirmed:
+            delivery = unconfirmed
+        elif dispatch_id and channel_timeout <= 0:
+            delivery = {"success": False, "error": "delivery_deadline", "delivery_status": "not_dispatched"}
         elif not configured:
             delivery = {"success": False, "error": "missing_channel_configuration"}
         elif channel == "wxpusher":
@@ -544,13 +693,15 @@ def publish_preclose_and_notify(
                 post=post,
                 timeout=channel_timeout,
             )
-        if delivery.get("status") != "already_sent":
+        if delivery.get("status") != "already_sent" and not unconfirmed:
             outbox.record(
                 content_hash=content_hash,
                 channel=channel,
                 success=delivery.get("success") is True,
                 response=delivery,
                 snapshot_id=snapshot.get("snapshot_id"),
+                dispatch_id=dispatch_id,
+                dispatch_state="final" if dispatch_id else None,
             )
         result["notifications"][channel] = delivery
     return result
@@ -673,17 +824,26 @@ def send_reconciliation_notifications(
     if wecom_webhook:
         channels.append(("wecom", True))
     for channel, configured in channels:
-        if outbox.was_successful(
+        unconfirmed = outbox.unconfirmed_result(summary_hash, channel, idempotency_key=idempotency_key)
+        already_sent = outbox.was_successful(
             summary_hash,
             channel,
             idempotency_key=idempotency_key,
             formal_hash=formal_hash,
-        ):
+        )
+        dispatch_id = None
+        if configured and not already_sent and not unconfirmed:
+            dispatch_id = outbox.begin_dispatch(content_hash=summary_hash, channel=channel,
+                snapshot_id=reconciliation.get("snapshot_id"), idempotency_key=idempotency_key,
+                formal_content_hash=formal_hash, phase=phase, event_type=event_type, summary_hash=summary_hash)
+        if already_sent:
             delivery = {"success": True, "status": "already_sent"}
             if not outbox.was_successful(summary_hash, channel, idempotency_key=idempotency_key):
                 outbox.record(content_hash=summary_hash, channel=channel, success=True,
                     response={'status': 'mapped_legacy_success'}, idempotency_key=idempotency_key,
                     formal_content_hash=formal_hash, phase=phase, event_type='legacy_migration', summary_hash=summary_hash)
+        elif unconfirmed:
+            delivery = unconfirmed
         elif not configured:
             delivery = {"success": False, "error": "missing_channel_configuration"}
         elif channel == "wxpusher":
@@ -702,7 +862,7 @@ def send_reconciliation_notifications(
                 post=post,
                 timeout=timeout,
             )
-        if delivery.get("status") != "already_sent":
+        if delivery.get("status") != "already_sent" and not unconfirmed:
             outbox.record(
                 content_hash=summary_hash,
                 channel=channel,
@@ -714,6 +874,8 @@ def send_reconciliation_notifications(
                 phase=phase,
                 event_type=event_type,
                 summary_hash=summary_hash,
+                dispatch_id=dispatch_id,
+                dispatch_state="final" if dispatch_id else None,
             )
         result[channel] = delivery
     return result

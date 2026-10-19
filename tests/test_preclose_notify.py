@@ -44,6 +44,12 @@ def _snapshot():
     }
 
 
+def _wx_accepted(uid):
+    return {"success": True, "code": 1000, "data": [
+        {"uid": uid, "topicId": None, "messageContentId": 123,
+         "code": 1000, "status": "创建发送任务成功"}]}
+
+
 class FakeResponse:
     def __init__(self, status_code=200, payload=None):
         self.status_code = status_code
@@ -71,7 +77,7 @@ class PrecloseNotifyTests(unittest.TestCase):
                 return send_reconciliation_notifications(value, outbox=outbox,
                     wxpusher_app_token="fixture", wxpusher_uid="fixture",
                     post=lambda *args, **kwargs: (calls.append(kwargs) or FakeResponse(
-                        payload={"success": True, "code": 1000})))
+                        payload=_wx_accepted(kwargs["json"]["uids"][0]))))
             send(reconciliation)
             repeated = send(reconciliation)
             self.assertEqual(repeated["wxpusher"]["status"], "already_sent")
@@ -129,7 +135,7 @@ class PrecloseNotifyTests(unittest.TestCase):
 
         def success_post(url, **kwargs):
             calls.append((url, kwargs))
-            return FakeResponse(payload={"success": True, "code": 1000})
+            return FakeResponse(payload=_wx_accepted(kwargs["json"]["uids"][0]))
 
         result = send_wxpusher_message(
             "message", app_token="app-token", uid="uid-1", post=success_post
@@ -346,7 +352,7 @@ class PrecloseNotifyTests(unittest.TestCase):
 
             def post(*args, **kwargs):
                 calls.append((args, kwargs))
-                return FakeResponse(payload={"success": True, "code": 1000})
+                return FakeResponse(payload=_wx_accepted(kwargs["json"]["uids"][0]))
 
             first = send_reconciliation_notifications(
                 reconciliation,
@@ -399,7 +405,7 @@ class PrecloseNotifyTests(unittest.TestCase):
 
             def post(*args, **kwargs):
                 calls.append((args, kwargs))
-                return FakeResponse(payload={"success": True, "code": 1000})
+                return FakeResponse(payload=_wx_accepted(kwargs["json"]["uids"][0]))
 
             first = send_reconciliation_notifications(
                 reconciliation,
@@ -531,7 +537,7 @@ class PrecloseNotifyTests(unittest.TestCase):
         def post(url, **kwargs):
             calls.append(url)
             if "wxpusher.zjiecode.com" in url:
-                return FakeResponse(payload={"success": True, "code": 1000})
+                return FakeResponse(payload=_wx_accepted(kwargs["json"]["uids"][0]))
             return FakeResponse(payload={"errcode": 1})
 
         with tempfile.TemporaryDirectory() as temp_dir:

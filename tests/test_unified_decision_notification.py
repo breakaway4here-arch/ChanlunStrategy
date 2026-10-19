@@ -18,7 +18,9 @@ class UnifiedDecisionNotification(unittest.TestCase):
         class Response:
             status_code = 200
             def raise_for_status(self): pass
-            def json(self): return {'success': True, 'code': 1000}
+            def json(self): return {'success': True, 'code': 1000, 'data': [
+                {'uid': 'test', 'topicId': None, 'messageContentId': 123,
+                 'code': 1000, 'status': '创建发送任务成功'}]}
         calls = []
         p = build_decision_workbench(*inputs())
         rec = {'trade_date': '2026-09-07', 'status': 'unchanged', 'formal_content_hash': 'f' * 64, 'pools': {}}

@@ -418,7 +418,7 @@ os.close(other)
 
 
 class ScheduleTests(unittest.TestCase):
-    def test_schedule_is_once_late_weekdays_and_runtime_paths_are_exact(self):
+    def test_schedule_has_finite_late_weekday_recovery_and_exact_runtime_paths(self):
         path=ROOT/'launchd/com.breakaway4here.chanlun-kaipanla-refresh.plist'
         self.assertTrue(path.exists(), 'late refresh schedule is not implemented')
         obj=plistlib.loads(path.read_bytes())
@@ -427,7 +427,8 @@ class ScheduleTests(unittest.TestCase):
         self.assertEqual(obj['ProgramArguments'],['/bin/zsh',root+'/scripts/kaipanla_refresh.sh'])
         self.assertFalse(obj['RunAtLoad'])
         self.assertNotIn('KeepAlive',obj)
-        self.assertEqual(obj['StartCalendarInterval'],[{'Weekday':day,'Hour':17,'Minute':30} for day in range(1,6)])
+        self.assertEqual(obj['StartCalendarInterval'],[{'Weekday':day,'Hour':hour,'Minute':minute}
+            for day in range(1,6) for hour,minute in [(17,30),(17,45),(18,0)]])
 
     def test_shell_gates_synchronizes_and_stages_only_four_files(self):
         path=ROOT/'scripts/kaipanla_refresh.sh'
@@ -440,7 +441,9 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn('git merge-base --is-ancestor origin/main HEAD',text)
         self.assertIn('git add -- "${TARGETS[@]}"',text)
         self.assertIn('git diff --cached --quiet',text)
-        self.assertIn('timeout=30',text)
+        self.assertIn('run_daily_git_network.py',text)
+        self.assertIn('--timeout-seconds 30',text)
+        self.assertNotIn('for proxy in',text)
         self.assertIn('git status --porcelain=v1 --untracked-files=all -- "${TARGETS[@]}"',text)
         for forbidden in ['daily_run','import run','notify','git add -A','git add .','reset --hard','stash']:
             self.assertNotIn(forbidden,text)
@@ -463,8 +466,11 @@ class ScheduleGitIntegrationTests(unittest.TestCase):
         self._git('config','user.name','KPL Test')
         (self.repo/'scripts').mkdir();(self.repo/'docs/data').mkdir(parents=True)
         (self.repo/('docs/'+self.today)).mkdir();(self.repo/'docs/assets').mkdir()
-        for name in ['refresh_kaipanla_context.py','kaipanla_refresh.sh']:
+        for name in ['refresh_kaipanla_context.py','kaipanla_refresh.sh','run_daily_git_network.py']:
             shutil.copy2(ROOT/'scripts'/name,self.repo/'scripts'/name)
+        # Keep injected permanent failures fast; production retains bounded backoff.
+        helper=self.repo/'scripts/run_daily_git_network.py'
+        helper.write_text(helper.read_text().replace('default=5)', 'default=0)'))
         (self.repo/'scripts/enable_shadow_evaluation_snapshot.py').symlink_to(ROOT/'scripts/enable_shadow_evaluation_snapshot.py')
         (self.repo/'chanlun').symlink_to(ROOT/'chanlun',target_is_directory=True)
         (self.repo/'config.py').symlink_to(ROOT/'config.py')
@@ -554,6 +560,23 @@ if command and command[0]=='commit' and mode=='commit_failed':
     print('injected commit rejection',file=sys.stderr);raise SystemExit(1)
 if command and command[0]=='push' and mode=='push_failed':
     print('injected push rejection',file=sys.stderr);raise SystemExit(1)
+if command and command[0]=='push' and mode=='push_response_lost':
+    import subprocess
+    subprocess.run([real]+args,check=True)
+    print('injected accepted push response lost',file=sys.stderr);raise SystemExit(1)
+if command and command[0]=='push' and mode=='push_interrupted':
+    import time
+    Path(os.environ['KPL_TEST_PUSH_READY']).write_text(str(os.getpid()))
+    time.sleep(30)
+if command and command[0]=='commit' and mode=='commit_race':
+    import subprocess
+    subprocess.run([real]+args,check=True)
+    Path('extra.txt').write_text('concurrent unknown commit')
+    subprocess.run([real,'add','extra.txt'],check=True)
+    subprocess.run([real,'commit','-m','chore: concurrent unknown commit'],check=True)
+    raise SystemExit(0)
+if command and command[0]=='fetch' and mode=='third_fetch_recovers' and count<=2:
+    print('injected SSL failure',file=sys.stderr);raise SystemExit(1)
 os.execv(real,[real]+args)
 """)
         wrapper.chmod(0o700)
@@ -622,7 +645,111 @@ os.execv(real,[real]+args)
         self.assertEqual(self._git('diff','--cached','--name-only').splitlines(),[])
         self.assertEqual(self._git('diff','--name-only').splitlines(),['notes.txt'])
         self.assertIn(current,proc.stderr)
-        self.assertIn('HEAD:main',proc.stderr)
+        self.assertIn('kaipanla_refresh.sh',proc.stderr)
+
+    def test_third_network_attempt_publishes_without_losing_fetched_data(self):
+        self.install_git_failure('third_fetch_recovers')
+        proc=self.schedule()
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','HEAD'),self._git('rev-parse','origin/main'))
+        self.assertGreaterEqual(int((self.base/'fetch-count').read_text()),4)
+
+    def pending_fixture(self):
+        self.install_git_failure('push_failed')
+        first=self.schedule()
+        self.assertNotEqual(first.returncode,0,first.stdout+first.stderr)
+        self.env['KPL_TEST_GIT_FAILURE']='none'
+        return self._git('rev-parse','HEAD').strip()
+
+    def test_restart_resumes_only_receipted_commit_and_clears_receipt(self):
+        pending=self.pending_fixture()
+        proc=self.schedule()
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','origin/main').strip(),pending)
+        self.assertEqual(self.call_log.read_text().splitlines(),['source'])
+        self.assertFalse(list((self.repo/'.cache/chanlun/kaipanla').glob('publication-*.json')))
+        self.assertFalse(list((self.base/'tmp').glob('chanlun-kpl-result.*')))
+        head=self._git('rev-parse','HEAD')
+        proc=self.schedule()
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','HEAD'),head)
+        self.assertIn('no_changes',proc.stdout)
+
+    def test_restart_recognizes_push_accepted_before_response_was_lost(self):
+        self.install_git_failure('push_response_lost')
+        first=self.schedule()
+        self.assertNotEqual(first.returncode,0,first.stdout+first.stderr)
+        pending=self._git('rev-parse','HEAD').strip()
+        self.assertEqual(self._git('rev-parse','origin/main').strip(),pending)
+        self.env['KPL_TEST_GIT_FAILURE']='none'
+        proc=self.schedule()
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self.call_log.read_text().splitlines(),['source'])
+        self.assertFalse(list((self.repo/'.cache/chanlun/kaipanla').glob('publication-*.json')))
+
+    def test_push_interruption_keeps_trusted_receipt_and_reaps_git_before_restart(self):
+        self.install_git_failure('push_interrupted')
+        marker=self.base/'push-ready'
+        self.env['KPL_TEST_PUSH_READY']=str(marker)
+        process=subprocess.Popen(['/bin/zsh',str(self.repo/'scripts/kaipanla_refresh.sh')],cwd=self.repo,
+            env=self.env,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,start_new_session=True)
+        try:
+            import time
+            deadline=time.monotonic()+10
+            while not marker.exists():
+                self.assertLess(time.monotonic(),deadline,'fake push never started')
+                time.sleep(0.01)
+            git_pid=int(marker.read_text())
+            os.killpg(process.pid,signal.SIGTERM)
+            process.communicate(timeout=5)
+            with self.assertRaises(ProcessLookupError): os.kill(git_pid,0)
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid,signal.SIGKILL);process.communicate(timeout=3)
+            if marker.exists():
+                try: os.killpg(int(marker.read_text()),signal.SIGKILL)
+                except ProcessLookupError: pass
+        self.env['KPL_TEST_GIT_FAILURE']='none'
+        proc=self.schedule()
+        self.assertEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','HEAD'),self._git('rev-parse','origin/main'))
+        self.assertEqual(self.call_log.read_text().splitlines(),['source'])
+
+    def test_commit_race_cannot_push_an_unknown_followup_commit(self):
+        self.install_git_failure('commit_race')
+        proc=self.schedule()
+        self.assertNotEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','origin/main').strip(),self.old_head)
+
+    def test_unknown_local_commit_is_never_resumed_as_supplement(self):
+        (self.repo/'unrelated.txt').write_text('unknown local work')
+        self._git('add','unrelated.txt');self._git('commit','-m','chore: unrelated commit')
+        proc=self.schedule()
+        self.assertNotEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','origin/main').strip(),self.old_head)
+        self.assertFalse(self.call_log.exists())
+
+    def test_extra_commit_after_pending_is_not_pushed(self):
+        self.pending_fixture()
+        (self.repo/'unrelated.txt').write_text('new local work')
+        self._git('add','unrelated.txt');self._git('commit','-m','chore: unrelated commit')
+        proc=self.schedule()
+        self.assertNotEqual(proc.returncode,0,proc.stdout+proc.stderr)
+        self.assertEqual(self._git('rev-parse','origin/main').strip(),self.old_head)
+
+    def test_pending_receipt_wrong_hash_or_wrong_origin_blocks_recovery(self):
+        self.pending_fixture()
+        receipt=next((self.repo/'.cache/chanlun/kaipanla').glob('publication-*.json'))
+        original=json.loads(receipt.read_text())
+        self.assertNotIn('origin_url',original,'remote credentials must never enter a receipt')
+        for field in ['target_sha256','origin_url_sha256']:
+            changed=copy.deepcopy(original)
+            if field=='target_sha256': changed[field]['index.html']='0'*64
+            else: changed[field]='0'*64
+            receipt.write_text(json.dumps(changed))
+            proc=self.schedule()
+            self.assertNotEqual(proc.returncode,0,proc.stdout+proc.stderr)
+            self.assertEqual(self._git('rev-parse','origin/main').strip(),self.old_head)
 
     def test_shared_cache_symlink_uses_canonical_lock_without_wrapper_loop(self):
         shared=self.base/'shared-cache';shared.mkdir()

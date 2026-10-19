@@ -134,7 +134,10 @@ assert value.isoformat() == "2026-08-28T14:50:00+08:00"
         result = publish_preclose_snapshot(snapshot, api_base='https://test.example', write_token='test',
             put=put, get=get, timeout=6, budget_remaining=lambda: remaining[0])
         self.assertTrue(result['success'])
-        self.assertEqual(timeouts, [5.0, 1.0])
+        self.assertEqual(len(timeouts), 2)
+        self.assertGreater(timeouts[0], 0)
+        self.assertLessEqual(timeouts[0], 5.0)
+        self.assertEqual(timeouts[1], 1.0)
         mismatch = publish_preclose_snapshot(snapshot, api_base='https://test.example', write_token='test',
             put=lambda *args, **kwargs: FakeResponse(payload={}),
             get=lambda *args, **kwargs: FakeResponse(payload=dict(snapshot, trade_date='2026-08-27')))
