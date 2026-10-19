@@ -377,21 +377,74 @@ def rewrite_bootstrap(path, change):
     path.write_text(html[:match.start(1)] + json.dumps(envelope) + html[match.end(1):])
 
 
-def test_real_same_generation_preserves_independent_minutes_and_closes_stale_view(real_docs):
+def test_real_same_generation_preserves_bound_independent_highlights_and_minutes(real_docs):
     original = atomic._read_bootstrap_envelope(real_docs / "index.html")
-    assert len(original["recommendationEvidence"]["views"]["highlights"]) == 10
+    # The 10/14 B0 repair superseded closing valid independent LuoJie highlights.
+    # Freeze actual identities/order and prove their source refs, not just a count.
+    expected = [(code, "luojie_pool") for code in (
+        "002352", "000400", "300624", "601179", "600089", "601360", "601877", "600588",
+    )] + [("300006", "startup_watchlist"), ("301658", "startup_watchlist")]
+    highlights = original["recommendationEvidence"]["views"]["highlights"]
+    assert [(row["code"], row["summary"]["pool_identity"]) for row in highlights] == expected
+    assert repair._independent_luojie_research_contract(original["inlineReportData"]) is not None
+
+    def bound_highlights(envelope):
+        results = sorted((result for item in envelope["decisionWorkbench"]["items"]
+                          for result in item["strategy_results"]
+                          if result["strategy_id"] == "highlights"), key=lambda row: row["view_rank"])
+        assert len(results) == len(expected)
+        for rank, ((code, pool), result) in enumerate(zip(expected, results), 1):
+            candidate, evidence = result["candidate"], result["evidence"]
+            assert candidate["code"] == evidence["code"] == code
+            assert candidate["ref"] == {"pool": pool, "code": code}
+            assert evidence["summary"]["as_of"] == DAY
+            assert evidence["summary"]["view_identity"] == "highlights"
+            assert evidence["summary"]["pool_identity"] == pool
+            assert evidence["summary"]["view_rank"] == result["view_rank"] == rank
+            assert evidence["source_identity"]["status"] == "available"
+            if pool == "luojie_pool":
+                assert candidate["sources"] == ["luojie"]
+                assert candidate["action_semantics"] == "watch_only"
+                assert candidate["is_formal_recommendation"] is False
+        return results
+
+    original_highlights = bound_highlights(original)
     publish(real_docs)
     final = atomic._read_bootstrap_envelope(real_docs / "index.html")
     assert final["recommendationEvidence"]["views"]["baseline"] == original["recommendationEvidence"]["views"]["baseline"]
     for view, rows in original["recommendationEvidence"]["views"].items():
-        if view != "highlights":
-            assert final["recommendationEvidence"]["views"][view] == rows
+        assert final["recommendationEvidence"]["views"][view] == rows
     missing = [row for rows in final["recommendationEvidence"]["views"].values() for row in rows
                if row["sublevel_30m"]["status"] == "missing"]
     assert missing and all(row["source_identity"]["status"] == "available" for row in missing)
-    assert final["recommendationEvidence"]["views"]["highlights"] == []
-    assert all(s["strategy_id"] != "highlights" for item in final["decisionWorkbench"]["items"] for s in item["strategy_results"])
+    assert bound_highlights(final) == original_highlights
     assert validate_main(["--docs-dir", str(real_docs), "--public-planes-only", DAY]) == 0
+
+
+@pytest.mark.parametrize("mutation", ["ref_code", "pool", "date"])
+def test_same_generation_wrong_highlight_binding_is_rejected(real_docs, mutation):
+    def corrupt(envelope):
+        row = envelope["recommendationEvidence"]["views"]["highlights"][0]
+        assert row["code"] == "002352"
+        result = next(result for item in envelope["decisionWorkbench"]["items"]
+                      for result in item["strategy_results"]
+                      if result["strategy_id"] == "highlights" and result["view_rank"] == 1)
+        if mutation == "ref_code":
+            # A different real LuoJie identity cannot donate its evidence.
+            result["candidate"]["ref"]["code"] = "000400"
+        elif mutation == "pool":
+            row["summary"]["pool_identity"] = "picks_pure"
+            result["candidate"]["ref"]["pool"] = "picks_pure"
+        else:
+            row["summary"]["as_of"] = "2026-10-09"
+        # Keep the redundant payload consistent: rejection must still follow
+        # identity/source/date binding rather than differing evidence copies.
+        result["evidence"] = copy.deepcopy(row)
+    rewrite_bootstrap(real_docs / "index.html", corrupt)
+    before = fingerprints(real_docs)
+    with pytest.raises((ValueError, RuntimeError), match="source identity mismatch|source binding mismatch"):
+        publish(real_docs)
+    assert fingerprints(real_docs) == before
 
 
 @pytest.mark.parametrize("mutation", ["date", "code", "summary_code", "pool", "rank", "ref", "evidence_conflict"])
