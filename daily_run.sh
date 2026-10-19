@@ -94,8 +94,32 @@ sync_with_remote() {
     return 1
 }
 
+assert_no_pending_kaipanla_publication() {
+    local -a kpl_receipts
+    local ahead_subjects subject
+
+    kpl_receipts=("${SCRIPT_DIR}/.cache/chanlun/kaipanla"/publication-*.json(N))
+    if [ "${#kpl_receipts}" -ne 0 ]; then
+        echo "开盘啦 pending 必须先经专用 receipt 校验，拒绝通用补推"
+        return 1
+    fi
+    ahead_subjects=$(git log --format=%s "${GIT_UPSTREAM}..HEAD") || return 1
+    while IFS= read -r subject; do
+        # This recognizes an unsafe orphan for rejection only; a title never
+        # substitutes for a receipt or grants permission to publish anything.
+        case "$subject" in
+            "chore: 补更"????-??-??"开盘啦题材资料")
+                echo "发现无可信 receipt 的开盘啦待推提交，拒绝通用发布"
+                return 1
+                ;;
+        esac
+    done <<< "$ahead_subjects"
+}
+
 push_pending_commits() {
     local pending_count
+
+    assert_no_pending_kaipanla_publication || return 1
 
     if ! pending_count=$(git rev-list --count "${GIT_UPSTREAM}..HEAD"); then
         echo "无法判断待推送提交数量"
@@ -166,8 +190,21 @@ main() {
         echo "正式发布来源无法确认，停止运行以保护用户改动"
         exit 1
     fi
+    # Recover only attested KPL commits before generic push/finalization. A clean
+    # recovery may change HEAD; the prepare below rechecks journal provenance.
+    local -a kpl_receipts
+    kpl_receipts=("${SCRIPT_DIR}/.cache/chanlun/kaipanla"/publication-*.json(N))
+    if [ "${#kpl_receipts}" -ne 0 ]; then
+        if ! /bin/zsh "${SCRIPT_DIR}/scripts/kaipanla_refresh.sh" --recover-pending-only; then
+            echo "开盘啦 pending 来源未确认，停止本轮正式发布"
+            exit 1
+        fi
+    fi
     if ! sync_with_remote; then
         echo "远端同步未完成，停止生成，避免产生分叉提交"
+        exit 1
+    fi
+    if ! assert_no_pending_kaipanla_publication; then
         exit 1
     fi
     if ! prepare_formal_publish_state; then
@@ -183,7 +220,8 @@ main() {
                 echo "正式策略已校验，但分钟级研究输入仍缺失，进入本次收盘后增量补跑"
             else
                 if is_today_report_published; then
-                    echo "今日正式日报已校验并发布，跳过重复生成、固化及可选钩子"
+                    echo "今日正式日报已校验并发布，跳过重复生成和固化"
+                    run_optional_kaipanla_refresh
                     exit 0
                 fi
                 /usr/bin/python3 scripts/finalize_recommendation_ledger.py "$TODAY"
@@ -194,6 +232,7 @@ main() {
                 if ! publish_ready_report; then
                     exit 1
                 fi
+                run_optional_kaipanla_refresh
                 echo "今日产物已存在且行情与选股输入校验通过，跳过补跑"
                 exit 0
             fi
@@ -313,6 +352,17 @@ run_optional_nextday_research_hook() {
     else
         hook_status=$?
         echo "可选次日研究钩子进程异常（exit=${hook_status}），不影响已发布日报"
+        return 0
+    fi
+}
+
+run_optional_kaipanla_refresh() {
+    # run.main already fetches KPL on generation/incremental rounds. Only the
+    # success paths that skip it need this one force-refresh opportunity.
+    if /bin/zsh "${SCRIPT_DIR}/scripts/kaipanla_refresh.sh"; then
+        return 0
+    else
+        echo "开盘啦单项补更未完成，保留已发布日报；后续有限轮次继续核验"
         return 0
     fi
 }

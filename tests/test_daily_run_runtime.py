@@ -30,6 +30,7 @@ class DailyRunRuntimeTests(unittest.TestCase):
                         TEST_EVENTS=str(self.events), TEST_DAY=self.day,
                         CHANLUN_DAILY_GIT_RETRY_DELAY_SECONDS="0", TZ="UTC")
         for name in ("CHANLUN_DOCS_PUBLISH_LOCK_HELD", "CHANLUN_DOCS_PUBLISH_LOCK_PATH",
+                     "CHANLUN_DOCS_PUBLISH_LOCK_FD", "CHANLUN_KPL_PUBLISH_LOCK_FD",
                      "CHANLUN_FORMAL_PUBLISH_JOURNAL_PATH", "CHANLUN_GIT_UPSTREAM"):
             self.env.pop(name, None)
         self.write_executable(self.bin / "git", self.git_stub())
@@ -43,6 +44,15 @@ class DailyRunRuntimeTests(unittest.TestCase):
         for name in ("run_with_docs_publish_lock.py", "run_daily_git_network.py"):
             if (ROOT / "scripts" / name).exists():
                 shutil.copy2(ROOT / "scripts" / name, self.repo / "scripts" / name)
+        # This suite isolates generic daily Git behavior; the real KPL shell and
+        # frozen provider are exercised by test_ongoing_kaipanla instead.
+        self.write_executable(self.repo / "scripts/kaipanla_refresh.sh", r'''#!/bin/zsh
+/usr/bin/python3 - "$@" <<'PY'
+import json,os,sys
+with open(os.environ['TEST_EVENTS'],'a') as log:
+    log.write(json.dumps({'python':'kaipanla_refresh.sh','args':sys.argv[1:]})+'\n')
+PY
+''')
         (self.repo / ".gitignore").write_text(".test-*\n.cache/\n")
         (self.repo / "baseline.txt").write_text("baseline\n")
         self.git("init", "--bare", str(self.remote), cwd=self.base)
@@ -159,7 +169,7 @@ raise SystemExit(0)
         self.assertEqual(self.git("rev-parse", "HEAD"), head)
         self.assertEqual(self.git("rev-list", "--count", "origin/main..HEAD"), "1")
 
-    def test_already_published_valid_report_skips_regeneration_and_hooks(self):
+    def test_already_published_valid_report_skips_formal_hooks_but_checks_kpl(self):
         self.report(published=True)
         result = self.run_daily()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -168,6 +178,7 @@ raise SystemExit(0)
         self.assertNotIn("finalize_recommendation_ledger.py", calls)
         self.assertNotIn("repair_strategy_scorecard_snapshot.py", calls)
         self.assertNotIn("nextday_research_hook.py", calls)
+        self.assertEqual(calls.count("kaipanla_refresh.sh"), 1)
         self.assertIn("--public-planes-only", [a for r in self.logs() for a in r.get("args", [])])
 
     def test_untracked_optional_performance_is_not_mistaken_for_published(self):
