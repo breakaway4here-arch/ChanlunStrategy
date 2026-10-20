@@ -34,6 +34,7 @@ from chanlun.report_generator import (  # noqa: E402
     _load_psy12_shadow_history,
     _report_asset_version,
     build_aggregate_day_projection,
+    build_aggregate_day_projection_from_full,
     copy_report_assets,
 )
 from chanlun.report_view_model import build_workspace  # noqa: E402
@@ -1329,10 +1330,11 @@ def _report_generated_at(report, report_date, name):
     return generated
 
 
-def _aggregate_projection(source, original):
+def _aggregate_projection(source, original, *, legacy=False):
     """Keep independent supplements; replace report fields from the full source."""
     projected = copy.deepcopy(original)
-    report_fields = build_aggregate_day_projection(
+    projector = build_aggregate_day_projection if legacy else build_aggregate_day_projection_from_full
+    report_fields = projector(
         source, include_right_side_shadow="right_side_startup" in source,
     )
     projected.update(report_fields)
@@ -1368,6 +1370,11 @@ def _aggregate_matches_source(aggregate, source):
     if aggregate == source:
         return True
     expected = _aggregate_projection(source, aggregate)
+    if _publication_facts_digest(aggregate) == _publication_facts_digest(expected):
+        return True
+    # Previously published light entries used their own workspace projection.
+    # Retain that exact compatibility path without weakening its fact checks.
+    expected = _aggregate_projection(source, aggregate, legacy=True)
     # Legacy light entries were built before chart-window truncation. Their
     # point indexes use the original window, and contextual prices may be
     # absent. These representation differences do not change selection facts.

@@ -1140,7 +1140,8 @@ class TestFormalReportProjection(unittest.TestCase):
         report_data = _make_minimal_report_data()
         report_data["decision_brief"] = {"summary": "保持聚合输出"}
         report_data["shadow_evaluations"] = {"status": "collecting"}
-        expected = report_generator.build_aggregate_day_projection(report_data)
+        expected = report_generator.build_aggregate_day_projection_from_full(
+            report_generator.build_full_daily_projection(report_data))
 
         with tempfile.TemporaryDirectory() as tmpdir:
             update_data_json(report_data, output_dir=tmpdir)
