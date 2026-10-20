@@ -332,6 +332,7 @@ def _analyze_30m_inputs(market_inputs, rows_by_code, components):
             "volume_unit", "volume_raw_unit", "volume_source",
             "amount_available", "amount_units", "amount_sources",
             "amount_unit", "amount_source",
+            "is_final", "source_batches", "adjustment", "minute_to_daily",
         ):
             if key in evidence["klines"]:
                 setattr(result, key, evidence["klines"][key])
@@ -347,6 +348,8 @@ def _analyze_30m_inputs(market_inputs, rows_by_code, components):
             "bars": int(evidence.get("bars") or len(evidence["klines"].get("dates") or [])),
             "source": str(evidence["klines"].get("source") or ""),
             "adjustment": str(evidence["klines"].get("adjustment") or ""),
+            "minute_to_daily": dict(evidence['klines'].get('minute_to_daily') or {
+                'schema_version': 1, 'status': 'pending', 'reason': 'preclose_basis_unverified'}),
         })
         results.append(result)
     return results, unavailable

@@ -13,7 +13,8 @@ from .signal_policy import (
 from .sublevel_confirm import classify_30min_confirmation
 
 
-def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pure"):
+def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pure",
+                                       requested_codes=None, failure_evidence=None):
     """Upgrade daily reference signals using 30min confirmation.
 
     Args:
@@ -41,10 +42,33 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
         "dropped_risk_guard": 0,
         "dropped_diverge_far": 0,
     }
+    statuses = ('not_requested', 'request_failed', 'price_basis_unverified',
+                'risk_rejected', 'valid_no_confirmation', 'passed')
+    diag['evaluation_by_code'] = {}
+    diag['evaluation_stock_counts'] = dict.fromkeys(statuses, 0)
+    diag['evaluation_buy_point_counts'] = dict.fromkeys(statuses, 0)
+    requested = set(str(code) for code in (requested_codes or []))
+    failures = failure_evidence or {}
 
     for stock in daily_pool:
         code = stock["code"]
         min30_result = min30_map.get(code)
+        evaluated = []
+
+        def record(bp, status, reason=''):
+            evaluated.append({'source_type': bp.get('type', ''), 'status': status,
+                              'reason': reason})
+            diag['evaluation_buy_point_counts'][status] += 1
+
+        def finish():
+            states = {item['status'] for item in evaluated}
+            # One stock has one summary state; buy-point counts remain separate.
+            priority = ('passed', 'price_basis_unverified', 'request_failed',
+                        'not_requested', 'risk_rejected', 'valid_no_confirmation')
+            selected = next((value for value in priority if value in states), 'valid_no_confirmation')
+            if code not in diag['evaluation_by_code']:
+                diag['evaluation_stock_counts'][selected] += 1
+            diag['evaluation_by_code'][code] = {'status': selected, 'buy_points': evaluated}
 
         if min30_result is not None:
             diag["fetched_30min"] += 1
@@ -83,6 +107,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                 }
             recommendable.append(bp_copy)
             diag["formal_kept"] += 1
+            record(bp, 'passed', 'formal_kept')
 
         # Try to upgrade each upgradeable reference (including seeds)
         for bp in upgradeable_bps:
@@ -95,6 +120,15 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
             if min30_result is None:
                 # Cannot upgrade without 30min data
                 reference_buy_points.append(bp)
+                failure = failures.get(code) or next((v for k,v in failures.items()
+                    if str(k).endswith('|'+str(code))), {})
+                reason = str(failure.get('rejection_reason') or failure.get('status') or '')
+                basis_unknown = (failure.get('status') == 'price_basis_unverified'
+                                 or 'basis' in reason or 'reference' in reason
+                                 or reason.startswith(('raw_daily_conflict:', 'indeterminate_flat_day:')))
+                state = ('price_basis_unverified' if basis_unknown
+                         else 'request_failed' if code in requested or failure else 'not_requested')
+                record(bp, state, reason)
                 continue
 
             # 底背驰候选 — 距源价 >3% 不升级
@@ -107,12 +141,16 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                     if dist_pct > 3:
                         reference_buy_points.append(bp)
                         diag["dropped_diverge_far"] += 1
+                        record(bp, 'risk_rejected', 'source_distance_above_3pct')
                         continue
 
             # Risk guard before confirmation
-            if not _passes_upgrade_risk_guard(stock, bp, min30_result):
+            risk = _upgrade_risk_status(stock, bp, min30_result)
+            if risk != 'passed':
                 reference_buy_points.append(bp)
                 diag["dropped_risk_guard"] += 1
+                record(bp, 'price_basis_unverified' if risk == 'price_basis_unverified'
+                       else 'request_failed' if risk == 'daily_data_missing' else 'risk_rejected', risk)
                 continue
 
             confirmation = classify_30min_confirmation(stock, bp, min30_result)
@@ -133,8 +171,10 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                 recommendable.append(candidate)
                 upgraded_candidates.append(candidate)
                 diag["candidate_upgraded"] += 1
+                record(bp, 'passed', 'confirmed')
             else:
                 reference_buy_points.append(bp)
+                record(bp, 'valid_no_confirmation', confirmation.get('reason', ''))
 
         # Count drops
         if not recommendable:
@@ -142,6 +182,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                 diag["dropped_no_30min"] += 1
             else:
                 diag["dropped_no_confirm"] += 1
+            finish()
             continue
 
         # Pick best_buy_point from recommendable
@@ -175,6 +216,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
             out["resonance"] = {"level": "弱", "reason": "30分钟数据缺失，未做次级别确认"}
 
         recommended.append(out)
+        finish()
 
     return recommended, diag
 
@@ -218,13 +260,17 @@ def _passes_upgrade_risk_guard(stock, source_bp, min30_result):
     Returns False if the daily close has run too far above the source price,
     or if the 30min recent low has broken below the source price by >3%.
     """
+    return _upgrade_risk_status(stock, source_bp, min30_result) == 'passed'
+
+
+def _upgrade_risk_status(stock, source_bp, min30_result):
     closes = stock.get("closes")
     if closes is None or len(closes) == 0:
-        return False
+        return 'daily_data_missing'
     latest_daily_close = float(closes[-1])
     source_price = float(source_bp.get("price") or 0)
     if source_price > 0 and latest_daily_close > source_price * 1.12:
-        return False
+        return 'chase_above_12pct'
 
     lows_30 = min30_result.lows
     if source_price > 0 and lows_30 is not None and len(lows_30) >= 8:
@@ -233,8 +279,8 @@ def _passes_upgrade_risk_guard(stock, source_bp, min30_result):
             recent_low, stock, min30_result
         )
         if recent_low is None:
-            return False
+            return 'price_basis_unverified'
         if recent_low < source_price * 0.97:
-            return False
+            return 'breakdown_below_3pct'
 
-    return True
+    return 'passed'

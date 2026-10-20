@@ -9,6 +9,7 @@
 """
 
 import json
+import copy
 import os
 import math
 import inspect
@@ -2997,6 +2998,11 @@ def batch_fetch_daily_klines(
                 "as_of": str(status.get("latest_date") or required_date or ""),
             }
 
+        canonical_daily = (klines or {}).get('canonical_daily')
+        if isinstance(canonical_daily, dict):
+            price_basis = dict(price_basis or {'adjustment': adjustment})
+            price_basis['canonical_daily'] = copy.deepcopy(canonical_daily)
+
         return {
             "asset_type": identity.asset_type,
             "exchange": identity.exchange,
@@ -3073,6 +3079,8 @@ def _sublevel_input_evidence(interval, kline, repository_result=None):
             status.get("adjustment") or payload.get("adjustment") or ""
         ),
     }
+    if isinstance(payload.get('minute_to_daily'), dict):
+        evidence['minute_to_daily'] = copy.deepcopy(payload['minute_to_daily'])
     if repository_result is not None:
         diagnostics = repository_result.diagnostics
         if isinstance(diagnostics, dict):

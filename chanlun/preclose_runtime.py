@@ -550,7 +550,9 @@ def fetch_preclose_30m(targets, trade_date, as_of, max_workers=20):
                 raise
             if validated is not None:
                 validated["source"] = source
-                validated["adjustment"] = "qfq"
+                from .price_basis import pending_minute_basis
+                validated['minute_to_daily'] = pending_minute_basis(
+                    'preclose_basis_unverified', interval='30m', as_of=as_of)
                 return validated
             source_failures.append({
                 "source": source,

@@ -144,7 +144,15 @@ class DailyNonfinalRepairTests(unittest.TestCase):
                 result = self.repo.repair_daily_nonfinal(DAY,providers=[('eastmoney',self.source)],
                     budget=DailyRepairBudget(**kwargs))
                 self.assertEqual(result['diagnostics']['http_requests'],0)
-                self.assertEqual(result['diagnostics']['pending_count'],3)
+                if 'seconds' in kwargs or 'remaining' in kwargs:
+                    # A zero total deadline cannot fund even discovery. Unknown
+                    # denominator must not masquerade as zero or a complete scan.
+                    self.assertFalse(result['diagnostics']['discovery_complete'])
+                    self.assertIsNone(result['diagnostics']['pending_count'])
+                    self.assertEqual(result['diagnostics']['discovery_reason'],'daily_repair_deadline')
+                else:
+                    self.assertTrue(result['diagnostics']['discovery_complete'])
+                    self.assertEqual(result['diagnostics']['pending_count'],3)
         self.assertEqual(self.calls,[])
 
     def test_request_stock_limits_and_shared_time(self):
@@ -564,6 +572,57 @@ class DailyNonfinalRepairTests(unittest.TestCase):
         self.assertIn((6,'2026-09-26'),self.rows())
         self.assertEqual(result['diagnostics']['repaired_count'],2)
         self.assertIn('repair_local_window_changed',result['diagnostics']['pending'][0]['reasons'][0])
+
+
+    def test_zero_deadline_readonly_loader_preserves_healthy_universe_and_unknown_count(self):
+        from chanlun import preclose_runtime
+        import json
+        before = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        files = set(self.path.parent.iterdir())
+        with patch.object(preclose_runtime, '_previous_market_date', return_value=DAY):
+            rows, diag = preclose_runtime.load_readonly_preclose_universe(self.path, '2026-10-08',
+                repair_budget_remaining=lambda:0, repair_providers=[('eastmoney', self.source)])
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(diag['eligibility']['excluded']['nonfinal_bars'], 3)
+        self.assertIsNone(diag['daily_nonfinal_repair']['pending_count'])
+        self.assertFalse(diag['daily_nonfinal_repair']['discovery_complete'])
+        self.assertEqual(json.loads(json.dumps(diag))['daily_nonfinal_repair']['pending_count'], None)
+        self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), before)
+        self.assertEqual(set(self.path.parent.iterdir()), files)
+
+    def test_partial_success_rebuilds_same_call_readonly_minute_targets(self):
+        from chanlun import preclose_runtime
+        trade, as_of = '2026-10-08', '2026-10-08T14:45:00+08:00'
+        before = hashlib.sha256(self.path.read_bytes()).hexdigest()
+        codes = ['60000'+str(i) for i in range(9)]
+        quotes = [dict(code=c,asset_type='stock',exchange='SH',name='普通'+c,is_st=False,
+            delisting_risk=False,open=10,high=10.3,low=9.9,current_price=10,prev_close=10,
+            volume=100000,amount=100000000,volume_unit='hands',volume_raw_unit='hands',
+            volume_source='eastmoney',amount_unit='CNY',amount_source='eastmoney',amount_available=True,
+            quote_source='eastmoney',quote_asof=as_of) for c in codes]
+        targets = []
+        def partial(identity, count, *, request_budget):
+            if identity.code == '600005':
+                request_budget.take_request()
+                return None
+            return self.source(identity, count-1, request_budget=request_budget)
+        def loader(path, day, **kwargs):
+            return preclose_runtime.load_readonly_preclose_universe(path, day,
+                repair_providers=[('eastmoney', partial)], **kwargs)
+        def minute(rows, *args):
+            targets.extend(r['code'] for r in rows)
+            return {}
+        with patch.object(preclose_runtime, '_previous_market_date', return_value=DAY):
+            result = preclose_runtime.build_scheduled_preclose_input(trade, as_of,
+                formal_market_db=self.path, universe_loader=loader,
+                quote_fetcher=lambda:(quotes, {'complete':True,'requested':9,'unique':9}),
+                index_fetcher=lambda day:{name:{} for name in preclose_runtime.MARKET_INDICES},
+                target_selector=lambda rows:rows, min30_fetcher=minute, turnover_loader=lambda *a:[])
+        expected = sorted(set(codes)-{'600005'})
+        self.assertEqual(sorted(targets), expected)
+        self.assertEqual(sorted(r['code'] for r in result['daily']), expected)
+        self.assertEqual(result['runtime_diagnostics']['universe']['daily_nonfinal_repair']['repaired_count'], 2)
+        self.assertEqual(hashlib.sha256(self.path.read_bytes()).hexdigest(), before)
 
 
 if __name__ == '__main__':

@@ -427,6 +427,32 @@ def _int_or_none(value):
     return int(number)
 
 
+def _classic_minute30_evaluation(diagnostics):
+    """Count unique classic-upgrade inputs, separately from buy points/fusion."""
+    statuses = ('not_requested', 'request_failed', 'price_basis_unverified',
+                'risk_rejected', 'valid_no_confirmation', 'passed')
+    diagnostic = _map(diagnostics.get('sublevel_upgrade_pure'))
+    rows = diagnostic.get('evaluation_by_code')
+    result = {'status': 'unknown', 'input_count': None,
+              'stock_counts': dict.fromkeys(statuses)}
+    if not isinstance(rows, dict):
+        return result
+    counts = dict.fromkeys(statuses, 0)
+    for code, row in rows.items():
+        status = _map(row).get('status')
+        if not isinstance(code, str) or not re.fullmatch(r'[0-9]{6}', code) or status not in counts:
+            result['status'] = 'conflict'
+            return result
+        counts[status] += 1
+    recorded = diagnostic.get('evaluation_stock_counts')
+    if not isinstance(recorded, dict) or any(
+        _int_or_none(recorded.get(status)) != counts[status] for status in statuses
+    ):
+        result['status'] = 'conflict'
+        return result
+    return {'status': 'recorded', 'input_count': len(rows), 'stock_counts': counts}
+
+
 def _coverage(report):
     """Project recorded coverage facts; never infer missing counts as zero."""
     quality = _map(report.get('data_quality'))
@@ -468,7 +494,12 @@ def _coverage(report):
         'eligible_count': _int_or_none(eligible_value),
         'excluded': {
             key: _int_or_none(excluded.get(key))
-            for key in ('nonfinal_bars', 'stale_latest_bar')
+            for key in ('nonfinal_bars', 'stale_latest_bar', 'missing_meta',
+                        'volume_evidence_incomplete', 'amount_evidence_incomplete', 'listed_days')
+        },
+        'listing_age_evidence': {
+            key: _int_or_none(_map(eligibility.get('listing_age_evidence')).get(key))
+            for key in ('unknown', 'below_minimum')
         },
     }
     retrieval_value = stage_counts.get('retrieval')
@@ -487,6 +518,22 @@ def _coverage(report):
         'base_count': _int_or_none(universe.get('base_count')),
         'overlay_count': _int_or_none(universe.get('overlay_count')),
     }
+    quota_excluded = retrieval_summary['first_failure']
+    # Only the same funnel's stages share a subtractable population.  An
+    # independently recorded universe fallback may include different inputs.
+    eligible_count = _int_or_none(stage_counts.get('eligible'))
+    retrieval_count = _int_or_none(stage_counts.get('retrieval'))
+    quota_conflict = False
+    if eligible_count is not None and retrieval_count is not None:
+        difference = eligible_count - retrieval_count
+        quota_conflict = difference < 0 or (quota_excluded is not None and quota_excluded != difference)
+        if quota_excluded is None:
+            quota_excluded = difference
+    if quota_conflict:
+        quota_excluded = None
+    retrieval_summary['quota_excluded'] = quota_excluded
+    daily_scan_summary = {'scanned': _int_or_none(_map(diagnostics.get('daily_scan')).get('total'))}
+    classic_evaluation = _classic_minute30_evaluation(diagnostics)
     requested = _int_or_none(
         minute.get('requested_count', minute.get('requested_30min'))
     )
@@ -561,6 +608,8 @@ def _coverage(report):
         minute_summary['verified'],
         quantity_summary['required'],
         quantity_summary['available'],
+        daily_scan_summary['scanned'],
+        classic_evaluation['input_count'],
     ))
     eligibility_conflict = (
         eligibility_summary['instrument_count'] is not None
@@ -568,7 +617,7 @@ def _coverage(report):
         and eligibility_summary['eligible_count']
         > eligibility_summary['instrument_count']
     )
-    retrieval_conflict = (
+    retrieval_conflict = quota_conflict or (
         retrieval_summary['full_a'] is not None
         and retrieval_summary['retrieval'] is not None
         and retrieval_summary['retrieval'] > retrieval_summary['full_a']
@@ -614,8 +663,21 @@ def _coverage(report):
         reasons.append('eligibility_coverage_conflict')
     if retrieval_conflict:
         reasons.append('retrieval_coverage_conflict')
-    if any(value not in (None, 0) for value in eligibility_summary['excluded'].values()):
+    if any(eligibility_summary['excluded'][key] not in (None, 0)
+           for key in ('nonfinal_bars', 'stale_latest_bar')):
         reasons.append('historical_window_exclusions')
+    if any(eligibility_summary['excluded'][key] not in (None, 0)
+           for key in ('missing_meta', 'volume_evidence_incomplete', 'amount_evidence_incomplete')):
+        reasons.append('eligibility_evidence_pending')
+    if eligibility_summary['listing_age_evidence']['unknown'] not in (None, 0):
+        reasons.append('listing_age_evidence_pending')
+    evaluation_counts = classic_evaluation['stock_counts']
+    if classic_evaluation['status'] == 'conflict':
+        reasons.append('classic_minute30_evaluation_conflict')
+    elif any(evaluation_counts[key] not in (None, 0) for key in (
+        'not_requested', 'request_failed', 'price_basis_unverified'
+    )):
+        reasons.append('classic_minute30_evaluation_pending')
     if not known:
         status = 'unknown'
     elif 'formal_input_unavailable' in reasons:
@@ -629,6 +691,8 @@ def _coverage(report):
         'formal': formal_summary,
         'eligibility': eligibility_summary,
         'retrieval': retrieval_summary,
+        'daily_scan': daily_scan_summary,
+        'classic_minute30_evaluation': classic_evaluation,
         'minute30': minute_summary,
         'quantity': quantity_summary,
         'market_close_snapshot': snapshot_summary,
@@ -647,7 +711,7 @@ def _summary(report, workspace, items, health):
     if any(s['count'] for s in states.values()):
         title = '正式主推 {} 只，H4 独立策略 {} 只'.format(states['main']['count'], states['h4_t3']['count'])
     elif all(s['state'] == 'verified_empty' for s in states.values()):
-        title = '本期暂无正式推荐'
+        title = '已评估范围内暂无正式推荐'
     else:
         title = '本期暂无正式推荐，部分策略状态待核验'
     unavailable = [{'main': '正式主推', 'h4_t3': 'H4'}[key] for key, value in states.items()
@@ -666,7 +730,13 @@ def _summary(report, workspace, items, health):
         reason = '{} 只基础候选经融合筛选剩 {} 只，正式主推 {} 只。'.format(before, after, states['main']['count'])
         if diagnostic.get('dropped_by_ma'):
             reason += '其中 {} 只未通过均线条件。'.format(diagnostic['dropped_by_ma'])
-    return dict(states, title=title, reason=reason, coverage=_coverage(report), total_items=len(items),
+    coverage = _coverage(report)
+    coverage['formal']['recommendation_count'] = (
+        states['main']['count'] if states['main']['state'] in ('available', 'verified_empty') else None
+    )
+    if not states['main']['count']:
+        reason += '评估范围与待核验分项以本期覆盖记录为准。'
+    return dict(states, title=title, reason=reason, coverage=coverage, total_items=len(items),
                 executable_items=sum(x['is_executable'] for x in items),
                 blocked_by_price=sum(any(b.startswith('missing_') for b in x['blocked_reasons']) for x in items),
                 health_blocking_reasons=health['blocking_reasons'] + health['fact_blocking_reasons'])

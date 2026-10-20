@@ -5298,6 +5298,12 @@
       return isFormalMarketNumber(count, 0, Infinity) && Number.isInteger(count);
     }
     var projectedFacts = [];
+    var eligibility = value.eligibility && typeof value.eligibility === 'object' ? value.eligibility : {};
+    projectedFacts.push(isCoverageCount(eligibility.eligible_count)
+      ? '资格通过 ' + eligibility.eligible_count + '只' : '资格通过数量未记录');
+    var scan = value.daily_scan && typeof value.daily_scan === 'object' ? value.daily_scan : {};
+    projectedFacts.push(isCoverageCount(scan.scanned)
+      ? '实际日线扫描 ' + scan.scanned + '只（含附加目标）' : '实际日线扫描未记录');
     var snapshot = value.market_close_snapshot && typeof value.market_close_snapshot === 'object'
       ? value.market_close_snapshot : {};
     var snapshotStatus = normalizeString(snapshot.status).trim();
@@ -5338,18 +5344,51 @@
       ? (retrievalMode === 'base_plus_overlay'
         ? '日线检索 ' + retrieval.retrieval + '/登记候选 ' + retrieval.full_a
         : '日线检索记录 ' + retrieval.retrieval + '/登记候选 ' + retrieval.full_a)
-        + (isFormalMarketNumber(retrieval.first_failure, 0, Infinity)
-          ? (retrievalMode === 'base_plus_overlay'
-            ? '；检索筛选未入 ' + retrieval.first_failure
-            : '；前置筛选未入 ' + retrieval.first_failure) : '')
       : '日线检索未记录';
-    var eligibility = value.eligibility && typeof value.eligibility === 'object' ? value.eligibility : {};
+    if (isCoverageCount(retrieval.quota_excluded)) {
+      projectedFacts.push('检索名额外 ' + retrieval.quota_excluded + '只');
+    } else if (!Object.prototype.hasOwnProperty.call(retrieval, 'quota_excluded')
+        && isCoverageCount(retrieval.first_failure)) {
+      projectedFacts.push('检索筛选未入 ' + retrieval.first_failure + '只（旧记录）');
+    }
     var excluded = eligibility.excluded && typeof eligibility.excluded === 'object' ? eligibility.excluded : {};
     var excludedText = (isFormalMarketNumber(excluded.nonfinal_bars, 0, Infinity)
       || isFormalMarketNumber(excluded.stale_latest_bar, 0, Infinity))
       ? '日线未定稿 ' + (isFormalMarketNumber(excluded.nonfinal_bars, 0, Infinity) ? excluded.nonfinal_bars : '--')
-        + ' · 历史过期 ' + (isFormalMarketNumber(excluded.stale_latest_bar, 0, Infinity) ? excluded.stale_latest_bar : '--')
+        + ' · 最新日缺失 ' + (isFormalMarketNumber(excluded.stale_latest_bar, 0, Infinity) ? excluded.stale_latest_bar : '--')
       : '日线定稿/过期未记录';
+    [['missing_meta', '元数据缺失'], ['volume_evidence_incomplete', '量证据缺失'],
+      ['amount_evidence_incomplete', '金额证据缺失']].forEach(function (entry) {
+      if (isCoverageCount(excluded[entry[0]]) && excluded[entry[0]] > 0) {
+        projectedFacts.push(entry[1] + ' ' + excluded[entry[0]] + '只');
+      }
+    });
+    var listing = eligibility.listing_age_evidence && typeof eligibility.listing_age_evidence === 'object'
+      ? eligibility.listing_age_evidence : {};
+    if (isCoverageCount(listing.unknown) || isCoverageCount(listing.below_minimum)) {
+      projectedFacts.push('上市年限未核验 ' + (isCoverageCount(listing.unknown) ? listing.unknown + '只' : '未记录')
+        + ' · 上市年限不足 ' + (isCoverageCount(listing.below_minimum) ? listing.below_minimum + '只' : '未记录'));
+    } else if (isCoverageCount(excluded.listed_days) && excluded.listed_days > 0) {
+      projectedFacts.push('上市年限细分未记录（排除 ' + excluded.listed_days + '只）');
+    }
+    var evaluation = value.classic_minute30_evaluation && typeof value.classic_minute30_evaluation === 'object'
+      ? value.classic_minute30_evaluation : {};
+    var evaluationCounts = evaluation.stock_counts || {};
+    var evaluationLabels = [['price_basis_unverified', '口径待核验'],
+      ['valid_no_confirmation', '有效无确认'], ['passed', '评估通过'],
+      ['not_requested', '未请求'], ['request_failed', '请求失败'], ['risk_rejected', '真实风险拒绝']];
+    if (evaluation.status === 'recorded' && isCoverageCount(evaluation.input_count)
+        && evaluationLabels.every(function (entry) { return isCoverageCount(evaluationCounts[entry[0]]); })) {
+      projectedFacts.push('经典30分钟（' + evaluation.input_count + '只）：' + evaluationLabels.filter(function (entry, index) {
+        return index < 3 || evaluationCounts[entry[0]] > 0;
+      }).map(function (entry) { return entry[1] + ' ' + evaluationCounts[entry[0]] + '只'; }).join('，'));
+    } else {
+      projectedFacts.push(evaluation.status === 'conflict' ? '经典30分钟评估记录冲突' : '经典30分钟评估未记录');
+    }
+    var formal = value.formal && typeof value.formal === 'object' ? value.formal : {};
+    if (isCoverageCount(formal.recommendation_count)) {
+      projectedFacts.push('正式主推 ' + formal.recommendation_count + '只');
+    }
     return [statusLabel].concat(projectedFacts, [retrievalText, minuteText, excludedText]).join(' · ');
   }
 
@@ -5360,11 +5399,12 @@
       if (!result) return '';
       var reason;
       if (result.state === 'verified_empty') {
-        reason = entry[0] === 'main' ? '本期没有通过全部条件的正式结果。' : '本期没有候选通过 H4 T+3 全部门槛。';
+        reason = entry[0] === 'main' ? '已评估范围内暂无通过全部条件的正式结果。' : '本期没有候选通过 H4 T+3 全部门槛。';
         if (entry[0] === 'main' && admission.kept_formal === 0
             && isFormalMarketNumber(admission.kept_candidate, 1, Infinity)) {
-          reason = '留下的 ' + admission.kept_candidate + ' 只仍处于候选阶段，尚未形成正式买点；继续观察个股确认条件。';
+          reason += '融合筛选保留 ' + admission.kept_candidate + ' 只候选，正式主推另需通过决策评分及风险条件。';
         }
+        if (entry[0] === 'main') reason += '评估范围与待核验分项见覆盖记录。';
       } else if (result.state === 'unavailable') {
         reason = normalizeString(result.reason) || '本期数据未通过核验，暂不能判断。';
       } else {
@@ -5993,7 +6033,7 @@
           + '<span>当前筛选没有匹配对象；主推完整集合与原状态均已保留。</span></div>';
       }
       return '<div class="candidate-empty decision-empty"><strong>本期暂无主推</strong>'
-        + '<span>原正式推荐、正式结果与优先关注的有效阅读集合均为空；不从研究池自动补票。</span></div>';
+        + '<span>原正式推荐、正式结果与优先关注的有效阅读集合均为空；评估范围与待核验分项见概览。</span></div>';
     }
     if (isDecisionView(viewKey) && !ctx.filtered) {
       var projection = getDecisionWorkbench() || {};

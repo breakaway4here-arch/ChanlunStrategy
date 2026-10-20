@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
@@ -248,31 +248,37 @@ def _decorate_legacy_bar(row: Mapping[str, Any]) -> Dict[str, Any]:
 class MarketHistoryStore:
     """Read/write facade for the unified market history SQLite database."""
 
-    def __init__(self, path: Any, readonly: bool = False, immutable: bool = False):
+    def __init__(self, path: Any, readonly: bool = False, immutable: bool = False,
+                 execution_budget=None):
         self.path = Path(path).expanduser().resolve()
         self.readonly = bool(readonly)
         self.immutable = bool(immutable)
         if self.immutable and not self.readonly:
             raise ValueError("immutable mode requires readonly=True")
 
+        if execution_budget is not None:
+            execution_budget.ensure()
+        connect_options = ({'timeout': max(0., min(.1, execution_budget.remaining()))}
+                           if execution_budget is not None else {})
         if self.readonly:
             uri = "file:{}?mode=ro{}".format(
                 quote(str(self.path), safe="/"),
                 "&immutable=1" if self.immutable else "",
             )
-            self.connection = sqlite3.connect(uri, uri=True)
+            self.connection = sqlite3.connect(uri, uri=True, **connect_options)
         else:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self.connection = sqlite3.connect(str(self.path))
+            self.connection = sqlite3.connect(str(self.path), **connect_options)
         self.connection.row_factory = sqlite3.Row
-        self.connection.execute("PRAGMA foreign_keys = ON")
-        if not self.readonly:
-            try:
-                self._initialize_schema()
-            except Exception:
-                self.connection.close()
-                self.connection = None
-                raise
+        try:
+            with self.repair_execution(execution_budget) if execution_budget is not None else nullcontext():
+                self.connection.execute("PRAGMA foreign_keys = ON")
+                if not self.readonly:
+                    self._initialize_schema()
+        except BaseException:
+            self.connection.close()
+            self.connection = None
+            raise
 
     def __enter__(self):
         return self
@@ -1257,6 +1263,73 @@ class MarketHistoryStore:
             _decorate_legacy_bar(row)
             for row in self.connection.execute(sql, params).fetchall()
         ]
+
+    @contextmanager
+    def repair_execution(self, budget):
+        """Interrupt SQL work at the shared maintenance deadline, including lock waits."""
+        errors = []
+        def expired():
+            try:
+                return int(budget.remaining() <= 0)
+            except BaseException as exc:
+                errors.append(exc)
+                return 1
+        budget.ensure()
+        self.connection.execute('PRAGMA busy_timeout={}'.format(
+            max(1, min(100, int(budget.remaining()*1000)))))
+        self.connection.set_progress_handler(expired, 1000)
+        try:
+            yield self
+        except sqlite3.OperationalError as exc:
+            if errors:
+                raise errors[0]
+            if budget.remaining() <= 0:
+                raise ValueError('daily_repair_deadline') from exc
+            raise
+        finally:
+            self.connection.set_progress_handler(None, 0)
+
+    def discover_daily_nonfinal(self, required_date, budget, instrument_ids=None):
+        """Read only finality/version fields in each existing latest-120 window.
+
+        Keep already discovered gaps on deadline; incomplete discovery is explicit.
+        Healthy rows never load OHLCV. Only discovered bad rows load their
+        content for the persistent evidence version.
+        """
+        gaps = []
+        scanned = 0
+        try:
+            with self.repair_execution(budget):
+                if instrument_ids is None:
+                    instruments = self.list_instruments(asset_type='stock')
+                else:
+                    ids = list(dict.fromkeys(int(i) for i in instrument_ids))
+                    instruments = []
+                    for iid in ids:
+                        row = self.connection.execute('SELECT instrument_id, asset_type, exchange, code '
+                            'FROM instruments WHERE instrument_id=?', (iid,)).fetchone()
+                        if row:
+                            instruments.append(dict(row))
+                for instrument in instruments:
+                    budget.ensure()
+                    rows = self.connection.execute('SELECT ts, is_final, updated_at FROM bars_day '
+                        'WHERE instrument_id=? AND ts<=? ORDER BY ts DESC LIMIT 120',
+                        (instrument['instrument_id'], str(required_date))).fetchall()
+                    scanned += 1
+                    bad_dates = [row['ts'] for row in rows if not bool(row['is_final'])]
+                    if bad_dates:
+                        # Full content is needed only for known bad rows: their
+                        # real evidence version must not rely on updated_at alone.
+                        budget.ensure()
+                        bad = [_decorate_legacy_bar(row) for row in self.connection.execute(
+                            'SELECT * FROM bars_day WHERE instrument_id=? AND ts IN ({}) '
+                            'ORDER BY ts'.format(','.join('?' for _ in bad_dates)),
+                            [instrument['instrument_id']] + bad_dates).fetchall()]
+                        gaps.append(dict(instrument=instrument, bad_rows=bad, count=len(rows),
+                            latest_date=str(rows[0]['ts']).split(' ')[0]))
+            return dict(gaps=gaps, complete=True, scanned=scanned, reason='')
+        except (ValueError, sqlite3.OperationalError) as exc:
+            return dict(gaps=gaps, complete=False, scanned=scanned, reason=str(exc))
 
     def query_bars_many(
         self,
