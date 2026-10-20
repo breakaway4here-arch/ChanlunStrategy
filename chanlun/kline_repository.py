@@ -23,10 +23,12 @@ import numpy as np
 
 from .market_history_store import MarketHistoryStore
 from .daily_repair_queue import DailyRepairQueue, RepairQueueError
+from .daily_price_repair import DailyPriceConflict, classify_price_conflict
 from .identity import InstrumentIdentity, normalize_identity
 from .minute_sources import align_daily_basis
 from .price_basis import (basis_sha256, canonical_daily_reference,
-                          minute_price_rows, pending_minute_basis, verified_minute_basis)
+                          minute_price_rows, pending_minute_basis, verified_minute_basis,
+                          repaired_daily_basis_failure)
 
 
 _CN_TZ = timezone(timedelta(hours=8))
@@ -478,10 +480,13 @@ class KLineRepository:
             self._prepare_remote(interval, identity, aligned)['bars'], 'verified', False))
         receipts = {}
         for date, mapping in evidence.items():
+            receipt_as_of = str(as_of or datetime.now(_CN_TZ).isoformat())
+            if repaired_daily_basis_failure([dict(mapping['target_daily'], ts=date)], as_of=receipt_as_of):
+                continue
             raw_rows = [row for row in inputs if row['ts'][:10] == date]
             mapped_rows = [row for row in outputs if row['ts'][:10] == date]
             receipt = {'schema_version': 1, 'identity_key': identity.key, 'interval': interval,
-                       'date': date, 'as_of': str(as_of or datetime.now(_CN_TZ).isoformat()), 'input_adjustment': 'unverified',
+                       'date': date, 'as_of': receipt_as_of, 'input_adjustment': 'unverified',
                        'output_adjustment': 'qfq', 'transform_applied': True,
                        'input_rows': raw_rows, 'output_rows': mapped_rows,
                        'input_sha256': basis_sha256(raw_rows), 'output_sha256': basis_sha256(mapped_rows),
@@ -775,6 +780,8 @@ class KLineRepository:
                             break
                         except Exception as exc:
                             detail['reasons'].append('{}:{}'.format(source, str(exc)))
+                            if isinstance(exc, DailyPriceConflict):
+                                detail.setdefault('price_conflicts', []).append(dict(exc.diagnostic, source=source))
                     if (queue is not None and (sent or intent_saved) and not queue_error
                             and budget.remaining() > 0):
                         try:
@@ -905,6 +912,9 @@ class KLineRepository:
                 keys += ('volume',)
             for key in keys:
                 if not math.isclose(float(original[key]), float(replacement[key]), rel_tol=1e-6, abs_tol=1e-8):
+                    if key in ('open','high','low','close'):
+                        raise DailyPriceConflict('repair_healthy_overlap_conflict',
+                            classify_price_conflict(healthy, [remote[r['ts']] for r in healthy]))
                     raise ValueError('repair_healthy_overlap_conflict')
             if original.get('amount_available') and replacement['amount_available']:
                 if original.get('amount_unit') != replacement['amount_unit'] or not math.isclose(
@@ -1324,7 +1334,12 @@ class KLineRepository:
                             del self._memory[cached]
             if interval == 'day' and pending_repair and pending_repair[0] == str(required_date):
                 status, stale = 'repair_pending', True
+            basis_failure = repaired_daily_basis_failure(rows, as_of=as_of) if interval == 'day' else None
+            if basis_failure:
+                status, stale = 'price_basis_unverified', False
             kline = self._rows_to_kline(rows, status, stale)
+            if kline and basis_failure:
+                kline['_data_status']['degraded_reason'] = basis_failure
             reference_failure = False
             if kline is not None and interval == 'day':
                 try:
