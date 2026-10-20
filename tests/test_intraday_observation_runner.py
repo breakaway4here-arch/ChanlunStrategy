@@ -195,7 +195,12 @@ class ObservationRunnerTests(unittest.TestCase):
             self.assertLess(elapsed,.4)
             self.assertEqual(calls,[1])
             self.assertFalse(result['success'])
-            self.assertEqual(json.loads((Path(directory)/'outbox.json').read_text())['parts']['0']['state'],'uncertain')
+            self.assertEqual(json.loads((Path(directory)/'outbox.json').read_text())['parts']['0']['state'],'dispatching')
+            repeated = runner.deliver_before_deadline(snapshot,
+                deadline=datetime.now(SHANGHAI)+timedelta(seconds=1),
+                outbox_path=Path(directory)/'outbox.json', app_token='a', uid='u', sender=stalled)
+            self.assertFalse(repeated['success'])
+            self.assertEqual(calls,[1])
         self.assertIs(signal.getsignal(signal.SIGALRM), previous_handler)
         self.assertEqual(signal.getitimer(signal.ITIMER_REAL),(0.0,0.0))
 
