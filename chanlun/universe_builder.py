@@ -10,6 +10,7 @@ import numpy as np
 
 from .market_history_store import MarketHistoryStore
 from .identity import normalize_identity
+from .price_basis import canonical_daily_reference
 
 
 @dataclass(frozen=True)
@@ -290,6 +291,7 @@ def load_eligible_candidates(
         "risk_evidence_conflict": 0,
     }
     risk_unknown_count = 0
+    listing_age_evidence = {'unknown': 0, 'below_minimum': 0}
     for instrument in instruments:
         try:
             canonical = normalize_identity(instrument)
@@ -363,10 +365,14 @@ def load_eligible_candidates(
             listed_days = int(meta.get("listed_days"))
         except (TypeError, ValueError):
             excluded["listed_days"] += 1
+            listing_age_evidence['unknown'] += 1
+            audit['listing_age_status'] = 'unknown'
             reject("listed_days")
             continue
         if listed_days < int(min_listed_days):
             excluded["listed_days"] += 1
+            listing_age_evidence['below_minimum'] += 1
+            audit['listing_age_status'] = 'below_minimum'
             reject("listed_days")
             continue
         if len(rows) < int(minimum_bars):
@@ -432,6 +438,8 @@ def load_eligible_candidates(
                 else meta.get("circulating_market_cap")
             ),
             "klines": kline,
+            "price_basis": {"adjustment": str(kline['adjustment']),
+                            "canonical_daily": canonical_daily_reference(canonical, rows)},
             "data_status": kline["_data_status"],
             "amount": average_amount,
             "amounts": np.array(
@@ -457,6 +465,7 @@ def load_eligible_candidates(
         "instrument_count": len(instruments),
         "eligible_count": len(candidates),
         "risk_unknown_count": risk_unknown_count,
+        "listing_age_evidence": listing_age_evidence,
         "excluded": excluded,
     }
     if return_diagnostics:

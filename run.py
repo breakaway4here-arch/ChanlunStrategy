@@ -191,6 +191,7 @@ def _attach_kline_evidence(result, kline):
         "volume_unit", "volume_raw_unit", "volume_source",
         "amount_available", "amount_units", "amount_sources",
         "amount_unit", "amount_source",
+        "is_final", "source_batches", "adjustment", "minute_to_daily",
     ):
         if isinstance(kline, dict) and key in kline:
             setattr(result, key, kline[key])
@@ -3629,7 +3630,8 @@ def main(debug=False, preview=False, generated_at=None, *, observation_context=N
 
             print("[纯净版候选升级]")
             pure_confirmed, upgrade_diag_pure = upgrade_daily_candidates_with_30min(
-                pure_pool, chan_results_30min, mode="pure")
+                pure_pool, chan_results_30min, mode="pure",
+                requested_codes=all_target_codes, failure_evidence=min30_failure_evidence)
             print(f"  formal_kept={upgrade_diag_pure['formal_kept']}, "
                   f"candidate_upgraded={upgrade_diag_pure['candidate_upgraded']}, "
                   f"dropped_no_confirm={upgrade_diag_pure['dropped_no_confirm']}, "
@@ -3753,7 +3755,8 @@ def main(debug=False, preview=False, generated_at=None, *, observation_context=N
             else:
                 print("[融合版候选升级]")
                 fusion_confirmed, upgrade_diag_fusion = upgrade_daily_candidates_with_30min(
-                    fusion_pool, chan_results_30min, mode="fusion")
+                    fusion_pool, chan_results_30min, mode="fusion",
+                    requested_codes=all_target_codes, failure_evidence=min30_failure_evidence)
                 print(f"  formal_kept={upgrade_diag_fusion['formal_kept']}, "
                       f"candidate_upgraded={upgrade_diag_fusion['candidate_upgraded']}, "
                       f"dropped_no_confirm={upgrade_diag_fusion['dropped_no_confirm']}, "
@@ -3761,6 +3764,21 @@ def main(debug=False, preview=False, generated_at=None, *, observation_context=N
                       f"dropped_risk_guard={upgrade_diag_fusion.get('dropped_risk_guard', 0)}, "
                       f"dropped_diverge_far={upgrade_diag_fusion.get('dropped_diverge_far', 0)}")
                 fusion_admission_diag = {}
+
+        # Keep the old aggregate diagnostics while exposing why each stock and
+        # buy point was not evaluated/confirmed, including an all-fetch-failed run.
+        for pool, diagnostic in ((pure_pool, upgrade_diag_pure),
+                                 (pure_pool if ENABLE_FUSION_ADMISSION_POLICY else fusion_pool,
+                                  upgrade_diag_fusion)):
+            if 'evaluation_by_code' not in diagnostic:
+                if formal_min30_data_list and ENABLE_FUSION_ADMISSION_POLICY:
+                    details = upgrade_diag_pure
+                else:
+                    _, details = upgrade_daily_candidates_with_30min(
+                        pool, [], requested_codes=all_target_codes,
+                        failure_evidence=min30_failure_evidence)
+                for key in ('evaluation_by_code', 'evaluation_stock_counts', 'evaluation_buy_point_counts'):
+                    diagnostic[key] = copy.deepcopy(details.get(key, {}))
 
         # Right-side startup has a private 30m lane.  In shadow mode its
         # read-only hits must never make the formal fetch appear successful.

@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import math
+import json
+import os
+import tempfile
 import copy
 import inspect
 import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,8 +22,11 @@ from typing import Any, Callable, Dict, List, Mapping, Optional, Sequence
 import numpy as np
 
 from .market_history_store import MarketHistoryStore
+from .daily_repair_queue import DailyRepairQueue, RepairQueueError
 from .identity import InstrumentIdentity, normalize_identity
 from .minute_sources import align_daily_basis
+from .price_basis import (basis_sha256, canonical_daily_reference,
+                          minute_price_rows, pending_minute_basis, verified_minute_basis)
 
 
 _CN_TZ = timezone(timedelta(hours=8))
@@ -38,9 +45,12 @@ class DailyRepairBudget:
         self.max_stocks = min(8, max(0, int(max_stocks)))
         self.max_requests = min(16, max(0, int(max_requests)))
         self.monotonic = monotonic
-        self.deadline = float(monotonic()) + min(20., max(0., float(seconds)))
+        self.started = float(monotonic())
+        self.deadline = self.started + min(20., max(0., float(seconds)))
         self.external_remaining = remaining
         self.requests = 0
+        self.stocks = 0
+        self.phase_seconds = {}
 
     def remaining(self):
         left = self.deadline - float(self.monotonic())
@@ -51,6 +61,21 @@ class DailyRepairBudget:
     def ensure(self):
         if self.remaining() <= 0:
             raise ValueError('daily_repair_deadline')
+
+    @contextmanager
+    def phase(self, name):
+        started = float(self.monotonic())
+        try:
+            yield
+        finally:
+            self.phase_seconds[name] = self.phase_seconds.get(name, 0.) + max(
+                0., float(self.monotonic()) - started)
+
+    def take_stock(self):
+        self.ensure()
+        if self.stocks >= self.max_stocks:
+            raise ValueError('daily_repair_stock_limit')
+        self.stocks += 1
 
     def take_request(self):
         remaining = self.remaining()
@@ -113,11 +138,12 @@ class KLineRepository:
     def _identity(value: Any) -> InstrumentIdentity:
         return normalize_identity(value)
 
-    def _open(self, readonly: bool) -> MarketHistoryStore:
+    def _open(self, readonly: bool, execution_budget=None) -> MarketHistoryStore:
         store = MarketHistoryStore(
             self.path,
             readonly=readonly,
             immutable=readonly and self.mode == "backtest" and self.immutable_backtest,
+            execution_budget=execution_budget,
         )
         if self.trace_callback is not None:
             store.connection.set_trace_callback(self.trace_callback)
@@ -394,6 +420,7 @@ class KLineRepository:
             "amount_source": _summary(amount_sources),
             "source": "market_history_db",
             "adjustment": str(rows[-1]["adjustment"]),
+            "source_batches": [str(row.get('source_batch') or '') for row in rows],
         }
         result["_data_status"] = {
             "daily": status,
@@ -406,6 +433,62 @@ class KLineRepository:
             "nonfinal_dates": [str(row['ts']) for row in rows if not bool(row['is_final'])],
         }
         return result
+
+    def _basis_receipt_path(self, identity, interval):
+        return self.path.parent / 'minute_basis_v1' / (
+            self.path.name + '.' + identity.key.replace('|', '-') + '.' + interval + '.json')
+
+    def _load_basis_receipts(self, identity, interval):
+        try:
+            with self._basis_receipt_path(identity, interval).open() as handle:
+                payload = json.load(handle)
+            return payload if isinstance(payload, dict) else {}
+        except (OSError, ValueError):
+            return {}
+
+    def _save_basis_receipts(self, identity, interval, receipts):
+        """A bounded sidecar at the existing DB cache boundary; no bar migration."""
+        if self.mode != 'ongoing' or not receipts:
+            return
+        path = self._basis_receipt_path(identity, interval)
+        with self._write_lock:
+            current = self._load_basis_receipts(identity, interval)
+            current.update(receipts)
+            current = {date: current[date] for date in sorted(current)[-240:]}
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = None
+            try:
+                with tempfile.NamedTemporaryFile(mode='w', dir=path.parent, delete=False) as handle:
+                    temporary = handle.name
+                    json.dump(current, handle, sort_keys=True, allow_nan=False)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(temporary, path)
+            finally:
+                if temporary and os.path.exists(temporary):
+                    os.unlink(temporary)
+
+    def _producer_basis_receipts(self, interval, identity, source, aligned, as_of):
+        evidence = aligned.get('price_basis_evidence')
+        if not isinstance(evidence, Mapping) or source.get('adjustment') != 'unverified':
+            return {}
+        inputs = minute_price_rows(self._rows_to_kline(
+            self._prepare_remote(interval, identity, source)['bars'], 'verified', False))
+        outputs = minute_price_rows(self._rows_to_kline(
+            self._prepare_remote(interval, identity, aligned)['bars'], 'verified', False))
+        receipts = {}
+        for date, mapping in evidence.items():
+            raw_rows = [row for row in inputs if row['ts'][:10] == date]
+            mapped_rows = [row for row in outputs if row['ts'][:10] == date]
+            receipt = {'schema_version': 1, 'identity_key': identity.key, 'interval': interval,
+                       'date': date, 'as_of': str(as_of or datetime.now(_CN_TZ).isoformat()), 'input_adjustment': 'unverified',
+                       'output_adjustment': 'qfq', 'transform_applied': True,
+                       'input_rows': raw_rows, 'output_rows': mapped_rows,
+                       'input_sha256': basis_sha256(raw_rows), 'output_sha256': basis_sha256(mapped_rows),
+                       'evidence': dict(mapping)}
+            receipt['sha256'] = basis_sha256(receipt)
+            receipts[date] = receipt
+        return receipts
 
     @classmethod
     def _needs_refresh(
@@ -476,11 +559,27 @@ class KLineRepository:
             return "preview", False
         return "stale_cache", True
 
+    @contextmanager
+    def _write_guard(self, budget):
+        if budget is None:
+            self._write_lock.acquire()
+        else:
+            budget.ensure()
+            if not self._write_lock.acquire(timeout=budget.remaining()):
+                raise ValueError('daily_repair_deadline')
+        try:
+            if budget is not None:
+                budget.ensure()
+            yield
+        finally:
+            self._write_lock.release()
+
     def _write_prepared(self, prepared: Sequence[Mapping[str, Any]], budget=None) -> None:
         if not prepared:
             return
-        with self._write_lock:
-            with self._open(readonly=False) as store:
+        with self._write_guard(budget):
+            with self._open(readonly=False, execution_budget=budget) as store, (
+                    store.repair_execution(budget) if budget is not None else nullcontext()):
                 try:
                     if budget is not None:
                         budget.ensure()
@@ -524,93 +623,199 @@ class KLineRepository:
     def repair_daily_nonfinal(self, required_date, *, providers, write=True,
                               budget=None, fetch_buffer=False, as_of=None,
                               require_full_quantity=False):
-        """Replace only concrete nonfinal dates in the existing <=120 qualification window.
+        """Discover all latest-120 gaps and fairly maintain at most eight identities.
 
-        The ordinary missing-only fetcher is deliberately not used here. Read-only
-        callers receive overrides, never a writable connection to their database.
+        Wide rows are loaded only for this call's targets. A durable source intent
+        precedes every formal request; readonly preclose never opens the sidecar.
         """
         budget = budget or DailyRepairBudget()
         evidence_as_of = as_of or datetime.now(_CN_TZ).isoformat()
         if write and self.mode != 'ongoing':
             raise ValueError('read-only repository cannot write repairs')
-        with self._open(readonly=True) as store:
-            instruments = store.list_instruments(asset_type='stock')
-            rows_by_id = store.query_bars_many('day', [int(i['instrument_id']) for i in instruments],
-                                               as_of=required_date, limit=120)
-        gaps = [(i, rows_by_id[int(i['instrument_id'])]) for i in instruments
-                if any(not bool(r['is_final']) for r in rows_by_id[int(i['instrument_id'])])]
-        overrides, expected_overrides, repaired, pending = {}, {}, [], []
-        for index, (instrument, rows) in enumerate(gaps):
-            bad_dates = [r['ts'] for r in rows if not bool(r['is_final'])]
+        with budget.phase('discovery'):
+            with self._open(readonly=True) as store:
+                discovery = store.discover_daily_nonfinal(required_date, budget)
+        gaps = discovery['gaps']
+        overrides, expected_overrides, repaired = {}, {}, []
+        details, targets = [], []
+        for gap in gaps:
+            instrument = gap['instrument']
+            bad_dates = [r['ts'] for r in gap['bad_rows']]
+            detail = dict(code=instrument['code'], exchange=instrument['exchange'],
+                nonfinal_dates=bad_dates, reasons=[])
+            details.append(detail)
             try:
                 identity = self._identity(instrument)
             except (TypeError, ValueError):
-                pending.append(dict(code=instrument['code'], exchange=instrument['exchange'],
-                                    nonfinal_dates=bad_dates, reasons=['invalid_identity']))
+                detail['reasons'].append('invalid_identity')
                 continue
-            detail = dict(code=identity.code, exchange=identity.exchange,
-                          nonfinal_dates=bad_dates, reasons=[])
-            if index >= budget.max_stocks or budget.remaining() <= 0 or budget.requests >= budget.max_requests:
-                detail['reasons'].append('repair_budget_exhausted')
-                pending.append(detail)
-                continue
-            if len(rows) < 60 or self._latest_date(rows) != str(required_date):
-                detail['reasons'].append('local_qualification_window_incomplete')
-                pending.append(detail)
-                continue
-            adopted = False
-            for source, fetcher in list(providers)[:2]:
-                if budget.remaining() <= 0 or budget.requests >= budget.max_requests:
-                    detail['reasons'].append('repair_budget_exhausted')
-                    break
-                try:
-                    payload = fetcher(identity, len(rows) + int(bool(fetch_buffer)), request_budget=budget)
-                    budget.ensure()
-                    item = self._prepare_daily_repair(identity, rows, payload, source, required_date,
-                                                      evidence_as_of, require_full_quantity)
-                    replacements = {bar['ts']:bar for bar in item['bars'] if bar['ts'] in bad_dates}
-                    if set(replacements) != set(bad_dates):
-                        raise ValueError('repair_dates_not_covered')
-                    budget.ensure()
-                    if write:
-                        self._write_prepared([dict(item, bars=list(replacements.values()),
-                            repair_expected_rows=rows)], budget=budget)
-                        self._memory.clear()
-                    else:
-                        with self._open(readonly=True) as store:
-                            self._check_repair_rows(store, int(instrument['instrument_id']), rows,
-                                                    require_nonfinal=False)
+            # Only the bad rows and whether today's close is available form the
+            # input version. A healthy daily tail cannot reset every old failure.
+            # This is a maintenance version, not a price-basis proof. Invalid
+            # legacy values still need a stable version so one bad stock can be
+            # repaired or rejected by the existing validators without aborting discovery.
+            version_rows = [{key: ({'nonfinite_float':repr(value)}
+                if isinstance(value, float) and not math.isfinite(value) else value)
+                for key, value in row.items()} for row in gap['bad_rows']]
+            signature = basis_sha256(dict(identity=identity.key, bad_rows=version_rows,
+                required_close_available=bool(self._infer_final('day', str(required_date),
+                    self._parse_timestamp(evidence_as_of)))))
+            targets.append(dict(gap=gap, detail=detail, identity=identity,
+                key=identity.key, signature=signature, nonfinal_dates=bad_dates))
+        queue_error = ''
+        cooldown_count, unknown_count = 0, 0
+        attempted_ids = []
+        queue_context = (DailyRepairQueue(self.path, budget=budget) if write and discovery['complete']
+            and budget.remaining() > 0 and budget.stocks < budget.max_stocks
+            and budget.requests < budget.max_requests else nullcontext(None))
+        try:
+            with budget.phase('queue'):
+                queue = queue_context.__enter__()
+            try:
+                with budget.phase('queue'):
+                    if queue is not None:
+                        queue.reconcile(targets)
+                now = time.time()
+                if queue is not None:
+                    targets.sort(key=lambda t: queue.state['entries'][t['key']]['sequence'])
+                for target in targets:
+                    gap, detail, identity = target['gap'], target['detail'], target['identity']
+                    if not discovery['complete']:
+                        detail['reasons'].append('repair_discovery_incomplete')
+                        continue
+                    if queue_error:
+                        detail['reasons'].append(queue_error)
+                        continue
+                    entry = queue.state['entries'][target['key']] if queue is not None else None
+                    if entry is not None and entry['status'] == 'inflight':
+                        detail['reasons'].append('repair_attempt_unknown')
+                        unknown_count += 1
+                        continue
+                    if entry is not None and float(entry['next_attempt']) > now:
+                        detail['reasons'].extend(['repair_cooldown'] + list(entry.get('reasons') or []))
+                        detail['next_attempt_at'] = entry['next_attempt']
+                        cooldown_count += 1
+                        continue
+                    if (budget.stocks >= budget.max_stocks or budget.remaining() <= 0
+                            or budget.requests >= budget.max_requests):
+                        detail['reasons'].append('repair_budget_exhausted')
+                        continue
+                    if gap['count'] < 60 or gap['latest_date'] != str(required_date):
+                        detail['reasons'].append('local_qualification_window_incomplete')
+                        continue
+                    budget.take_stock()
+                    iid = int(gap['instrument']['instrument_id'])
+                    attempted_ids.append(iid)
+                    try:
+                        with budget.phase('read'):
+                            with self._open(readonly=True) as store, store.repair_execution(budget):
+                                rows = store.query_bars_many('day', [iid],
+                                    as_of=required_date, limit=120)[iid]
                         budget.ensure()
-                    merged = [dict(r, **replacements[r['ts']]) if r['ts'] in replacements else dict(r) for r in rows]
-                    overrides[int(instrument['instrument_id'])] = merged
-                    expected_overrides[int(instrument['instrument_id'])] = rows
-                    repaired.append(dict(detail, source=source))
-                    adopted = True
-                    break
-                except _RepairRowsChanged as exc:
-                    detail['reasons'].append('{}:{}'.format(source, str(exc)))
-                    break
-                except Exception as exc:
-                    detail['reasons'].append('{}:{}'.format(source, str(exc)))
-            if not adopted:
-                pending.append(detail)
+                    except Exception as exc:
+                        detail['reasons'].append(str(exc))
+                        continue
+                    # Recheck discovery against the exact snapshot used as CAS input.
+                    bad_dates = [r['ts'] for r in rows if not bool(r['is_final'])]
+                    bad_versions = [dict(r) for r in rows if not bool(r['is_final'])]
+                    if bad_versions != gap['bad_rows']:
+                        detail['reasons'].append('repair_discovery_changed')
+                        continue
+                    adopted = False
+                    sent = False
+                    intent_saved = False
+                    if not providers:
+                        detail['reasons'].append('repair_provider_unavailable')
+                    for source, fetcher in list(providers)[:2]:
+                        if budget.remaining() <= 0 or budget.requests >= budget.max_requests:
+                            detail['reasons'].append('repair_budget_exhausted')
+                            break
+                        try:
+                            if queue is not None:
+                                with budget.phase('queue'):
+                                    budget.ensure()
+                                    queue.intent(target['key'], source, time.time())
+                                    intent_saved = True
+                            budget.ensure()
+                            sent = True
+                            with budget.phase('request'):
+                                payload = fetcher(identity, len(rows) + int(bool(fetch_buffer)),
+                                    request_budget=budget)
+                            budget.ensure()
+                            with budget.phase('validation'):
+                                item = self._prepare_daily_repair(identity, rows, payload, source,
+                                    required_date, evidence_as_of, require_full_quantity)
+                                replacements = {bar['ts']:bar for bar in item['bars'] if bar['ts'] in bad_dates}
+                                if set(replacements) != set(bad_dates):
+                                    raise ValueError('repair_dates_not_covered')
+                            budget.ensure()
+                            with budget.phase('write' if write else 'readonly_check'):
+                                if write:
+                                    self._write_prepared([dict(item, bars=list(replacements.values()),
+                                        repair_expected_rows=rows)], budget=budget)
+                                    self._memory.clear()
+                                else:
+                                    with self._open(readonly=True) as store, store.repair_execution(budget):
+                                        self._check_repair_rows(store, iid, rows, require_nonfinal=False)
+                                    budget.ensure()
+                            merged = [dict(r, **replacements[r['ts']]) if r['ts'] in replacements else dict(r)
+                                      for r in rows]
+                            overrides[iid] = merged
+                            expected_overrides[iid] = rows
+                            repaired.append(dict(detail, source=source))
+                            detail['_repaired'] = True
+                            adopted = True
+                            break
+                        except RepairQueueError as exc:
+                            queue_error = str(exc)
+                            detail['reasons'].append(queue_error)
+                            break
+                        except _RepairRowsChanged as exc:
+                            detail['reasons'].append('{}:{}'.format(source, str(exc)))
+                            break
+                        except Exception as exc:
+                            detail['reasons'].append('{}:{}'.format(source, str(exc)))
+                    if (queue is not None and (sent or intent_saved) and not queue_error
+                            and budget.remaining() > 0):
+                        try:
+                            with budget.phase('queue'):
+                                # At the deadline the durable intent stays unknown;
+                                # do not start receipt persistence outside the budget.
+                                queue.finish(target['key'], adopted, detail['reasons'], time.time())
+                        except RepairQueueError as exc:
+                            queue_error = str(exc)
+                            if not adopted:
+                                detail['reasons'].append(queue_error)
+            finally:
+                queue_context.__exit__(None, None, None)
+        except RepairQueueError as exc:
+            queue_error = str(exc)
+            for detail in details:
+                if not detail['reasons']:
+                    detail['reasons'].append(queue_error)
+        pending = [detail for detail in details if not detail.pop('_repaired', False)]
+        # Only attempted identities can have changed during this call. Re-read
+        # their lightweight gaps; never reload all pending OHLCV windows.
+        if attempted_ids and budget.remaining() > 0:
+            with budget.phase('recheck'):
+                with self._open(readonly=True) as store:
+                    latest = store.discover_daily_nonfinal(required_date, budget, attempted_ids)
+            if latest['complete']:
+                by_identity = {(g['instrument']['exchange'], g['instrument']['code']):
+                    [r['ts'] for r in g['bad_rows']] for g in latest['gaps']}
+                attempted_keys = {(t['identity'].exchange, t['identity'].code) for t in targets
+                    if int(t['gap']['instrument']['instrument_id']) in attempted_ids}
+                for detail in pending:
+                    key = (detail['exchange'], detail['code'])
+                    if key in attempted_keys:
+                        actual_dates = by_identity.get(key, [])
+                        if actual_dates != detail['nonfinal_dates']:
+                            detail['initial_nonfinal_dates'] = detail['nonfinal_dates']
+                            detail['nonfinal_dates'] = actual_dates
         if write:
             self._memory.clear()
-            self._daily_repair_pending = {}
-        # A different writer may already have resolved a gap. The failed
-        # attempt remains auditable, while current final rows stay usable.
-        instrument_ids = {(i['exchange'], i['code']): int(i['instrument_id']) for i in instruments}
-        with self._open(readonly=True) as store:
-            current_rows = store.query_bars_many('day',
-                [instrument_ids[(d['exchange'], d['code'])] for d in pending],
-                as_of=required_date, limit=120)
-        for detail in pending:
-            actual_dates = [r['ts'] for r in current_rows[instrument_ids[(detail['exchange'], detail['code'])]]
-                            if not bool(r['is_final'])]
-            if actual_dates != detail['nonfinal_dates']:
-                detail['initial_nonfinal_dates'] = detail['nonfinal_dates']
-                detail['nonfinal_dates'] = actual_dates
-        if write:
+            if discovery['complete']:
+                self._daily_repair_pending = {}
             for detail in pending:
                 if not detail['nonfinal_dates']:
                     continue
@@ -619,9 +824,22 @@ class KLineRepository:
                 except ValueError:
                     continue
                 self._daily_repair_pending[identity] = (str(required_date), detail['nonfinal_dates'])
-        return dict(daily_rows_override=overrides, daily_rows_expected=expected_overrides, diagnostics=dict(
-            nonfinal_stock_count=len(gaps), repaired_count=len(repaired), repaired=repaired,
-            pending_count=len(pending), pending=pending, http_requests=budget.requests))
+        complete = discovery['complete']
+        return dict(daily_rows_override=overrides, daily_rows_expected=expected_overrides,
+            diagnostics=dict(nonfinal_stock_count=len(gaps) if complete else None,
+                discovered_nonfinal_stock_count=len(gaps), discovery_complete=complete,
+                discovery_reason=discovery['reason'], discovery_scanned_count=discovery['scanned'],
+                valid_identity_count=len(targets) if complete else None,
+                invalid_identity_count=len(gaps)-len(targets) if complete else None,
+                discovered_valid_identity_count=len(targets),
+                discovered_invalid_identity_count=len(gaps)-len(targets),
+                repaired_count=len(repaired), repaired=repaired,
+                pending_count=len(pending) if complete else None, pending=pending,
+                known_pending_count=len(pending), queue_error=queue_error,
+                cooldown_count=cooldown_count, unknown_attempt_count=unknown_count,
+                stock_attempts=budget.stocks, http_requests=budget.requests,
+                phase_seconds=dict(budget.phase_seconds),
+                elapsed_seconds=max(0., float(budget.monotonic())-budget.started)))
 
     def _prepare_daily_repair(self, identity, rows, payload, source, required_date, as_of,
                               require_full_quantity=False):
@@ -921,6 +1139,7 @@ class KLineRepository:
         remote_diagnostics = {}
         fetched_remote = set()
         prepared = []
+        producer_receipts = {}
         read_only_remote = {}
 
         refresh_identities = [
@@ -984,9 +1203,12 @@ class KLineRepository:
                                 remote_diagnostics[identity] = dict(diagnostics)
                         if validator is not None:
                             try:
+                                original_payload = payload
                                 payload, _checked = validator(payload)
                                 if payload.get('price_basis_evidence'):
                                     remote_diagnostics.setdefault(identity, {})['price_basis_evidence'] = payload['price_basis_evidence']
+                                    producer_receipts[identity] = self._producer_basis_receipts(
+                                        interval, identity, original_payload, payload, as_of)
                             except (ValueError, TypeError, KeyError) as exc:
                                 reason = str(exc)
                                 remote_diagnostics.setdefault(identity, {})['price_basis_failure'] = (
@@ -1057,10 +1279,17 @@ class KLineRepository:
                         remote_failed[identity] = True
                         fetched_remote.discard(identity)
                 else:
+                    for identity in fetched_remote:
+                        try:
+                            self._save_basis_receipts(identity, interval, producer_receipts.get(identity, {}))
+                        except (OSError, ValueError):
+                            remote_diagnostics.setdefault(identity, {})['price_basis_receipt_failure'] = 'receipt_write_failed'
                     local = self._load_many(
                         interval, identities, int(count), as_of
                     )
 
+        minute_daily_rows = (self._load_many('day', identities, 240, as_of)
+                             if interval in ('30m', '15m') else {})
         results = {}
         for identity in identities:
             result_key = result_keys[identity]
@@ -1073,9 +1302,37 @@ class KLineRepository:
                 remote_failed=bool(remote_failed.get(identity)),
             )
             pending_repair = self._daily_repair_pending.get(identity)
+            if (interval == 'day' and pending_repair and pending_repair[0] == str(required_date)
+                    and status == 'verified' and pending_repair[1]):
+                covered = {row['ts']:row for row in rows}
+                resolved = True
+                for bad_date in pending_repair[1]:
+                    row = covered.get(bad_date)
+                    if not row or not bool(row['is_final']) or row['adjustment'] != self.adjustment:
+                        resolved = False
+                        break
+                    try:
+                        MarketHistoryStore._validated_bar(row, self.adjustment)
+                    except (TypeError, ValueError):
+                        resolved = False
+                        break
+                if resolved:
+                    self._daily_repair_pending.pop(identity, None)
+                    pending_repair = None
+                    for cached in list(self._memory):
+                        if cached[0] == 'day' and cached[1] == identity.key:
+                            del self._memory[cached]
             if interval == 'day' and pending_repair and pending_repair[0] == str(required_date):
                 status, stale = 'repair_pending', True
             kline = self._rows_to_kline(rows, status, stale)
+            reference_failure = False
+            if kline is not None and interval == 'day':
+                try:
+                    kline['canonical_daily'] = canonical_daily_reference(identity, rows)
+                except (TypeError, ValueError, KeyError, OverflowError):
+                    # Reference evidence is optional; a bad identity's reference
+                    # cannot discard the existing K-line or healthy batch members.
+                    reference_failure = True
             if kline and interval == 'day' and pending_repair and pending_repair[0] == str(required_date):
                 kline['_data_status']['nonfinal_dates'] = list(pending_repair[1])
             result_source = "market_history_db" if kline else "missing"
@@ -1096,6 +1353,20 @@ class KLineRepository:
                 "mode": self.mode,
             }
             diagnostics.update(remote_diagnostics.get(identity, {}))
+            if reference_failure:
+                diagnostics['canonical_daily_reference'] = dict(
+                    status='pending', reason='invalid_daily_reference')
+            if kline is not None and interval in ('30m', '15m'):
+                daily_rows = minute_daily_rows[identity]
+                try:
+                    reference = canonical_daily_reference(identity, daily_rows)
+                except (TypeError, ValueError, KeyError, OverflowError):
+                    proof = pending_minute_basis('invalid_daily_reference', identity.key, interval, as_of)
+                else:
+                    proof = verified_minute_basis(identity, interval, kline, reference,
+                        self._load_basis_receipts(identity, interval), as_of)
+                kline['minute_to_daily'] = proof
+                diagnostics['minute_to_daily'] = proof
             diagnostics.update(
                 self._shadow_diagnostics(interval, identity, int(count), kline)
             )
@@ -1140,7 +1411,7 @@ class KLineRepository:
             as_of,
             force_refresh,
         )
-        if key in self._memory:
+        if interval == 'day' and key in self._memory:
             return self._memory[key]
         return self.get_many(
             interval,

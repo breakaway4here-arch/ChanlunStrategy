@@ -206,6 +206,12 @@ def validate_preclose_30m_payload(
             return None, "invalid_high"
         if low_price > min(open_price, high_price, close_price):
             return None, "invalid_low"
+    # Timestamp/OHLC validation does not prove an adjustment scale.  This entry
+    # has no cutoff-safe raw-to-canonical mapping, including after a second
+    # normalization/truncation by fetch_target_30m_snapshots.
+    from .price_basis import pending_minute_basis
+    truncated['minute_to_daily'] = pending_minute_basis(
+        'preclose_basis_unverified', interval='30m', as_of=as_of)
     return truncated, ""
 
 
