@@ -17,7 +17,7 @@ from pathlib import Path
 
 from chanlun.intraday_observation_delivery import (
     SHANGHAI, _validate_snapshot, build_failure_snapshot,
-    build_observation_snapshot, content_hash, deliver_observation,
+    build_observation_snapshot, content_hash, deliver_observation, deliver_wecom_observation,
     freeze_json, freeze_observation_snapshot, validate_cutoff,
 )
 
@@ -228,35 +228,80 @@ def _run_worker(args, batch, trade_date, deadline):
     return _read_snapshot(batch / "snapshot.json", trade_date)
 
 
-class _DeliveryDeadline(TimeoutError):
+class _DeliveryDeadline(BaseException):
     pass
 
 
-def deliver_before_deadline(snapshot, *, deadline, clock=None, **kwargs):
-    """Bound the complete delivery operation, including a slow response body."""
-    clock = clock or _now
-    remaining = (deadline - clock()).total_seconds()
-    if remaining <= 0:
-        return {"status": "deadline_exceeded", "success": False}
+def _deliver_channel(deliver, snapshot, *, deadline, clock, budget, **kwargs):
+    """Hard-cap a channel, including a slow response body or lock wait."""
     old_handler = signal.getsignal(signal.SIGALRM)
     old_timer = signal.getitimer(signal.ITIMER_REAL)
     started = elapsed_clock.monotonic()
     def expired(_signum, _frame):
         raise _DeliveryDeadline("observation notification deadline")
-    signal.signal(signal.SIGALRM, expired)
-    signal.setitimer(signal.ITIMER_REAL, remaining)
     try:
-        return deliver_observation(snapshot, deadline=deadline, clock=clock, **kwargs)
+        try:
+            # Arm inside the cleanup boundary: a very short timer can fire
+            # before setitimer returns. Ordinary sender exception handlers must
+            # not swallow this signal and continue writing a final receipt.
+            signal.signal(signal.SIGALRM, expired)
+            signal.setitimer(signal.ITIMER_REAL, budget)
+            return deliver(snapshot, deadline=deadline, clock=clock, **kwargs)
+        finally:
+            try:
+                signal.setitimer(signal.ITIMER_REAL, 0)
+            finally:
+                signal.signal(signal.SIGALRM, old_handler)
+                if old_timer[0] > 0:
+                    restored = max(.000001, old_timer[0] - (elapsed_clock.monotonic() - started))
+                    signal.setitimer(signal.ITIMER_REAL, restored, old_timer[1])
     except _DeliveryDeadline:
-        # A durable dispatching receipt remains if the interrupt crossed the
-        # provider call or receipt write. Such a part is never auto-retried.
+        # Only our own cutoff is converted to a channel result. A dispatching
+        # receipt stays unknown; KeyboardInterrupt/SystemExit still propagate.
         return {"status": "deadline_exceeded", "success": False}
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, old_handler)
-        if old_timer[0] > 0:
-            restored = max(.000001, old_timer[0] - (elapsed_clock.monotonic() - started))
-            signal.setitimer(signal.ITIMER_REAL, restored, old_timer[1])
+    except Exception as exc:
+        # A corrupt/unknown receipt blocks this channel, not the other route.
+        return {"status": "delivery_failed", "success": False, "error": type(exc).__name__}
+
+
+def deliver_before_deadline(snapshot, *, deadline, outbox_path, app_token=None, uid=None,
+                            sender=None, wecom_webhook=None, wecom_sender=None, clock=None):
+    """WeCom first; independent receipts and one shared absolute send cutoff."""
+    clock = clock or _now
+    remaining = (deadline - clock()).total_seconds()
+    if remaining <= 0:
+        return {"status": "deadline_exceeded", "success": False}
+    started = elapsed_clock.monotonic()
+    configured = {"wecom": bool(wecom_webhook), "wxpusher": bool(app_token and uid)}
+    channels = {key: {"status": "not_configured", "success": False} for key in configured}
+    path = Path(outbox_path)
+    routes = (("wecom", deliver_wecom_observation,
+               {"outbox_path": path.with_name(path.stem + "-wecom" + path.suffix),
+                "webhook": wecom_webhook, "sender": wecom_sender}),
+              ("wxpusher", deliver_observation,
+               {"outbox_path": path, "app_token": app_token, "uid": uid, "sender": sender}))
+    for name, deliver, options in routes:
+        if not configured[name]:
+            continue
+        # A frozen or backwards wall clock cannot extend this invocation.
+        available = min((deadline - clock()).total_seconds(),
+                        remaining - (elapsed_clock.monotonic() - started))
+        if available <= 0:
+            channels[name] = {"status": "deadline_exceeded", "success": False}
+            continue
+        reserve = min(10.0, available / 2) if name == "wecom" and configured["wxpusher"] else 0
+        budget = available - reserve
+        channel_deadline = min(deadline, clock() + timedelta(seconds=budget))
+        channels[name] = _deliver_channel(deliver, snapshot, deadline=channel_deadline,
+                                         clock=clock, budget=budget, **options)
+    active = [channels[key] for key in channels if configured[key]]
+    if not wecom_webhook and configured["wxpusher"]:
+        # Preserve the existing single-Wx caller's return shape.
+        return channels["wxpusher"]
+    successful = bool(active) and all(item.get("success") is True for item in active)
+    return {"status": "sent" if successful else "partial" if any(item.get("success") is True for item in active)
+            else "delivery_incomplete" if active else "not_configured",
+            "success": successful, "channels": channels}
 
 
 def main(argv=None):
@@ -268,7 +313,7 @@ def main(argv=None):
     parser.add_argument("--input", help="existing frozen input; never fetch when provided")
     parser.add_argument("--date")
     parser.add_argument("--scheduled", action="store_true")
-    parser.add_argument("--send", action="store_true", help="send to configured personal WxPusher UID")
+    parser.add_argument("--send", action="store_true", help="send through the existing configured WeCom/WxPusher channels")
     parser.add_argument("--compute-worker", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--worker-deadline", help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
@@ -320,6 +365,7 @@ def main(argv=None):
             values = load_preclose_env(args.env_file)
             receipt = deliver_before_deadline(result, outbox_path=batch / "outbox.json",
                 app_token=values.get("WXPUSHER_APP_TOKEN"), uid=values.get("WXPUSHER_UID"),
+                wecom_webhook=values.get("WECOM_BOT_WEBHOOK"),
                 deadline=send_deadline)
         print(json.dumps({"trade_date": trade_date, "run_id": result["run_id"],
                           "status": result["status"], "delivery": receipt}, ensure_ascii=False))

@@ -13,6 +13,7 @@ import math
 import os
 import re
 import tempfile
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -160,14 +161,19 @@ def build_failure_snapshot(trade_date, *, cutoff, failure_code, input_hash=None)
     })
 
 
-def format_observation_messages(snapshot, *, max_chars=1200):
+def format_observation_messages(snapshot, *, max_chars=1200, max_bytes=None):
     _validate_snapshot(snapshot)
-    if max_chars < 250:
+    size = (lambda value: len(value.encode("utf-8"))) if max_bytes is not None else len
+    budget = max_bytes if max_bytes is not None else max_chars
+    if budget < 250:
         raise ValueError("message size too small")
     header = "【14:45完整选股观察】\n{} 数据截至14:45\n观察用途，盘后任务照常。批次 {}".format(
         snapshot["trade_date"], snapshot["content_hash"][:8])
     if snapshot["status"] == "failed":
-        return [header + "\n本次计算失败或关键数据不足，未提供候选池。"]
+        message = header + "\n本次计算失败或关键数据不足，未提供候选池。"
+        if size(message) > budget:
+            raise ValueError("message size too small")
+        return [message]
     lines = []
     coverage = snapshot.get("input_coverage", {})
     if coverage.get("status") == "partial":
@@ -201,17 +207,22 @@ def format_observation_messages(snapshot, *, max_chars=1200):
             for row in pool["rows"]:
                 lines.append("{} {}".format(row["name"], row["code"]))
     # Reserve room for the part counter before splitting; no names are truncated.
-    limit = max_chars - len(header) - 30
+    limit = budget - size(header) - 30
     groups, current = [], []
     for line in lines:
-        if len("\n".join(current + [line])) > limit and current:
+        if size(line) > limit:
+            raise ValueError("one observation line exceeds message size")
+        if size("\n".join(current + [line])) > limit and current:
             groups.append(current)
             current = []
         current.append(line)
     if current:
         groups.append(current)
-    return [header + "\n第{}/{}条\n".format(index + 1, len(groups)) + "\n".join(group)
-            for index, group in enumerate(groups)]
+    messages = [header + "\n第{}/{}条\n".format(index + 1, len(groups)) + "\n".join(group)
+                for index, group in enumerate(groups)]
+    if any(size(message) > budget for message in messages):
+        raise ValueError("observation message exceeds size limit")
+    return messages
 
 
 def freeze_observation_snapshot(path, snapshot):
@@ -317,3 +328,91 @@ def deliver_observation(snapshot, *, outbox_path, app_token, uid, sender=None, d
             if not successful:
                 return {"status": "delivery_uncertain", "success": False, "part": index + 1}
         return {"status": "sent", "success": True, "parts": len(messages)}
+
+
+def deliver_wecom_observation(snapshot, *, outbox_path, webhook, deadline,
+                              sender=None, clock=None, sleep=None):
+    """Deliver complete UTF-8 parts to the existing bot, independently of Wx.
+
+    The sidecar binds the frozen parts and destination. A dispatch whose result
+    is unknown stays protected, including after process interruption. "sent"
+    means provider acceptance, never a claim that a group member read it.
+    """
+    _validate_snapshot(snapshot)
+    if not isinstance(webhook, str) or not webhook:
+        raise ValueError("one configured WeCom webhook is required")
+    if sender is None:
+        from chanlun.preclose_notify import send_wecom_text
+        sender = send_wecom_text
+    clock = clock or (lambda: datetime.now(SHANGHAI))
+    sleep = sleep or time.sleep
+    messages = format_observation_messages(snapshot, max_bytes=2048)
+    identity = {"run_id": snapshot["run_id"], "content_hash": snapshot["content_hash"],
+                "input_hash": snapshot.get("input_hash"), "channel": "wecom",
+                "format_version": "wecom-text-utf8-v1",
+                "webhook_hash": hashlib.sha256(webhook.encode("utf-8")).hexdigest(),
+                "message_hashes": [content_hash(message) for message in messages]}
+    path = Path(outbox_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
+    with os.fdopen(descriptor, "a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        receipt = json.loads(path.read_text()) if path.exists() else dict(identity, parts={})
+        if (any(receipt.get(key) != value for key, value in identity.items())
+                or not isinstance(receipt.get("parts"), dict)):
+            raise ValueError("WeCom outbox belongs to another batch, format or destination")
+
+        def result(status, success=False):
+            sent = sum(receipt["parts"].get(str(index), {}).get("state") == "sent"
+                       for index in range(len(messages)))
+            return {"status": status, "success": success, "parts": len(messages),
+                    "accepted_parts": sent, "remaining_parts": len(messages) - sent}
+
+        if all(receipt["parts"].get(str(index), {}).get("state") == "sent"
+               for index in range(len(messages))):
+            return result("already_sent", True)
+        for index, message in enumerate(messages):
+            part = receipt["parts"].get(str(index), {})
+            if part.get("state") == "sent":
+                continue
+            if part:
+                return result("provider_rejected" if part.get("state") == "rejected" else "delivery_uncertain")
+            now = clock()
+            if now >= deadline:
+                return result("deadline_exceeded")
+            if receipt.get("last_attempt_at"):
+                earliest = datetime.fromisoformat(receipt["last_attempt_at"]) + timedelta(seconds=4)
+                wait = (earliest - now).total_seconds()
+                if wait > 0:
+                    if earliest >= deadline:
+                        return result("deadline_exceeded")
+                    sleep(wait)
+                    if clock() < earliest:
+                        return result("rate_limited")
+            now = clock()
+            if now >= deadline:
+                return result("deadline_exceeded")
+            receipt["last_attempt_at"] = now.isoformat()
+            receipt["parts"][str(index)] = {"state": "dispatching", "message_hash": content_hash(message),
+                                            "attempted_at": now.isoformat()}
+            _replace_receipt(path, receipt)
+            try:
+                remaining = (deadline - clock()).total_seconds()
+                response = (sender(message, webhook=webhook, timeout=min(10.0, remaining))
+                            if remaining > 0 else {"success": False, "error": "deadline_exceeded"})
+                if not isinstance(response, dict):
+                    raise TypeError("invalid provider response")
+            except Exception as exc:
+                response = {"success": False, "provider": "wecom", "provider_accepted": False,
+                            "delivery_status": "provider_result_unknown", "error": type(exc).__name__}
+            safe = {key: response[key] for key in (
+                "success", "provider", "http_status", "business_code", "provider_accepted", "delivery_status", "error",
+            ) if key in response}
+            successful = response.get("success") is True
+            rejected = response.get("delivery_status") == "provider_rejected" and not successful
+            receipt["parts"][str(index)].update(
+                state="sent" if successful else "rejected" if rejected else "uncertain", response=safe)
+            _replace_receipt(path, receipt)
+            if not successful:
+                return result("provider_rejected" if rejected else "delivery_uncertain")
+        return result("sent", True)
