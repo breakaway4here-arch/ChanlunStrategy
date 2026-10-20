@@ -2909,7 +2909,8 @@ def build_full_daily_projection(
 
 
 def build_aggregate_day_projection(
-    report_data, include_shadow=True, include_right_side_shadow=False
+    report_data, include_shadow=True, include_right_side_shadow=False,
+    *, _full_source=False
 ):
     """Build the sole lightweight aggregate entry used by data.json."""
     day_entry = {
@@ -2935,16 +2936,16 @@ def build_aggregate_day_projection(
         "market_temperature": report_data.get("market_temperature", {}),
         "events": report_data.get("events", []),
         "forecast": report_data.get("forecast", {}),
-        "sell_signals": _serialize_sell_signals(
+        "sell_signals": copy.deepcopy(report_data.get("sell_signals", [])) if _full_source else _serialize_sell_signals(
             report_data.get("sell_signals", [])
         ),
-        "holding_risks": _serialize_holding_risks(
+        "holding_risks": copy.deepcopy(report_data.get("holding_risks", [])) if _full_source else _serialize_holding_risks(
             report_data.get("holding_risks", [])
         ),
         "recommendation_ledger": report_data.get(
             "recommendation_ledger", []
         ),
-        "strategy_scorecards": _serialize_strategy_scorecards(
+        "strategy_scorecards": copy.deepcopy(report_data.get("strategy_scorecards", [])) if _full_source else _serialize_strategy_scorecards(
             report_data.get("strategy_scorecards", [])
         ),
         "strategy_run_manifest": report_data.get("strategy_run_manifest", []),
@@ -2953,10 +2954,10 @@ def build_aggregate_day_projection(
         "selection_input_health": report_data.get(
             "selection_input_health", {}
         ),
-        "next_day_boom": _serialize_next_day_boom(
+        "next_day_boom": copy.deepcopy(report_data.get("next_day_boom", {})) if _full_source else _serialize_next_day_boom(
             report_data.get("next_day_boom", {})
         ),
-        "luojie_pool": _serialize_luojie_pool(
+        "luojie_pool": copy.deepcopy(report_data.get("luojie_pool", {})) if _full_source else _serialize_luojie_pool(
             report_data.get("luojie_pool", {})
         ),
     }
@@ -2971,9 +2972,8 @@ def build_aggregate_day_projection(
         if optional_pool not in report_data:
             day_entry.pop(optional_pool, None)
     if include_shadow:
-        day_entry["shadow_evaluations"] = _serialize_shadow_evaluations(
-            report_data.get("shadow_evaluations", {})
-        )
+        day_entry["shadow_evaluations"] = (copy.deepcopy(report_data.get("shadow_evaluations", {}))
+            if _full_source else _serialize_shadow_evaluations(report_data.get("shadow_evaluations", {})))
         for shadow_field in ("psy12", "psy12_shadow"):
             if shadow_field in report_data:
                 day_entry[shadow_field] = report_data[shadow_field]
@@ -2989,18 +2989,32 @@ def build_aggregate_day_projection(
         day_entry["right_side_startup"] = report_data[
             "right_side_startup"
         ]
-    day_entry["workspace"] = build_workspace(day_entry)
-    _backfill_workspace_scores(day_entry)
-    day_entry.pop("workspace", None)
+    if _full_source:
+        for pool in ("picks_pure", "picks_fusion"):
+            for light, full in zip(day_entry.get(pool, []), report_data.get(pool, [])):
+                _copy_workspace_score_fields(light, full)
+    else:
+        day_entry["workspace"] = build_workspace(day_entry)
+        _backfill_workspace_scores(day_entry)
+        day_entry.pop("workspace", None)
     return _native_public_projection(day_entry)
+
+
+def build_aggregate_day_projection_from_full(
+    daily_data, include_shadow=True, include_right_side_shadow=False
+):
+    """Drop chart fields from one completed daily projection without rescoring."""
+    return build_aggregate_day_projection(daily_data, include_shadow,
+        include_right_side_shadow, _full_source=True)
 
 
 def build_formal_output_projection(report_data):
     """Build every non-shadow public data surface protected by the guard."""
+    daily = build_full_daily_projection(report_data, include_shadow=False)
     return {
-        "daily": build_full_daily_projection(report_data, include_shadow=False),
-        "aggregate": build_aggregate_day_projection(
-            report_data, include_shadow=False
+        "daily": daily,
+        "aggregate": build_aggregate_day_projection_from_full(
+            daily, include_shadow=False
         ),
     }
 
@@ -3425,7 +3439,10 @@ def update_data_json(report_data, output_dir=None):
     date_str = report_data["date"]
 
     # 写入当日（picks 去掉图表数组，data.json 只存轻量索引）
-    day_entry = build_aggregate_day_projection(report_data)
+    # Use the same deterministic full serialization as generate_report. Raw
+    # and chart-window coordinates must never be independently published.
+    day_entry = build_aggregate_day_projection_from_full(
+        build_full_daily_projection(report_data))
     existing["reports"][date_str] = day_entry
 
     # 更新日期列表
