@@ -17,6 +17,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 from urllib.parse import quote
 
 from .identity import normalize_identity
+from .price_basis import repair_quantity_source
 
 
 BAR_TABLES = {
@@ -190,7 +191,9 @@ def _decorate_legacy_bar(row: Mapping[str, Any]) -> Dict[str, Any]:
     """
     result = dict(row)
     volume_unit = str(result.get("volume_unit") or "unknown").strip().lower()
-    source_batch = str(result.get("source_batch") or "").strip().lower()
+    # Price provenance changes independently of the unchanged legacy quantity
+    # contract. Invalid repair metadata cannot infer units from its text.
+    source_batch = repair_quantity_source(str(result.get("source_batch") or "").strip()).lower()
     if volume_unit == "unknown":
         try:
             volume = float(result.get("volume"))

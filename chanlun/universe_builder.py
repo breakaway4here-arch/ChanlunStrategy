@@ -10,7 +10,7 @@ import numpy as np
 
 from .market_history_store import MarketHistoryStore
 from .identity import normalize_identity
-from .price_basis import canonical_daily_reference
+from .price_basis import canonical_daily_reference, repaired_daily_basis_failure
 
 
 @dataclass(frozen=True)
@@ -344,6 +344,13 @@ def load_eligible_candidates(
             audit["eligibility_failure_reason"] = reason
             if audit_records is not None:
                 audit_records.append(dict(audit))
+
+        basis_failure = repaired_daily_basis_failure(rows, as_of=as_of)
+        if basis_failure:
+            excluded['price_basis_unverified'] = excluded.get('price_basis_unverified', 0) + 1
+            audit['data_quality'].update(daily='price_basis_unverified', degraded_reason=basis_failure)
+            reject('price_basis_unverified')
+            continue
 
         if not meta:
             excluded["missing_meta"] += 1

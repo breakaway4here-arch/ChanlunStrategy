@@ -7,6 +7,7 @@ import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
+from urllib.parse import unquote
 
 from .identity import normalize_identity
 
@@ -28,6 +29,59 @@ def canonical_daily_reference(identity, rows):
         }
     return {'schema_version': 1, 'identity_key': normalize_identity(identity).key,
             'by_date': by_date, 'sha256': basis_sha256(by_date)}
+
+
+def _repair_source_parts(source):
+    prefix, version, start, end, known, provider, digest = source.split('|quantity_source=',1)[0].split(':')
+    if (prefix != 'price_basis_repair' or version != 'v1' or provider not in ('tencent','sina')
+            or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest)):
+        raise ValueError('invalid_repair_source')
+    if provider == 'sina' and (start != '2026-04-21' or end != '2026-10-20'):
+        raise ValueError('invalid_repair_source_scope')
+    datetime.strptime(start, '%Y-%m-%d')
+    datetime.strptime(end, '%Y-%m-%d')
+    known_at = datetime.strptime(known, '%Y%m%dT%H%M%S.%fZ' if '.' in known else '%Y%m%dT%H%M%SZ').replace(tzinfo=timezone.utc)
+    if start > end:
+        raise ValueError('invalid_repair_scope')
+    return start, end, known_at
+
+
+def repair_quantity_source(source):
+    """Unwrap an explicit original quantity contract, never guess on corruption."""
+    if not source.startswith('price_basis_repair:'):
+        return source
+    try:
+        _repair_source_parts(source)
+        return unquote(source.split('|quantity_source=',1)[1])
+    except (IndexError, TypeError, ValueError):
+        return ''
+
+
+def repaired_daily_basis_failure(rows, *, as_of=None, consumed_dates=None):
+    """Check only the consumed dates of an explicitly versioned repair.
+
+    A 240-day reference container is not itself a 240-day consumption. Existing
+    receipts for unrelated dates keep their existing verification behavior.
+    """
+    dates = None if consumed_dates is None else {str(d)[:10] for d in consumed_dates}
+    consumed = [r for r in rows if dates is None or str(r['ts'])[:10] in dates]
+    for row in consumed:
+        source = str(row.get('source_batch') or row.get('source') or '')
+        if not source.startswith('price_basis_repair:'):
+            continue
+        try:
+            start, end, known_at = _repair_source_parts(source)
+            if ':sina:' in source.split('|quantity_source=',1)[0] and str(row['ts'])[:10] != '2026-10-20':
+                raise ValueError('invalid_repair_sina_date')
+            if not start <= str(row['ts'])[:10] <= end:
+                raise ValueError('invalid_repair_scope')
+            if any(str(r['ts'])[:10] < start for r in consumed):
+                return 'price_basis_repair_window_crossed'
+            if as_of is not None and _basis_cutoff(as_of) < known_at:
+                return 'price_basis_repair_not_known_as_of'
+        except (TypeError, ValueError):
+            return 'invalid_price_basis_repair_provenance'
+    return None
 
 
 def minute_price_rows(kline):
@@ -88,6 +142,10 @@ def verified_minute_basis(identity, interval, kline, daily_reference, receipts, 
             return pending('daily_identity_mismatch')
         dates = sorted({row['ts'][:10] for row in rows})
         targets = {date: daily_reference['by_date'][date] for date in dates}
+        target_rows = [dict(target, ts=date) for date, target in targets.items()]
+        failure = repaired_daily_basis_failure(target_rows, as_of=as_of)
+        if failure:
+            return pending(failure)
         evidence, inputs = {}, []
         for date in dates:
             receipt = receipts.get(date)
@@ -105,6 +163,9 @@ def verified_minute_basis(identity, interval, kline, daily_reference, receipts, 
             if (not receipt.get('as_of') or _basis_cutoff(receipt['as_of']) > _basis_cutoff(as_of)
                     or _basis_cutoff(date+' 15:00:00') > _basis_cutoff(as_of)):
                 return pending('receipt_or_daily_reference_after_cutoff:'+date)
+            failure = repaired_daily_basis_failure([dict(targets[date], ts=date)], as_of=receipt['as_of'])
+            if failure:
+                return pending(failure)
             if (mapping['target_daily'] != targets[date] or not targets[date]['is_final']
                     or targets[date]['adjustment'] != 'qfq' or not targets[date]['source']):
                 return pending('target_reference_changed:'+date)
@@ -156,6 +217,8 @@ def _canonical_minute_comparable(daily_stock, min30_result, proof):
             return False
         dates = sorted({row['ts'][:10] for row in rows})
         targets = {date: reference['by_date'][date] for date in dates}
+        if repaired_daily_basis_failure([dict(target, ts=date) for date,target in targets.items()], as_of=proof['as_of']):
+            return False
         if set(proof['evidence_by_date']) != set(dates) or basis_sha256(targets) != proof['target_reference_sha256']:
             return False
         actual_dates = {str(date)[:10]: index for index,date in enumerate(daily_stock['dates'])}
@@ -164,6 +227,8 @@ def _canonical_minute_comparable(daily_stock, min30_result, proof):
             if (target != item['target_daily'] or not item.get('receipt_as_of')
                     or _basis_cutoff(item['receipt_as_of']) > cutoff
                     or _basis_cutoff(date+' 15:00:00') > cutoff):
+                return False
+            if repaired_daily_basis_failure([dict(target,ts=date)], as_of=item['receipt_as_of']):
                 return False
             index = actual_dates[date]
             if any(float(daily_stock[key+'s'][index]) != target[key] for key in ('open','high','low','close')):
