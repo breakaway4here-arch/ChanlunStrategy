@@ -43,7 +43,10 @@ class ObservationDeliveryTests(unittest.TestCase):
         report["intraday_observation"]["pool_status"]["picks_pure"] = {"status": "available"}
         snapshot = self.snapshot(report)
         text = "\n".join(delivery.format_observation_messages(snapshot))
-        self.assertLess(text.index("600002"), text.index("600001"))
+        self.assertEqual([row['code'] for row in snapshot['pools']['picks_pure']['rows']],
+                         ['600002', '600001'])
+        self.assertIn('候选2只', text)
+        self.assertIn('依据不足', text)
         self.assertEqual(set(snapshot["pools"]), {key for key, _, _ in delivery.POOL_SPECS})
         self.assertIn("14:45", text)
         self.assertIn("观察", text)
@@ -147,15 +150,19 @@ class ObservationDeliveryTests(unittest.TestCase):
         report['intraday_observation']['pool_status']['picks_pure'] = {'status': 'available'}
         self.assertEqual(self.snapshot(report)['pools']['picks_pure']['status'], 'unavailable')
 
-    def test_messages_include_every_name_across_bounded_chunks(self):
+    def test_single_unknown_digest_preserves_every_member_in_private_snapshot(self):
         report = report_fixture()
         report['picks_pure'] = [{'code': str(600000 + i), 'name': '观察样本{}'.format(i)} for i in range(100)]
         report['intraday_observation']['pool_status']['picks_pure'] = {'status': 'available'}
-        messages = delivery.format_observation_messages(self.snapshot(report), max_chars=500)
-        self.assertGreater(len(messages), 1)
+        snapshot = self.snapshot(report)
+        messages = delivery.format_observation_messages(snapshot, max_chars=500)
+        self.assertEqual(len(messages), 1)
         self.assertTrue(all(len(message) <= 500 for message in messages))
+        self.assertIn('候选100只', messages[0])
+        self.assertIn('依据不足', messages[0])
         for i in range(100):
-            self.assertEqual('\n'.join(messages).count(str(600000 + i)), 1)
+            self.assertEqual(snapshot['pools']['picks_pure']['rows'][i]['code'], str(600000 + i))
+            self.assertNotIn(str(600000 + i), messages[0])
         self.assertTrue(all('14:45' in message and '观察' in message for message in messages))
 
     def test_failed_run_message_never_looks_like_empty_pool(self):
