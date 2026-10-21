@@ -27,7 +27,9 @@ ACCEPTED = {"success": True, "provider": "wecom", "provider_accepted": True,
 def snapshot_with_rows(count=0):
     report = report_fixture()
     if count:
-        report["picks_pure"] = [{"code": str(600000 + i), "name": "中文🚀样本{:04d}".format(i)}
+        report["picks_pure"] = [{"code": str(600000 + i), "name": "中文🚀样本{:04d}".format(i),
+                                "best_buy_point": {"tier": "formal", "is_recent": True},
+                                "data_status": {"daily": "verified"}}
                                 for i in range(count)]
         report["intraday_observation"]["pool_status"]["picks_pure"]["status"] = "available"
     return delivery.build_observation_snapshot(report)
@@ -65,18 +67,22 @@ class WecomObservationTests(unittest.TestCase):
         options.update(kwargs)
         return delivery.deliver_wecom_observation(snapshot, outbox_path=path, **options)
 
-    def test_utf8_parts_preserve_every_name_order_and_failure_meaning(self):
+    def test_one_utf8_digest_keeps_selected_order_full_archive_and_failure_meaning(self):
         snapshot = snapshot_with_rows(190)
         parts = delivery.format_observation_messages(snapshot, max_bytes=2048)
-        self.assertGreater(len(parts), 1)
+        self.assertEqual(len(parts), 1)
         self.assertTrue(all(len(part.encode("utf-8")) <= 2048 for part in parts))
         text = "\n".join(parts)
         offsets = []
-        for row in snapshot["pools"]["picks_pure"]["rows"]:
+        for row in snapshot["pools"]["picks_pure"]["rows"][:5]:
             item = "{} {}".format(row["name"], row["code"])
             self.assertEqual(text.count(item), 1)
             offsets.append(text.index(item))
         self.assertEqual(offsets, sorted(offsets))
+        self.assertEqual(len(snapshot["pools"]["picks_pure"]["rows"]), 190)
+        self.assertIn('精选5只 / 候选190只', text)
+        for row in snapshot["pools"]["picks_pure"]["rows"][5:]:
+            self.assertNotIn(row['code'], text)
         failed = delivery.build_failure_snapshot("2026-10-13", cutoff="2026-10-13T14:45:00+08:00",
                                                  failure_code="collection_failed")
         self.assertIn("本次计算失败", delivery.format_observation_messages(failed, max_bytes=2048)[0])
@@ -129,7 +135,7 @@ class WecomObservationTests(unittest.TestCase):
                 self.assertEqual(calls, [1])
                 self.assertNotIn("secret", path.read_text())
 
-    def test_partial_deadline_retains_full_manifest_and_cross_restart_rate(self):
+    def test_single_digest_finishes_in_short_window_and_retains_full_snapshot(self):
         snapshot = snapshot_with_rows(190)
         clock = Clock()
         calls = []
@@ -138,16 +144,17 @@ class WecomObservationTests(unittest.TestCase):
             sender = lambda *a, **k: calls.append(clock()) or ACCEPTED
             result = self.send(snapshot, path, clock=clock, sleep=clock.sleep,
                                deadline=NOW + timedelta(seconds=2), sender=sender)
-            self.assertEqual(result["status"], "deadline_exceeded")
-            self.assertFalse(result["success"])
+            self.assertEqual(result["status"], "sent")
+            self.assertTrue(result["success"])
             self.assertEqual(len(calls), 1)
             receipt = json.loads(path.read_text())
             self.assertEqual(len(receipt["message_hashes"]), len(delivery.format_observation_messages(snapshot, max_bytes=2048)))
             result = self.send(snapshot, path, clock=clock, sleep=clock.sleep, sender=sender)
             self.assertTrue(result["success"])
-            self.assertTrue(all((b-a).total_seconds() >= 4 for a,b in zip(calls,calls[1:])))
-            self.assertEqual(len(calls), len(receipt["message_hashes"]))
-            self.assertTrue(all(0 < wait <= 4 for wait in clock.waits))
+            self.assertEqual(len(calls), 1)
+            self.assertEqual(len(receipt["message_hashes"]), 1)
+            self.assertEqual(len(snapshot["pools"]["picks_pure"]["rows"]), 190)
+            self.assertEqual(clock.waits, [])
 
     def test_real_provider_schema_rejected_unknown_and_accepted(self):
         for payload, expected in [({"errcode": 0}, True), ({"errcode": 45009}, False),
@@ -238,7 +245,10 @@ class WecomRoutingTests(unittest.TestCase):
                 self.assertEqual(calls, ["wecom"])
                 self.assertEqual(path.read_bytes(), original)
                 self.assertTrue(result["channels"]["wecom"]["success"])
-                self.assertEqual(result["success"], old_state == "sent")
+                # Legacy Wx receipts have no manifest length. A sent first part
+                # cannot prove that every old part was accepted.
+                self.assertFalse(result["success"])
+                self.assertTrue(result['channels']['wxpusher']['format_protected'])
 
     def test_accepted_then_crash_before_receipt_is_unknown_and_restart_only_sends_wx(self):
         with tempfile.TemporaryDirectory() as directory:

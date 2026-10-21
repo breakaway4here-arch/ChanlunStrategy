@@ -17,6 +17,10 @@ import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from chanlun.intraday_observation_digest import (
+    FORMAT_VERSION, SOURCE_LABELS, project_evidence, select_digest,
+)
+
 
 POOL_SPECS = (
     ("picks_pure", "纯缠论池", ("picks_pure",)),
@@ -64,7 +68,7 @@ def _validate_snapshot(snapshot):
     validate_cutoff(snapshot.get("cutoff"), snapshot.get("trade_date"))
 
 
-def _row_projection(row):
+def _row_projection(row, pool, rank, trade_date, cutoff):
     if not isinstance(row, dict):
         raise ValueError("invalid pool row")
     code = str(row.get("code") or "")
@@ -72,8 +76,7 @@ def _row_projection(row):
     if not re.fullmatch(r"\d{6}", code) or not name or len(name) > 40:
         raise ValueError("invalid stock identity")
     result = {"code": code, "name": name.replace("\n", " ").replace("\r", " ")}
-    # The request is for pool membership. Unproven price bases, strategy actions
-    # and account details must not leak into the private observation notice.
+    result["selection_evidence"] = project_evidence(row, pool, rank, trade_date, cutoff)
     return result
 
 
@@ -117,7 +120,8 @@ def build_observation_snapshot(report_data):
         projected = []
         if status != "unavailable":
             try:
-                projected = [_row_projection(row) for row in rows]
+                projected = [_row_projection(row, key, rank, trade_date, cutoff)
+                             for rank, row in enumerate(rows)]
             except ValueError:
                 status, projected = "unavailable", []
         pool = {"label": label, "status": status, "rows": projected}
@@ -161,68 +165,69 @@ def build_failure_snapshot(trade_date, *, cutoff, failure_code, input_hash=None)
     })
 
 
-def format_observation_messages(snapshot, *, max_chars=1200, max_bytes=None):
+def build_observation_digest(snapshot):
     _validate_snapshot(snapshot)
-    size = (lambda value: len(value.encode("utf-8"))) if max_bytes is not None else len
-    budget = max_bytes if max_bytes is not None else max_chars
-    if budget < 250:
+    return select_digest(snapshot)
+
+
+def format_observation_messages(snapshot, *, max_chars=1200, max_bytes=None):
+    """One shared, bounded UTF-8 notice; the private snapshot keeps every row."""
+    digest = build_observation_digest(snapshot)
+    byte_budget = min(2048, max_bytes) if max_bytes is not None else 2048
+    if byte_budget < 250 or max_chars < 250:
         raise ValueError("message size too small")
-    header = "【14:45完整选股观察】\n{} 数据截至14:45\n观察用途，盘后任务照常。批次 {}".format(
+    header = "【14:45观察精选】\n{} 数据截至14:45\n观察用途，盘后任务照常。批次 {}".format(
         snapshot["trade_date"], snapshot["content_hash"][:8])
     if snapshot["status"] == "failed":
-        message = header + "\n本次计算失败或关键数据不足，未提供候选池。"
-        if size(message) > budget:
+        message = header + "\n精选0只 / 候选数量未知\n本次计算失败或关键数据不足，未提供候选池。"
+        if len(message.encode("utf-8")) > byte_budget or len(message) > max_chars:
             raise ValueError("message size too small")
         return [message]
-    lines = []
+    notes = []
     coverage = snapshot.get("input_coverage", {})
     if coverage.get("status") == "partial":
-        lines.append("已核验行情 {}/{} 只，存在数据缺口；空池仅代表已核验范围。".format(
+        notes.append("已核验行情 {}/{} 只，存在数据缺口。".format(
             coverage["acquired"], coverage["expected"]))
         if coverage.get("foundation_missing", 0):
-            lines.append("另有{}只基础数据不足未参与。".format(coverage["foundation_missing"]))
-    if snapshot["status"] == "partial":
-        lines.append("部分池数据不足，以下逐池说明。")
+            notes.append("另有{}只基础数据不足未参与。".format(coverage["foundation_missing"]))
+    unavailable = sum(pool["status"] == "unavailable" for pool in snapshot["pools"].values())
+    partial = [pool for pool in snapshot["pools"].values() if pool["status"] == "partial"]
+    if unavailable:
+        notes.append("{}个池数据不足，暂不可用；候选数仅计已核验范围。".format(unavailable))
+    if partial:
+        counts = ["{}/{}".format(pool["verified_count"], pool["requested_count"])
+                  for pool in partial if "verified_count" in pool and "requested_count" in pool]
+        notes.append("{}个池覆盖不完整{}。".format(len(partial), "（" + "、".join(counts) + "）" if counts else ""))
     labels = {"sector_flows": "板块资金", "market_sentiment": "市场情绪",
               "limit_up_pool": "涨停生态", "market_indices": "市场指数"}
     missing = [labels[key] for key in snapshot.get("missing_auxiliary_inputs", []) if key in labels]
     if missing:
-        lines.append("本次缺少{}信息，对照盘后时需一并考虑。".format("、".join(missing)))
-    for key, _label, _path in POOL_SPECS:
-        pool = snapshot["pools"][key]
-        status = pool["status"]
-        if status == "unavailable":
-            lines.append(pool["label"] + "：数据不足，暂不可用")
-        elif status == "empty":
-            lines.append(pool["label"] + "：本次未选出候选")
+        notes.append("缺少{}信息。".format("、".join(missing)))
+    states = {"confirmed": "技术确认·观察", "daily_candidate": "日线候选·观察", "research_candidate": "研究候选"}
+    selected = list(digest["selected"])
+    while True:
+        lines = [header, "精选{}只 / 候选{}只（股票去重）".format(len(selected), digest["candidate_count"])]
+        if selected:
+            lines.append("按有效来源数、确认/数据依据及源内原序精选。")
+            for index, row in enumerate(selected, 1):
+                sources = "、".join("{}·{}".format(SOURCE_LABELS[family], states[row["source_states"][family]])
+                                   for family in row["sources"])
+                lines.append("{}. {} {}｜{}源：{}{}".format(index, row["name"], row["code"],
+                    row["valid_source_count"], sources, "；另有待核/不通过记录" if row["has_pending"] else ""))
+        elif digest["candidate_count"]:
+            lines.append("精选依据不足，现有候选保留在私有完整归档。")
+        elif snapshot["status"] == "empty":
+            lines.append("本次未选出候选。")
         else:
-            coverage = ""
-            if status == "partial":
-                coverage = "，覆盖不完整"
-                if "verified_count" in pool and "requested_count" in pool:
-                    coverage += " {}/{}".format(pool["verified_count"], pool["requested_count"])
-            lines.append("{}：{}只{}".format(pool["label"], len(pool["rows"]), coverage))
-            if not pool["rows"]:
-                lines.append("已核验范围暂无候选，其余数据待补齐")
-            for row in pool["rows"]:
-                lines.append("{} {}".format(row["name"], row["code"]))
-    # Reserve room for the part counter before splitting; no names are truncated.
-    limit = budget - size(header) - 30
-    groups, current = [], []
-    for line in lines:
-        if size(line) > limit:
-            raise ValueError("one observation line exceeds message size")
-        if size("\n".join(current + [line])) > limit and current:
-            groups.append(current)
-            current = []
-        current.append(line)
-    if current:
-        groups.append(current)
-    messages = [header + "\n第{}/{}条\n".format(index + 1, len(groups)) + "\n".join(group)
-                for index, group in enumerate(groups)]
-    if any(size(message) > budget for message in messages):
-        raise ValueError("observation message exceeds size limit")
-    return messages
+            lines.append("已核验范围暂无候选，其余数据待核验。")
+        if selected:
+            lines.append("完整名单保留于本批私有归档。")
+        message = "\n".join(lines + notes)
+        if len(message.encode("utf-8")) <= byte_budget and len(message) <= max_chars:
+            return [message]
+        if not selected:
+            raise ValueError("observation digest exceeds message size limit")
+        selected.pop()
 
 
 def freeze_observation_snapshot(path, snapshot):
@@ -274,6 +279,23 @@ def _replace_receipt(path, value):
             os.unlink(temporary)
 
 
+def _prior_format_result(receipt, identity):
+    """An attempted old batch is immutable even when its text/hash changes."""
+    if any(receipt.get(key) != identity.get(key) for key in ("run_id", "input_hash", "channel")):
+        raise ValueError("outbox belongs to another observation batch")
+    if identity.get("channel") == "wecom" and receipt.get("webhook_hash") != identity.get("webhook_hash"):
+        raise ValueError("WeCom outbox belongs to another destination")
+    if not isinstance(receipt.get("parts"), dict):
+        raise ValueError("invalid observation receipt")
+    if receipt.get("format_version") != FORMAT_VERSION and receipt["parts"]:
+        total = len(receipt.get("message_hashes") or [])
+        complete = bool(total and all(receipt["parts"].get(str(index), {}).get("state") == "sent"
+                                      for index in range(total)))
+        return {"status": "already_sent" if complete else "delivery_uncertain", "success": complete,
+                "format_protected": True, "parts": total or len(receipt["parts"])}
+    return None
+
+
 def deliver_observation(snapshot, *, outbox_path, app_token, uid, sender=None, deadline=None, clock=None):
     """Send only to one existing WxPusher UID, with a durable per-part receipt."""
     _validate_snapshot(snapshot)
@@ -287,11 +309,16 @@ def deliver_observation(snapshot, *, outbox_path, app_token, uid, sender=None, d
     path.parent.mkdir(parents=True, exist_ok=True)
     messages = format_observation_messages(snapshot)
     identity = {"run_id": snapshot["run_id"], "content_hash": snapshot["content_hash"],
-                "input_hash": snapshot.get("input_hash"), "channel": "wxpusher"}
+                "input_hash": snapshot.get("input_hash"), "channel": "wxpusher",
+                "format_version": FORMAT_VERSION,
+                "message_hashes": [content_hash(message) for message in messages]}
     descriptor = os.open(str(path) + ".lock", os.O_CREAT | os.O_RDWR, 0o600)
     with os.fdopen(descriptor, "a+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         receipt = json.loads(path.read_text()) if path.exists() else dict(identity, parts={})
+        protected = _prior_format_result(receipt, identity)
+        if protected is not None:
+            return protected
         if any(receipt.get(key) != value for key, value in identity.items()):
             raise ValueError("outbox belongs to another observation batch")
         if all(receipt["parts"].get(str(index), {}).get("state") == "sent" for index in range(len(messages))):
@@ -312,7 +339,7 @@ def deliver_observation(snapshot, *, outbox_path, app_token, uid, sender=None, d
                     result = {"success": False, "error": "deadline_exceeded"}
                 else:
                     result = sender(message, app_token=app_token, uid=uid,
-                                    timeout=min(10.0, remaining), summary="14:45完整选股观察")
+                                    timeout=min(10.0, remaining), summary="14:45观察精选")
             except Exception as exc:
                 result = {"success": False, "error": type(exc).__name__}
             safe_result = {key: result[key] for key in (
@@ -332,7 +359,7 @@ def deliver_observation(snapshot, *, outbox_path, app_token, uid, sender=None, d
 
 def deliver_wecom_observation(snapshot, *, outbox_path, webhook, deadline,
                               sender=None, clock=None, sleep=None):
-    """Deliver complete UTF-8 parts to the existing bot, independently of Wx.
+    """Deliver one UTF-8 digest to the existing bot, independently of Wx.
 
     The sidecar binds the frozen parts and destination. A dispatch whose result
     is unknown stays protected, including after process interruption. "sent"
@@ -349,7 +376,7 @@ def deliver_wecom_observation(snapshot, *, outbox_path, webhook, deadline,
     messages = format_observation_messages(snapshot, max_bytes=2048)
     identity = {"run_id": snapshot["run_id"], "content_hash": snapshot["content_hash"],
                 "input_hash": snapshot.get("input_hash"), "channel": "wecom",
-                "format_version": "wecom-text-utf8-v1",
+                "format_version": FORMAT_VERSION,
                 "webhook_hash": hashlib.sha256(webhook.encode("utf-8")).hexdigest(),
                 "message_hashes": [content_hash(message) for message in messages]}
     path = Path(outbox_path)
@@ -358,6 +385,9 @@ def deliver_wecom_observation(snapshot, *, outbox_path, webhook, deadline,
     with os.fdopen(descriptor, "a+") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         receipt = json.loads(path.read_text()) if path.exists() else dict(identity, parts={})
+        protected = _prior_format_result(receipt, identity)
+        if protected is not None:
+            return protected
         if (any(receipt.get(key) != value for key, value in identity.items())
                 or not isinstance(receipt.get("parts"), dict)):
             raise ValueError("WeCom outbox belongs to another batch, format or destination")
