@@ -5,37 +5,37 @@
       "close": 3658.03,
       "change_pct": -1.48,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     },
     "深证成指": {
       "close": 11357.32,
       "change_pct": -2.96,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     },
     "创业板指": {
       "close": 2576.9,
       "change_pct": -4.37,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     },
     "科创50": {
       "close": 1305.87,
       "change_pct": -2.78,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     },
     "沪深300": {
       "close": 4036.3,
       "change_pct": -1.84,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     },
     "中证500": {
       "close": 6655.25,
       "change_pct": -2.71,
       "date": "2026-10-22",
-      "source": "tencent_plain"
+      "source": "tencent"
     }
   },
   "chanlun_structure": {
@@ -50619,8 +50619,8 @@
       "name": "电机Ⅱ",
       "flow": 1093744736,
       "change_pct": 4.13,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "10.94亿",
       "component_coverage": 1.0,
@@ -50634,8 +50634,8 @@
       "name": "集成电路封测",
       "flow": 1027856448,
       "change_pct": 0.2,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "10.28亿",
       "component_coverage": 1.0,
@@ -50646,8 +50646,8 @@
       "name": "美容护理",
       "flow": 438832609,
       "change_pct": -1.07,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "4.39亿",
       "component_coverage": 1.0,
@@ -50662,8 +50662,8 @@
       "name": "水力发电",
       "flow": 268732368,
       "change_pct": -2.61,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "2.69亿",
       "component_coverage": 1.0,
@@ -50674,8 +50674,8 @@
       "name": "白色家电",
       "flow": 262829040,
       "change_pct": -1.11,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "2.63亿",
       "component_coverage": 1.0,
@@ -50689,8 +50689,8 @@
       "name": "能源及重型设备",
       "flow": 227948656,
       "change_pct": -1.45,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "2.28亿",
       "component_coverage": 1.0,
@@ -50701,8 +50701,8 @@
       "name": "其他石化",
       "flow": 193256064,
       "change_pct": 0.07,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.93亿",
       "component_coverage": 1.0,
@@ -50713,8 +50713,8 @@
       "name": "厨房小家电",
       "flow": 171030960,
       "change_pct": -2.87,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.71亿",
       "component_coverage": 1.0,
@@ -50725,8 +50725,8 @@
       "name": "底盘与发动机系统",
       "flow": 168161632,
       "change_pct": -1.16,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.68亿",
       "component_coverage": 1.0,
@@ -50737,8 +50737,8 @@
       "name": "机床工具",
       "flow": 163369907,
       "change_pct": -0.3,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.63亿",
       "component_coverage": 1.0,
@@ -50749,8 +50749,8 @@
       "name": "光伏主材",
       "flow": 159441921,
       "change_pct": 0.33,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.59亿",
       "component_coverage": 1.0,
@@ -50761,8 +50761,8 @@
       "name": "保险Ⅱ",
       "flow": 155199280,
       "change_pct": -1.21,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.55亿",
       "component_coverage": 1.0,
@@ -50776,8 +50776,8 @@
       "name": "工程机械",
       "flow": 151702448,
       "change_pct": 0.35,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.52亿",
       "component_coverage": 1.0,
@@ -50788,8 +50788,8 @@
       "name": "国际工程",
       "flow": 139176294,
       "change_pct": -2.04,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.39亿",
       "component_coverage": 1.0,
@@ -50800,8 +50800,8 @@
       "name": "电网自动化设备",
       "flow": 135073024,
       "change_pct": -1.64,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "1.35亿",
       "component_coverage": 1.0,
@@ -50811,7 +50811,7 @@
   "sector_heat": {
     "schema_version": 1,
     "date": "2026-10-22",
-    "as_of": "2026-10-22T15:35:12+08:00",
+    "as_of": "2026-10-22T15:50:14+08:00",
     "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
     "status": "verified_partial",
     "items": [
@@ -50854,7 +50854,7 @@
         "limit_up_count": 7,
         "net_flow": 1093744736.0,
         "net_flow_text": "10.94亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -50905,7 +50905,7 @@
         "limit_up_count": 2,
         "net_flow": 151702448.0,
         "net_flow_text": "1.52亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -50923,7 +50923,7 @@
         "limit_up_count": 0,
         "net_flow": 159441921.0,
         "net_flow_text": "1.59亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_complete"
       },
@@ -50952,7 +50952,7 @@
         "limit_up_count": 0,
         "net_flow": 1027856448.0,
         "net_flow_text": "10.28亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -50982,7 +50982,7 @@
         "limit_up_count": 1,
         "net_flow": 193256064.0,
         "net_flow_text": "1.93亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51018,7 +51018,7 @@
         "limit_up_count": 0,
         "net_flow": 163369907.0,
         "net_flow_text": "1.63亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51068,7 +51068,7 @@
         "limit_up_count": 0,
         "net_flow": 438832609.0,
         "net_flow_text": "4.39亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51095,7 +51095,7 @@
         "limit_up_count": 0,
         "net_flow": 262829040.0,
         "net_flow_text": "2.63亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51224,7 +51224,7 @@
         "limit_up_count": 3,
         "net_flow": 168161632.0,
         "net_flow_text": "1.68亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51245,7 +51245,7 @@
         "limit_up_count": 0,
         "net_flow": 155199280.0,
         "net_flow_text": "1.55亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51325,7 +51325,7 @@
         "limit_up_count": 3,
         "net_flow": 227948656.0,
         "net_flow_text": "2.28亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51371,7 +51371,7 @@
         "limit_up_count": 0,
         "net_flow": 135073024.0,
         "net_flow_text": "1.35亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51391,7 +51391,7 @@
         "limit_up_count": 0,
         "net_flow": 139176294.0,
         "net_flow_text": "1.39亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51418,7 +51418,7 @@
         "limit_up_count": 0,
         "net_flow": 268732368.0,
         "net_flow_text": "2.69亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -51444,7 +51444,7 @@
         "limit_up_count": 0,
         "net_flow": 171030960.0,
         "net_flow_text": "1.71亿",
-        "as_of": "2026-10-22T15:35:12+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       }
@@ -51458,8 +51458,8 @@
       "name": "电子",
       "flow": -16345370368,
       "change_pct": -3.33,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-163.45亿",
       "component_coverage": 1.0,
@@ -51473,8 +51473,8 @@
       "name": "通信",
       "flow": -9128239872,
       "change_pct": -3.75,
-      "board_quote_as_of": "2026-10-22T15:35:00+08:00",
-      "flow_retrieved_at": "2026-10-22T15:35:20.413811+08:00",
+      "board_quote_as_of": "2026-10-22T15:39:30+08:00",
+      "flow_retrieved_at": "2026-10-22T15:50:21.720485+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-91.28亿",
       "component_coverage": 1.0,
@@ -51852,8 +51852,8 @@
   ],
   "limit_up_snapshot": {
     "date": "2026-10-22",
-    "as_of": "2026-10-22T15:36:19+08:00",
-    "generated_at": "2026-10-22T15:37:01+08:00",
+    "as_of": "2026-10-22T15:51:22+08:00",
+    "generated_at": "2026-10-22T15:52:09+08:00",
     "source": "eastmoney_limit_pools",
     "status": "verified_complete",
     "raw_total": 33,
@@ -52429,15 +52429,15 @@
     "data_date": "2026-10-22",
     "report_date": "2026-10-22",
     "coverage": "returned_sample",
-    "fetched_at": "2026-10-22T15:37:41.953909+08:00"
+    "fetched_at": "2026-10-22T15:52:45.716424+08:00"
   },
   "personal_watchlist": {
     "schema_version": "1",
     "config_revision": "watchlist-20260820-01",
     "analysis_revision": "watchlist-20260820-01:2026-10-22:46ba59c330b2",
     "date": "2026-10-22",
-    "as_of": "2026-10-22T15:35:12+08:00",
-    "generated_at": "2026-10-22T15:35:12+08:00",
+    "as_of": "2026-10-22T15:50:14+08:00",
+    "generated_at": "2026-10-22T15:50:14+08:00",
     "status": "ok",
     "fresh_count": 5,
     "stale_count": 0,
@@ -52620,7 +52620,7 @@
     "model": "gpt-5.6-luna",
     "prompt_version": "decision-brief-v4",
     "schema_version": "1",
-    "generated_at": "2026-10-22T15:35:12+08:00",
+    "generated_at": "2026-10-22T15:50:14+08:00",
     "evidence_registry": [
       {
         "evidence_ref": "event:2026-10-22:2b7e7905b150",
@@ -53122,7 +53122,7 @@
           {
             "reason_code": "negative_sector_impact",
             "title": "半导体负向影响",
-            "detail": "AI投资放缓与半导体盈利担忧升温，压制科技股风险偏好",
+            "detail": "AI投资放缓担忧升温压制半导体板块盈利预期",
             "severity": "low",
             "source_type": "event_impact",
             "verification_status": "model_extracted",
@@ -53132,8 +53132,8 @@
             "affected_codes": []
           }
         ],
-        "rule_summary": "半导体存在风险：AI投资放缓与半导体盈利担忧升温，压制科技股风险偏好。",
-        "llm_summary": "AI投资放缓与半导体盈利担忧压制科技股风险偏好，板块资金虽有流入，重点股仍处于等待确认状态，负向风险暂未消除。",
+        "rule_summary": "半导体存在风险：AI投资放缓担忧升温压制半导体板块盈利预期。",
+        "llm_summary": "AI投资放缓担忧压制半导体盈利预期，板块资金虽有流入，重点股仍处于等待确认状态，负向风险需要优先关注。",
         "next_trigger": [
           "半导体风险继续扩散或相关结构进一步走弱"
         ],
@@ -53201,7 +53201,7 @@
         ],
         "risk_reasons": [],
         "rule_summary": "半导体出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "芯片价格缺乏下跌迹象形成半导体催化，板块资金与重点池存在关联，但该正向逻辑与盈利担忧形成并存的规则矛盾。",
+        "llm_summary": "芯片价格上行预期构成半导体催化，结合板块资金与重点池交集，代码将该方向判定为已确认，但需结合负向事件观察持续性。",
         "next_trigger": [
           "半导体资金与涨停梯队继续共振"
         ],
@@ -53263,7 +53263,7 @@
         ],
         "risk_reasons": [],
         "rule_summary": "光模块出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "订单交付与AI基建扩张构成光模块催化，但重点股仍等待板块资金、涨停梯队与个股强度形成共振。",
+        "llm_summary": "订单交付与AI基建扩张提供光模块催化，重点池已覆盖相关个股，但板块资金和涨停梯队证据不足，方向仍在发展阶段。",
         "next_trigger": [
           "光模块资金与涨停梯队继续共振"
         ],
@@ -53298,9 +53298,9 @@
         "event_ref": "event:2026-10-22:2b7e7905b150",
         "rule_score": 32.0,
         "rule_result": "developing_catalyst",
-        "llm_result": "positive",
-        "arbitration_result": "catalyst",
-        "arbitration_reason": "rule_and_llm_consistent",
+        "llm_result": "no_impact",
+        "arbitration_result": "no_impact",
+        "arbitration_reason": "event_llm_no_impact_filtered",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
         "schema_version": "1"
@@ -53370,7 +53370,7 @@
         "event_ref": "event:2026-10-22:207d99c5c773",
         "rule_score": 32.0,
         "rule_result": "developing_catalyst",
-        "llm_result": "positive",
+        "llm_result": "mixed",
         "arbitration_result": "catalyst",
         "arbitration_reason": "rule_and_llm_consistent",
         "model": "gpt-5.6-luna",
@@ -53535,7 +53535,7 @@
     "schema_version": 1,
     "rule_version": "extreme-icepoint-v1",
     "date": "2026-10-22",
-    "as_of": "2026-10-22T15:37:42+08:00",
+    "as_of": "2026-10-22T15:52:45+08:00",
     "phase": "closed",
     "affects_production": false,
     "status": "insufficient",
@@ -53557,7 +53557,7 @@
           "database": "market_history",
           "amount_by_date": {}
         },
-        "as_of": "2026-10-22T15:37:42+08:00",
+        "as_of": "2026-10-22T15:52:45+08:00",
         "scope": "all_a_cny",
         "reason": "comparable_full_market_amount_or_indices_missing"
       },
@@ -53575,20 +53575,20 @@
         },
         "threshold": "六指数每项≤-2%",
         "source": {
-          "上证指数": "tencent_plain",
-          "深证成指": "tencent_plain",
-          "创业板指": "tencent_plain",
-          "科创50": "tencent_plain",
-          "沪深300": "tencent_plain",
-          "中证500": "tencent_plain"
+          "上证指数": "tencent",
+          "深证成指": "tencent",
+          "创业板指": "tencent",
+          "科创50": "tencent",
+          "沪深300": "tencent",
+          "中证500": "tencent"
         },
         "as_of": {
-          "上证指数": "2026-10-22T15:36:19+08:00",
-          "深证成指": "2026-10-22T15:36:19+08:00",
-          "创业板指": "2026-10-22T15:36:19+08:00",
-          "科创50": "2026-10-22T15:36:19+08:00",
-          "沪深300": "2026-10-22T15:36:19+08:00",
-          "中证500": "2026-10-22T15:36:19+08:00"
+          "上证指数": "2026-10-22T15:51:22+08:00",
+          "深证成指": "2026-10-22T15:51:22+08:00",
+          "创业板指": "2026-10-22T15:51:22+08:00",
+          "科创50": "2026-10-22T15:51:22+08:00",
+          "沪深300": "2026-10-22T15:51:22+08:00",
+          "中证500": "2026-10-22T15:51:22+08:00"
         },
         "scope": "six_fixed_indices",
         "reason": ""
@@ -53604,7 +53604,7 @@
         },
         "threshold": "下跌>0且下跌家数≥上涨家数×9",
         "source": "market_history",
-        "as_of": "2026-10-22T15:37:42+08:00",
+        "as_of": "2026-10-22T15:52:45+08:00",
         "scope": "all_a",
         "reason": "all_a_breadth_or_coverage_missing"
       },
@@ -55240,21 +55240,16 @@
         "无盘面验证-10"
       ],
       "impact": {
-        "no_impact": false,
-        "headline": "外资流入与消费外贸扩张彰显中国经济韧性，提振市场信心",
+        "no_impact": true,
+        "headline": "对A股无明显影响",
         "analysis": [
-          "外资持续流入反映中国市场吸引力仍具韧性",
-          "消费规模扩大有助于改善内需预期",
-          "外贸保持增长将支撑相关企业盈利表现"
+          "对A股无明显影响"
         ],
-        "positive_sectors": [
-          "商贸零售",
-          "跨境电商"
-        ],
+        "positive_sectors": [],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "外资流入与消费外贸扩张彰显中国经济韧性，提振市场信心",
+        "summary": "对A股无明显影响",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55290,20 +55285,19 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "PHP超危漏洞提示网络安全需求升温，利好安全防护产业",
+        "headline": "PHP超危漏洞风险提示推升网络安全防护需求预期",
         "analysis": [
-          "远程代码执行漏洞将提升企业安全防护投入",
-          "漏洞修复和安全运维需求有望阶段性增加",
-          "国产网络安全厂商或获得更多替代与服务机会"
+          "漏洞可远程执行代码，提升政企系统安全防护紧迫性",
+          "存量系统升级和安全运维需求有望阶段性增加",
+          "事件偏风险提示，市场影响取决于实际修复进度"
         ],
         "positive_sectors": [
-          "网络安全",
-          "软件开发"
+          "网络安全"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "PHP超危漏洞提示网络安全需求升温，利好安全防护产业",
+        "summary": "PHP超危漏洞风险提示推升网络安全防护需求预期",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55341,21 +55335,21 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "广电规划强化人工智能与超高清建设，打开视听产业升级空间",
+        "headline": "广电视听规划推动人工智能与超高清产业加速落地",
         "analysis": [
-          "行业大模型建设将带动算力和数据资源投入",
-          "超高清制播升级有望提升设备与内容需求",
-          "广电网络智能化改造将促进相关技术应用落地"
+          "行业大模型和智算基础设施建设将拓展算力需求",
+          "超高清制播升级有望带动设备更新与内容制作投资",
+          "广电网络智能化改造将提升通信及软件服务需求"
         ],
         "positive_sectors": [
-          "人工智能",
-          "广播电视",
-          "通信"
+          "通信设备",
+          "计算机应用",
+          "影视院线"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "广电规划强化人工智能与超高清建设，打开视听产业升级空间",
+        "summary": "广电视听规划推动人工智能与超高清产业加速落地",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55391,11 +55385,11 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "芯片价格仍有上涨预期，半导体周期景气度获得积极支撑",
+        "headline": "芯片价格上行预期强化半导体行业景气改善逻辑",
         "analysis": [
-          "芯片价格上涨有助于改善产业链盈利预期",
-          "供需偏紧可能推动存储及相关产品涨价",
-          "半导体板块估值修复动力有望阶段性增强"
+          "芯片价格未见下跌，反映供需关系仍具一定支撑",
+          "价格上涨有望改善晶圆制造和存储厂商盈利预期",
+          "行业景气改善可能提升半导体板块估值弹性"
         ],
         "positive_sectors": [
           "半导体"
@@ -55403,7 +55397,7 @@
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "芯片价格仍有上涨预期，半导体周期景气度获得积极支撑",
+        "summary": "芯片价格上行预期强化半导体行业景气改善逻辑",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55439,21 +55433,21 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "人工智能加速赋能产业基础创新，工业智能化应用空间拓宽",
+        "headline": "人工智能融入产业基础环节拓展工业智能化投资空间",
         "analysis": [
-          "工业大模型将推动研发设计环节智能化",
-          "智能体应用有望提升制造业生产运营效率",
-          "产业基础产品智能升级将带来新增市场需求"
+          "通用大模型与工业机理融合将推动智能制造升级",
+          "研发设计和生产运营智能化提升工业软件需求",
+          "智能原生基础产品有望形成新的产业增长方向"
         ],
         "positive_sectors": [
-          "人工智能",
-          "工业软件",
-          "高端装备"
+          "软件开发",
+          "工业母机",
+          "半导体"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "人工智能加速赋能产业基础创新，工业智能化应用空间拓宽",
+        "summary": "人工智能融入产业基础环节拓展工业智能化投资空间",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55490,20 +55484,19 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "AI投资放缓与半导体盈利担忧升温，压制科技股风险偏好",
+        "headline": "AI投资放缓担忧升温压制半导体板块盈利预期",
         "analysis": [
-          "AI资本开支放缓担忧可能削弱算力需求预期",
-          "半导体盈利下修风险将压制板块估值",
-          "科技股波动率上升可能引发资金避险行为"
+          "AI资本开支放缓可能削弱算力芯片需求增长预期",
+          "半导体盈利预期下修将增加高估值品种回调压力",
+          "海外市场波动可能通过情绪传导影响A股科技板块"
         ],
         "positive_sectors": [],
         "negative_sectors": [
-          "半导体",
-          "人工智能"
+          "半导体"
         ],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "AI投资放缓与半导体盈利担忧升温，压制科技股风险偏好",
+        "summary": "AI投资放缓担忧升温压制半导体板块盈利预期",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55539,19 +55532,36 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "券商并购重组与国际化提速，证券行业集中度有望进一步提升",
+        "headline": "券商并购重组提速有望提升证券行业集中度与估值",
         "analysis": [
-          "监管支持并购整合有助于优化券商竞争格局",
-          "头部券商资本补充将增强跨境业务能力",
-          "行业集中度提升或改善大型券商盈利预期"
+          "监管支持并购整合，券商行业集中度有望持续提升",
+          "国际化布局将推动头部券商资本实力和业务扩张",
+          "中金公司整合落地强化行业并购重组示范效应"
         ],
         "positive_sectors": [
           "证券"
         ],
         "negative_sectors": [],
-        "positive_stocks": [],
-        "negative_stocks": [],
-        "summary": "券商并购重组与国际化提速，证券行业集中度有望进一步提升",
+        "positive_stocks": [
+          {
+            "name": "中金公司",
+            "code": "601995",
+            "reason": "并购整合提升综合竞争力"
+          }
+        ],
+        "negative_stocks": [
+          {
+            "name": "东兴证券",
+            "code": "601198",
+            "reason": "终止上市后不再交易"
+          },
+          {
+            "name": "信达证券",
+            "code": "601059",
+            "reason": "终止上市后不再交易"
+          }
+        ],
+        "summary": "券商并购重组提速有望提升证券行业集中度与估值",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55587,19 +55597,25 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "新易盛订单交付正常，短期缓解光模块市场对经营的担忧",
+        "headline": "新易盛订单交付正常缓解市场担忧并支撑光模块预期",
         "analysis": [
-          "订单有序交付表明公司当前生产经营稳定",
-          "800G与1.6T产品需求仍是主要增长支撑",
-          "产能扩充将为后续光模块收入增长提供保障"
+          "公司确认生产经营正常，有助于修复短期市场信心",
+          "800G和1.6T产品交付推进支撑未来收入增长预期",
+          "产能扩充按需求推进，显示公司供货能力仍在提升"
         ],
         "positive_sectors": [
-          "通信"
+          "通信设备"
         ],
         "negative_sectors": [],
-        "positive_stocks": [],
+        "positive_stocks": [
+          {
+            "name": "新易盛",
+            "code": "300502",
+            "reason": "订单交付正常，产能持续扩充"
+          }
+        ],
         "negative_stocks": [],
-        "summary": "新易盛订单交付正常，短期缓解光模块市场对经营的担忧",
+        "summary": "新易盛订单交付正常缓解市场担忧并支撑光模块预期",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55635,21 +55651,20 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "AI推理需求推动服务器CPU高增长，Arm架构渗透率持续提升",
+        "headline": "服务器CPU需求高增长推动国产算力芯片竞争加剧",
         "analysis": [
-          "AI Agent普及将持续拉动服务器CPU需求",
-          "服务器CPU高增长有望扩大算力基础设施投资",
-          "Arm架构份额提升将重塑处理器竞争格局"
+          "AI推理和智能体应用渗透将持续扩大服务器CPU需求",
+          "服务器CPU出货增长有望拉动芯片产业链景气度",
+          "Arm架构份额提升将加剧x86与Arm阵营竞争格局"
         ],
         "positive_sectors": [
           "半导体",
-          "计算机设备",
-          "人工智能"
+          "计算机设备"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "AI推理需求推动服务器CPU高增长，Arm架构渗透率持续提升",
+        "summary": "服务器CPU需求高增长推动国产算力芯片竞争加剧",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55686,21 +55701,20 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "全球AI基建持续扩张，光模块高景气与高速迭代趋势延续",
+        "headline": "全球AI基建持续扩张强化光通信板块业绩增长预期",
         "analysis": [
-          "海外科技巨头业绩验证AI基建投资仍在加速",
-          "800G与1.6T升级将推动光模块需求增长",
-          "光通信企业业绩高增长预期获得进一步强化"
+          "海外科技公司业绩显示AI数据中心投资仍在加速",
+          "800G和1.6T光模块升级将提升行业产品价值量",
+          "全球算力基础设施扩张有望支撑光模块订单增长"
         ],
         "positive_sectors": [
-          "通信",
-          "人工智能",
+          "通信设备",
           "计算机设备"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "全球AI基建持续扩张，光模块高景气与高速迭代趋势延续",
+        "summary": "全球AI基建持续扩张强化光通信板块业绩增长预期",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -55714,18 +55728,18 @@
   ],
   "forecast": {
     "core_judgment": "指数普跌且成长领跌，日线中枢未识别，暂不能确认趋势或买卖点",
-    "volume_note": "量能较近5日均量持平，未支持有效突破或止跌确认",
+    "volume_note": "量能较近5日均量持平，未见放量确认",
     "short_term": [
-      "创业板指跌4.37%、深证成指跌2.96%，短线成长风格仍承压，关注跌幅是否收窄",
-      "10/15板块资金正流入但指数普跌，观察电机Ⅱ、封测流入能否转化为持续上涨",
-      "半导体、AI同时受产业利好与投资放缓担忧影响，观察热点能否保持相对强势",
-      "上证指数报3658.03点，若量能仍平稳且未出现明显背驰，暂不推断反转买点"
+      "创业板指跌4.37%、科创50跌2.78%，若成长板块继续弱于上证，市场仍偏结构性承压",
+      "电机Ⅱ涨4.13%、集成电路封测涨0.20%，若强势板块延续且资金流入扩大，局部热点或保持活跃",
+      "10/15板块资金正流入，但指数普跌，若正流入占比下降，分化可能进一步扩大",
+      "网络安全、AI、半导体获事件催化，但半导体同时受AI投资放缓担忧压制，需观察板块能否转强"
     ],
-    "mid_term": "关键结构价位待核验。若资金持续流入电机、封测、通信且指数跌幅收窄，市场或演化为结构性修复；若科技股继续受AI投资放缓担忧压制并带动宽基扩大跌幅，则弱势延续。",
+    "mid_term": "日线中枢及关键价位待核验，暂不判断盘整或趋势。若指数止跌、成长板块相对上证改善且量能放大，市场可能转向结构性修复；若继续缩弱并伴随资金流入板块减少，则需防范弱势延续。",
     "risks": [
-      "指数普跌而量能未放大，若后续放量下跌，可能确认抛压加剧",
-      "AI与半导体利好和盈利放缓担忧并存，科技板块波动可能进一步放大",
-      "板块正流入占67%但整体下跌，资金承接不足，热点持续性存在风险"
+      "创业板指跌4.37%、深证成指跌2.96%，成长风格继续下挫可能拖累风险偏好",
+      "量能持平而指数普跌，反弹缺乏量能确认，存在弱修复或冲高回落风险",
+      "半导体同时面临芯片涨价利多与AI投资放缓利空，预期反复可能加剧板块波动"
     ]
   },
   "sell_signals": [
@@ -55889,7 +55903,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:89d23f6c8e06e2ed",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "000065",
       "name": "北方国际",
       "reference_close": 9.95645652173913,
@@ -55970,7 +55984,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4fc663fdb6aa9d6b",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "000400",
       "name": "许继电气",
       "reference_close": 23.60543908546629,
@@ -56051,7 +56065,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:cb9378b7f5e51c42",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "000651",
       "name": "格力电器",
       "reference_close": 39.32135927235978,
@@ -56535,7 +56549,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:53623348c5a7d82b",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "001298",
       "name": "好上好",
       "reference_close": 15.78,
@@ -56615,7 +56629,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:25500567eaff3fb6",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "001309",
       "name": "德明利",
       "reference_close": 342.0362904778575,
@@ -56762,7 +56776,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8e78b9682899b669",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002023",
       "name": "海特高新",
       "reference_close": 9.010072822534633,
@@ -56843,7 +56857,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:34ee1cea7ab354e3",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002097",
       "name": "山河智能",
       "reference_close": 7.26,
@@ -56924,7 +56938,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a214643e477bd6da",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002112",
       "name": "三变科技",
       "reference_close": 15.590305997552022,
@@ -57006,7 +57020,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8f11b52ffa8e39a4",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002185",
       "name": "华天科技",
       "reference_close": 15.55,
@@ -57153,7 +57167,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:865d2b0cf3a075ea",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002238",
       "name": "天威视讯",
       "reference_close": 7.288110749185666,
@@ -57233,7 +57247,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:579a275b5a6a13bd",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002307",
       "name": "北新路桥",
       "reference_close": 3.368269230769227,
@@ -57314,7 +57328,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8354af71eb8a338a",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002363",
       "name": "隆基机械",
       "reference_close": 6.957697542533084,
@@ -57395,7 +57409,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d990e92add30a0ca",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002415",
       "name": "海康威视",
       "reference_close": 33.80554260160915,
@@ -57879,7 +57893,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:133dd8dcbaf0a3ab",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002506",
       "name": "协鑫集成",
       "reference_close": 2.318810408921933,
@@ -58362,7 +58376,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d281d2f0aa59cfe6",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002526",
       "name": "山东矿机",
       "reference_close": 2.7,
@@ -58443,7 +58457,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7b0a7c00365044f9",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002701",
       "name": "奥瑞金",
       "reference_close": 4.260743801652893,
@@ -58928,7 +58942,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ee3d668a9b1ddc96",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002823",
       "name": "凯中精密",
       "reference_close": 12.662045365799237,
@@ -59009,7 +59023,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6cb26640e9ad5f7f",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002841",
       "name": "视源股份",
       "reference_close": 44.35791044776119,
@@ -59089,7 +59103,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:83cc8bb6a4be3b5f",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "002983",
       "name": "芯瑞达",
       "reference_close": 23.43,
@@ -59170,7 +59184,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:041f4f551ede41a7",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300024",
       "name": "机器人",
       "reference_close": 12.88,
@@ -59251,7 +59265,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8cdee562faafea0e",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300232",
       "name": "洲明科技",
       "reference_close": 5.38,
@@ -59331,7 +59345,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:22ade911946dfaf6",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300469",
       "name": "信息发展",
       "reference_close": 45.79108790838664,
@@ -59478,7 +59492,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:0f985494dcc05cd8",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300493",
       "name": "润欣科技",
       "reference_close": 12.281266261925415,
@@ -59558,7 +59572,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:e3f0807e09f39fcd",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300503",
       "name": "昊志机电",
       "reference_close": 55.94,
@@ -59639,7 +59653,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3be1a9ca11cb90ab",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300633",
       "name": "开立医疗",
       "reference_close": 19.88,
@@ -59720,7 +59734,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:03fda4905a74eafe",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300638",
       "name": "广和通",
       "reference_close": 20.17,
@@ -59800,7 +59814,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:15cf2f2f74a2f35c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300772",
       "name": "运达股份",
       "reference_close": 9.022839016653451,
@@ -59932,7 +59946,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5bb12dcb0d305f28",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300780",
       "name": "德恩精工",
       "reference_close": 17.57,
@@ -60013,7 +60027,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5eeb8844b3df2d80",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300842",
       "name": "帝科股份",
       "reference_close": 54.54612354521038,
@@ -60094,7 +60108,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:19ebff77b461405b",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "300879",
       "name": "大叶股份",
       "reference_close": 16.31,
@@ -60228,7 +60242,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a0e6c1ae5b25c932",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301159",
       "name": "三维天地",
       "reference_close": 39.54886448019803,
@@ -60308,7 +60322,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:1aa1954f2da1557f",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301502",
       "name": "华阳智能",
       "reference_close": 53.43728290235428,
@@ -60389,7 +60403,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:078cd1241c97f3ae",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301563",
       "name": "云汉芯城",
       "reference_close": 110.72502901193631,
@@ -60470,7 +60484,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:eac9ea39c7c08121",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301596",
       "name": "瑞迪智驱",
       "reference_close": 42.84,
@@ -60551,7 +60565,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:656023678da7935c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301622",
       "name": "英思特",
       "reference_close": 35.62,
@@ -60684,7 +60698,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:659b6536c5f04bc5",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "301666",
       "name": "大普微",
       "reference_close": 356.0,
@@ -60765,7 +60779,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:1615eda179295a9a",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600089",
       "name": "特变电工",
       "reference_close": 17.75746931067044,
@@ -60846,7 +60860,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:fd7d9791c265dbed",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600192",
       "name": "长城电工",
       "reference_close": 8.840694822888283,
@@ -60927,7 +60941,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5335dab992bbf97b",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600261",
       "name": "阳光照明",
       "reference_close": 3.588196721311475,
@@ -61008,7 +61022,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4abb1884ec055530",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600312",
       "name": "平高电气",
       "reference_close": 22.09382425923223,
@@ -61089,7 +61103,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:138a44b81da630bc",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600360",
       "name": "华微电子",
       "reference_close": 9.76,
@@ -61236,7 +61250,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ef18ea09c68ce550",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600406",
       "name": "国电南瑞",
       "reference_close": 23.794021574982157,
@@ -61317,7 +61331,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6a5ef1df77cf43dc",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600580",
       "name": "卧龙电驱",
       "reference_close": 25.26176649185758,
@@ -61449,7 +61463,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:56a46de3a3beff2c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600690",
       "name": "海尔智家",
       "reference_close": 20.618936466598026,
@@ -61934,7 +61948,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7224f3ebe4f93161",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600698",
       "name": "湖南天雁",
       "reference_close": 7.670744680851064,
@@ -62015,7 +62029,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ee3c212f0e8310f6",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600729",
       "name": "重百集团",
       "reference_close": 18.760141485598783,
@@ -62504,7 +62518,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:9b7808ebbb280adf",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "600741",
       "name": "华域汽车",
       "reference_close": 14.873193749999999,
@@ -62987,7 +63001,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:255d9f962afc1873",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601012",
       "name": "隆基绿能",
       "reference_close": 11.361475667189953,
@@ -63068,7 +63082,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4bf54404cf883b52",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601606",
       "name": "长城军工",
       "reference_close": 33.19,
@@ -63149,7 +63163,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:115ac20bad0c8bfa",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601628",
       "name": "中国人寿",
       "reference_close": 34.127565373310446,
@@ -63634,7 +63648,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5433183978760f9a",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601727",
       "name": "上海电气",
       "reference_close": 6.213924418604651,
@@ -64118,7 +64132,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:bcdb61e67ab45952",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601825",
       "name": "沪农商行",
       "reference_close": 8.818508041936719,
@@ -64603,7 +64617,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6182b1545bded60c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "601888",
       "name": "中国中免",
       "reference_close": 48.92,
@@ -65087,7 +65101,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a6131103b370349f",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603013",
       "name": "亚普股份",
       "reference_close": 15.592059817136711,
@@ -65168,7 +65182,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:36b2365819890c3f",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603028",
       "name": "赛福天",
       "reference_close": 7.76,
@@ -65249,7 +65263,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3285a1a8e572739c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603068",
       "name": "博通集成",
       "reference_close": 42.48,
@@ -65329,7 +65343,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:84152e1277ce4dc7",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603089",
       "name": "正裕工业",
       "reference_close": 10.649577625570778,
@@ -65410,7 +65424,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4e32873c3981245d",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603126",
       "name": "中材节能",
       "reference_close": 6.439303482587067,
@@ -65491,7 +65505,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:55bbf82622a80ef3",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603138",
       "name": "海量数据",
       "reference_close": 16.95757216876388,
@@ -65572,7 +65586,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:599ffcb324483c2e",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603278",
       "name": "大业股份",
       "reference_close": 14.51,
@@ -65653,7 +65667,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:396e2abe45f1de0c",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603280",
       "name": "南方路机",
       "reference_close": 29.06,
@@ -65734,7 +65748,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5b1e02f1ea308ac1",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603370",
       "name": "华新精科",
       "reference_close": 29.462008149010476,
@@ -65815,7 +65829,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3e8c91f53c412c36",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603501",
       "name": "豪威集团",
       "reference_close": 78.4,
@@ -65896,7 +65910,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:67469158b0300d21",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603528",
       "name": "多伦科技",
       "reference_close": 7.365312500000003,
@@ -65977,7 +65991,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:9627cab3182c1af8",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603556",
       "name": "海兴电力",
       "reference_close": 20.81,
@@ -66462,7 +66476,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ef852a86ec5b132d",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603606",
       "name": "东方电缆",
       "reference_close": 34.5,
@@ -66609,7 +66623,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ff685b4f4a459aac",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603662",
       "name": "柯力传感",
       "reference_close": 48.03,
@@ -66690,7 +66704,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6823ca849f1e91a4",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603893",
       "name": "瑞芯微",
       "reference_close": 197.94009848411704,
@@ -66770,7 +66784,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f62dbefd28258fff",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603926",
       "name": "铁流股份",
       "reference_close": 16.508521303258142,
@@ -66851,7 +66865,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8acc9e18a484493b",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "603933",
       "name": "睿能科技",
       "reference_close": 19.04,
@@ -66932,7 +66946,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5d18f6dd8131edbc",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "605389",
       "name": "长龄液压",
       "reference_close": 56.810271460014675,
@@ -67013,7 +67027,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:c347abcccb1ea2b5",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "605499",
       "name": "东鹏饮料",
       "reference_close": 105.5223101341762,
@@ -67497,7 +67511,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:833d7702d72116a2",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "605555",
       "name": "德昌股份",
       "reference_close": 11.374172185430465,
@@ -67578,7 +67592,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f9607b2da60a4a92",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688018",
       "name": "乐鑫科技",
       "reference_close": 141.36,
@@ -67658,7 +67672,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:0b8d7e809ffe68b7",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688049",
       "name": "炬芯科技",
       "reference_close": 41.41,
@@ -67805,7 +67819,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a293238e2feba955",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688061",
       "name": "灿瑞科技",
       "reference_close": 41.0,
@@ -67886,7 +67900,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:bc22a22a17e559cd",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688111",
       "name": "金山办公",
       "reference_close": 247.56664919505798,
@@ -67966,7 +67980,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:845ce51bdcd30cbf",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688213",
       "name": "思特威",
       "reference_close": 105.55,
@@ -68046,7 +68060,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:220dad61e058e5c2",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688220",
       "name": "翱捷科技",
       "reference_close": 88.12,
@@ -68126,7 +68140,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:44045766d1a33ba2",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688277",
       "name": "天智航",
       "reference_close": 14.94,
@@ -68207,7 +68221,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:45a5f2aa9dc02d6a",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688286",
       "name": "敏芯股份",
       "reference_close": 51.84,
@@ -68287,7 +68301,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d665340ec6dde398",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688303",
       "name": "大全能源",
       "reference_close": 16.98713444027852,
@@ -68368,7 +68382,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:bd5ac7025c68ec42",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688396",
       "name": "华润微",
       "reference_close": 51.0,
@@ -68449,7 +68463,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:2b76be8be99522f2",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688408",
       "name": "中信博",
       "reference_close": 21.880645161290325,
@@ -68530,7 +68544,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d901adef019d6ec7",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688608",
       "name": "恒玄科技",
       "reference_close": 111.2,
@@ -68611,7 +68625,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:eb0697892b331fae",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688651",
       "name": "盛邦安全",
       "reference_close": 23.274385228703316,
@@ -68692,7 +68706,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6afd428927eb3ddc",
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
       "code": "688686",
       "name": "奥普特",
       "reference_close": 127.84808620449158,
@@ -71442,7 +71456,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -71462,9 +71476,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -71730,7 +71744,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -71750,9 +71764,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -72009,7 +72023,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -72029,9 +72043,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -72288,7 +72302,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -72308,9 +72322,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -72568,7 +72582,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -72588,9 +72602,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -72858,7 +72872,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -72878,9 +72892,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -84307,8 +84321,8 @@
     },
     "data_quality": {
       "report_date": "2026-10-22",
-      "generated_at": "2026-10-22T15:35:12+08:00",
-      "as_of": "2026-10-22T15:35:12+08:00",
+      "generated_at": "2026-10-22T15:50:14+08:00",
+      "as_of": "2026-10-22T15:50:14+08:00",
       "bar_state": "closed",
       "is_trading_day": true,
       "is_official": true,
@@ -84891,9 +84905,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676126.9502358
           },
           {
             "code": "600776",
@@ -84902,9 +84918,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676127.1712909
           },
           {
             "code": "600784",
@@ -84913,9 +84931,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676127.4136078
           },
           {
             "code": "600792",
@@ -84924,9 +84944,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676127.6423192
           },
           {
             "code": "600810",
@@ -84935,9 +84957,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676127.858464
           },
           {
             "code": "600844",
@@ -84946,9 +84970,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676128.0863721
           },
           {
             "code": "600866",
@@ -84957,9 +84983,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676128.2892292
           },
           {
             "code": "600873",
@@ -84968,9 +84996,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1792676128.520098
           },
           {
             "code": "600925",
@@ -84979,7 +85009,69 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -84989,7 +85081,59 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -84999,7 +85143,139 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-04-24",
+                  "2026-04-27",
+                  "2026-04-28",
+                  "2026-04-29",
+                  "2026-04-30",
+                  "2026-05-06",
+                  "2026-05-07",
+                  "2026-05-08",
+                  "2026-05-11",
+                  "2026-05-12",
+                  "2026-05-13",
+                  "2026-05-14",
+                  "2026-05-15",
+                  "2026-05-18",
+                  "2026-05-19",
+                  "2026-05-20",
+                  "2026-05-21",
+                  "2026-05-22",
+                  "2026-05-25",
+                  "2026-05-26",
+                  "2026-05-27",
+                  "2026-05-28",
+                  "2026-05-29",
+                  "2026-06-01",
+                  "2026-06-02",
+                  "2026-06-03",
+                  "2026-06-04",
+                  "2026-06-05",
+                  "2026-06-08",
+                  "2026-06-09",
+                  "2026-06-10",
+                  "2026-06-11",
+                  "2026-06-12",
+                  "2026-06-15",
+                  "2026-06-16",
+                  "2026-06-17",
+                  "2026-06-18",
+                  "2026-06-22",
+                  "2026-06-23",
+                  "2026-06-24",
+                  "2026-06-25",
+                  "2026-06-26",
+                  "2026-06-29",
+                  "2026-06-30",
+                  "2026-07-01",
+                  "2026-07-02",
+                  "2026-07-03",
+                  "2026-07-06",
+                  "2026-07-07",
+                  "2026-07-08",
+                  "2026-07-09",
+                  "2026-07-10",
+                  "2026-07-13",
+                  "2026-07-14",
+                  "2026-07-15",
+                  "2026-07-16",
+                  "2026-07-17",
+                  "2026-07-20",
+                  "2026-07-21",
+                  "2026-07-22",
+                  "2026-07-23",
+                  "2026-07-24",
+                  "2026-07-27",
+                  "2026-07-28",
+                  "2026-07-29",
+                  "2026-07-30",
+                  "2026-07-31",
+                  "2026-08-03",
+                  "2026-08-04",
+                  "2026-08-05",
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -85009,7 +85285,96 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-04-24",
+                  "2026-04-27",
+                  "2026-04-28",
+                  "2026-04-29",
+                  "2026-04-30",
+                  "2026-05-06",
+                  "2026-05-07",
+                  "2026-05-08",
+                  "2026-05-11",
+                  "2026-05-12",
+                  "2026-05-13",
+                  "2026-05-14",
+                  "2026-05-15",
+                  "2026-05-18",
+                  "2026-05-19",
+                  "2026-05-20",
+                  "2026-05-21",
+                  "2026-05-22",
+                  "2026-05-25",
+                  "2026-05-26",
+                  "2026-05-27",
+                  "2026-05-28",
+                  "2026-05-29",
+                  "2026-06-01",
+                  "2026-06-02",
+                  "2026-06-03",
+                  "2026-06-04",
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -85019,7 +85384,69 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -85029,7 +85456,69 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -85039,7 +85528,139 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-04-24",
+                  "2026-04-27",
+                  "2026-04-28",
+                  "2026-04-29",
+                  "2026-04-30",
+                  "2026-05-06",
+                  "2026-05-07",
+                  "2026-05-08",
+                  "2026-05-11",
+                  "2026-05-12",
+                  "2026-05-13",
+                  "2026-05-14",
+                  "2026-05-15",
+                  "2026-05-18",
+                  "2026-05-19",
+                  "2026-05-20",
+                  "2026-05-21",
+                  "2026-05-22",
+                  "2026-05-25",
+                  "2026-05-26",
+                  "2026-05-27",
+                  "2026-05-28",
+                  "2026-05-29",
+                  "2026-06-01",
+                  "2026-06-02",
+                  "2026-06-03",
+                  "2026-06-04",
+                  "2026-06-05",
+                  "2026-06-08",
+                  "2026-06-09",
+                  "2026-06-10",
+                  "2026-06-11",
+                  "2026-06-12",
+                  "2026-06-15",
+                  "2026-06-16",
+                  "2026-06-17",
+                  "2026-06-18",
+                  "2026-06-22",
+                  "2026-06-23",
+                  "2026-06-24",
+                  "2026-06-25",
+                  "2026-06-26",
+                  "2026-06-29",
+                  "2026-06-30",
+                  "2026-07-01",
+                  "2026-07-02",
+                  "2026-07-03",
+                  "2026-07-06",
+                  "2026-07-07",
+                  "2026-07-08",
+                  "2026-07-09",
+                  "2026-07-10",
+                  "2026-07-13",
+                  "2026-07-14",
+                  "2026-07-15",
+                  "2026-07-16",
+                  "2026-07-17",
+                  "2026-07-20",
+                  "2026-07-21",
+                  "2026-07-22",
+                  "2026-07-23",
+                  "2026-07-24",
+                  "2026-07-27",
+                  "2026-07-28",
+                  "2026-07-29",
+                  "2026-07-30",
+                  "2026-07-31",
+                  "2026-08-03",
+                  "2026-08-04",
+                  "2026-08-05",
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -85049,7 +85670,69 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_healthy_overlap_conflict"
+            ],
+            "price_conflicts": [
+              {
+                "category": "unexplained",
+                "price_category": "unexplained",
+                "write_authorized": false,
+                "conflict_dates": [
+                  "2026-08-07",
+                  "2026-08-10",
+                  "2026-08-11",
+                  "2026-08-12",
+                  "2026-08-13",
+                  "2026-08-14",
+                  "2026-08-17",
+                  "2026-08-18",
+                  "2026-08-19",
+                  "2026-08-20",
+                  "2026-08-21",
+                  "2026-08-24",
+                  "2026-08-25",
+                  "2026-08-26",
+                  "2026-08-27",
+                  "2026-08-28",
+                  "2026-08-31",
+                  "2026-09-01",
+                  "2026-09-02",
+                  "2026-09-03",
+                  "2026-09-04",
+                  "2026-09-07",
+                  "2026-09-08",
+                  "2026-09-09",
+                  "2026-09-10",
+                  "2026-09-11",
+                  "2026-09-14",
+                  "2026-09-15",
+                  "2026-09-16",
+                  "2026-09-17",
+                  "2026-09-18",
+                  "2026-09-21",
+                  "2026-09-22",
+                  "2026-09-23",
+                  "2026-09-24",
+                  "2026-09-28",
+                  "2026-09-29",
+                  "2026-09-30",
+                  "2026-10-08",
+                  "2026-10-09",
+                  "2026-10-12",
+                  "2026-10-13",
+                  "2026-10-14",
+                  "2026-10-15",
+                  "2026-10-16",
+                  "2026-10-19",
+                  "2026-10-20",
+                  "2026-10-21",
+                  "2026-10-22"
+                ],
+                "reasons": [],
+                "quantity_unverified": true,
+                "source": "tencent"
+              }
             ]
           },
           {
@@ -90021,19 +90704,19 @@
         ],
         "known_pending_count": 558,
         "queue_error": "",
-        "cooldown_count": 16,
+        "cooldown_count": 24,
         "unknown_attempt_count": 0,
         "stock_attempts": 8,
         "http_requests": 16,
         "phase_seconds": {
-          "discovery": 3.2536456250000008,
-          "queue": 0.28872262500001256,
-          "read": 0.055588333000002876,
-          "request": 1.52797587600001,
-          "validation": 0.00033120999999880496,
-          "recheck": 0.005495416999998781
+          "discovery": 3.061198375000002,
+          "queue": 0.27658820800000683,
+          "read": 0.06507987399999138,
+          "request": 1.5785436249999982,
+          "validation": 0.04912491500001792,
+          "recheck": 0.0065704590000024155
         },
-        "elapsed_seconds": 5.151095249999999
+        "elapsed_seconds": 5.055665915999999
       },
       "missing_30min_count": 0,
       "stock_pool_incomplete": true,
@@ -91865,15 +92548,16 @@
       ],
       "fallback_used": true,
       "warnings": [
-        "板块成分身份已取齐，2只A股同日报价不可用；板块叠加检索关闭"
+        "板块成分身份已取齐，2只A股同日报价不可用；板块叠加检索关闭",
+        "重点观察池远端配置不可用，本次使用仓库回退版本 watchlist-20260820-01: <urlopen error EOF occurred in violation of protocol (_ssl.c:1129)>"
       ],
-      "run_started_at": "2026-10-22T15:35:10+08:00",
+      "run_started_at": "2026-10-22T15:50:10+08:00",
       "personal_watchlist_config": {
-        "status": "remote_live",
-        "source": "worker",
+        "status": "local_fallback",
+        "source": "local_file",
         "revision": "watchlist-20260820-01",
         "remote_url": "https://top10-worker.breakaway4here.workers.dev/api/decision-watchlist",
-        "remote_error": "",
+        "remote_error": "<urlopen error EOF occurred in violation of protocol (_ssl.c:1129)>",
         "name_resolution_missing_codes": []
       },
       "daily_run_mode": "missing_only",
@@ -92096,7 +92780,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -92116,9 +92800,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -92483,7 +93167,7 @@
           "preserved_independent_final_rows": [],
           "quote_identity_keys": [],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+          "acquired_at": "2026-10-22T15:50:14.636988+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5576,
@@ -92503,9 +93187,9 @@
             "quote_sources": {
               "sina": 5569
             },
-            "started_at": "2026-10-22T15:35:11.840444+08:00",
-            "as_of": "2026-10-22T15:35:12+08:00",
-            "fetched_at": "2026-10-22T15:35:12+08:00",
+            "started_at": "2026-10-22T15:50:13.769901+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
+            "fetched_at": "2026-10-22T15:50:14+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -93627,7 +94311,7 @@
             "preserved_independent_final_rows": [],
             "quote_identity_keys": [],
             "cached_snapshot_unverified_count": 0,
-            "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+            "acquired_at": "2026-10-22T15:50:14.636988+08:00",
             "quote_fetch": {
               "complete": true,
               "requested": 5576,
@@ -93647,9 +94331,9 @@
               "quote_sources": {
                 "sina": 5569
               },
-              "started_at": "2026-10-22T15:35:11.840444+08:00",
-              "as_of": "2026-10-22T15:35:12+08:00",
-              "fetched_at": "2026-10-22T15:35:12+08:00",
+              "started_at": "2026-10-22T15:50:13.769901+08:00",
+              "as_of": "2026-10-22T15:50:14+08:00",
+              "fetched_at": "2026-10-22T15:50:14+08:00",
               "attempts": [
                 {
                   "source": "sina",
@@ -94770,7 +95454,7 @@
             "preserved_independent_final_rows": [],
             "quote_identity_keys": [],
             "cached_snapshot_unverified_count": 0,
-            "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+            "acquired_at": "2026-10-22T15:50:14.636988+08:00",
             "quote_fetch": {
               "complete": true,
               "requested": 5576,
@@ -94790,9 +95474,9 @@
               "quote_sources": {
                 "sina": 5569
               },
-              "started_at": "2026-10-22T15:35:11.840444+08:00",
-              "as_of": "2026-10-22T15:35:12+08:00",
-              "fetched_at": "2026-10-22T15:35:12+08:00",
+              "started_at": "2026-10-22T15:50:13.769901+08:00",
+              "as_of": "2026-10-22T15:50:14+08:00",
+              "fetched_at": "2026-10-22T15:50:14+08:00",
               "attempts": [
                 {
                   "source": "sina",
@@ -95067,7 +95751,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SZ|003029",
                 "interval": "15m",
-                "as_of": "2026-10-22T15:35:12+08:00"
+                "as_of": "2026-10-22T15:50:14+08:00"
               },
               "price_basis_failure": "indeterminate_flat_day:2026-10-19",
               "attempt_evidence": [
@@ -95165,7 +95849,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SZ|002889",
                 "interval": "15m",
-                "as_of": "2026-10-22T15:35:12+08:00"
+                "as_of": "2026-10-22T15:50:14+08:00"
               },
               "price_basis_failure": "indeterminate_flat_day:2026-10-16",
               "attempt_evidence": [
@@ -95905,104 +96589,6 @@
             "605287"
           ],
           "failure_evidence": {
-            "603605": {
-              "interval": "30m",
-              "status": "price_basis_unverified",
-              "latest_date": "2026-10-22",
-              "latest_ts": "2026-10-22 15:00:00",
-              "source": "sina",
-              "bars": 80,
-              "stale": false,
-              "is_final": true,
-              "adjustment": "unverified",
-              "minute_to_daily": {
-                "schema_version": 1,
-                "status": "pending",
-                "reason": "minute_window_unverified",
-                "identity_key": "stock|SH|603605",
-                "interval": "30m",
-                "as_of": "2026-10-22T15:35:12+08:00"
-              },
-              "price_basis_failure": "missing_canonical_daily_reference",
-              "attempt_evidence": [
-                {
-                  "trade_date": "2026-10-22",
-                  "identity": "stock|SH|603605",
-                  "interval": "30m",
-                  "provider": "sina",
-                  "attempt": 1,
-                  "result": "rejected",
-                  "reason": "missing_canonical_daily_reference",
-                  "http_status": 200,
-                  "content_type": "application/javascript; charset=gbk",
-                  "response_summary": "json_array length=240",
-                  "exception_category": "validation",
-                  "exception_type": "FinalValidationError"
-                },
-                {
-                  "trade_date": "2026-10-22",
-                  "identity": "stock|SH|603605",
-                  "interval": "30m",
-                  "provider": "tencent",
-                  "attempt": 2,
-                  "result": "rejected",
-                  "reason": "missing_canonical_daily_reference",
-                  "http_status": 200,
-                  "content_type": "text/html; charset=UTF-8",
-                  "response_summary": "json_object",
-                  "exception_category": "validation",
-                  "exception_type": "FinalValidationError"
-                },
-                {
-                  "trade_date": "2026-10-22",
-                  "identity": "stock|SH|603605",
-                  "interval": "30m",
-                  "provider": "eastmoney",
-                  "attempt": 3,
-                  "result": "failed",
-                  "reason": "connection_error",
-                  "exception_category": "connection",
-                  "exception_type": "ConnectionError"
-                },
-                {
-                  "trade_date": "2026-10-22",
-                  "identity": "stock|SH|603605",
-                  "interval": "30m",
-                  "provider": "sina",
-                  "attempt": 4,
-                  "result": "rejected",
-                  "reason": "missing_canonical_daily_reference",
-                  "http_status": 200,
-                  "content_type": "application/javascript; charset=gbk",
-                  "response_summary": "json_array length=240",
-                  "exception_category": "validation",
-                  "exception_type": "FinalValidationError"
-                }
-              ],
-              "rejected": [
-                {
-                  "provider": "sina",
-                  "reason": "missing_canonical_daily_reference"
-                },
-                {
-                  "provider": "tencent",
-                  "reason": "missing_canonical_daily_reference"
-                },
-                {
-                  "provider": "eastmoney",
-                  "reason": "connection_error"
-                },
-                {
-                  "provider": "sina",
-                  "reason": "missing_canonical_daily_reference"
-                }
-              ],
-              "latest_cache_date": "2026-10-22",
-              "cache_stale": false,
-              "cache_bars": 80,
-              "final_adopted": false,
-              "rejection_reason": "missing_canonical_daily_reference"
-            },
             "605287": {
               "interval": "30m",
               "status": "price_basis_unverified",
@@ -96019,7 +96605,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SH|605287",
                 "interval": "30m",
-                "as_of": "2026-10-22T15:35:12+08:00"
+                "as_of": "2026-10-22T15:50:14+08:00"
               },
               "price_basis_failure": "indeterminate_flat_day:2026-10-12",
               "attempt_evidence": [
@@ -96100,6 +96686,104 @@
               "cache_bars": 80,
               "final_adopted": false,
               "rejection_reason": "indeterminate_flat_day:2026-10-12"
+            },
+            "603605": {
+              "interval": "30m",
+              "status": "price_basis_unverified",
+              "latest_date": "2026-10-22",
+              "latest_ts": "2026-10-22 15:00:00",
+              "source": "sina",
+              "bars": 80,
+              "stale": false,
+              "is_final": true,
+              "adjustment": "unverified",
+              "minute_to_daily": {
+                "schema_version": 1,
+                "status": "pending",
+                "reason": "minute_window_unverified",
+                "identity_key": "stock|SH|603605",
+                "interval": "30m",
+                "as_of": "2026-10-22T15:50:14+08:00"
+              },
+              "price_basis_failure": "missing_canonical_daily_reference",
+              "attempt_evidence": [
+                {
+                  "trade_date": "2026-10-22",
+                  "identity": "stock|SH|603605",
+                  "interval": "30m",
+                  "provider": "sina",
+                  "attempt": 1,
+                  "result": "rejected",
+                  "reason": "missing_canonical_daily_reference",
+                  "http_status": 200,
+                  "content_type": "application/javascript; charset=gbk",
+                  "response_summary": "json_array length=240",
+                  "exception_category": "validation",
+                  "exception_type": "FinalValidationError"
+                },
+                {
+                  "trade_date": "2026-10-22",
+                  "identity": "stock|SH|603605",
+                  "interval": "30m",
+                  "provider": "tencent",
+                  "attempt": 2,
+                  "result": "rejected",
+                  "reason": "missing_canonical_daily_reference",
+                  "http_status": 200,
+                  "content_type": "text/html; charset=UTF-8",
+                  "response_summary": "json_object",
+                  "exception_category": "validation",
+                  "exception_type": "FinalValidationError"
+                },
+                {
+                  "trade_date": "2026-10-22",
+                  "identity": "stock|SH|603605",
+                  "interval": "30m",
+                  "provider": "eastmoney",
+                  "attempt": 3,
+                  "result": "failed",
+                  "reason": "connection_error",
+                  "exception_category": "connection",
+                  "exception_type": "ConnectionError"
+                },
+                {
+                  "trade_date": "2026-10-22",
+                  "identity": "stock|SH|603605",
+                  "interval": "30m",
+                  "provider": "sina",
+                  "attempt": 4,
+                  "result": "rejected",
+                  "reason": "missing_canonical_daily_reference",
+                  "http_status": 200,
+                  "content_type": "application/javascript; charset=gbk",
+                  "response_summary": "json_array length=240",
+                  "exception_category": "validation",
+                  "exception_type": "FinalValidationError"
+                }
+              ],
+              "rejected": [
+                {
+                  "provider": "sina",
+                  "reason": "missing_canonical_daily_reference"
+                },
+                {
+                  "provider": "tencent",
+                  "reason": "missing_canonical_daily_reference"
+                },
+                {
+                  "provider": "eastmoney",
+                  "reason": "connection_error"
+                },
+                {
+                  "provider": "sina",
+                  "reason": "missing_canonical_daily_reference"
+                }
+              ],
+              "latest_cache_date": "2026-10-22",
+              "cache_stale": false,
+              "cache_bars": 80,
+              "final_adopted": false,
+              "rejection_reason": "missing_canonical_daily_reference"
             }
           },
           "blocks_strategy_output": false
@@ -96324,7 +97008,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -96344,9 +97028,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -98232,7 +98916,7 @@
       "startup_watchlist": 15
     },
     "candidate_funnel": {
-      "run_id": "20261022-ef932f448340",
+      "run_id": "20261022-7b4e7f491b08",
       "report_date": "2026-10-22",
       "as_of": "2026-10-22",
       "candidate_count": 5921,
@@ -98813,7 +99497,7 @@
     "strategy_review_benchmark_ingest": {
       "status": "ok",
       "code": "000300",
-      "bars": 100,
+      "bars": 101,
       "rows_written": 0,
       "latest_date": "2026-10-22"
     },
@@ -98831,8 +99515,8 @@
   },
   "data_quality": {
     "report_date": "2026-10-22",
-    "generated_at": "2026-10-22T15:35:12+08:00",
-    "as_of": "2026-10-22T15:35:12+08:00",
+    "generated_at": "2026-10-22T15:50:14+08:00",
+    "as_of": "2026-10-22T15:50:14+08:00",
     "bar_state": "closed",
     "is_trading_day": true,
     "is_official": true,
@@ -99415,9 +100099,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676126.9502358
         },
         {
           "code": "600776",
@@ -99426,9 +100112,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676127.1712909
         },
         {
           "code": "600784",
@@ -99437,9 +100125,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676127.4136078
         },
         {
           "code": "600792",
@@ -99448,9 +100138,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676127.6423192
         },
         {
           "code": "600810",
@@ -99459,9 +100151,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676127.858464
         },
         {
           "code": "600844",
@@ -99470,9 +100164,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676128.0863721
         },
         {
           "code": "600866",
@@ -99481,9 +100177,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676128.2892292
         },
         {
           "code": "600873",
@@ -99492,9 +100190,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1792676128.520098
         },
         {
           "code": "600925",
@@ -99503,7 +100203,69 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99513,7 +100275,59 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99523,7 +100337,139 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-04-24",
+                "2026-04-27",
+                "2026-04-28",
+                "2026-04-29",
+                "2026-04-30",
+                "2026-05-06",
+                "2026-05-07",
+                "2026-05-08",
+                "2026-05-11",
+                "2026-05-12",
+                "2026-05-13",
+                "2026-05-14",
+                "2026-05-15",
+                "2026-05-18",
+                "2026-05-19",
+                "2026-05-20",
+                "2026-05-21",
+                "2026-05-22",
+                "2026-05-25",
+                "2026-05-26",
+                "2026-05-27",
+                "2026-05-28",
+                "2026-05-29",
+                "2026-06-01",
+                "2026-06-02",
+                "2026-06-03",
+                "2026-06-04",
+                "2026-06-05",
+                "2026-06-08",
+                "2026-06-09",
+                "2026-06-10",
+                "2026-06-11",
+                "2026-06-12",
+                "2026-06-15",
+                "2026-06-16",
+                "2026-06-17",
+                "2026-06-18",
+                "2026-06-22",
+                "2026-06-23",
+                "2026-06-24",
+                "2026-06-25",
+                "2026-06-26",
+                "2026-06-29",
+                "2026-06-30",
+                "2026-07-01",
+                "2026-07-02",
+                "2026-07-03",
+                "2026-07-06",
+                "2026-07-07",
+                "2026-07-08",
+                "2026-07-09",
+                "2026-07-10",
+                "2026-07-13",
+                "2026-07-14",
+                "2026-07-15",
+                "2026-07-16",
+                "2026-07-17",
+                "2026-07-20",
+                "2026-07-21",
+                "2026-07-22",
+                "2026-07-23",
+                "2026-07-24",
+                "2026-07-27",
+                "2026-07-28",
+                "2026-07-29",
+                "2026-07-30",
+                "2026-07-31",
+                "2026-08-03",
+                "2026-08-04",
+                "2026-08-05",
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99533,7 +100479,96 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-04-24",
+                "2026-04-27",
+                "2026-04-28",
+                "2026-04-29",
+                "2026-04-30",
+                "2026-05-06",
+                "2026-05-07",
+                "2026-05-08",
+                "2026-05-11",
+                "2026-05-12",
+                "2026-05-13",
+                "2026-05-14",
+                "2026-05-15",
+                "2026-05-18",
+                "2026-05-19",
+                "2026-05-20",
+                "2026-05-21",
+                "2026-05-22",
+                "2026-05-25",
+                "2026-05-26",
+                "2026-05-27",
+                "2026-05-28",
+                "2026-05-29",
+                "2026-06-01",
+                "2026-06-02",
+                "2026-06-03",
+                "2026-06-04",
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99543,7 +100578,69 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99553,7 +100650,69 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99563,7 +100722,139 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-04-24",
+                "2026-04-27",
+                "2026-04-28",
+                "2026-04-29",
+                "2026-04-30",
+                "2026-05-06",
+                "2026-05-07",
+                "2026-05-08",
+                "2026-05-11",
+                "2026-05-12",
+                "2026-05-13",
+                "2026-05-14",
+                "2026-05-15",
+                "2026-05-18",
+                "2026-05-19",
+                "2026-05-20",
+                "2026-05-21",
+                "2026-05-22",
+                "2026-05-25",
+                "2026-05-26",
+                "2026-05-27",
+                "2026-05-28",
+                "2026-05-29",
+                "2026-06-01",
+                "2026-06-02",
+                "2026-06-03",
+                "2026-06-04",
+                "2026-06-05",
+                "2026-06-08",
+                "2026-06-09",
+                "2026-06-10",
+                "2026-06-11",
+                "2026-06-12",
+                "2026-06-15",
+                "2026-06-16",
+                "2026-06-17",
+                "2026-06-18",
+                "2026-06-22",
+                "2026-06-23",
+                "2026-06-24",
+                "2026-06-25",
+                "2026-06-26",
+                "2026-06-29",
+                "2026-06-30",
+                "2026-07-01",
+                "2026-07-02",
+                "2026-07-03",
+                "2026-07-06",
+                "2026-07-07",
+                "2026-07-08",
+                "2026-07-09",
+                "2026-07-10",
+                "2026-07-13",
+                "2026-07-14",
+                "2026-07-15",
+                "2026-07-16",
+                "2026-07-17",
+                "2026-07-20",
+                "2026-07-21",
+                "2026-07-22",
+                "2026-07-23",
+                "2026-07-24",
+                "2026-07-27",
+                "2026-07-28",
+                "2026-07-29",
+                "2026-07-30",
+                "2026-07-31",
+                "2026-08-03",
+                "2026-08-04",
+                "2026-08-05",
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -99573,7 +100864,69 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_healthy_overlap_conflict"
+          ],
+          "price_conflicts": [
+            {
+              "category": "unexplained",
+              "price_category": "unexplained",
+              "write_authorized": false,
+              "conflict_dates": [
+                "2026-08-07",
+                "2026-08-10",
+                "2026-08-11",
+                "2026-08-12",
+                "2026-08-13",
+                "2026-08-14",
+                "2026-08-17",
+                "2026-08-18",
+                "2026-08-19",
+                "2026-08-20",
+                "2026-08-21",
+                "2026-08-24",
+                "2026-08-25",
+                "2026-08-26",
+                "2026-08-27",
+                "2026-08-28",
+                "2026-08-31",
+                "2026-09-01",
+                "2026-09-02",
+                "2026-09-03",
+                "2026-09-04",
+                "2026-09-07",
+                "2026-09-08",
+                "2026-09-09",
+                "2026-09-10",
+                "2026-09-11",
+                "2026-09-14",
+                "2026-09-15",
+                "2026-09-16",
+                "2026-09-17",
+                "2026-09-18",
+                "2026-09-21",
+                "2026-09-22",
+                "2026-09-23",
+                "2026-09-24",
+                "2026-09-28",
+                "2026-09-29",
+                "2026-09-30",
+                "2026-10-08",
+                "2026-10-09",
+                "2026-10-12",
+                "2026-10-13",
+                "2026-10-14",
+                "2026-10-15",
+                "2026-10-16",
+                "2026-10-19",
+                "2026-10-20",
+                "2026-10-21",
+                "2026-10-22"
+              ],
+              "reasons": [],
+              "quantity_unverified": true,
+              "source": "tencent"
+            }
           ]
         },
         {
@@ -104545,19 +105898,19 @@
       ],
       "known_pending_count": 558,
       "queue_error": "",
-      "cooldown_count": 16,
+      "cooldown_count": 24,
       "unknown_attempt_count": 0,
       "stock_attempts": 8,
       "http_requests": 16,
       "phase_seconds": {
-        "discovery": 3.2536456250000008,
-        "queue": 0.28872262500001256,
-        "read": 0.055588333000002876,
-        "request": 1.52797587600001,
-        "validation": 0.00033120999999880496,
-        "recheck": 0.005495416999998781
+        "discovery": 3.061198375000002,
+        "queue": 0.27658820800000683,
+        "read": 0.06507987399999138,
+        "request": 1.5785436249999982,
+        "validation": 0.04912491500001792,
+        "recheck": 0.0065704590000024155
       },
-      "elapsed_seconds": 5.151095249999999
+      "elapsed_seconds": 5.055665915999999
     },
     "missing_30min_count": 0,
     "stock_pool_incomplete": true,
@@ -106389,15 +107742,16 @@
     ],
     "fallback_used": true,
     "warnings": [
-      "板块成分身份已取齐，2只A股同日报价不可用；板块叠加检索关闭"
+      "板块成分身份已取齐，2只A股同日报价不可用；板块叠加检索关闭",
+      "重点观察池远端配置不可用，本次使用仓库回退版本 watchlist-20260820-01: <urlopen error EOF occurred in violation of protocol (_ssl.c:1129)>"
     ],
-    "run_started_at": "2026-10-22T15:35:10+08:00",
+    "run_started_at": "2026-10-22T15:50:10+08:00",
     "personal_watchlist_config": {
-      "status": "remote_live",
-      "source": "worker",
+      "status": "local_fallback",
+      "source": "local_file",
       "revision": "watchlist-20260820-01",
       "remote_url": "https://top10-worker.breakaway4here.workers.dev/api/decision-watchlist",
-      "remote_error": "",
+      "remote_error": "<urlopen error EOF occurred in violation of protocol (_ssl.c:1129)>",
       "name_resolution_missing_codes": []
     },
     "daily_run_mode": "missing_only",
@@ -106620,7 +107974,7 @@
       "preserved_independent_final_rows": [],
       "quote_identity_keys": [],
       "cached_snapshot_unverified_count": 0,
-      "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+      "acquired_at": "2026-10-22T15:50:14.636988+08:00",
       "quote_fetch": {
         "complete": true,
         "requested": 5576,
@@ -106640,9 +107994,9 @@
         "quote_sources": {
           "sina": 5569
         },
-        "started_at": "2026-10-22T15:35:11.840444+08:00",
-        "as_of": "2026-10-22T15:35:12+08:00",
-        "fetched_at": "2026-10-22T15:35:12+08:00",
+        "started_at": "2026-10-22T15:50:13.769901+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
+        "fetched_at": "2026-10-22T15:50:14+08:00",
         "attempts": [
           {
             "source": "sina",
@@ -107007,7 +108361,7 @@
         "preserved_independent_final_rows": [],
         "quote_identity_keys": [],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+        "acquired_at": "2026-10-22T15:50:14.636988+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5576,
@@ -107027,9 +108381,9 @@
           "quote_sources": {
             "sina": 5569
           },
-          "started_at": "2026-10-22T15:35:11.840444+08:00",
-          "as_of": "2026-10-22T15:35:12+08:00",
-          "fetched_at": "2026-10-22T15:35:12+08:00",
+          "started_at": "2026-10-22T15:50:13.769901+08:00",
+          "as_of": "2026-10-22T15:50:14+08:00",
+          "fetched_at": "2026-10-22T15:50:14+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -108151,7 +109505,7 @@
           "preserved_independent_final_rows": [],
           "quote_identity_keys": [],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+          "acquired_at": "2026-10-22T15:50:14.636988+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5576,
@@ -108171,9 +109525,9 @@
             "quote_sources": {
               "sina": 5569
             },
-            "started_at": "2026-10-22T15:35:11.840444+08:00",
-            "as_of": "2026-10-22T15:35:12+08:00",
-            "fetched_at": "2026-10-22T15:35:12+08:00",
+            "started_at": "2026-10-22T15:50:13.769901+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
+            "fetched_at": "2026-10-22T15:50:14+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -109294,7 +110648,7 @@
           "preserved_independent_final_rows": [],
           "quote_identity_keys": [],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+          "acquired_at": "2026-10-22T15:50:14.636988+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5576,
@@ -109314,9 +110668,9 @@
             "quote_sources": {
               "sina": 5569
             },
-            "started_at": "2026-10-22T15:35:11.840444+08:00",
-            "as_of": "2026-10-22T15:35:12+08:00",
-            "fetched_at": "2026-10-22T15:35:12+08:00",
+            "started_at": "2026-10-22T15:50:13.769901+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
+            "fetched_at": "2026-10-22T15:50:14+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -109591,7 +110945,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SZ|003029",
               "interval": "15m",
-              "as_of": "2026-10-22T15:35:12+08:00"
+              "as_of": "2026-10-22T15:50:14+08:00"
             },
             "price_basis_failure": "indeterminate_flat_day:2026-10-19",
             "attempt_evidence": [
@@ -109689,7 +111043,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SZ|002889",
               "interval": "15m",
-              "as_of": "2026-10-22T15:35:12+08:00"
+              "as_of": "2026-10-22T15:50:14+08:00"
             },
             "price_basis_failure": "indeterminate_flat_day:2026-10-16",
             "attempt_evidence": [
@@ -110429,104 +111783,6 @@
           "605287"
         ],
         "failure_evidence": {
-          "603605": {
-            "interval": "30m",
-            "status": "price_basis_unverified",
-            "latest_date": "2026-10-22",
-            "latest_ts": "2026-10-22 15:00:00",
-            "source": "sina",
-            "bars": 80,
-            "stale": false,
-            "is_final": true,
-            "adjustment": "unverified",
-            "minute_to_daily": {
-              "schema_version": 1,
-              "status": "pending",
-              "reason": "minute_window_unverified",
-              "identity_key": "stock|SH|603605",
-              "interval": "30m",
-              "as_of": "2026-10-22T15:35:12+08:00"
-            },
-            "price_basis_failure": "missing_canonical_daily_reference",
-            "attempt_evidence": [
-              {
-                "trade_date": "2026-10-22",
-                "identity": "stock|SH|603605",
-                "interval": "30m",
-                "provider": "sina",
-                "attempt": 1,
-                "result": "rejected",
-                "reason": "missing_canonical_daily_reference",
-                "http_status": 200,
-                "content_type": "application/javascript; charset=gbk",
-                "response_summary": "json_array length=240",
-                "exception_category": "validation",
-                "exception_type": "FinalValidationError"
-              },
-              {
-                "trade_date": "2026-10-22",
-                "identity": "stock|SH|603605",
-                "interval": "30m",
-                "provider": "tencent",
-                "attempt": 2,
-                "result": "rejected",
-                "reason": "missing_canonical_daily_reference",
-                "http_status": 200,
-                "content_type": "text/html; charset=UTF-8",
-                "response_summary": "json_object",
-                "exception_category": "validation",
-                "exception_type": "FinalValidationError"
-              },
-              {
-                "trade_date": "2026-10-22",
-                "identity": "stock|SH|603605",
-                "interval": "30m",
-                "provider": "eastmoney",
-                "attempt": 3,
-                "result": "failed",
-                "reason": "connection_error",
-                "exception_category": "connection",
-                "exception_type": "ConnectionError"
-              },
-              {
-                "trade_date": "2026-10-22",
-                "identity": "stock|SH|603605",
-                "interval": "30m",
-                "provider": "sina",
-                "attempt": 4,
-                "result": "rejected",
-                "reason": "missing_canonical_daily_reference",
-                "http_status": 200,
-                "content_type": "application/javascript; charset=gbk",
-                "response_summary": "json_array length=240",
-                "exception_category": "validation",
-                "exception_type": "FinalValidationError"
-              }
-            ],
-            "rejected": [
-              {
-                "provider": "sina",
-                "reason": "missing_canonical_daily_reference"
-              },
-              {
-                "provider": "tencent",
-                "reason": "missing_canonical_daily_reference"
-              },
-              {
-                "provider": "eastmoney",
-                "reason": "connection_error"
-              },
-              {
-                "provider": "sina",
-                "reason": "missing_canonical_daily_reference"
-              }
-            ],
-            "latest_cache_date": "2026-10-22",
-            "cache_stale": false,
-            "cache_bars": 80,
-            "final_adopted": false,
-            "rejection_reason": "missing_canonical_daily_reference"
-          },
           "605287": {
             "interval": "30m",
             "status": "price_basis_unverified",
@@ -110543,7 +111799,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SH|605287",
               "interval": "30m",
-              "as_of": "2026-10-22T15:35:12+08:00"
+              "as_of": "2026-10-22T15:50:14+08:00"
             },
             "price_basis_failure": "indeterminate_flat_day:2026-10-12",
             "attempt_evidence": [
@@ -110624,6 +111880,104 @@
             "cache_bars": 80,
             "final_adopted": false,
             "rejection_reason": "indeterminate_flat_day:2026-10-12"
+          },
+          "603605": {
+            "interval": "30m",
+            "status": "price_basis_unverified",
+            "latest_date": "2026-10-22",
+            "latest_ts": "2026-10-22 15:00:00",
+            "source": "sina",
+            "bars": 80,
+            "stale": false,
+            "is_final": true,
+            "adjustment": "unverified",
+            "minute_to_daily": {
+              "schema_version": 1,
+              "status": "pending",
+              "reason": "minute_window_unverified",
+              "identity_key": "stock|SH|603605",
+              "interval": "30m",
+              "as_of": "2026-10-22T15:50:14+08:00"
+            },
+            "price_basis_failure": "missing_canonical_daily_reference",
+            "attempt_evidence": [
+              {
+                "trade_date": "2026-10-22",
+                "identity": "stock|SH|603605",
+                "interval": "30m",
+                "provider": "sina",
+                "attempt": 1,
+                "result": "rejected",
+                "reason": "missing_canonical_daily_reference",
+                "http_status": 200,
+                "content_type": "application/javascript; charset=gbk",
+                "response_summary": "json_array length=240",
+                "exception_category": "validation",
+                "exception_type": "FinalValidationError"
+              },
+              {
+                "trade_date": "2026-10-22",
+                "identity": "stock|SH|603605",
+                "interval": "30m",
+                "provider": "tencent",
+                "attempt": 2,
+                "result": "rejected",
+                "reason": "missing_canonical_daily_reference",
+                "http_status": 200,
+                "content_type": "text/html; charset=UTF-8",
+                "response_summary": "json_object",
+                "exception_category": "validation",
+                "exception_type": "FinalValidationError"
+              },
+              {
+                "trade_date": "2026-10-22",
+                "identity": "stock|SH|603605",
+                "interval": "30m",
+                "provider": "eastmoney",
+                "attempt": 3,
+                "result": "failed",
+                "reason": "connection_error",
+                "exception_category": "connection",
+                "exception_type": "ConnectionError"
+              },
+              {
+                "trade_date": "2026-10-22",
+                "identity": "stock|SH|603605",
+                "interval": "30m",
+                "provider": "sina",
+                "attempt": 4,
+                "result": "rejected",
+                "reason": "missing_canonical_daily_reference",
+                "http_status": 200,
+                "content_type": "application/javascript; charset=gbk",
+                "response_summary": "json_array length=240",
+                "exception_category": "validation",
+                "exception_type": "FinalValidationError"
+              }
+            ],
+            "rejected": [
+              {
+                "provider": "sina",
+                "reason": "missing_canonical_daily_reference"
+              },
+              {
+                "provider": "tencent",
+                "reason": "missing_canonical_daily_reference"
+              },
+              {
+                "provider": "eastmoney",
+                "reason": "connection_error"
+              },
+              {
+                "provider": "sina",
+                "reason": "missing_canonical_daily_reference"
+              }
+            ],
+            "latest_cache_date": "2026-10-22",
+            "cache_stale": false,
+            "cache_bars": 80,
+            "final_adopted": false,
+            "rejection_reason": "missing_canonical_daily_reference"
           }
         },
         "blocks_strategy_output": false
@@ -110848,7 +112202,7 @@
       "preserved_independent_final_rows": [],
       "quote_identity_keys": [],
       "cached_snapshot_unverified_count": 0,
-      "acquired_at": "2026-10-22T15:35:12.735523+08:00",
+      "acquired_at": "2026-10-22T15:50:14.636988+08:00",
       "quote_fetch": {
         "complete": true,
         "requested": 5576,
@@ -110868,9 +112222,9 @@
         "quote_sources": {
           "sina": 5569
         },
-        "started_at": "2026-10-22T15:35:11.840444+08:00",
-        "as_of": "2026-10-22T15:35:12+08:00",
-        "fetched_at": "2026-10-22T15:35:12+08:00",
+        "started_at": "2026-10-22T15:50:13.769901+08:00",
+        "as_of": "2026-10-22T15:50:14+08:00",
+        "fetched_at": "2026-10-22T15:50:14+08:00",
         "attempts": [
           {
             "source": "sina",
@@ -316751,7 +318105,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600360",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -317168,7 +318522,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "9a0d51df00aa58ef67e6e48dc1e3b576967a9a4fd3ad17f798eb0e98b866ff24"
+            "sha256": "117de8ab8bbaad2c3851103c378189ba9570def7e3ec2c07918fa2f8a12a2ec9"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -318770,7 +320124,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|300469",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -319187,7 +320541,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "45dadbde456be6c9813e1cf741c798cd196b4599f4b20a149f79c5344d4a6db8"
+            "sha256": "afe0118b6a0fb8c807b5b31ac6b4b96b89c2bddaf2e682d041f58927bde22341"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -320793,7 +322147,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|000400",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -321210,7 +322564,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "f0c292ceba0075723b794adf39957195882c24b520fabd02022a81dc7f64542f"
+            "sha256": "6c0712f976823e8f1ce6d3e0361131be132fcc962e4fa05d1f13d6d11d839302"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -322812,7 +324166,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|002185",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -323229,7 +324583,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "4057295202d9d3aa002b1d5f995cbc9aad5cce1f3c40b82848ccfe06c83b8a24"
+            "sha256": "0e96b7f622c6fd6747348d40c68f7bdbc50abc5ffc37c5cb4117061bdc902b62"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -324838,7 +326192,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688651",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -325255,7 +326609,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "5df5c144099666d21ccde170fc21f50e99489963b3676fdf16cff99948db7042"
+            "sha256": "1adcb361b5d18058ecbbccc16c3f6f527a3eb144cb8148da19b078548a47dab4"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -326861,7 +328215,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600312",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -327278,7 +328632,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "76b4232f031b3d3b26f3f91b4e3222baf10bcd61117bc99601630b9d76d67f97"
+            "sha256": "ffad24f330e563c34a2e63f12791e9f538887de53e7e4ed6cd20be93a1a5113a"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -328880,7 +330234,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600089",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -329297,7 +330651,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "bd2fa57323bb8fc1790c8f1c93307085f6908c1a5bb660979488f6d59c309b96"
+            "sha256": "031ebc47a26c97ca5ba1c2019c0c4b9389510bd7b25acb2903120ef24e78fcd7"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -330899,7 +332253,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600406",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -331316,7 +332670,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "19058b9c1a9df7a3be9eff2bc9112f76f0124f0860e83092ec57c2472c2257dc"
+            "sha256": "db60a690a85aaa73a0a0092b669a883b34a4646f1cf143b64366d877ed00e46e"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -332918,7 +334272,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688049",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -333335,7 +334689,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "53719f10581a14fced2727f91319130f49a54c7f35d6d99a111d5c431ba4252c"
+            "sha256": "2346c55ea2c58af16ea4d0171ca41633289c683f6b16ba113b57d352268029c4"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -334940,7 +336294,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688111",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -335357,7 +336711,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "12e206e298b48500d167b0b52d2deca5e6b2417abe7b7a92932a1cc3436dbcf1"
+            "sha256": "fed7f605a531589e446d18aa4498576fc52963aeb4c8c495cab6ecf56086da68"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -336963,7 +338317,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688396",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -337380,7 +338734,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "2163ed6c0c0cc843af56e03702f6f7c5a618d1da1086ae869a5aa6a914b203e1"
+            "sha256": "32baf7171bc757e98fdc4c438585961eb8b3e8517246e98cdbbce4f9ef6f356e"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -338986,7 +340340,7 @@
             "status": "verified",
             "identity_key": "stock|SH|603501",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -339403,7 +340757,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "73f84147fd296dce2c12613f69a83b0f1ac0ddec18575124cad636c9c45882b9"
+            "sha256": "91e758618bf930f7eca61e94977a3ed06e01a7e4ec8cb4e3ee35033b52606e3d"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -341005,7 +342359,7 @@
             "status": "verified",
             "identity_key": "stock|SH|603606",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -341422,7 +342776,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "95a23a5bde084e2340416879b364af7127a9cda11f051390356fe3ef1da48747"
+            "sha256": "04090e3497d7c7f38e499846457ee903aba54774c9025258073438a80d72acd1"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -343023,7 +344377,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688213",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -343440,7 +344794,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "ef06c8be48bd2b5f743ec2838417ff005a47d26e3d1982a54dc8246c07e269b7"
+            "sha256": "f651d9cf69a4f4612ac89a7a74128349ca8263fe7f86cfd83c5bcf83fee01200"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -345045,7 +346399,7 @@
             "status": "verified",
             "identity_key": "stock|SH|603068",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -345462,7 +346816,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "c7a99e3b9acaa65718f6eb0d40cf2ea8b40b2e1b2bceb4292bb445705c9ef123"
+            "sha256": "c52c47cce4acc480307f83e50033d1625294fa378a1aa87cff3575e03922d586"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -347063,7 +348417,7 @@
             "status": "verified",
             "identity_key": "stock|SH|603893",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -347480,7 +348834,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "b52a21e92263f3959f58a3c76833dfbb4bdcc1dbb3ad8dd3106a73f69cba9436"
+            "sha256": "166ba2d79dd5d5fe0dba50260cd9a4ed2c59f898c0442b2986a32d8629e1d5c5"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -349082,7 +350436,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|001309",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -349499,7 +350853,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "5a8be7cc136993d0d0fdc119d76bf36d8e81e56e1a2d53f8083596ebd0862002"
+            "sha256": "10c510a89c6b1eb15fe6c75741d576171a0e652a2d28e0ff5dfe37d3394e1be7"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -351104,7 +352458,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|002112",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -351521,7 +352875,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "adc6b3518e5a0702291d3117265cc538884603a25c4c391013761e44ed4b2f55"
+            "sha256": "50c846d7eb0f8ebf7d2061870042b740614cde2db52509467fe9518002b15fe8"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -353128,7 +354482,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|301159",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -353545,7 +354899,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "446d51662c440d2e0bb87beca0b49084e300d3cde27a2342a88283aa17cacee1"
+            "sha256": "59d4b03507ae27bef6a15f9cdf4a2ea49b45832ef15084f8bb77b101da590a3a"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -355152,7 +356506,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688018",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -355569,7 +356923,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "eb015ebba2a90302d18419048e2199b1050efed6ace0f9961c539e1aafbdc0e9"
+            "sha256": "b0cc1332e351183017962eb3986a300d5c6672e8237443e46558bdcb737a1aa8"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -357177,7 +358531,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688608",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -357594,7 +358948,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "05ce66c6e8b4ce4c7a3694120bf73da8302c84a9dc4e2559941508c70ec65b26"
+            "sha256": "f2a01ad2a45ca790837908fd5929aa0ab90bb197959c0161e4067c63f823cf00"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -359201,7 +360555,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|300638",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -359618,7 +360972,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "6148629407fe71a7c0428e4b3e011d3b309ed71a61253409eb3a171a4fc0ff39"
+            "sha256": "5f35166273d9b2c4d30df6a3aa5303306198864a18f5aeade7d881f4fe5b5cd7"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -361225,7 +362579,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688286",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -361642,7 +362996,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "a618ec0274d9cbb320bb69db63b4344e25e87fde1440004f9dc062174f5cf944"
+            "sha256": "41c0ca21b24ae536415ae35fe94ce7b0c953dd6db9599ad2dfdb69dc02aad069"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -363249,7 +364603,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688220",
             "interval": "15m",
-            "as_of": "2026-10-22T15:35:12+08:00",
+            "as_of": "2026-10-22T15:50:14+08:00",
             "window_start": "2026-09-28 10:45:00",
             "window_end": "2026-10-22 15:00:00",
             "input_adjustment": "unverified",
@@ -363666,7 +365020,7 @@
                 "receipt_as_of": "2026-10-22T15:05:45+08:00"
               }
             },
-            "sha256": "71d064a897005f84c1c73ed4e295347a51b5538ef43d593cc91cc2381b5878da"
+            "sha256": "00d1288c9cf6d6094266ec8a12261f6c96f78afcfc30dd7fa88c8669fa562702"
           },
           "latest_cache_date": "2026-10-22",
           "cache_stale": false,
@@ -364371,8 +365725,8 @@
     },
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "b417a6de71269cfafbd2aa58432d3da30a089d9d1379276e8e6ec7d8f8277bb1",
-      "after_sha256": "b417a6de71269cfafbd2aa58432d3da30a089d9d1379276e8e6ec7d8f8277bb1"
+      "before_sha256": "015e68c59d30ebc979001e3bbee86a4441a0a75bb8a17f0c3ab27559a51a6571",
+      "after_sha256": "015e68c59d30ebc979001e3bbee86a4441a0a75bb8a17f0c3ab27559a51a6571"
     },
     "production_reference": {
       "pool": "picks_fusion",
