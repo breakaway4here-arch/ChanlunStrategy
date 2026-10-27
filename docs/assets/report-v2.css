@@ -7246,6 +7246,7 @@ body {
   .market-decision-summary, .market-decision-bar .sector-strip, .market-decision-bar .direction-quick { border: 1px solid var(--border-soft); }
 }
 @media (max-width: 680px) {
+  .workspace-tab-list { flex: 1 1 100%; flex-wrap: wrap; }
   .mobile-decision-summary {
     display: block;
     margin: 0 0 10px;

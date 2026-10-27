@@ -60,8 +60,13 @@ window.CHANLUN_BOOTSTRAP={pageDate:data.date,decisionWorkbench:{schema_version:'
 const views=globalThis.__auxTest.setup(data);
 if(views.views.decision_all.length!==1 || views.views.decision_formal.length!==0)
   throw Error('projection not consumed by all/primary views');
-if(globalThis.__auxTest.groups().primary.some(x=>['confirming','observation_top5','decision_focus','decision_wait'].includes(x.key)))
+const primary=globalThis.__auxTest.groups().primary;
+if(primary.some(x=>['confirming','decision_focus','decision_wait'].includes(x.key)))
   throw Error('duplicate primary navigation');
+if(primary.filter(x=>x.key==='observation_top5' && x.label==='观察 Top5').length!==1)
+  throw Error('observation Top5 is not directly reachable');
+if(views.meta.observation_top5.role!=='research' || views.meta.observation_top5.action_semantics!=='watch_only')
+  throw Error('observation navigation replaced its research source contract');
 const row=views.views.decision_all[0];
 const summary=globalThis.__auxTest.row(row,'decision_all');
 if(summary.action.indexOf('观察')<0 || summary.scoreText.indexOf('决策分')>=0)throw Error('research formal label leaked');

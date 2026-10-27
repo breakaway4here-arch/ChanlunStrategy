@@ -5706,7 +5706,7 @@
       primary: [
         { key: 'main', label: '主推' },
         { key: 'confirming', label: '待确认' },
-        { key: 'observation_top5', label: '观察' },
+        { key: 'observation_top5', label: '观察 Top5' },
       ],
       research: [
         { key: 'baseline', label: '基础候选' },
@@ -5716,8 +5716,13 @@
         { key: 'growth_quality', label: '高弹性观察' },
       ],
     };
+    var primary = asArray(supplied.primary).length ? asArray(supplied.primary) : fallback.primary;
+    if (getDecisionWorkbench()) {
+      primary = decisionNavigation();
+      primary.splice(1, 0, { key: 'observation_top5', label: '观察 Top5' });
+    }
     return {
-      primary: getDecisionWorkbench() ? decisionNavigation() : (asArray(supplied.primary).length ? asArray(supplied.primary) : fallback.primary),
+      primary: primary,
       research: asArray(supplied.research).length ? asArray(supplied.research) : fallback.research,
     };
   }
