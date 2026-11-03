@@ -1,0 +1,26 @@
+[
+  {
+    "fixture": "05-sina-index-5m.json",
+    "source_path": "/private/tmp/opening-alert-feasibility-20261103/05-sina-index-5m.raw",
+    "source_sha256": "57dc339032195d15b8a2ffc04ef2975bf79c60425d47007ac8fa24280d6cd352",
+    "fixture_sha256": "1dd959c84165aa600a9af6049afca6685b97f2387cd984d2951f13e1560a2d90",
+    "extraction": "prior5 full48 + D closed first2 bars",
+    "captured_at": "2026-11-03T10:32:00+08:00"
+  },
+  {
+    "fixture": "07-xgb-ZT-live.json",
+    "source_path": "/private/tmp/opening-alert-feasibility-20261103/07-xgb-ZT-live.raw",
+    "source_sha256": "ad6a7b386575d83d9c26f6e25d3570a82ff3949a3e2c4758763dd69201a65689",
+    "fixture_sha256": "ad6a7b386575d83d9c26f6e25d3570a82ff3949a3e2c4758763dd69201a65689",
+    "extraction": "full native response",
+    "captured_at": "2026-11-03T10:32:00+08:00"
+  },
+  {
+    "fixture": "08-xgb-ZB-live.json",
+    "source_path": "/private/tmp/opening-alert-feasibility-20261103/08-xgb-ZB-live.raw",
+    "source_sha256": "409963db42410bb382a0b75d28e6e65021f2771a6ca5f61531bc2a68d52e339b",
+    "fixture_sha256": "53d5acef467ed083efe84cc9d56d26f5a5d045afc38bc5c586ef9f0ac03a8a85",
+    "extraction": "full native response",
+    "captured_at": "2026-11-03T10:32:00+08:00"
+  }
+]

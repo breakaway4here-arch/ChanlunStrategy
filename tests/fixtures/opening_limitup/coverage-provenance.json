@@ -1,0 +1,20 @@
+[
+  {
+    "fixture": "01-XGB-P.json",
+    "source_path": "/private/tmp/opening-alert-coverage-20261103/01-XGB-P.raw",
+    "source_sha256": "818f54c63bf2d1259fde9eb19ba58c02266e01a0266f0b5bf4216bbcd7248945",
+    "fixture_sha256": "00051938664018739c5b3adf610c17492d6e8435c154eefe76b4ce11837113e3"
+  },
+  {
+    "fixture": "02-XGB-Y.json",
+    "source_path": "/private/tmp/opening-alert-coverage-20261103/02-XGB-Y.raw",
+    "source_sha256": "0db729e400304474898dc3925b6765981405e366977f0a34223290a6d1765896",
+    "fixture_sha256": "49cfa85eb40d4a3ed0e5798590205ff66c1a83e39a3078d35317026fbadadc1f"
+  },
+  {
+    "fixture": "Tencent-cohort-20261103.raw",
+    "source_path": "/private/tmp/opening-alert-coverage-20261103/03-Tencent-target-cohort.raw",
+    "source_sha256": "95e77833a176e805a00af3730ecdcb741829361eefbc8278d3fc7199952ad15a",
+    "fixture_sha256": "95e77833a176e805a00af3730ecdcb741829361eefbc8278d3fc7199952ad15a"
+  }
+]
