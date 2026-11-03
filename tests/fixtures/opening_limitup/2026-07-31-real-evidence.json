@@ -1,0 +1,3316 @@
+{
+  "schema_version": 1,
+  "trade_date": "2026-07-31",
+  "calendar": {
+    "status": "verified",
+    "source": "reviewed_2026_exchange_calendar",
+    "dates": [
+      "2026-07-24",
+      "2026-07-27",
+      "2026-07-28",
+      "2026-07-29",
+      "2026-07-30",
+      "2026-07-31"
+    ]
+  },
+  "index": {
+    "identity": "SH.000001",
+    "instrument": "index",
+    "source": "frozen_IW_and_BaoStock_verified_multisource",
+    "unit": "CNY",
+    "amount_scope": "includes_auction",
+    "sessions": [
+      {
+        "date": "2026-07-24",
+        "open": "3853.6316",
+        "close": "3814.1978",
+        "amountday": "915366398292.6000",
+        "close0940": "3851.11",
+        "amount0940": "157553270000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-24",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-24",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-24",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-24",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260724 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-24",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260724 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": true
+      },
+      {
+        "date": "2026-07-27",
+        "open": "3808.9032",
+        "close": "3858.2450",
+        "amountday": "1031312143065.2000",
+        "close0940": "3798.31",
+        "amount0940": "179389500000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-27",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-27",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-27",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-27",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260727 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-27",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260727 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": true
+      },
+      {
+        "date": "2026-07-28",
+        "open": "3823.1331",
+        "close": "3813.3146",
+        "amountday": "949683080126.4000",
+        "close0940": "3838.1",
+        "amount0940": "162719080000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-28",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-28",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-28",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-28",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260728 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-28",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260728 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": true
+      },
+      {
+        "date": "2026-07-29",
+        "open": "3823.2931",
+        "close": "3828.4690",
+        "amountday": "1087407759096.1000",
+        "close0940": "3817.25",
+        "amount0940": "151825100000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-29",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-29",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-29",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-29",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260729 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-29",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260729 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": true
+      },
+      {
+        "date": "2026-07-30",
+        "open": "3812.1110",
+        "close": "3804.6926",
+        "amountday": "1106477266461.8000",
+        "close0940": "3834.96",
+        "amount0940": "155724060000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-30",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-30",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-30",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-30",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260730 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-30",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260730 09:40]",
+              "request_number": 2,
+              "response_path": "02-pilot-five.json",
+              "response_sha256": "ca33c9fddde4dece5f569cb6d5f7f0e72160715d3037c0458ff7428ebd25ed21"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": true
+      },
+      {
+        "date": "2026-07-31",
+        "open": "3833.5359",
+        "close": null,
+        "amountday": null,
+        "close0940": "3836.04",
+        "amount0940": "251094530000.0",
+        "field_sources": {
+          "open": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-31",
+            "exact_field": "open",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-31",
+            "exact_field": "close",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "amountday": {
+            "provider": "BaoStock",
+            "fact_date": "2026-07-31",
+            "exact_field": "amount",
+            "frozen_path": "data/prices/index-day.json",
+            "sha256": "f79b360eb9edd6648bcd6b844c297152d75af9b64e43835327ab68cc5eb8a1e0"
+          },
+          "close0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-31",
+            "exact_observation": {
+              "key": "指数@分时收盘价:不复权[20260731 09:40]",
+              "request_number": 3,
+              "response_path": "03-batch-20260731.json",
+              "response_sha256": "26cd3855d9682edd30b993e5ce31bdaec789407e9741d0cbc7d85df0b55d70c9"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          },
+          "amount0940": {
+            "provider": "IW",
+            "fact_date": "2026-07-31",
+            "exact_observation": {
+              "key": "指数@分时成交额[20260731 09:40]",
+              "request_number": 3,
+              "response_path": "03-batch-20260731.json",
+              "response_sha256": "26cd3855d9682edd30b993e5ce31bdaec789407e9741d0cbc7d85df0b55d70c9"
+            },
+            "frozen_path": "data/index/iw/index-normalized.json",
+            "sha256": "c674d039f9bd93870e3be0702a984baddac25a09f0c19be87c60c9aa92c79059"
+          }
+        },
+        "complete_session": false
+      }
+    ]
+  },
+  "pools": {
+    "P": {
+      "date": "2026-07-29",
+      "source": "XGB",
+      "coverage": "source_as_delivered",
+      "status": "verified_complete",
+      "items": [
+        {
+          "identity": "SH.603407",
+          "code": "603407",
+          "exchange": "SH",
+          "name": "长裕集团",
+          "board": 1
+        },
+        {
+          "identity": "SZ.003001",
+          "code": "003001",
+          "exchange": "SZ",
+          "name": "中岩大地",
+          "board": 1
+        },
+        {
+          "identity": "SH.605339",
+          "code": "605339",
+          "exchange": "SH",
+          "name": "南侨食品",
+          "board": 1
+        },
+        {
+          "identity": "SH.600227",
+          "code": "600227",
+          "exchange": "SH",
+          "name": "赤天化",
+          "board": 1
+        },
+        {
+          "identity": "SH.601003",
+          "code": "601003",
+          "exchange": "SH",
+          "name": "柳钢股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.603559",
+          "code": "603559",
+          "exchange": "SH",
+          "name": "中通国脉",
+          "board": 1
+        },
+        {
+          "identity": "SH.600578",
+          "code": "600578",
+          "exchange": "SH",
+          "name": "京能电力",
+          "board": 1
+        },
+        {
+          "identity": "SH.600429",
+          "code": "600429",
+          "exchange": "SH",
+          "name": "三元股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002037",
+          "code": "002037",
+          "exchange": "SZ",
+          "name": "保利联合",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300997",
+          "code": "300997",
+          "exchange": "SZ",
+          "name": "欢乐家",
+          "board": 1
+        },
+        {
+          "identity": "SZ.003032",
+          "code": "003032",
+          "exchange": "SZ",
+          "name": "传智教育",
+          "board": 3
+        },
+        {
+          "identity": "SH.603719",
+          "code": "603719",
+          "exchange": "SH",
+          "name": "良品铺子",
+          "board": 1
+        },
+        {
+          "identity": "SH.600228",
+          "code": "600228",
+          "exchange": "SH",
+          "name": "返利科技",
+          "board": 1
+        },
+        {
+          "identity": "SH.603163",
+          "code": "603163",
+          "exchange": "SH",
+          "name": "圣晖集成",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002903",
+          "code": "002903",
+          "exchange": "SZ",
+          "name": "宇环数控",
+          "board": 1
+        },
+        {
+          "identity": "SH.603801",
+          "code": "603801",
+          "exchange": "SH",
+          "name": "志邦家居",
+          "board": 1
+        },
+        {
+          "identity": "SZ.301112",
+          "code": "301112",
+          "exchange": "SZ",
+          "name": "信邦智能",
+          "board": 1
+        },
+        {
+          "identity": "SH.605016",
+          "code": "605016",
+          "exchange": "SH",
+          "name": "百龙创园",
+          "board": 1
+        },
+        {
+          "identity": "SH.600733",
+          "code": "600733",
+          "exchange": "SH",
+          "name": "北汽蓝谷",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000736",
+          "code": "000736",
+          "exchange": "SZ",
+          "name": "中交发展",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002440",
+          "code": "002440",
+          "exchange": "SZ",
+          "name": "闰土股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002580",
+          "code": "002580",
+          "exchange": "SZ",
+          "name": "圣阳股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.600722",
+          "code": "600722",
+          "exchange": "SH",
+          "name": "金牛化工",
+          "board": 1
+        },
+        {
+          "identity": "SH.600844",
+          "code": "600844",
+          "exchange": "SH",
+          "name": "金煤科技",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002045",
+          "code": "002045",
+          "exchange": "SZ",
+          "name": "国光电器",
+          "board": 1
+        },
+        {
+          "identity": "SH.603258",
+          "code": "603258",
+          "exchange": "SH",
+          "name": "电魂网络",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300169",
+          "code": "300169",
+          "exchange": "SZ",
+          "name": "天晟新材",
+          "board": 1
+        },
+        {
+          "identity": "SH.605179",
+          "code": "605179",
+          "exchange": "SH",
+          "name": "一鸣食品",
+          "board": 2
+        },
+        {
+          "identity": "SZ.002956",
+          "code": "002956",
+          "exchange": "SZ",
+          "name": "西麦食品",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002199",
+          "code": "002199",
+          "exchange": "SZ",
+          "name": "东晶电子",
+          "board": 2
+        },
+        {
+          "identity": "SZ.002517",
+          "code": "002517",
+          "exchange": "SZ",
+          "name": "恺英网络",
+          "board": 1
+        },
+        {
+          "identity": "SH.603499",
+          "code": "603499",
+          "exchange": "SH",
+          "name": "翔港科技",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000826",
+          "code": "000826",
+          "exchange": "SZ",
+          "name": "*ST启环",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002498",
+          "code": "002498",
+          "exchange": "SZ",
+          "name": "汉缆股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002298",
+          "code": "002298",
+          "exchange": "SZ",
+          "name": "中电鑫龙",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002945",
+          "code": "002945",
+          "exchange": "SZ",
+          "name": "华林证券",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300359",
+          "code": "300359",
+          "exchange": "SZ",
+          "name": "全通教育",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002514",
+          "code": "002514",
+          "exchange": "SZ",
+          "name": "*ST宝馨",
+          "board": 1
+        },
+        {
+          "identity": "SZ.001323",
+          "code": "001323",
+          "exchange": "SZ",
+          "name": "慕思股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.605188",
+          "code": "605188",
+          "exchange": "SH",
+          "name": "国光连锁",
+          "board": 1
+        },
+        {
+          "identity": "SH.605337",
+          "code": "605337",
+          "exchange": "SH",
+          "name": "李子园",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002667",
+          "code": "002667",
+          "exchange": "SZ",
+          "name": "*ST威领",
+          "board": 1
+        },
+        {
+          "identity": "SH.601858",
+          "code": "601858",
+          "exchange": "SH",
+          "name": "中国科传",
+          "board": 1
+        },
+        {
+          "identity": "SH.603696",
+          "code": "603696",
+          "exchange": "SH",
+          "name": "安记食品",
+          "board": 1
+        },
+        {
+          "identity": "SZ.001318",
+          "code": "001318",
+          "exchange": "SZ",
+          "name": "阳光乳业",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000636",
+          "code": "000636",
+          "exchange": "SZ",
+          "name": "风华高科",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002597",
+          "code": "002597",
+          "exchange": "SZ",
+          "name": "金禾实业",
+          "board": 1
+        },
+        {
+          "identity": "SH.603399",
+          "code": "603399",
+          "exchange": "SH",
+          "name": "永杉锂业",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002141",
+          "code": "002141",
+          "exchange": "SZ",
+          "name": "贤丰控股",
+          "board": 1
+        },
+        {
+          "identity": "SH.603400",
+          "code": "603400",
+          "exchange": "SH",
+          "name": "华之杰",
+          "board": 2
+        },
+        {
+          "identity": "SZ.002112",
+          "code": "002112",
+          "exchange": "SZ",
+          "name": "三变科技",
+          "board": 1
+        },
+        {
+          "identity": "SH.603833",
+          "code": "603833",
+          "exchange": "SH",
+          "name": "欧派家居",
+          "board": 1
+        },
+        {
+          "identity": "SH.601086",
+          "code": "601086",
+          "exchange": "SH",
+          "name": "国芳集团",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002607",
+          "code": "002607",
+          "exchange": "SZ",
+          "name": "中公教育",
+          "board": 1
+        },
+        {
+          "identity": "SH.600419",
+          "code": "600419",
+          "exchange": "SH",
+          "name": "天润乳业",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002212",
+          "code": "002212",
+          "exchange": "SZ",
+          "name": "天融信",
+          "board": 2
+        },
+        {
+          "identity": "SZ.300333",
+          "code": "300333",
+          "exchange": "SZ",
+          "name": "兆日科技",
+          "board": 1
+        },
+        {
+          "identity": "SH.603580",
+          "code": "603580",
+          "exchange": "SH",
+          "name": "艾艾精工",
+          "board": 2
+        },
+        {
+          "identity": "SH.605388",
+          "code": "605388",
+          "exchange": "SH",
+          "name": "均瑶健康",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000668",
+          "code": "000668",
+          "exchange": "SZ",
+          "name": "荣丰控股",
+          "board": 1
+        },
+        {
+          "identity": "SZ.301139",
+          "code": "301139",
+          "exchange": "SZ",
+          "name": "*ST元道",
+          "board": 2
+        },
+        {
+          "identity": "SZ.300530",
+          "code": "300530",
+          "exchange": "SZ",
+          "name": "领湃科技",
+          "board": 1
+        },
+        {
+          "identity": "SZ.001358",
+          "code": "001358",
+          "exchange": "SZ",
+          "name": "兴欣新材",
+          "board": 3
+        },
+        {
+          "identity": "SZ.000428",
+          "code": "000428",
+          "exchange": "SZ",
+          "name": "华天酒店",
+          "board": 3
+        },
+        {
+          "identity": "SH.603556",
+          "code": "603556",
+          "exchange": "SH",
+          "name": "海兴电力",
+          "board": 1
+        },
+        {
+          "identity": "SH.605136",
+          "code": "605136",
+          "exchange": "SH",
+          "name": "丽人丽妆",
+          "board": 1
+        },
+        {
+          "identity": "SH.603178",
+          "code": "603178",
+          "exchange": "SH",
+          "name": "圣龙股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.605068",
+          "code": "605068",
+          "exchange": "SH",
+          "name": "明新旭腾",
+          "board": 3
+        },
+        {
+          "identity": "SH.688260",
+          "code": "688260",
+          "exchange": "SH",
+          "name": "昀冢科技",
+          "board": 1
+        },
+        {
+          "identity": "SH.600236",
+          "code": "600236",
+          "exchange": "SH",
+          "name": "桂冠电力",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002558",
+          "code": "002558",
+          "exchange": "SZ",
+          "name": "巨人网络",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002286",
+          "code": "002286",
+          "exchange": "SZ",
+          "name": "保龄宝",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300981",
+          "code": "300981",
+          "exchange": "SZ",
+          "name": "中红医疗",
+          "board": 1
+        },
+        {
+          "identity": "SH.603068",
+          "code": "603068",
+          "exchange": "SH",
+          "name": "博通集成",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002568",
+          "code": "002568",
+          "exchange": "SZ",
+          "name": "百润股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.600693",
+          "code": "600693",
+          "exchange": "SH",
+          "name": "东百集团",
+          "board": 2
+        },
+        {
+          "identity": "SZ.002827",
+          "code": "002827",
+          "exchange": "SZ",
+          "name": "高争民爆",
+          "board": 1
+        },
+        {
+          "identity": "SH.603057",
+          "code": "603057",
+          "exchange": "SH",
+          "name": "紫燕食品",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000892",
+          "code": "000892",
+          "exchange": "SZ",
+          "name": "欢瑞世纪",
+          "board": 1
+        },
+        {
+          "identity": "SH.600499",
+          "code": "600499",
+          "exchange": "SH",
+          "name": "科达制造",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002791",
+          "code": "002791",
+          "exchange": "SZ",
+          "name": "坚朗五金",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002882",
+          "code": "002882",
+          "exchange": "SZ",
+          "name": "金龙羽",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002083",
+          "code": "002083",
+          "exchange": "SZ",
+          "name": "孚日股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002726",
+          "code": "002726",
+          "exchange": "SZ",
+          "name": "ST龙大",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002833",
+          "code": "002833",
+          "exchange": "SZ",
+          "name": "弘亚数控",
+          "board": 1
+        },
+        {
+          "identity": "SH.603221",
+          "code": "603221",
+          "exchange": "SH",
+          "name": "爱丽家居",
+          "board": 7
+        }
+      ],
+      "total": 86
+    },
+    "Y": {
+      "date": "2026-07-30",
+      "source": "XGB",
+      "coverage": "source_as_delivered",
+      "status": "verified_complete",
+      "items": [
+        {
+          "identity": "SZ.301449",
+          "code": "301449",
+          "exchange": "SZ",
+          "name": "天溯计量",
+          "board": 1
+        },
+        {
+          "identity": "SZ.301667",
+          "code": "301667",
+          "exchange": "SZ",
+          "name": "纳百川",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002846",
+          "code": "002846",
+          "exchange": "SZ",
+          "name": "英联股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002258",
+          "code": "002258",
+          "exchange": "SZ",
+          "name": "利尔化学",
+          "board": 1
+        },
+        {
+          "identity": "SZ.301668",
+          "code": "301668",
+          "exchange": "SZ",
+          "name": "昊创瑞通",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002703",
+          "code": "002703",
+          "exchange": "SZ",
+          "name": "浙江世宝",
+          "board": 1
+        },
+        {
+          "identity": "SZ.001225",
+          "code": "001225",
+          "exchange": "SZ",
+          "name": "和泰机电",
+          "board": 1
+        },
+        {
+          "identity": "SH.603660",
+          "code": "603660",
+          "exchange": "SH",
+          "name": "苏州科达",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002585",
+          "code": "002585",
+          "exchange": "SZ",
+          "name": "双星新材",
+          "board": 1
+        },
+        {
+          "identity": "SH.600629",
+          "code": "600629",
+          "exchange": "SH",
+          "name": "华建集团",
+          "board": 1
+        },
+        {
+          "identity": "SH.601003",
+          "code": "601003",
+          "exchange": "SH",
+          "name": "柳钢股份",
+          "board": 2
+        },
+        {
+          "identity": "SH.603352",
+          "code": "603352",
+          "exchange": "SH",
+          "name": "至信股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.603185",
+          "code": "603185",
+          "exchange": "SH",
+          "name": "弘元绿能",
+          "board": 1
+        },
+        {
+          "identity": "SH.603039",
+          "code": "603039",
+          "exchange": "SH",
+          "name": "泛微网络",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000820",
+          "code": "000820",
+          "exchange": "SZ",
+          "name": "神雾节能",
+          "board": 1
+        },
+        {
+          "identity": "SH.603382",
+          "code": "603382",
+          "exchange": "SH",
+          "name": "海阳科技",
+          "board": 1
+        },
+        {
+          "identity": "SH.600162",
+          "code": "600162",
+          "exchange": "SH",
+          "name": "香江控股",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000721",
+          "code": "000721",
+          "exchange": "SZ",
+          "name": "西安饮食",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002547",
+          "code": "002547",
+          "exchange": "SZ",
+          "name": "*ST春兴",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002534",
+          "code": "002534",
+          "exchange": "SZ",
+          "name": "西子洁能",
+          "board": 1
+        },
+        {
+          "identity": "SH.603348",
+          "code": "603348",
+          "exchange": "SH",
+          "name": "文灿股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.600418",
+          "code": "600418",
+          "exchange": "SH",
+          "name": "江淮汽车",
+          "board": 1
+        },
+        {
+          "identity": "SZ.003032",
+          "code": "003032",
+          "exchange": "SZ",
+          "name": "传智教育",
+          "board": 4
+        },
+        {
+          "identity": "SH.600513",
+          "code": "600513",
+          "exchange": "SH",
+          "name": "联环药业",
+          "board": 1
+        },
+        {
+          "identity": "SH.603556",
+          "code": "603556",
+          "exchange": "SH",
+          "name": "海兴电力",
+          "board": 2
+        },
+        {
+          "identity": "SH.603919",
+          "code": "603919",
+          "exchange": "SH",
+          "name": "金徽酒",
+          "board": 1
+        },
+        {
+          "identity": "SH.605179",
+          "code": "605179",
+          "exchange": "SH",
+          "name": "一鸣食品",
+          "board": 3
+        },
+        {
+          "identity": "SH.603376",
+          "code": "603376",
+          "exchange": "SH",
+          "name": "大明电子",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002686",
+          "code": "002686",
+          "exchange": "SZ",
+          "name": "亿利达",
+          "board": 1
+        },
+        {
+          "identity": "SH.603171",
+          "code": "603171",
+          "exchange": "SH",
+          "name": "税友股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.600228",
+          "code": "600228",
+          "exchange": "SH",
+          "name": "返利科技",
+          "board": 2
+        },
+        {
+          "identity": "SZ.002882",
+          "code": "002882",
+          "exchange": "SZ",
+          "name": "金龙羽",
+          "board": 2
+        },
+        {
+          "identity": "SZ.000009",
+          "code": "000009",
+          "exchange": "SZ",
+          "name": "中国宝安",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002702",
+          "code": "002702",
+          "exchange": "SZ",
+          "name": "海欣食品",
+          "board": 1
+        },
+        {
+          "identity": "SH.600663",
+          "code": "600663",
+          "exchange": "SH",
+          "name": "陆家嘴",
+          "board": 1
+        },
+        {
+          "identity": "SH.605068",
+          "code": "605068",
+          "exchange": "SH",
+          "name": "明新旭腾",
+          "board": 4
+        },
+        {
+          "identity": "SZ.002512",
+          "code": "002512",
+          "exchange": "SZ",
+          "name": "ST达华",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000566",
+          "code": "000566",
+          "exchange": "SZ",
+          "name": "海南海药",
+          "board": 1
+        },
+        {
+          "identity": "SH.603813",
+          "code": "603813",
+          "exchange": "SH",
+          "name": "原尚股份",
+          "board": 1
+        },
+        {
+          "identity": "SH.605388",
+          "code": "605388",
+          "exchange": "SH",
+          "name": "均瑶健康",
+          "board": 2
+        },
+        {
+          "identity": "SH.605033",
+          "code": "605033",
+          "exchange": "SH",
+          "name": "美邦股份",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300894",
+          "code": "300894",
+          "exchange": "SZ",
+          "name": "火星人",
+          "board": 1
+        },
+        {
+          "identity": "SH.600702",
+          "code": "600702",
+          "exchange": "SH",
+          "name": "舍得酒业",
+          "board": 1
+        },
+        {
+          "identity": "SH.600712",
+          "code": "600712",
+          "exchange": "SH",
+          "name": "南宁百货",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002731",
+          "code": "002731",
+          "exchange": "SZ",
+          "name": "*ST萃华",
+          "board": 1
+        },
+        {
+          "identity": "SH.600475",
+          "code": "600475",
+          "exchange": "SH",
+          "name": "华光环能",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002827",
+          "code": "002827",
+          "exchange": "SZ",
+          "name": "高争民爆",
+          "board": 2
+        },
+        {
+          "identity": "SH.603221",
+          "code": "603221",
+          "exchange": "SH",
+          "name": "爱丽家居",
+          "board": 8
+        },
+        {
+          "identity": "SH.603137",
+          "code": "603137",
+          "exchange": "SH",
+          "name": "恒尚节能",
+          "board": 1
+        },
+        {
+          "identity": "SZ.000526",
+          "code": "000526",
+          "exchange": "SZ",
+          "name": "学大教育",
+          "board": 1
+        },
+        {
+          "identity": "SH.601616",
+          "code": "601616",
+          "exchange": "SH",
+          "name": "广电电气",
+          "board": 1
+        },
+        {
+          "identity": "SZ.300996",
+          "code": "300996",
+          "exchange": "SZ",
+          "name": "普联软件",
+          "board": 1
+        },
+        {
+          "identity": "SZ.001309",
+          "code": "001309",
+          "exchange": "SZ",
+          "name": "德明利",
+          "board": 1
+        },
+        {
+          "identity": "SZ.002667",
+          "code": "002667",
+          "exchange": "SZ",
+          "name": "*ST威领",
+          "board": 2
+        },
+        {
+          "identity": "SZ.000025",
+          "code": "000025",
+          "exchange": "SZ",
+          "name": "特  力Ａ",
+          "board": 1
+        }
+      ],
+      "total": 55
+    }
+  },
+  "events": {
+    "date": "2026-07-31",
+    "source": "XGB",
+    "coverage": "source_as_delivered",
+    "scope": "limit_up_union_limit_up_broken",
+    "status": "verified_complete",
+    "items": [
+      {
+        "identity": "SH.603682",
+        "code": "603682",
+        "exchange": "SH",
+        "name": "锦和商管",
+        "first_at": "2026-07-31T09:44:15+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000967",
+        "code": "000967",
+        "exchange": "SZ",
+        "name": "盈峰环境",
+        "first_at": "2026-07-31T09:30:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603115",
+        "code": "603115",
+        "exchange": "SH",
+        "name": "海星股份",
+        "first_at": "2026-07-31T09:33:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603221",
+        "code": "603221",
+        "exchange": "SH",
+        "name": "爱丽家居",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001223",
+        "code": "001223",
+        "exchange": "SZ",
+        "name": "欧克科技",
+        "first_at": "2026-07-31T09:51:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600986",
+        "code": "600986",
+        "exchange": "SH",
+        "name": "浙文互联",
+        "first_at": "2026-07-31T10:53:55+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605318",
+        "code": "605318",
+        "exchange": "SH",
+        "name": "法狮龙",
+        "first_at": "2026-07-31T13:00:22+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603533",
+        "code": "603533",
+        "exchange": "SH",
+        "name": "掌阅科技",
+        "first_at": "2026-07-31T10:16:28+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003018",
+        "code": "003018",
+        "exchange": "SZ",
+        "name": "金富科技",
+        "first_at": "2026-07-31T09:32:39+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002851",
+        "code": "002851",
+        "exchange": "SZ",
+        "name": "麦格米特",
+        "first_at": "2026-07-31T09:38:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603336",
+        "code": "603336",
+        "exchange": "SH",
+        "name": "宏辉果蔬",
+        "first_at": "2026-07-31T10:36:48+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605168",
+        "code": "605168",
+        "exchange": "SH",
+        "name": "三人行",
+        "first_at": "2026-07-31T10:02:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688095",
+        "code": "688095",
+        "exchange": "SH",
+        "name": "福昕软件",
+        "first_at": "2026-07-31T10:03:26+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000032",
+        "code": "000032",
+        "exchange": "SZ",
+        "name": "深桑达Ａ",
+        "first_at": "2026-07-31T10:57:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003001",
+        "code": "003001",
+        "exchange": "SZ",
+        "name": "中岩大地",
+        "first_at": "2026-07-31T09:31:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001400",
+        "code": "001400",
+        "exchange": "SZ",
+        "name": "江顺科技",
+        "first_at": "2026-07-31T09:59:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603466",
+        "code": "603466",
+        "exchange": "SH",
+        "name": "风语筑",
+        "first_at": "2026-07-31T11:01:28+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002931",
+        "code": "002931",
+        "exchange": "SZ",
+        "name": "锋龙股份",
+        "first_at": "2026-07-31T09:51:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300508",
+        "code": "300508",
+        "exchange": "SZ",
+        "name": "维宏股份",
+        "first_at": "2026-07-31T09:35:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603608",
+        "code": "603608",
+        "exchange": "SH",
+        "name": "天创时尚",
+        "first_at": "2026-07-31T13:17:07+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002929",
+        "code": "002929",
+        "exchange": "SZ",
+        "name": "润建股份",
+        "first_at": "2026-07-31T10:27:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002957",
+        "code": "002957",
+        "exchange": "SZ",
+        "name": "科瑞技术",
+        "first_at": "2026-07-31T09:38:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603598",
+        "code": "603598",
+        "exchange": "SH",
+        "name": "引力传媒",
+        "first_at": "2026-07-31T10:20:23+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600449",
+        "code": "600449",
+        "exchange": "SH",
+        "name": "宁夏建材",
+        "first_at": "2026-07-31T09:42:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002896",
+        "code": "002896",
+        "exchange": "SZ",
+        "name": "中大力德",
+        "first_at": "2026-07-31T09:42:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603106",
+        "code": "603106",
+        "exchange": "SH",
+        "name": "恒银科技",
+        "first_at": "2026-07-31T09:40:29+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301231",
+        "code": "301231",
+        "exchange": "SZ",
+        "name": "荣信文化",
+        "first_at": "2026-07-31T10:57:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603031",
+        "code": "603031",
+        "exchange": "SH",
+        "name": "安孚科技",
+        "first_at": "2026-07-31T09:41:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603009",
+        "code": "603009",
+        "exchange": "SH",
+        "name": "北特科技",
+        "first_at": "2026-07-31T13:04:57+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603139",
+        "code": "603139",
+        "exchange": "SH",
+        "name": "康惠股份",
+        "first_at": "2026-07-31T09:41:19+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603629",
+        "code": "603629",
+        "exchange": "SH",
+        "name": "利通电子",
+        "first_at": "2026-07-31T09:25:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603316",
+        "code": "603316",
+        "exchange": "SH",
+        "name": "诚邦股份",
+        "first_at": "2026-07-31T09:45:30+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600162",
+        "code": "600162",
+        "exchange": "SH",
+        "name": "香江控股",
+        "first_at": "2026-07-31T11:06:48+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000892",
+        "code": "000892",
+        "exchange": "SZ",
+        "name": "欢瑞世纪",
+        "first_at": "2026-07-31T10:02:30+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605069",
+        "code": "605069",
+        "exchange": "SH",
+        "name": "正和生态",
+        "first_at": "2026-07-31T09:49:22+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002775",
+        "code": "002775",
+        "exchange": "SZ",
+        "name": "文科股份",
+        "first_at": "2026-07-31T10:48:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002659",
+        "code": "002659",
+        "exchange": "SZ",
+        "name": "凯文教育",
+        "first_at": "2026-07-31T10:53:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605289",
+        "code": "605289",
+        "exchange": "SH",
+        "name": "罗曼股份",
+        "first_at": "2026-07-31T09:30:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002552",
+        "code": "002552",
+        "exchange": "SZ",
+        "name": "宝鼎科技",
+        "first_at": "2026-07-31T09:36:21+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603171",
+        "code": "603171",
+        "exchange": "SH",
+        "name": "税友股份",
+        "first_at": "2026-07-31T10:41:05+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605198",
+        "code": "605198",
+        "exchange": "SH",
+        "name": "安德利",
+        "first_at": "2026-07-31T09:41:41+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002131",
+        "code": "002131",
+        "exchange": "SZ",
+        "name": "利欧股份",
+        "first_at": "2026-07-31T10:03:39+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300058",
+        "code": "300058",
+        "exchange": "SZ",
+        "name": "蓝色光标",
+        "first_at": "2026-07-31T10:37:39+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603637",
+        "code": "603637",
+        "exchange": "SH",
+        "name": "镇海股份",
+        "first_at": "2026-07-31T11:19:58+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603039",
+        "code": "603039",
+        "exchange": "SH",
+        "name": "泛微网络",
+        "first_at": "2026-07-31T10:09:55+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003032",
+        "code": "003032",
+        "exchange": "SZ",
+        "name": "传智教育",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000009",
+        "code": "000009",
+        "exchange": "SZ",
+        "name": "中国宝安",
+        "first_at": "2026-07-31T11:15:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605178",
+        "code": "605178",
+        "exchange": "SH",
+        "name": "时空科技",
+        "first_at": "2026-07-31T09:30:02+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002354",
+        "code": "002354",
+        "exchange": "SZ",
+        "name": "天娱数科",
+        "first_at": "2026-07-31T09:32:57+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603779",
+        "code": "603779",
+        "exchange": "SH",
+        "name": "威龙股份",
+        "first_at": "2026-07-31T11:04:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600580",
+        "code": "600580",
+        "exchange": "SH",
+        "name": "卧龙电驱",
+        "first_at": "2026-07-31T11:07:50+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603738",
+        "code": "603738",
+        "exchange": "SH",
+        "name": "泰晶科技",
+        "first_at": "2026-07-31T09:30:18+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300418",
+        "code": "300418",
+        "exchange": "SZ",
+        "name": "昆仑万维",
+        "first_at": "2026-07-31T10:55:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605287",
+        "code": "605287",
+        "exchange": "SH",
+        "name": "德才股份",
+        "first_at": "2026-07-31T09:46:08+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301171",
+        "code": "301171",
+        "exchange": "SZ",
+        "name": "易点天下",
+        "first_at": "2026-07-31T10:10:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002346",
+        "code": "002346",
+        "exchange": "SZ",
+        "name": "柘中股份",
+        "first_at": "2026-07-31T13:24:36+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300996",
+        "code": "300996",
+        "exchange": "SZ",
+        "name": "普联软件",
+        "first_at": "2026-07-31T09:50:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002235",
+        "code": "002235",
+        "exchange": "SZ",
+        "name": "安妮股份",
+        "first_at": "2026-07-31T13:29:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002197",
+        "code": "002197",
+        "exchange": "SZ",
+        "name": "证通电子",
+        "first_at": "2026-07-31T10:27:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603956",
+        "code": "603956",
+        "exchange": "SH",
+        "name": "威派格",
+        "first_at": "2026-07-31T13:01:11+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603696",
+        "code": "603696",
+        "exchange": "SH",
+        "name": "安记食品",
+        "first_at": "2026-07-31T14:50:58+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002432",
+        "code": "002432",
+        "exchange": "SZ",
+        "name": "九安医疗",
+        "first_at": "2026-07-31T10:44:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003005",
+        "code": "003005",
+        "exchange": "SZ",
+        "name": "竞业达",
+        "first_at": "2026-07-31T10:54:30+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600588",
+        "code": "600588",
+        "exchange": "SH",
+        "name": "用友网络",
+        "first_at": "2026-07-31T10:20:55+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000676",
+        "code": "000676",
+        "exchange": "SZ",
+        "name": "智度股份",
+        "first_at": "2026-07-31T10:00:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002015",
+        "code": "002015",
+        "exchange": "SZ",
+        "name": "协鑫能科",
+        "first_at": "2026-07-31T14:26:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002827",
+        "code": "002827",
+        "exchange": "SZ",
+        "name": "高争民爆",
+        "first_at": "2026-07-31T09:30:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600602",
+        "code": "600602",
+        "exchange": "SH",
+        "name": "云赛智联",
+        "first_at": "2026-07-31T10:27:02+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002963",
+        "code": "002963",
+        "exchange": "SZ",
+        "name": "豪尔赛",
+        "first_at": "2026-07-31T09:54:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002979",
+        "code": "002979",
+        "exchange": "SZ",
+        "name": "雷赛智能",
+        "first_at": "2026-07-31T13:15:21+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603398",
+        "code": "603398",
+        "exchange": "SH",
+        "name": "*ST沐邦",
+        "first_at": "2026-07-31T14:54:47+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000048",
+        "code": "000048",
+        "exchange": "SZ",
+        "name": "京基智农",
+        "first_at": "2026-07-31T09:33:21+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603286",
+        "code": "603286",
+        "exchange": "SH",
+        "name": "日盈电子",
+        "first_at": "2026-07-31T11:10:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002115",
+        "code": "002115",
+        "exchange": "SZ",
+        "name": "三维通信",
+        "first_at": "2026-07-31T13:00:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605179",
+        "code": "605179",
+        "exchange": "SH",
+        "name": "一鸣食品",
+        "first_at": "2026-07-31T09:32:11+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600667",
+        "code": "600667",
+        "exchange": "SH",
+        "name": "太极实业",
+        "first_at": "2026-07-31T09:25:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603120",
+        "code": "603120",
+        "exchange": "SH",
+        "name": "肯特催化",
+        "first_at": "2026-07-31T09:35:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001267",
+        "code": "001267",
+        "exchange": "SZ",
+        "name": "汇绿生态",
+        "first_at": "2026-07-31T09:41:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603261",
+        "code": "603261",
+        "exchange": "SH",
+        "name": "立航科技",
+        "first_at": "2026-07-31T09:47:29+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000838",
+        "code": "000838",
+        "exchange": "SZ",
+        "name": "*ST发展",
+        "first_at": "2026-07-31T13:00:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000815",
+        "code": "000815",
+        "exchange": "SZ",
+        "name": "美利云",
+        "first_at": "2026-07-31T10:26:33+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000595",
+        "code": "000595",
+        "exchange": "SZ",
+        "name": "新能股份",
+        "first_at": "2026-07-31T09:37:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603375",
+        "code": "603375",
+        "exchange": "SH",
+        "name": "盛景微",
+        "first_at": "2026-07-31T09:41:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000506",
+        "code": "000506",
+        "exchange": "SZ",
+        "name": "招金黄金",
+        "first_at": "2026-07-31T10:11:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000428",
+        "code": "000428",
+        "exchange": "SZ",
+        "name": "华天酒店",
+        "first_at": "2026-07-31T09:34:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600673",
+        "code": "600673",
+        "exchange": "SH",
+        "name": "东阳光",
+        "first_at": "2026-07-31T09:41:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000820",
+        "code": "000820",
+        "exchange": "SZ",
+        "name": "神雾节能",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000593",
+        "code": "000593",
+        "exchange": "SZ",
+        "name": "德龙汇能",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603721",
+        "code": "603721",
+        "exchange": "SH",
+        "name": "中广天择",
+        "first_at": "2026-07-31T10:28:20+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001359",
+        "code": "001359",
+        "exchange": "SZ",
+        "name": "平安电工",
+        "first_at": "2026-07-31T09:30:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300720",
+        "code": "300720",
+        "exchange": "SZ",
+        "name": "海川智能",
+        "first_at": "2026-07-31T09:34:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002774",
+        "code": "002774",
+        "exchange": "SZ",
+        "name": "快意电梯",
+        "first_at": "2026-07-31T09:44:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603067",
+        "code": "603067",
+        "exchange": "SH",
+        "name": "振华股份",
+        "first_at": "2026-07-31T09:36:37+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300789",
+        "code": "300789",
+        "exchange": "SZ",
+        "name": "唐源电气",
+        "first_at": "2026-07-31T13:13:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300364",
+        "code": "300364",
+        "exchange": "SZ",
+        "name": "中文在线",
+        "first_at": "2026-07-31T10:44:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301396",
+        "code": "301396",
+        "exchange": "SZ",
+        "name": "宏景科技",
+        "first_at": "2026-07-31T09:32:21+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003036",
+        "code": "003036",
+        "exchange": "SZ",
+        "name": "泰坦股份",
+        "first_at": "2026-07-31T09:35:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600791",
+        "code": "600791",
+        "exchange": "SH",
+        "name": "京能置业",
+        "first_at": "2026-07-31T09:42:30+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603337",
+        "code": "603337",
+        "exchange": "SH",
+        "name": "杰克科技",
+        "first_at": "2026-07-31T09:47:40+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605208",
+        "code": "605208",
+        "exchange": "SH",
+        "name": "永茂泰",
+        "first_at": "2026-07-31T13:08:10+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600353",
+        "code": "600353",
+        "exchange": "SH",
+        "name": "旭光电子",
+        "first_at": "2026-07-31T09:55:57+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002768",
+        "code": "002768",
+        "exchange": "SZ",
+        "name": "国恩股份",
+        "first_at": "2026-07-31T10:10:36+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603137",
+        "code": "603137",
+        "exchange": "SH",
+        "name": "恒尚节能",
+        "first_at": "2026-07-31T09:25:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000608",
+        "code": "000608",
+        "exchange": "SZ",
+        "name": "阳光股份",
+        "first_at": "2026-07-31T09:50:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002787",
+        "code": "002787",
+        "exchange": "SZ",
+        "name": "华源控股",
+        "first_at": "2026-07-31T09:30:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001331",
+        "code": "001331",
+        "exchange": "SZ",
+        "name": "胜通能源",
+        "first_at": "2026-07-31T13:00:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300986",
+        "code": "300986",
+        "exchange": "SZ",
+        "name": "志特新材",
+        "first_at": "2026-07-31T13:14:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603626",
+        "code": "603626",
+        "exchange": "SH",
+        "name": "科森科技",
+        "first_at": "2026-07-31T09:45:18+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003043",
+        "code": "003043",
+        "exchange": "SZ",
+        "name": "华亚智能",
+        "first_at": "2026-07-31T09:53:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301013",
+        "code": "301013",
+        "exchange": "SZ",
+        "name": "利和兴",
+        "first_at": "2026-07-31T09:41:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002667",
+        "code": "002667",
+        "exchange": "SZ",
+        "name": "*ST威领",
+        "first_at": "2026-07-31T10:26:39+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301213",
+        "code": "301213",
+        "exchange": "SZ",
+        "name": "观想科技",
+        "first_at": "2026-07-31T13:00:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605376",
+        "code": "605376",
+        "exchange": "SH",
+        "name": "博迁新材",
+        "first_at": "2026-07-31T09:47:58+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002303",
+        "code": "002303",
+        "exchange": "SZ",
+        "name": "美盈森",
+        "first_at": "2026-07-31T09:38:48+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688322",
+        "code": "688322",
+        "exchange": "SH",
+        "name": "奥比中光",
+        "first_at": "2026-07-31T13:13:16+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300378",
+        "code": "300378",
+        "exchange": "SZ",
+        "name": "鼎捷数智",
+        "first_at": "2026-07-31T13:11:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688661",
+        "code": "688661",
+        "exchange": "SH",
+        "name": "和林微纳",
+        "first_at": "2026-07-31T09:41:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603078",
+        "code": "603078",
+        "exchange": "SH",
+        "name": "江化微",
+        "first_at": "2026-07-31T09:55:58+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688141",
+        "code": "688141",
+        "exchange": "SH",
+        "name": "杰华特",
+        "first_at": "2026-07-31T13:00:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.003031",
+        "code": "003031",
+        "exchange": "SZ",
+        "name": "中瓷电子",
+        "first_at": "2026-07-31T09:49:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301312",
+        "code": "301312",
+        "exchange": "SZ",
+        "name": "智立方",
+        "first_at": "2026-07-31T09:46:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.601208",
+        "code": "601208",
+        "exchange": "SH",
+        "name": "东材科技",
+        "first_at": "2026-07-31T09:41:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002636",
+        "code": "002636",
+        "exchange": "SZ",
+        "name": "金安国纪",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688507",
+        "code": "688507",
+        "exchange": "SH",
+        "name": "索辰科技",
+        "first_at": "2026-07-31T13:20:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002970",
+        "code": "002970",
+        "exchange": "SZ",
+        "name": "锐明技术",
+        "first_at": "2026-07-31T13:07:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002380",
+        "code": "002380",
+        "exchange": "SZ",
+        "name": "科远智慧",
+        "first_at": "2026-07-31T13:12:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002647",
+        "code": "002647",
+        "exchange": "SZ",
+        "name": "仁东控股",
+        "first_at": "2026-07-31T14:32:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688766",
+        "code": "688766",
+        "exchange": "SH",
+        "name": "普冉股份",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600183",
+        "code": "600183",
+        "exchange": "SH",
+        "name": "生益科技",
+        "first_at": "2026-07-31T09:30:02+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600082",
+        "code": "600082",
+        "exchange": "SH",
+        "name": "ST海泰",
+        "first_at": "2026-07-31T10:56:57+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002655",
+        "code": "002655",
+        "exchange": "SZ",
+        "name": "共达电声",
+        "first_at": "2026-07-31T09:56:48+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603662",
+        "code": "603662",
+        "exchange": "SH",
+        "name": "柯力传感",
+        "first_at": "2026-07-31T13:25:38+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688369",
+        "code": "688369",
+        "exchange": "SH",
+        "name": "致远互联",
+        "first_at": "2026-07-31T13:12:43+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002712",
+        "code": "002712",
+        "exchange": "SZ",
+        "name": "思美传媒",
+        "first_at": "2026-07-31T10:20:45+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603107",
+        "code": "603107",
+        "exchange": "SH",
+        "name": "上海汽配",
+        "first_at": "2026-07-31T10:54:14+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603989",
+        "code": "603989",
+        "exchange": "SH",
+        "name": "艾华集团",
+        "first_at": "2026-07-31T09:51:47+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001309",
+        "code": "001309",
+        "exchange": "SZ",
+        "name": "德明利",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002463",
+        "code": "002463",
+        "exchange": "SZ",
+        "name": "沪电股份",
+        "first_at": "2026-07-31T09:48:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002428",
+        "code": "002428",
+        "exchange": "SZ",
+        "name": "云南锗业",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300795",
+        "code": "300795",
+        "exchange": "SZ",
+        "name": "米奥会展",
+        "first_at": "2026-07-31T10:59:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000710",
+        "code": "000710",
+        "exchange": "SZ",
+        "name": "贝瑞基因",
+        "first_at": "2026-07-31T10:58:18+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.301196",
+        "code": "301196",
+        "exchange": "SZ",
+        "name": "唯科科技",
+        "first_at": "2026-07-31T09:53:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603211",
+        "code": "603211",
+        "exchange": "SH",
+        "name": "晋拓股份",
+        "first_at": "2026-07-31T09:41:47+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688183",
+        "code": "688183",
+        "exchange": "SH",
+        "name": "生益电子",
+        "first_at": "2026-07-31T09:47:58+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603819",
+        "code": "603819",
+        "exchange": "SH",
+        "name": "神力股份",
+        "first_at": "2026-07-31T14:00:44+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002484",
+        "code": "002484",
+        "exchange": "SZ",
+        "name": "江海股份",
+        "first_at": "2026-07-31T09:39:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600176",
+        "code": "600176",
+        "exchange": "SH",
+        "name": "中国巨石",
+        "first_at": "2026-07-31T09:51:25+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603283",
+        "code": "603283",
+        "exchange": "SH",
+        "name": "赛腾股份",
+        "first_at": "2026-07-31T09:57:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603324",
+        "code": "603324",
+        "exchange": "SH",
+        "name": "盛剑科技",
+        "first_at": "2026-07-31T09:46:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603119",
+        "code": "603119",
+        "exchange": "SH",
+        "name": "浙江荣泰",
+        "first_at": "2026-07-31T13:13:20+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603186",
+        "code": "603186",
+        "exchange": "SH",
+        "name": "华正新材",
+        "first_at": "2026-07-31T09:25:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300063",
+        "code": "300063",
+        "exchange": "SZ",
+        "name": "天龙集团",
+        "first_at": "2026-07-31T11:00:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600376",
+        "code": "600376",
+        "exchange": "SH",
+        "name": "首开股份",
+        "first_at": "2026-07-31T09:58:53+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603678",
+        "code": "603678",
+        "exchange": "SH",
+        "name": "火炬电子",
+        "first_at": "2026-07-31T09:54:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603618",
+        "code": "603618",
+        "exchange": "SH",
+        "name": "杭电股份",
+        "first_at": "2026-07-31T09:42:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002353",
+        "code": "002353",
+        "exchange": "SZ",
+        "name": "杰瑞股份",
+        "first_at": "2026-07-31T10:06:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603679",
+        "code": "603679",
+        "exchange": "SH",
+        "name": "华体科技",
+        "first_at": "2026-07-31T10:10:55+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000962",
+        "code": "000962",
+        "exchange": "SZ",
+        "name": "东方钽业",
+        "first_at": "2026-07-31T09:38:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000636",
+        "code": "000636",
+        "exchange": "SZ",
+        "name": "风华高科",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603124",
+        "code": "603124",
+        "exchange": "SH",
+        "name": "江南新材",
+        "first_at": "2026-07-31T09:47:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600180",
+        "code": "600180",
+        "exchange": "SH",
+        "name": "*ST瑞茂",
+        "first_at": "2026-07-31T14:49:34+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603936",
+        "code": "603936",
+        "exchange": "SH",
+        "name": "博敏电子",
+        "first_at": "2026-07-31T09:57:41+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001389",
+        "code": "001389",
+        "exchange": "SZ",
+        "name": "广合科技",
+        "first_at": "2026-07-31T09:42:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603228",
+        "code": "603228",
+        "exchange": "SH",
+        "name": "景旺电子",
+        "first_at": "2026-07-31T09:30:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603052",
+        "code": "603052",
+        "exchange": "SH",
+        "name": "可川科技",
+        "first_at": "2026-07-31T09:48:08+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688607",
+        "code": "688607",
+        "exchange": "SH",
+        "name": "康众医疗",
+        "first_at": "2026-07-31T11:21:42+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002975",
+        "code": "002975",
+        "exchange": "SZ",
+        "name": "博杰股份",
+        "first_at": "2026-07-31T09:46:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603203",
+        "code": "603203",
+        "exchange": "SH",
+        "name": "快克智能",
+        "first_at": "2026-07-31T09:46:44+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600869",
+        "code": "600869",
+        "exchange": "SH",
+        "name": "远东股份",
+        "first_at": "2026-07-31T09:53:01+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002686",
+        "code": "002686",
+        "exchange": "SZ",
+        "name": "亿利达",
+        "first_at": "2026-07-31T09:31:18+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603986",
+        "code": "603986",
+        "exchange": "SH",
+        "name": "兆易创新",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000826",
+        "code": "000826",
+        "exchange": "SZ",
+        "name": "*ST启环",
+        "first_at": "2026-07-31T13:15:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605068",
+        "code": "605068",
+        "exchange": "SH",
+        "name": "明新旭腾",
+        "first_at": "2026-07-31T09:43:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605303",
+        "code": "605303",
+        "exchange": "SH",
+        "name": "园林股份",
+        "first_at": "2026-07-31T13:00:37+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603950",
+        "code": "603950",
+        "exchange": "SH",
+        "name": "长源东谷",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002384",
+        "code": "002384",
+        "exchange": "SZ",
+        "name": "东山精密",
+        "first_at": "2026-07-31T09:46:15+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002757",
+        "code": "002757",
+        "exchange": "SZ",
+        "name": "南兴股份",
+        "first_at": "2026-07-31T10:59:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002400",
+        "code": "002400",
+        "exchange": "SZ",
+        "name": "省广集团",
+        "first_at": "2026-07-31T11:01:30+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002488",
+        "code": "002488",
+        "exchange": "SZ",
+        "name": "金固股份",
+        "first_at": "2026-07-31T14:38:57+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688630",
+        "code": "688630",
+        "exchange": "SH",
+        "name": "芯碁微装",
+        "first_at": "2026-07-31T09:57:44+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603061",
+        "code": "603061",
+        "exchange": "SH",
+        "name": "金海通",
+        "first_at": "2026-07-31T09:48:52+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603272",
+        "code": "603272",
+        "exchange": "SH",
+        "name": "*ST联翔",
+        "first_at": "2026-07-31T09:46:10+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603728",
+        "code": "603728",
+        "exchange": "SH",
+        "name": "鸣志电器",
+        "first_at": "2026-07-31T13:23:37+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300668",
+        "code": "300668",
+        "exchange": "SZ",
+        "name": "杰恩股份",
+        "first_at": "2026-07-31T13:32:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002138",
+        "code": "002138",
+        "exchange": "SZ",
+        "name": "顺络电子",
+        "first_at": "2026-07-31T09:31:03+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300489",
+        "code": "300489",
+        "exchange": "SZ",
+        "name": "光智科技",
+        "first_at": "2026-07-31T09:33:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002585",
+        "code": "002585",
+        "exchange": "SZ",
+        "name": "双星新材",
+        "first_at": "2026-07-31T09:25:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.001339",
+        "code": "001339",
+        "exchange": "SZ",
+        "name": "智微智能",
+        "first_at": "2026-07-31T09:47:00+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603773",
+        "code": "603773",
+        "exchange": "SH",
+        "name": "沃格光电",
+        "first_at": "2026-07-31T10:00:13+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002916",
+        "code": "002916",
+        "exchange": "SZ",
+        "name": "深南电路",
+        "first_at": "2026-07-31T09:40:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603985",
+        "code": "603985",
+        "exchange": "SH",
+        "name": "恒润股份",
+        "first_at": "2026-07-31T13:46:46+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002897",
+        "code": "002897",
+        "exchange": "SZ",
+        "name": "意华股份",
+        "first_at": "2026-07-31T09:56:54+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605358",
+        "code": "605358",
+        "exchange": "SH",
+        "name": "立昂微",
+        "first_at": "2026-07-31T09:41:11+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600234",
+        "code": "600234",
+        "exchange": "SH",
+        "name": "科新发展",
+        "first_at": "2026-07-31T09:58:40+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300454",
+        "code": "300454",
+        "exchange": "SZ",
+        "name": "深信服",
+        "first_at": "2026-07-31T13:07:06+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603256",
+        "code": "603256",
+        "exchange": "SH",
+        "name": "宏和科技",
+        "first_at": "2026-07-31T09:47:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.300624",
+        "code": "300624",
+        "exchange": "SZ",
+        "name": "万兴科技",
+        "first_at": "2026-07-31T10:57:12+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002990",
+        "code": "002990",
+        "exchange": "SZ",
+        "name": "盛视科技",
+        "first_at": "2026-07-31T09:48:27+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.600228",
+        "code": "600228",
+        "exchange": "SH",
+        "name": "返利科技",
+        "first_at": "2026-07-31T11:00:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.002281",
+        "code": "002281",
+        "exchange": "SZ",
+        "name": "光迅科技",
+        "first_at": "2026-07-31T09:49:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603045",
+        "code": "603045",
+        "exchange": "SH",
+        "name": "福达合金",
+        "first_at": "2026-07-31T09:48:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603929",
+        "code": "603929",
+        "exchange": "SH",
+        "name": "亚翔集成",
+        "first_at": "2026-07-31T09:39:24+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688020",
+        "code": "688020",
+        "exchange": "SH",
+        "name": "方邦股份",
+        "first_at": "2026-07-31T09:38:10+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603657",
+        "code": "603657",
+        "exchange": "SH",
+        "name": "春光科技",
+        "first_at": "2026-07-31T13:30:02+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.605488",
+        "code": "605488",
+        "exchange": "SH",
+        "name": "福莱新材",
+        "first_at": "2026-07-31T13:12:36+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.688258",
+        "code": "688258",
+        "exchange": "SH",
+        "name": "卓易信息",
+        "first_at": "2026-07-31T10:53:16+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SZ.000681",
+        "code": "000681",
+        "exchange": "SZ",
+        "name": "视觉中国",
+        "first_at": "2026-07-31T11:06:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603285",
+        "code": "603285",
+        "exchange": "SH",
+        "name": "键邦股份",
+        "first_at": "2026-07-31T09:55:53+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603002",
+        "code": "603002",
+        "exchange": "SH",
+        "name": "宏昌电子",
+        "first_at": "2026-07-31T09:46:51+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      },
+      {
+        "identity": "SH.603306",
+        "code": "603306",
+        "exchange": "SH",
+        "name": "华懋科技",
+        "first_at": "2026-07-31T09:47:09+08:00",
+        "timeline_complete": false,
+        "timeline": []
+      }
+    ],
+    "coverage_verified": true,
+    "coverage_method": "immutable_historical_final_ZT_union_ZB"
+  },
+  "quotes": {
+    "SZ.002827": {
+      "identity": "SZ.002827",
+      "date": "2026-07-31",
+      "cutoff": "2026-07-31T09:40:00+08:00",
+      "basis": "raw",
+      "limit_verified": true,
+      "limit_price": "34.60",
+      "open": "34.6000",
+      "observed_low0940": "33.7200",
+      "close0940": "34.6000"
+    }
+  },
+  "fixture_provenance": {
+    "kind": "real_frozen_historical_replay",
+    "extraction": "date-specific native index/closing pools/event first seconds; raw unadjusted quote from reviewed closed bars; no fabricated timeline",
+    "sources": [
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/events/bulk-02-xgbzt-20260729.raw",
+        "sha256": "e7f940bc0a8892d11bd6c2774a617f5bea05bf458399523a0b05693dac491531"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/events/03-xgbzt-20260730.raw",
+        "sha256": "6421bbf47740b9010ba5ebe440381d3b916b9c643c80affdcec65f92f4405341"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/events/bulk-03-xgbzt-20260731.raw",
+        "sha256": "78971b8e907c1a89f9e2c4a9aa08b61133deb96089e3640a21c1372386a19966"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/events/bulk-58-xgbzb-20260731.raw",
+        "sha256": "cf73ae1fd7253bc7f01ac8412170248f6018209cc656f32f6d7c5ea4db696f96"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/export-data.json",
+        "sha256": "8cc2f00431a4ea328913a12defe70225d6ecb6e0d4c447f06d26541abcc872b0"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/prices/stocks/2026-07-31-002827-5.json",
+        "sha256": "fb90d6a9869639a30564084e5ffdfb426971d920fee99f94570d97ff94f7f999"
+      },
+      {
+        "path": "/Users/yangfan/.codex/worktrees/opening-limitup-replay/ChanlunStrategy/research/opening-limitup-20261029/alternative-source-60d-v2/data/prices/stocks/2026-07-31-002827-d.json",
+        "sha256": "b3f7ad8d9bec0dd6b87ea0624d47661293395dc8a7246f4918f5726de818209d"
+      }
+    ]
+  }
+}
