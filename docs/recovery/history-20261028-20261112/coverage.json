@@ -1,0 +1,211 @@
+{
+  "2026-10-28": {
+    "raw_close_count": 5480,
+    "amount_count": 5480,
+    "verified": {
+      "day": 4831,
+      "30m": 8024,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 649,
+      "missing_day": 1,
+      "30m_price_basis_conflict": 71,
+      "30m_incomplete_or_missing_daily": 136,
+      "30m_daily_volume_conflict": 1,
+      "15m_price_basis_conflict": 2,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-10-29": {
+    "raw_close_count": 5479,
+    "amount_count": 5479,
+    "verified": {
+      "day": 4831,
+      "30m": 8024,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 2,
+      "30m_price_basis_conflict": 51,
+      "30m_incomplete_or_missing_daily": 136,
+      "30m_daily_volume_conflict": 1,
+      "15m_price_basis_conflict": 2,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-10-30": {
+    "raw_close_count": 5479,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4831,
+      "30m": 8016,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 2,
+      "30m_price_basis_conflict": 30,
+      "30m_incomplete_or_missing_daily": 136,
+      "15m_price_basis_conflict": 1,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-02": {
+    "raw_close_count": 5477,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4829,
+      "30m": 8000,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 4,
+      "30m_price_basis_conflict": 33,
+      "30m_incomplete_or_missing_daily": 136,
+      "30m_daily_volume_conflict": 1,
+      "15m_price_basis_conflict": 3,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-03": {
+    "raw_close_count": 5475,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4827,
+      "30m": 7992,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 6,
+      "30m_price_basis_conflict": 46,
+      "30m_incomplete_or_missing_daily": 136,
+      "15m_price_basis_conflict": 2,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-04": {
+    "raw_close_count": 5476,
+    "amount_count": 5474,
+    "verified": {
+      "day": 4828,
+      "30m": 8000,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 5,
+      "30m_price_basis_conflict": 37,
+      "30m_incomplete_or_missing_daily": 136,
+      "15m_price_basis_conflict": 4,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-05": {
+    "raw_close_count": 5475,
+    "amount_count": 5474,
+    "verified": {
+      "day": 4827,
+      "30m": 8000,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 6,
+      "30m_price_basis_conflict": 66,
+      "30m_incomplete_or_missing_daily": 136,
+      "15m_price_basis_conflict": 4,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-06": {
+    "raw_close_count": 5476,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4828,
+      "30m": 8000,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 5,
+      "30m_price_basis_conflict": 47,
+      "30m_incomplete_or_missing_daily": 136,
+      "15m_price_basis_conflict": 2,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-09": {
+    "raw_close_count": 5476,
+    "amount_count": 5476,
+    "verified": {
+      "day": 4828,
+      "30m": 7984,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 648,
+      "missing_day": 5,
+      "30m_price_basis_conflict": 65,
+      "30m_incomplete_or_missing_daily": 136,
+      "30m_daily_volume_conflict": 1,
+      "15m_price_basis_conflict": 4,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-10": {
+    "raw_close_count": 5475,
+    "amount_count": 5474,
+    "verified": {
+      "day": 4829,
+      "30m": 7984,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 646,
+      "missing_day": 6,
+      "30m_price_basis_conflict": 113,
+      "30m_incomplete_or_missing_daily": 135,
+      "15m_price_basis_conflict": 6,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-11": {
+    "raw_close_count": 5476,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4829,
+      "30m": 7992,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 647,
+      "missing_day": 5,
+      "30m_price_basis_conflict": 104,
+      "30m_incomplete_or_missing_daily": 135,
+      "30m_daily_volume_conflict": 1,
+      "15m_price_basis_conflict": 5,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  },
+  "2026-11-12": {
+    "raw_close_count": 5475,
+    "amount_count": 5475,
+    "verified": {
+      "day": 4828,
+      "30m": 8000,
+      "15m": 1584
+    },
+    "gaps": {
+      "daily_overlap_or_volume_conflict": 647,
+      "missing_day": 6,
+      "30m_price_basis_conflict": 61,
+      "30m_incomplete_or_missing_daily": 135,
+      "15m_price_basis_conflict": 4,
+      "15m_incomplete_or_missing_daily": 31
+    }
+  }
+}

@@ -1,0 +1,717 @@
+{
+  "date": "2026-11-09",
+  "readiness": {
+    "is_official": false,
+    "as_of": "2026-11-09T15:00:00+08:00",
+    "final_daily_bars": 4828,
+    "registered_universe": 5920,
+    "coverage": 0.8155405405405406,
+    "coverage_gate": 0.9,
+    "additional_rows_to_gate": 500,
+    "required_30m_codes": 349,
+    "sector_overlay_available": false,
+    "market_index_regime_available": false,
+    "main_replay_count": 3,
+    "observe_replay_count": 134
+  },
+  "stage_counts": {
+    "full_a": 6040,
+    "eligible": 3068,
+    "retrieval": 800,
+    "daily_channel": 415,
+    "minute30": 71,
+    "fusion": 1,
+    "display": 137
+  },
+  "candidates": [
+    {
+      "code": "002697",
+      "final_state": "main",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002819",
+      "final_state": "main",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301248",
+      "final_state": "main",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "000428",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "000533",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "000547",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "000722",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001219",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001270",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001308",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001316",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001388",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "001896",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002041",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002045",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002086",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002088",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002124",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002300",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002307",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002310",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002344",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002388",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002446",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002488",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002506",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002543",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002567",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002578",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002596",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002611",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002635",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002685",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002712",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002773",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002779",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002864",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002865",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002878",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "002903",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002911",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002931",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "002943",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "003030",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300005",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300007",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300056",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300069",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300102",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300118",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300217",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300224",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300345",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300413",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300421",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300433",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300469",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300473",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300528",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300660",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300680",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300793",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300825",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "300878",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300900",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300949",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "300969",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301000",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301181",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301232",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301252",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301266",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301306",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301313",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301361",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301449",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "301578",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "301595",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600108",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600118",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600148",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600156",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600261",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600278",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600313",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600327",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600359",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600368",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600396",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600410",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600456",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600498",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600510",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600644",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600650",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600683",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600697",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600728",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600744",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600801",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600803",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600821",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600853",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600865",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600879",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600892",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "600933",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600977",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "600986",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "601128",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "601333",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "601595",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "601599",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "601689",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603037",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603040",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "603151",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603297",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603305",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "603381",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "603389",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603626",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603677",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603706",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603777",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "603797",
+      "final_state": "observe",
+      "source_channel": "low_position"
+    },
+    {
+      "code": "603887",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603901",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603955",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "603990",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605090",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605162",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605287",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605296",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605319",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605339",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    },
+    {
+      "code": "605598",
+      "final_state": "observe",
+      "source_channel": "right_side_startup"
+    }
+  ],
+  "metadata": {
+    "strategy_input": "historical_funnel",
+    "formal_actions_allowed": false
+  }
+}
