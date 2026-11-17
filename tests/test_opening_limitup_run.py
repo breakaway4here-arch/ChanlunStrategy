@@ -1,14 +1,82 @@
+from datetime import datetime
 import io
 import json
 from pathlib import Path
+import sqlite3
 import tempfile
 import unittest
+from unittest import mock
 
 import opening_limitup_run
 from tests.test_opening_limitup import evidence
 
 
 class OpeningRunTests(unittest.TestCase):
+    def run_scheduled_at(self, instant, args, *, collector=None):
+        now = datetime.fromisoformat(instant)
+        output = io.StringIO()
+        with mock.patch.object(opening_limitup_run, "datetime") as clock:
+            clock.now.side_effect = now.astimezone
+            code = opening_limitup_run.main(["--scheduled", *args], collector=collector, stdout=output)
+        return code, json.loads(output.getvalue())
+
+    def test_sleep_catchup_is_blocked_with_actual_shanghai_time(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "calendar.sqlite"
+            args = ["--send", "--market-db", str(db)]
+            collector = mock.Mock(side_effect=AssertionError("late trigger attempted to collect"))
+            for instant in ("2026-11-17T01:41:00+00:00", "2026-11-17T01:48:58+00:00"):
+                with self.subTest(instant=instant):
+                    code, log = self.run_scheduled_at(instant, args, collector=collector)
+                    expected = datetime.fromisoformat(instant).astimezone(opening_limitup_run.SHANGHAI)
+                    self.assertEqual(code, 2)
+                    self.assertEqual(log, {
+                        "delivery_status": "blocked_time_or_calendar",
+                        "blocked_reason": "outside_send_window",
+                        "guard_checked_at": expected.isoformat(),
+                        "trade_date": "2026-11-17",
+                    })
+            collector.assert_not_called()
+            self.assertFalse(db.exists())
+
+    def test_closed_calendar_and_mismatched_date_have_separate_reasons(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            args = ["--send", "--market-db", str(Path(tmp) / "calendar.sqlite")]
+            collector = mock.Mock(side_effect=AssertionError("blocked trigger attempted to collect"))
+            for instant in ("2026-10-01", "2026-10-10", "2027-01-06"):
+                with self.subTest(instant=instant):
+                    code, log = self.run_scheduled_at(instant + "T09:40:00+08:00", args, collector=collector)
+                    self.assertEqual(code, 2)
+                    self.assertEqual(log.get("blocked_reason"), "closed_or_unsupported_calendar")
+            code, log = self.run_scheduled_at(
+                "2026-11-17T09:40:00+08:00", [*args, "--date", "2026-11-16"], collector=collector
+            )
+            self.assertEqual(code, 2)
+            self.assertEqual(log.get("blocked_reason"), "date_mismatch")
+            collector.assert_not_called()
+
+    def test_open_fallback_calendar_runs_collection_within_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "calendar.sqlite"
+            connection = sqlite3.connect(db)
+            try:
+                connection.execute("CREATE TABLE trade_calendar (trade_date TEXT, exchange TEXT, is_open INTEGER)")
+            finally:
+                connection.close()
+            original = db.read_bytes()
+            collected = []
+            def collect(day, market_db, *, budget_seconds):
+                collected.append((day, market_db, budget_seconds))
+                return {"trade_date": day}
+            code, log = self.run_scheduled_at(
+                "2026-11-17T01:40:02+00:00", ["--market-db", str(db)], collector=collect
+            )
+            self.assertEqual(code, 0)
+            self.assertEqual(log["delivery_status"], "dry_run")
+            self.assertEqual(log.get("guard_checked_at"), "2026-11-17T09:40:02+08:00")
+            self.assertEqual(collected, [("2026-11-17", str(db), 43.0)])
+            self.assertEqual(db.read_bytes(), original)
+
     def test_offline_default_preview_never_calls_collector_or_sender(self):
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp)/"input.json"; p.write_text(json.dumps(evidence()))

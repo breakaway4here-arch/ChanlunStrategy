@@ -60,3 +60,10 @@
 B 产品清单：`/private/tmp/opening-alert-b-release-20261103/implementation-b/manifest.json`，SHA `91d3a37b141d8433e0e03d6c9766dc2e762b7789d9614c865a5e26ff73d0c861`。完整本地日志在 `/private/tmp/opening-alert-b-release-20261103/parent-release-tests.log`，SHA `024d2e70362cbe621943876fe43a528b781bd7c0bd11be557e955b57e8605c2b`。
 
 当前发布流程使用独立 `opening-limitup-runtime`，实际发布提交、安装状态和回读验收保存在本任务 `/private/tmp/opening-alert-b-release-20261103/deployment/`，运行侧版本回执为 `.cache/chanlun/opening-limitup/release.json`。安装不代表自然 09:40 已触发；服务商回执也不等于用户已阅读。旧日报运行目录与 compare 用户改动保持原样。
+
+## 09:40 调度迟到排查
+
+- 启动阶段保留 `blocked_time_or_calendar` 状态，并在 `guard_checked_at` 记录上海时间。`blocked_reason` 为 `outside_send_window`、`date_mismatch` 或 `closed_or_unsupported_calendar`。进入采集后若在发送前超出窗口，日志仍带有启动时刻和计算结果，可和启动即被拦截区分。
+- 对照 `~/Library/Logs/chanlun-opening-limitup.log` 与 `pmset -g log` 的 Sleep、DarkWake、Wake。Mac 睡眠跨过 09:40 时，launchd 醒后补触发会被发送窗口拦截。2026 年的交易日仍可用已审核的[上交所休市安排](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml)判断，本地日历表无行时可继续使用这份安排。
+- 先用 `pmset -g sched` 核对系统现有的重复事件。确认无冲突并获主机管理权限后，可用 `sudo /usr/bin/pmset repeat wake MTWRF 09:35:00` 登记工作日唤醒，再回读计划。macOS 只允许一对重复开关机事件，已有重复计划时先协调。撤销前核对重复计划仍是此次登记的唯一事件，再用 `sudo /usr/bin/pmset repeat cancel` 清除。参见 [Apple 的 Mac 定时唤醒说明](https://support.apple.com/en-mt/guide/mac-help/mchl40376151/27/mac/27)。
+- 首次自然验收时，保持充电、开盖、已登录且联网，确认 Mac 在 09:40 前已唤醒，随后核对启动时刻、任务结果和服务商回执。仅登记唤醒无法证明合盖或电池状态下的实际执行。

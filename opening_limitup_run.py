@@ -61,9 +61,22 @@ def main(argv=None, *, collector=None, stdout=None):
         return emit({"delivery_status": "invalid_date"}, 2)
     if args.send and args.input:
         return emit({"delivery_status": "blocked_offline_input"}, 2)
-    window = now.date().isoformat() == day and time(9, 40) <= now.time().replace(tzinfo=None) < time(9, 41)
-    if (args.send or args.scheduled) and (not window or not is_trading_day(day, args.market_db)):
-        return emit({"delivery_status": "blocked_time_or_calendar", "trade_date": day}, 2 if args.send else 0)
+    scheduled = args.send or args.scheduled
+    if scheduled:
+        blocked_reason = None
+        if now.date().isoformat() != day:
+            blocked_reason = "date_mismatch"
+        elif not time(9, 40) <= now.time().replace(tzinfo=None) < time(9, 41):
+            blocked_reason = "outside_send_window"
+        elif not is_trading_day(day, args.market_db):
+            blocked_reason = "closed_or_unsupported_calendar"
+        if blocked_reason:
+            return emit({
+                "delivery_status": "blocked_time_or_calendar",
+                "trade_date": day,
+                "guard_checked_at": now.isoformat(),
+                "blocked_reason": blocked_reason,
+            }, 2 if args.send else 0)
     if not args.input and not is_trading_day(day, args.market_db):
         return emit({"delivery_status": "skipped_closed_or_unsupported_calendar", "trade_date": day}, 0)
     try:
@@ -73,7 +86,7 @@ def main(argv=None, *, collector=None, stdout=None):
                 raise ValueError("input_date_mismatch")
         else:
             budget = 45.0
-            if args.send or args.scheduled:
+            if scheduled:
                 budget = max(0, min(budget, (now.replace(hour=9, minute=40, second=45, microsecond=0) - now).total_seconds()))
             if budget <= 0:
                 evidence = {"trade_date": day, "issues": ["collection_deadline_passed"]}
@@ -85,6 +98,8 @@ def main(argv=None, *, collector=None, stdout=None):
         response = deliver(evidence, send=args.send, state_root=args.state_dir, market_db=args.market_db, offline=bool(args.input))
     response["offline_replay"] = bool(args.input)
     response["preview_only"] = not args.send
+    if scheduled:
+        response["guard_checked_at"] = now.isoformat()
     if preview:
         preview.mkdir(parents=True, exist_ok=True, mode=0o700)
         _write_preview_text(preview / "evidence.json", json.dumps(evidence, ensure_ascii=False, sort_keys=True, indent=2) + "\n")
