@@ -94,6 +94,16 @@ class IntradayObservationRunTests(unittest.TestCase):
         self.assertEqual(context.input_hash, original_hash)
         self.assertEqual(context.snapshot()["daily_data"]["stocks"][0]["code"], "600001")
 
+    def test_context_hash_reads_the_owned_input_without_copying_it_again(self):
+        from chanlun.intraday_observation_delivery import content_hash
+        value = payload()
+        context = self.context(value)
+        expected = content_hash(value)
+        snapshot = context.snapshot()
+        snapshot["daily_data"]["stocks"][0]["code"] = "WRONG"
+        with mock.patch.object(context, "snapshot", side_effect=AssertionError("extra input copy")):
+            self.assertEqual(context.input_hash, expected)
+
     def test_minute_boundary_rejects_late_or_unfinished_rows(self):
         for interval, end in (("15m", "14:45:00"), ("30m", "14:30:00")):
             value = payload()

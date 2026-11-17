@@ -2306,13 +2306,7 @@ def write_comparison_page(output_dir, top10_api_base, asset_version=None):
     if "__CHANLUN_TOP10_API_BASE__" in html:
         raise ValueError("comparison bootstrap placeholder was not replaced")
     if asset_version:
-        html = html.replace(
-            "../assets/report-v2.css\"",
-            f"../assets/report-v2.css?v={asset_version}\"",
-        ).replace(
-            "../assets/report-v2.js\"",
-            f"../assets/report-v2.js?v={asset_version}\"",
-        )
+        html = replace_report_asset_versions(html, asset_version)
 
     target_path = os.path.join(output_dir, "compare", "index.html")
     os.makedirs(os.path.dirname(target_path), exist_ok=True)

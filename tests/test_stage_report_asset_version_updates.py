@@ -6,7 +6,11 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from chanlun.report_generator import _report_asset_version
+from chanlun.report_generator import (
+    _report_asset_version,
+    refresh_report_asset_versions,
+    write_comparison_page,
+)
 from scripts.stage_report_asset_version_updates import (
     _journal_exclusions,
     stage_report_asset_version_updates,
@@ -32,6 +36,45 @@ class TestStageReportAssetVersionUpdates(unittest.TestCase):
             text=True,
             check=True,
         ).stdout
+
+    def test_generated_comparison_preserves_published_asset_tag_layout(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            docs = root / "docs"
+            api_base = "https://quotes.example.test"
+            old_version = "111111111111"
+            compare = Path(write_comparison_page(docs, api_base, asset_version=old_version))
+            refresh_report_asset_versions(docs, old_version)
+            published = compare.read_text(encoding="utf-8")
+
+            # Match the asset order and indentation of the already-published shell.
+            self.assertIn(
+                f'  <link rel="stylesheet" href="../assets/report-v2.css?v={old_version}">\n'
+                f'<link rel="stylesheet" href="../assets/selection-performance.css?v={old_version}">\n',
+                published,
+            )
+            self.assertIn(
+                f'<script src="../assets/selection-performance.js?v={old_version}" defer></script>\n'
+                f'  <script src="../assets/report-v2.js?v={old_version}" defer></script>\n',
+                published,
+            )
+            self.assertEqual(refresh_report_asset_versions(docs, old_version), [])
+            self._git(root, "init", "-q")
+            self._git(root, "config", "user.name", "Chanlun Test")
+            self._git(root, "config", "user.email", "chanlun-test@example.invalid")
+            self._git(root, "add", "docs")
+            self._git(root, "commit", "-q", "-m", "baseline")
+
+            current_version = _report_asset_version()
+            write_comparison_page(docs, api_base, asset_version=current_version)
+            self.assertEqual(refresh_report_asset_versions(docs, current_version), [])
+            self.assertEqual(
+                compare.read_text(encoding="utf-8"), published.replace(old_version, current_version),
+            )
+            self.assertEqual(
+                stage_report_asset_version_updates(root, docs),
+                (["docs/compare/index.html"], []),
+            )
 
     def test_stages_only_query_changes_and_preserves_dirty_or_deleted_history(self):
         with tempfile.TemporaryDirectory() as tmpdir:

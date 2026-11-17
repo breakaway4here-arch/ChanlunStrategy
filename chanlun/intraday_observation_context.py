@@ -88,7 +88,8 @@ class ObservationContext:
 
     @property
     def input_hash(self):
-        encoded = json.dumps(self.snapshot(), ensure_ascii=False, sort_keys=True,
+        # The constructor owns this copy, and readers receive separate copies.
+        encoded = json.dumps(self._payload, ensure_ascii=False, sort_keys=True,
                              separators=(",", ":"), default=_json_default, allow_nan=False)
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 

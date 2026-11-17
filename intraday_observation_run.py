@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import fcntl
 import json
+import logging
 import math
 import os
 import signal
@@ -22,6 +23,7 @@ from chanlun.intraday_observation_delivery import (
 )
 
 CALCULATION_RESERVE_SECONDS = 30
+_PROGRESS_LOG = logging.getLogger("chanlun.intraday_observation_progress")
 
 
 def _now():
@@ -85,12 +87,27 @@ def _live_acquire(*args, **kwargs):
     return acquire_observation_payload(*args, **kwargs)
 
 
+def _log_phase(phase, elapsed_seconds):
+    if _PROGRESS_LOG.isEnabledFor(logging.INFO):
+        _PROGRESS_LOG.info("observation_phase phase=%s elapsed_seconds=%.6f logged_at=%s",
+            phase, elapsed_seconds, datetime.now(SHANGHAI).isoformat(timespec="milliseconds"))
+
+
 def _evaluate(payload, generated_at):
+    started = elapsed_clock.monotonic()
     from chanlun.intraday_observation_context import ObservationContext
     import run
+    _log_phase("calculation_import", elapsed_clock.monotonic() - started)
+    started = elapsed_clock.monotonic()
     context = ObservationContext(payload)
+    _log_phase("calculation_context", elapsed_clock.monotonic() - started)
+    started = elapsed_clock.monotonic()
     report = run.main(generated_at=generated_at, observation_context=context, render=False)
-    return report, context.snapshot()
+    _log_phase("calculation_strategy", elapsed_clock.monotonic() - started)
+    started = elapsed_clock.monotonic()
+    final_payload = context.snapshot()
+    _log_phase("calculation_final_copy", elapsed_clock.monotonic() - started)
+    return report, final_payload
 
 
 def compute_batch(*, batch_dir, trade_date, formal_market_db, deadline,
@@ -117,18 +134,25 @@ def compute_batch(*, batch_dir, trade_date, formal_market_db, deadline,
         if clock() >= deadline:
             raise TimeoutError("computation deadline")
         frozen_input = batch / "input.json"
-        if frozen_input.exists():
-            payload = json.loads(frozen_input.read_text(encoding="utf-8"))
-        elif input_path is not None:
-            payload = json.loads(Path(input_path).read_text(encoding="utf-8"))
-            freeze_json(frozen_input, payload)
+        already_frozen = frozen_input.exists()
+        if already_frozen or input_path is not None:
+            input_file = frozen_input if already_frozen else Path(input_path)
+            payload = json.loads(input_file.read_text(encoding="utf-8"))
+            _log_phase("input_load", elapsed_clock.monotonic() - phase_started)
         else:
             acquisition_deadline = deadline - timedelta(seconds=CALCULATION_RESERVE_SECONDS)
             if clock() >= acquisition_deadline:
                 raise TimeoutError("observation acquisition reserve reached")
             payload = acquire(formal_market_db, trade_date, deadline=acquisition_deadline,
                               snapshot_dir=batch / "inputs", clock=clock, timings=acquisition_timings)
+            _log_phase("source_acquisition", elapsed_clock.monotonic() - phase_started)
+            for phase in ("collection_wall_seconds", "post_collection_aggregation_seconds"):
+                if phase in acquisition_timings:
+                    _log_phase(phase.removesuffix("_seconds"), acquisition_timings[phase])
+        if not already_frozen:
+            freeze_started = elapsed_clock.monotonic()
             freeze_json(frozen_input, payload)
+            _log_phase("input_freeze", elapsed_clock.monotonic() - freeze_started)
         if not _collection_usable(payload, trade_date):
             raise ValueError("collection coverage or identity unavailable")
         if clock() >= deadline:
@@ -140,16 +164,21 @@ def compute_batch(*, batch_dir, trade_date, formal_market_db, deadline,
         if clock() >= deadline:
             raise TimeoutError("computation deadline")
         phase_seconds[stage] = elapsed_clock.monotonic() - phase_started
+        _log_phase(stage, phase_seconds[stage])
         stage = "output_validation"
         phase_started = elapsed_clock.monotonic()
         # A run must not extend the frozen input with fresh or post-cutoff data.
-        if content_hash(final_payload) != content_hash(payload):
+        final_hash = content_hash(final_payload)
+        if final_hash != content_hash(payload):
             raise ValueError("calculation changed frozen inputs")
         observation = report.get("intraday_observation", {})
-        if observation.get("input_hash") != content_hash(final_payload):
+        if observation.get("input_hash") != final_hash:
             raise ValueError("report input identity mismatch")
+        _log_phase("output_input_hashes", elapsed_clock.monotonic() - phase_started)
         result = build_observation_snapshot(report)
+        freeze_started = elapsed_clock.monotonic()
         freeze_json(batch / "input-final.json", final_payload)
+        _log_phase("final_input_freeze", elapsed_clock.monotonic() - freeze_started)
     except Exception as exc:
         failure_code = "deadline_exceeded" if isinstance(exc, TimeoutError) else stage + "_failed"
         result = build_failure_snapshot(trade_date, cutoff=cutoff, failure_code=failure_code,
@@ -158,6 +187,8 @@ def compute_batch(*, batch_dir, trade_date, formal_market_db, deadline,
             "failure_code": failure_code, "error_type": type(exc).__name__})
     freeze_observation_snapshot(result_path, result)
     phase_seconds[stage] = elapsed_clock.monotonic() - phase_started
+    if result["status"] != "failed":
+        _log_phase(stage, phase_seconds[stage])
     freeze_json(batch / "timings.json", {"schema_version": 1, "trade_date": trade_date,
         "status": result["status"], "phase_seconds": phase_seconds,
         "acquisition": acquisition_timings,
@@ -331,9 +362,21 @@ def main(argv=None):
             parser.error("live worker deadline cannot pass 14:58")
         if compute_deadline > now + timedelta(minutes=13, seconds=1):
             parser.error("worker deadline exceeds finite runtime budget")
-        compute_batch(batch_dir=root / trade_date, trade_date=trade_date,
-                      formal_market_db=args.formal_market_db, deadline=compute_deadline,
-                      input_path=args.input)
+        # StreamHandler flushes each private marker to calculation.log even when
+        # the parent later terminates the worker at its deadline.
+        handler = logging.StreamHandler()
+        previous_level, previous_propagate = _PROGRESS_LOG.level, _PROGRESS_LOG.propagate
+        _PROGRESS_LOG.addHandler(handler)
+        _PROGRESS_LOG.setLevel(logging.INFO)
+        _PROGRESS_LOG.propagate = False
+        try:
+            compute_batch(batch_dir=root / trade_date, trade_date=trade_date,
+                          formal_market_db=args.formal_market_db, deadline=compute_deadline,
+                          input_path=args.input)
+        finally:
+            _PROGRESS_LOG.removeHandler(handler)
+            _PROGRESS_LOG.setLevel(previous_level)
+            _PROGRESS_LOG.propagate = previous_propagate
         return 0
     if args.worker_deadline:
         parser.error("worker deadline is internal only")

@@ -1,7 +1,7 @@
 import copy
 import json
 import io
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 import plistlib
 import tempfile
 import unittest
@@ -108,6 +108,58 @@ class ObservationRunnerTests(unittest.TestCase):
             def bad_evaluate(payload, generated_at):
                 return report_fixture(), payload
             self.assertEqual(self.execute(directory, evaluate=bad_evaluate)['status'], 'failed')
+
+    def test_validates_both_frozen_inputs_and_reuses_final_hash_for_report(self):
+        with tempfile.TemporaryDirectory() as directory, mock.patch.object(
+                runner, 'content_hash', wraps=content_hash) as digest:
+            self.assertEqual(self.execute(directory)['status'], 'empty')
+            self.assertEqual(digest.call_count, 2)
+        with tempfile.TemporaryDirectory() as directory:
+            def changed_final(payload, generated_at):
+                updated = copy.deepcopy(payload)
+                updated['minute_data']['30m'] = {'future': 'not frozen'}
+                return self.evaluate(updated, generated_at)
+
+            result = self.execute(directory, evaluate=changed_final)
+            self.assertEqual(result['failure_code'], 'output_validation_failed')
+            self.assertFalse((Path(directory) / DAY / 'input-final.json').exists())
+
+    def test_worker_phase_log_keeps_completed_steps_when_calculation_fails(self):
+        def stop_calculation(_, generated_at):
+            raise TimeoutError('private value omitted from diagnostics')
+
+        with tempfile.TemporaryDirectory() as directory, self.assertLogs(
+                'chanlun.intraday_observation_progress', level='INFO') as phases:
+            result = self.execute(directory, evaluate=stop_calculation)
+        self.assertEqual(result['failure_code'], 'deadline_exceeded')
+        text = '\n'.join(phases.output)
+        self.assertIn('phase=source_acquisition', text)
+        self.assertIn('phase=input_freeze', text)
+        self.assertIn('elapsed_seconds=', text)
+        self.assertNotIn('phase=calculation', text)
+        self.assertNotIn('private value', text)
+
+    def test_compute_worker_writes_phases_to_stderr_only(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory) / 'intraday-observation'
+            source = Path(directory) / 'input.json'
+            payload = payload_fixture()
+            payload['collection_health']['coverage'] = .5
+            payload['private_fixture'] = 'not-for-stage-log'
+            source.write_text(json.dumps(payload))
+            deadline = NOW.replace(minute=58)
+            with mock.patch.object(runner, '_now', return_value=NOW), redirect_stderr(
+                    io.StringIO()) as errors, redirect_stdout(io.StringIO()) as output:
+                self.assertEqual(runner.main(['--compute-worker', '--root', str(root),
+                    '--formal-market-db', str(Path(directory) / 'formal.sqlite'),
+                    '--date', DAY, '--input', str(source), '--worker-deadline',
+                    deadline.isoformat()]), 0)
+            self.assertEqual(output.getvalue(), '')
+            self.assertIn('phase=input_load', errors.getvalue())
+            self.assertIn('phase=input_freeze', errors.getvalue())
+            self.assertNotIn('not-for-stage-log', errors.getvalue())
+            failure = json.loads((root / DAY / 'failure.json').read_text())
+            self.assertEqual(failure['failure_code'], 'input_acquisition_failed')
 
     def test_exceptions_and_deadline_are_failed_not_empty_and_do_not_leak_details(self):
         with tempfile.TemporaryDirectory() as directory:
