@@ -11,8 +11,11 @@ import hashlib
 import json
 import math
 import os
+import re
+import subprocess
 import tempfile
 import time as elapsed_clock
+from collections import deque
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
@@ -23,6 +26,8 @@ PRICE_KEYS = ("opens", "highs", "lows", "closes")
 ARRAY_KEYS = ("dates",) + PRICE_KEYS + ("volumes", "amounts", "amount_available", "finals")
 MINUTE_COUNT = 656  # 40 complete past sessions plus today's closed buckets.
 MINIMUM_COVERAGE = 0.90
+_PRIORITY_BLOB_LIMIT = 64 * 1024 * 1024
+_PRIORITY_LOOKUP_SECONDS = 2.0
 
 
 def _dt(value):
@@ -64,6 +69,90 @@ def _jsonable(value):
 def _digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, default=_jsonable,
         separators=(",", ":"), allow_nan=False).encode()).hexdigest()
+
+
+def _previous_report_priority(docs_dir, previous, cutoff, timeout):
+    """Resolve the complete prior formal 30m request set from a local Git blob."""
+    if not previous < cutoff.date().isoformat() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", previous):
+        return None
+    docs = Path(docs_dir)
+    if not docs.is_absolute() or docs.name != "docs":
+        return None
+    expires = elapsed_clock.monotonic() + timeout
+
+    def git(*args):
+        remaining = expires - elapsed_clock.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("prior formal report lookup")
+        return subprocess.run(
+            ["/usr/bin/git", "--no-replace-objects", "-C", str(docs.parent), *args],
+            env={**{key: value for key, value in os.environ.items() if not key.startswith("GIT_")},
+                 "GIT_ALLOW_PROTOCOL": ""},
+            timeout=remaining, check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        ).stdout
+
+    try:
+        if not (docs.parent / ".git").exists():
+            return None
+        commit = git("rev-parse", "--verify", "refs/remotes/origin/main^{commit}").decode("ascii").strip()
+        path = f"docs/data/{previous}.json"
+        entry = git("ls-tree", "-l", commit, "--", path)
+        fields, listed_path = entry.rstrip(b"\n").split(b"\t", 1)
+        mode, kind, blob, size = fields.split()
+        if (listed_path != path.encode("ascii") or mode not in (b"100644", b"100755")
+                or kind != b"blob" or not 0 < int(size) <= _PRIORITY_BLOB_LIMIT):
+            return None
+        report = json.loads(git("cat-file", "blob", blob.decode("ascii")))
+        if elapsed_clock.monotonic() >= expires:
+            return None
+        quality = report["data_quality"]
+        health = report["selection_input_health"]
+        formal = health["formal"]
+        minute = health["sublevels"]["30m"]
+        if (report["date"] != previous or quality["report_date"] != previous
+                or quality["is_official"] is not True or quality["is_trading_day"] is not True
+                or quality["bar_state"] != "closed" or health["required_date"] != previous
+                or formal["status"] != "verified" or formal["formal_actions_allowed"] is not True
+                or minute["required_date"] != previous or minute["interval"] != "30m"):
+            return None
+        close = datetime.fromisoformat(previous + "T15:00:00+08:00")
+        as_of, generated = (datetime.fromisoformat(quality[key]) for key in ("as_of", "generated_at"))
+        if (as_of.utcoffset() is None or generated.utcoffset() is None
+                or generated.astimezone(CN).date() != close.date()
+                or not close <= as_of <= generated < cutoff):
+            return None
+        verified, missing = minute["verified_codes"], minute["missing_codes"]
+        if not isinstance(verified, list) or not isinstance(missing, list):
+            return None
+        codes = verified + missing
+        for key, count in (("requested_count", len(codes)), ("verified_count", len(verified)),
+                           ("missing_count", len(missing))):
+            if type(minute[key]) is not int or minute[key] != count:
+                return None
+        if not all(isinstance(code, str) and re.fullmatch(r"[0-9]{6}", code) for code in codes):
+            return None
+        identities = {normalize_identity(code=code, asset_type="stock").key for code in codes}
+        if len(identities) != len(codes):
+            return None
+    except (OSError, ValueError, TypeError, KeyError, RecursionError, subprocess.SubprocessError):
+        return None
+    return identities, commit
+
+
+def _priority_stock_dispatch(candidates, priority):
+    """Advance prior-report stocks, alternating SH/SZ in their canonical order."""
+    by_exchange = {"SH": deque(), "SZ": deque(), "BJ": deque()}
+    rest = []
+    for candidate in candidates:
+        if candidate["identity_key"] in priority:
+            by_exchange[candidate["exchange"]].append(candidate)
+        else:
+            rest.append(candidate)
+    selected = []
+    sh, sz = by_exchange["SH"], by_exchange["SZ"]
+    while sh and sz:
+        selected.extend((sh.popleft(), sz.popleft()))
+    return selected + list(sh) + list(sz) + list(by_exchange["BJ"]) + rest
 
 
 def _freeze_capture(path, value):
@@ -641,7 +730,7 @@ def _minute_row(stock, interval, cutoff):
 
 
 def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snapshot_dir=None,
-        max_workers=20, pair_fetcher=None, clock=None, timings=None):
+        max_workers=20, pair_fetcher=None, clock=None, timings=None, formal_docs_dir=None):
     """Read-only full metadata cohort, then bounded cutoff acquisition/retrieval.
 
     The caller owns the date lock and immutable final payload. Individual source
@@ -704,13 +793,25 @@ def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snaps
                     # The ordinary per-identity reader rejects corrupt input;
                     # it never becomes an eligible transport recovery.
                     continue
+    primary_budget_path = source_dir / "_requests" / "primary.json" if source_dir else None
+    dispatch_stocks = candidates
+    if (formal_docs_dir and not stop.is_set()
+            and (primary_budget_path is None or not primary_budget_path.exists())
+            and (deadline - _dt(clock())).total_seconds() > _PRIORITY_LOOKUP_SECONDS):
+        priority_source = _previous_report_priority(formal_docs_dir, previous, cutoff, _PRIORITY_LOOKUP_SECONDS)
+        if priority_source is not None:
+            priority, commit = priority_source
+            dispatch_stocks = _priority_stock_dispatch(candidates, priority)
+            if timings is not None:
+                timings["dispatch_priority"] = dict(source_commit=commit, source_date=previous,
+                    priority_count=sum(row["identity_key"] in priority for row in candidates))
     phase_reserved_here = {"primary": True, "recovery-1": False}
-    if pair_fetcher is None and source_dir is not None:
+    if pair_fetcher is None and primary_budget_path is not None:
         primary_budget = dict(cutoff=cutoff.isoformat(), previous_trade_date=previous,
             cohort_sha256=_digest(candidates), maximum_requests_per_identity=5,
             identities=sorted(normalize_identity(row).key for row in index_candidates + candidates))
         phase_reserved_here["primary"] = (not stop.is_set() and _reserve_request_phase(
-            source_dir / "_requests" / "primary.json", primary_budget, clock))
+            primary_budget_path, primary_budget, clock))
 
     def source_details(result):
         evidence = result.get("request_evidence") or {}
@@ -804,7 +905,7 @@ def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snaps
                     stocks.append(row)
     try:
         with ThreadPoolExecutor(max_workers=max(1, min(20, int(max_workers)))) as executor:
-            futures = {executor.submit(acquire, row): row for row in index_candidates + candidates}
+            futures = {executor.submit(acquire, row): row for row in index_candidates + dispatch_stocks}
             consume(futures)
             # Foundation gaps cannot be repaired by asking the quote provider
             # again. Recovery has its own finite namespace and no third wave.

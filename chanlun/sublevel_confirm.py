@@ -200,7 +200,7 @@ def _latest_yang_pattern(min30_result):
     return None
 
 
-def classify_30min_confirmation(daily_stock, source_bp, min30_result):
+def classify_30min_confirmation(daily_stock, source_bp, min30_result, *, price_aligner=None):
     """Classify 30min confirmation strength for a daily reference buy point.
 
     Args:
@@ -247,7 +247,7 @@ def classify_30min_confirmation(daily_stock, source_bp, min30_result):
         reasons.append("30分钟底分型+MACD金叉")
 
     # 4. Key level not broken
-    key_level_ok = _check_key_level(daily_stock, source_bp, min30_result)
+    key_level_ok = _check_key_level(daily_stock, source_bp, min30_result, price_aligner=price_aligner)
     if key_level_ok:
         signals.append("关键位不破")
         reasons.append("30分钟回拉不破日线关键位")
@@ -346,7 +346,7 @@ def _check_bottom_fractal_macd(min30_result):
     return False
 
 
-def _check_key_level(daily_stock, source_bp, min30_result):
+def _check_key_level(daily_stock, source_bp, min30_result, *, price_aligner=None):
     """Check if recent 30min lows respect the daily key level for this source_bp type."""
     src_type = source_bp.get("type", "")
     lows_30 = min30_result.lows
@@ -354,7 +354,7 @@ def _check_key_level(daily_stock, source_bp, min30_result):
         return False
 
     recent_low = float(np.min(lows_30[-RECENT_30MIN_BARS:]))
-    recent_low = align_intraday_price(
+    recent_low = (price_aligner or align_intraday_price)(
         recent_low, daily_stock, min30_result
     )
     if recent_low is None:

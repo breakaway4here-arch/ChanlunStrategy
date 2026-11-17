@@ -645,6 +645,7 @@ def run_scheduled_preclose(
     skip_publish=False,
     notify=None,
     deadline_seconds=MAX_PRE_CLOSE_RUNTIME_SECONDS,
+    observation_capture_root=None,
 ):
     """Acquire, freeze, publish and optionally notify within one total budget."""
 
@@ -771,6 +772,14 @@ def run_scheduled_preclose(
                             initial_budget - max(0.0, float(monotonic()) - started_at),
                             _scheduled_wall_budget(now()),
                         ) - DELIVERY_RESERVE_SECONDS)
+                    if observation_capture_root is None:
+                        try:
+                            observation_capture_root = load_preclose_env(env_file).get(
+                                "PRECLOSE_OBSERVATION_CAPTURE_ROOT")
+                        except (OSError, ValueError):
+                            # The optional archive must not change whether
+                            # normal acquisition can start without this path.
+                            observation_capture_root = None
                     runtime_kwargs = {'formal_market_db': formal_market_db}
                     signature_target = getattr(runtime_builder, 'side_effect', None)
                     if not callable(signature_target):
@@ -781,6 +790,10 @@ def run_scheduled_preclose(
                     for name, value in (('clock', now), ('monotonic', monotonic)):
                         if name in parameters or any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()):
                             runtime_kwargs[name] = value
+                    if observation_capture_root and ('observation_capture_root' in parameters or any(
+                        p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values()
+                    )):
+                        runtime_kwargs['observation_capture_root'] = observation_capture_root
                     market_inputs = runtime_builder(
                         trade_date,
                         as_of,
@@ -843,6 +856,7 @@ def run_scheduled_preclose(
                 min(MAX_PRE_CLOSE_RUNTIME_SECONDS, strategy_remaining),
             ),
             monotonic=monotonic,
+            allow_observation_basis=bool(observation_capture_root),
         )
 
         def deadline_runner(stage, error_type):
@@ -1125,6 +1139,7 @@ def _arguments(argv=None):
         default="~/.config/chanlun-strategy/preclose.env",
         help="dedicated 0600 pre-close credentials file",
     )
+    parser.add_argument("--observation-capture-root", help="explicit local read-only observation archive root")
     parser.add_argument(
         "--notify",
         action="store_true",
@@ -1176,6 +1191,7 @@ def main(argv=None):
             skip_publish=args.skip_publish,
             notify=True if args.notify else None,
             deadline_seconds=args.deadline_seconds,
+            observation_capture_root=args.observation_capture_root,
         )
         print(json.dumps({
             key: result.get(key)
@@ -1193,6 +1209,8 @@ def main(argv=None):
         return int(result.get("exit_code") or 0)
     if not args.input or not args.source_sha:
         raise SystemExit("--input and --source-sha are required outside --scheduled")
+    if args.observation_capture_root:
+        raise SystemExit("--observation-capture-root requires --scheduled")
     input_path = Path(args.input).expanduser().resolve()
     market_inputs = json.loads(input_path.read_text(encoding="utf-8"))
     now = datetime.now(PRE_CLOSE_TIMEZONE).isoformat(timespec="seconds")

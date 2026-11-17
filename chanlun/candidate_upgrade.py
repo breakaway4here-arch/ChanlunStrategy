@@ -14,7 +14,7 @@ from .sublevel_confirm import classify_30min_confirmation
 
 
 def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pure",
-                                       requested_codes=None, failure_evidence=None):
+                                       requested_codes=None, failure_evidence=None, *, price_aligner=None):
     """Upgrade daily reference signals using 30min confirmation.
 
     Args:
@@ -145,7 +145,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                         continue
 
             # Risk guard before confirmation
-            risk = _upgrade_risk_status(stock, bp, min30_result)
+            risk = _upgrade_risk_status(stock, bp, min30_result, price_aligner=price_aligner)
             if risk != 'passed':
                 reference_buy_points.append(bp)
                 diag["dropped_risk_guard"] += 1
@@ -153,7 +153,7 @@ def upgrade_daily_candidates_with_30min(daily_pool, chan_results_30min, mode="pu
                        else 'request_failed' if risk == 'daily_data_missing' else 'risk_rejected', risk)
                 continue
 
-            confirmation = classify_30min_confirmation(stock, bp, min30_result)
+            confirmation = classify_30min_confirmation(stock, bp, min30_result, price_aligner=price_aligner)
             if confirmation["confirmed"] and confirmation["level"] in ("强", "中"):
                 candidate = {
                     **bp,
@@ -263,7 +263,7 @@ def _passes_upgrade_risk_guard(stock, source_bp, min30_result):
     return _upgrade_risk_status(stock, source_bp, min30_result) == 'passed'
 
 
-def _upgrade_risk_status(stock, source_bp, min30_result):
+def _upgrade_risk_status(stock, source_bp, min30_result, *, price_aligner=None):
     closes = stock.get("closes")
     if closes is None or len(closes) == 0:
         return 'daily_data_missing'
@@ -275,7 +275,7 @@ def _upgrade_risk_status(stock, source_bp, min30_result):
     lows_30 = min30_result.lows
     if source_price > 0 and lows_30 is not None and len(lows_30) >= 8:
         recent_low = float(np.min(lows_30[-8:]))
-        recent_low = align_intraday_price(
+        recent_low = (price_aligner or align_intraday_price)(
             recent_low, stock, min30_result
         )
         if recent_low is None:

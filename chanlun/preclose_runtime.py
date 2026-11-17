@@ -5,8 +5,10 @@ from __future__ import annotations
 import math
 import inspect
 import sqlite3
+import time
 from collections import Counter, defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote as url_quote
@@ -30,7 +32,7 @@ from .preclose_data import MARKET_INDICES, fetch_target_30m_snapshots
 from .preclose_pipeline import PreclosePipelineComponents
 from .preclose_schedule import normalize_preclose_datetime
 from .quote_sources import QuoteAcquisitionDeadline
-from .price_basis import adjustment_factor, scale_price
+from .price_basis import adjustment_factor, basis_sha256, scale_price
 from .right_side_startup import (
     resolve_right_side_startup_mode,
     select_classic_startup_inputs,
@@ -52,6 +54,12 @@ _VOLUME_METADATA_KEYS = (
 _AMOUNT_METADATA_KEYS = (
     ("amount_units", "amount_unit", "unknown"),
     ("amount_sources", "amount_source", ""),
+)
+_RAW_QUOTE_BASIS_FIELDS = (
+    "code", "exchange", "asset_type", "quote_source", "quote_status", "quote_asof",
+    "open", "high", "low", "current_price", "prev_close", "volume", "amount",
+    "volume_unit", "volume_raw_unit", "volume_source", "amount_unit", "amount_source",
+    "amount_available",
 )
 
 
@@ -357,6 +365,15 @@ def _append_intraday_quote_with_reason(candidate, quote, trade_date, as_of):
             "raw_current_price": values["current_price"],
         },
     })
+    historical_basis = candidate.get("price_basis")
+    reference = historical_basis.get("canonical_daily") if isinstance(historical_basis, dict) else None
+    if isinstance(reference, dict):
+        row["price_basis"]["canonical_daily"] = deepcopy(reference)
+        if quote.get("quote_status") == "valid" and all(key in quote for key in _RAW_QUOTE_BASIS_FIELDS):
+            row["price_basis"]["intraday_quote"] = {
+                "raw": {key: quote[key] for key in _RAW_QUOTE_BASIS_FIELDS},
+                "known_at": str(as_of),
+            }
     if risk["risk_status"] == "conflict":
         return None, "risk_evidence_conflict"
     if risk["is_st"] is True or risk["delisting_risk"] is True:
@@ -699,6 +716,56 @@ class PrecloseInputError(RuntimeError):
         self.daily_splice = daily_splice or {}
 
 
+def _retain_consumed_daily_basis(daily, min30, trade_date, history_known_at):
+    """Freeze only prior references used by available minute windows."""
+    for stock in daily:
+        basis = stock["price_basis"]
+        reference = basis.pop("canonical_daily", None)
+        minutes = min30.get(stock["code"], {}).get("klines", {})
+        if not reference or not minutes:
+            continue
+        by_date = reference.get("by_date")
+        if not isinstance(by_date, dict) or basis_sha256(by_date) != reference.get("sha256"):
+            continue
+        dates = sorted({stamp[:10] for stamp in minutes.get("dates", []) if stamp[:10] < trade_date})
+        consumed = {date: by_date[date] for date in dates if date in by_date}
+        basis["canonical_daily"] = dict(reference, by_date=consumed, sha256=basis_sha256(consumed))
+        if history_known_at:
+            basis["historical_known_at"] = history_known_at
+
+
+def _read_observation_fallback(root, formal_market_db, trade_date, as_of, previous,
+                               targets, min30, budget_remaining, clock, monotonic):
+    from .intraday_observation_data import _calendar_reader
+    from .preclose_observation_basis import apply_observation_fallback
+
+    root = Path(root).expanduser()
+    if not root.is_absolute() or not previous:
+        return {"target_count": len(targets), "reason": "invalid_configuration_or_previous_date"}
+    if clock is None:
+        return {"target_count": len(targets), "reason": "live_clock_unavailable"}
+    monotonic = monotonic or time.monotonic
+    # This additional local, optional work may use at most ten seconds and
+    # never more than a tenth of the remaining shared acquisition/computation budget.
+    available = 10.0 if budget_remaining is None else min(10.0, max(0.0, budget_remaining()) / 10)
+    until = monotonic() + available
+
+    def remaining():
+        phase = until - monotonic()
+        return phase if budget_remaining is None else min(phase, budget_remaining())
+
+    if remaining() <= 0:
+        return {"target_count": len(targets), "reason": "budget_exhausted"}
+    try:
+        with MarketHistoryStore(formal_market_db, readonly=True) as store:
+            calendar_check = _calendar_reader(store)
+    except (OSError, sqlite3.Error):
+        return {"target_count": len(targets), "reason": "calendar_unavailable"}
+    return apply_observation_fallback(min30, targets, capture_dir=root / trade_date / "inputs",
+        as_of=as_of, previous=previous, calendar_check=calendar_check,
+        budget_remaining=remaining, clock=clock)
+
+
 def build_scheduled_preclose_input(
     trade_date,
     as_of,
@@ -713,6 +780,7 @@ def build_scheduled_preclose_input(
     repair_budget_remaining=None,
     clock=None,
     monotonic=None,
+    observation_capture_root=None,
 ):
     """Build one complete input using only batch quotes and read-only history."""
 
@@ -743,6 +811,8 @@ def build_scheduled_preclose_input(
         loader_kwargs['repair_as_of'] = as_of
     universe, universe_diagnostics = universe_loader(
         formal_market_db, str(trade_date), **loader_kwargs)
+    historical_known_at = (normalize_preclose_datetime(clock()).isoformat()
+                           if observation_capture_root and clock is not None else None)
     quotes, quote_diagnostics = quote_fetcher()
     quotes = list(quotes or [])
     quote_diagnostics = (
@@ -844,6 +914,7 @@ def build_scheduled_preclose_input(
         })
         current_turnover += values["amount"]
     turnover_history = turnover_loader(formal_market_db, str(trade_date))
+    _retain_consumed_daily_basis(daily, min30, str(trade_date),historical_known_at)
     input_payload = {
         "schema_version": "preclose-input-v1",
         "mode": "preclose_advisory",
@@ -880,4 +951,9 @@ def build_scheduled_preclose_input(
             },
         },
     }
+    if observation_capture_root:
+        input_payload["runtime_diagnostics"]["observation_basis"] = _read_observation_fallback(
+            observation_capture_root, formal_market_db, str(trade_date), as_of,
+            universe_diagnostics.get("previous_market_date"), targets, min30,
+            repair_budget_remaining, clock, monotonic)
     return input_payload

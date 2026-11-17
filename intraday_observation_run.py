@@ -24,6 +24,7 @@ from chanlun.intraday_observation_delivery import (
 
 CALCULATION_RESERVE_SECONDS = 30
 _PROGRESS_LOG = logging.getLogger("chanlun.intraday_observation_progress")
+_FORMAL_DOCS_ENV = "CHANLUN_OBSERVATION_FORMAL_DOCS_DIR"
 
 
 def _now():
@@ -84,7 +85,8 @@ def _collection_usable(payload, trade_date):
 
 def _live_acquire(*args, **kwargs):
     from chanlun.intraday_observation_data import acquire_observation_payload
-    return acquire_observation_payload(*args, **kwargs)
+    return acquire_observation_payload(
+        *args, formal_docs_dir=os.environ.get(_FORMAL_DOCS_ENV), **kwargs)
 
 
 def _log_phase(phase, elapsed_seconds):
@@ -227,6 +229,17 @@ def _run_worker(args, batch, trade_date, deadline):
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env["KLINE_CACHE_ROOT"] = str(batch / "isolated-cache")
     env["CHANLUN_MARKET_HISTORY_DB_PATH"] = str(Path(args.formal_market_db).expanduser().resolve())
+    remaining = (deadline - _now()).total_seconds()
+    if remaining <= 0:
+        return _record_worker_failure(batch, trade_date, "deadline_exceeded")
+    if not args.input and not env.get(_FORMAL_DOCS_ENV) and getattr(args, "env_file", None):
+        from chanlun.preclose_notify import load_preclose_env
+        try:
+            docs_dir = load_preclose_env(args.env_file).get(_FORMAL_DOCS_ENV)
+            if docs_dir:
+                env[_FORMAL_DOCS_ENV] = docs_dir
+        except (OSError, ValueError):
+            pass
     remaining = (deadline - _now()).total_seconds()
     if remaining <= 0:
         return _record_worker_failure(batch, trade_date, "deadline_exceeded")

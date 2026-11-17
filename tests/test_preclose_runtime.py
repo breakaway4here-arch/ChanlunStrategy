@@ -368,6 +368,43 @@ class PrecloseRuntimeTests(unittest.TestCase):
         self.assertEqual(row["volume_unit"], "hands")
         self.assertEqual(row["amount_available"], True)
 
+    def test_basis_candidate_keeps_original_history_and_intraday_quote_separate(self):
+        from chanlun.price_basis import canonical_daily_reference
+
+        history = _history("300900", "广联航空", 3.81)
+        identity = {"asset_type": "stock", "exchange": "SZ", "code": "300900"}
+        history.update(identity)
+        previous = history["klines"]["dates"][-1]
+        history["klines"]["adjustment"] = "qfq"
+        previous_row = {
+            key: history["klines"][key + "s"][-1]
+            for key in ("open", "high", "low", "close")
+        }
+        reference = canonical_daily_reference(identity, [{
+            **previous_row, "ts": previous, "adjustment": "qfq",
+            "source_batch": "verified_daily_archive", "is_final": True,
+        }])
+        history["price_basis"] = {"canonical_daily": reference}
+        quote = dict(identity, quote_source="eastmoney", quote_status="valid",
+                     quote_asof="2026-08-28T14:46:58+08:00", prev_close=10.0,
+                     open=9.8, high=10.3, low=9.6, current_price=10.1,
+                     volume=20000, amount=20000000, volume_unit="hands",
+                     volume_raw_unit="hands", volume_source="eastmoney",
+                     amount_available=True, amount_unit="CNY", amount_source="eastmoney")
+
+        row, reason = _append_intraday_quote_with_reason(
+            history, quote, TRADE_DATE, AS_OF
+        )
+
+        self.assertEqual(reason, "")
+        self.assertEqual(row["price_basis"].get("canonical_daily"), reference)
+        self.assertIsNot(row["price_basis"]["canonical_daily"]["by_date"], reference["by_date"])
+        self.assertNotIn(TRADE_DATE, row["price_basis"]["canonical_daily"]["by_date"])
+        self.assertEqual(row["price_basis"]["intraday_quote"]["raw"], quote)
+        self.assertEqual(row["price_basis"]["intraday_quote"]["known_at"], AS_OF)
+        self.assertFalse(row["is_final"])
+        self.assertFalse(row["klines"]["finals"][-1])
+
     def test_default_daily_target_selector_accepts_json_lists(self):
         rows = [_history("300998", "宁波方正", 10.0)]
         rows[0].update({

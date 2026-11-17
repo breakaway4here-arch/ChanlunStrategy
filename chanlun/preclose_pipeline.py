@@ -23,11 +23,14 @@ from .market_history_store import quote_stock_risk
 from .next_day_boom import build_next_day_boom_candidates
 from .preclose_contract import build_preclose_snapshot
 from .preclose_data import MARKET_INDICES
+from .preclose_observation_basis import (
+    FALLBACK_KEY, analyzer_window_matches, comparison_daily_matches, verified_fallback_kline,
+)
 from .preclose_schedule import (
     MAX_PRE_CLOSE_RUNTIME_SECONDS, PRE_CLOSE_CUTOFF_TIME,
     normalize_preclose_datetime,
 )
-from .price_basis import scale_price
+from .price_basis import align_intraday_price, scale_price
 from .scorer import apply_scores
 from .strategy_identity import PRE_CLOSE_STRATEGY_VERSION
 from .signal_recency import filter_recent_picks, filter_recent_watchlist
@@ -107,6 +110,7 @@ class PreclosePipelineConfig:
     run_id: str
     deadline_seconds: float = MAX_PRE_CLOSE_RUNTIME_SECONDS
     monotonic: object = time.monotonic
+    allow_observation_basis: bool = False
 
     def __post_init__(self):
         trade_date = _canonical_date(self.trade_date)
@@ -299,60 +303,90 @@ def _min30_unavailable_details(market_inputs, unavailable):
     return details
 
 
-def _analyze_30m_inputs(market_inputs, rows_by_code, components):
-    results = []
-    unavailable = []
+def _attach_30m_evidence(result, kline, evidence, market_inputs):
+    for key in (
+        "volume_units", "volume_raw_units", "volume_sources",
+        "volume_unit", "volume_raw_unit", "volume_source",
+        "amount_available", "amount_units", "amount_sources",
+        "amount_unit", "amount_source",
+        "is_final", "source_batches", "adjustment", "minute_to_daily",
+    ):
+        if key in kline:
+            setattr(result, key, kline[key])
+    result.strategy_input_evidence = {
+        "interval": "30m",
+        "status": "intraday_available",
+        "latest_date": str(evidence.get("latest_date") or ""),
+        "latest_ts": str(evidence.get("latest_ts") or ""),
+        "stale": False,
+        "is_final": False,
+        "bar_state": "intraday",
+        "as_of": str(evidence.get("as_of") or market_inputs.get("as_of") or ""),
+        "bars": int(evidence.get("bars") or len(kline.get("dates") or [])),
+        "source": str(kline.get("source") or ""),
+        "adjustment": str(kline.get("adjustment") or ""),
+        "minute_to_daily": dict(kline.get("minute_to_daily") or {
+            "schema_version": 1, "status": "pending", "reason": "preclose_basis_unverified"}),
+    }
+
+
+def _analyze_30m_inputs(market_inputs, rows_by_code, components, config):
+    results, unavailable = [], []
+    paired_results, rejected_pairs = {}, {}
     requested = [str(code) for code in (market_inputs.get("target_codes") or [])]
     by_code = market_inputs.get("min30")
     by_code = by_code if isinstance(by_code, dict) else {}
     for code in requested:
         evidence = by_code.get(code)
         evidence = evidence if isinstance(evidence, dict) else {}
-        if evidence.get("status") != "available" or not isinstance(
-            evidence.get("klines"), dict
-        ):
+        kline = evidence.get("klines")
+        if evidence.get("status") != "available" or not isinstance(kline, dict):
             unavailable.append(code)
             continue
         row = rows_by_code.get(code, {})
+        name = str(row.get("name") or "")
         try:
-            result = _analyze_kline(
-                components.analyze,
-                code,
-                str(row.get("name") or ""),
-                evidence["klines"],
-            )
+            result = _analyze_kline(components.analyze,code,name,kline)
         except Exception:
-            unavailable.append(code)
-            continue
+            result = None
         if result is None:
             unavailable.append(code)
             continue
-        for key in (
-            "volume_units", "volume_raw_units", "volume_sources",
-            "volume_unit", "volume_raw_unit", "volume_source",
-            "amount_available", "amount_units", "amount_sources",
-            "amount_unit", "amount_source",
-            "is_final", "source_batches", "adjustment", "minute_to_daily",
-        ):
-            if key in evidence["klines"]:
-                setattr(result, key, evidence["klines"][key])
-        setattr(result, "strategy_input_evidence", {
-            "interval": "30m",
-            "status": "intraday_available",
-            "latest_date": str(evidence.get("latest_date") or ""),
-            "latest_ts": str(evidence.get("latest_ts") or ""),
-            "stale": False,
-            "is_final": False,
-            "bar_state": "intraday",
-            "as_of": str(evidence.get("as_of") or market_inputs.get("as_of") or ""),
-            "bars": int(evidence.get("bars") or len(evidence["klines"].get("dates") or [])),
-            "source": str(evidence["klines"].get("source") or ""),
-            "adjustment": str(evidence["klines"].get("adjustment") or ""),
-            "minute_to_daily": dict(evidence['klines'].get('minute_to_daily') or {
-                'schema_version': 1, 'status': 'pending', 'reason': 'preclose_basis_unverified'}),
-        })
+        _attach_30m_evidence(result,kline,evidence,market_inputs)
         results.append(result)
-    return results, unavailable
+
+        pair = evidence.get(FALLBACK_KEY) if config.allow_observation_basis else None
+        if pair is None:
+            continue
+        fallback = verified_fallback_kline(row,evidence,pair,config.as_of,config.generated_at)
+        if fallback is None:
+            rejected_pairs[code] = "consumer_receipt_mismatch"
+            continue
+        try:
+            paired = _analyze_kline(components.analyze,code,name,fallback)
+            if paired is not None and analyzer_window_matches(paired,fallback):
+                _attach_30m_evidence(paired,fallback,evidence,market_inputs)
+                paired_results[code] = (paired,row)
+                continue
+        except Exception:
+            pass
+        rejected_pairs[code] = "consumer_window_mismatch"
+    return results, unavailable, paired_results, rejected_pairs
+
+
+def _observation_price_aligner(paired_results):
+    def align(value, daily, minute):
+        selected = paired_results.get(str(getattr(minute,"code","")))
+        if selected is None or minute is not selected[0]:
+            return align_intraday_price(value,daily,minute)
+        try:
+            price = _finite(value)
+            if price is not None and price > 0 and comparison_daily_matches(daily,selected[1]):
+                return price
+        except (KeyError, TypeError, ValueError):
+            pass
+        return None
+    return align
 
 
 def _sector_stocks(rows_by_code):
@@ -509,9 +543,19 @@ def _finish_main_state(
     sh_closes,
     components,
     sector_rank_map=None,
+    paired_results=None,
 ):
+    # Strong/startup and right-side consumers still use the original minute
+    # scale. Only the classic comparisons below understand this receipt.
+    classic_minutes, upgrade_kwargs = min30_results, {}
+    if paired_results:
+        classic_minutes = [
+            paired_results[result.code][0] if result.code in paired_results else result
+            for result in min30_results
+        ]
+        upgrade_kwargs["price_aligner"] = _observation_price_aligner(paired_results)
     pure_confirmed, upgrade_diagnostics = components.upgrade_daily_candidates(
-        copy.deepcopy(daily_state["pure_pool"]), min30_results, mode="pure"
+        copy.deepcopy(daily_state["pure_pool"]), classic_minutes, mode="pure", **upgrade_kwargs
     )
     startup_candidates, startup_waiting, startup_upgrade_diagnostics = (
         components.upgrade_strong_startup(
@@ -1269,8 +1313,8 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
         )
 
         def min30_operation():
-            min30_results, unavailable = _analyze_30m_inputs(
-                market_inputs, daily_state["rows_by_code"], components
+            min30_results, unavailable, paired_results, rejected_pairs = _analyze_30m_inputs(
+                market_inputs, daily_state["rows_by_code"], components, config
             )
             requested_count = len(market_inputs.get("target_codes") or [])
             available_count = len(min30_results)
@@ -1288,6 +1332,17 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
             )
             if unavailable_details:
                 min30_diagnostics["unavailable_details"] = unavailable_details
+            if config.allow_observation_basis:
+                min30_diagnostics["observation_basis"] = {
+                    "selected_codes":list(paired_results), "consumer_rejected":rejected_pairs,
+                    "classic_only":True,
+                    "receipt_by_code":{
+                        code: {"source": result.strategy_input_evidence["source"],
+                               "last_bucket": result.strategy_input_evidence["latest_ts"],
+                               "sha256": result.strategy_input_evidence["minute_to_daily"]["sha256"]}
+                        for code,(result,_) in paired_results.items()
+                    },
+                }
             diagnostics["min30"] = min30_diagnostics
             diagnostics["input_health"]["min30"] = {
                 "status": (
@@ -1310,6 +1365,7 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
                 daily_state["sector_stocks"],
                 _shanghai_closes(market_inputs),
                 components,
+                paired_results=paired_results,
                 sector_rank_map=(
                     list(
                         ((market_inputs.get("market") or {}).get("sectors"))
