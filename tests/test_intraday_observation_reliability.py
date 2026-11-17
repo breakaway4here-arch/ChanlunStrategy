@@ -3,7 +3,7 @@ import json
 import tempfile
 import threading
 import unittest
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -52,12 +52,33 @@ class CaptureReliabilityTests(unittest.TestCase):
         return db
 
     def fetch(self, session, **kwargs):
+        kwargs.setdefault("clock", lambda: NOW)
         return data.fetch_eastmoney_cutoff_pair(IDENTITY, cutoff=CUTOFF,
             previous_trade_date="2026-10-12", session=session,
-            deadline=DEADLINE, clock=lambda: NOW, **kwargs)
+            deadline=DEADLINE, **kwargs)
+
+    def test_each_success_records_timing_without_advancing_business_clock(self):
+        class Session:
+            def get(self, url, **kwargs):
+                return FakeResponse(kwargs["params"])
+        clock = mock.Mock(return_value=NOW)
+        attempts = []
+        monotonic_values = [i * 250_000_000 for i in range(8)]
+        with mock.patch.object(data.elapsed_clock, "monotonic_ns", side_effect=monotonic_values):
+            pair = self.fetch(Session(), clock=clock, request_attempts=attempts)
+
+        self.assertEqual(clock.call_count, 13)
+        self.assertEqual(pair["request_count"], 4)
+        self.assertNotIn("request_attempts", pair)
+        self.assertEqual(attempts, [
+            {"interval": interval, "adjustment": adjustment, "attempt": 1,
+             "started_at": NOW.isoformat(), "finished_at": (NOW + timedelta(seconds=.25)).isoformat(),
+             "elapsed_seconds": .25, "http_status": 200}
+            for interval, adjustment in (("15", "raw"), ("15", "qfq"), ("101", "raw"), ("101", "qfq"))
+        ])
 
     def test_one_transient_disconnect_recovers_without_restarting_other_endpoints(self):
-        calls = []
+        calls, attempts = [], []
         class Session:
             def get(self, url, **kwargs):
                 calls.append(kwargs["params"].copy())
@@ -65,12 +86,18 @@ class CaptureReliabilityTests(unittest.TestCase):
                     raise requests.ConnectionError("remote closed before response")
                 return FakeResponse(kwargs["params"])
         try:
-            pair = self.fetch(Session())
+            pair = self.fetch(Session(), request_attempts=attempts)
         except requests.ConnectionError:
             self.fail("one transient disconnect must get one bounded retry")
         self.assertEqual(len(calls), 5)
         self.assertEqual(calls[0], calls[1])
         self.assertEqual([e["attempts"] for e in pair["source_evidence"]], [2, 1, 1, 1])
+        self.assertEqual(len(attempts), 5)
+        self.assertEqual([attempt["attempt"] for attempt in attempts], [1, 2, 1, 1, 1])
+        self.assertEqual(attempts[0]["error_type"], "ConnectionError")
+        self.assertNotIn("http_status", attempts[0])
+        self.assertNotIn("remote closed", json.dumps(attempts))
+        self.assertEqual([attempt["http_status"] for attempt in attempts[1:]], [200] * 4)
 
     def test_retry_allowance_is_once_per_identity_not_once_per_endpoint(self):
         calls = []
@@ -80,9 +107,14 @@ class CaptureReliabilityTests(unittest.TestCase):
                 if len(calls) in (1, 3):
                     raise requests.ConnectionError("remote closed")
                 return FakeResponse(kwargs["params"])
-        with self.assertRaises(requests.ConnectionError):
+        with self.assertRaises(requests.ConnectionError) as failure:
             self.fetch(Session())
         self.assertEqual(len(calls), 3)
+        attempts = failure.exception.observation_request_evidence["request_attempts"]
+        self.assertEqual([(item["interval"], item["adjustment"], item["attempt"]) for item in attempts],
+                         [("15", "raw", 1), ("15", "raw", 2), ("15", "qfq", 1)])
+        self.assertEqual([item.get("error_type") for item in attempts],
+                         ["ConnectionError", None, "ConnectionError"])
 
     def test_certificate_http_and_parse_errors_are_not_retried(self):
         for failure in (requests.exceptions.SSLError("certificate verify failed"),
@@ -98,9 +130,16 @@ class CaptureReliabilityTests(unittest.TestCase):
                         if failure == "wrong_identity":
                             response.json = lambda: {"data": {"code": "000001", "market": 1}}
                         return response
-                with self.assertRaises((requests.exceptions.SSLError, ValueError, data.SourceRateLimited)):
-                    self.fetch(Session())
+                stop = threading.Event()
+                with self.assertRaises((requests.exceptions.SSLError, ValueError, data.SourceRateLimited)) as rejected:
+                    self.fetch(Session(), stop_event=stop)
                 self.assertEqual(len(calls), 1)
+                self.assertEqual(stop.is_set(), failure in (429, 456))
+                attempt, = rejected.exception.observation_request_evidence["request_attempts"]
+                if isinstance(failure, Exception):
+                    self.assertEqual(attempt["error_type"], type(failure).__name__)
+                else:
+                    self.assertEqual(attempt["http_status"], 200 if failure == "wrong_identity" else failure)
 
     def test_disconnect_at_deadline_does_not_issue_retry(self):
         current = [NOW]
@@ -110,11 +149,28 @@ class CaptureReliabilityTests(unittest.TestCase):
                 calls.append(kwargs)
                 current[0] = DEADLINE
                 raise requests.ConnectionError("remote closed")
-        with self.assertRaises((requests.ConnectionError, TimeoutError)):
+        with self.assertRaises((requests.ConnectionError, TimeoutError)) as failure:
             data.fetch_eastmoney_cutoff_pair(IDENTITY, cutoff=CUTOFF,
                 previous_trade_date="2026-10-12", session=Session(),
                 deadline=DEADLINE, clock=lambda: current[0])
         self.assertEqual(len(calls), 1)
+        evidence = failure.exception.observation_request_evidence
+        attempt, = evidence["request_attempts"]
+        self.assertEqual(attempt["error_type"], "ConnectionError")
+        self.assertFalse(evidence["retryable_transport_failure"])
+
+    def test_response_past_deadline_is_recorded_but_no_pair_is_used(self):
+        current, calls = [NOW], []
+        class Session:
+            def get(self, url, **kwargs):
+                calls.append(kwargs)
+                current[0] = DEADLINE + timedelta(microseconds=1)
+                return FakeResponse(kwargs["params"])
+        with self.assertRaisesRegex(TimeoutError, "observation_acquisition_deadline") as failure:
+            self.fetch(Session(), clock=lambda: current[0])
+        self.assertEqual(len(calls), 1)
+        attempt, = failure.exception.observation_request_evidence["request_attempts"]
+        self.assertEqual(attempt["http_status"], 200)
 
     def test_capture_write_is_byte_equivalent_immutable_and_never_partial(self):
         self.assertTrue(hasattr(data, "_freeze_capture"), "capture needs an atomic create-once writer")
@@ -154,9 +210,24 @@ class CaptureReliabilityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             db = self.make_market_db(directory)
             before = db.read_bytes()
+            source = Path(directory) / "inputs"
             with mock.patch("requests.Session", Session), mock.patch.object(data, "INDEX_NAMES", {"上证指数": "000001"}):
                 payload = data.acquire_observation_payload(db, "2026-10-13", deadline=DEADLINE,
-                    clock=lambda: NOW, snapshot_dir=Path(directory) / "inputs", max_workers=1)
+                    clock=lambda: NOW, snapshot_dir=source, max_workers=1)
+            for path in source.glob("*.json"):
+                legacy = json.loads(path.read_text())
+                attempts = legacy["result"].pop("request_evidence")["request_attempts"]
+                self.assertEqual([attempt["http_status"] for attempt in attempts], [200] * 4)
+                self.assertEqual(legacy["result"]["pair"]["request_count"], len(attempts))
+                legacy["sha256"] = data._digest(legacy["result"])
+                path.write_text(json.dumps(legacy))
+            legacy_bytes = {p.name: p.read_bytes() for p in source.glob("*.json")}
+            with mock.patch("requests.Session", side_effect=AssertionError("capture replay requested HTTP")), \
+                    mock.patch.object(data, "INDEX_NAMES", {"上证指数": "000001"}):
+                replay = data.acquire_observation_payload(db, "2026-10-13", deadline=DEADLINE,
+                    clock=lambda: NOW, snapshot_dir=source, max_workers=1)
+            self.assertEqual(replay, payload)
+            self.assertEqual(legacy_bytes, {p.name: p.read_bytes() for p in source.glob("*.json")})
             self.assertEqual(payload["collection_health"]["acquired"], 2)
             self.assertEqual(len(sessions), 1)
             self.assertEqual(len(sessions[0].calls), 12)
@@ -193,6 +264,8 @@ class CaptureReliabilityTests(unittest.TestCase):
                 evidence = json.loads(material)["result"]["request_evidence"]
                 self.assertEqual(evidence["request_count"], 2)
                 self.assertEqual(len(evidence["failures"]), 2)
+                self.assertEqual([attempt["error_type"] for attempt in evidence["request_attempts"]],
+                                 ["ConnectionError", "ConnectionError"])
             self.assertTrue(all(s.closed for s in sessions))
 
     def test_session_close_error_does_not_skip_other_worker_sessions(self):

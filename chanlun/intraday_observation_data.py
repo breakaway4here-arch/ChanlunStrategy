@@ -232,8 +232,9 @@ class SourceDispatchUncertain(RuntimeError):
 
 
 def fetch_eastmoney_cutoff_pair(identity, *, cutoff, previous_trade_date, deadline,
-        session=None, count=MINUTE_COUNT, timeout=5.0, clock=None, stop_event=None):
-    """Four logical requests and at most one transient retry per identity."""
+        session=None, count=MINUTE_COUNT, timeout=5.0, clock=None, stop_event=None,
+        request_attempts=None):
+    """Fetch the four-part pair; collect attempt timing separately from the pair."""
     import requests
     identity = normalize_identity(identity)
     cutoff = _cutoff(cutoff)
@@ -253,6 +254,18 @@ def fetch_eastmoney_cutoff_pair(identity, *, cutoff, previous_trade_date, deadli
     pair = {"source_evidence": []}
     retry_used, request_count = False, 0
     request_failures = []
+    if request_attempts is None:
+        request_attempts = []
+
+    def record_attempt(started_at, started_ns, **outcome):
+        # Use the existing deadline-check instant and a duration that is
+        # independent of the fact/cutoff clock. Do not store request arguments.
+        elapsed = round((elapsed_clock.monotonic_ns() - started_ns) / 1_000_000_000, 6)
+        request_attempts.append(dict(interval=interval, adjustment=adjustment,
+            attempt=attempts, started_at=started_at.isoformat(),
+            finished_at=(started_at + timedelta(seconds=elapsed)).isoformat(),
+            elapsed_seconds=elapsed, **outcome))
+
     try:
         for interval, adjustment in (("15", "raw"), ("15", "qfq"), ("101", "raw"), ("101", "qfq")):
             remaining = (deadline - _dt(clock())).total_seconds()
@@ -266,16 +279,19 @@ def fetch_eastmoney_cutoff_pair(identity, *, cutoff, previous_trade_date, deadli
                 "lmt": str(120 if interval == "101" else max(MINUTE_COUNT, int(count)))}
             attempts = 0
             while True:
-                remaining = (deadline - _dt(clock())).total_seconds()
+                request_started_at = _dt(clock())
+                remaining = (deadline - request_started_at).total_seconds()
                 if remaining <= 0 or (stop_event is not None and stop_event.is_set()):
                     raise TimeoutError("observation_acquisition_deadline")
                 attempts += 1
                 request_count += 1
+                request_started_ns = elapsed_clock.monotonic_ns()
                 try:
                     response = session.get("https://push2his.eastmoney.com/api/qt/stock/kline/get",
                         params=params, timeout=min(float(timeout), 5.0, remaining), allow_redirects=False)
                     break
                 except (requests.ConnectionError, requests.Timeout) as exc:
+                    record_attempt(request_started_at, request_started_ns, error_type=type(exc).__name__)
                     request_failures.append(dict(interval=interval, adjustment=adjustment,
                         attempt=attempts, error_type=type(exc).__name__,
                         observed_at=_dt(clock()).isoformat()))
@@ -286,13 +302,18 @@ def fetch_eastmoney_cutoff_pair(identity, *, cutoff, previous_trade_date, deadli
                     if remaining <= 0:
                         raise TimeoutError("observation_acquisition_deadline") from exc
                     elapsed_clock.sleep(min(.05, remaining))
+                except Exception as exc:
+                    record_attempt(request_started_at, request_started_ns, error_type=type(exc).__name__)
+                    raise
             try:
-                if response.status_code in (429, 456):
-                    if stop_event is not None:
-                        stop_event.set()
+                status = response.status_code
+                if status in (429, 456) and stop_event is not None:
+                    stop_event.set()
+                record_attempt(request_started_at, request_started_ns, http_status=status)
+                if status in (429, 456):
                     raise SourceRateLimited("eastmoney_rate_limited")
-                if not 200 <= response.status_code < 300:
-                    raise ValueError("eastmoney_http_{}".format(response.status_code))
+                if not 200 <= status < 300:
+                    raise ValueError("eastmoney_http_{}".format(status))
                 decoded = response.json()
             finally:
                 response.close()
@@ -319,7 +340,8 @@ def fetch_eastmoney_cutoff_pair(identity, *, cutoff, previous_trade_date, deadli
         return pair
     except Exception as exc:
         exc.observation_request_evidence = dict(request_count=request_count,
-            failures=request_failures, interval=interval, adjustment=adjustment,
+            failures=request_failures, request_attempts=request_attempts,
+            interval=interval, adjustment=adjustment,
             final_error_type=type(exc).__name__,
             retryable_transport_failure=(
                 isinstance(exc, (requests.ConnectionError, requests.Timeout))
@@ -722,9 +744,15 @@ def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snaps
                     if not phase_reserved_here["recovery-1" if recovery else "primary"]:
                         raise SourceDispatchUncertain(
                             "recovery_dispatch_uncertain" if recovery else "capture_dispatch_uncertain")
+                request_attempts = []
+                capture_options = {"request_attempts": request_attempts} if pair_fetcher is None else {}
                 pair = fetcher(identity, cutoff=cutoff.isoformat(), previous_trade_date=previous,
-                    deadline=deadline, clock=clock, stop_event=stop)
+                    deadline=deadline, clock=clock, stop_event=stop, **capture_options)
                 result = {"pair": pair}
+                if request_attempts:
+                    # Capture integrity covers the trace, but the strategy
+                    # hashes only the existing provider pair.
+                    result["request_evidence"] = {"request_attempts": request_attempts}
             except Exception as exc:
                 if isinstance(exc, SourceRateLimited):
                     stop.set()
