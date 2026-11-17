@@ -380,6 +380,7 @@ def _rebuild_staged_artifacts(
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
+            docs_dir=staged_docs,
         )
         with open(staged_docs / relative, "w", encoding="utf-8") as handle:
             handle.write(html)
@@ -436,6 +437,7 @@ def _validate_staged_artifacts(
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
+            docs_dir=staged_docs,
         )
         if html_path.read_text(encoding="utf-8") != expected_html:
             raise RuntimeError("HTML whitelist mismatch: {}".format(name))

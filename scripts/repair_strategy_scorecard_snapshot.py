@@ -1745,6 +1745,7 @@ def _rebuild_staged_artifacts(
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
+            docs_dir=staged_docs,
         )
         (staged_docs / relative).parent.mkdir(parents=True, exist_ok=True)
         with open(staged_docs / relative, "w", encoding="utf-8") as handle:
@@ -1858,6 +1859,7 @@ def _validate_staged_artifacts(
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
+            docs_dir=staged_docs,
         )
         if html_path.read_bytes().decode("utf-8") != expected_html:
             raise RuntimeError("HTML mismatch: {}".format(name))

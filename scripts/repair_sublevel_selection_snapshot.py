@@ -433,6 +433,7 @@ def _rebuild_staged_artifacts(
             _escape_inline_json(envelope),
             asset_prefix=prefix,
             asset_version=asset_version,
+            docs_dir=staged_docs,
         )
         with open(staged_docs / relative, "w", encoding="utf-8") as handle:
             handle.write(html)

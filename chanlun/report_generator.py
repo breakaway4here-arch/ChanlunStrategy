@@ -19,6 +19,7 @@ from collections.abc import Mapping
 from html.parser import HTMLParser
 from html import escape
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import numpy as np
 
@@ -2336,7 +2337,73 @@ def _render_kaipanla_context(context):
             '<summary><strong>今日热点</strong> · ' + date_text + '</summary></details>')
 
 
-def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None):
+_RECOVERY_PAGE = re.compile(
+    r"(?P<batch>history-(?P<start>[0-9]{8})-(?P<end>[0-9]{8}))/"
+    r"(?P<day>[0-9]{4}-[0-9]{2}-[0-9]{2})\.html"
+)
+
+
+def _render_history_recovery_nav(docs_dir, asset_prefix):
+    """Render links to verified local recovery batches, outside the formal index."""
+    if docs_dir is None or asset_prefix not in ("", "../"):
+        return ""
+    root = Path(docs_dir) / "recovery"
+    manifest = root / "index.json"
+    try:
+        if root.is_symlink() or manifest.is_symlink() or not manifest.is_file():
+            return ""
+        index = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RecursionError):
+        return ""
+    if (not isinstance(index, dict) or type(index.get("schema_version")) is not int
+            or index["schema_version"] != 1
+            or index.get("report_kind") != "market_data_recovery"
+            or not isinstance(index.get("reports"), list)):
+        return ""
+    latest = None
+    for row in index["reports"]:
+        if (not isinstance(row, dict) or row.get("is_official") is not False
+                or row.get("formal_actions_allowed") is not False):
+            continue
+        page = row.get("page")
+        match = _RECOVERY_PAGE.fullmatch(page) if isinstance(page, str) else None
+        if not match or row.get("date") != match["day"]:
+            continue
+        try:
+            day = datetime.strptime(match["day"], "%Y-%m-%d").date()
+            start = datetime.strptime(match["start"], "%Y%m%d").date()
+            end = datetime.strptime(match["end"], "%Y%m%d").date()
+        except ValueError:
+            continue
+        if not start <= day <= end:
+            continue
+        batch = match["batch"]
+        folder = root / batch
+        landing = folder / "index.html"
+        report = root / page
+        try:
+            if (folder.is_symlink() or landing.is_symlink() or report.is_symlink()
+                    or not landing.is_file() or not report.is_file()):
+                continue
+        except OSError:
+            continue
+        candidate = (day, end, start, batch)
+        if latest is None or candidate > latest:
+            latest = candidate
+    if latest is None:
+        return ""
+    _, end, start, batch = latest
+    start_label, end_label = (f"{d.month} 月 {d.day} 日" for d in (start, end))
+    if start.year != end.year:
+        start_label = f"{start.year} 年 {start_label}"
+        end_label = f"{end.year} 年 {end_label}"
+    title = escape(f"历史补发日报（{start_label}至 {end_label}）")
+    href = escape(f"{asset_prefix}recovery/{batch}/", quote=True)
+    return ('<nav id="history-recovery-nav" aria-label="历史补发日报" style="padding:.6rem 1rem">'
+            f'<a href="{href}">{title}</a> <span>非正式日报，仅供复盘</span></nav>\n')
+
+
+def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_version=None, *, docs_dir=None):
     """Build the lightweight v2 HTML shell."""
     asset_query = f"?v={asset_version}" if asset_version else ""
     try:
@@ -2344,6 +2411,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
     except (TypeError, ValueError, AttributeError):
         context = {}
     kaipanla_html = _render_kaipanla_context(context)
+    recovery_html = _render_history_recovery_nav(docs_dir, asset_prefix)
     return f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -2357,7 +2425,7 @@ def _build_report_v2_html(date_str, bootstrap_json, asset_prefix="", asset_versi
 </head>
 <body>
 {kaipanla_html}
-<div id="app"></div>
+{recovery_html}<div id="app"></div>
 
 <script>
 (function() {{
@@ -3283,6 +3351,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             bootstrap_data_json,
             asset_prefix="",
             asset_version=asset_version,
+            docs_dir=output_dir,
         ))
 
     archive_path = os.path.join(date_dir, "index.html")
@@ -3292,6 +3361,7 @@ def _generate_report_v2(report_data, output_dir=None, comparison_db_path=None):
             bootstrap_data_json,
             asset_prefix="../",
             asset_version=asset_version,
+            docs_dir=output_dir,
         ))
 
     refresh_report_asset_versions(output_dir, asset_version)
