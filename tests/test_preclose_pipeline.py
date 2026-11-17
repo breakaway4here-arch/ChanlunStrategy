@@ -27,6 +27,8 @@ from chanlun.preclose_pipeline import (
     run_preclose_pipeline,
 )
 from chanlun.preclose_contract import build_public_preclose_view
+from chanlun.preclose_compare import build_reconciliation
+from chanlun.preclose_notify import format_preclose_message
 from chanlun.report_view_model import build_workspace
 from chanlun.scorer import apply_scores as apply_real_scores
 from chanlun.volume_contract import (
@@ -459,6 +461,58 @@ def _config(clock=None, run_id="run-a"):
 
 
 class PreclosePipelineTests(unittest.TestCase):
+    def _run_minute_basis_case(self, *, formal_peer=False, price=10.0):
+        def daily_pool(results, sector_stocks=None, mode="pure"):
+            pool = []
+            for result in results:
+                if formal_peer and result.code == "300998":
+                    pool.append(_candidate(result.code, result.name))
+                else:
+                    row = _candidate(
+                        result.code, result.name, "swing底背驰候选种子", tier="seed"
+                    )
+                    row["buy_points"][0]["price"] = price
+                    pool.append(row)
+            return pool, {}
+
+        return run_preclose_pipeline(
+            _market_inputs(),
+            config=_config(),
+            components=replace(
+                _components(),
+                build_daily_structure_pool=daily_pool,
+                upgrade_daily_candidates=upgrade_daily_candidates_with_30min,
+                build_next_day_boom_candidates=lambda *args, **kwargs: {"candidates": []},
+            ),
+        )
+
+    def test_empty_pools_with_unverified_minute_basis_are_unavailable(self):
+        result = self._run_minute_basis_case()
+
+        self.assertEqual(result["status"], "failed")
+        self.assertEqual(result["diagnostics"]["input_health"]["min30"]["available_count"], 2)
+        self.assertEqual(result["diagnostics"]["input_health"]["min30"]["basis_unverified_stock_count"], 2)
+        self.assertEqual(result["diagnostics"]["failure"]["stage"], "target_30m_confirm")
+        public = build_public_preclose_view(result, GENERATED_AT)
+        self.assertEqual(public["status"], "failed")
+        self.assertNotIn("diagnostics", public)
+        self.assertIn("暂不可用", format_preclose_message(result))
+        self.assertEqual(build_reconciliation(result, result["pools"])["status"], "preclose_unavailable")
+
+    def test_real_risk_rejection_can_still_produce_a_normal_empty_result(self):
+        result = self._run_minute_basis_case(price=9.5)
+
+        self.assertEqual(result["status"], "empty")
+        self.assertIn("本期未选出推荐票", format_preclose_message(result))
+        self.assertEqual(build_reconciliation(result, result["pools"])["status"], "unchanged")
+
+    def test_available_pool_survives_another_stocks_unverified_minute_basis(self):
+        result = self._run_minute_basis_case(formal_peer=True)
+
+        self.assertEqual(result["status"], "available")
+        self.assertEqual([row["code"] for row in result["pools"]["main"]], ["300998"])
+        self.assertEqual(result["diagnostics"]["input_health"]["min30"]["basis_unverified_stock_count"], 1)
+
     def test_preclose_quantity_roles_keep_research_and_observation_out_of_formal_gate(self):
         inputs = _prove_quantity_evidence(_market_inputs(), ["300998"])
         inputs["target_codes"] = []

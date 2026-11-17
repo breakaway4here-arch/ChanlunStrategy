@@ -1399,12 +1399,29 @@ def run_preclose_pipeline(market_inputs, *, config, components=None):
             name: _public_pool(candidates)
             for name, candidates in internal_pools.items()
         }
+        status = None
+        upgrade = diagnostics["pool_build"].get("candidate_upgrade") or {}
+        basis_unverified_count = (upgrade.get("evaluation_stock_counts") or {}).get(
+            "price_basis_unverified", 0
+        )
+        if basis_unverified_count:
+            min30_health = diagnostics["input_health"]["min30"]
+            min30_health["basis_unverified_stock_count"] = basis_unverified_count
+            if min30_health["status"] == "verified":
+                min30_health["status"] = "partial"
+            if not any(pools.values()):
+                status = "failed"
+                diagnostics["failure"] = {
+                    "type": "MinutePriceBasisUnverified",
+                    "stage": "target_30m_confirm",
+                }
         return build_preclose_snapshot(
             trade_date=config.trade_date,
             as_of=config.as_of,
             generated_at=config.generated_at,
             pools=pools,
             source_sha=config.source_sha,
+            status=status,
             diagnostics=diagnostics,
             run_id=config.run_id,
         )

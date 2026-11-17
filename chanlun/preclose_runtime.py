@@ -22,6 +22,7 @@ from config import (
     MIN_LISTED_DAYS,
 )
 
+from .market_close_snapshot import _previous_trade_date
 from .market_history_store import MarketHistoryStore, preserve_previous_quote_risk, quote_stock_risk
 from .kline_repository import DailyRepairBudget, KLineRepository
 from .identity import normalize_index_identity
@@ -127,21 +128,21 @@ def _readonly_connection(path):
 
 
 def _previous_market_date(formal_market_db, trade_date):
-    with _readonly_connection(formal_market_db) as connection:
-        row = connection.execute(
-            "SELECT substr(b.ts, 1, 10) AS trade_date "
+    with MarketHistoryStore(formal_market_db, readonly=True) as store:
+        previous_date = _previous_trade_date(trade_date, store)
+        if previous_date is None:
+            raise PrecloseInputError("previous_trading_day_calendar_unavailable")
+        count = store.connection.execute(
+            "SELECT COUNT(DISTINCT b.instrument_id) "
             "FROM bars_day b JOIN instruments i "
             "ON i.instrument_id=b.instrument_id "
-            "WHERE i.asset_type='stock' AND b.is_final=1 "
-            "AND substr(b.ts, 1, 10) < ? "
-            "GROUP BY substr(b.ts, 1, 10) "
-            "HAVING COUNT(DISTINCT b.instrument_id) >= 1000 "
-            "ORDER BY trade_date DESC LIMIT 1",
-            (str(trade_date),),
-        ).fetchone()
-    if not row:
-        raise RuntimeError("previous full-market date unavailable")
-    return str(row[0])
+            "WHERE i.asset_type='stock' AND b.is_final=1 AND b.ts=?",
+            (previous_date,),
+        ).fetchone()[0]
+    if count < 1000:
+        # The live quote's previous close refers to this session only.
+        raise PrecloseInputError("previous_trading_day_history_unavailable")
+    return previous_date
 
 
 def load_readonly_preclose_universe(formal_market_db, trade_date, *,

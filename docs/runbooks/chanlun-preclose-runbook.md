@@ -8,6 +8,8 @@
 
 交易日门禁优先读取正式行情库中的 `trade_calendar`；没有本地覆盖时使用经 Review 的上交所 2026 年休市表。更新年度休市表时必须依据[上交所休市安排](https://www.sse.com.cn/disclosure/dealinstruc/closed/)重新 Review，未知年度默认跳过。
 
+自 2026-11-17 起，预跑日线锚点沿用正式入口的前一交易日判断。日历无法确定或真实前一交易日不足 1000 只股票的最终日线时，`acquisition-failure.json` 分别记录 `previous_trading_day_calendar_unavailable` 或 `previous_trading_day_history_unavailable`。
+
 ## 专用配置
 
 凭证只保存在 `~/.config/chanlun-strategy/preclose.env`，文件必须属于当前用户且权限为 `0600`。必需键为：
@@ -81,6 +83,8 @@ ls -l .cache/chanlun/preclose/YYYY-MM-DD/
 “未运行”不能由一个从未启动的进程自行写文件；必须联合使用 launchd 当日运行次数、调度日志和当日隔离目录不存在这三项证据，不能用事后手工创建的 `not_run` 文件冒充。
 
 14:56前若正常快照写入失败且总预算仍有剩余，任务会原子提升启动前已准备的截止快照。公开面分别显示正常空池、等待、失败、超时和明确未运行；没有响应只说明暂不可用，不据此推断任务是否启动。真实内部原因继续只保存在上述证据。验收时应同时核对文件的 `trade_date`、`run_id`、`source_sha`、`snapshot_id/content_hash`，不能仅以进程退出码代替。
+
+已取得 30 分钟 K 线的数量在 `input_health.min30.available_count` 查看。经典确认卡在价基核验时另记录 `basis_unverified_stock_count`。三个池均空且有这类阻断时，网页和通知显示预跑暂不可用，盘后仍可展示正式结果并标为不可比。有可发布的候选池时照常展示可用结果。
 
 当前日期页面在预跑等待或网络暂错时进行有界自动刷新，窗口尾部缩短间隔，所有请求共用14:56截止；稳定候选、真空池、明确失败/超时/未运行和过期结果停止轮询。“刷新预跑”可手动重新读取，重复点击不并发，旧请求及错日期响应不能覆盖当前日期。失效后仍保留原结果状态，旧合同没有原状态时显示无可回看候选，不冒充正常空池。
 

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -16,6 +17,7 @@ from chanlun.preclose_runtime import (
     MARKET_INDICES,
     _append_intraday_quote,
     _append_intraday_quote_with_reason,
+    _previous_market_date,
     build_scheduled_preclose_input,
     fetch_preclose_30m,
     select_preclose_30m_targets,
@@ -53,6 +55,56 @@ def _history(code, name, start):
 
 
 class PrecloseRuntimeTests(unittest.TestCase):
+    def _history_dates(self, path, counts, calendar=()):
+        with sqlite3.connect(path) as db:
+            db.executescript(
+                "CREATE TABLE instruments(instrument_id INTEGER, asset_type TEXT);"
+                "CREATE TABLE bars_day(instrument_id INTEGER, ts TEXT, is_final INTEGER);"
+                "CREATE TABLE trade_calendar(exchange TEXT, trade_date TEXT, is_open INTEGER);"
+            )
+            db.executemany(
+                "INSERT INTO instruments VALUES (?, 'stock')",
+                ((index,) for index in range(max(counts.values(), default=0))),
+            )
+            db.executemany(
+                "INSERT INTO bars_day VALUES (?, ?, 1)",
+                ((index, day) for day, count in counts.items() for index in range(count)),
+            )
+            db.executemany("INSERT INTO trade_calendar VALUES (?, ?, ?)", calendar)
+
+    def test_previous_market_date_does_not_use_older_complete_history(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "history.sqlite"
+            self._history_dates(path, {"2026-11-12": 1100, "2026-11-13": 999})
+            unchanged = path.read_bytes()
+            with self.assertRaisesRegex(RuntimeError, "previous trading day history unavailable"):
+                _previous_market_date(path, "2026-11-16")
+            self.assertEqual(path.read_bytes(), unchanged)
+            with sqlite3.connect(path) as db:
+                db.execute("INSERT INTO bars_day VALUES (999, '2026-11-13', 1)")
+            self.assertEqual(_previous_market_date(path, "2026-11-16"), "2026-11-13")
+            with sqlite3.connect(path) as db:
+                db.executemany("INSERT INTO bars_day VALUES (?, '2026-11-16', 1)",
+                               ((index,) for index in range(1000)))
+            self.assertEqual(_previous_market_date(path, "2026-11-17"), "2026-11-16")
+
+    def test_previous_market_date_uses_reviewed_holiday_calendar(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "history.sqlite"
+            self._history_dates(path, {"2026-09-30": 1000, "2026-10-07": 1000})
+            self.assertEqual(_previous_market_date(path, "2026-10-08"), "2026-09-30")
+
+    def test_previous_market_date_rejects_conflicting_or_unknown_calendar(self):
+        for trading_date, previous, calendar in (
+            ("2026-11-16", "2026-11-13", (("SH", "2026-11-13", 1), ("SZ", "2026-11-13", 0))),
+            ("2027-01-05", "2027-01-04", ()),
+        ):
+            with self.subTest(trading_date=trading_date), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "history.sqlite"
+                self._history_dates(path, {previous: 1000}, calendar)
+                with self.assertRaisesRegex(RuntimeError, "previous trading day calendar unavailable"):
+                    _previous_market_date(path, trading_date)
+
     @staticmethod
     def _minute_payload(trade_date, close, source):
         clocks = (
