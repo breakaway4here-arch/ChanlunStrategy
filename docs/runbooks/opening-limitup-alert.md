@@ -67,3 +67,5 @@ B 产品清单：`/private/tmp/opening-alert-b-release-20261103/implementation-b
 - 对照 `~/Library/Logs/chanlun-opening-limitup.log` 与 `pmset -g log` 的 Sleep、DarkWake、Wake。Mac 睡眠跨过 09:40 时，launchd 醒后补触发会被发送窗口拦截。2026 年的交易日仍可用已审核的[上交所休市安排](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml)判断，本地日历表无行时可继续使用这份安排。
 - 先用 `pmset -g sched` 核对系统现有的重复事件。确认无冲突并获主机管理权限后，可用 `sudo /usr/bin/pmset repeat wake MTWRF 09:35:00` 登记工作日唤醒，再回读计划。macOS 只允许一对重复开关机事件，已有重复计划时先协调。撤销前核对重复计划仍是此次登记的唯一事件，再用 `sudo /usr/bin/pmset repeat cancel` 清除。参见 [Apple 的 Mac 定时唤醒说明](https://support.apple.com/en-mt/guide/mac-help/mchl40376151/27/mac/27)。
 - 首次自然验收时，保持充电、开盖、已登录且联网，确认 Mac 在 09:40 前已唤醒，随后核对启动时刻、任务结果和服务商回执。仅登记唤醒无法证明合盖或电池状态下的实际执行。
+
+2026-11-17 更新：用户接受 Mac 关机或睡眠跨过窗口时跳过当天提醒。当前运行口径无需设置定时唤醒，保留 09:40–09:41 上海时间窗口。迟到触发记录拦截原因，跳过的提醒不补发。
