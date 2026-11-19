@@ -122286,8 +122286,8 @@
       "name": "半导体",
       "flow": 3051302400,
       "change_pct": -0.63,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "30.51亿",
       "component_coverage": 1.0,
@@ -122308,8 +122308,8 @@
       "name": "通信网络设备及器件",
       "flow": 1339331072,
       "change_pct": -3.11,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "13.39亿",
       "component_coverage": 1.0,
@@ -122320,8 +122320,8 @@
       "name": "家电零部件Ⅱ",
       "flow": 376428400,
       "change_pct": -2.68,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "3.76亿",
       "component_coverage": 1.0,
@@ -122335,8 +122335,8 @@
       "name": "底盘与发动机系统",
       "flow": 372325440,
       "change_pct": -3.33,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "3.72亿",
       "component_coverage": 1.0,
@@ -122347,8 +122347,8 @@
       "name": "小家电",
       "flow": 305521488,
       "change_pct": -3.03,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "3.06亿",
       "component_coverage": 1.0,
@@ -122362,8 +122362,8 @@
       "name": "特种纸",
       "flow": 286481044,
       "change_pct": -2.19,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "2.86亿",
       "component_coverage": 1.0,
@@ -122377,8 +122377,8 @@
       "name": "生活用纸",
       "flow": 246106602,
       "change_pct": -1.84,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "2.46亿",
       "component_coverage": 1.0,
@@ -122392,7 +122392,7 @@
   "sector_heat": {
     "schema_version": 1,
     "date": "2026-11-19",
-    "as_of": "2026-11-19T15:35:13+08:00",
+    "as_of": "2026-11-19T15:50:11+08:00",
     "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
     "status": "verified_partial",
     "items": [
@@ -122596,7 +122596,7 @@
         "limit_up_count": 3,
         "net_flow": 3051302400.0,
         "net_flow_text": "30.51亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122621,7 +122621,7 @@
         "limit_up_count": 0,
         "net_flow": 246106602.0,
         "net_flow_text": "2.46亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122651,7 +122651,7 @@
         "limit_up_count": 0,
         "net_flow": 286481044.0,
         "net_flow_text": "2.86亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122702,7 +122702,7 @@
         "limit_up_count": 2,
         "net_flow": 376428400.0,
         "net_flow_text": "3.76亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122741,7 +122741,7 @@
         "limit_up_count": 1,
         "net_flow": 305521488.0,
         "net_flow_text": "3.06亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122795,7 +122795,7 @@
         "limit_up_count": 0,
         "net_flow": 1339331072.0,
         "net_flow_text": "13.39亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       },
@@ -122924,7 +122924,7 @@
         "limit_up_count": 1,
         "net_flow": 372325440.0,
         "net_flow_text": "3.72亿",
-        "as_of": "2026-11-19T15:35:13+08:00",
+        "as_of": "2026-11-19T15:50:11+08:00",
         "source": "eastmoney+verified_daily_close+eastmoney_limit_pools",
         "status": "verified_partial"
       }
@@ -122938,8 +122938,8 @@
       "name": "计算机",
       "flow": -5515482624,
       "change_pct": -3.71,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-55.15亿",
       "component_coverage": 1.0,
@@ -122953,8 +122953,8 @@
       "name": "机械设备",
       "flow": -3198330880,
       "change_pct": -2.93,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-31.98亿",
       "component_coverage": 0.0,
@@ -122965,8 +122965,8 @@
       "name": "医药生物",
       "flow": -2864315520,
       "change_pct": -2.3,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-28.64亿",
       "component_coverage": 1.0,
@@ -122977,8 +122977,8 @@
       "name": "电力设备",
       "flow": -2789139456,
       "change_pct": -2.91,
-      "board_quote_as_of": "2026-11-19T15:34:57+08:00",
-      "flow_retrieved_at": "2026-11-19T15:35:21.379658+08:00",
+      "board_quote_as_of": "2026-11-19T15:39:57+08:00",
+      "flow_retrieved_at": "2026-11-19T15:50:18.187694+08:00",
       "fund_date_evidence": "same_day_board_quote",
       "flow_str": "-27.89亿",
       "component_coverage": 1.0,
@@ -123242,8 +123242,8 @@
   ],
   "limit_up_snapshot": {
     "date": "2026-11-19",
-    "as_of": "2026-11-19T15:36:31+08:00",
-    "generated_at": "2026-11-19T15:37:45+08:00",
+    "as_of": "2026-11-19T15:51:10+08:00",
+    "generated_at": "2026-11-19T15:52:28+08:00",
     "source": "eastmoney_limit_pools",
     "status": "verified_complete",
     "raw_total": 23,
@@ -123705,15 +123705,15 @@
     "data_date": "2026-11-19",
     "report_date": "2026-11-19",
     "coverage": "returned_sample",
-    "fetched_at": "2026-11-19T15:38:35.614526+08:00"
+    "fetched_at": "2026-11-19T15:53:19.586476+08:00"
   },
   "personal_watchlist": {
     "schema_version": "1",
     "config_revision": "watchlist-20260820-01",
     "analysis_revision": "watchlist-20260820-01:2026-11-19:4b9850c30eef",
     "date": "2026-11-19",
-    "as_of": "2026-11-19T15:35:13+08:00",
-    "generated_at": "2026-11-19T15:35:13+08:00",
+    "as_of": "2026-11-19T15:50:11+08:00",
+    "generated_at": "2026-11-19T15:50:11+08:00",
     "status": "ok",
     "fresh_count": 5,
     "stale_count": 0,
@@ -123897,7 +123897,7 @@
     "model": "gpt-5.6-luna",
     "prompt_version": "decision-brief-v4",
     "schema_version": "1",
-    "generated_at": "2026-11-19T15:35:13+08:00",
+    "generated_at": "2026-11-19T15:50:11+08:00",
     "evidence_registry": [
       {
         "evidence_ref": "event:2026-11-19:1a0d4b02ec93",
@@ -124360,7 +124360,7 @@
           {
             "reason_code": "negative_stock_impact",
             "title": "AI算力个股负向影响",
-            "detail": "海光信息：算力芯片股下跌超过百分之十五",
+            "detail": "海光信息：算力芯片股持续下挫",
             "severity": "high",
             "source_type": "event_impact",
             "verification_status": "model_extracted",
@@ -124373,7 +124373,7 @@
           }
         ],
         "rule_summary": "AI算力存在风险：国产算力板块暴跌，业界称“市场传闻不准确”。",
-        "llm_summary": "国产算力遭遇硬风险事件，算力芯片持续下挫，重点观察股中光通信方向相对独立，但国产算力相关重点股承受明显压力，板块修复仍缺乏确认。",
+        "llm_summary": "国产算力板块遭遇硬风险事件，算力芯片股持续下挫，重点池中的中际旭创与海光信息需要优先观察风险传导。",
         "next_trigger": [
           "AI算力风险继续扩散或相关结构进一步走弱"
         ],
@@ -124450,7 +124450,7 @@
           {
             "reason_code": "negative_sector_impact",
             "title": "半导体负向影响",
-            "detail": "传闻被澄清但监管不确定性仍压制国产算力芯片情绪",
+            "detail": "传闻被证伪但监管不确定性仍压制国产算力芯片情绪",
             "severity": "high",
             "source_type": "event_impact",
             "verification_status": "model_extracted",
@@ -124474,7 +124474,7 @@
           {
             "reason_code": "negative_sector_impact",
             "title": "半导体负向影响",
-            "detail": "算力芯片股持续下挫显著打击国产算力板块市场情绪",
+            "detail": "算力芯片股持续重挫，国产AI芯片风险偏好明显降温",
             "severity": "high",
             "source_type": "event_impact",
             "verification_status": "model_extracted",
@@ -124498,7 +124498,7 @@
           {
             "reason_code": "negative_stock_impact",
             "title": "半导体个股负向影响",
-            "detail": "海光信息：算力芯片股下跌超过百分之十五",
+            "detail": "海光信息：算力芯片股持续下挫",
             "severity": "high",
             "source_type": "event_impact",
             "verification_status": "model_extracted",
@@ -124510,8 +124510,8 @@
             ]
           }
         ],
-        "rule_summary": "半导体存在风险：传闻被澄清但监管不确定性仍压制国产算力芯片情绪。",
-        "llm_summary": "虽然半导体获得资金关注并形成涨停梯队，但国产算力冲击与监管不确定性压制板块情绪，重点观察股尚未形成一致性强势，风险方向优先。",
+        "rule_summary": "半导体存在风险：传闻被证伪但监管不确定性仍压制国产算力芯片情绪。",
+        "llm_summary": "半导体虽有资金流入和涨停梯队，但国产算力芯片风险事件压制板块情绪，重点池中的晓程科技与佰维存储仍面临方向分化。",
         "next_trigger": [
           "半导体风险继续扩散或相关结构进一步走弱"
         ],
@@ -124587,7 +124587,7 @@
         ],
         "risk_reasons": [],
         "rule_summary": "半导体出现催化，需由资金、涨停梯队与重点股共同确认。",
-        "llm_summary": "半导体设备与存储方向出现事件催化、资金流入和涨停梯队，代码规则给出确认，但重点观察股表现偏弱，需警惕正向规则与负向风险证据并存。",
+        "llm_summary": "半导体设备与存储方向出现催化，资金流向和涨停梯队提供板块支撑，重点池中的晓程科技与佰维存储用于观察催化能否形成盘面共振。",
         "next_trigger": [
           "半导体资金与涨停梯队继续共振"
         ],
@@ -124859,7 +124859,7 @@
     "schema_version": 1,
     "rule_version": "extreme-icepoint-v1",
     "date": "2026-11-19",
-    "as_of": "2026-11-19T15:38:35+08:00",
+    "as_of": "2026-11-19T15:53:19+08:00",
     "phase": "closed",
     "affects_production": false,
     "status": "insufficient",
@@ -124881,7 +124881,7 @@
           "database": "market_history",
           "amount_by_date": {}
         },
-        "as_of": "2026-11-19T15:38:35+08:00",
+        "as_of": "2026-11-19T15:53:19+08:00",
         "scope": "all_a_cny",
         "reason": "comparable_full_market_amount_or_indices_missing"
       },
@@ -124907,12 +124907,12 @@
           "中证500": "tencent_plain"
         },
         "as_of": {
-          "上证指数": "2026-11-19T15:36:31+08:00",
-          "深证成指": "2026-11-19T15:36:31+08:00",
-          "创业板指": "2026-11-19T15:36:31+08:00",
-          "科创50": "2026-11-19T15:36:31+08:00",
-          "沪深300": "2026-11-19T15:36:31+08:00",
-          "中证500": "2026-11-19T15:36:31+08:00"
+          "上证指数": "2026-11-19T15:51:09+08:00",
+          "深证成指": "2026-11-19T15:51:09+08:00",
+          "创业板指": "2026-11-19T15:51:09+08:00",
+          "科创50": "2026-11-19T15:51:09+08:00",
+          "沪深300": "2026-11-19T15:51:09+08:00",
+          "中证500": "2026-11-19T15:51:09+08:00"
         },
         "scope": "six_fixed_indices",
         "reason": ""
@@ -124928,7 +124928,7 @@
         },
         "threshold": "下跌>0且下跌家数≥上涨家数×9",
         "source": "market_history",
-        "as_of": "2026-11-19T15:38:35+08:00",
+        "as_of": "2026-11-19T15:53:19+08:00",
         "scope": "all_a",
         "reason": "all_a_breadth_or_coverage_missing"
       },
@@ -126569,15 +126569,16 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": true,
-        "headline": "市场震荡与个股涨跌属于盘中表现对A股无新增影响",
+        "headline": "对A股无明显影响",
         "analysis": [
-          "市场震荡与个股涨跌属于盘中表现对A股无新增影响"
+          "仅为盘中行情复述，未出现新增政策或基本面催化",
+          "指数震荡且成交缩量，短线市场情绪仍然偏弱"
         ],
         "positive_sectors": [],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "市场震荡与个股涨跌属于盘中表现对A股无新增影响",
+        "summary": "对A股无明显影响",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126617,11 +126618,11 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "半导体设备板块午后走强带动国产设备关注度提升",
+        "headline": "半导体设备午后走强，国产替代预期带动板块修复",
         "analysis": [
-          "设备股集体拉升显示资金回流国产替代方向",
-          "涨停个股强化半导体设备板块短线赚钱效应",
-          "板块持续性仍需观察成交量与核心股表现"
+          "设备股集体拉升显示资金回流国产半导体设备方向",
+          "涨停与跟涨扩散有助于强化板块短线交易热度",
+          "行情仍缺乏基本面新增催化，持续性需观察成交配合"
         ],
         "positive_sectors": [
           "半导体"
@@ -126631,31 +126632,31 @@
           {
             "name": "耐科装备",
             "code": "688419",
-            "reason": "半导体设备股拉升并触及20厘米涨停"
+            "reason": "半导体设备板块拉升并封涨停"
           },
           {
             "name": "中科飞测",
             "code": "688361",
-            "reason": "半导体设备板块走强获得资金跟涨"
+            "reason": "半导体设备板块走强跟涨"
           },
           {
             "name": "长川科技",
             "code": "300604",
-            "reason": "半导体设备板块走强获得资金跟涨"
+            "reason": "半导体设备板块走强跟涨"
           },
           {
             "name": "华海清科",
             "code": "688120",
-            "reason": "半导体设备板块走强获得资金跟涨"
+            "reason": "半导体设备板块走强跟涨"
           },
           {
             "name": "北方华创",
             "code": "002371",
-            "reason": "半导体设备板块走强获得资金跟涨"
+            "reason": "半导体设备板块走强跟涨"
           }
         ],
         "negative_stocks": [],
-        "summary": "半导体设备板块午后走强带动国产设备关注度提升",
+        "summary": "半导体设备午后走强，国产替代预期带动板块修复",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126695,11 +126696,11 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "传闻被澄清但监管不确定性仍压制国产算力芯片情绪",
+        "headline": "传闻被证伪但监管不确定性仍压制国产算力芯片情绪",
         "analysis": [
-          "三星严查代工传闻不准确有助于缓解恐慌情绪",
-          "BIS新规执行尺度未明仍 constrains 国产芯片预期",
-          "相关公司申请结果将决定板块后续估值修复空间"
+          "三星严查代工传闻被证伪，直接利空逻辑得到一定修正",
+          "美国BIS新规执行尺度未明，国产芯片出口预期仍承压",
+          "相关个股大跌反映市场对政策不确定性的风险定价"
         ],
         "positive_sectors": [],
         "negative_sectors": [
@@ -126707,7 +126708,7 @@
         ],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "传闻被澄清但监管不确定性仍压制国产算力芯片情绪",
+        "summary": "传闻被证伪但监管不确定性仍压制国产算力芯片情绪",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126748,15 +126749,16 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": true,
-        "headline": "早盘板块轮动与指数波动属于盘面表现无新增影响",
+        "headline": "对A股无明显影响",
         "analysis": [
-          "早盘板块轮动与指数波动属于盘面表现无新增影响"
+          "仅为早盘市场表现复述，未出现新增政策或产业催化",
+          "指数普跌且成交有限，板块轮动暂不足以改变趋势"
         ],
         "positive_sectors": [],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "早盘板块轮动与指数波动属于盘面表现无新增影响",
+        "summary": "对A股无明显影响",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126798,11 +126800,11 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "算力芯片股持续下挫显著打击国产算力板块市场情绪",
+        "headline": "算力芯片股持续重挫，国产AI芯片风险偏好明显降温",
         "analysis": [
-          "核心算力芯片大跌加剧资金对高估值板块的担忧",
-          "跌停与大幅回撤可能引发短线资金集中兑现",
-          "国产算力主题后续修复依赖基本面和政策催化"
+          "算力芯片集体下跌显示资金快速撤离高估值成长方向",
+          "跌停与大幅回撤可能引发板块情绪及估值进一步收缩",
+          "事件冲击集中于算力芯片，产业基本面影响仍待确认"
         ],
         "positive_sectors": [],
         "negative_sectors": [
@@ -126813,10 +126815,10 @@
           {
             "name": "海光信息",
             "code": "688041",
-            "reason": "算力芯片股下跌超过百分之十五"
+            "reason": "算力芯片股持续下挫"
           }
         ],
-        "summary": "算力芯片股持续下挫显著打击国产算力板块市场情绪",
+        "summary": "算力芯片股持续重挫，国产AI芯片风险偏好明显降温",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126857,11 +126859,11 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "机构逆势加仓半导体测试链但资金分歧加剧波动风险",
+        "headline": "机构逆势加仓半导体测试链，热门股资金博弈加剧",
         "analysis": [
-          "回购公告与股东增持信息提升相关标的关注度",
-          "机构集中持仓反映半导体测试链中长期预期",
-          "多路资金操作分化意味着短线博弈风险仍高"
+          "回购与股东数据提升市场对机构逆势布局的关注度",
+          "半导体测试产业链获资金集中配置，短线可能维持活跃",
+          "机构操作分歧较大，热门股波动和兑现压力同步上升"
         ],
         "positive_sectors": [
           "半导体"
@@ -126869,7 +126871,7 @@
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "机构逆势加仓半导体测试链但资金分歧加剧波动风险",
+        "summary": "机构逆势加仓半导体测试链，热门股资金博弈加剧",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126911,15 +126913,16 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": true,
-        "headline": "午间收评反映市场当日表现对A股无新增影响",
+        "headline": "对A股无明显影响",
         "analysis": [
-          "午间收评反映市场当日表现对A股无新增影响"
+          "内容属于收盘行情复盘，未出现新的政策或产业催化",
+          "板块涨跌分化反映存量博弈，难以形成新增趋势判断"
         ],
         "positive_sectors": [],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "午间收评反映市场当日表现对A股无新增影响",
+        "summary": "对A股无明显影响",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -126960,15 +126963,16 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": true,
-        "headline": "午间盘面复盘属于行情描述对A股无新增影响",
+        "headline": "对A股无明显影响",
         "analysis": [
-          "午间盘面复盘属于行情描述对A股无新增影响"
+          "内容属于午间行情复盘，未出现新的政策或产业催化",
+          "指数调整与板块轮动属于盘面表现，影响主要偏短线"
         ],
         "positive_sectors": [],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "午间盘面复盘属于行情描述对A股无新增影响",
+        "summary": "对A股无明显影响",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -127009,21 +127013,20 @@
       "downgrade_reasons": [],
       "impact": {
         "no_impact": false,
-        "headline": "吉林人工智能应用规划加速落地利好智能产业长期发展",
+        "headline": "吉林推进人工智能应用普及，长期利好相关产业链布局",
         "analysis": [
-          "省级规划明确人工智能应用普及率提升目标",
-          "政策推动智能终端和智能体需求持续扩张",
-          "本地产业数字化升级或带来软件服务增量机会"
+          "地方规划明确智能终端与智能体普及目标，释放应用扩张信号",
+          "政策有利于人工智能软硬件及场景服务需求持续增长",
+          "规划落地仍需财政投入、产业协同和项目进度共同验证"
         ],
         "positive_sectors": [
           "人工智能",
-          "软件开发",
           "消费电子"
         ],
         "negative_sectors": [],
         "positive_stocks": [],
         "negative_stocks": [],
-        "summary": "吉林人工智能应用规划加速落地利好智能产业长期发展",
+        "summary": "吉林推进人工智能应用普及，长期利好相关产业链布局",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -127064,11 +127067,11 @@
       ],
       "impact": {
         "no_impact": false,
-        "headline": "存储芯片板块逆势走强带动半导体细分方向活跃",
+        "headline": "存储芯片逆势拉升，先进封装与国产替代热度回升",
         "analysis": [
-          "存储芯片拉升体现资金对半导体细分方向的偏好",
-          "涨停股出现有助于强化板块短线联动效应",
-          "板块持续性仍取决于需求复苏与成交量配合"
+          "存储芯片集体走强显示资金重新关注半导体细分机会",
+          "涨停个股扩散有助于强化先进封装和国产替代交易逻辑",
+          "板块持续性仍取决于需求改善及后续成交量配合"
         ],
         "positive_sectors": [
           "半导体"
@@ -127078,31 +127081,36 @@
           {
             "name": "大港股份",
             "code": "002077",
-            "reason": "存储芯片板块拉升并直线涨停"
+            "reason": "存储芯片板块直线涨停"
           },
           {
             "name": "蓝箭电子",
             "code": "301348",
-            "reason": "存储芯片板块拉升获得资金关注"
+            "reason": "存储芯片板块涨幅居前"
+          },
+          {
+            "name": "华虹宏力",
+            "code": "688347",
+            "reason": "存储芯片板块涨幅居前"
           },
           {
             "name": "江化微",
             "code": "603078",
-            "reason": "存储芯片板块拉升获得资金关注"
+            "reason": "存储芯片板块涨幅居前"
           },
           {
             "name": "康强电子",
             "code": "002119",
-            "reason": "存储芯片板块拉升获得资金关注"
+            "reason": "存储芯片板块涨幅居前"
           },
           {
             "name": "时空科技",
             "code": "605178",
-            "reason": "存储芯片板块拉升获得资金关注"
+            "reason": "存储芯片板块涨幅居前"
           }
         ],
         "negative_stocks": [],
-        "summary": "存储芯片板块逆势走强带动半导体细分方向活跃",
+        "summary": "存储芯片逆势拉升，先进封装与国产替代热度回升",
         "status": "ok",
         "model": "gpt-5.6-luna",
         "prompt_version": "event-impact-v1",
@@ -127115,19 +127123,19 @@
     }
   ],
   "forecast": {
-    "core_judgment": "日线中枢未识别，结构未确认；指数分化，半导体内部多空激烈博弈",
-    "volume_note": "较近5日均量降10.2%，量能平稳，突破确认不足",
+    "core_judgment": "日线中枢未识别，指数分化且个股普跌，半导体呈结构性修复",
+    "volume_note": "量较近5日均量降10.2%，成交约1.3万亿，放量不足",
     "short_term": [
-      "科创50涨1.83%而创业板指跌0.79%，若强弱分化延续，行情仍偏结构性",
-      "半导体资金流入居首但板块跌0.63%，需观察资金能否推动板块转强",
-      "国产算力利空与半导体设备、存储芯片利好并存，板块内部波动或继续扩大",
-      "沪深京约4900股飘绿，若市场广度未改善，指数反弹持续性有限"
+      "若半导体设备、存储芯片延续强势，科创50或保持相对强势",
+      "若沪深三市普跌延续且成交未明显放大，指数反弹持续性偏弱",
+      "若国产算力跌势收窄并获资金回流，半导体情绪或边际修复",
+      "若深成指、创业板指继续弱于沪深300，市场分化将进一步加剧"
     ],
-    "mid_term": "关键结构价位待核验，暂不能判断中枢内外及买卖点。若半导体资金流入持续并带动板块上涨，科创50强势延续，市场或走结构性修复；若算力下跌扩散且成交继续缩减，则弱势分化可能延续。",
+    "mid_term": "关键结构价位待核验。短期关注半导体资金流入能否转化为指数与板块同步上涨，以及成交量能否改善；若热点仅局部修复而普跌延续，市场或维持结构性分化，若资金扩散并伴随放量，则再观察趋势结构是否形成。",
     "risks": [
-      "半导体资金流入与板块下跌背离，存在资金承接不足或高位博弈风险",
-      "国产算力芯片连续大跌，可能拖累半导体及成长风格情绪",
-      "多数个股下跌而科创50独强，指数反弹与个股亏钱效应可能并存"
+      "国产算力芯片重挫，监管不确定性可能继续压制半导体风险偏好",
+      "沪深京约4900股飘绿，市场广度恶化，局部热点难抵个股普跌",
+      "半导体虽获资金流入但板块多数仍下跌，缩量反弹存在冲高回落风险"
     ]
   },
   "sell_signals": [
@@ -127546,7 +127554,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8892d13af0faea8c",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000301",
       "name": "东方盛虹",
       "reference_close": 9.56449612403101,
@@ -128030,7 +128038,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:51c5370d93030069",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000539",
       "name": "粤电力Ａ",
       "reference_close": 5.080979729729731,
@@ -128110,7 +128118,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7afaf93a6b6901f1",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000703",
       "name": "恒逸石化",
       "reference_close": 11.61,
@@ -128595,7 +128603,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6e39218a4f629776",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000711",
       "name": "京蓝科技",
       "reference_close": 3.8901964636542234,
@@ -128675,7 +128683,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8a9548d66b395265",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000728",
       "name": "国元证券",
       "reference_close": 6.9061222795787724,
@@ -129162,7 +129170,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d5a0c7cb4a244e8f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000815",
       "name": "美利云",
       "reference_close": 14.637981820170902,
@@ -129241,7 +129249,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a47e69d91fd7f818",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000825",
       "name": "太钢不锈",
       "reference_close": 3.1622689075630257,
@@ -129725,7 +129733,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:acdaa692740c501a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000839",
       "name": "国安股份",
       "reference_close": 2.3235668789808908,
@@ -129805,7 +129813,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:fef0ce6d8fc8fa31",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000858",
       "name": "五 粮 液",
       "reference_close": 74.40520945220193,
@@ -130288,7 +130296,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7fa652c3a2866cdd",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "000882",
       "name": "华联股份",
       "reference_close": 1.33,
@@ -130772,7 +130780,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d4e8012140a714f8",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002074",
       "name": "国轩高科",
       "reference_close": 22.26,
@@ -131254,7 +131262,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4a7805b8ff0c328f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002077",
       "name": "大港股份",
       "reference_close": 12.11,
@@ -131334,7 +131342,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:768fe5e918b5f394",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002119",
       "name": "康强电子",
       "reference_close": 19.09,
@@ -131414,7 +131422,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:98ca9a5b3372e271",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002146",
       "name": "荣盛发展",
       "reference_close": 1.02,
@@ -131494,7 +131502,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f034fd3fd9015f3b",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002185",
       "name": "华天科技",
       "reference_close": 14.73,
@@ -131639,7 +131647,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:e454a1aad04ecbf9",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002252",
       "name": "上海莱士",
       "reference_close": 4.66,
@@ -132123,7 +132131,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6097c6d9b32f699a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002340",
       "name": "格林美",
       "reference_close": 5.5813986394557835,
@@ -132605,7 +132613,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:369b0794665be696",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002348",
       "name": "高乐股份",
       "reference_close": 7.364050632911393,
@@ -132685,7 +132693,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:3f7aa00738af5346",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002352",
       "name": "顺丰控股",
       "reference_close": 34.630079298434076,
@@ -133704,7 +133712,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:13e8b12700f49ce4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002371",
       "name": "北方华创",
       "reference_close": 592.02,
@@ -133784,7 +133792,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:0d425a6666036954",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002579",
       "name": "中京电子",
       "reference_close": 12.17,
@@ -133864,7 +133872,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b59f3e7e72981e05",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002594",
       "name": "比亚迪",
       "reference_close": 81.91763801416747,
@@ -134346,7 +134354,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:027f914144522560",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002701",
       "name": "奥瑞金",
       "reference_close": 4.352045454545455,
@@ -134477,7 +134485,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f2e659208911456f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002706",
       "name": "良信股份",
       "reference_close": 8.738088888888887,
@@ -134557,7 +134565,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6b5af19b4ff90fa4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "002745",
       "name": "木林森",
       "reference_close": 10.09,
@@ -134637,7 +134645,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5b20bf63678ca822",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300181",
       "name": "佐力药业",
       "reference_close": 13.204113149847096,
@@ -135122,7 +135130,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ea4e5f6f005b7d4f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300311",
       "name": "任子行",
       "reference_close": 4.052262569832404,
@@ -135202,7 +135210,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:2c469dad5635aceb",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300416",
       "name": "苏试试验",
       "reference_close": 12.742401055408974,
@@ -135282,7 +135290,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:a7e97ab41ab0e5a4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300541",
       "name": "先进数通",
       "reference_close": 8.694788097385032,
@@ -135412,7 +135420,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:0f4eea2647d27a54",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300604",
       "name": "长川科技",
       "reference_close": 192.9532022307015,
@@ -135492,7 +135500,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b24285dc5c6a3067",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300656",
       "name": "民德电子",
       "reference_close": 21.52,
@@ -135572,7 +135580,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4835083ac938c1dd",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300782",
       "name": "卓胜微",
       "reference_close": 53.03,
@@ -135652,7 +135660,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ab6dbcd7fb2a7baa",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300812",
       "name": "易天股份",
       "reference_close": 15.0,
@@ -135732,7 +135740,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:45186e2ed9bb421d",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "300940",
       "name": "南极光",
       "reference_close": 11.88,
@@ -135864,7 +135872,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4a68dc014c22dc91",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301269",
       "name": "华大九天",
       "reference_close": 92.33853813559323,
@@ -135945,7 +135953,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:2e38c898de23dc85",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301285",
       "name": "鸿日达",
       "reference_close": 80.71,
@@ -136025,7 +136033,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:28d45aadc6bd4907",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301332",
       "name": "德尔玛",
       "reference_close": 7.92373786407767,
@@ -136273,7 +136281,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:97ed3cf6a0b4d37f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301348",
       "name": "蓝箭电子",
       "reference_close": 21.66,
@@ -136353,7 +136361,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:06d37006fd097579",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301396",
       "name": "宏景科技",
       "reference_close": 113.37295732340839,
@@ -136483,7 +136491,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:89f9381a7757147b",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "301498",
       "name": "乖宝宠物",
       "reference_close": 34.175444057195875,
@@ -136967,7 +136975,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8511758cc767d31e",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600031",
       "name": "三一重工",
       "reference_close": 18.9,
@@ -137047,7 +137055,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:ebba8745ca02de92",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600032",
       "name": "浙江新能",
       "reference_close": 6.699632035965021,
@@ -137529,7 +137537,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:627883a028c8be7d",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600156",
       "name": "华升股份",
       "reference_close": 8.094570135746608,
@@ -137609,7 +137617,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:1cdd02f3cfad1524",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600166",
       "name": "福田汽车",
       "reference_close": 2.4245723684210527,
@@ -138093,7 +138101,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:6fb0771a625e6e1b",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600179",
       "name": "安通控股",
       "reference_close": 3.917948717948719,
@@ -138578,7 +138586,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:605543330ade91d5",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600196",
       "name": "复星医药",
       "reference_close": 20.71,
@@ -139061,7 +139069,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8cfbdecbd06712a2",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600236",
       "name": "桂冠电力",
       "reference_close": 9.532798162442646,
@@ -139192,7 +139200,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7ffac53d7da1f6c4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600315",
       "name": "上海家化",
       "reference_close": 16.81464205859527,
@@ -139677,7 +139685,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:31bb9ee4eec530b7",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600346",
       "name": "恒力石化",
       "reference_close": 15.838452722063039,
@@ -140161,7 +140169,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d98a230be09f9bca",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600390",
       "name": "五矿资本",
       "reference_close": 4.481985108849024,
@@ -140645,7 +140653,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:83cf62920e8eac8c",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600406",
       "name": "国电南瑞",
       "reference_close": 25.388466319697454,
@@ -140725,7 +140733,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f4f0a23e75fb7106",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600520",
       "name": "三佳科技",
       "reference_close": 22.17,
@@ -140805,7 +140813,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f8d5c121ae068562",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600536",
       "name": "中国软件",
       "reference_close": 29.242825755263958,
@@ -141290,7 +141298,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:107e328f2c04050a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600584",
       "name": "长电科技",
       "reference_close": 55.508644280339965,
@@ -141370,7 +141378,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:11f07506d89352e3",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600820",
       "name": "隧道股份",
       "reference_close": 5.40164233058678,
@@ -141855,7 +141863,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:7bc5efd38a91ff82",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "600905",
       "name": "三峡能源",
       "reference_close": 3.2470000000000008,
@@ -142340,7 +142348,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:fc7f610a2cd69ae4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601117",
       "name": "中国化学",
       "reference_close": 7.137926493037425,
@@ -142825,7 +142833,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:8cdfc25c01e1cba4",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601118",
       "name": "海南橡胶",
       "reference_close": 4.961313320825515,
@@ -143308,7 +143316,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:4403ce07fa891239",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601136",
       "name": "首创证券",
       "reference_close": 12.56,
@@ -143796,7 +143804,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:2b8413c278826281",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601162",
       "name": "天风证券",
       "reference_close": 3.165983606557376,
@@ -144278,7 +144286,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:cdeed16ed6ce7c24",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601360",
       "name": "三六零",
       "reference_close": 7.691432030611183,
@@ -144762,7 +144770,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:abf9ff492983e1b5",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601375",
       "name": "中原证券",
       "reference_close": 3.692897945675075,
@@ -145246,7 +145254,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:49ca3c0ec6c4d85f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601616",
       "name": "广电电气",
       "reference_close": 3.7902688172043013,
@@ -145326,7 +145334,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5d2409894e07ebcb",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601727",
       "name": "上海电气",
       "reference_close": 6.00985465116279,
@@ -145810,7 +145818,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:2ecb351a216f8f75",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601728",
       "name": "中国电信",
       "reference_close": 7.336928104575165,
@@ -145890,7 +145898,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5f96f41bcc905f1f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "601919",
       "name": "中远海控",
       "reference_close": 17.959290308093575,
@@ -145969,7 +145977,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:229d7ca339a9e6f9",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "603324",
       "name": "盛剑科技",
       "reference_close": 24.544582250278502,
@@ -146049,7 +146057,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:56bf87e3512eab96",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "603328",
       "name": "依顿电子",
       "reference_close": 9.36,
@@ -146531,7 +146539,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:b809f5e81b19e521",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "603733",
       "name": "仙鹤股份",
       "reference_close": 15.25,
@@ -147014,7 +147022,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:253aae16dbda62fe",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "605588",
       "name": "冠石科技",
       "reference_close": 37.33,
@@ -147094,7 +147102,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:88ece203d75f593f",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688012",
       "name": "中微公司",
       "reference_close": 256.5,
@@ -147174,7 +147182,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:f8aaa9866f782592",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688037",
       "name": "芯源微",
       "reference_close": 241.83111668757846,
@@ -147254,7 +147262,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:589d3993d55fcf0a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688072",
       "name": "拓荆科技",
       "reference_close": 547.8111300535801,
@@ -147334,7 +147342,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:dfc41d66587193fb",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688082",
       "name": "盛美上海",
       "reference_close": 224.0,
@@ -147414,7 +147422,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:95675f6f23597c25",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688120",
       "name": "华海清科",
       "reference_close": 216.3,
@@ -147494,7 +147502,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:666b9015574745e9",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688126",
       "name": "沪硅产业",
       "reference_close": 21.6,
@@ -147574,7 +147582,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:aacab73470fa36cb",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688172",
       "name": "燕东微",
       "reference_close": 37.51,
@@ -147654,7 +147662,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:69670ab3e7798306",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688216",
       "name": "气派科技",
       "reference_close": 26.63,
@@ -147734,7 +147742,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d0468203035acf39",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688249",
       "name": "晶合集成",
       "reference_close": 29.98,
@@ -147814,7 +147822,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:9da17a2e46514f0a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688347",
       "name": "华虹宏力",
       "reference_close": 199.86,
@@ -147894,7 +147902,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:5ceaa21896ceb86a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688361",
       "name": "中科飞测",
       "reference_close": 254.5,
@@ -147974,7 +147982,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:e00506b5a573c342",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688396",
       "name": "华润微",
       "reference_close": 48.947585394581864,
@@ -148054,7 +148062,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:16d3c1440531b108",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688469",
       "name": "芯联集成",
       "reference_close": 7.08,
@@ -148251,7 +148259,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:93f3448946a2f79e",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688691",
       "name": "灿芯股份",
       "reference_close": 61.27,
@@ -148331,7 +148339,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:d35ccd1c3659de3a",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688820",
       "name": "盛合晶微",
       "reference_close": 98.8,
@@ -148410,7 +148418,7 @@
       "schema_version": "1",
       "recommendation_id": "rec:16bb0e301edf8c50",
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
       "code": "688981",
       "name": "中芯国际",
       "reference_close": 122.25,
@@ -156770,7 +156778,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -156790,9 +156798,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -162524,7 +162532,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -162544,9 +162552,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -168269,7 +168277,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -168289,9 +168297,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -174014,7 +174022,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -174034,9 +174042,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -179760,7 +179768,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -179780,9 +179788,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -185516,7 +185524,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -185536,9 +185544,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -197430,8 +197438,8 @@
     },
     "data_quality": {
       "report_date": "2026-11-19",
-      "generated_at": "2026-11-19T15:35:13+08:00",
-      "as_of": "2026-11-19T15:35:13+08:00",
+      "generated_at": "2026-11-19T15:50:11+08:00",
+      "as_of": "2026-11-19T15:50:11+08:00",
       "bar_state": "closed",
       "is_trading_day": true,
       "is_official": true,
@@ -199426,9 +199434,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095328.536122
           },
           {
             "code": "688386",
@@ -199437,9 +199447,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095328.743022
           },
           {
             "code": "688387",
@@ -199448,9 +199460,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095328.930051
           },
           {
             "code": "688398",
@@ -199459,9 +199473,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095329.122522
           },
           {
             "code": "688418",
@@ -199470,9 +199486,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095329.312459
           },
           {
             "code": "688571",
@@ -199481,9 +199499,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095329.485122
           },
           {
             "code": "688585",
@@ -199492,9 +199512,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095329.686306
           },
           {
             "code": "688592",
@@ -199503,9 +199525,11 @@
               "2026-08-06"
             ],
             "reasons": [
+              "repair_cooldown",
               "eastmoney:repair_source_unavailable",
               "tencent:repair_source_unavailable"
-            ]
+            ],
+            "next_attempt_at": 1795095329.87219
           },
           {
             "code": "688618",
@@ -199514,7 +199538,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199524,7 +199549,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199534,7 +199560,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199544,7 +199571,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199554,7 +199582,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199564,7 +199593,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199574,7 +199604,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -199584,7 +199615,8 @@
               "2026-08-06"
             ],
             "reasons": [
-              "repair_budget_exhausted"
+              "eastmoney:repair_source_unavailable",
+              "tencent:repair_source_unavailable"
             ]
           },
           {
@@ -203196,19 +203228,19 @@
         ],
         "known_pending_count": 558,
         "queue_error": "",
-        "cooldown_count": 16,
+        "cooldown_count": 24,
         "unknown_attempt_count": 0,
         "stock_attempts": 8,
         "http_requests": 16,
         "phase_seconds": {
-          "discovery": 2.9303651669999997,
-          "queue": 0.3458704580000074,
-          "read": 0.05805212600000331,
-          "request": 1.1905197500000035,
-          "validation": 0.0005876249999907657,
-          "recheck": 0.004011875000003329
+          "discovery": 2.9293037500000008,
+          "queue": 0.3533374969999983,
+          "read": 0.07886154200000028,
+          "request": 1.282088457999988,
+          "validation": 0.00048641499999924065,
+          "recheck": 0.003595541999999341
         },
-        "elapsed_seconds": 4.547268541999999
+        "elapsed_seconds": 4.6658043330000005
       },
       "missing_30min_count": 0,
       "stock_pool_incomplete": true,
@@ -207570,7 +207602,7 @@
       "warnings": [
         "板块成分身份已取齐，3只A股同日报价不可用；板块叠加检索关闭"
       ],
-      "run_started_at": "2026-11-19T15:35:11+08:00",
+      "run_started_at": "2026-11-19T15:50:09+08:00",
       "personal_watchlist_config": {
         "status": "remote_live",
         "source": "worker",
@@ -213265,7 +213297,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -213285,9 +213317,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -219123,7 +219155,7 @@
             "stock|SZ|302132"
           ],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+          "acquired_at": "2026-11-19T15:50:11.504093+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5579,
@@ -219143,9 +219175,9 @@
             "quote_sources": {
               "sina": 5572
             },
-            "started_at": "2026-11-19T15:35:12.645069+08:00",
-            "as_of": "2026-11-19T15:35:12+08:00",
-            "fetched_at": "2026-11-19T15:35:12+08:00",
+            "started_at": "2026-11-19T15:50:10.596322+08:00",
+            "as_of": "2026-11-19T15:50:10+08:00",
+            "fetched_at": "2026-11-19T15:50:10+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -225700,7 +225732,7 @@
               "stock|SZ|302132"
             ],
             "cached_snapshot_unverified_count": 0,
-            "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+            "acquired_at": "2026-11-19T15:50:11.504093+08:00",
             "quote_fetch": {
               "complete": true,
               "requested": 5579,
@@ -225720,9 +225752,9 @@
               "quote_sources": {
                 "sina": 5572
               },
-              "started_at": "2026-11-19T15:35:12.645069+08:00",
-              "as_of": "2026-11-19T15:35:12+08:00",
-              "fetched_at": "2026-11-19T15:35:12+08:00",
+              "started_at": "2026-11-19T15:50:10.596322+08:00",
+              "as_of": "2026-11-19T15:50:10+08:00",
+              "fetched_at": "2026-11-19T15:50:10+08:00",
               "attempts": [
                 {
                   "source": "sina",
@@ -232276,7 +232308,7 @@
               "stock|SZ|302132"
             ],
             "cached_snapshot_unverified_count": 0,
-            "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+            "acquired_at": "2026-11-19T15:50:11.504093+08:00",
             "quote_fetch": {
               "complete": true,
               "requested": 5579,
@@ -232296,9 +232328,9 @@
               "quote_sources": {
                 "sina": 5572
               },
-              "started_at": "2026-11-19T15:35:12.645069+08:00",
-              "as_of": "2026-11-19T15:35:12+08:00",
-              "fetched_at": "2026-11-19T15:35:12+08:00",
+              "started_at": "2026-11-19T15:50:10.596322+08:00",
+              "as_of": "2026-11-19T15:50:10+08:00",
+              "fetched_at": "2026-11-19T15:50:10+08:00",
               "attempts": [
                 {
                   "source": "sina",
@@ -232651,7 +232683,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SH|688507",
                 "interval": "15m",
-                "as_of": "2026-11-19T15:35:13+08:00"
+                "as_of": "2026-11-19T15:50:11+08:00"
               },
               "price_basis_failure": "missing_canonical_daily_reference",
               "attempt_evidence": [
@@ -232749,7 +232781,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SH|601188",
                 "interval": "15m",
-                "as_of": "2026-11-19T15:35:13+08:00"
+                "as_of": "2026-11-19T15:50:11+08:00"
               },
               "price_basis_failure": "indeterminate_flat_day:2026-11-19",
               "attempt_evidence": [
@@ -233594,7 +233626,7 @@
                 "reason": "minute_window_unverified",
                 "identity_key": "stock|SZ|300779",
                 "interval": "30m",
-                "as_of": "2026-11-19T15:35:13+08:00"
+                "as_of": "2026-11-19T15:50:11+08:00"
               },
               "price_basis_failure": "indeterminate_flat_day:2026-11-16",
               "attempt_evidence": [
@@ -239365,7 +239397,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -239385,9 +239417,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -240688,7 +240720,7 @@
       "startup_watchlist": 9
     },
     "candidate_funnel": {
-      "run_id": "20261119-002360a08f73",
+      "run_id": "20261119-649a85abd2db",
       "report_date": "2026-11-19",
       "as_of": "2026-11-19",
       "candidate_count": 5927,
@@ -241626,8 +241658,8 @@
   },
   "data_quality": {
     "report_date": "2026-11-19",
-    "generated_at": "2026-11-19T15:35:13+08:00",
-    "as_of": "2026-11-19T15:35:13+08:00",
+    "generated_at": "2026-11-19T15:50:11+08:00",
+    "as_of": "2026-11-19T15:50:11+08:00",
     "bar_state": "closed",
     "is_trading_day": true,
     "is_official": true,
@@ -243622,9 +243654,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095328.536122
         },
         {
           "code": "688386",
@@ -243633,9 +243667,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095328.743022
         },
         {
           "code": "688387",
@@ -243644,9 +243680,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095328.930051
         },
         {
           "code": "688398",
@@ -243655,9 +243693,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095329.122522
         },
         {
           "code": "688418",
@@ -243666,9 +243706,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095329.312459
         },
         {
           "code": "688571",
@@ -243677,9 +243719,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095329.485122
         },
         {
           "code": "688585",
@@ -243688,9 +243732,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095329.686306
         },
         {
           "code": "688592",
@@ -243699,9 +243745,11 @@
             "2026-08-06"
           ],
           "reasons": [
+            "repair_cooldown",
             "eastmoney:repair_source_unavailable",
             "tencent:repair_source_unavailable"
-          ]
+          ],
+          "next_attempt_at": 1795095329.87219
         },
         {
           "code": "688618",
@@ -243710,7 +243758,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243720,7 +243769,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243730,7 +243780,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243740,7 +243791,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243750,7 +243802,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243760,7 +243813,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243770,7 +243824,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -243780,7 +243835,8 @@
             "2026-08-06"
           ],
           "reasons": [
-            "repair_budget_exhausted"
+            "eastmoney:repair_source_unavailable",
+            "tencent:repair_source_unavailable"
           ]
         },
         {
@@ -247392,19 +247448,19 @@
       ],
       "known_pending_count": 558,
       "queue_error": "",
-      "cooldown_count": 16,
+      "cooldown_count": 24,
       "unknown_attempt_count": 0,
       "stock_attempts": 8,
       "http_requests": 16,
       "phase_seconds": {
-        "discovery": 2.9303651669999997,
-        "queue": 0.3458704580000074,
-        "read": 0.05805212600000331,
-        "request": 1.1905197500000035,
-        "validation": 0.0005876249999907657,
-        "recheck": 0.004011875000003329
+        "discovery": 2.9293037500000008,
+        "queue": 0.3533374969999983,
+        "read": 0.07886154200000028,
+        "request": 1.282088457999988,
+        "validation": 0.00048641499999924065,
+        "recheck": 0.003595541999999341
       },
-      "elapsed_seconds": 4.547268541999999
+      "elapsed_seconds": 4.6658043330000005
     },
     "missing_30min_count": 0,
     "stock_pool_incomplete": true,
@@ -251766,7 +251822,7 @@
     "warnings": [
       "板块成分身份已取齐，3只A股同日报价不可用；板块叠加检索关闭"
     ],
-    "run_started_at": "2026-11-19T15:35:11+08:00",
+    "run_started_at": "2026-11-19T15:50:09+08:00",
     "personal_watchlist_config": {
       "status": "remote_live",
       "source": "worker",
@@ -257461,7 +257517,7 @@
         "stock|SZ|302132"
       ],
       "cached_snapshot_unverified_count": 0,
-      "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+      "acquired_at": "2026-11-19T15:50:11.504093+08:00",
       "quote_fetch": {
         "complete": true,
         "requested": 5579,
@@ -257481,9 +257537,9 @@
         "quote_sources": {
           "sina": 5572
         },
-        "started_at": "2026-11-19T15:35:12.645069+08:00",
-        "as_of": "2026-11-19T15:35:12+08:00",
-        "fetched_at": "2026-11-19T15:35:12+08:00",
+        "started_at": "2026-11-19T15:50:10.596322+08:00",
+        "as_of": "2026-11-19T15:50:10+08:00",
+        "fetched_at": "2026-11-19T15:50:10+08:00",
         "attempts": [
           {
             "source": "sina",
@@ -263319,7 +263375,7 @@
           "stock|SZ|302132"
         ],
         "cached_snapshot_unverified_count": 0,
-        "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+        "acquired_at": "2026-11-19T15:50:11.504093+08:00",
         "quote_fetch": {
           "complete": true,
           "requested": 5579,
@@ -263339,9 +263395,9 @@
           "quote_sources": {
             "sina": 5572
           },
-          "started_at": "2026-11-19T15:35:12.645069+08:00",
-          "as_of": "2026-11-19T15:35:12+08:00",
-          "fetched_at": "2026-11-19T15:35:12+08:00",
+          "started_at": "2026-11-19T15:50:10.596322+08:00",
+          "as_of": "2026-11-19T15:50:10+08:00",
+          "fetched_at": "2026-11-19T15:50:10+08:00",
           "attempts": [
             {
               "source": "sina",
@@ -269896,7 +269952,7 @@
             "stock|SZ|302132"
           ],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+          "acquired_at": "2026-11-19T15:50:11.504093+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5579,
@@ -269916,9 +269972,9 @@
             "quote_sources": {
               "sina": 5572
             },
-            "started_at": "2026-11-19T15:35:12.645069+08:00",
-            "as_of": "2026-11-19T15:35:12+08:00",
-            "fetched_at": "2026-11-19T15:35:12+08:00",
+            "started_at": "2026-11-19T15:50:10.596322+08:00",
+            "as_of": "2026-11-19T15:50:10+08:00",
+            "fetched_at": "2026-11-19T15:50:10+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -276472,7 +276528,7 @@
             "stock|SZ|302132"
           ],
           "cached_snapshot_unverified_count": 0,
-          "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+          "acquired_at": "2026-11-19T15:50:11.504093+08:00",
           "quote_fetch": {
             "complete": true,
             "requested": 5579,
@@ -276492,9 +276548,9 @@
             "quote_sources": {
               "sina": 5572
             },
-            "started_at": "2026-11-19T15:35:12.645069+08:00",
-            "as_of": "2026-11-19T15:35:12+08:00",
-            "fetched_at": "2026-11-19T15:35:12+08:00",
+            "started_at": "2026-11-19T15:50:10.596322+08:00",
+            "as_of": "2026-11-19T15:50:10+08:00",
+            "fetched_at": "2026-11-19T15:50:10+08:00",
             "attempts": [
               {
                 "source": "sina",
@@ -276847,7 +276903,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SH|688507",
               "interval": "15m",
-              "as_of": "2026-11-19T15:35:13+08:00"
+              "as_of": "2026-11-19T15:50:11+08:00"
             },
             "price_basis_failure": "missing_canonical_daily_reference",
             "attempt_evidence": [
@@ -276945,7 +277001,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SH|601188",
               "interval": "15m",
-              "as_of": "2026-11-19T15:35:13+08:00"
+              "as_of": "2026-11-19T15:50:11+08:00"
             },
             "price_basis_failure": "indeterminate_flat_day:2026-11-19",
             "attempt_evidence": [
@@ -277790,7 +277846,7 @@
               "reason": "minute_window_unverified",
               "identity_key": "stock|SZ|300779",
               "interval": "30m",
-              "as_of": "2026-11-19T15:35:13+08:00"
+              "as_of": "2026-11-19T15:50:11+08:00"
             },
             "price_basis_failure": "indeterminate_flat_day:2026-11-16",
             "attempt_evidence": [
@@ -283561,7 +283617,7 @@
         "stock|SZ|302132"
       ],
       "cached_snapshot_unverified_count": 0,
-      "acquired_at": "2026-11-19T15:35:13.536213+08:00",
+      "acquired_at": "2026-11-19T15:50:11.504093+08:00",
       "quote_fetch": {
         "complete": true,
         "requested": 5579,
@@ -283581,9 +283637,9 @@
         "quote_sources": {
           "sina": 5572
         },
-        "started_at": "2026-11-19T15:35:12.645069+08:00",
-        "as_of": "2026-11-19T15:35:12+08:00",
-        "fetched_at": "2026-11-19T15:35:12+08:00",
+        "started_at": "2026-11-19T15:50:10.596322+08:00",
+        "as_of": "2026-11-19T15:50:10+08:00",
+        "fetched_at": "2026-11-19T15:50:10+08:00",
         "attempts": [
           {
             "source": "sina",
@@ -389467,7 +389523,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|000839",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -389884,7 +389940,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "7d83e613564dbc5b76daec9ec8b464b96205f26b3c044e73e72c64dbdd9062c0"
+            "sha256": "d02455c3f9c86dfea65dce200f05056658b843c0475839238a86ee83115ff818"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -391485,7 +391541,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688012",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -391902,7 +391958,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "f582049143c0165d30554cbe51ad2b180e058f0f3a03921e24bbf016bf67c21b"
+            "sha256": "13c83e8e2d3583020e22394c178301883a8a7b21fa154ee718e82d35ac1e1b3e"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -393507,7 +393563,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600584",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -393924,7 +393980,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "eae2f667d51029fefb0458e8179e2a61ab0a8df9528fb21f17c5dcb0d1302ffb"
+            "sha256": "c4a46091ea47725cde872f34a18b1018c5f53736aa67eed93e46545b17933413"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -395525,7 +395581,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688396",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -395942,7 +395998,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "8429b3cd96544ce3e6ce970a2f5ceb478973d6e1c8f1227ab6346cc0c40c201e"
+            "sha256": "efea4290e60ac838d2437df0ab96af4f95b2891018112e27c856ad3fcdb94b60"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -397547,7 +397603,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|002185",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -397964,7 +398020,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "00ab4598021a6bcfcbebd88b2aeb80bcbb95319217ca853ba3bd931b4bbdb6a1"
+            "sha256": "b5606d895a7037f59608f04c1afa3558966f4a1322d46c9240b4142de3a17e4e"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -399569,7 +399625,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688126",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -399986,7 +400042,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "8ba32d7837b9534b658b4c76db68bcf8fa90862bee0d207deaf999e9f8db08af"
+            "sha256": "30d40dc8a864b4d4e4073ba17b9ea1b6d971415260da9d25ca61d86500a21610"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -401591,7 +401647,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688361",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -402008,7 +402064,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "121b164efa66789132adc53d12255cff9bf80f4ff425da1ce6521db53a2de136"
+            "sha256": "b235a198c73d7256640ae8243cffc65bb35904d46d2b2b40323d90f6018dbcc3"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -403613,7 +403669,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|002371",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -404030,7 +404086,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "e28c028e644fe91f1bb8e486161ceaeb53a3a4e96978c6f3d75a6cc2085fecbe"
+            "sha256": "bbef29db3f5bad1bccf1dcdb93d683000e3b334f976a995604335a86ab0c0ba4"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -405635,7 +405691,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688037",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -406052,7 +406108,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "2e19828b443111157b9ac60b77c413d58b5b9bbc2c9126f4f3613db4b24302d3"
+            "sha256": "8e185db5ec32d26c1654dcb8bbef539d974721e6d556a162e596bd741fc75d71"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -407657,7 +407713,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|002352",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -408074,7 +408130,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "c101430ff04f5444326d6b42c5acbaddc48958b32fdcd9098c1bbe6b75291625"
+            "sha256": "2340c95a07efceffc0c232ba1b4e5b807e8efd4214596623376677d099607089"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -409680,7 +409736,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|301269",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -410097,7 +410153,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "e3b47136625ff7ae4052e37c76bf99bc138a2993debc58404f5efc649fe5d66f"
+            "sha256": "6c9f2cc5095d9019ffcca8bc4b5cd855f821171bb03340d183c9ade38c4751a7"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -411702,7 +411758,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688469",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -412119,7 +412175,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "47fb29e9fd4c900d6cb477087c6487599b4a66fa57de12c52111a6b0bced2447"
+            "sha256": "19470d07bbc74f6831831375f5e4b113946325e6f02ea09a3ecfdd2344f2d1be"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -413724,7 +413780,7 @@
             "status": "verified",
             "identity_key": "stock|SZ|300604",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -414141,7 +414197,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "b46499b97a88662369b3d0ef2c31ef532884ff6cbeecc222e48dadbc49b2215b"
+            "sha256": "2e93108ed8bbf412b80d9d2344575903562cec8f97b8c4aa15828ac6cd093040"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -415746,7 +415802,7 @@
             "status": "verified",
             "identity_key": "stock|SH|600406",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -416163,7 +416219,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "342217253c0f48b717836d7f269e0e005861a972abf14855e55fc3a21b7490b7"
+            "sha256": "42c41d4f7a1f72e902be8ae0f93517b02cf126fb6ff565137b1d2f3907a7f4c4"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -417763,7 +417819,7 @@
             "status": "verified",
             "identity_key": "stock|SH|601919",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -418180,7 +418236,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "934a685101821081b5f656947ab7c2d4ff9240b68d6fdfdd7d250cf511fd9345"
+            "sha256": "4b3381c753c350ed2a8b18a35d8914442713801ec81d696902bffbdfea6b1e37"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -419782,7 +419838,7 @@
             "status": "verified",
             "identity_key": "stock|SH|601728",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -420199,7 +420255,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "488ef119fe1e90c2beaf740be06dd6a88be4af10604f002512ed5316e251b1e2"
+            "sha256": "61dfefb11d2ff51330f81b4553054455855a5e3b397a3189a895e9bf5bb8f953"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -421800,7 +421856,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688981",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -422217,7 +422273,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "7d37b185b56509b91cc6e80693f8010ee1a833774bed83cc042dc0afb762a173"
+            "sha256": "93b859af518abe5a7f1ebef33e96dde7d58728bb728a27ef14fe403dba1b41d9"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -423824,7 +423880,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688691",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -424241,7 +424297,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "fea109d406a5f4b93ff6cdad15360c3dc9aeacd6ca1f6e0580420ded79392ad9"
+            "sha256": "090e6d0ee37e9f8bf28cddca1b266dc5d4ce43379449e7181cd0061ea78db358"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -425849,7 +425905,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688072",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -426266,7 +426322,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "82ce7071fda0c64ad56094d584ad08b607f8a4b996c45043dc4c9cea08e68c0e"
+            "sha256": "bb95f5c932797e200902c0d958ba0f94192f915f66dbf23ab20fe7c48bd693ad"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -427873,7 +427929,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688082",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -428290,7 +428346,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "1f0aaf1866524a667e8b44524174f3d7fb66f57062256f25e47b93930b2c1e00"
+            "sha256": "e62ef38f1ce7a4bfe017be9626fdea823b35d2f0ef44cd86bcda0bb711523fa2"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -429897,7 +429953,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688120",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -430314,7 +430370,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "534891a5c4cea4832cebe1519ada72b57db4e48aca1a857204a28f1c78d9fc9a"
+            "sha256": "2484dbb45bbd1879763e2e929f62c9a973a5ec5d8fb10c0f50e1906cda5197d3"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -431921,7 +431977,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688172",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -432338,7 +432394,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "892ffadaa3adcdd30cc58e8281e326565e463e21924312aa92fcb3428f7669ab"
+            "sha256": "352a613ffe60bb86f74b042d55a788b5451ca479819193447aff7282752e430c"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -433946,7 +434002,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688249",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -434363,7 +434419,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "3d45426971cfd91fa4e3c50c6d98dd7505da931a9608133554a5e314060cd81e"
+            "sha256": "60bacf0eb84ff7224d5fd4ad356e39b3d8b5a98e179ca6f72034ee50abe3a41c"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -435971,7 +436027,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688347",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -436388,7 +436444,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "84f4ec06cf2a6888a50964ebec35a67987558add4e43f2cce00f570fc6f45c51"
+            "sha256": "0cddeedf53c0c324522a3d1aae9e6a69a6cf957396cc07341ad2a4dec0009385"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -437995,7 +438051,7 @@
             "status": "verified",
             "identity_key": "stock|SH|688820",
             "interval": "15m",
-            "as_of": "2026-11-19T15:35:13+08:00",
+            "as_of": "2026-11-19T15:50:11+08:00",
             "window_start": "2026-11-02 10:45:00",
             "window_end": "2026-11-19 15:00:00",
             "input_adjustment": "unverified",
@@ -438412,7 +438468,7 @@
                 "receipt_as_of": "2026-11-19T15:06:36+08:00"
               }
             },
-            "sha256": "b5e57d8a6a73ed89d64dbbd99a12ce66dc826fb4322b80353f2e6f50f6b8fdc4"
+            "sha256": "406629f1e342c8f26c06a01595814dd8686f66ccc37f10344f20cb2467d95d49"
           },
           "latest_cache_date": "2026-11-19",
           "cache_stale": false,
@@ -439195,8 +439251,8 @@
     },
     "production_guard": {
       "unchanged": true,
-      "before_sha256": "d2896bb401afdd766a71792ea078dead126b906e8e8d3bddc6924f2e5c323292",
-      "after_sha256": "d2896bb401afdd766a71792ea078dead126b906e8e8d3bddc6924f2e5c323292"
+      "before_sha256": "4e4eda6009f85980d35fa3168be3f6cf2cd26045eaa4ac62abebbf8f2a2e0565",
+      "after_sha256": "4e4eda6009f85980d35fa3168be3f6cf2cd26045eaa4ac62abebbf8f2a2e0565"
     },
     "production_reference": {
       "pool": "picks_fusion",
