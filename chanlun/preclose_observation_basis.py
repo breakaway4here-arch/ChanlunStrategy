@@ -222,7 +222,19 @@ def _kline_digest(kline):
 
 def _daily_fingerprint(stock):
     kline = stock["klines"]
-    return basis_sha256({key:kline[key] for key in ARRAY_KEYS})
+    material = {key:kline[key] for key in ARRAY_KEYS}
+    amounts = list(material["amounts"])
+    available = material["amount_available"]
+    _require(len(amounts) == len(available), "daily_amount_contract_mismatch")
+    for index, amount in enumerate(amounts):
+        if amount is None or (isinstance(amount, float) and math.isnan(amount)):
+            _require(available[index] is False, "daily_amount_contract_mismatch")
+            amounts[index] = None
+    # The live reader uses NaN for an explicitly missing amount, while the
+    # immutable input serializes that same value as null. Bind both to the
+    # missing-value marker without changing prices, volume, or availability.
+    material["amounts"] = amounts
+    return basis_sha256(material)
 
 
 def build_observation_fallback(stock, original, document, *, ready_at_ns, as_of,

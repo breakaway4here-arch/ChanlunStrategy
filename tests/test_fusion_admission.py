@@ -151,6 +151,26 @@ class TestFusionAdmission(unittest.TestCase):
         picks, diag = apply_fusion_admission([stock], self._make_sh_closes(False))
         self.assertEqual(len(picks), 1)
 
+    def test_dibeichi_structured_confirmation_labels_are_exact_and_authoritative(self):
+        for labels in (
+            [],
+            ["关键位不破"],
+            ["EMA5收复"],
+            ["关键位不破", "EMA5收复失败"],
+            ["关键位不破", {"label": "EMA5收复"}],
+            "关键位不破+EMA5收复",
+        ):
+            with self.subTest(labels=labels):
+                stock = self._make_stock(
+                    "底背驰候选", strength="中",
+                    confirmed_by="关键位不破+EMA5收复",
+                )
+                stock["best_buy_point"]["confirmations"] = labels
+                picks, _ = apply_fusion_admission(
+                    [stock], self._make_sh_closes(False)
+                )
+                self.assertEqual(picks, [])
+
     def test_zhongshu_dixi_strong_confirm_no_ma_kept_strong_market(self):
         stock = self._make_stock("中枢低吸候选", strength="强", confirmed_by="底分型+MACD金叉")
         stock["closes"] = self._make_non_bullish_closes()

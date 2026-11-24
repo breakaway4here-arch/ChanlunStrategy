@@ -77,7 +77,10 @@ def apply_fusion_admission(picks, sh_closes, sector_stocks=None):
         # authoritative market phase.
         stock["market_regime"] = regime
 
-        decision, reason = _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by)
+        decision, reason = _admit(
+            bp_type, tier, ma_ok, market_strong, strength, confirmed_by,
+            confirmations=bp.get("confirmations"),
+        )
 
         admission = {
             "passed": bool(decision),
@@ -114,7 +117,7 @@ def apply_fusion_admission(picks, sh_closes, sector_stocks=None):
     return fusion_picks, diag
 
 
-def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
+def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by, confirmations=None):
     """Single-stock admission decision per the fusion threshold matrix.
 
     Returns (admitted: bool, reason: str).
@@ -184,8 +187,16 @@ def _admit(bp_type, tier, ma_ok, market_strong, strength, confirmed_by):
         else:
             if strength == "强":
                 return True, "底背驰候选弱市确认强度强通过"
-            has_key_level = "关键位不破" in (confirmed_by or "")
-            has_ema5 = "EMA5收复" in (confirmed_by or "")
+            # Current producers keep signal labels separate from explanation text.
+            # Older records without labels retain their existing text contract.
+            if confirmations is None:
+                evidence = confirmed_by or ""
+            elif isinstance(confirmations, (list, tuple)):
+                evidence = confirmations
+            else:
+                evidence = ()
+            has_key_level = "关键位不破" in evidence
+            has_ema5 = "EMA5收复" in evidence
             if has_key_level and has_ema5:
                 return True, "底背驰候选弱市关键位不破+EMA5收复通过"
             return False, "底背驰候选弱市要求确认强度强或(关键位不破且EMA5收复)"

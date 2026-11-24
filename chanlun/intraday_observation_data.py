@@ -19,7 +19,7 @@ from collections import deque
 from pathlib import Path
 from datetime import datetime, timedelta, timezone
 
-from .identity import normalize_identity
+from .identity import infer_stock_exchange, normalize_identity
 
 CN = timezone(timedelta(hours=8))
 PRICE_KEYS = ("opens", "highs", "lows", "closes")
@@ -679,13 +679,40 @@ def _calendar_reader(store):
     return check
 
 
+def _cohort_scope_exclusion(instrument, canonical_keys):
+    code = str(instrument.get("code") or "")
+    exchange = str(instrument.get("exchange") or "").upper()
+    if len(code) != 6 or not code.isascii() or not code.isdigit():
+        return ""
+    if ((exchange == "SH" and code.startswith("900"))
+            or (exchange == "SZ" and code.startswith(("200", "201")))):
+        return "non_a_share"
+    expected = infer_stock_exchange(code)
+    if (exchange in {"SH", "SZ", "BJ"} and expected and expected != exchange
+            and (expected, code) in canonical_keys):
+        return "duplicate_market_registration"
+    return ""
+
+
 def _load_cohort(store, cutoff):
     from config import MIN_LISTED_DAYS
     instruments = store.list_instruments(asset_type="stock")
     metadata = store.query_stock_meta_many([int(row["instrument_id"]) for row in instruments], as_of=cutoff)
-    candidates, excluded = [], []
+    canonical_keys = set()
+    for instrument in instruments:
+        try:
+            identity = normalize_identity(instrument)
+        except (ValueError, TypeError):
+            continue
+        canonical_keys.add((identity.exchange, identity.code))
+    candidates, excluded, scope_excluded = [], [], []
     for instrument in instruments:
         reason = ""
+        scope_reason = _cohort_scope_exclusion(instrument, canonical_keys)
+        if scope_reason:
+            scope_excluded.append(dict(code=str(instrument.get("code") or ""),
+                exchange=str(instrument.get("exchange") or ""), reason=scope_reason))
+            continue
         try:
             identity = normalize_identity(instrument)
         except (ValueError, TypeError):
@@ -716,6 +743,7 @@ def _load_cohort(store, cutoff):
             float_market_cap=meta.get("float_market_cap", meta.get("circulating_market_cap"))))
     return sorted(candidates, key=lambda row: row["identity_key"]), dict(
         instrument_count=len(instruments), eligible_metadata_count=len(candidates), excluded=excluded,
+        scope_excluded=scope_excluded,
         rule="canonical stocks with historical listing/risk metadata; no prior-day liquidity or retrieval filter",
         historic_daily_source="independent bounded raw/qfq snapshots ending previous trading day")
 
@@ -968,9 +996,9 @@ def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snaps
         for row in selected} for interval in ("15m", "30m")}
     for row in selected:
         row.pop("cutoff_minutes", None)
-    # Every original instrument is accounted for. Only confirmed business
-    # exclusions leave the acquisition denominator; unknown identity/metadata
-    # remains a separate, visible foundation gap.
+    # Every original instrument is accounted for. Confirmed scope, duplicate,
+    # and business exclusions leave the acquisition denominator; unresolved
+    # identity/metadata remains a separate, visible foundation gap.
     business_excluded = [r for r in cohort["excluded"] if r["reason"] in
         ("st_or_delisting", "listed_days")]
     foundation_missing = [r for r in cohort["excluded"] if r["reason"] not in
@@ -988,6 +1016,9 @@ def acquire_observation_payload(formal_market_db, trade_date, *, deadline, snaps
         expected=expected, acquired=acquired, rejected=len(stock_failures), timed_out=timed_out,
         instrument_count=cohort["instrument_count"], qualified_cohort=expected,
         business_excluded=len(business_excluded), business_excluded_reasons=reason_counts(business_excluded),
+        scope_excluded=len(cohort["scope_excluded"]),
+        scope_excluded_reasons=reason_counts(cohort["scope_excluded"]),
+        scope_excluded_records=cohort["scope_excluded"],
         foundation_missing=len(foundation_missing), foundation_missing_reasons=reason_counts(foundation_missing),
         foundation_missing_records=foundation_missing,
         coverage=coverage, minimum_coverage=MINIMUM_COVERAGE, foundation_coverage=foundation_coverage,

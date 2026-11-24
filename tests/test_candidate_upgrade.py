@@ -5,6 +5,7 @@ from chanlun.candidate_upgrade import (
     _passes_upgrade_risk_guard,
     upgrade_daily_candidates_with_30min,
 )
+from chanlun.fusion_admission import apply_fusion_admission
 
 
 def make_stock(code, buy_points, closes=None):
@@ -121,6 +122,33 @@ class TestCandidateUpgrade(unittest.TestCase):
 
         self.assertEqual(recommended, [])
         self.assertEqual(diag["dropped_no_confirm"], 1)
+
+    def test_real_confirmation_labels_admit_bottom_divergence_in_weak_market(self):
+        stock = make_stock("000001", [{
+            "type": "swing底背驰候选种子",
+            "tier": "seed",
+            "source_type": "swing底背驰参考",
+            "price": 10.0,
+        }])
+        confirmed, _ = upgrade_daily_candidates_with_30min(
+            [stock], [make_min30_result("000001")], mode="pure"
+        )
+        self.assertEqual(len(confirmed), 1)
+        best = confirmed[0]["best_buy_point"]
+        self.assertEqual(best["strength"], "中")
+        self.assertTrue({"关键位不破", "EMA5收复"}.issubset(best["confirmations"]))
+        self.assertNotIn("EMA5收复", best["confirmed_by"])
+
+        admitted, diagnostics = apply_fusion_admission(
+            confirmed, list(range(180, 100, -1))
+        )
+
+        self.assertEqual(len(admitted), 1)
+        self.assertEqual(diagnostics["admission_regime"], "weak")
+        self.assertEqual(
+            admitted[0]["fusion_admission"]["reason"],
+            "底背驰候选弱市关键位不破+EMA5收复通过",
+        )
 
 
 if __name__ == "__main__":

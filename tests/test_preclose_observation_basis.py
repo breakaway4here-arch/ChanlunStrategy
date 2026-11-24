@@ -2,6 +2,7 @@
 import copy
 import importlib.util
 import json
+import math
 import socket
 import unittest
 from dataclasses import replace
@@ -103,6 +104,38 @@ class PrecloseObservationBasisTests(unittest.TestCase):
         self.assertEqual(kline["volumes"][-1],20000.0)
         self.assertEqual(kline["amounts"][-1],20200000.0)
         self.assertIs(self.api().verified_fallback_kline(stock,minute,replacement,FACT),kline)
+
+    def test_missing_historical_amount_survives_live_and_frozen_consumers(self):
+        stock,minute,capture,ready=prepare()
+        # This is the representation emitted by universe_builder._rows_to_kline.
+        stock["klines"]["amounts"][0]=math.nan
+        stock["klines"]["amount_available"][0]=False
+        replacement=self.produce(stock,minute,capture,ready)
+        self.assertIsNotNone(self.api().verified_fallback_kline(stock,minute,replacement,FACT))
+
+        frozen=copy.deepcopy(stock)
+        frozen["klines"]["amounts"][0]=None
+        self.assertIsNotNone(self.api().verified_fallback_kline(frozen,minute,replacement,FACT))
+        for changed in ("availability","restored_amount","price","volume"):
+            with self.subTest(changed=changed):
+                row=copy.deepcopy(frozen)
+                if changed=="availability":
+                    row["klines"]["amount_available"][0]=True
+                elif changed=="restored_amount":
+                    row["klines"]["amounts"][0]=1.0
+                else:
+                    field="closes" if changed=="price" else "volumes"
+                    row["klines"][field][0]=math.nan
+                self.assertIsNone(self.api().verified_fallback_kline(row,minute,replacement,FACT))
+
+    def test_unavailable_amount_does_not_allow_infinity_or_available_nan(self):
+        for value,available in ((math.inf,False),(math.nan,True),(None,True)):
+            with self.subTest(value=value,available=available):
+                stock,minute,capture,ready=prepare()
+                stock["klines"]["amounts"][0]=value
+                stock["klines"]["amount_available"][0]=available
+                with self.assertRaises(ValueError):
+                    self.produce(stock,minute,capture,ready)
 
     def test_consumer_rejects_quote_receipt_window_and_original_source_changes(self):
         stock,minute,capture,ready=prepare()
